@@ -18,8 +18,9 @@ let shutdownTasksPromise: Promise<void> | undefined;
 
 /**
  * Settles when a quit is requested, so something waiting on the user can stop waiting. A quit is a
- * stronger statement than any answer the user could give, and a native dialog cannot be dismissed
- * from code — so the wait has to end from this side.
+ * stronger statement than any answer the user could give. An asker that takes its own question down
+ * on a quit will answer on its own; this is what ends the wait for one that does not, so a question
+ * nobody answers can never hold the app open.
  */
 let quitRequested: { promise: Promise<void>; resolve: () => void } = makeQuitRequestedSignal();
 
@@ -82,7 +83,11 @@ export function runShutdownTasksOnce(performShutdownTasks: () => Promise<void>):
 }
 
 /**
- * Clear both latches because a new session is starting. Called when a window is created.
+ * Clear both latches because a new session is starting. Called when a window is created where there
+ * were NONE — that condition is load-bearing, not incidental. A window created alongside living
+ * windows is not a new session, and resetting there would replace the quit signal a close path may
+ * already be waiting on, leaving that wait to be settled by a quit that now signals something
+ * else.
  *
  * Without this the shutdown tasks would run at most once per process. Closing the last window on
  * macOS runs them and leaves the app resident; reactivating from the dock then gives the user a

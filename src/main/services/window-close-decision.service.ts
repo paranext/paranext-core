@@ -13,6 +13,8 @@ import {
   markQuitRequested,
   whenQuitRequested,
 } from '@main/services/shutdown-latch.service';
+import { getErrorMessage } from 'platform-bible-utils';
+import { logger } from '@shared/services/logger.service';
 import { countWindowsThatWouldStayOpen } from '@main/services/window-state.service';
 import { isPrimaryWindow } from '@main/services/window-layout-persistence.service';
 
@@ -62,14 +64,19 @@ export async function decideWindowClose(
   // cancelled). Racing the latch as well is what ends the wait for an asker that does not, so the
   // app can never hang with the question up and the quit swallowed underneath it.
   const answer = await Promise.race([
-    // The losing side is never observed; a rejection from an asker whose window is being torn down
-    // would otherwise surface as an unhandled rejection
-    confirmCloseAll().catch((): CloseAllAnswer => 'cancel'),
+    // An asker that fails is not the user choosing to stay, so it is reported rather than being
+    // indistinguishable from a Cancel click. Treated as one all the same: the window is already
+    // held open, and taking it down because the question could not be put is the worse outcome.
+    confirmCloseAll().catch((e: unknown): CloseAllAnswer => {
+      logger.warn(`Could not put the close-all question to the user: ${getErrorMessage(e)}`);
+      return 'cancel';
+    }),
     whenQuitRequested().then((): CloseAllAnswer => 'close-all'),
   ]);
-  // The latch decides, not the answer: a question taken down by the quit reports itself cancelled,
-  // and a cancel that arrives after the quit has been requested is a click on a dead dialog.
-  if (isAppQuitRequested()) return 'quit-all';
+  // No second latch read here, deliberately. A quit taken down the question by aborting it, and
+  // that abort fires from the very promise this race is waiting on — so the latch side always
+  // settles first and the box's resulting `cancel` can never win. A `cancel` reaching this line is
+  // therefore always a real click made before any quit.
   if (answer === 'cancel') return 'stay-open';
 
   markQuitRequested();
