@@ -2228,7 +2228,13 @@ step, no automation. Just a record.
   the user's ✕ and never asks: the latch is set before any window's close, and a quit arriving
   while the question is open takes the question down with it (Electron closes a signalled message
   box and reports it as cancelled), so the latch — not the reported answer — is what the decision
-  reads. An emptied primary never reaches this path at all: moving its last tab out reopens Home,
+  reads. When no live window holds the marked entry at all — the startup restore always leaves one that
+  does, so this means every window it created has gone and something else opened one, as an
+  extension's `platform.createWindow` can while macOS keeps the app resident with none open — the
+  oldest live window answers instead. The marked entry keeps its flag: it names the entry simple
+  mode restores and the only one allowed the legacy layout fallback, so moving it to a window
+  created into that gap would cost the user that layout next launch. An emptied primary never
+  reaches this path at all: moving its last tab out reopens Home,
   exactly as closing that tab does, so the primary cannot disappear except through its own ✕ or
   Quit.
 - **Alternatives:** A second main-owned live reference alongside the persisted

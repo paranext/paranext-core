@@ -349,7 +349,19 @@ export function getMainWindowId(): number | undefined {
  * @param windowId Window to check
  */
 export function isPrimaryWindow(windowId: number): boolean {
-  return getMainWindowId() === windowId;
+  const mainWindowId = getMainWindowId();
+  if (mainWindowId !== undefined) return mainWindowId === windowId;
+  // No live window holds the marked entry. The startup restore always leaves one that does, so
+  // reaching here means every window it created has gone and something else opened one — on macOS
+  // the app stays resident with no windows, and an extension can call `platform.createWindow` into
+  // that gap. Some live window has to answer for the app's lifetime, or nothing would ask before
+  // closing and an emptied window would close itself; the oldest one does, matching the role the
+  // restore would have given the window it created first.
+  //
+  // The flag itself deliberately does NOT move. It names the entry simple mode restores and the
+  // only entry allowed the legacy layout fallback, so handing it to a window created into the gap
+  // would cost the user that layout on the next launch.
+  return fileSlots.find((slot) => slot.windowId !== undefined)?.windowId === windowId;
 }
 
 /** Merge captured bounds into a window's entry and schedule a write */
