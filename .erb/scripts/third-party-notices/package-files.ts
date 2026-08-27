@@ -14,15 +14,22 @@ import { compareStrings } from './compare';
 import type { NamedText } from './types';
 
 /**
- * Matches an Apache-style `NOTICE` file.
+ * Matches an Apache-style attribution notice.
  *
  * A NOTICE is not a license and must not be reported as one, but Apache-2.0 section 4(d) requires
  * its attributions to travel with every redistribution - an obligation the license text alone does
  * not discharge. Kept separate from license files for that reason: several packages ship a NOTICE
  * and no license file at all, and treating the NOTICE as their license text would suppress the
  * canonical text they actually need.
+ *
+ * Matched ANYWHERE in the stem rather than anchored to the start of it, and applied alongside
+ * `NOT_LICENSE_TEXT` for the same reason `EMBEDDED_LICENSE_FILE` is. An anchored pattern reads only
+ * the first word, which misses every convention that puts a qualifier in front of it -
+ * `THIRD-PARTY-NOTICES.TXT` is what the .NET runtime packages ship and what this repository's own
+ * document is called, and `ThirdPartyNotices.txt` is the same file under Microsoft's other
+ * spelling. `static-assets.ts` documents the same trap for the tree it scans.
  */
-const NOTICE_FILE = /^NOTICE([._-].*)?$/i;
+const NOTICE_FILE = /notices?/i;
 
 /** Matches a file whose contents are a license grant to reproduce. */
 const LICENSE_FILE = /^(LICEN[CS]E|COPYING)([._-].*)?$/i;
@@ -73,7 +80,10 @@ export function isLicenseTextFileName(name: string): boolean {
 
 /** Whether a file name (not a path) is an attribution notice to reproduce alongside the license. */
 export function isNoticeFileName(name: string): boolean {
-  return NOTICE_FILE.test(name) && !NOT_LICENSE_TEXT.test(name);
+  if (NOT_LICENSE_TEXT.test(name)) return false;
+  // The STEM, so an extension can never be read as the word - the same discipline
+  // `isLicenseTextFileName` applies for `EMBEDDED_LICENSE_FILE`.
+  return NOTICE_FILE.test(name.replace(/\.[^.]*$/, ''));
 }
 
 /**

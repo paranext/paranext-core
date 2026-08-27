@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import correct from 'spdx-correct';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { parseDeclared } from './declared';
 import { classify, loadPolicy, CONFIDENCE_THRESHOLD } from './policy';
 import type { Detection, Exception } from './types';
@@ -450,6 +450,56 @@ describe('classify', () => {
     expect(v.reason).toContain('not on the allowed list');
   });
 
+  it('pins the verdict to the objecting file, not to the one that merely matched best', () => {
+    // The verdict rests on LICENSE.GPL, so that is the file a reviewed exception has to be pinned
+    // to. Pinning LICENSE instead let upstream rewrite LICENSE.GPL at the same version with the
+    // exception still clearing the block - the one drift a hash pin exists to catch, watching a
+    // file nobody objected to.
+    const v = classify({
+      ...base,
+      declaredField: 'MIT',
+      detection: detectedFilesAt([
+        ['LICENSE', 'MIT', 100],
+        ['LICENSE.GPL', 'GPL-3.0-or-later', CONFIDENCE_THRESHOLD - 3],
+      ]),
+    });
+    expect(v.verdict).toBe('blocked');
+    expect(v.matchedFile).toBe('LICENSE.GPL');
+    expect(v.textSha256).toBe('sha-LICENSE.GPL');
+    // All three move together, so the recorded identifier names the same file as the hash.
+    expect(v.detected).toBe('GPL-3.0-or-later');
+  });
+
+  it('refuses a reviewed exception pinned to the file that did not object', () => {
+    // The consequence the pin exists for: an exception recorded against LICENSE's hash no longer
+    // clears a block LICENSE.GPL raised.
+    const policy = {
+      ...POLICY,
+      exceptions: [
+        {
+          package: 'npm:weird@1.0.0',
+          spdx: 'MIT',
+          reason: 'the permissive file was read and it is MIT',
+          reviewer: 'x@y',
+          date: '2026-08-20',
+          textSha256: 'sha-LICENSE',
+        },
+      ],
+    };
+    const v = classify({
+      ...base,
+      name: 'weird',
+      policy,
+      declaredField: 'MIT',
+      detection: detectedFilesAt([
+        ['LICENSE', 'MIT', 100],
+        ['LICENSE.GPL', 'GPL-3.0-or-later', CONFIDENCE_THRESHOLD - 3],
+      ]),
+    });
+    expect(v.verdict).toBe('blocked');
+    expect(v.reason).toContain('stale');
+  });
+
   it('objects to a below-threshold bundled file that is copyleft', () => {
     const v = classify({
       ...base,
@@ -601,6 +651,60 @@ describe('classify', () => {
     });
     expect(v.verdict).toBe('excepted');
     expect(v.spdxId).toBe('BSD-3-Clause');
+  });
+
+  it('refuses an exception that records no reason', () => {
+    // `reason` IS the determination - `applyException` puts it verbatim into the verdict - so an
+    // entry without one clears the gate recording nothing about why, and reads back as
+    // "reviewed exception: undefined".
+    const policy = {
+      ...POLICY,
+      exceptions: [
+        {
+          package: 'npm:weird@1.0.0',
+          spdx: 'BSD-3-Clause',
+          reviewer: 'x@y',
+          date: '2026-08-20',
+          textSha256: 'abc',
+        },
+      ],
+    };
+    const v = classify({
+      ...base,
+      name: 'weird',
+      policy,
+      declaredField: 'SEE LICENSE IN X',
+      detection: detected('NOASSERTION', 100, 'abc'),
+    });
+    expect(v.verdict).toBe('blocked');
+    expect(v.reason).toContain('records no reason');
+  });
+
+  it('refuses an exception still carrying the template placeholder reason', () => {
+    // `report.ts` prints a paste-ready template whose `reason` is a bracketed placeholder. Pasted
+    // and half-filled it satisfies every other check and stands as the recorded determination.
+    const policy = {
+      ...POLICY,
+      exceptions: [
+        {
+          package: 'npm:weird@1.0.0',
+          spdx: 'BSD-3-Clause',
+          reason: '<why this is correct - one sentence>',
+          reviewer: 'x@y',
+          date: '2026-08-20',
+          textSha256: 'abc',
+        },
+      ],
+    };
+    const v = classify({
+      ...base,
+      name: 'weird',
+      policy,
+      declaredField: 'SEE LICENSE IN X',
+      detection: detected('NOASSERTION', 100, 'abc'),
+    });
+    expect(v.verdict).toBe('blocked');
+    expect(v.reason).toContain('placeholder reason');
   });
 
   it('refuses an exception that records a copyleft id', () => {
@@ -1747,9 +1851,15 @@ describe("a bundled file does not displace a package's own grant", () => {
 });
 
 describe('loadPolicy', () => {
+  // Collected and removed together, as every other suite in this pipeline does: one temp directory
+  // per case, left behind, is a tree that grows with every run of the test suite.
+  const created: string[] = [];
+  afterAll(() => created.forEach((dir) => fs.rmSync(dir, { recursive: true, force: true })));
+
   /** Writes a policy file and returns its path. */
   const write = (policy: unknown) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-policy-'));
+    created.push(dir);
     const file = path.join(dir, 'notices-policy.json');
     fs.writeFileSync(file, JSON.stringify(policy), 'utf8');
     return file;

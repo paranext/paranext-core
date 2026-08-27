@@ -580,8 +580,8 @@ entry answers a blocked build, and how to change the generator, see
 **You do not need to regenerate them as part of ordinary work.** Building never touches them and
 never complains, whatever your webpack cache holds. Regenerate deliberately, when a **production**
 dependency changes - an npm package that reaches the bundle, or a NuGet version in
-`c-sharp/ParanextDataProvider.csproj`. If you forget, CI's Linux leg regenerates and fails on the
-diff, naming what moved.
+`c-sharp/ParanextDataProvider.csproj`. If you forget, CI's Linux leg fails: it verifies, never
+regenerates, so the committed copy has to be brought up to date here and committed.
 
 ### Regenerating (Linux)
 

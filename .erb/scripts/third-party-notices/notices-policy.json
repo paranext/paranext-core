@@ -64,6 +64,7 @@
     "BUSL-1.1",
     "Elastic-2.0"
   ],
+  "electionsNote": "Which branch this project takes where a package offers a CHOICE of licenses (an SPDX OR disjunction), and why. The elected identifier must be on \"allowed\" and off \"copyleft\"; a conjunction (AND) is not a choice and cannot be elected. Keyed by ecosystem:name.",
   "elections": {
     "npm:jszip": {
       "elected": "MIT",
@@ -373,6 +374,7 @@
       }
     }
   },
+  "overridesNote": "What a human established about a package whose own metadata establishes nothing - a legacy <licenseUrl>, or proprietary terms no SPDX identifier names. Keyed by ecosystem:name and pinned to NEITHER a version nor a license text, so it is the weakest instrument here and applies only where the package declares nothing parseable AND ships no identifiable license text. Free text must set \"nonSpdx\", which records that no list checked it. \"alwaysList\" is a separate NuGet-only flag for a package no restore on this machine resolves.",
   "overrides": {
     "nuget:ParatextData": {
       "license": "Proprietary — SIL Global / United Bible Societies",

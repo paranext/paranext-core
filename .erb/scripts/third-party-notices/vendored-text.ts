@@ -100,6 +100,16 @@ export function vendoredLicenseText(
 ): NamedText | undefined {
   const entry = (policy.licenseTexts || {})[key];
   if (!entry) return undefined;
+  // Only `nugetVerdict` consults this table, so an entry under any other prefix is a legal text
+  // checked in, hash-pinned and reproduced nowhere - and `stalePolicyEntries` cannot report it
+  // either, because the package it names IS in the shipping set. Refused rather than left silent.
+  if (!key.startsWith('nuget:'))
+    throw new Error(
+      `the notices policy holds a vendored license text for "${key}", but only NuGet packages read ` +
+        'that table - an npm package that ships no license file has its declared identifier\u2019s ' +
+        'canonical SPDX text reproduced instead. Remove the entry, or say which reader should ' +
+        'consult it.',
+    );
   if (entry.version !== version)
     throw new Error(
       `the notices policy holds a license text for "${key}" read from version ${entry.version}, ` +

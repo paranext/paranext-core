@@ -32,6 +32,17 @@ export function buildLock(
   },
   rendered: string,
 ): Lock {
+  // `diffLock` and `diffShippingSet` both index rows by `ecosystem:name@version`, so a duplicate
+  // key silently hides one row from every comparison the lock exists to make - including the text
+  // hash change it is most meant to catch.
+  const keys = verdicts.map((v) => `${v.ecosystem}:${v.name}@${v.version}`);
+  const duplicated = [...new Set(keys.filter((key, index) => keys.indexOf(key) !== index))].sort();
+  if (duplicated.length)
+    throw new Error(
+      `the shipping set contains ${duplicated.length} duplicate lock key(s): ` +
+        `${duplicated.join(', ')}. Every row must be uniquely identified by ecosystem, name and ` +
+        'version, or the lock comparison silently skips one of them.',
+    );
   return {
     licenseeVersion,
     corpusVersion,

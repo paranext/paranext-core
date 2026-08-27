@@ -26,14 +26,22 @@ describe('isNoticeFileName', () => {
   // A NOTICE is not a license and grants nothing, but Apache-2.0 section 4(d) requires its
   // attributions to be redistributed - an obligation reproducing the license text does not
   // discharge.
-  it.each(['NOTICE', 'NOTICE.txt', 'NOTICE.md', 'notice'])(
-    'treats %j as an attribution notice',
-    (name) => {
-      expect(isNoticeFileName(name)).toBe(true);
-    },
-  );
+  it.each([
+    'NOTICE',
+    'NOTICE.txt',
+    'NOTICE.md',
+    'notice',
+    'NOTICES.md',
+    // What the .NET runtime packages ship - 60 of the 88 NuGet packages in the shipping closure -
+    // and what this repository's own document is called. Both spellings, because Microsoft uses
+    // each of them.
+    'THIRD-PARTY-NOTICES.TXT',
+    'ThirdPartyNotices.txt',
+  ])('treats %j as an attribution notice', (name) => {
+    expect(isNoticeFileName(name)).toBe(true);
+  });
 
-  it.each(['LICENSE', 'NOTICES.md', 'notice.js', 'README.md'])(
+  it.each(['LICENSE', 'notice.js', 'README.md', 'notices.json'])(
     'does not treat %j as an attribution notice',
     (name) => {
       expect(isNoticeFileName(name)).toBe(false);

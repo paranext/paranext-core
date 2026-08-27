@@ -31,6 +31,12 @@ function admissibleSpdx(
 ): string {
   const placeholder = '<SPDX identifier this package is actually under>';
   if (!declared.ok) return placeholder;
+  // An SPDX `WITH` operand or an unrepresentable `+` is exactly what `applyException` refuses, and
+  // for reasons that do not go away here: dropping the operator would hand back a template whose
+  // `spdx` states terms narrower than the package grants - `Apache-2.0` for a package offering
+  // `Apache-2.0 WITH LLVM-exception` - which the gate then accepts, and the document reproduces the
+  // plain text for a grant that is not plain. The placeholder is honest where no identifier is.
+  if (declared.exceptions.length || declared.unrepresentablePlus.length) return placeholder;
   if (!declared.hasConjunction && declared.ids.length > 1) {
     const admissible = declared.ids.find((id) => !copyleft.has(id) && allowed.has(id));
     // Every operand is copyleft or unlisted, so no single branch clears the gate either. The
@@ -69,10 +75,10 @@ function exceptionRemedy(
   // threshold - so an inadmissible `detected` IS the positive identification an exception cannot
   // override. Nothing weaker reaches this test.
   //
-  // Bounded by `isDisallowedId`, the same predicate the gate itself applies. Testing `copyleft`
-  // alone meant this printed the exception template - a paste-ready entry, with the hash already
-  // filled in - for every restrictive identifier absent from that 21-entry list, walking the reader
-  // into an instrument that cannot clear the block they are reading.
+  // Bounded by `isDisallowedId`, the same predicate the gate itself applies, so the two cannot
+  // disagree about what an exception may clear. A looser test here prints the paste-ready template
+  // - hash already filled in - for an identifier the gate will refuse, walking the reader into an
+  // instrument that cannot clear the block they are reading.
   const copyleftIds = copyleft || new Set<string>();
   const inadmissible = (id: string) =>
     allowed ? isDisallowedId(id, allowed, copyleftIds) : copyleftIds.has(id);
@@ -141,6 +147,50 @@ function policyRemedy(v: Verdict, entryKey: string, copyleft: Set<string> = new 
     `  instead, in ${POLICY_FILE}:`,
     '',
   ];
+
+  // Checked BEFORE the shapes below, because these three carry an SPDX OPERATOR and no instrument
+  // in the policy can clear one. `resolveDeclaredPrefix` refuses them ahead of any list lookup, so
+  // an "allowed" or "elections" entry is never consulted; `applyException` refuses `WITH` and an
+  // unrepresentable `+` by name; and `applyOverride` is only ever reached for a package whose
+  // declaration does NOT parse, which these do. Sending the reader to any of the three is advice
+  // the gate rejects, which is the failure this function exists to prevent.
+  if (declared.ok && declared.hasNonGrantDisjunct)
+    return [
+      ...head,
+      `  - ${v.declared} offers a branch that is not a grant this project can verify it holds -`,
+      '    typically a commercial offer. Electing it would be a procurement decision, so it is never',
+      '    automatic, and no policy entry can make it one.',
+      '  - if the package genuinely also offers terms this project accepts, the reviewer records',
+      '    that determination against the license text they read - which needs a license text, and',
+      '    this package ships none.',
+      '  - otherwise the dependency itself has to change.',
+      '',
+    ];
+
+  if (declared.ok && declared.unrepresentablePlus.length)
+    return [
+      ...head,
+      `  - ${v.declared} offers ${declared.unrepresentablePlus.join(', ')}, and SPDX publishes no`,
+      '    "or later" identifier for it - so no identifier states what this package offers, and',
+      '    reproducing the base license text would state terms narrower than it grants.',
+      '  - no entry in the policy can clear this: an exception refuses an unrepresentable "+" by',
+      '    name, and an override applies only where the declaration does not parse, which this does.',
+      '  - the dependency has to declare a version SPDX can express, or it has to change.',
+      '',
+    ];
+
+  if (declared.ok && declared.exceptions.length)
+    return [
+      ...head,
+      `  - ${v.declared} carries the license exception ${declared.exceptions.join(', ')}, which`,
+      '    modifies the grant its base identifier makes. This pipeline reproduces license texts from',
+      '    the SPDX corpus, which holds no exception texts, so resolving on the base identifier would',
+      '    put a text into the artifact describing a license the package is not under.',
+      '  - no entry in the policy can clear this: an exception refuses a "WITH" operand by name, and',
+      '    an override applies only where the declaration does not parse, which this does.',
+      '  - the dependency has to change.',
+      '',
+    ];
 
   if (declared.ok && declared.ids.length === 1) {
     // The allow-list route is advice the gate would then reject for a copyleft identifier:
@@ -281,8 +331,11 @@ export function stalePolicyEntries(
       .map((entry) => entry.package)
       .filter((key) => !versioned.has(key))
       .map((key) => `exception "${key}" - no such package at that version in the shipping set`),
+    // The `alwaysList` exemption is bounded to the prefix that implements it. Exempting the flag
+    // wherever it appeared meant an entry under any other prefix was both inert (`alwaysListedPackages`
+    // produces rows for NuGet only) and unreported.
     ...Object.entries(policy.overrides || {})
-      .filter(([key, entry]) => !entry.alwaysList && !names.has(key))
+      .filter(([key, entry]) => !(entry.alwaysList && key.startsWith('nuget:')) && !names.has(key))
       .map(([key]) => `override "${key}" - no such package in the shipping set`),
     // The one table pinned to neither a version nor a text hash, and the one whose entries are
     // mostly read from a package's REPOSITORY rather than its tarball - so this report is the only
