@@ -2944,7 +2944,7 @@ step, no automation. Just a record.
 - **Source:** PT-4325 (registration reminder dot), sub-task of PT-4323; retry-cost evidence from
   `requestWithRetry` and `MAX_REQUEST_ATTEMPTS` in `src/shared/data/rpc.model.ts`.
 
-## ADR-0034: The tab context menu is a contribution channel, and a window is named by its content
+## adr-tab-menu-channel-and-window-naming: The tab context menu is a contribution channel, and a window is named by its content
 
 - **Date:** 2026-08-25
 - **Status:** Accepted
