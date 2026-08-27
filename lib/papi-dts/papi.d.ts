@@ -4133,6 +4133,23 @@ declare module 'shared/services/window.service-model' {
      * find the data provider when accessing it using the useData hook
      */
     dataProviderName: 'platform.windowServiceDataProvider';
+    /**
+     * Get the id of the window this code is currently running in.
+     *
+     * Works from the renderer and from inside a web view. A web view's iframe has no window id of its
+     * own; it reaches this through the `papi` object it shares with the renderer hosting it, and this
+     * code runs as part of that renderer — so it answers with the id of the window the web view is
+     * in. Returns `undefined` in the extension host, which has no window of its own.
+     *
+     * This answers a different question than `platform.getFocusedWindowId`, which reports which
+     * window the user is currently looking at — that call returns a _different_ window's id whenever
+     * this one is not the focused window.
+     *
+     * @returns The id of the current window, or `undefined` if there is no current window (e.g. in
+     *   the extension host)
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    getWindowId(): string | undefined;
   }>;
   /** Focus of the window is on a WebView iframe with the specified id */
   export type FocusSubjectWebView = {
@@ -4260,7 +4277,10 @@ declare module 'shared/services/window.service-model' {
    * @experimental This type is unstable and may change or disappear without notice
    */
   export type WindowSummary = {
-    /** Runtime id of the window. Not stable across restarts */
+    /**
+     * The window's durable id: persisted in its layout entry and handed back to whichever window
+     * restores that entry, so it is stable across restarts.
+     */
     windowId: string;
     /**
      * The window's title, which follows its own content. Two windows showing the same thing carry the

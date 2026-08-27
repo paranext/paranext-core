@@ -84,9 +84,11 @@ async function initializeWindowService(): Promise<void> {
  */
 async function getWindowService(): Promise<IWindowService> {
   // Having a window id is what separates a renderer from the extension host, which has none.
-  // Compared against `undefined` rather than tested for truthiness: a falsiness test would send
-  // window 0 down the extension host's path. Nothing mints 0 today, and a check that is correct
-  // only because of that is one counter change away from being wrong.
+  // Compared against `undefined` rather than tested for truthiness because `undefined` is the
+  // deliberate sentinel for "no window": the renderer assigns `requestedWindowId || undefined`
+  // (`renderer/global-this.model.ts`), so an absent or empty parameter lands as `undefined` rather
+  // than as an empty-string id. Testing the sentinel says what is meant instead of resting on every
+  // possible id being truthy.
   if (globalThis.windowId === undefined) return getFocusedWindowService();
   await initialize();
   // Initializing resolved without setting the provider, which means it was disposed between being

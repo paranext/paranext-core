@@ -2263,12 +2263,15 @@ step, no automation. Just a record.
 ## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
 
 - **Date:** 2026-08-26
-- **Status:** Superseded by adr-durable-window-ids (the slot indirection this entry's "Per-window
-  renderer state moves off the window id and onto the slot" and "State whose slot has left the
-  structure is pruned" sections describe is removed there). The numeric-vs-string and
-  never-reused-id decisions above them stand; a still-earlier, undocumented step of this same
-  work (PT-4464) had already made ids strings again by the time `adr-durable-window-ids` was
-  written, which that entry's Context notes but does not re-litigate.
+- **Status:** Superseded by adr-durable-window-ids. Of this entry's three headline claims, "minted
+  by main" and "never reused" still hold; **"numeric on every surface" does not** — ids are GUID
+  strings. Two decisions in the body are also reversed: ids are no longer minted fresh on every
+  launch, and with that the slot indirection described under "Per-window renderer state moves off
+  the window id and onto the slot" and "State whose slot has left the structure is pruned" is gone.
+  Non-reuse survives but stopped being the interesting property: a durable id answers "which window
+  was this", which is the question the slot existed to answer. Read this entry as the reasoning of
+  2026-08-26, not as current guidance — the Alternatives below in particular reject an approach that
+  was subsequently adopted, over blockers that adr-durable-window-ids removed rather than dismissed.
 - **Context:** Every window-id surface exported Electron's `BrowserWindow.id`. Electron assigns
   those per session and hands the same number to a later window, so every mention of a window id
   carried a "runtime-only, reused, never persist" caveat, and several behaviours existed only to
@@ -2362,10 +2365,19 @@ step, no automation. Just a record.
   `local-storage.service.ts`, `window-scoped-web-view-ids.util.ts`, and the web view service shard.
   Two ids naming the same window is exactly the kind of split `adr-platform-minted-window-ids`
   removed for Electron's id versus the platform's; here it was reintroduced for a reason (id reuse)
-  that a durable id removes at the source. (By the time this decision was written, `mintWindowId`
-  had already gone back to a string — `randomUUID()` rather than a persisted counter — in an earlier,
-  undocumented step of this same PT-4464 work; that reversal of `adr-platform-minted-window-ids`'s
-  numeric-id decision is not re-litigated here.)
+  that a durable id removes at the source. This decision also reverses
+  `adr-platform-minted-window-ids`'s numeric-id decision, which the same PT-4464 work had already
+  carried out a step earlier. That entry rejected an opaque or uuid id over four concrete blockers,
+  and each was removed deliberately rather than found to be untrue. `MoveWebViewTarget` was
+  `number | 'new'`, discriminating a numeric id from a string literal, so a string id would have
+  made `'new'` a possible id and collapsed the union — it is now a tagged union discriminating on a
+  `kind` field, so no id value can collide with `'new'` whatever its type. `getServiceShardWindowId`
+  answered `undefined` for anything non-numeric, so a half-typed build would have routed nothing
+  while looking healthy — `getServiceShardAttributes` now throws on a non-string, moving that
+  failure from silent-at-routing to loud-at-registration. The digit-requiring matchers were
+  retargeted at the GUID shape, and the two tie-breaks that needed `a.windowId - b.windowId` to be
+  arithmetic now read creation order from `getWindowCreationRank` off the creation-ordered window
+  list, which is what they always meant.
 - **Decision:** `mintWindowId` (`window-state.service.ts`) mints a random GUID instead of a
   counter value, and `addWindow` accepts an optional `existingId` — supplied only when a window is
   restoring a persisted entry, in which case `main.ts`'s `createWindow` passes
@@ -2389,12 +2401,18 @@ step, no automation. Just a record.
   identity are one field — deferred, not rejected: it changes a second, independent axis (whether a
   preserved entry with no live window can be told apart from one that has one) that deserves its own
   review rather than riding in on an id-durability change.
-- **Consequences:** Every matcher that used to recognize a window id by requiring digits
+- **Consequences:** The matchers that recognize a *live* window id by requiring digits
   (`WINDOW_SUFFIX_PATTERN` in `window-scoped-web-view-ids.util.ts`, the per-window storage prune in
-  `local-storage.service.ts`) now requires the GUID shape instead
+  `local-storage.service.ts`) now require the GUID shape instead
   (`WINDOW_ID_SHAPE_PATTERN_SOURCE`, `shared/utils/util.ts`) — deliberately shape-only rather than
   RFC-4122-strict, since `newGuid()` (`platform-bible-utils`) leaves the variant nibble
-  unconstrained and ids of that shape are already on disk. The storage prune flips from an exclusion
+  unconstrained and ids of that shape are already on disk. One digit-requiring matcher is deliberately
+  left alone: `PREFIXED_DOCK_LAYOUT_KEY_PATTERN` (`web-view.service-shard.ts`) is a one-way reader
+  for pre-multi-window layouts, whose keys were written by builds that scoped storage by *numeric*
+  window id, and `getLegacySavedLayout` picks the lowest such id as the newest saved layout.
+  Widening it to the GUID shape would be a bug twice over — it would make current-scheme keys look
+  like legacy ones, and its `Number(match[1])` ordering would go `NaN`. A matcher that reads only
+  historical data must keep matching the historical shape. The storage prune flips from an exclusion
   (accept any prefix, reject all-digit ones) to a positive match, closing a real gap where an
   extension's own `<prefix>_web-view-state` key in the shared origin storage could be swept up as a
   dead window's. An entry parsed from disk still accepts the legacy `slotId` key as a fallback for
