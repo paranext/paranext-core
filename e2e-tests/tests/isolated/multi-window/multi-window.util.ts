@@ -420,15 +420,29 @@ export async function waitForRendererRegistered(
 }
 
 /**
- * Locator for a window's Home tab title BY ITS FIXED FALLBACK-LAYOUT ID — only valid for a window
- * that loaded the single-Home-tab fallback layout ({@link HOME_TAB_UUID}), i.e. the first window of
- * a fresh profile or one restored from a saved layout that already carried that id. A window whose
+ * A window's Home tab web view id BY ITS FIXED FALLBACK-LAYOUT ID — only valid for a window that
+ * loaded the single-Home-tab fallback layout ({@link HOME_TAB_UUID}), i.e. the first window of a
+ * fresh profile or one restored from a saved layout that already carried that id. A window whose
  * Home tab was docked on the fly (see {@link expectWindowDockHasOnlyHomeTab}) gets a freshly
- * generated web view id each time, so this locator will not find it — look that one up with
+ * generated web view id each time, so this is not that id.
+ *
+ * The window suffix this appends is owned by `window-scoped-web-view-ids.util.ts`
+ * (`withWindowScopedWebViewIdInTab`), not by this file — calling this rather than spelling the
+ * suffix out at each call site means a change to that scheme surfaces as one place to update
+ * instead of a locator silently built against the old id and timing out with nothing to name.
+ */
+export function homeTabWebViewId(windowId: number): string {
+  return `${HOME_TAB_UUID}-w${windowId}`;
+}
+
+/**
+ * Locator for a window's Home tab title BY ITS FIXED FALLBACK-LAYOUT ID — see
+ * {@link homeTabWebViewId}. A window whose Home tab was docked on the fly gets a freshly generated
+ * web view id each time, so this locator will not find it — look that one up with
  * {@link webViewTabTitle}, passing the id it minted.
  */
 export function homeTabTitle(page: Page, windowId: number) {
-  return webViewTabTitle(page, `${HOME_TAB_UUID}-w${windowId}`);
+  return webViewTabTitle(page, homeTabWebViewId(windowId));
 }
 
 /**
