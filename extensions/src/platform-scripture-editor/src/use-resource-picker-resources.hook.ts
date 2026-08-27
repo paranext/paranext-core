@@ -24,32 +24,25 @@ export function useResourcePickerResources(
     'platformScripture.referencedProjectsAndResources',
   );
 
-  const [downloaded, setDownloaded] = useState<DownloadedResource[]>([]);
-  const [isDownloadedLoading, setIsDownloadedLoading] = useState(false);
+  // undefined = fetch in flight; [] = not fetching (includeDownloaded is false or fetch completed)
+  const [downloaded, setDownloaded] = useState<DownloadedResource[] | undefined>(undefined);
 
   // TODO: papi.projectLookup has no onDidChange event yet; the downloaded list will be stale if
   // a project is installed while this panel is open. Re-fetch when that event exists.
   useEffect(() => {
     if (!includeDownloaded) {
       setDownloaded([]);
-      setIsDownloadedLoading(false);
       return undefined;
     }
-    setIsDownloadedLoading(true);
+    setDownloaded(undefined);
     let current = true;
     fetchDownloadedResources()
       .then((result) => {
-        if (current) {
-          setDownloaded(result);
-          setIsDownloadedLoading(false);
-        }
+        if (current) setDownloaded(result);
         return undefined;
       })
       .catch(() => {
-        if (current) {
-          setDownloaded([]);
-          setIsDownloadedLoading(false);
-        }
+        if (current) setDownloaded([]);
       });
     return () => {
       current = false;
@@ -58,10 +51,15 @@ export function useResourcePickerResources(
 
   const rows = useMemo(() => {
     if (!effectiveResources) return undefined;
-    const built = buildPickerResources(effectiveResources.items, downloaded, dblResources);
+    if (includeDownloaded && downloaded === undefined) return undefined;
+    const built = buildPickerResources(
+      effectiveResources.items,
+      includeDownloaded ? (downloaded ?? []) : [],
+      dblResources,
+    );
     if (!adminLockedFirst) return built;
     return [...built].sort((a, b) => Number(b.isAdminLocked) - Number(a.isAdminLocked));
-  }, [effectiveResources, downloaded, dblResources, adminLockedFirst]);
+  }, [effectiveResources, downloaded, dblResources, adminLockedFirst, includeDownloaded]);
 
-  return [rows, isEffectiveLoading || isDownloadedLoading];
+  return [rows, isEffectiveLoading || rows === undefined];
 }
