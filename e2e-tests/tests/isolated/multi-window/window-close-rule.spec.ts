@@ -30,21 +30,24 @@
 
 import fs from 'fs';
 import path from 'path';
-import type { ElectronApplication } from '@playwright/test';
+import type { ElectronApplication, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   ElectronAppContext,
   LaunchElectronAppOptions,
   launchElectronApp,
   preConfigureSettings,
+  sendPapiRequestOnce,
   teardownElectronApp,
   waitForAppReady,
 } from '../../../fixtures/helpers';
 import {
+  WEBSOCKET_PORT,
   captureAppOutput,
   createSecondWindow,
   createStepLogger,
   getWindowIdOfPage,
+  homeTabTitle,
   pollUntil,
   waitForAppPages,
   waitForRendererRegistered,
@@ -121,6 +124,13 @@ async function clickCloseOn(electronApp: ElectronApplication, windowId: number):
     if (!win) throw new Error(`No BrowserWindow with id ${id}`);
     win.close();
   }, windowId);
+}
+
+/** Web view ids a page currently holds, read from its tab titles */
+async function heldWebViewIds(page: Page): Promise<string[]> {
+  return page
+    .locator('.platform-tab-title[data-web-view-id]')
+    .evaluateAll((titles) => titles.map((title) => title.getAttribute('data-web-view-id') ?? ''));
 }
 
 /** IDs of the windows still alive in the main process */
@@ -287,6 +297,54 @@ test.describe('window close rule', () => {
     } finally {
       if (ctx) await teardownElectronApp(ctx);
     }
+  });
+
+  test('the primary survives having its last tab moved out, and comes back with Home', async ({
+    electronApp,
+    mainPage,
+  }) => {
+    // D28: moving the primary's last tab out does what closing that tab does — Home reopens. The
+    // primary neither empties away nor closes. If it closed, nothing would hold the primary role
+    // and the window the user moved their work into would be a secondary whose ✕ drops its layout.
+    // So this asserts both halves: the primary stays and docks Home, and it is STILL the primary —
+    // shown by its ✕ asking, which only the primary's does.
+    const logStep = createStepLogger('window-close-rule');
+    await waitForAppReady(mainPage, 180_000);
+    const primaryId = getWindowIdOfPage(mainPage);
+
+    const page2 = await createSecondWindow(electronApp);
+    const secondId = getWindowIdOfPage(page2);
+    await waitForRendererRegistered(secondId, 120_000);
+    logStep(`windows ${primaryId} (primary) and ${secondId} up`);
+
+    // Move the primary's only web view into window 2, emptying the primary
+    const [webViewInPrimary] = await heldWebViewIds(mainPage);
+    expect(webViewInPrimary).toBeTruthy();
+    const movedWebViewId = await sendPapiRequestOnce<string>(
+      'command:platform.moveWebViewToWindow',
+      [webViewInPrimary, secondId],
+      WEBSOCKET_PORT,
+      120_000,
+    );
+    logStep(`moved ${movedWebViewId} out of the primary and into window ${secondId}`);
+
+    // The primary stays, and docks Home rather than sitting empty
+    await expect(homeTabTitle(mainPage, primaryId)).toBeAttached({ timeout: 120_000 });
+    expect(mainPage.isClosed()).toBe(false);
+    expect(await liveWindowIds(electronApp)).toHaveLength(2);
+    logStep('primary stayed open and docked Home');
+
+    // And it is still the primary: only the primary's ✕ asks
+    await stubMessageBox(electronApp, CANCEL_BUTTON);
+    await clickCloseOn(electronApp, primaryId);
+    await pollUntil(
+      () => readMessageBoxCalls(electronApp),
+      (calls) => calls.length === 1,
+      30_000,
+      'the emptied primary’s ✕ to still ask',
+    );
+    expect(await liveWindowIds(electronApp)).toHaveLength(2);
+    logStep('the emptied primary is still the primary — its ✕ asked');
   });
 
   test('a quit arriving while the question is open still keeps the primary for next launch', async () => {
