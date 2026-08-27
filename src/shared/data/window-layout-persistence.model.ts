@@ -58,7 +58,8 @@ export type WindowLayoutEntry = WindowBoundsState & {
   /**
    * Stable identity of this slot across sessions, minted when the slot is first created and never
    * changed. This is what per-window renderer state (web view state) is keyed by, so a restored
-   * window finds what its slot saved last time regardless of which window id it was given.
+   * window finds what its slot saved last time regardless of which window id it was given. Handed
+   * to the window on its URL when it is created.
    *
    * Deliberately NOT the entry's position in the list: entries are dropped when their window leaves
    * the structure, so a position can silently come to mean a neighbouring slot's state.
@@ -92,10 +93,9 @@ export type WindowLayoutStructure = { windows: WindowLayoutEntry[] };
  * - `pending-content`: like `empty`, but also skip the default-layout supplement — the window was
  *   created to receive one specific web view, routed separately, and must start with nothing else.
  *
- * Every answer for a tracked window also carries the window's `slotId` — the stable identity of its
- * entry in the structure — which is what the renderer keys its per-window storage by. It is the one
- * thing a window cannot know about itself, since only main holds the structure. Absent only on the
- * defensive `empty` for a request that names no tracked window.
+ * The window's slot id — what its renderer keys per-window storage by — is not part of this answer:
+ * it is settled when the window is tracked, before its first load, and travels on the window's URL
+ * (`WINDOW_SLOT_ID_QUERY_PARAMETER`), so storage works before this request is ever made.
  *
  * An entry whose saved layout held only phantom tabs produces none of these: it is dropped while
  * the structure loads, so no window is ever created to ask. The one exception is the main entry,
@@ -103,14 +103,14 @@ export type WindowLayoutStructure = { windows: WindowLayoutEntry[] };
  * the layout.
  */
 export type WindowLayoutGetResponse =
-  | { kind: 'entry'; layout: LayoutInfo; slotId: string }
-  | { kind: 'legacy'; slotId: string }
-  | { kind: 'empty'; slotId?: string }
+  | { kind: 'entry'; layout: LayoutInfo }
+  | { kind: 'legacy' }
+  | { kind: 'empty' }
   /**
    * This window was created to receive specific content that the main process is about to route to
    * it: start truly empty (no default tabs, no supplement) and wait
    */
-  | { kind: 'pending-content'; slotId: string };
+  | { kind: 'pending-content' };
 
 /**
  * Why a window is reporting itself empty:

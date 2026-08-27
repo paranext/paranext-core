@@ -112,6 +112,7 @@ import { confirmCloseAllWindows } from '@main/services/close-all-prompt.service'
 import { decideWindowClose } from '@main/services/window-close-decision.service';
 import {
   assignEntryToWindow,
+  getSlotIdOf,
   handleWindowRemoved,
   initializeWindowLayoutPersistence,
   isWindowPendingContent,
@@ -160,6 +161,7 @@ import {
   STARTUP_MARKS_QUERY_PARAMETER,
   THEME_STATE_QUERY_PARAMETER,
   WINDOW_ID,
+  WINDOW_SLOT_ID_QUERY_PARAMETER,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
@@ -1369,6 +1371,10 @@ async function main() {
     const searchParamsObject: Record<string, string> = {
       [LOG_LEVEL_QUERY_PARAMETER]: globalThis.logLevel,
       [WINDOW_ID]: `${windowId}`,
+      // The window's per-window storage is keyed by its slot, and the slot was settled when the
+      // window was tracked above — so it travels with the window rather than being asked for after
+      // the load, and storage works from the first render in every interface mode
+      [WINDOW_SLOT_ID_QUERY_PARAMETER]: getSlotIdOf(windowId),
     };
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
