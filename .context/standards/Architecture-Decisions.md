@@ -42,7 +42,7 @@ step, no automation. Just a record.
 
 ### Entry template
 
-``markdown
+```markdown
 ## adr-{slug}: {short title}
 
 - **Date:** YYYY-MM-DD
@@ -51,7 +51,7 @@ step, no automation. Just a record.
 - **Decision:** what we chose.
 - **Alternatives:** what we considered and why we rejected/deferred them.
 - **Consequences:** what this enables or constrains; when to revisit.
-``
+```
 
 ---
 

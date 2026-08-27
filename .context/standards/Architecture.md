@@ -21,7 +21,7 @@ This document provides detailed architectural information for Platform.Bible (pa
 
 Platform.Bible uses **JSON-RPC 2.0 over WebSocket** for inter-process communication. All processes connect to the Main process which acts as the message broker.
 
-``
+```
 ┌─────────────────────────────────────────────────────────┐
 │                    Main Process (Electron)               │
 │  • WebSocket server on port 8876                         │
@@ -34,7 +34,7 @@ Platform.Bible uses **JSON-RPC 2.0 over WebSocket** for inter-process communicat
 │ Renderer   │ │ Extension  │ │ .NET Data       │
 │ (React UI) │ │ Host       │ │ Provider        │
 └────────────┘ └────────────┘ └─────────────────┘
-``
+```
 
 ### Communication Patterns
 
@@ -61,14 +61,14 @@ Platform.Bible uses a **host/proxy pattern** for cross-process services:
 - **Service Host** (`*-host.ts`): Runs on one process, contains actual implementation
 - **Service** (`*.service.ts`): Proxy that forwards calls to the host
 
-``
+```
 Extension Host Process              Main Process
 ┌─────────────────────┐            ┌─────────────────────┐
 │ settings.service-   │  JSON-RPC  │ settings.service.ts │
 │ host.ts             │ ◄────────► │ (proxy)             │
 │ (implementation)    │            │                     │
 └─────────────────────┘            └─────────────────────┘
-``
+```
 
 > For the **authoring shape** of a service — stateless function-exports vs stateful module-state
 > with `initialize()`/`shutdown()` vs a process-specific factory — see
@@ -87,7 +87,7 @@ one window's business, and the app can have several windows. Those services use 
 | **Service router** | `*.service-router.ts` | main | Registers the generic global name. Holds no logic; resolves a target window and forwards. Fans out only where the operation is inherently cross-window |
 | **Service shard** | `*.service-shard.ts` | each renderer | The real implementation for **one** window. Registered under a window-scoped network object id with an `objectType` of its own |
 
-``
+```
 Renderer (window 1)          Main Process                  Renderer (window 2)
 ┌──────────────────────┐    ┌────────────────────────┐    ┌──────────────────────┐
 │ web-view.service-    │    │ web-view.service-      │    │ web-view.service-    │
@@ -96,7 +96,7 @@ Renderer (window 1)          Main Process                  Renderer (window 2)
 │ objectType:          │    │ (the generic name      │    │ objectType:          │
 │  webViewServiceShard │    │  consumers call)       │    │  webViewServiceShard │
 └──────────────────────┘    └────────────────────────┘    └──────────────────────┘
-``
+```
 
 Consumers never see any of this: they call the generic name, exactly as they did before there was
 more than one window.
@@ -220,7 +220,7 @@ Data providers are the primary abstraction for exposing data across processes wi
 
 ### Structure
 
-``typescript
+```typescript
 // Data Provider Engine (implementation)
 class MyDataProviderEngine implements IDataProviderEngine<MyDataTypes> {
   async getBook(selector: string): Promise<BookData> { /* ... */ }
@@ -232,18 +232,18 @@ const myDataProvider = await papi.dataProviders.registerEngine(
   'myExtension.myDataProvider',
   myDataProviderEngine
 );
-``
+```
 
 ### Subscription Pattern
 
-``typescript
+```typescript
 // In a React component
 const [data, setData, isLoading] = useData('myExtension.myDataProvider').Book('GEN');
 
 // Manual subscription
 const unsubscribe = await papi.dataProviders.get('myExtension.myDataProvider')
   .subscribeBook('GEN', (bookData) => { /* handle update */ });
-``
+```
 
 ### Key Files
 
@@ -263,7 +263,7 @@ Network objects allow any object to be exposed across process boundaries via JSO
 2. **Proxy**: Remote processes get a proxy that forwards method calls
 3. **Serialization**: Arguments and return values are JSON-serialized
 
-``typescript
+```typescript
 // Expose an object
 const disposable = await networkObjectService.set('myObject', {
   async doSomething(arg: string): Promise<string> {
@@ -274,7 +274,7 @@ const disposable = await networkObjectService.set('myObject', {
 // Get from another process
 const myObject = await networkObjectService.get<MyObjectType>('myObject');
 const result = await myObject.doSomething('test'); // JSON-RPC call
-``
+```
 
 ### Limitations
 
@@ -296,7 +296,7 @@ const result = await myObject.doSomething('test'); // JSON-RPC call
 
 Extensions run in the Extension Host process, isolated from the main Electron process:
 
-``
+```
 Extension Host Process
 ┌─────────────────────────────────────────────────────┐
 │  Extension A     Extension B     Extension C        │
@@ -306,13 +306,13 @@ Extension Host Process
 │  │ Has `papi`│   │ Has `papi`│   │ Has `papi`│     │
 │  └───────────┘   └───────────┘   └───────────┘     │
 └─────────────────────────────────────────────────────┘
-``
+```
 
 ### WebView Isolation
 
 WebViews run in isolated renderer contexts within iframes:
 
-``
+```
 Renderer Process
 ┌─────────────────────────────────────────────────────┐
 │  Platform Shell (React)                             │
@@ -326,13 +326,13 @@ Renderer Process
 │  │  └──────────┘  └──────────┘  └──────────┘    │  │
 │  └───────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────┘
-``
+```
 
 ### Why `instanceof` Doesn't Work
 
 Objects crossing process boundaries are serialized and deserialized:
 
-``typescript
+```typescript
 // In Extension Host
 class MyClass { value = 42; }
 const obj = new MyClass();
@@ -341,13 +341,13 @@ await networkObjectService.set('myObj', obj);
 // In Renderer - THIS FAILS
 const proxy = await networkObjectService.get('myObj');
 proxy instanceof MyClass; // false! It's a proxy, not the original
-``
+```
 
 ### PAPI as the Bridge
 
 Extensions and WebViews interact with the platform through the PAPI (Platform API):
 
-``typescript
+```typescript
 // Extension main.ts
 export async function activate(context: ExecutionActivationContext) {
   const { papi } = context;
@@ -361,7 +361,7 @@ export async function activate(context: ExecutionActivationContext) {
   // Register web views
   papi.webViewProviders.registerWebViewProvider('myExt.view', webViewProvider); // `register` is deprecated (renamed 2024-11)
 }
-``
+```
 
 ---
 
@@ -388,7 +388,7 @@ Code in `src/shared/` must:
 
 Defined in `tsconfig.json`:
 
-``json
+```json
 {
   "paths": {
     "@main/*": ["src/main/*"],
@@ -398,7 +398,7 @@ Defined in `tsconfig.json`:
     "@node/*": ["src/node/*"]
   }
 }
-``
+```
 
 ### Violation Detection
 

@@ -20,7 +20,7 @@ The namespace of classes in each file should always match the directory where th
 
 ### Directory Structure
 
-``
+```
 c-sharp/
 ├── Projects/              # Project data providers and factories
 ├── Services/              # Static service classes
@@ -31,7 +31,7 @@ c-sharp/
 ├── Users/                 # User management
 ├── Program.cs             # Entry point
 └── PapiClient.cs          # Core PAPI communication client
-``
+```
 
 The goal is to aggregate related classes into the same directory, providing a logical taxonomy of capabilities.
 
@@ -92,7 +92,7 @@ Use for making one-time PAPI calls from C# to services hosted elsewhere on the n
 **Location:** `c-sharp/Services/`
 
 **Pattern:**
-``csharp
+```csharp
 public static class MyService
 {
     public static T MethodName(PapiClient client, params...)
@@ -115,7 +115,7 @@ public static class MyService
         }
     }
 }
-``
+```
 
 Note: Services use synchronous wrappers via `ThreadingUtils.GetTaskResult()` to bridge async PAPI calls.
 
@@ -135,7 +135,7 @@ Note: Services use synchronous wrappers via `ThreadingUtils.GetTaskResult()` to 
 **Location:** `c-sharp/{Directory Containing Related Functionality}/`
 
 **Pattern:**
-``csharp
+```csharp
 public class MyService
 {
     public void DoSomething(params...)
@@ -159,7 +159,7 @@ public class MyService
             DoSomethingElse);
     }
 }
-``
+```
 
 Note: `InitializeAsync()` must be called in `Program.cs` to make commands available to PAPI clients.
 
@@ -181,14 +181,14 @@ Use for data that needs to be subscribed to or updated over time.
 **Location:** `c-sharp/{Directory Containing Related Functionality}/`
 
 **Inheritance:**
-``
+```
 NetworkObject (base)
   └── DataProvider (abstract)
         ├── ProjectDataProvider (abstract)
         │   └── ParatextProjectDataProvider
         ├── InventoryDataProvider
         └── TimeDataProvider (sample code, not used in production)
-``
+```
 
 **Key methods:**
 - `RegisterDataProviderAsync()` - Registers on PAPI network and starts the provider
@@ -212,10 +212,10 @@ Use to expose a stateless query/command service as a named, typed network object
 **Location:** `c-sharp/{Directory Containing Related Functionality}/`
 
 **Inheritance:**
-``
+```
 NetworkObject (base)
   └── SomeNetworkObject (example name, not real network object)
-``
+```
 
 **Key methods:**
 - `RegisterNetworkObjectAsync()` - Registers on PAPI network
@@ -236,9 +236,9 @@ Note: `RegisterNetworkObjectAsync()` must be called in `Program.cs` to be availa
 
 A DataProvider notifies its own subscribers from inside its `Set*` methods (see **Adding a Method to an Existing Project Data Provider** below). But a NetworkObject (or a static service) that mutates project data which DataProvider subscribers observe — e.g. a command that adds/removes books, which `useProjectSetting('platformScripture.booksPresent')` consumers watch — has no `Set*` to fire the event. After such a mutation succeeds, reach the affected project's data provider and fire a full update yourself:
 
-``csharp
+```csharp
 _pdpFactory.GetExistingProjectDataProvider(projectId)?.SendFullProjectUpdateEvent();
-``
+```
 
 The mutation that precedes this notification is itself subject to the mandatory Send/Receive write gate — the entry point must open with `SendReceiveWriteLock.EnterWrite` (see **Project write-locking** under Multi-threaded/Concurrent Code for the gate vs. `WriteLockManager` distinction).
 
@@ -271,7 +271,7 @@ When you want to expose new data from an existing `ProjectDataProvider` (e.g. `P
 > If you only need a helper method on the provider that is **not** part of the contract, the method MUST NOT start with `get`/`set`/`subscribe` — those prefixes opt the method into the contract. Use any other appropriate verb (e.g. `lookup*`, `compute*`, `list*`). The recipe below assumes you are adding a contract method.
 
 1. **C# methods.** Add `public` `Get*` and `Set*` methods on the provider class (e.g. `ParatextProjectDataProvider.cs`). Keep each focused — one method per conceptual operation. The `Get*` reads from the underlying source; the `Set*` writes and then calls `SendDataUpdateEvent` for the affected data type so subscribers get notified:
-   ``csharp
+   ```csharp
    public string? GetBookSummary(int bookNum)
    {
        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -286,24 +286,24 @@ When you want to expose new data from an existing `ProjectDataProvider` (e.g. `P
        SendDataUpdateEvent(ProjectDataType.BOOK_SUMMARY, "book summary data update event");
        return true;
    }
-   ``
+   ```
    You will also need to add a matching `BOOK_SUMMARY` constant to `ProjectDataType.cs` (e.g. `public const string BOOK_SUMMARY = "BookSummary";`) — that is the string `SendDataUpdateEvent` carries to the TS side.
 2. **C# registration.** Register both methods in the provider's `GetFunctions()` override (string name → delegate). The string is what TS consumers call:
-   ``csharp
+   ```csharp
    retVal.Add(("getBookSummary", GetBookSummary));
    retVal.Add(("setBookSummary", SetBookSummary));
-   ``
+   ```
 3. **C# interface constant.** Add the `projectInterface` name to `c-sharp/Projects/ProjectInterfaces.cs`:
-   ``csharp
+   ```csharp
    public const string BOOK_SUMMARY = "platformScripture.BookSummary";
-   ``
+   ```
 4. **C# project advertisement.** Add the constant to the provider's supported interfaces lists in `LocalParatextProjects.cs` — since #2342 (2026-06-18) there are two: `s_paratextPublishedProjectInterfaces` (include only if published/read-only resource projects can genuinely serve the interface) and `s_paratextUnpublishedProjectInterfaces` (regular editable projects). Projects advertise it via `getMetadataForAllProjects`:
-   ``csharp
+   ```csharp
    ProjectInterfaces.BOOK_SUMMARY,
-   ``
+   ```
 5. **TypeScript types.** In the extension's `types/*.d.ts` (e.g. `platform-scripture.d.ts`), declare both the data-types record and the interface. The data-types record's **keys** (`BookSummary` here) determine the names of the `get*` / `set*` / `subscribe*` methods, and its three type parameters — `<TSelector, TGetData, TSetData>` — fix the argument and return types of all three methods (see `src/shared/models/data-provider.model.ts` for the canonical `DataProviderGetter` / `DataProviderSetter` / `DataProviderSubscriber` JSDoc):
 
-   ``ts
+   ```ts
    /** Provides per-book summary text */
    export type BookSummaryProjectInterfaceDataTypes = {
      /** Per-book summary text */
@@ -324,11 +324,11 @@ When you want to expose new data from an existing `ProjectDataProvider` (e.g. `P
          options?: DataProviderSubscriberOptions,
        ): Promise<UnsubscriberAsync>;
      };
-   ``
+   ```
 
    Each `get*` on the interface needs its own paired `set*` and `subscribe*` declaration — you cannot share them across multiple gets, even when the data is effectively read-only. The `subscribe*` declaration is **declaration-only**: the TS data provider service auto-generates the body from the events your C# `Set*` emits. Don't write an implementation in either C# or TS.
 6. **TypeScript registration.** Import the interface into the `papi-shared-types` block (same file) and add the entry to `ProjectDataProviderInterfaces`:
-   ``ts
+   ```ts
    import type {
      // ...
      IBookSummaryProjectDataProvider,
@@ -338,14 +338,14 @@ When you want to expose new data from an existing `ProjectDataProvider` (e.g. `P
      // ...
      'platformScripture.BookSummary': IBookSummaryProjectDataProvider;
    }
-   ``
+   ```
    The string key here MUST match the value of the C# constant from step 3 byte-for-byte.
 
 **Consuming from a web view:**
-``tsx
+```tsx
 const pdp = useProjectDataProvider('platformScripture.BookSummary', projectId);
 const summary = await pdp?.getBookSummary(bookNum);
-``
+```
 
 **Verification:**
 - Call over PAPI directly: `object:{pdpName}.{methodName}` via `papi-client` skill — confirms C# registration and delegate wiring.
@@ -368,12 +368,12 @@ A `projectInterface` (the capability names a project advertises, registered as a
 
 Instead, read the `projectInterfaces: string[]` from project metadata (e.g. `papi.projectLookup.getMetadataForProject(projectId)`) and check for the capability by name with `.includes(...)` against a named interface constant — the shipped idiom:
 
-``typescript
+```typescript
 // e.g. src/shared/services/project-data-provider.service.ts:114
 projectInterfaces.includes(PROJECT_INTERFACE_PLATFORM_BASE);
 // or against a specific capability such as 'platformScripture.USFM_BookChapterVerse'
 projectInterfaces.includes(scriptureInterfaceName);
-``
+```
 
 (`src/shared/models/project-lookup.service-model.ts` uses the same `.includes(...)` check when matching PDP factories and enriching metadata.) Keep the interface-name constant in one shared place so the name convention is encoded once. This keeps an extension's new project type working with zero changes to a central enum, and avoids a wrong-shape "fetch a project-type setting" lookup. Each PT9 project variant maps cleanly onto a combination of interface checks.
 
@@ -395,7 +395,7 @@ projectInterfaces.includes(scriptureInterfaceName);
 - `DummyParatextProjectDataProvider` - In-memory file storage
 
 **Fixture Setup Pattern:**
-``csharp
+```csharp
 [SetUpFixture]
 public class FixtureSetup
 {
@@ -405,17 +405,17 @@ public class FixtureSetup
     [OneTimeTearDown]
     public void RunAfterAnyTests() => Directory.Delete(testFolder, true);
 }
-``
+```
 
 **Test Parameterization:**
-``csharp
+```csharp
 [TestCase(1, 1, 0, @"\id GEN \ip intro \c 1 ")]
 [TestCase(1, 2, 1, @"\v 1 verse one ")]
 public void TestMethod(int bookNum, int chapterNum, int verseNum, string expected)
 {
     // Test implementation
 }
-``
+```
 
 ---
 
@@ -428,7 +428,7 @@ These patterns cover cross-cutting concerns that implementers need to understand
 Custom exception types with structured data for domain-specific errors.
 
 **Pattern:**
-``csharp
+```csharp
 // Custom exception with structured properties
 public class MissingBookException(int bookNum, string projectId)
     : Exception($"Book number {bookNum} not found in project {projectId}.")
@@ -436,7 +436,7 @@ public class MissingBookException(int bookNum, string projectId)
     public int BookNum { get; } = bookNum;
     public string ProjectId { get; } = projectId;
 }
-``
+```
 
 **When to create custom exceptions:**
 - Domain-specific errors that need structured metadata
@@ -467,11 +467,11 @@ When a C# exception crosses the PAPI wire boundary and the TS caller needs a mac
 The 16-value code set in `c-sharp/PlatformErrorCodes.cs` (`ABORTED`, `ALREADY_EXISTS`, `CANCELLED`, `DATA_LOSS`, `DEADLINE_EXCEEDED`, `FAILED_PRECONDITION`, `INTERNAL`, `INVALID_ARGUMENT`, `NOT_FOUND`, `OUT_OF_RANGE`, `PERMISSION_DENIED`, `RESOURCE_EXHAUSTED`, `UNAUTHENTICATED`, `UNAVAILABLE`, `UNIMPLEMENTED`, `UNKNOWN`) mirrors the TS `PlatformErrorCode` union in `lib/platform-bible-utils/src/platform-error.ts`. (`PlatformErrorCodes` also exposes `Throw(code, message)` — marked `[DoesNotReturn]` — and `TryGetCode(ex, out code)` for the catch side.)
 
 **Pattern:**
-``csharp
+```csharp
 throw PlatformErrorCodes.WithCode(
     PlatformErrorCodes.PermissionDenied,
     "You must be an administrator on this shared project.");
-``
+```
 
 **Avoid:**
 - Throwing a *custom exception type* across the PAPI wire to signal a code — richer types do not survive the JSON-RPC serializer any better and complicate catch blocks. Use `WithCode` on the standard exception instead.
@@ -486,11 +486,11 @@ ParatextData surfaces user-facing warnings and errors by calling `Alert.Show` / 
 - Install `AlertCapture` as `Alert.Implementation` once at startup.
 - Wrap any ParatextData call that may raise alerts in a capture scope, then project the captured entries into the wire result:
 
-  ``csharp
+  ```csharp
   using var alertScope = AlertCapture.StartCapture();
   // ... run the ParatextData operation that may raise Alert.Show/ShowLater ...
   var entries = alertScope.Entries; // List<AlertEntry>
-  ``
+  ```
 
 - `AlertCapture` keeps the active scope in an `AsyncLocal<AlertScope?>`, so each async wire call captures only its own alerts even when calls run concurrently. Nested scopes save and restore the parent on dispose.
 - Partition the captured `List<AlertEntry>` (the `Entries`) into the result's `Warnings` / `Errors` `AlertEntry[]` arrays (e.g. `AlertCapture.PartitionAlertsByLevel`, whose `out` params are those arrays) so the caller gets structured feedback instead of a swallowed message.
@@ -505,21 +505,21 @@ Don't call `Alert.Show` from your own orchestrator code as poor-man's logging �
 Uses Console for output to be logged. Do **NOT** use System.Diagnostics.Trace.
 
 **Pattern:**
-``csharp
+```csharp
 Console.WriteLine($"Processing feature: {featureName}");
-``
+```
 
 **Anti-Pattern:**
-``csharp
+```csharp
 System.Diagnostics.Trace.WriteLine($"Processing feature: {featureName}");
-``
+```
 
 ### JSON Serialization Converters
 
 Custom converters for types that don't serialize naturally.
 
 **Pattern:**
-``csharp
+```csharp
 public class MyTypeConverter : JsonConverter<MyType>
 {
     public override MyType? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -532,10 +532,10 @@ public class MyTypeConverter : JsonConverter<MyType>
         // Write object as JSON
     }
 }
-``
+```
 
 **Registering converters:**
-``csharp
+```csharp
 // In SerializationOptions.cs
 public static JsonSerializerOptions CreateSerializationOptions()
 {
@@ -548,7 +548,7 @@ public static JsonSerializerOptions CreateSerializationOptions()
     options.Converters.Add(new MyTypeConverter());
     return options;
 }
-``
+```
 
 **Existing converters:**
 - `VerseRefConverter` - Paratext verse references
@@ -575,13 +575,13 @@ After writing, verify ParatextData can round-trip the file: call `ScrTextCollect
 
 Use ThreadingUtils to bridge between sync/async code
 
-``csharp
+```csharp
 // Synchronous wrapper for async call
 protected void DoSomething(T parameter1, string description = "function call description")
 {
     ThreadingUtils.RunTask(DoSomethingAsync(parameter1), description, ThreadingUtils.DefaultTimeout);
 }
-``
+```
 
 **Location:** `c-sharp/ThreadingUtils.cs`
 
@@ -591,7 +591,7 @@ protected void DoSomething(T parameter1, string description = "function call des
 
 Assume registered methods will be called concurrently. If some methods are not thread safe, lock all registered methods for the network object or data provider to achieve thread safety.
 
-``csharp
+```csharp
 internal sealed class MyDataProvider : NetworkObjects.DataProvider
 {
     private readonly Dictionary<string, MyData> _dataByKey = new();
@@ -622,13 +622,13 @@ internal sealed class MyDataProvider : NetworkObjects.DataProvider
         return true;
     }
 }
-``
+```
 
 #### Concurrent collections
 
 Use to achieve thread safety without locking for simple key-value access
 
-``csharp
+```csharp
 private readonly ConcurrentDictionary<string, Worker> _workersByJobId = new();
 
 // Thread-safe add
@@ -639,21 +639,21 @@ var worker = _workersByJobId.GetOrAdd(jobId, _ => new Worker());
 
 // Thread-safe remove
 _workersByJobId.TryRemove(jobId, out _);
-``
+```
 
 #### Interlocked
 
 Use to achieve thread safety without locking for atomic counter/flag operations
 
-``csharp
+```csharp
 Interlocked.Add(ref _totalCount, itemList.Count);
-``
+```
 
 #### Double-checked locking for cached-instance factories
 
 For a factory that lazily creates and caches one instance per key, use the `ConcurrentDictionary` check → `lock` → re-check → create sequence. The lock-free first check handles the common (already-cached) path without contention; the re-check inside the lock prevents two callers from both creating the instance.
 
-``csharp
+```csharp
 // Lazy-per-key GetOrAdd: creation is single-flighted per key with no shared lock.
 private readonly ConcurrentDictionary<string, Lazy<ParatextProjectDataProvider>> _pdpMap = new();
 
@@ -662,7 +662,7 @@ var lazyPdp = _pdpMap.GetOrAdd(
     id => new Lazy<ParatextProjectDataProvider>(() => CreateProvider(id))
 );
 return lazyPdp.Value;
-``
+```
 
 **When:** factory patterns with cached instances. Verified in `c-sharp/Projects/ParatextProjectDataProviderFactoryBase.cs` (`GetOrAdd` with `Lazy<T>`).
 
@@ -672,7 +672,7 @@ return lazyPdp.Value;
 
 If concurrent calls require more than a single operation to update shared state, then you **must** lock to achieve atomicity.
 
-``csharp
+```csharp
 private readonly ConcurrentDictionary<string, string> _dictionary1 = new();
 private readonly ConcurrentDictionary<string, string> _dictionary2 = new();
 private readonly object _lock = new();
@@ -699,17 +699,17 @@ public void ThreadSafe(string key1, string value)
 {
     _dictionary1.TryAdd(key1, value);
 }
-``
+```
 
 #### Project write-locking — reuse `ParatextData.WriteLockManager`
 
 To protect a project during a multi-step mutation (file swap, book copy/import/delete), obtain an exclusive write lock from ParatextData rather than rolling your own. PT10 already uses this primitive directly: `c-sharp/Projects/ParatextProjectDataProvider.cs` (via `RunWithinLock`, scope `WriteScope.EntireProject`) and `DeleteBooksOrchestrator` (scope `WriteScope.ProjectText`). Copy/Import don't call it themselves — they rely on ParatextData's own internal locking (`ImportSfmText.ImportBooks` / `PutText`) and only map the resulting `LockNotObtainedException`.
 
-``csharp
+```csharp
 // ObtainLock returns null when the lock can't be obtained — never assume success.
 WriteLock writeLock = WriteLockManager.Default.ObtainLock(WriteScope.EntireProject(scrText))
     ?? throw PlatformErrorCodes.WithCode(PlatformErrorCodes.FailedPrecondition, "The project is busy.");
-``
+```
 
 `ObtainLock` **returns null** when the lock is unavailable (it does not throw); callers convert that null — or an inactive lock — into a `LockNotObtainedException` (or a `PlatformError`) and handle it as a failed precondition, not a crash. `LockNotObtainedException` itself is thrown by higher-level ParatextData helpers (`ScrText`, `ScrTextCollection`) and by paranext-core's own null checks. When porting PT9 code that uses this lock, the lock logic and `LockNotObtainedException` port across without rewrite.
 
@@ -720,16 +720,16 @@ WriteLock writeLock = WriteLockManager.Default.ObtainLock(WriteScope.EntireProje
 Low-level patterns for registering handlers on the PAPI network.
 
 **Registering request handlers:**
-``csharp
+```csharp
 await PapiClient.RegisterRequestHandlerAsync(
     $"object:{networkObjectName}.{functionName}",
     functionDelegate,
     optionalTimeout
 );
-``
+```
 
 **Registering event handlers:**
-``csharp
+```csharp
 papiClient.RegisterEventHandler(
     "platform.settingsServiceUpdate",
     (JsonElement eventParams) =>
@@ -737,15 +737,15 @@ papiClient.RegisterEventHandler(
         // Handle the event
     }
 );
-``
+```
 
 **Sending events:**
-``csharp
+```csharp
 await PapiClient.SendEventAsync(
     "platform.dataProviderUpdate",
     new { dataScope = scopeValue }
 );
-``
+```
 
 **Location:** `c-sharp/PapiClient.cs`
 
@@ -761,7 +761,7 @@ await PapiClient.SendEventAsync(
 
 #### Platform Settings (via PAPI)
 
-``csharp
+```csharp
 // Get setting (synchronous wrapper)
 public static T? GetSetting<T>(PapiClient papiClient, string key)
 {
@@ -781,7 +781,7 @@ public static void SetSetting(PapiClient papiClient, string key, object value)
         ThreadingUtils.DefaultTimeout
     );
 }
-``
+```
 
 **Location:** `c-sharp/Services/SettingsService.cs`
 
@@ -789,7 +789,7 @@ public static void SetSetting(PapiClient papiClient, string key, object value)
 
 For settings that must reside in multiple processes for performance reasons (only one writer allowed)
 
-``csharp
+```csharp
 // Initialize shared store
 await SharedStoreService.InitializeAsync(papiClient);
 papiClient.SetSharedStore(SharedStoreService.GetSharedStore());
@@ -798,13 +798,13 @@ papiClient.SetSharedStore(SharedStoreService.GetSharedStore());
 var store = SharedStoreService.GetSharedStore();
 var value = store.Get<T>(key);
 store.Set(key, newValue);
-``
+```
 
 **Location:** `c-sharp/Services/SharedStore.cs`
 
 #### Validating Project Settings
 
-``csharp
+```csharp
 public static bool IsValid(
     PapiClient papiClient,
     object? newValue,
@@ -814,13 +814,13 @@ public static bool IsValid(
 {
     // Validate project-specific setting change
 }
-``
+```
 
 **Location:** `c-sharp/Services/ProjectSettingsService.cs`
 
 #### Loading Localized Strings
 
-``csharp
+```csharp
 DoSomething(
     arg1,
     LocalizationService.GetLocalizedString(
@@ -829,7 +829,7 @@ DoSomething(
         $"Default value for error message"
     )
 );
-``
+```
 
 **Location:** `c-sharp/Services/LocalizationService.cs`
 
@@ -838,13 +838,13 @@ DoSomething(
 Attribute-based timeout configuration for network methods. If the method does not return within the timeout, a JSON-RPC error will be returned over JSON-RPC.
 
 **Pattern:**
-``csharp
+```csharp
 [NetworkTimeout(15000)]  // 15 second timeout
 public object? GetData(string selector)
 {
     // Implementation
 }
-``
+```
 
 **Location:** `c-sharp/NetworkTimeoutAttribute.cs`
 
@@ -869,7 +869,7 @@ Standard visibility patterns for different component types.
 | Options records | `public record` | Passed via PAPI |
 
 **Pattern:**
-``csharp
+```csharp
 // Internal service - not exposed outside C# process
 internal static class FeatureService { }
 
@@ -882,20 +882,20 @@ public class FeatureException : Exception { }
 // Public records for PAPI communication
 public record FeatureResult { }
 public record FeatureOptions { }
-``
+```
 
 ### File Organization Patterns
 
 **Principle**: One file per type. Do not combine multiple types into a single file except for one case: a record type is used by another record type exclusively. Then the exclusive record types should be in the same file with the shared record type.
 
-``csharp
+```csharp
 // ✅ Correct - One class in a file
 internal sealed class FeatureService
 {
 }
-``
+```
 
-``csharp
+```csharp
 // ✅ Correct - Exclusively used records share file with primary record
 public record FeatureRecord
 {
@@ -906,9 +906,9 @@ public record FeatureRecord
 public record FeatureRecordAttribute
 {
 }
-``
+```
 
-``csharp
+```csharp
 // ❌ Incorrect - two or more shared types in a file
 public enum Enum1
 {
@@ -921,11 +921,11 @@ public enum Enum2
 public enum Enum3
 {
 }
-``
+```
 
 **File-scoped namespaces**: Always use `namespace X;` (no braces), not `namespace X { }`
 
-``csharp
+```csharp
 // ✅ Correct - file-scoped namespace
 namespace Paranext.DataProvider.Feature;
 
@@ -936,14 +936,14 @@ namespace Paranext.DataProvider.Feature
 {
     public record MyRecord { }
 }
-``
+```
 
 ### Initialization Order
 
 Critical initialization sequence in Program.cs.
 
 **Pattern:**
-``csharp
+```csharp
 // 1. Initialize infrastructure first
 await SharedStoreService.InitializeAsync(papi);
 papi.SetSharedStore(SharedStoreService.GetSharedStore());
@@ -962,7 +962,7 @@ await Task.WhenAll(
     inventoryProvider.RegisterDataProviderAsync(),
     checkRunner.RegisterDataProviderAsync()
 );
-``
+```
 
 **Key ordering rules:**
 1. SharedStore must initialize before PapiClient uses it
@@ -984,7 +984,7 @@ the vocabulary and diagram are in
 
 **Shard side** (`src/renderer/services/{service}.service-shard.ts`) — one per window:
 
-``typescript
+```typescript
 await networkObjectService.set<WebViewServiceType>(
   `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`,
   papiWebViewService,
@@ -992,14 +992,14 @@ await networkObjectService.set<WebViewServiceType>(
   WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
   getServiceShardAttributes(globalThis.windowId),
 );
-``
+```
 
 A shard that is a data provider passes the same two arguments to
 `dataProviderService.registerEngine`, which forwards them to `networkObjectService.set`.
 
 **Router side** (`src/main/services/{service}.service-router.ts`) — one for the app:
 
-``typescript
+```typescript
 const webViewShards = createServiceShardIndex<WebViewServiceType>({
   objectType: WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
   resolveShard: (networkObjectId) => networkObjectService.get<WebViewServiceType>(networkObjectId),
@@ -1021,7 +1021,7 @@ await networkObjectService.set<WebViewServiceType>(
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   webViewServiceRouter,
 );
-``
+```
 
 **A router may claim command or request names instead of a network object** — the dialog, Usersnap
 and BookChapterControl routers do, and the scripture navigation commands are a command-only module
@@ -1029,7 +1029,7 @@ with no service behind them at all. The shard index and target resolver are iden
 is that there is no service interface to declare the router as, so nothing type-checks the set of
 names it claims:
 
-``typescript
+```typescript
 export async function startUsersnapServiceRouter(): Promise<void> {
   // Nothing derives owner-vs-focus routing from a command's parameters any more, so each router
   // states how it routes what it claims and this reports a command whose parameters say otherwise
@@ -1044,7 +1044,7 @@ export async function startUsersnapServiceRouter(): Promise<void> {
     USERSNAP_COMMAND_DOCS['platform.usersnapSubmitIdea'],
   );
 }
-``
+```
 
 Pin the claimed-name set with an exact-set test in `src/main/services/__tests__/` — that test is
 what the type annotation does for the network object shape, and it is the only thing that catches a
@@ -1100,7 +1100,7 @@ worked examples: `src/main/services/scroll-group.service-host.ts` +
 
 **Host side** (`src/main/services/{service}.service-host.ts`) — one for the app:
 
-``typescript
+```typescript
 // Registered during main startup, BEFORE createWindow(), so it is there for the first render
 await networkObjectService.set<IScrollGroupHostService>(
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
@@ -1116,11 +1116,11 @@ await networkObjectService.set<IScrollGroupHostService>(
 await dataProviderService.registerEngine(themeServiceDataProviderName, engine, undefined, undefined, {
   methods: [{ name: 'migrateStoredThemeState', 'x-experimental': true /* ... */ }],
 });
-``
+```
 
 **Cache side** (`src/renderer/services/{service}.service.ts`) — one per window:
 
-``typescript
+```typescript
 // 1. Seeded synchronously at module load from what main put on the window's URL: React renders
 //    before any service has started, and the *Sync readers are called during that render
 seedCacheBeforeFirstRender();
@@ -1143,7 +1143,7 @@ export function setScrRefSync(/* ... */): boolean {
   sendPredictedWriteToHost(scrollGroupId, (host) => host.setScrRef(/* ... */));
   return true;
 }
-``
+```
 
 **Do:**
 
@@ -1236,7 +1236,7 @@ export function setScrRefSync(/* ... */): boolean {
 
 ### Command Registration
 
-``typescript
+```typescript
 const commandPromise = papi.commands.registerCommand(
   'extensionName.commandName',
   asyncFunctionHandler,
@@ -1261,14 +1261,14 @@ const commandPromise = papi.commands.registerCommand(
 );
 
 context.registrations.add(await commandPromise);
-``
+```
 
 ### Type Declarations
 
 **Location:** `extensions/src/{extension}/src/types/{extension}.d.ts`
 
 **Pattern:**
-``typescript
+```typescript
 declare module '{extension-name}' {
   // Import shared types
   import type { DataProviderDataType, IDataProvider } from '@papi/core';
@@ -1298,11 +1298,11 @@ declare module 'papi-shared-types' {
     'extensionName.settingName': SettingType;
   }
 }
-``
+```
 
 ### Extension Structure
 
-``
+```
 extensions/src/{extension}/
 ├── src/
 │   ├── main.ts                    # Entry point with activate/deactivate
@@ -1319,11 +1319,11 @@ extensions/src/{extension}/
 ├── assets/                        # Icons and static assets
 ├── manifest.json                  # Extension metadata
 └── package.json                   # npm package metadata
-``
+```
 
 ### Extension Activate Function
 
-``typescript
+```typescript
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   // Register commands, validators, web views, data providers, etc.
 
@@ -1339,20 +1339,20 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 export async function deactivate(): Promise<boolean> {
   return true;
 }
-``
+```
 
 ### DataProviderDataType Format
 
-``typescript
+```typescript
 DataProviderDataType<Selector, ReturnType, SetType>
-``
+```
 
 - **Selector:** Type of the get/subscribe selector (use `undefined` if no selector)
 - **ReturnType:** What `get` returns (can include `undefined` for missing data)
 - **SetType:** What `set` accepts (`never` if read-only)
 
 **Examples:**
-``typescript
+```typescript
 // Read-write with number selector
 RandomNumber: DataProviderDataType<number, number, number>;
 
@@ -1361,7 +1361,7 @@ Names: DataProviderDataType<undefined, string[], never>;
 
 // Scripture data
 BookUSFM: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
-``
+```
 
 ---
 
@@ -1440,14 +1440,14 @@ optional documentation argument — the C# counterpart of the TS
 
 **Build docs with the `ExperimentalMethodDocumentation` factory** (`c-sharp/NetworkObjects/Documentation/`; every doc it builds carries `x-experimental: true`). Complex record params/results use the `"object"` type rather than a fully-expanded schema:
 
-``csharp
+```csharp
 using static Paranext.DataProvider.NetworkObjects.Documentation.ExperimentalMethodDocumentation;
 
 Create(
     "Summary of the method.",
     [Param("input", "The input.", "object")],
     ResultOf("object", "The result"));
-``
+```
 
 Pass a `NetworkObjectDocumentation` to `RegisterNetworkObjectAsync`. It mirrors the
 TypeScript `NetworkObjectDocumentation`: an object-level `Experimental` flag that
@@ -1458,7 +1458,7 @@ per-method `Methods` for richer docs.
 It marks the existence method and every function automatically (functions without their
 own `Methods` entry get a bare marker). Add `Methods` for richer per-function docs:
 
-``csharp
+```csharp
 await RegisterNetworkObjectAsync(
     NetworkObjectName,
     functions,
@@ -1468,7 +1468,7 @@ await RegisterNetworkObjectAsync(
         Experimental = true,                       // cascades to object:{name} + every function
         Methods = BuildExperimentalDocumentation(), // optional richer per-method docs
     });
-``
+```
 
 `{ Experimental = true }` alone (no `Methods`) is enough to mark the whole object.
 
@@ -1477,7 +1477,7 @@ also exposes stable ones like USFM/USJ) — leave `Experimental` unset and list 
 experimental functions in `Methods`. The existence method and unlisted functions stay
 unmarked. For a data provider, override `DataProvider.GetNetworkObjectDocumentation()`:
 
-``csharp
+```csharp
 protected override NetworkObjectDocumentation GetNetworkObjectDocumentation() =>
     new()
     {
@@ -1488,7 +1488,7 @@ protected override NetworkObjectDocumentation GetNetworkObjectDocumentation() =>
             // … only the experimental functions
         },
     };
-``
+```
 
 `PapiClient.RegisterRequestHandlerAsync` also takes an optional `documentation:` argument
 for marking a single standalone method. Reference implementations:
