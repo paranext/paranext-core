@@ -1,0 +1,338 @@
+/**
+ * The window-close rule: the primary window's ✕ decides whether the app quits.
+ *
+ * TEST 1 — cancel keeps everything. With two windows open, closing the primary through its ✕ shows
+ * the close-all question. Answering Cancel leaves both windows open, the app up, and — the part a
+ * unit test cannot see — the primary still able to be closed again: a cancel that left the close
+ * guard latched would make the next ✕ fall through to Electron's default close with none of the
+ * shutdown work. So the test closes the primary a SECOND time and expects the question again.
+ *
+ * TEST 2 — confirm closes all and relaunch restores all. Same setup; answering "Close all windows"
+ * brings the app down cleanly, and the next launch restores BOTH windows. This is the test that
+ * keeps the dialog's own sentence honest: it promises the windows will be restored the next time
+ * the application is opened, so the relaunch half is not optional.
+ *
+ * TEST 3 — a quit during the question keeps the primary. With the question showing and unanswered,
+ * a real quit arrives (`app.quit()`, which is what Cmd+Q, File → Quit and platform.quit all do).
+ * The question is not a close in progress, so that quit must run the primary's normal shutdown work
+ * rather than the escape hatch that skips it — otherwise the primary's entry is spliced out and the
+ * main layout is lost through a timing window. Both entries must survive and both windows return.
+ *
+ * The native dialog is stubbed in the main process through `electronApp.evaluate`, which records
+ * each call and answers as the test directs, or holds the question open for test 3. `app.quit()` is
+ * deliberately NOT how test 2 brings the app down: that path sets the quit latch first and never
+ * asks, which is the behaviour the rule leaves unchanged.
+ *
+ * Every test carries a "the primary is still what it should be" assertion in one form or another,
+ * because the failure they guard against is silent: a stuck guard, a stuck latch, or a spliced
+ * entry shows up as a window that looks fine and then closes wrong.
+ */
+
+import fs from 'fs';
+import path from 'path';
+import type { ElectronApplication } from '@playwright/test';
+import { test, expect } from '../../../fixtures/isolated.fixture';
+import {
+  ElectronAppContext,
+  LaunchElectronAppOptions,
+  launchElectronApp,
+  teardownElectronApp,
+  waitForAppReady,
+} from '../../../fixtures/helpers';
+import {
+  captureAppOutput,
+  createSecondWindow,
+  createStepLogger,
+  getWindowIdOfPage,
+  pollUntil,
+  waitForAppPages,
+  waitForRendererRegistered,
+} from './multi-window.util';
+
+const BASE_LAUNCH_OPTIONS: LaunchElectronAppOptions = {
+  isolatedProjectRoot: true,
+  envOverrides: { DEV_NOISY: 'false' },
+};
+
+/** Index of the "Close all windows" button as the app lays the dialog out; Cancel is the other */
+const CLOSE_ALL_BUTTON = 0;
+const CANCEL_BUTTON = 1;
+
+/** What the stubbed message box records about each call it received */
+type RecordedMessageBox = { buttons: string[] };
+
+/**
+ * Replace the main process's message box with one that records every call and answers with a fixed
+ * button index — or, when `holdOpen` is set, records the call and never resolves, so the test can
+ * act while the question is still "showing". The record is read back with
+ * {@link readMessageBoxCalls}.
+ *
+ * The record lives on the `dialog` module object itself, which every `evaluate` sees the same
+ * instance of, so nothing has to be smuggled through a global.
+ */
+async function stubMessageBox(
+  electronApp: ElectronApplication,
+  answer: number,
+  holdOpen = false,
+): Promise<void> {
+  await electronApp.evaluate(
+    ({ dialog }, { buttonIndex, neverResolve }) => {
+      const calls: RecordedMessageBox[] = [];
+      // Electron overloads the call as (window, options) and (options); the app uses the first.
+      // The record is what the test reads; the answer is what the app reads.
+      const stub = (
+        windowOrOptions: Electron.BaseWindow | Electron.MessageBoxOptions,
+        maybeOptions?: Electron.MessageBoxOptions,
+      ): Promise<Electron.MessageBoxReturnValue> => {
+        const options =
+          maybeOptions ?? ('buttons' in windowOrOptions ? windowOrOptions : undefined);
+        calls.push({ buttons: options?.buttons ?? [] });
+        if (neverResolve) return new Promise(() => {});
+        return Promise.resolve({ response: buttonIndex, checkboxChecked: false });
+      };
+      Object.assign(dialog, { showMessageBox: stub, recordedMessageBoxCalls: calls });
+    },
+    { buttonIndex: answer, neverResolve: holdOpen },
+  );
+}
+
+/** Every message-box call recorded since {@link stubMessageBox}, oldest first */
+async function readMessageBoxCalls(
+  electronApp: ElectronApplication,
+): Promise<RecordedMessageBox[]> {
+  return electronApp.evaluate(({ dialog }) => {
+    // `stubMessageBox` hangs the record off the dialog module; read it back the same way
+    const record: unknown = Reflect.get(dialog, 'recordedMessageBoxCalls');
+    if (!Array.isArray(record)) return [];
+    // Narrow each entry rather than asserting the array's type: only the `buttons` field is read
+    return record.flatMap((entry: unknown): RecordedMessageBox[] => {
+      if (typeof entry !== 'object' || !entry || !('buttons' in entry)) return [];
+      const { buttons } = entry;
+      return Array.isArray(buttons) ? [{ buttons: buttons.map(String) }] : [];
+    });
+  });
+}
+
+/** Ask a window to close the way its ✕ does — through Electron's `close`, not `app.quit()` */
+async function clickCloseOn(electronApp: ElectronApplication, windowId: number): Promise<void> {
+  await electronApp.evaluate(({ BrowserWindow }, id) => {
+    const win = BrowserWindow.fromId(id);
+    if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+    win.close();
+  }, windowId);
+}
+
+/** IDs of the windows still alive in the main process */
+async function liveWindowIds(electronApp: ElectronApplication): Promise<number[]> {
+  return electronApp.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()
+      .filter((win) => !win.isDestroyed())
+      .map((win) => win.id)
+      .sort((a, b) => a - b),
+  );
+}
+
+/** Wait for the Electron process to exit, reporting how; kills the process group afterwards */
+async function waitForProcessExit(
+  electronApp: ElectronApplication,
+): Promise<{ code: number | undefined; signal: string | undefined }> {
+  const electronProcess = electronApp.process();
+  const result = await Promise.race([
+    new Promise<{ code: number | undefined; signal: string | undefined }>((resolve) => {
+      electronProcess.once('exit', (code, signal) =>
+        resolve({ code: code ?? undefined, signal: signal ?? undefined }),
+      );
+    }),
+    new Promise<never>((_resolve, reject) => {
+      setTimeout(
+        () =>
+          reject(new Error('Electron process did not exit within 120 s of closing all windows')),
+        120_000,
+      );
+    }),
+  ]);
+  if (electronProcess.pid) {
+    try {
+      process.kill(-electronProcess.pid, 'SIGKILL');
+    } catch {
+      /* process group already gone */
+    }
+  }
+  return result;
+}
+
+/** How many window entries the persisted structure holds */
+function countSavedWindowEntries(userDataDir: string): number {
+  const file = path.join(userDataDir, 'window-layouts.json');
+  const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (typeof parsed !== 'object' || !parsed || !('windows' in parsed)) return 0;
+  const { windows } = parsed;
+  return Array.isArray(windows) ? windows.length : 0;
+}
+
+test.describe('window close rule', () => {
+  test('closing the primary with another window open asks, and cancel keeps everything', async ({
+    electronApp,
+    mainPage,
+  }) => {
+    const logStep = createStepLogger('window-close-rule');
+    await waitForAppReady(mainPage, 180_000);
+    const primaryId = getWindowIdOfPage(mainPage);
+
+    const page2 = await createSecondWindow(electronApp);
+    const secondId = getWindowIdOfPage(page2);
+    await waitForRendererRegistered(secondId, 120_000);
+    logStep(`windows ${primaryId} (primary) and ${secondId} up`);
+
+    await stubMessageBox(electronApp, CANCEL_BUTTON);
+    await clickCloseOn(electronApp, primaryId);
+
+    // The question was asked, with the outcome-named buttons the rule specifies…
+    await pollUntil(
+      () => readMessageBoxCalls(electronApp),
+      (calls) => calls.length === 1,
+      30_000,
+      'the close-all question to be asked',
+    );
+    const [firstAsk] = await readMessageBoxCalls(electronApp);
+    expect(firstAsk.buttons).toHaveLength(2);
+    expect(firstAsk.buttons[CLOSE_ALL_BUTTON]).toMatch(/close all windows/i);
+    expect(firstAsk.buttons[CANCEL_BUTTON]).toMatch(/cancel/i);
+    logStep('asked once; cancelled');
+
+    // …and cancelling changed nothing: both windows are still alive and the app is up
+    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort((a, b) => a - b));
+    await expect(mainPage.locator('body')).toBeVisible();
+
+    // The primary is still a window that ASKS, not one whose close guard is stuck: a second ✕ must
+    // produce a second question rather than falling through to Electron's default close.
+    await clickCloseOn(electronApp, primaryId);
+    await pollUntil(
+      () => readMessageBoxCalls(electronApp),
+      (calls) => calls.length === 2,
+      30_000,
+      'the close-all question to be asked a second time',
+    );
+    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort((a, b) => a - b));
+    logStep('asked again on the second close; still both windows');
+  });
+
+  test('confirming closes every window, and the next launch restores all of them', async () => {
+    const logStep = createStepLogger('window-close-rule');
+    let ctx: ElectronAppContext | undefined;
+
+    try {
+      ctx = await launchElectronApp({ ...BASE_LAUNCH_OPTIONS, preserveUserDataDir: true });
+      const { userDataDir } = ctx;
+      const output = captureAppOutput(ctx.electronApp);
+      const [mainPage] = await waitForAppPages(ctx.electronApp, 1, 90_000);
+      await waitForAppReady(mainPage, 180_000);
+      const primaryId = getWindowIdOfPage(mainPage);
+
+      const page2 = await createSecondWindow(ctx.electronApp);
+      const secondId = getWindowIdOfPage(page2);
+      await waitForRendererRegistered(secondId, 120_000);
+      logStep(`phase 1: windows ${primaryId} (primary) and ${secondId} up`);
+
+      await stubMessageBox(ctx.electronApp, CLOSE_ALL_BUTTON);
+      await clickCloseOn(ctx.electronApp, primaryId);
+
+      // Every window goes down and the process exits cleanly — a real quit, not a hang and not a
+      // crash. Asked exactly once: the secondary's own close must not ask again.
+      const exit = await waitForProcessExit(ctx.electronApp);
+      logStep(`phase 1: exited with code ${exit.code} signal ${exit.signal}`);
+      expect(exit.signal).toBeUndefined();
+      expect(exit.code).toBe(0);
+      const log = output.text();
+      expect(log).toContain('Main process is quitting');
+
+      // Both entries survived the quit: a primary-close-quit records every window as staying
+      expect(countSavedWindowEntries(userDataDir)).toBe(2);
+      logStep('phase 1: persisted structure holds both windows');
+
+      await teardownElectronApp(ctx);
+      ctx = undefined;
+
+      // Phase 2 — the promise the dialog makes: both windows come back
+      ctx = await launchElectronApp({
+        ...BASE_LAUNCH_OPTIONS,
+        userDataDir,
+        preserveUserDataDir: true,
+      });
+      const restored = await waitForAppPages(ctx.electronApp, 2, 240_000);
+      expect(restored).toHaveLength(2);
+      const [restoredMain, restoredSecond] = restored;
+      await waitForAppReady(restoredMain, 180_000);
+      await waitForRendererRegistered(getWindowIdOfPage(restoredSecond), 120_000);
+      logStep('phase 2: both windows restored');
+    } finally {
+      if (ctx) await teardownElectronApp(ctx);
+    }
+  });
+
+  test('a quit arriving while the question is open still keeps the primary for next launch', async () => {
+    // The question is not a close in progress. A close that reaches the primary while it is
+    // showing — here `app.quit()`, as Cmd+Q, File → Quit and platform.quit all are — must go
+    // through the primary's normal shutdown work, not the escape hatch that skips it. If it took
+    // the hatch, the primary's entry would be spliced out and the user's main layout lost: the
+    // very loss this rule exists to prevent, reopened through a timing window.
+    const logStep = createStepLogger('window-close-rule');
+    let ctx: ElectronAppContext | undefined;
+
+    try {
+      ctx = await launchElectronApp({ ...BASE_LAUNCH_OPTIONS, preserveUserDataDir: true });
+      const { userDataDir } = ctx;
+      const output = captureAppOutput(ctx.electronApp);
+      const [mainPage] = await waitForAppPages(ctx.electronApp, 1, 90_000);
+      await waitForAppReady(mainPage, 180_000);
+      const primaryId = getWindowIdOfPage(mainPage);
+
+      const page2 = await createSecondWindow(ctx.electronApp);
+      const secondId = getWindowIdOfPage(page2);
+      await waitForRendererRegistered(secondId, 120_000);
+      logStep(`phase 1: windows ${primaryId} (primary) and ${secondId} up`);
+
+      // The question is asked and then left hanging, as a user staring at it would leave it
+      const { electronApp } = ctx;
+      await stubMessageBox(electronApp, CANCEL_BUTTON, true);
+      await clickCloseOn(electronApp, primaryId);
+      await pollUntil(
+        () => readMessageBoxCalls(electronApp),
+        (calls) => calls.length === 1,
+        30_000,
+        'the close-all question to be showing',
+      );
+      logStep('phase 1: question showing; quitting underneath it');
+
+      // Now a real quit arrives while the question is still up
+      await ctx.electronApp.evaluate(({ app }) => {
+        setTimeout(() => app.quit(), 0);
+      });
+      const exit = await waitForProcessExit(ctx.electronApp);
+      logStep(`phase 1: exited with code ${exit.code} signal ${exit.signal}`);
+      expect(exit.signal).toBeUndefined();
+      expect(exit.code).toBe(0);
+      expect(output.text()).toContain('Main process is quitting');
+
+      // The proof: the primary's entry is still there. Had the quit taken the escape hatch, the
+      // primary would have been recorded as leaving and its entry spliced out.
+      expect(countSavedWindowEntries(userDataDir)).toBe(2);
+      logStep('phase 1: both entries survived the quit-during-question');
+
+      await teardownElectronApp(ctx);
+      ctx = undefined;
+
+      ctx = await launchElectronApp({
+        ...BASE_LAUNCH_OPTIONS,
+        userDataDir,
+        preserveUserDataDir: true,
+      });
+      const restored = await waitForAppPages(ctx.electronApp, 2, 240_000);
+      expect(restored).toHaveLength(2);
+      await waitForAppReady(restored[0], 180_000);
+      logStep('phase 2: both windows restored, primary included');
+    } finally {
+      if (ctx) await teardownElectronApp(ctx);
+    }
+  });
+});
