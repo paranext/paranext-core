@@ -4,6 +4,7 @@ import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
+import { logger } from '@shared/services/logger.service';
 import { settingsService } from '@shared/services/settings.service';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
@@ -71,6 +72,19 @@ export const useSetting = <SettingName extends SettingNames>(
     settingsService.reset(key);
   }, [key]);
 
-  return [setting, setSetting, resetSetting, isLoading];
+  // `useData` drops its setter when its runaway guard trips. This hook's returned type promises a
+  // callable setter, so call sites do not null-check it — substitute one that rejects rather than
+  // letting `setSetting is not a function` throw synchronously out of an event handler.
+  const safeSetSetting = useCallback(
+    async (newData: SettingTypes[SettingName]) => {
+      if (setSetting) return setSetting(newData);
+      const message = `Cannot set setting ${key}: its data subscription was stopped. Reopen this view to retry.`;
+      logger.warn(message);
+      throw new Error(message);
+    },
+    [key, setSetting],
+  );
+
+  return [setting, safeSetSetting, resetSetting, isLoading];
 };
 export default useSetting;
