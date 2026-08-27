@@ -397,6 +397,60 @@ describe('web view state under every way the initial load can go', () => {
       vi.useRealTimers();
     }
   });
+  test('drops the stored state of slots the main process says are gone', async () => {
+    // Slot ids are never reissued, so state under a slot whose entry has gone can never be read
+    // again and nothing else removes it. Which ones are gone is main's answer about the ids this
+    // window actually holds state for, so a window created while the question was in flight cannot
+    // have its state deleted by it.
+    localStorage.setItem('slot-seven_web-view-state', 'this window, still live');
+    localStorage.setItem('slot-from-a-closed-window_web-view-state', 'nothing can reach this');
+    let askedWith: unknown;
+    mocks.networkRequest.mockImplementation(async (requestType: string, payload: unknown) => {
+      if (requestType === 'windowLayout:filterDeadSlots') {
+        askedWith = payload;
+        return ['slot-from-a-closed-window'];
+      }
+      return requestType === 'windowLayout:get' ? { kind: 'empty' } : undefined;
+    });
+    await bootFromWindowUrl('?windowId=7&windowSlotId=slot-seven');
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { dockLayout } = makeLiveDockLayout();
+    module.registerDockLayout(dockLayout);
+    await module.startWebViewServiceShard();
+
+    await vi.waitFor(() =>
+      expect(localStorage.getItem('slot-from-a-closed-window_web-view-state')).toBeNull(),
+    );
+    expect(localStorage.getItem('slot-seven_web-view-state')).toBe('this window, still live');
+    expect(askedWith).toEqual(expect.arrayContaining(['slot-seven', 'slot-from-a-closed-window']));
+  });
+
+  test('keeps every stored blob when the main process cannot be asked which slots are gone', async () => {
+    // A failed answer is not "everything is dead" — deleting on no information would take the
+    // state of every window in the profile
+    localStorage.setItem(
+      'slot-from-a-closed-window_web-view-state',
+      'kept: nothing said otherwise',
+    );
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:filterDeadSlots') throw new Error('main is not answering');
+      return requestType === 'windowLayout:get' ? { kind: 'empty' } : undefined;
+    });
+    await bootFromWindowUrl('?windowId=7&windowSlotId=slot-seven');
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { dockLayout } = makeLiveDockLayout();
+    module.registerDockLayout(dockLayout);
+    await module.startWebViewServiceShard();
+
+    await vi.waitFor(() =>
+      expect(mocks.loggerWarn).toHaveBeenCalledWith(
+        expect.stringMatching(/stored state of window slots that are gone/i),
+      ),
+    );
+    expect(localStorage.getItem('slot-from-a-closed-window_web-view-state')).toBe(
+      'kept: nothing said otherwise',
+    );
+  });
 });
 
 describe('the initial layout load against a dock that gained content mid-load', () => {

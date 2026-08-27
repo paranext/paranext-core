@@ -208,6 +208,90 @@ describe('window layout persistence service', () => {
     slotIds.forEach((slotId, index) => expect(slotId).not.toBe(String(index)));
   });
 
+  test('a slot id minted for a window tracked mid-session is written without anything else happening', async () => {
+    // Same rule as the mint on load, at the other two mint sites: until the file carries the id,
+    // a session that ends without a bounds change, a layout push or a clean quit mints again next
+    // launch and orphans everything the renderer stored under the first one.
+    vi.useFakeTimers();
+    const service = await startService();
+    await service.loadWindowLayouts();
+
+    service.trackNewWindow(21);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(writtenStructure().windows.map((entry) => entry.slotId)).toEqual([
+      service.getSlotIdOf(21),
+    ]);
+  });
+
+  test('a slot id minted for the legacy startup window is written the same way', async () => {
+    vi.useFakeTimers();
+    const service = await startService();
+    await service.loadWindowLayouts();
+
+    service.trackLegacyWindow(31);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(writtenStructure().windows.map((entry) => entry.slotId)).toEqual([
+      service.getSlotIdOf(31),
+    ]);
+  });
+
+  describe('reporting which slots are gone', () => {
+    test('names the candidates with no entry left, and only those', async () => {
+      const service = await startService();
+      await loadAndAssignAll(
+        service,
+        [
+          { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
+          { slotId: 'slot-two', layout: layoutWithTab('two') },
+        ],
+        11,
+      );
+      // A window closed deliberately takes its entry with it, which is what makes its slot dead
+      service.handleWindowRemoved(12, 'entry-goes-with-it');
+
+      await expect(
+        registeredHandler('windowLayout:filterDeadSlots')([
+          'slot-one',
+          'slot-two',
+          'slot-from-a-profile-ago',
+        ]),
+      ).resolves.toEqual(['slot-two', 'slot-from-a-profile-ago']);
+    });
+
+    test('a window whose entry stays keeps its slot alive, though the window is gone', async () => {
+      const service = await startService();
+      await loadAndAssignAll(service, [{ slotId: 'slot-one', layout: layoutWithTab('one') }], 11);
+      // The app going down is not the slot going away — its entry is preserved for the next launch
+      service.handleWindowRemoved(11, 'entry-stays');
+
+      await expect(
+        registeredHandler('windowLayout:filterDeadSlots')(['slot-one']),
+      ).resolves.toEqual([]);
+    });
+
+    test('answers nothing at all before the structure is loaded', async () => {
+      // Every slot would look dead to a process that holds none, and the caller deletes what this
+      // answer names — so the empty structure has to answer "none of them", not "all of them"
+      await startService();
+
+      await expect(
+        registeredHandler('windowLayout:filterDeadSlots')(['slot-one', 'slot-two']),
+      ).resolves.toEqual([]);
+    });
+
+    test('answers nothing for a request that does not carry a list of slot ids', async () => {
+      const service = await startService();
+      await loadAndAssignAll(service, [{ slotId: 'slot-one', layout: layoutWithTab('one') }], 11);
+      const filterDeadSlots = registeredHandler('windowLayout:filterDeadSlots');
+
+      await expect(filterDeadSlots(undefined)).resolves.toEqual([]);
+      await expect(filterDeadSlots('slot-one')).resolves.toEqual([]);
+      await expect(filterDeadSlots([1, 2])).resolves.toEqual([]);
+    });
+  });
+
   test('asking for the slot of a window that was never tracked is an error, not an empty answer', async () => {
     const service = await startService();
     await loadAndAssignAll(service, [{ slotId: 'slot-one', layout: layoutWithTab('one') }], 11);
@@ -1403,6 +1487,10 @@ describe('window layout persistence service', () => {
     const service = await startService();
     await service.loadWindowLayouts();
     service.trackLegacyWindow(61);
+    // Tracking a window mints its slot id and writes the file so that id survives the session.
+    // That write is not what this test is about: let it land, then count what the bad pushes add.
+    await vi.advanceTimersByTimeAsync(10_000);
+    mocks.writeFile.mockClear();
 
     const save = registeredHandler('windowLayout:save');
     await save('61', layoutWithTab('pushed')); // id must be a number

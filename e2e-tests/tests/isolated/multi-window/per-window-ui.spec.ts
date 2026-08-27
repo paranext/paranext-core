@@ -432,9 +432,12 @@ test.describe('per-window UI isolation', () => {
     // reliably reflect a programmatic minimize in isMinimized(), and the behaviour under test —
     // the notification following FOCUS, which the routing wait above pinned deterministically —
     // does not depend on the compositor cooperating with the set dressing.
+    // `.catch` for the same reason: a probe that records rather than asserts must not be able to
+    // abort the spec, and a window the helper cannot resolve is as much a non-answer as a
+    // compositor that does not cooperate
     const window1Minimized = await withPlatformWindow(electronApp, window1Id, (win) =>
       win.isMinimized(),
-    );
+    ).catch(() => undefined);
     logStep(
       `window ${window1Id} minimize requested; compositor reports minimized=${String(window1Minimized)}`,
     );
