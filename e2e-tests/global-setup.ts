@@ -3,7 +3,7 @@ import { execSync, spawn } from 'child_process';
 import net from 'net';
 import path from 'path';
 import fs from 'fs';
-import { restoreLeakedSettings } from './fixtures/helpers';
+import { restoreAppGlobalState, restoreLeakedSettings } from './fixtures/helpers';
 
 const WEBSOCKET_PORT = 8876;
 const RENDERER_PORT = 1212;
@@ -134,6 +134,17 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     console.log(
       'Recovered dev-appdata/data/settings.json from a previous run that was killed before it ' +
         `could restore it. Settings it had left behind: ${leakedKeys.join(', ') || '(none)'}`,
+    );
+  }
+
+  // Same for app-global state the main process persists outside the isolated user-data directory
+  // (the scroll group's reference, the theme). A killed run leaves it emptied, which the developer
+  // sees as their app opening at Genesis 1:1 in the default theme until something puts it back.
+  const recoveredKeys = restoreAppGlobalState();
+  if (recoveredKeys !== undefined) {
+    console.log(
+      'Recovered app-global main-process storage from a previous run that was killed before it ' +
+        `could restore it. Keys restored: ${recoveredKeys.join(', ')}`,
     );
   }
 
