@@ -63,6 +63,7 @@ import {
   pollUntil,
   waitForRendererRegistered,
   widenWindowForToolbarReference,
+  withPlatformWindow,
 } from './multi-window.util';
 
 /** Fixed GUID of the bundled sample WEB project (c-sharp/assets/WEB/Settings.xml <Guid>). */
@@ -431,15 +432,8 @@ test.describe('per-window UI isolation', () => {
     // reliably reflect a programmatic minimize in isMinimized(), and the behaviour under test —
     // the notification following FOCUS, which the routing wait above pinned deterministically —
     // does not depend on the compositor cooperating with the set dressing.
-    const window1Minimized = await electronApp.evaluate(
-      ({ BrowserWindow }, id) =>
-        BrowserWindow.getAllWindows()
-          .find(
-            (someWindow) =>
-              Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId')) === id,
-          )
-          ?.isMinimized(),
-      window1Id,
+    const window1Minimized = await withPlatformWindow(electronApp, window1Id, (win) =>
+      win.isMinimized(),
     );
     logStep(
       `window ${window1Id} minimize requested; compositor reports minimized=${String(window1Minimized)}`,
@@ -460,17 +454,7 @@ test.describe('per-window UI isolation', () => {
     // window's (hidden) document, and it is simply visible when the window is restored. That
     // matches single-window behaviour: a notification sent while the app is minimized shows when
     // the user brings the app back up, and none of it is lost or stuck.
-    await electronApp.evaluate(({ BrowserWindow }, id) => {
-      // `id` is the platform's; `BrowserWindow.fromId` understands only Electron's, and the two
-      // stop coinciding after a relaunch. Match on the `windowId` the main process puts in every
-      // renderer URL instead.
-      const win = BrowserWindow.getAllWindows().find(
-        (someWindow) =>
-          Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId')) === id,
-      );
-      if (!win) throw new Error(`No window with platform id ${id}`);
-      win.minimize();
-    }, window2Id);
+    await withPlatformWindow(electronApp, window2Id, (win) => win.minimize());
     const probeToastText = 'per-window notification probe (minimized)';
     // The send must not hang or reject with every window minimized.
     const probeToastId = await sendNotification(probeToastText);

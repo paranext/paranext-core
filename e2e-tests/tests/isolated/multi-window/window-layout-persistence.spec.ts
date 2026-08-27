@@ -105,6 +105,7 @@ import {
   waitForRendererRegistered,
   webViewTabTitle,
   windowScopedWebViewId,
+  withPlatformWindow,
 } from './multi-window.util';
 
 /**
@@ -125,16 +126,7 @@ async function getWindowBounds(
   electronApp: ElectronApplication,
   windowId: number,
 ): Promise<Rectangle> {
-  return electronApp.evaluate(({ BrowserWindow }, id) => {
-    // Matched on the renderer URL's `windowId`, which carries the platform id.
-    // `BrowserWindow.fromId` takes Electron's, and the two diverge once the app has relaunched.
-    const win = BrowserWindow.getAllWindows().find(
-      (someWindow) =>
-        Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId')) === id,
-    );
-    if (!win) throw new Error(`No window with platform id ${id}`);
-    return win.getBounds();
-  }, windowId);
+  return withPlatformWindow(electronApp, windowId, (win) => win.getBounds());
 }
 
 /** Whether `bounds` lies fully within a single one of `displays` — the app's "visible" rule. */
@@ -173,13 +165,10 @@ async function placeWindowAndSettle(
 ): Promise<Rectangle> {
   let settled: Rectangle | undefined;
   await expect(async () => {
-    await electronApp.evaluate(
-      ({ BrowserWindow }, { id, bounds }) => {
-        const win = BrowserWindow.getAllWindows().find(
-          (someWindow) =>
-            Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId')) === id,
-        );
-        if (!win) throw new Error(`No window with platform id ${id}`);
+    await withPlatformWindow(
+      electronApp,
+      windowId,
+      (win, _context, bounds) => {
         // Normal-state placement is what gets persisted, so leave any special state first, and
         // re-show a window the host may have minimized (an unmapped window reads back at a
         // far-off-screen position).
@@ -189,7 +178,7 @@ async function placeWindowAndSettle(
         win.show();
         win.setBounds(bounds);
       },
-      { id: windowId, bounds: targetBounds },
+      targetBounds,
     );
     // Let the compositor apply the placement and the app's debounced bounds capture observe it
     await new Promise<void>((resolve) => {

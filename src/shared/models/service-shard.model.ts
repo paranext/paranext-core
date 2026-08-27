@@ -46,17 +46,14 @@ export type ServiceShardAttributes = {
 /**
  * The attributes a window's shard registers with.
  *
- * @param windowId Platform id of the registering window. Accepted as a string as well as a number
- *   for callers that still hold the raw query-parameter form; the attribute itself is always a
- *   number, matching the ids the main process routes by.
- * @throws If `windowId` is not a window id, since a shard nothing can be routed to is worse than a
+ * @param windowId Platform id of the registering window
+ * @throws If `windowId` is not an integer, since a shard nothing can be routed to is worse than a
  *   window that fails to finish starting
  */
-export function getServiceShardAttributes(windowId: number | string): ServiceShardAttributes {
-  const windowIdNumber = typeof windowId === 'number' ? windowId : Number.parseInt(windowId, 10);
-  if (!Number.isInteger(windowIdNumber))
+export function getServiceShardAttributes(windowId: number): ServiceShardAttributes {
+  if (!Number.isInteger(windowId))
     throw new Error(`Cannot register a service shard for window id "${windowId}"`);
-  return { windowId: windowIdNumber };
+  return { windowId };
 }
 
 /**
