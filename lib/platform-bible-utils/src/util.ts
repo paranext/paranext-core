@@ -105,34 +105,40 @@ export function debounce<TFunc extends (...args: any[]) => any>(
   // Shared between the trailing-edge timer and `flush` so both run exactly the same invocation.
   let pendingArgs: Parameters<TFunc> | undefined;
 
-  // Runs one invocation with the given args, settling the promise that is pending as it starts.
-  // `fn` itself is invoked synchronously (before any await), which is what lets `flush` run the
-  // pending call even in teardown paths (pagehide/beforeunload) where async work never resumes.
-  //
-  // The promise and its settlers are captured AT ENTRY: while this invocation settles (an async
-  // window), a new debounced call may mint a fresh promise with fresh settlers — this invocation's
-  // outcome must reach the callers who were waiting on IT, and the cleanup must not detach the
-  // newer pending promise a fresh call installed.
-  const runInvocation = async (args: Parameters<TFunc>): Promise<void> => {
-    const invocationPromise = promise;
-    const resolveInvocation = promiseResolve;
-    const rejectInvocation = promiseReject;
-    try {
-      resolveInvocation(await fn(...args));
-    } catch (e) {
-      rejectInvocation(e);
-    } finally {
-      if (promise === invocationPromise) promise = undefined;
-    }
-  };
-
-  const debouncedFn = (...args: Parameters<TFunc>): Promise<ReturnType<TFunc>> => {
-    clearTimeout(timeout);
+  // The promise every caller waiting on the currently pending invocation shares, minted on demand
+  // so an invocation always has exactly one promise to settle.
+  const pendingPromise = (): Promise<ReturnType<TFunc>> => {
     if (!promise)
       promise = new Promise((resolve, reject) => {
         promiseResolve = resolve;
         promiseReject = reject;
       });
+    return promise;
+  };
+
+  // Runs one invocation with the given args, settling the promise that is pending as it starts.
+  // `fn` itself is invoked synchronously (before any await), which is what lets `flush` run the
+  // pending call even in teardown paths (pagehide/beforeunload) where async work never resumes.
+  //
+  // The promise and its settlers are captured AT ENTRY and the stored promise is detached
+  // immediately, before the first await: this invocation's outcome must reach the callers who were
+  // waiting on IT, and a call arriving while it settles is a DIFFERENT invocation that needs its
+  // own promise. Sharing one across both settled the newer caller with the older call's result and
+  // discarded the newer outcome — including a rejection — with nothing to observe it.
+  const runInvocation = async (args: Parameters<TFunc>): Promise<void> => {
+    const resolveInvocation = promiseResolve;
+    const rejectInvocation = promiseReject;
+    promise = undefined;
+    try {
+      resolveInvocation(await fn(...args));
+    } catch (e) {
+      rejectInvocation(e);
+    }
+  };
+
+  const debouncedFn = (...args: Parameters<TFunc>): Promise<ReturnType<TFunc>> => {
+    clearTimeout(timeout);
+    const callPromise = pendingPromise();
 
     pendingArgs = args;
     timeout = setTimeout(() => {
@@ -142,7 +148,7 @@ export function debounce<TFunc extends (...args: any[]) => any>(
       if (argsToRun) runInvocation(argsToRun);
     }, delay);
 
-    return promise;
+    return callPromise;
   };
 
   debouncedFn.cancel = () => {
@@ -160,14 +166,12 @@ export function debounce<TFunc extends (...args: any[]) => any>(
     const argsToRun = pendingArgs;
     // Cleared BEFORE invoking so a re-schedule from inside `fn` is not wiped out
     pendingArgs = undefined;
-    const pendingPromise = promise;
-    // Detach the stored promise BEFORE invoking (mirroring cancel), so a call made while the
-    // flushed invocation settles mints a FRESH promise. Left installed, that call reused the
-    // flushed invocation's promise and settlers: the new caller received the flushed call's
-    // result, and its own outcome — including a rejection — was silently discarded.
-    promise = undefined;
+    // Pending args always have a promise to settle, but not always a stored one: a call made while
+    // the previous invocation was settling leaves args pending after that invocation detached the
+    // promise. Minting here keeps flush's contract — it returns `undefined` only when nothing runs.
+    const flushedPromise = pendingPromise();
     runInvocation(argsToRun);
-    return pendingPromise;
+    return flushedPromise;
   };
 
   // Type assertion is necessary to cast the internal implementation type to the public API type
