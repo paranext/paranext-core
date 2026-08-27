@@ -7,7 +7,7 @@
  *
  * Run via: `npm run test:e2e:isolated find`
  *
- * OR by path: `npm run test:e2e:isolated tests/isolated/find/find-replace.spec.ts`
+ * OR by path: `npm run test:e2e:isolated tests/isolated/find/find.spec.ts`
  *
  * ## Simple mode, declared rather than inherited
  *
@@ -16,8 +16,8 @@
  * Find/Replace mode toggle and the entire Replace surface (`hideModeToggle`), every text-based
  * selector here is English-only, and the tab bar's overflow behaviour depends on window width.
  *
- * Replace is therefore untestable from here; covering it needs a separate suite running in Power
- * interface mode — see the note above "Search Filters" below.
+ * Replace is therefore untestable from here. It is covered by `replace.spec.ts` in this directory,
+ * which pins Power interface mode for exactly that reason.
  *
  * ## A permanent tab, not a panel you open and close
  *
@@ -62,6 +62,10 @@ import {
   WEB_COPY_PROJECT_ID,
 } from '../../../fixtures/find.fixture';
 import { waitForAppReady, PROCESS_READY_TIMEOUT } from '../../../fixtures/helpers';
+import {
+  EDITOR_HAMBURGER_SELECTOR,
+  findScriptureEditorFrame,
+} from '../../../fixtures/scripture-editor-helpers';
 
 // The layout this suite's assertions are written against — in particular the Column 3 tab overflow
 // behaviour that activateTab has to cope with.
@@ -107,17 +111,6 @@ const NO_MATCH_TERM = 'ZZZQQQXXX_NORESULT_12345';
 const HISTORY_DEBOUNCE_MS = 5_000;
 
 /**
- * The scripture editor's hamburger ("Project") menu button.
- *
- * The Find panel's own project picker carries the SAME `aria-label="Project"`, so a bare
- * `button[aria-label="Project"]` scan can land on the Find frame instead of the editor's — Find is
- * a permanent tab and is already mounted. `ProjectSelector` renders its trigger with
- * `role="combobox"`; the editor hamburger is a `DropdownMenuTrigger` and is not, so excluding the
- * combobox role separates them.
- */
-const EDITOR_HAMBURGER_SELECTOR = 'button[aria-label="Project"]:not([role="combobox"])';
-
-/**
  * Accessible name of the X button in the search input. Matched exactly: the component library also
  * defines a "Clear search results" label, which a substring match would pick up too.
  */
@@ -146,46 +139,6 @@ let openedProjectId: string | undefined;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Find the scripture editor's frame by scanning all web-view iframes for the one that contains the
- * Project hamburger button.
- *
- * We cannot use `nth(0)` because other webviews (the home page with DEV_NOISY=false, or helloRock3
- * frames with DEV_NOISY=true) may be present before the scripture editor in the iframe list.
- */
-async function findScriptureEditorFrame(page: Page, timeout = 30_000): Promise<Frame> {
-  const deadline = Date.now() + timeout;
-
-  const checkFrames = async (): Promise<Frame | undefined> =>
-    // Using reduce to iterate without for-of (linter requirement). Each step checks a frame and
-    // short-circuits once a match is found.
-    page
-      .frames()
-      .filter((f) => f !== page.mainFrame())
-      .reduce<Promise<Frame | undefined>>(async (accPromise, frame) => {
-        const acc = await accPromise;
-        if (acc) return acc;
-        try {
-          const isVisible = await frame.locator(EDITOR_HAMBURGER_SELECTOR).isVisible();
-          if (isVisible) return frame;
-        } catch {
-          // Frame may not be accessible yet — keep polling
-        }
-        return undefined;
-      }, Promise.resolve(undefined));
-
-  while (Date.now() < deadline) {
-    // Polling loop: each check depends on the previous result
-    // eslint-disable-next-line no-await-in-loop
-    const found = await checkFrames();
-    if (found) return found;
-    // Polling loop: wait between frame-scan attempts must be sequential
-    // eslint-disable-next-line no-await-in-loop
-    await page.waitForTimeout(500);
-  }
-  throw new Error(`Scripture editor not found: no Project button visible after ${timeout}ms`);
-}
 
 /** The tab-title element for a Column 3 web view, matched by its layout UUID prefix. */
 function tabTitleForWebView(mainPage: Page, uuid: string): Locator {
@@ -782,8 +735,7 @@ test.describe('Search History', () => {
 //
 // No Replace-mode tests belong here. Simple mode hides the Find/Replace toggle and renders no
 // Replace surface at all (`hideModeToggle`), so mode switching, Preserve Case, per-result replace
-// and Replace All have nothing to drive. Covering any of them needs a separate suite running in
-// Power interface mode.
+// and Replace All have nothing to drive. They live in `replace.spec.ts`, which pins Power mode.
 // ---------------------------------------------------------------------------
 
 test.describe('Search Filters', () => {

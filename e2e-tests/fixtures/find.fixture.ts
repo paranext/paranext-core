@@ -25,10 +25,12 @@ import { ElectronApplication, expect } from '@playwright/test';
 import { test as appTest } from './app.fixture';
 import {
   assertDeclaredWindowSize,
+  assertInterfaceMode,
   DEFAULT_WINDOW_SIZE,
   launchElectronApp,
   preConfigureSettings,
   PROCESS_READY_TIMEOUT,
+  RequiredInterfaceMode,
   sendPapiRequestOnce,
   teardownElectronApp,
   WindowSize,
@@ -85,15 +87,27 @@ function setupWEBCopyProject(projectsDir: string): void {
 // scripture editor.
 export const test = appTest.extend<
   {},
-  { electronApp: ElectronApplication; windowSize: WindowSize }
+  {
+    electronApp: ElectronApplication;
+    windowSize: WindowSize;
+    interfaceMode: RequiredInterfaceMode;
+  }
 >({
   // Option fixture, worker-scoped because the window it sizes belongs to the worker-scoped
   // `electronApp` below. A spec declares the layout it was written against with
   // `test.use({ windowSize: { width, height } })`.
   windowSize: [DEFAULT_WINDOW_SIZE, { option: true, scope: 'worker' }],
 
+  // Which interface mode the app is pinned to before launch. Simple is the default because that is
+  // what the Find suite drives; the Replace suite sets `test.use({ interfaceMode: 'power' })`,
+  // because Simple mode renders no Replace surface at all (`hideModeToggle`).
+  //
+  // Worker-scoped, and it must be: it is read before the app launches, and the app is shared by
+  // every test in the worker, so it cannot vary per test.
+  interfaceMode: ['simple', { option: true, scope: 'worker' }],
+
   electronApp: [
-    async ({ windowSize }, use) => {
+    async ({ windowSize, interfaceMode }, use) => {
       // Build an isolated, throwaway project root and populate it with a fresh, editable testWEB.
       // Pointing the app at it via PLATFORM_BIBLE_PROJECT_ROOT_FOLDER keeps the suite from ever
       // reading or writing the developer's real projects, and the fresh copy each worker run
@@ -118,7 +132,7 @@ export const test = appTest.extend<
       // - interfaceLanguage: every text-based selector here is English-only.
       const restoreSettings = preConfigureSettings({
         'platform.firstRunComplete': true,
-        'platform.interfaceMode': 'simple',
+        'platform.interfaceMode': interfaceMode,
         'platform.interfaceLanguage': ['en'],
       });
       // Inside its own try: a launch that throws — a bound port, a crash on start — would
@@ -139,6 +153,17 @@ export const test = appTest.extend<
         // resizes, so without this the suite runs at whatever size the platform hands out — under a
         // bare Xvfb that is not the 1280x800 the layout assertions are written against.
         const page = await ctx.electronApp.firstWindow({ timeout: PROCESS_READY_TIMEOUT });
+
+        // Verify the pin took before any test runs. The two modes render genuinely different Find
+        // UIs — Simple hides the Find/Replace toggle and the entire Replace surface — so a pin that
+        // silently failed would otherwise surface as a selector timeout deep inside a test.
+        await assertInterfaceMode(
+          page,
+          interfaceMode,
+          `This fixture pins '${interfaceMode}' before launching its own app, so the pin did not ` +
+            `take: check preConfigureSettings ran before launchElectronApp.`,
+        );
+
         await ctx.electronApp.evaluate(({ BrowserWindow }, size) => {
           const win = BrowserWindow.getAllWindows()[0];
           if (win) {
