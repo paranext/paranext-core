@@ -1,6 +1,8 @@
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
 import {
+  describeWebSocketCloseEvent,
+  MAX_LOGGED_DETAIL_LENGTH,
   MAX_REQUEST_ATTEMPTS,
   REQUEST_ATTEMPT_WAIT_TIME_MS,
   requestWithRetry,
@@ -213,5 +215,138 @@ describe('requestWithRetry', () => {
         `attempt ${MAX_REQUEST_ATTEMPTS} of ${MAX_REQUEST_ATTEMPTS}. Giving up.`,
       ),
     );
+  });
+});
+
+/**
+ * Mirrors how the `ws` library builds CloseEvent: values live on symbol keys with enumerable
+ * accessors on the prototype. That combination is what makes `JSON.stringify` yield `{}` — only own
+ * properties are serialized — so a fixture built from own properties would not exercise the
+ * behavior under test.
+ */
+const kCode = Symbol('code');
+const kReason = Symbol('reason');
+const kWasClean = Symbol('wasClean');
+
+class WsLikeCloseEvent {
+  [key: symbol]: unknown;
+
+  constructor(code?: number, reason?: string, wasClean?: boolean) {
+    // Index via symbol keys the way `ws` does
+    this[kCode] = code === undefined ? 0 : code;
+    this[kReason] = reason === undefined ? '' : reason;
+    this[kWasClean] = wasClean === undefined ? false : wasClean;
+  }
+
+  get code() {
+    return this[kCode];
+  }
+
+  get reason() {
+    return this[kReason];
+  }
+
+  get wasClean() {
+    return this[kWasClean];
+  }
+}
+Object.defineProperty(WsLikeCloseEvent.prototype, 'code', { enumerable: true });
+Object.defineProperty(WsLikeCloseEvent.prototype, 'reason', { enumerable: true });
+Object.defineProperty(WsLikeCloseEvent.prototype, 'wasClean', { enumerable: true });
+
+describe('describeWebSocketCloseEvent', () => {
+  test('the fixture reproduces the JSON.stringify collapse the formatter exists to avoid', () => {
+    // Guards the fixture itself: if this ever stops being `{}`, the fixture stopped
+    // modeling `ws` and every test below is weaker than it looks.
+    expect(JSON.stringify(new WsLikeCloseEvent(1006, '', false))).toBe('{}');
+  });
+
+  test.each([
+    [1000, true],
+    [1001, true],
+    [1005, false],
+    [1006, false],
+    [4000, true],
+    [4999, false],
+  ])('surfaces close code %i verbatim', (code, wasClean) => {
+    const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(code, '', wasClean));
+    expect(result).toContain(`code=${code}`);
+    expect(result).toContain(`wasClean=${wasClean}`);
+  });
+
+  test('renders a DOM CloseEvent identically to the ws-shaped one', () => {
+    // jsdom supplies CloseEvent (vitest.config.ts sets environment: 'jsdom').
+    // This is the renderer's engine; the formatter must not favor one shape.
+    const dom = new CloseEvent('close', { code: 1006, reason: 'gone', wasClean: false });
+    const wsLike = new WsLikeCloseEvent(1006, 'gone', false);
+    expect(describeWebSocketCloseEvent(dom)).toBe(describeWebSocketCloseEvent(wsLike));
+  });
+
+  test('renders code 0 rather than swallowing it as falsy', () => {
+    expect(describeWebSocketCloseEvent(new WsLikeCloseEvent(0, '', false))).toContain('code=0');
+  });
+
+  test('renders an empty reason as empty quotes, never the string "undefined"', () => {
+    const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(1006, '', false));
+    expect(result).toContain('reason=""');
+    expect(result).not.toContain('undefined');
+  });
+
+  test('collapses newlines in reason so one close cannot break line-oriented log parsing', () => {
+    const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(1006, 'a\nb\rc', false));
+    expect(result).not.toMatch(/[\r\n]/);
+    expect(result).toContain('a b c');
+  });
+
+  test.each([
+    [MAX_LOGGED_DETAIL_LENGTH - 1, false],
+    [MAX_LOGGED_DETAIL_LENGTH, false],
+    [MAX_LOGGED_DETAIL_LENGTH + 1, true],
+  ])('truncates a reason of length %i (truncated: %s)', (length, shouldTruncate) => {
+    const reason = 'x'.repeat(length);
+    const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(1006, reason, false));
+    expect(result.includes('…')).toBe(shouldTruncate);
+  });
+
+  test('tolerates a reason containing lone surrogates', () => {
+    const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(1006, '\uD800bad', false));
+    expect(result).toContain('code=1006');
+  });
+
+  test('omits wasClean when absent rather than printing undefined', () => {
+    const partial = { code: 1006, reason: '' };
+    const result = describeWebSocketCloseEvent(partial);
+    expect(result).toContain('wasClean=n/a');
+  });
+
+  // null is itself one of the garbage inputs under test
+  // eslint-disable-next-line no-null/no-null
+  test.each([undefined, null, {}, 'nope', 42])(
+    'returns a safe string for garbage input %p',
+    (input) => {
+      expect(() => describeWebSocketCloseEvent(input)).not.toThrow();
+      expect(typeof describeWebSocketCloseEvent(input)).toBe('string');
+    },
+  );
+
+  test('narrows prototype-less objects, where instanceof would fail', () => {
+    // Object.create requires a literal null prototype
+    // eslint-disable-next-line no-null/no-null
+    const bare = Object.create(null);
+    bare.code = 1006;
+    expect(describeWebSocketCloseEvent(bare)).toContain('code=1006');
+  });
+
+  test('does not throw when a getter throws', () => {
+    const hostile = {
+      code: 1006,
+      get reason(): string {
+        throw new Error('hostile getter');
+      },
+    };
+    // A formatter that throws inside a close handler turns a logged disconnect into
+    // an unhandled exception during teardown — strictly worse than logging nothing.
+    expect(() => describeWebSocketCloseEvent(hostile)).not.toThrow();
+    expect(describeWebSocketCloseEvent(hostile)).toContain('code=1006');
   });
 });

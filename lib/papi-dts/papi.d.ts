@@ -1125,6 +1125,19 @@ declare module 'shared/data/rpc.model' {
     errorCode?: JSONRPCErrorCode,
     requestId?: RequestId,
   ): JSONRPCErrorResponse;
+  /** Maximum characters retained from a single logged detail (close reason, error stack) */
+  export const MAX_LOGGED_DETAIL_LENGTH = 200;
+  /**
+   * Describe a WebSocket `close` event for a log line.
+   *
+   * Chromium and the `ws` library deliver structurally different close events, and both keep
+   * `code`/`reason`/`wasClean` as accessors on the prototype rather than own properties — so
+   * `JSON.stringify` on one yields `{}`. Read the fields explicitly instead.
+   *
+   * `code` is the single most diagnostic field: 1006 (abnormal, no close frame) means the connection
+   * died rather than being closed politely.
+   */
+  export function describeWebSocketCloseEvent(ev: unknown): string;
   /** Serialize a payload, if needed, and send it over the provided WebSocket */
   export function sendPayloadToWebSocket(ws: WebSocket | undefined, payload: unknown): void;
   /**

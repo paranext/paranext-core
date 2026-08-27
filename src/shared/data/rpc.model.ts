@@ -114,6 +114,58 @@ export function createErrorResponse(
   return { jsonrpc: JSONRPC, id: requestId, error: { code: errorCode, message: errorMessage } };
 }
 
+/** Maximum characters retained from a single logged detail (close reason, error stack) */
+export const MAX_LOGGED_DETAIL_LENGTH = 200;
+
+/**
+ * Read a property without trusting the source object. Returns `undefined` if the property is absent
+ * or if reading it throws — a hostile or exotic accessor must not turn a logged disconnect into an
+ * unhandled exception inside a close handler.
+ */
+function readEventProperty(source: object, key: string): unknown {
+  try {
+    return Reflect.get(source, key);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Collapse whitespace that would break line-oriented log parsing and bound the length, so a single
+ * event cannot flood a log line. Values here can originate from a remote peer.
+ */
+function sanitizeForLog(value: string): string {
+  const collapsed = value.replace(/[\r\n\t]+/g, ' ');
+  return collapsed.length > MAX_LOGGED_DETAIL_LENGTH
+    ? `${collapsed.slice(0, MAX_LOGGED_DETAIL_LENGTH)}…`
+    : collapsed;
+}
+
+/**
+ * Describe a WebSocket `close` event for a log line.
+ *
+ * Chromium and the `ws` library deliver structurally different close events, and both keep
+ * `code`/`reason`/`wasClean` as accessors on the prototype rather than own properties — so
+ * `JSON.stringify` on one yields `{}`. Read the fields explicitly instead.
+ *
+ * `code` is the single most diagnostic field: 1006 (abnormal, no close frame) means the connection
+ * died rather than being closed politely.
+ */
+export function describeWebSocketCloseEvent(ev: unknown): string {
+  if (typeof ev !== 'object' || !ev) return 'code=n/a reason=n/a wasClean=n/a';
+
+  const rawCode = readEventProperty(ev, 'code');
+  const code = typeof rawCode === 'number' ? `${rawCode}` : 'n/a';
+
+  const rawReason = readEventProperty(ev, 'reason');
+  const reason = typeof rawReason === 'string' ? `"${sanitizeForLog(rawReason)}"` : 'n/a';
+
+  const rawWasClean = readEventProperty(ev, 'wasClean');
+  const wasClean = typeof rawWasClean === 'boolean' ? `${rawWasClean}` : 'n/a';
+
+  return `code=${code} reason=${reason} wasClean=${wasClean}`;
+}
+
 /** Serialize a payload, if needed, and send it over the provided WebSocket */
 export function sendPayloadToWebSocket(ws: WebSocket | undefined, payload: unknown): void {
   if (!ws) throw new Error(`Tried to send payload while not connected`);
