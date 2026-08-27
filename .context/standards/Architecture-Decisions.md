@@ -2334,3 +2334,45 @@ step, no automation. Just a record.
 - **Source:** PT-4282; design and plan in the PRD folder
   (`2026-08-25-pt-4282-tab-move-menu-design.md`), Paratext 9 `ParatextFloatWindow.SetText`
   and `MainForm`'s Window menu.
+
+## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** Windows were ruled equal siblings (2026-08-24): no hierarchy, no "main window" in
+  API or UX language, and a `primary` role flag allowed only as a reassignable marker for which
+  persisted entry restores first. But the quit decision was still `window-all-closed`, a pure
+  window count that keyed on nothing. Closing the primary window while a secondary was open left
+  the app running on the secondary and spliced the primary's entry out of the persisted
+  structure, so the user's main layout did not return next launch — the NN-6 hole PT-4286's
+  window-close rule closes. Paratext 9 has the same shape: closing the main form closes
+  everything, floating windows close alone.
+- **Decision:** The primary role becomes load-bearing for the application's lifetime, and stays a
+  role. Its ✕, while other windows are open, asks once (in main, `dialog.showMessageBox`, never a
+  renderer modal — a renderer modal open during window close previously left its requester
+  hanging) and on confirm closes every window with each layout kept for next session; alone, it
+  quits as before; a secondary's ✕ closes only that window and its layout is dropped; Cmd+Q, File →
+  Quit and `platform.quit` keep their no-prompt behaviour. The primary is identified by a
+  main-owned reference set when the startup restore creates it, NOT by the persisted `isMain`
+  entry: that entry lets go of its runtime id the moment its window starts going down with the
+  app, which is exactly when the close path asks. On confirm the quit latch is set BEFORE the other
+  windows are told to close, so each reads a quit on its first pass and records `'entry-stays'` by
+  intent rather than by the last-window count happening to flip.
+- **Alternatives:** Reading `getMainWindowId()` in the close path — rejected; it is the persisted
+  lookup and goes `undefined` at the moment of use. A renderer-hosted confirm dialog — rejected;
+  see the hanging-requester incident above. Re-electing a new primary when the primary closes —
+  rejected as unreachable: with this rule the primary cannot disappear while secondaries live, so
+  there is nothing to elect. Relying on `areAllWindowsClosing()` flipping to make the secondaries
+  record `'entry-stays'` — rejected; it works by accident of ordering and says nothing about
+  intent. A "don't ask again" — rejected; Cmd+Q is the prompt-free path and stays so.
+- **Consequences:** Amends the equal-siblings ruling without reversing it: the primary window
+  decides the app's lifetime, and nothing else about it is special — no API or UX may call it
+  "the main window", and nothing else may route, gate, or prioritise on the role. Primary
+  re-election is deliberately not implemented and a future need for it would mean this rule has
+  been broken. The dialog's restore promise is user-visible and load-bearing, so the relaunch e2e
+  that asserts every window comes back is what keeps that sentence honest. The mode-switch half
+  of PT-4286 (a live switch to Simple must close the secondaries) is out of this decision's scope
+  and waits on #2425. Linux behaviour of the native dialog is best-effort and unverified on real
+  hardware at the time of writing.
+- **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
+  folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
