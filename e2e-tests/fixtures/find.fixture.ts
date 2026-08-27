@@ -22,7 +22,6 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { ElectronApplication, expect } from '@playwright/test';
-import WebSocket from 'ws';
 import { test as appTest } from './app.fixture';
 import {
   assertDeclaredWindowSize,
@@ -30,6 +29,7 @@ import {
   launchElectronApp,
   preConfigureSettings,
   PROCESS_READY_TIMEOUT,
+  sendPapiRequestOnce,
   teardownElectronApp,
   WindowSize,
 } from './helpers';
@@ -172,57 +172,6 @@ export const test = appTest.extend<
 
 export { expect } from '@playwright/test';
 
-const WEBSOCKET_PORT = 8876;
-
-/**
- * Send one JSON-RPC request over the PAPI WebSocket and resolve with its result.
- *
- * Opens a connection per call and closes it once the matching response arrives. Requests are
- * identified by a fixed id of 1; unsolicited traffic (events, notifications) is ignored until the
- * response for that id shows up.
- */
-async function requestPapi<T>(method: string, params: unknown[], timeoutMs: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const ws = new WebSocket(`ws://localhost:${WEBSOCKET_PORT}`);
-    const timeout = setTimeout(() => {
-      ws.close();
-      reject(new Error(`${method}: timed out after ${timeoutMs / 1000} s`));
-    }, timeoutMs);
-
-    ws.on('open', () => {
-      ws.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }));
-    });
-
-    ws.on('message', (data) => {
-      let parsed: { id?: number; error?: unknown; result?: unknown };
-      try {
-        parsed = JSON.parse(data.toString());
-      } catch (err) {
-        clearTimeout(timeout);
-        ws.close();
-        reject(err);
-        return;
-      }
-      // Ignore unsolicited messages (notifications/events) until our response arrives.
-      if (parsed.id !== 1) return;
-      clearTimeout(timeout);
-      ws.close();
-      if (parsed.error) {
-        reject(new Error(`PAPI error from ${method}: ${JSON.stringify(parsed.error)}`));
-      } else {
-        // parsed result is unknown JSON from a WebSocket message; we trust the PAPI contract
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        resolve(parsed.result as T);
-      }
-    });
-
-    ws.on('error', (err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
-  });
-}
-
 /** Minimal shape of ProjectMetadata returned by the PAPI project lookup service. */
 type ProjectMetadata = {
   id: string;
@@ -236,9 +185,10 @@ type ProjectMetadata = {
  */
 export async function getAvailableProjects(timeoutMs = 30_000): Promise<ProjectMetadata[]> {
   return (
-    (await requestPapi<ProjectMetadata[] | undefined>(
+    (await sendPapiRequestOnce<ProjectMetadata[] | undefined>(
       'object:ProjectLookupService.getMetadataForAllProjects',
       [],
+      undefined,
       timeoutMs,
     )) ?? []
   );
@@ -249,7 +199,12 @@ export async function getAvailableProjects(timeoutMs = 30_000): Promise<ProjectM
  * `command:platformScriptureEditor.openScriptureEditor` command.
  */
 export async function openScriptureEditor(projectId: string): Promise<void> {
-  await requestPapi('command:platformScriptureEditor.openScriptureEditor', [projectId], 30_000);
+  await sendPapiRequestOnce(
+    'command:platformScriptureEditor.openScriptureEditor',
+    [projectId],
+    undefined,
+    30_000,
+  );
 }
 
 /**
@@ -269,7 +224,7 @@ export async function openScriptureEditor(projectId: string): Promise<void> {
  * changing anything the panel displays.
  */
 export async function clearFindHistory(projectId: string | undefined): Promise<void> {
-  await requestPapi(
+  await sendPapiRequestOnce(
     'object:platformScripture.findHistory-data.setHistory',
     [projectId, []],
     15_000,
