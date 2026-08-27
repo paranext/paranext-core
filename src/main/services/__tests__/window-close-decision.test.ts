@@ -11,6 +11,7 @@ import {
   markWindowClosing,
   resetForTesting as resetWindowStateForTesting,
   setPrimaryWindowId,
+  setWindowPendingContentPredicate,
 } from '@main/services/window-state.service';
 
 vi.mock('electron', () => ({ BrowserWindow: class {} }));
@@ -123,6 +124,24 @@ describe('deciding what a window close means', () => {
       expect(confirm).not.toHaveBeenCalled();
       expect(decision).toBe('close-this-window');
       expect(isAppQuitRequested()).toBe(true);
+    });
+  });
+
+  describe('primary window while another is still loading', () => {
+    test('asks — a window still waiting for its content would be left behind too', async () => {
+      // A move-to-new-window target that has not finished loading is not a candidate to be the
+      // last window, but it is very much a window the user would lose. The question is about what
+      // survives this close, not about which windows could be the last one standing.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      setPrimaryWindowId(1);
+      setWindowPendingContentPredicate((windowId) => windowId === 2);
+      const { confirm } = promptAnswering('cancel');
+
+      const decision = await decideWindowClose(1, confirm);
+
+      expect(confirm).toHaveBeenCalledTimes(1);
+      expect(decision).toBe('stay-open');
     });
   });
 
