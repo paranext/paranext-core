@@ -241,28 +241,20 @@ export async function focusWindowAndWaitForRouting(
   await pollUntil(
     async () => {
       const shouldSimulateFocusDelivery = Date.now() - startTime >= OS_FOCUS_COOPERATION_BUDGET_MS;
-      await electronApp.evaluate(
-        ({ BrowserWindow }, { id, simulateFocusDelivery }) => {
-          // Matched through the renderer URL rather than `BrowserWindow.fromId`: `id` here is the
-          // platform's, and `fromId` understands only Electron's. The two coincide on a first
-          // launch and stop coinciding the moment the app is relaunched, since the platform's
-          // counter keeps counting while Electron's restarts at 1 — so `fromId` would answer
-          // `undefined`, or worse, answer with a different window.
-          const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) =>
-            Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId'));
-          const allWindows = BrowserWindow.getAllWindows();
-          const win = allWindows.find((someWindow) => platformIdOf(someWindow) === id);
-          if (!win) throw new Error(`No window with platform id ${id}`);
-          allWindows.forEach((otherWindow) => {
-            if (platformIdOf(otherWindow) !== id && !otherWindow.isMinimized())
-              otherWindow.minimize();
+      await withPlatformWindow(
+        electronApp,
+        windowId,
+        (win, { BrowserWindow }, simulateFocusDelivery) => {
+          // Every other window steps aside so the compositor has one candidate to activate
+          BrowserWindow.getAllWindows().forEach((otherWindow) => {
+            if (otherWindow !== win && !otherWindow.isMinimized()) otherWindow.minimize();
           });
           if (win.isMinimized()) win.restore();
           win.show();
           win.focus();
           if (simulateFocusDelivery) win.emit('focus');
         },
-        { id: windowId, simulateFocusDelivery: shouldSimulateFocusDelivery },
+        shouldSimulateFocusDelivery,
       );
       return getFocusedWindowId();
     },
@@ -275,6 +267,72 @@ export async function focusWindowAndWaitForRouting(
 // #endregion
 
 // #region window helpers
+
+/**
+ * What an action against a resolved window may use from the main process.
+ *
+ * Deliberately not the whole `electron` module: a body is serialised and re-instantiated in the
+ * main process, so what it can reach is exactly what is handed to it here.
+ */
+export type PlatformWindowActionContext = {
+  BrowserWindow: typeof import('electron').BrowserWindow;
+  screen: typeof import('electron').screen;
+};
+
+/**
+ * Run `action` in the main process against the window carrying the given platform id.
+ *
+ * Every window is matched on the `windowId` query parameter the main process puts in its renderer
+ * URL — the id `getWindowIdOfPage` reads — rather than looked up with `BrowserWindow.fromId`.
+ * `fromId` takes Electron's ids, and the platform's ids stop coinciding with Electron's the moment
+ * the app is relaunched: the platform's counter keeps counting while Electron's restarts at 1, so
+ * `fromId` would answer `undefined` or, worse, a different window. A window whose URL is not yet
+ * parseable (one still loading, with an empty URL) is skipped rather than aborting the lookup with
+ * an opaque `TypeError`.
+ *
+ * `action` is sent to the main process as source text, so it must be self-contained: it may use its
+ * parameters and nothing from the enclosing scope. Anything it needs from the test goes in `arg`.
+ *
+ * @param electronApp The app under test
+ * @param windowId Platform id of the window to act on
+ * @param action What to do with the resolved window. Receives the window, the main-process context,
+ *   and `arg`.
+ * @param arg A JSON-serialisable value forwarded to `action`
+ * @returns Whatever `action` returns
+ * @throws If no open window carries `windowId`
+ */
+export async function withPlatformWindow<TArg, TResult>(
+  electronApp: ElectronApplication,
+  windowId: number,
+  action: (
+    win: import('electron').BrowserWindow,
+    context: PlatformWindowActionContext,
+    arg: TArg,
+  ) => TResult,
+  arg?: TArg,
+): Promise<TResult> {
+  return electronApp.evaluate(
+    ({ BrowserWindow, screen }, { id, actionSource, actionArg }) => {
+      const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) => {
+        try {
+          return Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId'));
+        } catch {
+          return undefined;
+        }
+      };
+      const win = BrowserWindow.getAllWindows().find(
+        (someWindow) => platformIdOf(someWindow) === id,
+      );
+      if (!win) throw new Error(`No window with platform id ${id}`);
+      // Re-instantiated from source here because a function cannot cross the evaluate boundary.
+      // The surrounding `new Function` gives the body a name to be called by.
+      // eslint-disable-next-line no-new-func
+      const runAction = new Function(`return (${actionSource});`)();
+      return runAction(win, { BrowserWindow, screen }, actionArg);
+    },
+    { id: windowId, actionSource: action.toString(), actionArg: arg },
+  );
+}
 
 /**
  * The window's platform id, read from the `windowId` query parameter the main process puts in every
@@ -378,23 +436,13 @@ export async function widenWindowForToolbarReference(
   page: Page,
 ): Promise<number> {
   const windowId = getWindowIdOfPage(page);
-  await electronApp.evaluate(
-    ({ BrowserWindow, screen }, { id }) => {
-      // `id` is the platform's, read off the renderer URL; `BrowserWindow.fromId` takes Electron's,
-      // and the two diverge after a relaunch. Match on the same query parameter the id came from.
-      const win = BrowserWindow.getAllWindows().find(
-        (someWindow) =>
-          Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId')) === id,
-      );
-      if (!win) throw new Error(`No window with platform id ${id}`);
-      // An unmapped window reports stale bounds and ignores the resize.
-      if (win.isMinimized()) win.restore();
-      const { workArea } = screen.getPrimaryDisplay();
-      const { height, y } = win.getBounds();
-      win.setBounds({ x: workArea.x, y, width: workArea.width, height });
-    },
-    { id: windowId },
-  );
+  await withPlatformWindow(electronApp, windowId, (win, { screen }) => {
+    // An unmapped window reports stale bounds and ignores the resize.
+    if (win.isMinimized()) win.restore();
+    const { workArea } = screen.getPrimaryDisplay();
+    const { height, y } = win.getBounds();
+    win.setBounds({ x: workArea.x, y, width: workArea.width, height });
+  });
   // The shrink step comes from a `ResizeObserver`, so the label re-renders after the resize lands
   // rather than with it.
   let rendererWidth = 0;
