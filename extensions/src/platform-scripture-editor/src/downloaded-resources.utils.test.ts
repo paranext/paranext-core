@@ -85,8 +85,22 @@ describe('buildPickerResources', () => {
     },
   ];
 
+  // A catalog entry is required for ProjectReferences to resolve; without one resolveReferenced
+  // returns null and the row is filtered out.
+  const webDblResource: DblResourceData = {
+    dblEntryUid: 'uid-web',
+    displayName: 'WEB',
+    fullName: 'World English Bible',
+    bestLanguageName: 'English',
+    type: 'ScriptureResource',
+    size: 0,
+    installed: true,
+    updateAvailable: false,
+    projectId: 'proj-web',
+  };
+
   it('maps referenced items and preserves admin lock + source', () => {
-    const rows = buildPickerResources(effective, [], []);
+    const rows = buildPickerResources(effective, [], [webDblResource]);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       source: 'admin',
@@ -96,11 +110,16 @@ describe('buildPickerResources', () => {
     });
   });
 
+  it('filters out ProjectReferences not present in the DBL catalog', () => {
+    const rows = buildPickerResources(effective, [], []);
+    expect(rows).toHaveLength(0);
+  });
+
   it('appends downloaded projects not already referenced as scripture ProjectReferences', () => {
     const rows = buildPickerResources(
       effective,
       [downloaded({ projectId: 'proj-kjn', name: 'KJN' })],
-      [],
+      [webDblResource],
     );
     expect(rows).toHaveLength(2);
     expect(rows[1]).toMatchObject({
@@ -112,7 +131,11 @@ describe('buildPickerResources', () => {
   });
 
   it('does NOT duplicate a downloaded project already in the referenced list', () => {
-    const rows = buildPickerResources(effective, [downloaded({ projectId: 'proj-web' })], []);
+    const rows = buildPickerResources(
+      effective,
+      [downloaded({ projectId: 'proj-web' })],
+      [webDblResource],
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0].source).toBe('admin');
   });

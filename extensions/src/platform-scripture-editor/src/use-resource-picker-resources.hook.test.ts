@@ -2,6 +2,7 @@
 import { it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
+import type { DblResourceData } from 'platform-bible-utils';
 
 vi.mock('./use-effective-resource-reference-list.hook', () => ({
   useEffectiveResourceReferenceList: vi.fn(),
@@ -28,6 +29,23 @@ const effective = (
   items,
 });
 
+// Minimal catalog entry — resolveReferenced returns null for ProjectReferences with no catalog
+// match, so tests that assert on row count must supply a matching entry.
+const dblEntry = (
+  projectId: string,
+  type: DblResourceData['type'] = 'ScriptureResource',
+): DblResourceData => ({
+  dblEntryUid: `uid-${projectId}`,
+  displayName: projectId,
+  fullName: projectId,
+  bestLanguageName: 'English',
+  type,
+  size: 0,
+  installed: true,
+  updateAvailable: false,
+  projectId,
+});
+
 beforeEach(() => vi.clearAllMocks());
 
 it('returns referenced-only rows when includeDownloaded is false', async () => {
@@ -38,7 +56,7 @@ it('returns referenced-only rows when includeDownloaded is false', async () => {
   vi.mocked(fetchDownloadedResources).mockResolvedValue([]);
 
   const { result } = renderHook(() =>
-    useResourcePickerResources('p1', { includeDownloaded: false }, []),
+    useResourcePickerResources('p1', { includeDownloaded: false }, [dblEntry('proj-web')]),
   );
   await waitFor(() => expect(result.current[0]).toHaveLength(1));
   expect(fetchDownloadedResources).not.toHaveBeenCalled();
@@ -54,7 +72,7 @@ it('unions downloaded rows when includeDownloaded is true', async () => {
   ]);
 
   const { result } = renderHook(() =>
-    useResourcePickerResources('p1', { includeDownloaded: true }, []),
+    useResourcePickerResources('p1', { includeDownloaded: true }, [dblEntry('proj-web')]),
   );
   await waitFor(() => expect(result.current[0]).toHaveLength(2));
   expect(result.current[0]?.[1]).toMatchObject({ source: 'downloaded', projectId: 'proj-kjn' });
@@ -77,7 +95,10 @@ it('orders admin-locked rows first when adminLockedFirst is set', async () => {
   vi.mocked(fetchDownloadedResources).mockResolvedValue([]);
 
   const { result } = renderHook(() =>
-    useResourcePickerResources('p1', { includeDownloaded: false, adminLockedFirst: true }, []),
+    useResourcePickerResources('p1', { includeDownloaded: false, adminLockedFirst: true }, [
+      dblEntry('p-user'),
+      dblEntry('p-admin'),
+    ]),
   );
   await waitFor(() => expect(result.current[0]).toHaveLength(2));
   expect(result.current[0]?.[0]).toMatchObject({ isAdminLocked: true });

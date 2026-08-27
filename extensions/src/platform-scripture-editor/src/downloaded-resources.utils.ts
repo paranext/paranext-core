@@ -91,12 +91,12 @@ export function matchesDownloaded(
 function resolveReferenced(
   item: EffectiveResourceReference,
   dblResources: DblResourceData[],
-): PickerResource | null {
+): PickerResource | undefined {
   const isAdminLocked =
     (isProjectReference(item) || isDblResourceReference(item)) && !!item.isInTextCollection;
   if (isDblResourceReference(item)) {
     const dbl = dblResources.find((r) => r.dblEntryUid === item.id);
-    if (!dbl) return null;
+    if (!dbl) return undefined;
     return {
       reference: item,
       source: item.source,
@@ -106,9 +106,12 @@ function resolveReferenced(
       projectId: dbl.installed ? dbl.projectId : undefined,
     };
   }
-  // ProjectReference — look up type in the DBL catalog in case the project is a DBL-backed resource.
+  // ProjectReference — look up type in the combined DBL + local-non-DBL catalog. Returning
+  // undefined when there is no match keeps unresolvable references from leaking into a
+  // type-filtered view with a guessed type, symmetric with the DblResourceReference branch above.
   const isProject = isProjectReference(item);
   const dblByProjectId = isProject ? dblResources.find((r) => r.projectId === item.id) : undefined;
+  if (isProject && !dblByProjectId) return undefined;
   return {
     reference: item,
     source: item.source,
@@ -173,7 +176,7 @@ export function buildPickerResources(
 ): PickerResource[] {
   const referenced = effectiveItems
     .map((item) => resolveReferenced(item, dblResources))
-    .filter((r): r is PickerResource => r !== null);
+    .filter((r): r is PickerResource => r !== undefined);
   const extras = downloaded
     .filter((project) => !effectiveItems.some((item) => matchesDownloaded(project, item)))
     .map((project) => downloadedToRow(project, dblResources));

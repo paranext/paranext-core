@@ -87,25 +87,31 @@ async function syncInstalledFlags(): Promise<void> {
     let localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
       includeProjectInterfaces: ['platform.base'],
     });
-    const MAX_RETRIES = 5;
-    for (
-      let attempt = 0;
-      attempt < MAX_RETRIES && !localProjectMetadata.some((m) => m.isEditable === false);
-      attempt++
-    ) {
-      // Sequential retry: each attempt must wait for the previous result before retrying.
-      // eslint-disable-next-line no-await-in-loop
-      await wait(500);
-      // Sequential retry: each attempt must use the result of the previous fetch.
-      // eslint-disable-next-line no-await-in-loop
-      localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-        includeProjectInterfaces: ['platform.base'],
-      });
+    // Only retry while waiting for C# to register its projects when the cache shows installed
+    // resources. If nothing in the cache is marked installed, the predicate
+    // `isEditable === false` can never be satisfied — the retry would burn all 5 attempts for
+    // a sync that will be a no-op regardless.
+    if (cachedResources.some((r) => r.installed)) {
+      const MAX_RETRIES = 5;
+      for (
+        let attempt = 0;
+        attempt < MAX_RETRIES && !localProjectMetadata.some((m) => m.isEditable === false);
+        attempt++
+      ) {
+        // Sequential retry: each attempt must wait for the previous result before retrying.
+        // eslint-disable-next-line no-await-in-loop
+        await wait(500);
+        // Sequential retry: each attempt must use the result of the previous fetch.
+        // eslint-disable-next-line no-await-in-loop
+        localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+          includeProjectInterfaces: ['platform.base'],
+        });
+      }
+      // If the retry loop exhausted without finding any isEditable=false project, C# hasn't
+      // registered yet. Skip the sync entirely — syncing against an empty project list would
+      // incorrectly mark all installed resources as not-installed and corrupt the cache.
+      if (!localProjectMetadata.some((m) => m.isEditable === false)) return;
     }
-    // If the retry loop exhausted without finding any isEditable=false project, C# hasn't
-    // registered yet. Skip the sync entirely — syncing against an empty project list would
-    // incorrectly mark all installed resources as not-installed and corrupt the cache.
-    if (!localProjectMetadata.some((m) => m.isEditable === false)) return;
 
     // Wrap the read-modify-write in fetchMutex so a concurrent fetchAndCacheResources call cannot
     // overwrite cachedResources between our map() and our assignment.

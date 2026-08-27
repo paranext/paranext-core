@@ -107,7 +107,12 @@ export function useEffectiveResourceReferenceList(
   >(undefined);
 
   useEffect(() => {
-    if (!userPdp) return;
+    if (!userPdp) {
+      // Clear any stale user list from a previous project so we don't merge the new project's
+      // admin setting with the old project's user data while waiting for the PDP to register.
+      setUserResourceReferenceList(undefined);
+      return;
+    }
 
     let disposed = false;
     let unsubscribe: (() => Promise<boolean>) | undefined;
