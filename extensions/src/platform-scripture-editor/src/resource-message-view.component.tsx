@@ -27,9 +27,9 @@ export type ResourceMessageViewProps = {
  * The shared body of a resource panel's "there is no text to show, and here is why" state: a
  * centred `EmptyState` sentence that takes focus when it replaces the editor.
  *
- * `EmptyState` is the message-only zero-state primitive ADR-0016 reserves for a bare sentence with
- * no title, media, or action; going through it keeps these reading like every other empty state in
- * the app and supplies the `role="status"` live region.
+ * `EmptyState` is the message-only zero-state primitive `adr-empty-is-zero-state-primitive`
+ * reserves for a bare sentence with no title, media, or action; going through it keeps these
+ * reading like every other empty state in the app and supplies the `role="status"` live region.
  *
  * Accessibility: this REPLACES the editor subtree, so its arrival is a content swap a screen-reader
  * user gets no other notice of, and the focused element inside the editor is destroyed along with
