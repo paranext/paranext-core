@@ -112,6 +112,7 @@
     "unlink-dev-packages": "ts-node .erb/scripts/unlink-dev-packages.ts",
     "utils:link": "yalc link @eten-tech-foundation/scripture-utilities --no-pure",
     "utils:unlink": "yalc remove @eten-tech-foundation/scripture-utilities && npm i --ignore-scripts",
+    "verify:md-fences": "node .claude/scripts/verify-md-fences.mjs",
     "verify:testing-guide": "node .claude/scripts/verify-testing-guide-example.mjs"
   },
   "lint-staged": {
@@ -123,6 +124,7 @@
     "!(cspell).json": ["prettier --parser json --write --ignore-path .prettierignorerun"],
     "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
     "*.{html,md,yml}": ["prettier --single-quote --write --ignore-path .prettierignorerun"],
+    "*.md": ["npm run verify:md-fences --"],
     ".context/standards/Testing-Guide.md": ["npm run verify:testing-guide --"]
   },
   "browserslist": ["extends browserslist-config-detect-electron"],

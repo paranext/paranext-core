@@ -218,6 +218,11 @@ jobs:
         if: ${{ matrix.os == env.OS_LINUX }}
         run: npm run lint
 
+      - name: verify Testing-Guide example and Markdown code fences
+        run: |
+          npm run verify:testing-guide
+          npm run verify:md-fences
+
       - name: check packaging
         env:
           # no hardlinks so dependencies are copied
