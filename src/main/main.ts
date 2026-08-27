@@ -456,7 +456,7 @@ async function main() {
           {
             name: 'windowId',
             required: true,
-            summary: 'Electron BrowserWindow ID of the window reporting itself empty',
+            summary: 'Id of the window reporting itself empty',
             schema: { type: 'number' },
           },
           {

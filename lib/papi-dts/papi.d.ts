@@ -921,8 +921,9 @@ declare module 'shared/models/web-view.model' {
      * Combining it with a 'replace-tab' layout is likewise an error — the tab being replaced already
      * names the window.
      *
-     * This is a runtime-only handle: window ids are reused across sessions, so never persist one. Get
-     * the current window's id via the `platform.getFocusedWindowId` command.
+     * Window ids are assigned by the platform and never reused, in this run of the app or any
+     * later one, so an id names one window and only ever that window. Get the current window's
+     * id via the `platform.getFocusedWindowId` command.
      *
      * @experimental This option is unstable and may change or disappear without notice
      */
@@ -1090,14 +1091,18 @@ declare module 'shared/global-this.model' {
      */
     var startupMarks: boolean;
     /**
-     * Window id of the Electron browser window as a string (e.g. "1", "2"). This is the stringified
-     * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
-     * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via
-     * `platform.getFocusedWindowId`). `undefined` until the renderer reads the URL parameter.
+     * Id of the window this code is running in, as the platform assigns them. Set from the URL search
+     * params in the renderer process, and `undefined` outside a window — which is how code shared
+     * with the extension host tells the two apart, so test it against `undefined` rather than for
+     * truthiness.
+     *
+     * The same id names this window everywhere else: in `platform.getWindows`, in a move's
+     * `targetWindowId`, and in main. No window is ever given an id another window has had, in this
+     * run of the app or any earlier one.
      *
      * @experimental
      */
-    var windowId: string | undefined;
+    var windowId: number | undefined;
   }
   /** Type of Platform.Bible process */
   export enum ProcessType {
@@ -5030,8 +5035,8 @@ declare module 'papi-shared-types' {
      */
     'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
     /**
-     * Move a web view to an existing window, named by its runtime window id (see
-     * `platform.getFocusedWindowId`; window ids are reused across sessions — never persist one).
+     * Move a web view to an existing window, named by its window id (see
+     * `platform.getFocusedWindowId`). Ids are platform-assigned and never reused.
      *
      * Same semantics as `platform.moveWebViewToNewWindow` — including the marker a failed move
      * carries to say where it left the web view — and: moving a web view to the window it is
@@ -8996,7 +9001,7 @@ declare module 'shared/data/platform.data' {
   /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
   export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
   /**
-   * Query parameter key used to pass the Electron BrowserWindow ID to the renderer process
+   * Query parameter key used to pass a window's platform id to its renderer process
    *
    * @experimental
    */

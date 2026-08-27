@@ -582,7 +582,7 @@ describe('loadLayout scopes web view ids to this window', () => {
 
   test('re-scopes a restored supplement tab instead of adding a second copy', async () => {
     // Power mode restores the merged layout, so the next load restores a supplement tab that is
-    // already scoped — to another window's id, since window ids are not stable across restarts
+    // already scoped — to the id of the window that saved it, which a restored window never shares
     const savedSupplementTab: SavedTabInfo = {
       id: `${SUPPLEMENT_TAB_ID}-w1`,
       tabType: TAB_TYPE_WEBVIEW,

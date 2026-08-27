@@ -80,7 +80,7 @@ const webViewShards = createServiceShardIndex<WebViewServiceShard>({
  * window that answered its navigation context and so has to reach the same shards this router
  * does.
  *
- * @param windowId The Electron BrowserWindow ID
+ * @param windowId Platform id of the window whose shard to get
  */
 export async function getWebViewShard(windowId: number): Promise<WebViewServiceShard | undefined> {
   return webViewShards.getShard(windowId);
@@ -1171,8 +1171,7 @@ const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
         {
           name: 'targetWindowId',
           required: true,
-          summary:
-            "The target window's runtime id — ids restart at 1 each launch, so never persist one",
+          summary: 'Id of the target window, as `platform.getWindows` reports it',
           schema: { type: 'number' },
         },
       ],

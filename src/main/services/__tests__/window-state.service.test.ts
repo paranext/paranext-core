@@ -22,6 +22,7 @@ import {
   removeWindow,
   resetForTesting,
   setFocusedWindowId,
+  wasWindowEverReady,
 } from '@main/services/window-state.service';
 
 // `window-state.service` only imports BrowserWindow as a type, but the module graph resolves
@@ -685,21 +686,22 @@ describe('window state tracking', () => {
       expect(getTargetWindowId()).toBe(1);
     });
 
-    test('does not let a recycled window id inherit the closed window’s readiness', () => {
-      // Electron reuses BrowserWindow ids, so a new window can arrive with a closed one's id. It has
-      // its own renderer to start, and routing to it before that would fail every call.
+    test('a closed window’s id stops answering as ready once it is gone', () => {
+      // Ids are never reused, so no later window can inherit this one's readiness. The cleanup
+      // still matters: anything that kept the closed id — a queued routing decision, a caller
+      // mid-call — would otherwise be told the window is ready and route into nothing.
       const closed = fakeWindow(1);
-      addWindow(closed);
-      markWindowReady(1);
-      removeWindow(closed, 1);
+      const closedId = addWindow(closed);
+      markWindowReady(closedId);
+      removeWindow(closed, closedId);
 
-      addWindow(fakeWindow(1));
       const serving = fakeWindow(2);
-      addWindow(serving);
-      markWindowReady(2);
-      setFocusedWindowId(1);
+      const servingId = addWindow(serving);
+      markWindowReady(servingId);
+      setFocusedWindowId(closedId);
 
-      expect(getTargetWindowId()).toBe(2);
+      expect(isWindowReady(closedId)).toBe(false);
+      expect(getTargetWindowId()).toBe(servingId);
     });
 
     test('lists only the windows a fan-out can get an answer from', () => {
@@ -765,18 +767,19 @@ describe('window state tracking', () => {
       expect(getUnreachableWindowIds()).toEqual([]);
     });
 
-    test('does not let a recycled window id inherit the closed window’s history', () => {
-      // Electron reuses BrowserWindow ids. A new window arriving with a closed one's id has its own
-      // renderer to start, and remembering that the ID had served before would make it look, for
-      // the whole of its startup, like a window that had been serving and died — failing every
-      // routed search in the app until it registers.
+    test('a closed window’s id is not remembered as one that served and died', () => {
+      // A window that was serving and stopped is "unreachable" — a fan-out must account for it.
+      // Once the window is actually gone that history must go with it: no later window can hold
+      // the id, so keeping the mark would make the closed id count as an unreachable window
+      // forever, failing every routed search in the app for the rest of the session.
       const closed = fakeWindow(1);
-      addWindow(closed);
-      markWindowReady(1);
-      removeWindow(closed, 1);
+      const closedId = addWindow(closed);
+      markWindowReady(closedId);
+      removeWindow(closed, closedId);
 
-      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
 
+      expect(wasWindowEverReady(closedId)).toBe(false);
       expect(getUnreachableWindowIds()).toEqual([]);
     });
 
@@ -822,20 +825,20 @@ describe('window state tracking', () => {
       expect(getAbandonedWindowIds()).toEqual([1]);
     });
 
-    test('does not let a recycled window id inherit the abandoned mark', () => {
-      // Electron reuses BrowserWindow ids. A new window arriving with a given-up window's id has
-      // its own renderer to start, and remembering the abandonment would write it off before it
-      // ever loaded.
+    test('a closed window’s id is not remembered as abandoned', () => {
+      // Abandonment is reported so callers stop waiting on the window. Once it is gone the mark
+      // must go too: no later window can hold the id, so a kept mark would report an abandoned
+      // window that does not exist for the rest of the session.
       const abandoned = fakeWindow(1);
-      addWindow(abandoned);
-      markWindowReady(1);
-      markWindowNotReady(1);
-      markWindowAbandoned(1);
+      const abandonedId = addWindow(abandoned);
+      markWindowReady(abandonedId);
+      markWindowNotReady(abandonedId);
+      markWindowAbandoned(abandonedId);
 
-      removeWindow(abandoned, 1);
-      addWindow(fakeWindow(1));
+      removeWindow(abandoned, abandonedId);
+      addWindow(fakeWindow(2));
 
-      expect(isWindowAbandoned(1)).toBe(false);
+      expect(isWindowAbandoned(abandonedId)).toBe(false);
       expect(getAbandonedWindowIds()).toEqual([]);
     });
 

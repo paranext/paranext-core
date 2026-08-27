@@ -69,7 +69,7 @@ export interface ServiceShardIndex<T> {
    * one, say) gets the id the shard actually announced, rather than a second spelling of the
    * window-scoped name that would go silently wrong the moment the two disagreed.
    *
-   * @param windowId Electron BrowserWindow ID of the window to get the shard's id for
+   * @param windowId Platform id of the window to get the shard's id for
    */
   getShardNetworkObjectId(windowId: number): string | undefined;
 
@@ -81,7 +81,7 @@ export interface ServiceShardIndex<T> {
    * Callers that need to tell those apart — to say which of them happened, or to treat one as an
    * error — should ask {@link ServiceShardIndex.getShardWindowIds} first.
    *
-   * @param windowId Electron BrowserWindow ID of the window to get the shard for
+   * @param windowId Platform id of the window to get the shard for
    */
   getShard(windowId: number): Promise<T | undefined>;
 
