@@ -227,6 +227,7 @@ export async function clearFindHistory(projectId: string | undefined): Promise<v
   await sendPapiRequestOnce(
     'object:platformScripture.findHistory-data.setHistory',
     [projectId, []],
+    undefined,
     15_000,
   );
 }
