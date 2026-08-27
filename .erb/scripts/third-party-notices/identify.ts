@@ -1,6 +1,4 @@
 import { execFileSync } from 'child_process';
-import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import type { Detection } from './types';
 
@@ -31,12 +29,12 @@ export function identify(dirs: string[]): Map<string, Detection> {
       maxBuffer: 256 * 1024 * 1024,
     });
   } catch (error: unknown) {
-    // A missing Ruby toolchain reached the developer as `spawnSync bundle ENOENT`, which names
-    // neither Ruby, nor Bundler, nor licensee, nor what to do - and it arrives after four
+    // A missing Ruby toolchain otherwise reaches the developer as `spawnSync bundle ENOENT`, which
+    // names neither Ruby, nor Bundler, nor licensee, nor what to do - and it arrives after four
     // `dotnet restore` passes have already run, so it is the end of a long command rather than the
-    // start of one. `licenseeVersion` in `main.ts` fails with an explicit remedy, but it reads
-    // `Gemfile.lock` (which is committed) and so never fires on a machine that simply has no Ruby:
-    // this is the only path that actually needs the interpreter, and it was the silent one.
+    // start of one. This is the only path that needs the interpreter, so it is the only place the
+    // remedy can be stated: `licenseeVersion` in `main.ts` reads the committed `Gemfile.lock` and
+    // so never fires on a machine that simply has no Ruby.
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
       throw new Error(
         'licence identification needs Bundler, which is not on PATH. This step runs licensee ' +
@@ -52,24 +50,4 @@ export function identify(dirs: string[]): Map<string, Detection> {
 
   const detections: Detection[] = JSON.parse(out);
   return new Map(detections.map((entry) => [entry.dir, entry]));
-}
-
-/**
- * Identifies a single license text. Used by the corpus test, which holds texts rather than
- * directories; production callers use `identify`, which batches.
- */
-export async function identifyText(
-  text: string,
-): Promise<{ spdxId: string; confidence: number; matcher: string }> {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-identify-'));
-  try {
-    fs.writeFileSync(path.join(dir, 'LICENSE'), text);
-    const [entry] = [...identify([dir]).values()];
-    if (!entry || entry.files.length === 0)
-      return { spdxId: 'NONE', confidence: 0, matcher: 'none' };
-    const { spdxId, confidence, matcher } = entry.files[0];
-    return { spdxId, confidence, matcher };
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
 }

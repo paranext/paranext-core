@@ -469,14 +469,14 @@ export function decideLicenseStamp(declarations: DeclaredLicense[]): {
  * declares AGPL-3.0-or-later while shipping the text of a different licence.
  *
  * "An extension deliberately given other terms is left alone" is decided for the FOLDER, not per
- * file. Deciding it per file meant an extension declaring `Apache-2.0` in `package.json` with no
- * `license` in `manifest.json` had the manifest silently rewritten to AGPL while the package.json
- * kept its own terms - two files in one folder declaring different licences, and no text copied for
- * either.
+ * file. Decided per file instead, an extension declaring `Apache-2.0` in `package.json` with no
+ * `license` in `manifest.json` gets the manifest silently rewritten to AGPL while the package.json
+ * keeps its own terms - two files in one folder declaring different licences, and no text copied
+ * for either.
  *
- * The declaration is read from whichever of the two files the folder HAS. Reading it from
- * `package.json` alone made `declared` permanently undefined for a manifest-only extension
- * (`extensions/src/c-sharp-provider-test/` is one), so its hand-placed LICENSE was never verified
+ * The declaration is read from whichever of the two files the folder HAS. Read from `package.json`
+ * alone, `declared` is permanently undefined for a manifest-only extension
+ * (`extensions/src/c-sharp-provider-test/` is one), leaving its hand-placed LICENSE never verified
  * against the terms it declares and never repaired.
  */
 export async function stampExtensionLicense(
@@ -499,12 +499,12 @@ export async function stampExtensionLicense(
   }
 
   // Read BEFORE anything is written. `readCanonicalLicense` refuses a root `LICENSE` that is not
-  // the AGPL text, and reading it only after the JSON fields had been stamped produced exactly the
-  // state this function's docstring calls worse than either: the folder declares
-  // AGPL-3.0-or-later while the text beside it is a different licence, or absent. Nor could a
-  // re-run repair it - `stampLicenseInJson` returns early for a folder already declaring the
-  // value, so the throw came back before any text was copied. Nothing is stamped unless the text
-  // that has to accompany the declaration is in hand.
+  // the AGPL text, so reading it after the JSON fields are stamped leaves exactly the state this
+  // function's docstring calls worse than either: the folder declares AGPL-3.0-or-later while the
+  // text beside it is a different licence, or absent. A re-run cannot repair that either -
+  // `stampLicenseInJson` returns early for a folder already declaring the value, so the throw comes
+  // back before any text is copied. Nothing is stamped unless the text that has to accompany the
+  // declaration is in hand.
   const canonical = await readCanonicalLicense(root);
 
   const stamped = await Promise.all(manifestFiles.map((file) => stampLicenseInJson(file, root)));

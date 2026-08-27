@@ -311,7 +311,7 @@ export const ACCEPT_SHRINK_ENV = 'NOTICES_ACCEPT_SHRINK';
  * Returns `ignored` rather than throwing on an unrecognised value. Anyone who has set this variable
  * at all is reaching for the escape; failing the run would make a typo a build failure in the one
  * command a developer runs to get UNBLOCKED, while silence would leave them believing the
- * acknowledgement had been made. The caller prints it.
+ * acknowledgement was made. The caller prints it.
  */
 export function acceptShrinkFromEnv(env: typeof process.env): {
   accepted: boolean;

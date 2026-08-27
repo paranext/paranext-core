@@ -107,9 +107,9 @@ export function loadPolicy(file: string): Policy {
  *
  * `applyException` looks an entry up with `find`, so the FIRST match wins and every later one is
  * dead data - and appending rather than editing in place is the natural thing to do, because that
- * is the shape the paste-ready template in `report.ts` produces. Re-reviewing a package after its
- * licence text changed and appending the new entry left the stale one in force: the run blocked on
- * "the recorded textSha256 is stale" while the correct determination sat unread a few lines below.
+ * is the shape the paste-ready template in `report.ts` produces. Re-review a package after its
+ * licence text changes, append the new entry, and the stale one stays in force: the run blocks on
+ * "the recorded textSha256 is stale" while the correct determination sits unread a few lines below.
  * The mirror case is worse - two entries recording different identifiers, where whichever sorts
  * first silently decides what the document claims.
  *

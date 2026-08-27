@@ -35,10 +35,11 @@ function detect(
 }
 
 // Probes what this suite actually needs - licensee, resolvable through the repository's Gemfile -
-// rather than the mere existence of a `bundle` executable. GitHub's macos and windows runner images
-// ship Ruby with Bundler preinstalled, so `bundle -v` succeeded there and the suite ran, only to
-// fail on "Could not find licensee-10.1.0 in locally installed gems": the gem is installed on the
-// Linux leg alone. `npm test` runs on all three.
+// rather than the mere existence of a `bundle` executable. `npm test` runs on all three platforms
+// and GitHub's macos and windows images ship Ruby with Bundler preinstalled, so a `bundle`
+// executable exists everywhere; only the GEM is installed on the Linux leg. Probing the executable
+// runs this suite on legs that then fail on "Could not find licensee-10.1.0 in locally installed
+// gems".
 const hasLicensee = (() => {
   try {
     execFileSync('bundle', ['exec', 'ruby', '-e', 'require "licensee"'], {

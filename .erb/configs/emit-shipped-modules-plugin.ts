@@ -140,10 +140,10 @@ export class EmitShippedModulesPlugin {
 
     compiler.hooks.compilation.tap(NAME, (compilation) => {
       compilation.hooks.finishModules.tap(NAME, (modules) => {
-        // `Iterable<Module>`, not an array: webpack passes a Set at runtime, so calling `.forEach`
-        // on it happens to work, but the declared type carries no such method and nothing
-        // type-checked this file until now. `Array.from` is what the declared type supports, and
-        // keeps the array-iteration style this repo's `no-restricted-syntax` rule requires.
+        // `Iterable<Module>`, not an array: webpack passes a Set at runtime, so `.forEach` happens
+        // to work, but the declared type carries no such method. `Array.from` is what that type
+        // supports, and keeps the array-iteration style this repo's `no-restricted-syntax` rule
+        // requires.
         Array.from(modules).forEach((module) => {
           // A narrowing check rather than `module as webpack.NormalModule`: this repo bans type
           // assertions (`no-type-assertion/no-type-assertion`), and `resource` is genuinely absent

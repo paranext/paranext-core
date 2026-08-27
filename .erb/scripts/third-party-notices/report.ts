@@ -285,9 +285,9 @@ export function stalePolicyEntries(
       .filter(([key, entry]) => !entry.alwaysList && !names.has(key))
       .map(([key]) => `override "${key}" - no such package in the shipping set`),
     // The one table pinned to neither a version nor a text hash, and the one whose entries are
-    // mostly read from a package's REPOSITORY rather than its tarball - so nothing else can notice
-    // when an upstream rename leaves an entry behind and the package it credited loses its
-    // attribution. Every other instrument was covered here; this was the one that most needed it.
+    // mostly read from a package's REPOSITORY rather than its tarball - so this report is the only
+    // thing that can notice when an upstream rename leaves an entry behind and the package it
+    // credited loses its attribution.
     ...Object.keys(policy.copyrightNotices || {})
       .filter((key) => !names.has(key))
       .map((key) => `copyright notice "${key}" - no such package in the shipping set`),

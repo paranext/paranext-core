@@ -67,6 +67,16 @@ An **allowed licence this project has simply never met** is not a per-package pr
 identifier to `allowed`, which is one reviewable line, rather than admitting it invisibly through a
 per-package entry.
 
+Any entry above that records an identifier the policy could not previously reach — a new `allowed`
+line, but equally an `exceptions`, `elections` or SPDX `overrides` entry — also needs the canonical
+text for it in the corpus index, or the document renders an empty licence block for it:
+
+```bash
+npm run build:third-party-notices:corpus   # then commit spdx-corpus/index.json with the policy
+```
+
+`corpus-texts.test.ts` fails until you do, so this cannot be forgotten silently.
+
 ### Choosing between `exceptions` and `overrides`
 
 They answer different questions and are not interchangeable:
@@ -135,6 +145,7 @@ and why every escape instrument is pinned.
 | `render.ts`                | The document itself, including the prose sections nothing can scan               |
 | `lock.ts`                  | The sidecar, and every drift comparison against it                               |
 | `corpus.ts`                | Canonical SPDX texts, checksum-verified against a pinned `spdx-license-list`     |
+| `build-corpus-index.ts`    | Writes that checksum index, for the identifiers the policy can reach and no more |
 
 ## Changing the generator
 
@@ -146,5 +157,6 @@ and why every escape instrument is pinned.
   and adding it to `REQUIRED_BUNDLES`. `derived-invariants.test.ts` fails if you do one and not the
   other; a bundle with neither would emit no manifest, require none, and silently shorten the
   document.
-- **`--verify` runs before regeneration in CI**, never after. Regeneration overwrites the lock, so a
-  check that follows it compares a file against itself.
+- **CI never regenerates, only verifies.** `--verify` re-derives everything and byte-compares
+  against the committed pair without writing; regeneration is a deliberate act on a developer's
+  Linux machine, whose diff a human reads before committing.

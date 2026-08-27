@@ -83,6 +83,10 @@ CLAUDE.md
 THIRD-PARTY-NOTICES.md
 THIRD-PARTY-NOTICES.lock.json
 
+# A verbatim rendering of the Terms of Service source document, and the terms the application is
+# licensed under. Reformatting a legal text turns a faithful copy into an approximation of one.
+TERMS-OF-SERVICE.md
+
 # The notices renderer's golden fixture: it must equal render()'s output byte for byte.
 .erb/scripts/third-party-notices/__fixtures__/golden/
 
@@ -98,3 +102,9 @@ THIRD-PARTY-NOTICES.lock.json
 # error on the HTML fixtures some gems ship.
 /.bundle/
 /vendor/bundle/
+
+# Licence texts this repository holds verbatim on behalf of packages that publish theirs at a URL
+# and bundle no copy (see `notices-policy.json` `licenseTexts`). They are hash-pinned and
+# reproduced byte for byte into THIRD-PARTY-NOTICES.md, so reformatting one would change a legal
+# claim and fail the pin.
+.erb/scripts/third-party-notices/vendored-texts/
