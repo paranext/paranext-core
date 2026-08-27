@@ -336,6 +336,22 @@ export function getMainWindowId(): number | undefined {
   return fileSlots.find((slot) => slot.entry.isMain === true)?.windowId;
 }
 
+/**
+ * Whether a window holds the primary role — the one whose ✕ decides whether the app quits.
+ *
+ * Answered from the persisted `isMain` slot rather than a second live pointer. The slot lets go of
+ * its runtime id in {@link handleWindowRemoved}, which runs from a window's `closed` handler, one
+ * event AFTER the `close` handler where the close path asks this — so the answer is still there
+ * every time it is needed. And the primary never goes away while the app runs: an emptied primary
+ * docks Home rather than closing, so only its own ✕ or a quit takes it down, and both of those
+ * bring the whole app with them.
+ *
+ * @param windowId Window to check
+ */
+export function isPrimaryWindow(windowId: number): boolean {
+  return getMainWindowId() === windowId;
+}
+
 /** Merge captured bounds into a window's entry and schedule a write */
 export function updateWindowBounds(windowId: number, boundsState: WindowBoundsState): void {
   const slot = findSlotByWindowId(windowId);

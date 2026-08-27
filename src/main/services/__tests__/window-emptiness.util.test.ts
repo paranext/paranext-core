@@ -46,6 +46,45 @@ describe('deciding what happens to a window that reports its dock empty', () => 
     expect(closeWindow).not.toHaveBeenCalled();
   });
 
+  test('the primary window emptied by removal docks Home rather than closing, even with others open', async () => {
+    // Moving the primary's last tab out is the same as closing that tab: Home reopens. The primary
+    // does not stay empty and does not close — only its ✕ and the Quit menu may close it. Closing
+    // it here would leave the live primary reference naming a dead window and the survivor
+    // mis-classed as a secondary whose ✕ drops its layout.
+    const primaryHandler = createWindowEmptinessHandler({
+      countWindows,
+      closeWindow,
+      isWindowTracked: () => true,
+      markWindowClosing,
+      isPrimaryWindow: (windowId) => windowId === 1,
+    });
+    countWindows.mockReturnValue(2);
+
+    await expect(primaryHandler(1, 'emptied-by-removal')).resolves.toEqual({
+      action: 'open-home',
+    });
+    expect(closeWindow).not.toHaveBeenCalled();
+    expect(markWindowClosing).not.toHaveBeenCalled();
+  });
+
+  test('a secondary window emptied by removal still closes when the primary is the one that stays', async () => {
+    // The negative control: the primary exemption must not leak to every window
+    vi.useFakeTimers();
+    const primaryHandler = createWindowEmptinessHandler({
+      countWindows,
+      closeWindow,
+      isWindowTracked: () => true,
+      markWindowClosing,
+      isPrimaryWindow: (windowId) => windowId === 1,
+    });
+    countWindows.mockReturnValue(2);
+
+    await expect(primaryHandler(2, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    expect(markWindowClosing).toHaveBeenCalledWith(2);
+    vi.runAllTimers();
+    expect(closeWindow).toHaveBeenCalledWith(2);
+  });
+
   test('a window emptied by removal is told closing, and its close is deferred until after the response goes out', async () => {
     vi.useFakeTimers();
     countWindows.mockReturnValue(2);
