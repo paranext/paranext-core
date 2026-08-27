@@ -139,6 +139,51 @@ describe('window layout persistence service', () => {
     vi.useRealTimers();
   });
 
+  test('mints a slot id for every entry of a structure written before slots had one', async () => {
+    // A structure file from a build that keyed nothing by slot carries entries with no `slotId`.
+    // Each gets one on load — minted, not derived from its position, so it never changes once the
+    // file is rewritten — and the ids are distinct, or two slots' storage would collide.
+    const service = await startService();
+    seedFiles({
+      structure: {
+        windows: [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      },
+    });
+
+    const plan = await service.loadWindowLayouts();
+
+    if (plan.kind !== 'restore') throw new Error('expected a restore plan');
+    const slotIds = plan.entries.map((entry) => entry.slotId);
+    expect(slotIds).toHaveLength(2);
+    slotIds.forEach((slotId) => expect(slotId).toEqual(expect.any(String)));
+    expect(new Set(slotIds).size).toBe(2);
+
+    // The minted ids are what a window is told, and what the next write persists, so a second
+    // launch finds the same slot rather than minting again
+    service.assignEntryToWindow(11, 0);
+    await expect(registeredHandler('windowLayout:get')(11)).resolves.toEqual({
+      kind: 'entry',
+      slotId: slotIds[0],
+      layout: layoutWithTab('one'),
+    });
+    await service.writeNow();
+    expect(writtenStructure().windows.map((entry) => entry.slotId)).toEqual(slotIds);
+  });
+
+  test('keeps a slot id the structure already carries rather than minting a fresh one', async () => {
+    // Once persisted, the id is the slot's identity for good: re-minting on every load would
+    // orphan the storage keyed by the previous one after every restart
+    const service = await startService();
+    seedFiles({
+      structure: { windows: [{ slotId: 'kept-from-last-session', layout: layoutWithTab('one') }] },
+    });
+
+    const plan = await service.loadWindowLayouts();
+
+    if (plan.kind !== 'restore') throw new Error('expected a restore plan');
+    expect(plan.entries[0].slotId).toBe('kept-from-last-session');
+  });
+
   test('reports the legacy single-window plan when no structure file exists', async () => {
     seedFiles({
       legacyWindowState: {
@@ -186,9 +231,9 @@ describe('window layout persistence service', () => {
     seedFiles({
       structure: {
         windows: [
-          { layout: layoutWithTab('one'), isMain: true },
-          { layout: layoutWithTab('two') },
-          { layout: layoutWithTab('three') },
+          { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
+          { slotId: 'slot-two', layout: layoutWithTab('two') },
+          { slotId: 'slot-three', layout: layoutWithTab('three') },
         ],
       },
     });
@@ -208,8 +253,16 @@ describe('window layout persistence service', () => {
     service.assignEntryToWindow(12, 1);
     service.assignEntryToWindow(13, 2);
     const getLayout = registeredHandler('windowLayout:get');
-    await expect(getLayout(12)).resolves.toEqual({ kind: 'entry', layout: layoutWithTab('two') });
-    await expect(getLayout(13)).resolves.toEqual({ kind: 'entry', layout: layoutWithTab('three') });
+    await expect(getLayout(12)).resolves.toEqual({
+      kind: 'entry',
+      layout: layoutWithTab('two'),
+      slotId: expect.any(String),
+    });
+    await expect(getLayout(13)).resolves.toEqual({
+      kind: 'entry',
+      layout: layoutWithTab('three'),
+      slotId: expect.any(String),
+    });
   });
 
   test('writes exactly the live windows in order; a removed window leaves no trace', async () => {
@@ -217,9 +270,9 @@ describe('window layout persistence service', () => {
     await loadAndAssignAll(
       service,
       [
-        { layout: layoutWithTab('one'), isMain: true },
-        { layout: layoutWithTab('two') },
-        { layout: layoutWithTab('three') },
+        { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
+        { slotId: 'slot-two', layout: layoutWithTab('two') },
+        { slotId: 'slot-three', layout: layoutWithTab('three') },
       ],
       11,
     );
@@ -248,9 +301,9 @@ describe('window layout persistence service', () => {
     await loadAndAssignAll(
       service,
       [
-        { layout: layoutWithTab('one'), isMain: true },
-        { layout: layoutWithTab('two') },
-        { layout: layoutWithTab('three') },
+        { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
+        { slotId: 'slot-two', layout: layoutWithTab('two') },
+        { slotId: 'slot-three', layout: layoutWithTab('three') },
       ],
       11,
     );
@@ -403,9 +456,9 @@ describe('window layout persistence service', () => {
     await loadAndAssignAll(
       service,
       [
-        { layout: layoutWithTab('one'), isMain: true },
-        { layout: layoutWithTab('two') },
-        { layout: layoutWithTab('three') },
+        { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
+        { slotId: 'slot-two', layout: layoutWithTab('two') },
+        { slotId: 'slot-three', layout: layoutWithTab('three') },
       ],
       11,
     );
@@ -434,12 +487,13 @@ describe('window layout persistence service', () => {
       structure: {
         windows: [
           {
+            slotId: 'slot-one',
             layout: layoutWithTab('one'),
             bounds: { x: 1, y: 2, width: 300, height: 400 },
             isMain: true,
           },
-          { layout: layoutWithTab('two') },
-          { layout: layoutWithTab('three') },
+          { slotId: 'slot-two', layout: layoutWithTab('two') },
+          { slotId: 'slot-three', layout: layoutWithTab('three') },
         ],
       },
     });
@@ -454,16 +508,20 @@ describe('window layout persistence service', () => {
     await service.writeNow();
 
     expect(writtenStructure().windows).toEqual([
-      { layout: layoutWithTab('one'), bounds: movedBounds, isMain: true },
-      { layout: layoutWithTab('two') },
-      { layout: layoutWithTab('three') },
+      { slotId: 'slot-one', layout: layoutWithTab('one'), bounds: movedBounds, isMain: true },
+      { slotId: 'slot-two', layout: layoutWithTab('two') },
+      { slotId: 'slot-three', layout: layoutWithTab('three') },
     ]);
   });
 
   test('coalesces rapid updates into one debounced write; writeNow flushes immediately', async () => {
     vi.useFakeTimers();
     const service = await startService();
-    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 31);
+    await loadAndAssignAll(
+      service,
+      [{ slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true }],
+      31,
+    );
 
     service.updateWindowBounds(31, { bounds: { x: 1, y: 1, width: 500, height: 500 } });
     service.updateWindowBounds(31, { bounds: { x: 2, y: 2, width: 500, height: 500 } });
@@ -488,7 +546,7 @@ describe('window layout persistence service', () => {
       structure: {
         windows: [
           { layout: phantomOnlyLayout() },
-          { layout: layoutWithTab('keeper'), isMain: true },
+          { slotId: 'slot-keeper', layout: layoutWithTab('keeper'), isMain: true },
         ],
       },
     });
@@ -509,7 +567,10 @@ describe('window layout persistence service', () => {
     const emptyLayout: LayoutInfo = { dockbox: { mode: 'horizontal', children: [] } };
     seedFiles({
       structure: {
-        windows: [{ layout: layoutWithTab('one'), isMain: true }, { layout: emptyLayout }],
+        windows: [
+          { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
+          { layout: emptyLayout },
+        ],
       },
     });
     const service = await startService();
@@ -522,6 +583,7 @@ describe('window layout persistence service', () => {
     service.assignEntryToWindow(12, 1);
     await expect(registeredHandler('windowLayout:get')(12)).resolves.toEqual({
       kind: 'entry',
+      slotId: expect.any(String),
       layout: emptyLayout,
     });
   });
@@ -533,7 +595,7 @@ describe('window layout persistence service', () => {
     seedFiles({
       structure: {
         windows: [
-          { layout: layoutWithTab('one'), isMain: true },
+          { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
           { bounds: { x: 2, y: 2, width: 200, height: 200 } },
         ],
       },
@@ -546,7 +608,10 @@ describe('window layout persistence service', () => {
     expect(plan.entries).toHaveLength(2);
     service.assignEntryToWindow(11, 0);
     service.assignEntryToWindow(12, 1);
-    await expect(registeredHandler('windowLayout:get')(12)).resolves.toEqual({ kind: 'empty' });
+    await expect(registeredHandler('windowLayout:get')(12)).resolves.toEqual({
+      kind: 'empty',
+      slotId: expect.any(String),
+    });
   });
 
   test('the exact shape an emptied dock pushes round-trips as a restorable empty window', async () => {
@@ -560,7 +625,10 @@ describe('window layout persistence service', () => {
     });
     seedFiles({
       structure: {
-        windows: [{ layout: layoutWithTab('one'), isMain: true }, { layout: pushedEmptyShape }],
+        windows: [
+          { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
+          { layout: pushedEmptyShape },
+        ],
       },
     });
     const service = await startService();
@@ -573,6 +641,7 @@ describe('window layout persistence service', () => {
     service.assignEntryToWindow(12, 1);
     await expect(registeredHandler('windowLayout:get')(12)).resolves.toEqual({
       kind: 'entry',
+      slotId: expect.any(String),
       layout: pushedEmptyShape,
     });
   });
@@ -590,7 +659,10 @@ describe('window layout persistence service', () => {
 
     if (plan.kind !== 'restore') throw new Error('expected a restore plan');
     service.assignEntryToWindow(41, 0);
-    await expect(registeredHandler('windowLayout:get')(41)).resolves.toEqual({ kind: 'legacy' });
+    await expect(registeredHandler('windowLayout:get')(41)).resolves.toEqual({
+      kind: 'legacy',
+      slotId: expect.any(String),
+    });
   });
 
   test('answers the legacy window with the legacy fallback and any other window with empty', async () => {
@@ -600,8 +672,8 @@ describe('window layout persistence service', () => {
     service.trackNewWindow(52);
 
     const getLayout = registeredHandler('windowLayout:get');
-    await expect(getLayout(51)).resolves.toEqual({ kind: 'legacy' });
-    await expect(getLayout(52)).resolves.toEqual({ kind: 'empty' });
+    await expect(getLayout(51)).resolves.toEqual({ kind: 'legacy', slotId: expect.any(String) });
+    await expect(getLayout(52)).resolves.toEqual({ kind: 'empty', slotId: expect.any(String) });
     await expect(getLayout(999)).resolves.toEqual({ kind: 'empty' });
   });
 
@@ -616,10 +688,13 @@ describe('window layout persistence service', () => {
 
     await expect(registeredHandler('windowLayout:get')(61)).resolves.toEqual({
       kind: 'entry',
+      slotId: expect.any(String),
       layout: pushed,
     });
     await service.writeNow();
-    expect(writtenStructure().windows).toEqual([{ layout: pushed, isMain: true }]);
+    expect(writtenStructure().windows).toEqual([
+      { slotId: expect.any(String), layout: pushed, isMain: true },
+    ]);
   });
 
   test('a window marked pending content answers pending-content until its first layout push', async () => {
@@ -630,12 +705,14 @@ describe('window layout persistence service', () => {
     service.markWindowPendingContent(81);
     await expect(registeredHandler('windowLayout:get')(81)).resolves.toEqual({
       kind: 'pending-content',
+      slotId: expect.any(String),
     });
 
     const pushed = layoutWithTab('routed');
     await registeredHandler('windowLayout:save')(81, pushed);
     await expect(registeredHandler('windowLayout:get')(81)).resolves.toEqual({
       kind: 'entry',
+      slotId: expect.any(String),
       layout: pushed,
     });
   });
@@ -648,7 +725,10 @@ describe('window layout persistence service', () => {
 
     service.clearWindowPendingContent(86);
 
-    await expect(registeredHandler('windowLayout:get')(86)).resolves.toEqual({ kind: 'empty' });
+    await expect(registeredHandler('windowLayout:get')(86)).resolves.toEqual({
+      kind: 'empty',
+      slotId: expect.any(String),
+    });
   });
 
   test('clearing a mark tells the routing target it changed', async () => {
@@ -701,7 +781,10 @@ describe('window layout persistence service', () => {
 
     service.markWindowPendingContent(82);
 
-    await expect(registeredHandler('windowLayout:get')(83)).resolves.toEqual({ kind: 'empty' });
+    await expect(registeredHandler('windowLayout:get')(83)).resolves.toEqual({
+      kind: 'empty',
+      slotId: expect.any(String),
+    });
   });
 
   test('removing a pending-content window clears its mark so a later window cannot inherit it', async () => {
@@ -716,7 +799,10 @@ describe('window layout persistence service', () => {
     // outliving its window, not a session that could happen.
     service.trackNewWindow(84);
 
-    await expect(registeredHandler('windowLayout:get')(84)).resolves.toEqual({ kind: 'empty' });
+    await expect(registeredHandler('windowLayout:get')(84)).resolves.toEqual({
+      kind: 'empty',
+      slotId: expect.any(String),
+    });
   });
 
   test('a mid-session window that went down with the app keeps its entry; a later window gets its own', async () => {
@@ -750,7 +836,10 @@ describe('window layout persistence service', () => {
     const service = await startService();
     await loadAndAssignAll(
       service,
-      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      [
+        { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
+        { slotId: 'slot-two', layout: layoutWithTab('two') },
+      ],
       11,
     );
     service.handleWindowRemoved(11, 'entry-stays');
@@ -773,7 +862,10 @@ describe('window layout persistence service', () => {
     const service = await startService();
     await loadAndAssignAll(
       service,
-      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      [
+        { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
+        { slotId: 'slot-two', layout: layoutWithTab('two') },
+      ],
       11,
     );
     service.setMainWindowId(11);
@@ -796,9 +888,9 @@ describe('window layout persistence service', () => {
     await loadAndAssignAll(
       service,
       [
-        { layout: layoutWithTab('one') },
-        { layout: layoutWithTab('two'), isMain: true },
-        { layout: layoutWithTab('three') },
+        { slotId: 'slot-one', layout: layoutWithTab('one') },
+        { slotId: 'slot-two', layout: layoutWithTab('two'), isMain: true },
+        { slotId: 'slot-three', layout: layoutWithTab('three') },
       ],
       11,
     );
@@ -834,9 +926,9 @@ describe('window layout persistence service', () => {
     await loadAndAssignAll(
       service,
       [
-        { layout: layoutWithTab('one') },
-        { layout: layoutWithTab('two'), isMain: true },
-        { layout: layoutWithTab('three') },
+        { slotId: 'slot-one', layout: layoutWithTab('one') },
+        { slotId: 'slot-two', layout: layoutWithTab('two'), isMain: true },
+        { slotId: 'slot-three', layout: layoutWithTab('three') },
       ],
       11,
     );
@@ -871,7 +963,11 @@ describe('window layout persistence service', () => {
     // that carries it out is one made after it is already gone. It is still a window the user had
     // open when the app went down, so it has to come back.
     const service = await startService();
-    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
+    await loadAndAssignAll(
+      service,
+      [{ slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true }],
+      11,
+    );
     service.setMainWindowId(11);
 
     // Opened mid-session; it pushes its content, then goes down with the app
@@ -897,14 +993,20 @@ describe('window layout persistence service', () => {
     await service.loadWindowLayouts();
     service.trackNewWindow(85);
 
-    await expect(registeredHandler('windowLayout:get')(85)).resolves.toEqual({ kind: 'empty' });
+    await expect(registeredHandler('windowLayout:get')(85)).resolves.toEqual({
+      kind: 'empty',
+      slotId: expect.any(String),
+    });
   });
 
   test('a mid-session window is appended after the restored entries when written', async () => {
     const service = await startService();
     await loadAndAssignAll(
       service,
-      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      [
+        { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
+        { slotId: 'slot-two', layout: layoutWithTab('two') },
+      ],
       11,
     );
     service.setMainWindowId(11);
@@ -923,7 +1025,11 @@ describe('window layout persistence service', () => {
   test('a failed disk write is swallowed so persistence can never break the app', async () => {
     mocks.writeFile.mockRejectedValue(new Error('disk full'));
     const service = await startService();
-    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 71);
+    await loadAndAssignAll(
+      service,
+      [{ slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true }],
+      71,
+    );
 
     await expect(service.writeNow()).resolves.toBeUndefined();
   });
@@ -931,7 +1037,11 @@ describe('window layout persistence service', () => {
   test('a failed write leaves the write chain usable, so later writes still land', async () => {
     mocks.writeFile.mockRejectedValueOnce(new Error('disk full'));
     const service = await startService();
-    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 71);
+    await loadAndAssignAll(
+      service,
+      [{ slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true }],
+      71,
+    );
     service.setMainWindowId(71);
 
     await service.writeNow();
@@ -948,7 +1058,10 @@ describe('window layout persistence service', () => {
     const service = await startService();
     await loadAndAssignAll(
       service,
-      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      [
+        { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
+        { slotId: 'slot-two', layout: layoutWithTab('two') },
+      ],
       11,
     );
     service.setMainWindowId(11);
@@ -980,7 +1093,11 @@ describe('window layout persistence service', () => {
     // again.
     vi.useFakeTimers();
     const service = await startService();
-    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
+    await loadAndAssignAll(
+      service,
+      [{ slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true }],
+      11,
+    );
     service.setMainWindowId(11);
     await service.writeNow();
     expect(mocks.writeFile).toHaveBeenCalledTimes(1);
@@ -1001,6 +1118,7 @@ describe('window layout persistence service', () => {
     await loadAndAssignAll(
       service,
       tabIds.map((tabId, index) => ({
+        slotId: `slot-${tabId}`,
         layout: layoutWithTab(tabId),
         ...(index === 0 ? { isMain: true } : {}),
       })),
@@ -1045,7 +1163,10 @@ describe('window layout persistence service', () => {
     const service = await startService();
     await loadAndAssignAll(
       service,
-      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      [
+        { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
+        { slotId: 'slot-two', layout: layoutWithTab('two') },
+      ],
       11,
     );
     service.setMainWindowId(11);
@@ -1069,7 +1190,11 @@ describe('window layout persistence service', () => {
 
   test('a layout pushed while a flush waits behind an in-flight write still lands in the flush', async () => {
     const service = await startService();
-    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
+    await loadAndAssignAll(
+      service,
+      [{ slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true }],
+      11,
+    );
     service.setMainWindowId(11);
 
     // The first write blocks on the disk, holding the write chain open
@@ -1097,7 +1222,11 @@ describe('window layout persistence service', () => {
 
   test('loading waits for an in-flight write so the plan reflects the newest structure', async () => {
     const service = await startService();
-    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
+    await loadAndAssignAll(
+      service,
+      [{ slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true }],
+      11,
+    );
     service.setMainWindowId(11);
     await registeredHandler('windowLayout:save')(11, layoutWithTab('two'));
 
@@ -1116,7 +1245,10 @@ describe('window layout persistence service', () => {
     );
     mocks.readFile.mockImplementation(async (filePath: string) => {
       if (filePath.endsWith('window-layouts.json'))
-        return flushedRaw ?? JSON.stringify({ windows: [{ layout: layoutWithTab('one') }] });
+        return (
+          flushedRaw ??
+          JSON.stringify({ windows: [{ slotId: 'slot-one', layout: layoutWithTab('one') }] })
+        );
       throw enoent(filePath);
     });
 
@@ -1154,21 +1286,31 @@ describe('window layout persistence service', () => {
     const reconciled = reconcileSavedLayout(pushed);
     await expect(registeredHandler('windowLayout:get')(61)).resolves.toEqual({
       kind: 'entry',
+      slotId: expect.any(String),
       layout: reconciled,
     });
     await service.writeNow();
-    expect(writtenStructure().windows).toEqual([{ layout: reconciled, isMain: true }]);
+    expect(writtenStructure().windows).toEqual([
+      { slotId: expect.any(String), layout: reconciled, isMain: true },
+    ]);
   });
 
   test('assigning to a missing entry index tracks the window as new instead', async () => {
     const service = await startService();
-    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
+    await loadAndAssignAll(
+      service,
+      [{ slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true }],
+      11,
+    );
     service.setMainWindowId(11);
 
     service.assignEntryToWindow(99, 5);
 
     // The window is tracked (it appears in writes) but received no entry layout
-    await expect(registeredHandler('windowLayout:get')(99)).resolves.toEqual({ kind: 'empty' });
+    await expect(registeredHandler('windowLayout:get')(99)).resolves.toEqual({
+      kind: 'empty',
+      slotId: expect.any(String),
+    });
     await service.writeNow();
     const written = writtenStructure();
     expect(written.windows).toHaveLength(2);
@@ -1178,14 +1320,22 @@ describe('window layout persistence service', () => {
 
   test('assigning a window to an already-assigned slot tracks it as a new window', async () => {
     const service = await startService();
-    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
+    await loadAndAssignAll(
+      service,
+      [{ slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true }],
+      11,
+    );
 
     service.assignEntryToWindow(12, 0);
 
     // Window 12 must not receive entry 0's layout — that slot belongs to window 11
-    await expect(registeredHandler('windowLayout:get')(12)).resolves.toEqual({ kind: 'empty' });
+    await expect(registeredHandler('windowLayout:get')(12)).resolves.toEqual({
+      kind: 'empty',
+      slotId: expect.any(String),
+    });
     await expect(registeredHandler('windowLayout:get')(11)).resolves.toEqual({
       kind: 'entry',
+      slotId: 'slot-one',
       layout: layoutWithTab('one'),
     });
   });
@@ -1194,7 +1344,10 @@ describe('window layout persistence service', () => {
     const service = await startService();
     seedFiles({
       structure: {
-        windows: [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+        windows: [
+          { slotId: 'slot-one', layout: layoutWithTab('one'), isMain: true },
+          { slotId: 'slot-two', layout: layoutWithTab('two') },
+        ],
       },
     });
     const plan = await service.loadWindowLayouts();
@@ -1206,6 +1359,7 @@ describe('window layout persistence service', () => {
 
     await expect(registeredHandler('windowLayout:get')(11)).resolves.toEqual({
       kind: 'entry',
+      slotId: 'slot-one',
       layout: layoutWithTab('one'),
     });
     // Entry 'two' survives as a preserved, unassigned slot
@@ -1230,7 +1384,10 @@ describe('window layout persistence service', () => {
     // None of the bad pushes may schedule a write or alter the tracked window's layout
     await vi.advanceTimersByTimeAsync(10_000);
     expect(mocks.writeFile).not.toHaveBeenCalled();
-    await expect(registeredHandler('windowLayout:get')(61)).resolves.toEqual({ kind: 'legacy' });
+    await expect(registeredHandler('windowLayout:get')(61)).resolves.toEqual({
+      kind: 'legacy',
+      slotId: expect.any(String),
+    });
   });
 
   test('a bounds update for one window leaves the other windows’ entries alone', async () => {
@@ -1239,11 +1396,16 @@ describe('window layout persistence service', () => {
       service,
       [
         {
+          slotId: 'slot-one',
           layout: layoutWithTab('one'),
           bounds: { x: 1, y: 1, width: 100, height: 100 },
           isMain: true,
         },
-        { layout: layoutWithTab('two'), bounds: { x: 2, y: 2, width: 200, height: 200 } },
+        {
+          slotId: 'slot-two',
+          layout: layoutWithTab('two'),
+          bounds: { x: 2, y: 2, width: 200, height: 200 },
+        },
       ],
       11,
     );
@@ -1275,6 +1437,7 @@ describe('window layout persistence service', () => {
       service,
       [
         {
+          slotId: 'slot-one',
           layout: layoutWithTab('one'),
           bounds: normalBounds,
           displayBounds,
@@ -1305,6 +1468,7 @@ describe('window layout persistence service', () => {
       service,
       [
         {
+          slotId: 'slot-one',
           layout: layoutWithTab('one'),
           bounds: { x: 10, y: 20, width: 800, height: 600 },
           displayBounds: { x: 0, y: 0, width: 1920, height: 1080 },
@@ -1343,6 +1507,7 @@ describe('window layout persistence service', () => {
       service,
       [
         {
+          slotId: 'slot-one',
           layout: layoutWithTab('one'),
           bounds: { x: 10, y: 20, width: 800, height: 600 },
           displayBounds,
