@@ -923,6 +923,26 @@ describe('overlay.service-host', () => {
       await settledProbe;
     });
 
+    it('should clear the stored filter when the driven filter text goes back to empty', async () => {
+      // Backspacing the last filter character sends filterText: ''. Leaving the previous filter
+      // stored keeps the rendered list narrowed and makes the next commit resolve from that stale
+      // filter instead of the full list.
+      const promise = overlayService.showCommandPalette(passiveRequest, 'test-webview');
+
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'F' });
+      await overlayService.updateCommandPalette('test-webview', { filterText: '' });
+
+      const overlay = getOverlayById(getOverlays()[0].id);
+      // TypeScript cannot narrow a discriminated union after getOverlayById(); cast needed to access typed fields
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const palette = overlay as Extract<NonNullable<typeof overlay>, { type: 'commandPalette' }>;
+      expect(palette.filterText).toBeUndefined();
+
+      // The commit resolves from the FULL list, so index 0 is its first item
+      await overlayService.commitCommandPaletteSelection('test-webview');
+      await expect(promise).resolves.toBe('ft');
+    });
+
     it('should leave the store untouched when an update carries neither filterText nor moveSelection', async () => {
       const promise = overlayService.showCommandPalette(passiveRequest, 'test-webview');
 

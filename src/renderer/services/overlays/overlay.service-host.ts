@@ -928,7 +928,9 @@ async function updateCommandPalette(
     entry.request.searchFields,
   );
   updateCommandPaletteState(entry.id, {
-    filterText: nextFilterText,
+    // The RAW value, not the normalized one: the store reads `undefined` as "leave unchanged" and
+    // does its own '' normalization, so passing the normalized form would drop a filter CLEAR.
+    filterText: update.filterText,
     selectedIndex: resetSelection ? 0 : undefined,
     selectedIndexDelta: update.moveSelection,
     itemCount: filteredItems.length,

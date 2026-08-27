@@ -43,7 +43,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { groupBy, isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 
 // ── Public Types ──
@@ -268,16 +268,9 @@ function GroupedItems({
   items: CommandPaletteItem[];
   renderItem: (item: CommandPaletteItem) => ReactNode;
 }) {
-  const grouped = useMemo(() => {
-    const groups = new Map<string, CommandPaletteItem[]>();
-    items.forEach((item) => {
-      const key = item.group ?? '';
-      const arr = groups.get(key);
-      if (arr) arr.push(item);
-      else groups.set(key, [item]);
-    });
-    return groups;
-  }, [items]);
+  // `groupBy` keys the Map in first-appearance order, which is what `hasGroups` and the render
+  // loop below rely on.
+  const grouped = useMemo(() => groupBy(items, (item) => item.group ?? ''), [items]);
 
   const hasGroups = grouped.size > 1 || (grouped.size === 1 && !grouped.has(''));
 
