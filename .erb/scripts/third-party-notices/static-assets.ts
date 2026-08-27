@@ -1,7 +1,7 @@
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { compareStrings } from './compare';
+import { sha256Bytes } from './lock';
 import type { NamedText, Policy } from './types';
 
 /**
@@ -17,11 +17,10 @@ import type { NamedText, Policy } from './types';
  * redistributed by every artifact this repository produces while being invisible to everything that
  * decides what the notices document says.
  *
- * That was not hypothetical: `extensions/src/quick-verse/assets/letter-q.png` carries its own
- * `ATTRIBUTION.md` naming an author and terms, ships in every installer, and appeared nowhere in
- * THIRD-PARTY-NOTICES.md. The one comparable case that IS described - the UBS lexical database - is
- * covered by hand-written prose in `render.ts`, which is a paragraph somebody remembered to write
- * rather than a gate: nothing would have caught the next third-party asset.
+ * This is not hypothetical: `extensions/src/quick-verse/assets/letter-q.png` carries its own
+ * `ATTRIBUTION.md` naming an author and terms, and ships in every installer. The one comparable
+ * case covered WITHOUT a gate - the UBS lexical database - is hand-written prose in `render.ts`, a
+ * paragraph somebody remembered to write: nothing there catches the next third-party asset.
  *
  * The gate is an INVENTORY rather than an identifier: what these trees hold is arbitrary binary
  * content, and licensee has nothing to read. So the rule is that every notice-shaped file under
@@ -114,7 +113,7 @@ export function findStaticAssetNotices(repo: string): string[] {
 
 /** Sha256 of a file's exact bytes, as `staticAssetNotices` records them. */
 function sha256Of(file: string): string {
-  return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  return sha256Bytes(fs.readFileSync(file));
 }
 
 /**
@@ -123,7 +122,7 @@ function sha256Of(file: string): string {
  * Two entry shapes, and the difference is reviewable rather than inferred:
  *
  * - `sha256` recorded: a TRACKED file, whose text is reproduced verbatim in the document. Pinned for
- *   the same reason a vendored licence text is (`vendored-text.ts`) - it is a legal text somebody
+ *   the same reason a vendored license text is (`vendored-text.ts`) - it is a legal text somebody
  *   read, so an edited copy is a changed claim.
  * - `notTracked: true`: a file that is not in the repository, because it is fetched at install time
  *   (the lexical database's `LICENSE.md` and `SOURCE.md`). There is nothing stable to pin and the

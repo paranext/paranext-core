@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import webpack from 'webpack';
+import { buildIdFile } from '../scripts/notices-build-id';
 
 const NAME = 'EmitShippedModulesPlugin';
 
@@ -21,7 +22,7 @@ const NAME = 'EmitShippedModulesPlugin';
  */
 function buildId(outputDir: string): string {
   try {
-    return fs.readFileSync(path.join(outputDir, '..', 'build-id'), 'utf8').trim();
+    return fs.readFileSync(buildIdFile(outputDir), 'utf8').trim();
   } catch {
     return `unstamped-${crypto.randomUUID()}`;
   }
@@ -62,17 +63,17 @@ function buildId(outputDir: string): string {
  * them; a single `npm run build` invocation is one process with no cross-process memory cache to be
  * warm from either.
  *
- * The directory each extension bundle watches is its OWN, per bundle and per mode. Sharing one made
- * this answer wrong twice over: `extension-main` declares `dependencies: ['webView']`, so it starts
- * only after `extension-web-view` has written its entries and read as warm on a genuinely cold
- * build; and a release job's production extension build inherited the development build's cache, so
- * its manifests could not be verified at all and the per-platform check had to run against the
- * development graph instead. `extensionCacheDirectory` documents both.
+ * The directory each extension bundle watches is its OWN, per bundle and per mode. Sharing one
+ * makes this answer wrong twice over: `extension-main` declares `dependencies: ['webView']`, so it
+ * starts only after `extension-web-view` has written its entries and reads as warm on a genuinely
+ * cold build; and a release job's production extension build inherits the development build's
+ * cache, so its manifests cannot be verified at all and the per-platform check can only run against
+ * the development graph. `extensionCacheDirectory` documents both.
  */
 export function isWarmFilesystemCache(cache: webpack.Configuration['cache']): boolean {
   if (!cache || typeof cache !== 'object' || cache.type !== 'filesystem') return false;
-  // webpack's own default when a filesystem cache names no directory. Reporting COLD for that was
-  // the one branch here that produced a permissive verdict from absent information: the default
+  // webpack's own default when a filesystem cache names no directory. Reporting COLD for that is
+  // the one branch here that would draw a permissive verdict from absent information: the default
   // directory is warm on any tree built twice, and a manifest written over it would then be trusted
   // for a legal artifact. Nothing in this repository configures a filesystem cache without naming a
   // directory, so this is a guard rather than a live path - but the safe answer to "which directory
@@ -88,7 +89,7 @@ export function isWarmFilesystemCache(cache: webpack.Configuration['cache']): bo
     // `npm run build` runs concurrently - is a directory that may well be full and simply could not
     // be read. Answering "cold" there is a permissive verdict drawn from absent information, which
     // is exactly what the comment above refuses for the missing-`cacheDirectory` case: the manifest
-    // would be stamped trustworthy and a module list a cache hit had shortened would go into a
+    // would be stamped trustworthy and a module list a cache hit has shortened would go into a
     // legal artifact. The safe answer to "is this cache warm?" when the cache cannot be read is to
     // stop, not to guess.
     throw new Error(
@@ -126,10 +127,10 @@ export class EmitShippedModulesPlugin {
 
     // Both hooks, and both reset the accumulated set: `beforeRun` fires for a one-shot `webpack`
     // run and `watchRun` for every rebuild in watch mode, which `npm start` and the extensions'
-    // `npm run watch` use. Tapping only `beforeRun` left watch builds stamped `cacheWarm: false`
-    // for exactly the builds guaranteed to be warm, and left `resources` accumulating across every
-    // rebuild in the compiler's lifetime - so a module deleted from the source tree stayed in the
-    // manifest until the watcher was restarted, over-reporting the shipping set or failing the
+    // `npm run watch` use. Tapping only `beforeRun` leaves watch builds stamped `cacheWarm: false`
+    // for exactly the builds guaranteed to be warm, and leaves `resources` accumulating across every
+    // rebuild in the compiler's lifetime - so a module deleted from the source tree stays in the
+    // manifest until the watcher restarts, over-reporting the shipping set or failing the
     // generator's unresolved-module check on a directory that is legitimately gone.
     const startRun = () => {
       resources.clear();
@@ -161,7 +162,7 @@ export class EmitShippedModulesPlugin {
 
     compiler.hooks.done.tap(NAME, (stats) => {
       // `done` fires whether or not the compilation succeeded, and a failed compilation's module
-      // graph is whatever the compiler had walked when it gave up. Writing that would stamp a
+      // graph is whatever the compiler has walked when it gives up. Writing that would stamp a
       // PARTIAL list with the current build id, which passes both of the generator's guards - the
       // stamps agree (one id) and the list is non-empty - and silently shortens the shipping set.
       // `concurrently --kill-others-on-fail` makes this reachable on any failed `npm run build`.

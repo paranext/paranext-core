@@ -78,10 +78,10 @@ describe('parseDeclared', () => {
 });
 
 describe('the + operator', () => {
-  // `+` means "this version or any later one". Reading only `node.license` dropped it, after which
-  // spdx-correct mapped the bare id to the `-only` spelling - the OPPOSITE grant. A package
-  // declaring GPL-2.0+ was recorded, rendered and locked as GPL-2.0-only: strictly narrower terms
-  // than the package offers, asserted in a legal document.
+  // `+` means "this version or any later one". Reading only `node.license` drops it, after which
+  // spdx-correct maps the bare id to the `-only` spelling - the OPPOSITE grant. A package declaring
+  // GPL-2.0+ is then recorded, rendered and locked as GPL-2.0-only: strictly narrower terms than
+  // the package offers, asserted in a legal document.
   it.each([
     ['GPL-2.0+', 'GPL-2.0-or-later'],
     ['LGPL-2.1+', 'LGPL-2.1-or-later'],

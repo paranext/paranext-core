@@ -1,4 +1,5 @@
 {
+  "%about_copyright_format%": "Copyright © {years} SIL Global and United Bible Societies",
   "%about_db_ip_attribution_format%": "{intro} {websiteLink} ({license}, {terms})",
   "%about_db_ip_attribution_intro%": "Internet safety features use data from",
   "%about_db_ip_attribution_terms%": "Terms",

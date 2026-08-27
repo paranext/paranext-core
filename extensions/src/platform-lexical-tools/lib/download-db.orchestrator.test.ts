@@ -202,7 +202,7 @@ describe('runDownload', () => {
 
   it('fetches the notice files into the DB directory', async () => {
     // Portions of the DB are UBS material under CC BY-SA 4.0, whose section 3(a)(1) requires the
-    // attribution and licence notice to travel with the work, and the rest is distributable only
+    // attribution and license notice to travel with the work, and the rest is distributable only
     // under UBS's grant to Paratext. The extension's `assets` directory is
     // copied wholesale into every installer, so landing the notices beside the DB is what actually
     // puts them in front of a user.
@@ -256,9 +256,9 @@ describe('runDownload', () => {
   });
 
   it('strict + both notices missing: names every URL, not just the first to fail', async () => {
-    // The strict half of the `allSettled` change. It threw `failures[0]`, so a maintainer with both
-    // files missing published the one the message named, re-ran, and only then learned about the
-    // other - the second round the lenient path was already fixed to avoid.
+    // The strict half of the `allSettled` contract. Throwing `failures[0]` alone leaves a
+    // maintainer with both files missing publishing the one the message names, re-running, and only
+    // then learning about the other - the second round the lenient path also avoids.
     const deps = makeDeps({
       downloadFile: vi.fn(async (url: string) => {
         if (isNoticeUrl(url)) throw new FileNotFoundError(url);
@@ -315,7 +315,7 @@ describe('runDownload', () => {
     expect(deps.extractXzFile).toHaveBeenCalledTimes(1);
     const messages = warn.mock.calls.flat().join('\n');
     expect(messages).toContain(noticeUrl);
-    expect(messages).toContain('attribution and licence text');
+    expect(messages).toContain('attribution and license text');
   });
 
   it('lenient + both notices missing: names every URL it could not fetch', async () => {

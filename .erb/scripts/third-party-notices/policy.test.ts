@@ -432,8 +432,7 @@ describe('classify', () => {
 
   // The confidence threshold decides which files may RESOLVE a verdict, not which may raise an
   // OBJECTION. These three pin that the objecting scan is an allowlist and that it still ignores
-  // a file licensee could not identify at all. Before this the scan tested the copyleft list alone,
-  // and nothing covered it either way.
+  // a file licensee could not identify at all.
   it('objects to a below-threshold bundled file whose id is on neither list', () => {
     // GPL-1.0-or-later is on neither list in this test policy - the exact hole a denylist leaves,
     // since only ids somebody already enumerated can be seen. The real policy's copyleft list omits
@@ -483,9 +482,9 @@ describe('classify', () => {
 
   it('blocks a conjunction whose files match its operands AS a conjunction', () => {
     // The two files agree exactly - with each other and with the declaration - so "license files
-    // disagree" was not merely unhelpful but false, and sent the reader looking for a conflict
+    // disagree" would be not merely unhelpful but false, sending the reader looking for a conflict
     // between two consistent files. CASE 1 excludes this shape (it is not a choice an election can
-    // resolve) and CASE 2 excludes it (more than one declared id), so it fell through to CASE 3.
+    // resolve) and CASE 2 excludes it (more than one declared id), so it falls through to CASE 3.
     const v = classify({
       ...base,
       declaredField: 'MIT AND Apache-2.0',
@@ -637,7 +636,7 @@ describe('classify', () => {
 
   it('refuses an exception that records an id which is not on the allowed list', () => {
     // Artistic-2.0 is a real SPDX id on neither list in this fixture. An exception records WHICH
-    // licence an unidentifiable text actually is; it is not a licence to ship under terms the
+    // license an unidentifiable text actually is; it is not a license to ship under terms the
     // project has not accepted, and adding an identifier to `allowed` is a visible reviewable line
     // rather than one buried in a per-package entry.
     const policy = {
@@ -1167,15 +1166,14 @@ describe('notices-policy.json', () => {
     expect(typeof policy.overrides).toBe('object');
   });
 
-  // These two tables were migrated out of the deleted generate-third-party-notices.js. Losing
-  // either one silently removes data from a legal artifact: the copyright notices discharge an
+  // Losing either table silently removes data from a legal artifact: the copyright notices discharge an
   // MIT/BSD/ISC attribution obligation that SPDX's `<copyright holders>` placeholder does not, and
   // the alwaysList flag is the only thing that puts a genuinely shipped Windows dependency in the
   // document (its PackageReference is conditioned on the HOST OS, so no restore on Linux resolves
   // it whatever runtime identifier is asked for).
   it('keeps a copyright notice for each yalc dev-linked package', () => {
     // Asserted by INCLUSION, not equality. `loadPolicy` documents this table as carrying the
-    // copyright line for any npm package whose own licence file cannot be read on the generating
+    // copyright line for any npm package whose own license file cannot be read on the generating
     // machine; the yalc dev-linked pair are the packages that made it necessary, not its
     // definition. Pinning the exact key set made adding a notice for any other unreadable package
     // fail a test about dev links.
@@ -1187,12 +1185,12 @@ describe('notices-policy.json', () => {
     );
   });
 
-  it('carries a copyright notice for every package whose licence file cannot be read', () => {
-    // These ship, they are MIT/BSD/ISC, and the obligation those licences actually impose is that
+  it('carries a copyright notice for every package whose license file cannot be read', () => {
+    // These ship, they are MIT/BSD/ISC, and the obligation those licenses actually impose is that
     // the copyright notice travels with copies - which SPDX's `<copyright holders>` placeholder
-    // does not discharge. Each notice was read from the package's own licence file: from its
+    // does not discharge. Each notice was read from the package's own license file: from its
     // repository where the published tarball omits one (the @radix-ui family publishes dozens of
-    // packages from one monorepo), or from the README where the package embeds its licence there.
+    // packages from one monorepo), or from the README where the package embeds its license there.
     // `rc-new-window` is deliberately absent - its Apache-2.0 LICENSE leaves the boilerplate
     // appendix unfilled and it ships no NOTICE, so it asserts no copyright notice.
     const notices = policy.copyrightNotices ?? {};
@@ -1214,7 +1212,7 @@ describe('notices-policy.json', () => {
   it('keys every copyright notice by ecosystem and records a non-empty notice', () => {
     Object.entries(policy.copyrightNotices ?? {}).forEach(([key, notice]) => {
       expect(key).toMatch(/^(npm|nuget):/);
-      // The whole value of an entry is that someone read the package's own licence file. An empty
+      // The whole value of an entry is that someone read the package's own license file. An empty
       // one would pair a canonical SPDX text with nothing, which is the state it exists to fix.
       expect(notice.trim().length).toBeGreaterThan(0);
     });
@@ -1284,7 +1282,7 @@ describe('notices-policy.json', () => {
     it(`exception "${entry.package}" is complete and hash-pinned`, () => {
       expect(entry.package).toMatch(/^(npm|nuget):.+@.+$/);
       expect(entry.spdx.length).toBeGreaterThan(0);
-      // Long enough to be a sentence about the licence, not a shrug. The whole value of an
+      // Long enough to be a sentence about the license, not a shrug. The whole value of an
       // exception is that someone read the file once and wrote down what they found.
       expect(entry.reason.length).toBeGreaterThan(40);
       expect(entry.reviewer).toMatch(/@/);
@@ -1390,10 +1388,11 @@ describe('curated overrides', () => {
   });
 
   // The copyleft check below reads `recorded.ok && ...`, which is `false` - not a block - for any
-  // value that is not an SPDX expression, and free text is what this field is FOR. So the gate was
-  // strictest on the input class it could check and silent on the one it could not: an entry
-  // reading "GNU General Public License v3" resolved while the same determination spelled
-  // `GPL-3.0-only` blocked. An unparseable value still cannot be tested, so what is required is
+  // value that is not an SPDX expression, and free text is what this field is FOR. Without the
+  // `nonSpdx` requirement the gate is strictest on the input class it can check and silent on the
+  // one it cannot: an entry reading "GNU General Public License v3" resolves while the same
+  // determination spelled `GPL-3.0-only` blocks. An unparseable value still cannot be tested, so
+  // what is required is
   // that the entry SAY it is deliberately free text, which puts the bypass in the policy file where
   // a reviewer sees it.
   it('blocks a free-text override that is not marked nonSpdx', () => {
@@ -1496,7 +1495,7 @@ describe('what a reviewed exception may override', () => {
     {
       package: 'npm:p@1.0.0',
       spdx,
-      reason: 'the licence file was read and this is what it says',
+      reason: 'the license file was read and this is what it says',
       reviewer: 'x@example.test',
       date: '2026-01-01',
       textSha256: 'abc',
@@ -1519,7 +1518,7 @@ describe('what a reviewed exception may override', () => {
   it('cannot override a positively identified id that is merely UNLISTED', () => {
     // The gap the copyleft-only bound left. `BUSL-1.1` is on neither list, so `copyleft.has` read
     // it as "not copyleft" and the exception cleared the package: the row rendered as
-    // `MIT (reviewed exception)` with the Business Source Licence text reproduced under it. The
+    // `MIT (reviewed exception)` with the Business Source License text reproduced under it. The
     // bound is an ALLOW LIST for the same reason `applyException`'s bound on what may be RECORDED
     // is - an id nobody has admitted must not default to admissible by being absent from a denylist.
     const v = classify({
@@ -1594,7 +1593,7 @@ describe('what a reviewed exception may override', () => {
     // `resolveDeclaredPrefix` refuses `Apache-2.0+` in a DECLARATION because SPDX publishes no
     // `Apache-2.0-or-later`, so resolving on the base id records terms narrower than the package
     // offers - and `render` then reproduces the plain Apache-2.0 text. A human recording the same
-    // value buys no licence to state something narrower than the package grants.
+    // value buys no license to state something narrower than the package grants.
     const v = classify({
       ...base,
       policy: { ...POLICY, exceptions: pinned('Apache-2.0+') },
@@ -1607,7 +1606,7 @@ describe('what a reviewed exception may override', () => {
   });
 
   it('cannot record an SPDX expression carrying a WITH operand', () => {
-    // A licence exception modifies the grant its base identifier makes, and bounding `ids` alone
+    // A license exception modifies the grant its base identifier makes, and bounding `ids` alone
     // accepted it on the base id: `MIT WITH <restrictive-clause>` would clear with the clause
     // checked against nothing. `resolveDeclaredPrefix` refuses the same shape for a declaration.
     const v = classify({
@@ -1635,7 +1634,7 @@ describe('what a curated override may carry across', () => {
     policy: { ...POLICY, overrides: { 'nuget:X': entry } },
   });
 
-  // An override is keyed by NAME and pinned to no licence text. `stalePolicyEntries` reports one
+  // An override is keyed by NAME and pinned to no license text. `stalePolicyEntries` reports one
   // matching NO package; nothing can report one matching a DIFFERENT package than the reviewer had
   // in front of them. So the entry has to say which of the two it is - a determination read off one
   // version's metadata, or one that holds at every version - rather than leaving the answer to an
@@ -1666,9 +1665,9 @@ describe('what a curated override may carry across', () => {
   });
 });
 
-describe('a curated override cannot clear a package that identifies its own licence', () => {
+describe('a curated override cannot clear a package that identifies its own license', () => {
   // An override is the instrument for a package that establishes NOTHING. Testing `!best` for that
-  // was wrong in two directions at once: `best` is undefined when the licence files DISAGREE and
+  // is wrong in two directions at once: `best` is undefined when the license files DISAGREE and
   // when none of them clears the confidence threshold, and in both of those the package has said
   // something. Each case below resolves to `overridden` under the `!best` test.
   const overridden = (detection: Detection) => ({
@@ -1689,7 +1688,7 @@ describe('a curated override cannot clear a package that identifies its own lice
     },
   });
 
-  it('refuses where two licence files disagree and one is copyleft', () => {
+  it('refuses where two license files disagree and one is copyleft', () => {
     const v = classify(
       overridden(
         detectedFiles([
@@ -1702,7 +1701,7 @@ describe('a curated override cannot clear a package that identifies its own lice
     expect(v.spdxId).toBeUndefined();
   });
 
-  it('refuses where the only licence file identifies as copyleft below the threshold', () => {
+  it('refuses where the only license file identifies as copyleft below the threshold', () => {
     const v = classify(
       overridden(detectedFilesAt([['LICENSE', 'GPL-3.0-or-later', CONFIDENCE_THRESHOLD - 3]])),
     );
@@ -1759,7 +1758,7 @@ describe('loadPolicy', () => {
   const entry = (spdx: string) => ({
     package: 'npm:p@1.0.0',
     spdx,
-    reason: 'the licence file was read and this is what it says',
+    reason: 'the license file was read and this is what it says',
     reviewer: 'x@example.test',
     date: '2026-01-01',
     textSha256: 'abc',

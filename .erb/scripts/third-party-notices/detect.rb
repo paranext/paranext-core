@@ -15,11 +15,11 @@ require 'json'
 require 'digest'
 require 'licensee'
 
-# What encoding a licence file is in is a property of the FILE, so it is pinned here rather than
+# What encoding a license file is in is a property of the FILE, so it is pinned here rather than
 # inherited from the locale. Ruby tags anything read with `File.read` as `Encoding.default_external`,
 # which comes from `LC_ALL`/`LANG`: under `LC_ALL=C` - a bare container image, a systemd unit, ssh
-# without locale forwarding - a plain `File.read` of a UTF-8 licence returns bytes tagged US-ASCII,
-# and `valid_encoding?` is then FALSE for any licence carrying a copyright symbol, which is most of
+# without locale forwarding - a plain `File.read` of a UTF-8 license returns bytes tagged US-ASCII,
+# and `valid_encoding?` is then FALSE for any license carrying a copyright symbol, which is most of
 # them. The check below would abort the whole batch asserting the exact opposite of the truth.
 #
 # The pinned licensee (10.1.0) does not expose that: it hands back UTF-8 whatever the locale. But
@@ -38,10 +38,10 @@ results = $stdin.read.split("\n").map(&:strip).reject(&:empty?).map do |dir|
   project = Licensee.project(dir, filesystem: true, detect_packages: false)
 
   files = project.license_files.map do |file|
-    # A licence file that is not valid UTF-8 (a Latin-1 copyright line is the usual cause) cannot be
+    # A license file that is not valid UTF-8 (a Latin-1 copyright line is the usual cause) cannot be
     # serialized, and JSON.generate would raise for the whole batch only after every directory had
     # been scanned, naming no package. Checked per file, where the filename is still in hand. Not
-    # re-encoded: silently substituting replacement characters would put altered licence text into a
+    # re-encoded: silently substituting replacement characters would put altered license text into a
     # legal artifact.
     #
     # Re-tagged before the check, so it tests the BYTES rather than whatever tag the read happened

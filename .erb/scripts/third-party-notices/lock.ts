@@ -68,6 +68,16 @@ export function sha256(text: string): string {
 }
 
 /**
+ * Sha256 of bytes that are not text.
+ *
+ * A sibling of `sha256` rather than a widening of it: the string overload pins the encoding, and a
+ * parameter that accepts either would let a caller hash a string whose encoding nothing states.
+ */
+export function sha256Bytes(bytes: Buffer): string {
+  return crypto.createHash('sha256').update(bytes).digest('hex');
+}
+
+/**
  * Whether the committed document is the one the committed lock was written beside.
  *
  * The whole point of `documentSha256`: it lets a check that CANNOT re-render the document - no
@@ -157,7 +167,7 @@ export function diffLock(expected: Lock, actual: Lock): string[] {
       );
     // Same identifier, same text, but a different file or a different confidence behind it - a
     // package renaming LICENSE to LICENSE.md, or a matcher scoring the same text differently. Not a
-    // licence change, but it IS a change to what the committed lock records, and reporting nothing
+    // license change, but it IS a change to what the committed lock records, and reporting nothing
     // for it meant `--verify` could report success on a lock the very next regeneration rewrites.
     else if (was.matchedFile !== now.matchedFile || was.confidence !== now.confidence)
       out.push(
@@ -176,7 +186,7 @@ export function diffLock(expected: Lock, actual: Lock): string[] {
  *
  * This is the cheap cross-platform check (`main.ts`'s `--verify-shipping-set`), and it exists to
  * answer exactly one question: does THIS platform's build ship the same npm packages the committed
- * document was generated from? Licence identification is platform-invariant - the same files,
+ * document was generated from? License identification is platform-invariant - the same files,
  * matched by the same pinned licensee version, produce the same verdict everywhere - so re-deriving
  * it here would only repeat the Linux leg's answer, at the cost of a Ruby install this check exists
  * to avoid. The NuGet closure does not vary by platform either, because it is already the union of

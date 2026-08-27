@@ -31,9 +31,9 @@ const DEPENDENCIES_SUBDIR = 'lexical-db';
  * Notice files fetched alongside the DB and written beside it.
  *
  * The database is not our data. Portions of it are UBS material licensed under CC BY-SA 4.0, whose
- * section 3(a)(1) requires the identification of the creator, the copyright notice, the licence
- * notice and a link to the licence to travel with the work; the remaining portions are © United
- * Bible Societies under no open licence at all, distributable only under the permission UBS granted
+ * section 3(a)(1) requires the identification of the creator, the copyright notice, the license
+ * notice and a link to the license to travel with the work; the remaining portions are © United
+ * Bible Societies under no open license at all, distributable only under the permission UBS granted
  * Paratext. `SOURCE.md` carries both statements and `LICENSE.md` carries the CC BY-SA 4.0 text.
  * Fetching them here is what puts them inside the packaged application: the extension's `assets`
  * directory is copied wholesale into `extensions/dist` and from there into every installer, so a
@@ -529,17 +529,17 @@ export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps):
         .map((result) => result.reason);
       // Handled here rather than by the outer handler, whose message reports a missing DB — the DB
       // is on disk by this point, and saying otherwise would send a reader looking for the wrong
-      // problem. Strict mode fails: packaging the data without the attribution its licence
+      // problem. Strict mode fails: packaging the data without the attribution its license
       // requires is the defect this fetch exists to prevent. A fork is warned instead, because
       // hard-failing its `npm install` over a file it never published is what lenient mode is
       // for — but silence would let it ship the data bare, so the warning names the obligation.
       // A failure that is NOT a 404 is fatal in both modes, which is the contract the extension's
       // README states: "expected missing" is the only condition treated leniently.
       if (failures.length > 0) {
-        // EVERY failure is named, on both paths. Reporting `failures[0]` alone threw away what the
-        // `allSettled` above was introduced to collect: with both notices missing, the maintainer
-        // published the one file the message named, re-ran, and only then learned about the other
-        // — the two-round loop this whole block exists to remove.
+        // EVERY failure is named, on both paths. Reporting `failures[0]` alone throws away what
+        // the `allSettled` above collects: with both notices missing, a maintainer publishes the
+        // one file the message names, re-runs, and only then learns about the other — the
+        // two-round loop this whole block exists to remove.
         const described = failures
           .map((failure) =>
             failure instanceof FileNotFoundError
@@ -552,12 +552,12 @@ export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps):
           throw new Error(
             `Could not fetch the lexical DB notice files:\n  ${described}\n` +
               'The database carries UBS material under CC BY-SA 4.0, whose section 3(a)(1) requires ' +
-              'its attribution and licence notice to travel with it, so it is not packaged without ' +
+              'its attribution and license notice to travel with it, so it is not packaged without ' +
               `them. Publish ${noticeFilenames.join(' and ')} alongside the DB in the ` +
               `\`${DEPENDENCIES_REPO}\` repo, or fix the cause above.`,
           );
         deps.warn(
-          `Lexical DB notice files not found:\n  ${described}\n— the DB will be packaged without the attribution and licence text its terms require. Publish ${noticeFilenames.join(' and ')} alongside the DB in your \`${DEPENDENCIES_REPO}\` repo.`,
+          `Lexical DB notice files not found:\n  ${described}\n— the DB will be packaged without the attribution and license text its terms require. Publish ${noticeFilenames.join(' and ')} alongside the DB in your \`${DEPENDENCIES_REPO}\` repo.`,
         );
       }
     }

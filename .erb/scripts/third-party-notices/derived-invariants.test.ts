@@ -184,7 +184,7 @@ describe('LICENSING.md agrees with what the packages declare', () => {
   it('supplies as a webpack external every package the table says is supplied as one', () => {
     // The MIT side of the rule rests on runtime linking, and for platform-bible-utils the mechanism
     // IS the externals list - the table says so in as many words. Dropping it from `externals` would
-    // bundle it instead: the licence answer is unchanged, but the table's stated reason would stop
+    // bundle it instead: the license answer is unchanged, but the table's stated reason would stop
     // describing what actually happens.
     const externals = fs.readFileSync(
       path.join(REPO, 'extensions', 'webpack', 'webpack.config.base.ts'),
