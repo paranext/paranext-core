@@ -22,12 +22,17 @@ vi.mock('@shared/services/logger.service', () => ({
 /** Minimal event-target stand-in: records listeners so tests can dispatch to them. */
 function makeFakeSocket() {
   const listeners = new Map<string, (ev: unknown) => void>();
+  // Separate from `listeners`: never pruned by removeEventListener, so a test can still invoke a
+  // handler after RpcServer has "unregistered" it — proving idempotence against a caller holding a
+  // stale reference, not just against dispatch-via-listeners-map (which self-defeats that case).
+  const captured = new Map<string, (ev: unknown) => void>();
   const socket = {
     readyState: 1,
     send: vi.fn(),
     close: vi.fn(),
     addEventListener: (type: string, handler: (ev: unknown) => void) => {
       listeners.set(type, handler);
+      captured.set(type, handler);
     },
     removeEventListener: (type: string) => {
       listeners.delete(type);
@@ -38,6 +43,7 @@ function makeFakeSocket() {
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     socket: socket as unknown as WebSocket,
     dispatch: (type: string, ev: unknown) => listeners.get(type)?.(ev),
+    captured,
   };
 }
 
@@ -111,13 +117,18 @@ describe('RpcServer close logging', () => {
   });
 
   test('logs exactly once when the close event is dispatched twice', async () => {
-    const { socket, dispatch } = makeFakeSocket();
+    const { socket, captured } = makeFakeSocket();
     const server = makeServer(socket);
     await server.connect();
 
+    // Call the captured handler directly, twice: `captured` is never pruned by
+    // removeEventListener, so this genuinely re-invokes the handler after the first close has
+    // already torn things down — unlike dispatching through the mutated `listeners` map, where the
+    // second dispatch would find nothing and never call the handler at all.
+    const closeHandler = captured.get('close');
     const ev = new CloseEvent('close', { code: 1006, wasClean: false });
-    dispatch('close', ev);
-    dispatch('close', ev);
+    closeHandler?.(ev);
+    closeHandler?.(ev);
 
     // Two scary lines for one disconnect is the noise regression this ticket must not ship.
     expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
