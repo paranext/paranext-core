@@ -43,8 +43,8 @@ describe('web view state service', () => {
   });
 
   test('stores state under the minted id, so a window id that changes cannot strand it', async () => {
-    // Electron's BrowserWindow.id is not stable across restarts, so a suffix baked into the storage
-    // key would lose the record on any restart that renumbers the window
+    // A restored window always carries a new id, since ids are never reused, so a suffix baked into
+    // the storage key would lose the record on every restart
     const { setFullWebViewStateById, getFullWebViewStateById } = await importWebViewStateService();
 
     setFullWebViewStateById(`${MINTED_ID}-w1`, { scrRef: 'JHN 3:16' });

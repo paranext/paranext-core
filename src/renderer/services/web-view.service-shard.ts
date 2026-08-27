@@ -1133,9 +1133,10 @@ async function loadLayout(
     const didDockGainWebViewsDuringLoad = () =>
       webViewsBeforeLoad.length === 0 && dockLayoutVar.getAllWebViewDefinitions().length > 0;
     // Every layout gets its web view ids scoped to this window, including one restored from
-    // persistence: a saved entry's ids carry the window id of the session that saved them (window
-    // ids are not stable across restarts), and the legacy pre-multi-window layout carries unscoped
-    // ids. Re-scoping replaces the suffix rather than stacking another one, so it is safe on both.
+    // persistence: a saved entry's ids carry the window id of the session that saved them, which
+    // is never this window's id (ids are never reused, so a restored window is always a new one),
+    // and the legacy pre-multi-window layout carries unscoped ids. Re-scoping replaces the suffix
+    // rather than stacking another one, so it is safe on both.
     const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
     if (isPendingContent) {
       if (didDockGainWebViewsDuringLoad()) {

@@ -1082,7 +1082,7 @@ name this router is responsible for silently going unregistered.
   fails silently, since writing it succeeds and nothing ever reads it.
 - Cache a resolved shard in the router. `networkObjectService.get` already caches, serializes
   concurrent lookups, and drops what it holds on disposal; a second cache can only go stale, and
-  Electron reuses `BrowserWindow.id`.
+  a stale entry answers for a window that has gone.
 
 ### App-global services: service host in main + predicting cache
 

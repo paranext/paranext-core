@@ -4,10 +4,11 @@
  * and is read and written ONLY by the main process — renderers get and push their layout through
  * the `windowLayout:get`/`windowLayout:save` request handlers registered here.
  *
- * Identity model: a window's position in the structure's list IS its identity across sessions;
- * Electron window ids are runtime-only and are never persisted (they restart at 1 each process
- * launch, so a persisted one would name a different window). Every window has a slot in that list
- * from the moment it is created — a restored window binds to the slot it restores, a window opened
+ * Identity model: a window's position in the structure's list IS its identity across sessions.
+ * Window ids are not what ties a slot to a window across a restart — an id is never handed out
+ * twice, so a persisted one would name a window that no longer exists rather than the wrong one,
+ * but the slot is what a restored window binds to. Every window has a slot in that list from the
+ * moment it is created — a restored window binds to the slot it restores, a window opened
  * mid-session appends one — and the slot is the only place that window's layout and bounds live. A
  * slot with no window in it is a preserved entry: one this session never restored (a power-mode
  * secondary window while the app runs in simple mode, which restores only the main window), or one
@@ -597,7 +598,7 @@ export async function initializeWindowLayoutPersistence(): Promise<void> {
             {
               name: 'windowId',
               required: true,
-              summary: 'Electron BrowserWindow ID of the window asking what to restore',
+              summary: 'Id of the window asking what to restore',
               schema: { type: 'number' },
             },
           ],
@@ -621,7 +622,7 @@ export async function initializeWindowLayoutPersistence(): Promise<void> {
             {
               name: 'windowId',
               required: true,
-              summary: 'Electron BrowserWindow ID of the window whose layout this is',
+              summary: 'Id of the window whose layout this is',
               schema: { type: 'number' },
             },
             {
