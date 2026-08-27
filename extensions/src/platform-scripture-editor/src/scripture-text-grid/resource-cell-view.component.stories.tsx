@@ -14,13 +14,14 @@ import {
 /**
  * One cell of the Scripture Text Grid: a single resource's focused chapter. In the app the
  * connected `ResourceCell` fetches the chapter USJ and feeds a read-only `Editorial`; these stories
- * drive the presentational `ResourceCellView` directly so every state — downloading, failed, and
- * ready (LTR and RTL) — is reachable without a backend.
+ * drive the presentational `ResourceCellView` directly so every state — downloading, book not
+ * available, failed, and ready (LTR and RTL) — is reachable without a backend.
  *
  * `ResourceCellView` is purely presentational — role, focus, and accessible name live on the parent
  * verse `listitem` in `ScriptureTextGrid`. Stories wrap it in a plain bounded box.
  *
- * States covered: `downloading`, `failed`, `unavailable`, and `ready` (LTR and RTL).
+ * States covered: `downloading`, `bookNotAvailable`, `failed`, `unavailable`, and `ready` (LTR and
+ * RTL).
  */
 const meta: Meta<typeof ResourceCellView> = {
   title: 'Bundled Extensions/platform-scripture-editor/ResourceCell',
@@ -122,6 +123,26 @@ export const Failed: Story = {
     <CellBox>
       <ResourceCellView
         state="failed"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={undefined}
+      />
+    </CellBox>
+  ),
+};
+
+/**
+ * The resource is installed and working, but has no such book — e.g. Genesis in a New
+ * Testament-only text. Shows only the missing-book wording: no "Resource unavailable" heading and
+ * no "Download failed", either of which would point the user at a re-download that cannot supply a
+ * book the text never contained.
+ */
+export const BookNotAvailable: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="bookNotAvailable"
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
