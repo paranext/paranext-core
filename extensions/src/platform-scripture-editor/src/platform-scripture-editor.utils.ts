@@ -143,8 +143,12 @@ export interface NoteCallerClickState {
   editingNoteKey: string | undefined;
   /** Whether the footnote-editor popover is actually shown right now. */
   popoverShown: boolean;
+  /** Whether the footnotes pane's visibility TOGGLE is on (it may still lack data to render). */
+  paneVisible: boolean;
   /** Whether the footnotes pane is actually rendered (visible toggle AND data loaded). */
   paneRendered: boolean;
+  /** Whether the footnotes pane's auto-show behavior is enabled. */
+  isAutoShowEnabled: boolean;
 }
 
 /** What a collapsed-note caller click should do — see {@link decideNoteCallerClickAction}. */
@@ -160,10 +164,19 @@ export interface NoteCallerClickDecision {
    *
    * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
    * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored.
-   * - `focus-pane` — focus/highlight the note in the footnotes pane (PT9 navigate-to-note).
-   * - `open-popover` — open the footnote-editor popover for the clicked note.
+   * - `open-popover` — open the footnote-editor popover for the clicked note. The popover always
+   *   opens on a routed click, because it is the only surface that can EDIT a note today; the pane
+   *   flags below are navigation alongside it, never a substitute for it.
    */
-  action: 'ignore-expanded' | 'ignore-popover-open' | 'focus-pane' | 'open-popover';
+  action: 'ignore-expanded' | 'ignore-popover-open' | 'open-popover';
+  /**
+   * Also select/highlight/scroll to the clicked note in the footnotes pane (PT9 navigate-to-note).
+   * True when the pane is rendered — or is being shown by this very click ({@link showPane}); the
+   * pane's focus-request machinery retries a request that arrives before its data mounts.
+   */
+  sendPaneFocusRequest: boolean;
+  /** Also show the footnotes pane: it is currently toggled off and auto-show is enabled. */
+  showPane: boolean;
 }
 
 /**
@@ -173,34 +186,35 @@ export interface NoteCallerClickDecision {
  * - An expanded note's caller does nothing (the note is edited in place).
  * - While a footnote-editor popover is really shown, clicks are ignored (one session at a time).
  * - An editing-session key without a shown popover is STALE — it must not block the click.
- * - Pane actually rendered → focus/highlight the note there (PT9 navigate-to-note); the pane's
- *   visibility toggle alone is not enough (the pane also needs its data to render).
- * - Otherwise → open the footnote-editor popover.
+ * - Otherwise the popover OPENS — always, in every view, because it is the only surface that can edit
+ *   a note today. Alongside it, the pane highlights the clicked note when it is rendered, and a
+ *   click also SHOWS the pane when it is toggled off and auto-show is enabled.
  */
 export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
-  if (!state.isCollapsed) return { clearStaleEditingSession: false, action: 'ignore-expanded' };
+  if (!state.isCollapsed)
+    return {
+      clearStaleEditingSession: false,
+      action: 'ignore-expanded',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    };
   // A truthy editingNoteKey marks an editing session (matches the original inline guard's
   // truthiness check; an empty-string key is never a live session).
   if (state.editingNoteKey && state.popoverShown)
-    return { clearStaleEditingSession: false, action: 'ignore-popover-open' };
+    return {
+      clearStaleEditingSession: false,
+      action: 'ignore-popover-open',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    };
   const clearStaleEditingSession = !!state.editingNoteKey;
-  if (state.paneRendered) return { clearStaleEditingSession, action: 'focus-pane' };
-  return { clearStaleEditingSession, action: 'open-popover' };
-}
-
-/**
- * Whether a note-caller click may route to the footnotes pane: the pane must actually be rendered
- * AND the editor must be in Standard view. Outside Standard view the pane is a read-only projection
- * with no footnote editor, so routing a click there dead-ends — the note gets highlighted but there
- * is no path to editing it; those views keep the popover path instead. Composed into
- * {@link decideNoteCallerClickAction}'s `paneRendered` input at the call site, so that decision
- * function stays a pure function of its snapshot.
- */
-export function canRouteNoteCallerClickToPane(
-  paneRendered: boolean,
-  viewType: ScriptureEditorViewType,
-): boolean {
-  return paneRendered && viewType === 'standard';
+  const showPane = state.isAutoShowEnabled && !state.paneVisible;
+  return {
+    clearStaleEditingSession,
+    action: 'open-popover',
+    sendPaneFocusRequest: state.paneRendered || showPane,
+    showPane,
+  };
 }
 
 // #region Editor Title Formatting

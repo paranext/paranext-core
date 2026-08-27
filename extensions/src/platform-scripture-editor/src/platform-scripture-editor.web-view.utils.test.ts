@@ -334,10 +334,9 @@ describe('resolveFootnotesPaneAutoVisibility', () => {
   const GENESIS_1 = 'GEN|1';
   const GENESIS_2 = 'GEN|2';
 
-  /** Auto-show on, Standard view, current chapter has notes, no manual override in play. */
+  /** Auto-show on, current chapter has notes, no manual override in play. */
   const AUTO_SHOWING: FootnotesPaneAutoVisibilityInput = {
     isAutoShowEnabled: true,
-    viewType: 'standard',
     chapterHasNotes: true,
     manualOverrideChapterKey: undefined,
     currentChapterKey: GENESIS_1,
@@ -361,22 +360,6 @@ describe('resolveFootnotesPaneAutoVisibility', () => {
       resolveFootnotesPaneAutoVisibility({
         ...AUTO_SHOWING,
         isAutoShowEnabled: false,
-        chapterHasNotes: false,
-      }),
-    ).toBeUndefined();
-  });
-
-  it('has no opinion outside Standard view, whatever the chapter holds', () => {
-    expect(
-      resolveFootnotesPaneAutoVisibility({ ...AUTO_SHOWING, viewType: 'markers' }),
-    ).toBeUndefined();
-    expect(
-      resolveFootnotesPaneAutoVisibility({ ...AUTO_SHOWING, viewType: 'formatted' }),
-    ).toBeUndefined();
-    expect(
-      resolveFootnotesPaneAutoVisibility({
-        ...AUTO_SHOWING,
-        viewType: 'markers',
         chapterHasNotes: false,
       }),
     ).toBeUndefined();

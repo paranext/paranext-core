@@ -32,12 +32,8 @@ import {
   type SelectionRange,
   type StyleInfo,
 } from '@eten-tech-foundation/platform-editor';
-import {
-  markerMenuItemToPaletteItem,
-  stripMarkerNestingPrefix,
-  type MarkerMenuItem,
-} from 'platform-bible-react';
-import type { ScriptureEditorViewType } from 'platform-scripture-editor';
+import { markerMenuItemToPaletteItem, type MarkerMenuItem } from 'platform-bible-react';
+import { stripMarkerNestingPrefix } from 'platform-bible-react/experimental';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
 /**
@@ -161,8 +157,6 @@ export function getChapterKey(
 export interface FootnotesPaneAutoVisibilityInput {
   /** Whether the footnotes pane's auto-show/hide behavior is turned on. */
   isAutoShowEnabled: boolean;
-  /** The editor view the pane belongs to. */
-  viewType: ScriptureEditorViewType;
   /** Whether the chapter currently loaded in the editor has at least one note. */
   chapterHasNotes: boolean;
   /**
@@ -178,10 +172,10 @@ export interface FootnotesPaneAutoVisibilityInput {
  * Decides what the footnotes pane's auto-show/hide behavior should do right now: show the pane,
  * hide it, or leave it exactly as the user has it.
  *
- * Auto-show/hide is a PT9 divergence and defaults to off, so PT9's manual, persistent pane
- * visibility is what ships unless the user turns it on. It is also scoped to Standard view; the
- * other views keep manual visibility whatever the setting says. When it does apply, the pane
- * follows the loaded chapter: shown for a chapter that has notes, hidden for one that doesn't.
+ * Auto-show/hide is a PT9 divergence, off by default in Simple mode (so PT9's manual, persistent
+ * pane visibility is what ships there) and on by default in Power mode — see the web view's
+ * effective-setting derivation. It applies in EVERY editor view. When it applies, the pane follows
+ * the loaded chapter: shown for a chapter that has notes, hidden for one that doesn't.
  *
  * A manual show/hide wins over that, but only for the chapter it was made in — the user asked for
  * THIS chapter to look a particular way, not for the feature to stop working. Recording the
@@ -193,13 +187,11 @@ export interface FootnotesPaneAutoVisibilityInput {
  */
 export function resolveFootnotesPaneAutoVisibility({
   isAutoShowEnabled,
-  viewType,
   chapterHasNotes,
   manualOverrideChapterKey,
   currentChapterKey,
 }: FootnotesPaneAutoVisibilityInput): boolean | undefined {
   if (!isAutoShowEnabled) return undefined;
-  if (viewType !== 'standard') return undefined;
   if (manualOverrideChapterKey === currentChapterKey) return undefined;
   return chapterHasNotes;
 }
@@ -324,9 +316,9 @@ export function markerMenuItemsToResolvedPaletteItems(
  * Resolves every `LocalizeKey` field of already-built palette items, so a request handed to
  * `papi.overlays.showCommandPalette` carries NO unresolved keys.
  *
- * The single place the localizable `PaletteItem` fields are enumerated — every palette-opening
- * path routes through here so none of them can reintroduce the overlay host's localization await
- * (and with it the dropped-keystroke window) by forgetting a field.
+ * The single place the localizable `PaletteItem` fields are enumerated — every palette-opening path
+ * routes through here so none of them can reintroduce the overlay host's localization await (and
+ * with it the dropped-keystroke window) by forgetting a field.
  *
  * @param items Palette items whose text may still contain `LocalizeKey`s
  * @param localizedStrings Localized strings the caller already holds

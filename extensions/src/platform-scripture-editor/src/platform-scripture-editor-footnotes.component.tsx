@@ -82,8 +82,11 @@ export function FootnotesLayout({
         return undefined;
       });
     } catch (e) {
+      // Truncated like the divergence logger's snippets — a diagnostic line, never a full
+      // chapter dump into the log.
       logger.warn(
-        `FootnotesLayout failed to process USJ: ${getErrorMessage(e)}. USJ: ${JSON.stringify(usj)}`,
+        `FootnotesLayout failed to process USJ: ${getErrorMessage(e)}. ` +
+          `USJ (truncated): ${JSON.stringify(usj).slice(0, 200)}`,
       );
     }
   }, [usj]);

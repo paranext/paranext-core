@@ -8,7 +8,6 @@ import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   convertScriptureRangeToEditorRange,
-  canRouteNoteCallerClickToPane,
   decideNoteCallerClickAction,
   formatEditorTitle,
   generateParagraphMenuListItems,
@@ -2603,13 +2602,17 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     isCollapsed: true,
     editingNoteKey: undefined,
     popoverShown: false,
+    paneVisible: false,
     paneRendered: false,
+    isAutoShowEnabled: false,
   };
 
   it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
     expect(decideNoteCallerClickAction(base)).toEqual({
       clearStaleEditingSession: false,
       action: 'open-popover',
+      sendPaneFocusRequest: false,
+      showPane: false,
     });
   });
 
@@ -2617,53 +2620,92 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     expect(decideNoteCallerClickAction({ ...base, isCollapsed: false })).toEqual({
       clearStaleEditingSession: false,
       action: 'ignore-expanded',
+      sendPaneFocusRequest: false,
+      showPane: false,
     });
   });
 
   it('ignores clicks while a popover session is really shown (one at a time)', () => {
     expect(
       decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: true }),
-    ).toEqual({ clearStaleEditingSession: false, action: 'ignore-popover-open' });
+    ).toEqual({
+      clearStaleEditingSession: false,
+      action: 'ignore-popover-open',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
   });
 
   it('self-heals a stale session key (no popover shown) instead of dead-ending the click', () => {
     // Pre-fix, a leftover editingNoteKey silently swallowed every future caller click.
     expect(
       decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: false }),
-    ).toEqual({ clearStaleEditingSession: true, action: 'open-popover' });
-  });
-
-  it('routes to the pane only when the pane is actually rendered', () => {
-    expect(decideNoteCallerClickAction({ ...base, paneRendered: true })).toEqual({
-      clearStaleEditingSession: false,
-      action: 'focus-pane',
+    ).toEqual({
+      clearStaleEditingSession: true,
+      action: 'open-popover',
+      sendPaneFocusRequest: false,
+      showPane: false,
     });
   });
 
-  it('clears a stale session even when routing to the pane', () => {
+  it('still opens the popover when the pane is rendered — the pane highlight rides alongside', () => {
+    // The popover is the only surface that can EDIT a note today, so a routed click always opens
+    // it; the rendered pane additionally highlights the clicked note (PT9 navigate-to-note).
+    expect(decideNoteCallerClickAction({ ...base, paneVisible: true, paneRendered: true })).toEqual(
+      {
+        clearStaleEditingSession: false,
+        action: 'open-popover',
+        sendPaneFocusRequest: true,
+        showPane: false,
+      },
+    );
+  });
+
+  it('shows a closed pane when auto-show is on, and highlights the note once it mounts', () => {
+    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: true })).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-popover',
+      sendPaneFocusRequest: true,
+      showPane: true,
+    });
+  });
+
+  it('leaves a closed pane closed when auto-show is off', () => {
+    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: false })).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-popover',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
+  });
+
+  it('does not re-show a pane that is already toggled visible but still mounting its data', () => {
+    // paneVisible without paneRendered: the toggle is on but the data has not loaded — nothing to
+    // show and nothing to highlight yet.
     expect(
-      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', paneRendered: true }),
-    ).toEqual({ clearStaleEditingSession: true, action: 'focus-pane' });
-  });
-});
-
-// The view term the caller composes into decideNoteCallerClickAction's `paneRendered` input:
-// outside Standard view the pane is a read-only projection with no footnote editor, so routing a
-// caller click there dead-ends (highlighted note, no path to editing it) — those views must keep
-// the popover path even while the pane is rendered.
-describe('canRouteNoteCallerClickToPane (pane routing is Standard-view-only)', () => {
-  it('routes to the rendered pane in standard view', () => {
-    expect(canRouteNoteCallerClickToPane(true, 'standard')).toBe(true);
+      decideNoteCallerClickAction({ ...base, paneVisible: true, isAutoShowEnabled: true }),
+    ).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-popover',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
   });
 
-  it('keeps the popover path in formatted and markers view even while the pane is rendered', () => {
-    expect(canRouteNoteCallerClickToPane(true, 'formatted')).toBe(false);
-    expect(canRouteNoteCallerClickToPane(true, 'markers')).toBe(false);
-  });
-
-  it('never routes to a pane that is not rendered, in any view', () => {
-    expect(canRouteNoteCallerClickToPane(false, 'standard')).toBe(false);
-    expect(canRouteNoteCallerClickToPane(false, 'formatted')).toBe(false);
+  it('clears a stale session while still doing the pane work', () => {
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        editingNoteKey: 'note-1',
+        paneVisible: true,
+        paneRendered: true,
+      }),
+    ).toEqual({
+      clearStaleEditingSession: true,
+      action: 'open-popover',
+      sendPaneFocusRequest: true,
+      showPane: false,
+    });
   });
 });
 

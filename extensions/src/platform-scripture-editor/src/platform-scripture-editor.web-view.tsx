@@ -47,7 +47,6 @@ import {
   AlertTitle,
   BookChapterControl,
   Button,
-  clearPaletteSessionIfCurrent,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
   DisabledActionTooltip,
@@ -55,10 +54,6 @@ import {
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   type FootnoteEditorMarkerPalette,
-  handleMarkerPaletteSessionKeyDown,
-  type MarkerPaletteKeyEvent,
-  type MarkerPaletteOpenSession,
-  runMarkerPaletteSession,
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
   MarkerMenu,
@@ -78,6 +73,13 @@ import {
   isMacOs,
   usePromise,
 } from 'platform-bible-react';
+import {
+  clearPaletteSessionIfCurrent,
+  handleMarkerPaletteSessionKeyDown,
+  type MarkerPaletteKeyEvent,
+  type MarkerPaletteOpenSession,
+  runMarkerPaletteSession,
+} from 'platform-bible-react/experimental';
 import {
   ABORTED,
   compareScrRefs,
@@ -146,7 +148,6 @@ import {
   blockMarkerToBlockNames,
   buildChapterScaffoldOps,
   canAddChapterNumber,
-  canRouteNoteCallerClickToPane,
   correctEditorUsjVersion,
   decideNoteCallerClickAction,
   deepEqualAcrossIframes,
@@ -962,6 +963,55 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     { index: number } | undefined
   >(undefined);
 
+  /**
+   * The user's explicit footnotes-pane auto-show choice, or `undefined` when they have never
+   * toggled it. Kept separate from the EFFECTIVE value below because the default is per interface
+   * mode, and `useWebViewState` captures its default at mount — before `platform.interfaceMode` has
+   * resolved — so baking the mode into the stored default would freeze it at the loading-time
+   * value.
+   */
+  const [footnotesAutoShowChoice, setFootnotesAutoShow] = useWebViewState<boolean | undefined>(
+    'footnotesAutoShow',
+    undefined,
+  );
+
+  /**
+   * Footnotes-pane auto-show/hide, as applied: the user's explicit choice when they have made one,
+   * else ON in Power mode and OFF in Simple mode (PT9's manual, persistent pane visibility
+   * unchanged there by default). Applies in EVERY editor view. When on, the pane auto-shows/hides
+   * based on whether the current chapter has notes (see the `chapterHasNotes`/auto-show `useEffect`
+   * below, which runs once `usjFromPdp` is available), and a note-caller click also shows a closed
+   * pane (see `noteCallerOnClick`).
+   */
+  const footnotesAutoShow = footnotesAutoShowChoice ?? isPowerMode;
+
+  const footnotesAutoShowRef = useRef(footnotesAutoShow);
+
+  useEffect(() => {
+    footnotesAutoShowRef.current = footnotesAutoShow;
+  }, [footnotesAutoShow]);
+
+  /**
+   * The chapter (`getChapterKey`) in which the user last manually showed or hid the footnotes pane,
+   * or `undefined` when they have not. A manual toggle wins over the `footnotesAutoShow`
+   * auto-show/hide behavior for that chapter only — see `resolveFootnotesPaneAutoVisibility`, which
+   * compares this against the loaded chapter rather than trusting a flag to have been cleared.
+   *
+   * Intentionally a ref (not persisted web-view state) since it only needs to survive re-renders
+   * within a chapter, not across web-view reloads.
+   */
+  const footnotesManualOverrideChapterRef = useRef<string | undefined>(undefined);
+
+  // Chapter change drops per-chapter transient footnotes state: the manual pane override (so
+  // auto-show/hide resumes for the new chapter, and so returning to the earlier chapter starts
+  // fresh rather than reviving its old override) and any pending pane-focus request (so a request
+  // that was dropped as out-of-bounds while `footnotes` was momentarily empty can't be retried
+  // against the NEW chapter's notes once they repopulate).
+  useEffect(() => {
+    footnotesManualOverrideChapterRef.current = undefined;
+    setFootnotePaneFocusRequest(undefined);
+  }, [scrRef.book, scrRef.chapterNum]);
+
   // #endregion Footnotes Pane State
 
   // Project-settings-sourced separators/callers for `nodeOptions` below (PT9
@@ -1090,14 +1140,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               isCollapsed,
               editingNoteKey: editingNoteKey.current,
               popoverShown: showFootnoteEditorRef.current,
-              // The render condition (not just the toggle: the pane only consumes focus requests
-              // when it is actually rendered) AND the view: outside Standard view the pane is a
-              // read-only projection with no footnote editor, so routing there would dead-end the
-              // click — those views keep the popover path.
-              paneRendered: canRouteNoteCallerClickToPane(
-                footnotesPaneRenderedRef.current,
-                viewType,
-              ),
+              paneVisible: footnotesPaneVisibleRef.current,
+              // The render condition, not just the toggle: the pane only consumes focus requests
+              // when it is actually rendered.
+              paneRendered: footnotesPaneRenderedRef.current,
+              isAutoShowEnabled: footnotesAutoShowRef.current,
             });
             if (decision.clearStaleEditingSession) {
               // A prior session's key survived without its popover — orphaned bookkeeping that
@@ -1113,20 +1160,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             if (decision.action === 'ignore-expanded' || decision.action === 'ignore-popover-open')
               return;
 
-            // Pane rendered → focus/highlight the note there (PT9 navigate-to-note) instead of
-            // opening the popover, regardless of the auto-show setting. The pane addresses notes
-            // by document-order index, which the editor computes exactly at click time.
-            if (decision.action === 'focus-pane') {
+            // Alongside the popover below: show the pane when the click is what reveals it
+            // (auto-show behavior, so the per-chapter manual override is NOT recorded), and
+            // select/highlight the clicked note there (PT9 navigate-to-note). The pane addresses
+            // notes by document-order index, which the editor computes exactly at click time; a
+            // focus request sent while the pane's data is still mounting is retried when it
+            // repopulates.
+            if (decision.showPane) setFootnotesPaneVisible(true);
+            if (decision.sendPaneFocusRequest) {
               const index = getNoteIndex();
               if (index !== undefined) setFootnotePaneFocusRequest({ index });
               else
                 logger.warn(
                   'noteCallerOnClick: clicked note is no longer attached; pane focus request dropped',
                 );
-              return;
             }
 
-            // Pane hidden → open the popover (existing behavior).
+            // The popover opens on every routed click — it is the only surface that can EDIT a
+            // note today; the pane work above is navigation alongside it.
             const noteOp = getNoteOps()?.at(0);
             if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) {
               logger.warn('noteCallerOnClick: clicked note produced no valid note op; ignoring');
@@ -1153,6 +1204,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       defaultCrossRefCaller,
       footnoteCallers,
       crossRefCallers,
+      setFootnotesPaneVisible,
     ],
   );
 
@@ -1250,48 +1302,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const viewOptions = useMemo<ViewOptions>(() => {
     return getViewOptionsForType(viewType, isPowerMode);
   }, [viewType, isPowerMode]);
-
-  // #region Footnotes Auto-Show Setting
-
-  /**
-   * Footnotes-pane auto-show/hide setting that diverges from PT9 (default off, so PT9's
-   * manual/persistent behavior is unchanged by default): when on, the footnotes pane
-   * auto-shows/hides in standard view based on whether the current chapter has notes. See the
-   * `chapterHasNotes`/auto-show `useEffect` below, which runs once `usjFromPdp` is available.
-   */
-  const [footnotesAutoShow, setFootnotesAutoShow] = useWebViewState<boolean>(
-    'footnotesAutoShow',
-    false,
-  );
-
-  const footnotesAutoShowRef = useRef(footnotesAutoShow);
-
-  useEffect(() => {
-    footnotesAutoShowRef.current = footnotesAutoShow;
-  }, [footnotesAutoShow]);
-
-  /**
-   * The chapter (`getChapterKey`) in which the user last manually showed or hid the footnotes pane,
-   * or `undefined` when they have not. A manual toggle wins over the `footnotesAutoShow`
-   * auto-show/hide behavior for that chapter only — see `resolveFootnotesPaneAutoVisibility`, which
-   * compares this against the loaded chapter rather than trusting a flag to have been cleared.
-   *
-   * Intentionally a ref (not persisted web-view state) since it only needs to survive re-renders
-   * within a chapter, not across web-view reloads.
-   */
-  const footnotesManualOverrideChapterRef = useRef<string | undefined>(undefined);
-
-  // Chapter change drops per-chapter transient footnotes state: the manual pane override (so
-  // auto-show/hide resumes for the new chapter, and so returning to the earlier chapter starts
-  // fresh rather than reviving its old override) and any pending pane-focus request (so a request
-  // that was dropped as out-of-bounds while `footnotes` was momentarily empty can't be retried
-  // against the NEW chapter's notes once they repopulate).
-  useEffect(() => {
-    footnotesManualOverrideChapterRef.current = undefined;
-    setFootnotePaneFocusRequest(undefined);
-  }, [scrRef.book, scrRef.chapterNum]);
-
-  // #endregion Footnotes Auto-Show Setting
 
   /**
    * Function to run to set the editor's USJ content. Also clears annotation info because setting
@@ -2501,16 +2511,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // whether newer PDP data arrived while its write was in flight (see the retry gate in
   // `saveUsjToPdpInternal`, which deliberately does NOT re-push over an overlapped delivery).
   //
-  // Known limitation: the counter advances on `usjFromPdp` IDENTITY, and identity-stable
-  // deliveries are invisible to it — in particular the PlatformError path above resolves to the
-  // same module-level `defaultUsj` constant on every errored delivery, so an error burst never
-  // advances the count. The consequence is bounded and mostly harmless: a failed save whose
-  // in-flight window overlapped only such deliveries sees "no newer data" and re-pushes the
-  // editor's content once more.
+  // Counted on the RAW subscription value, not the error-mapped `usjFromPdp`: the PlatformError
+  // path above maps every errored delivery to the same module-level `defaultUsj` constant, whose
+  // unchanged identity would leave the count still — a save that failed during an error burst
+  // would then read "no delivery arrived" and re-push while deliveries were in fact streaming in.
+  // Each raw delivery (success or error) is a fresh object, so identity is a faithful signal
+  // here.
   const pdpDeliveryCount = useRef(0);
   useEffect(() => {
     pdpDeliveryCount.current += 1;
-  }, [usjFromPdp]);
+  }, [usjFromPdpPossiblyError]);
 
   // Single source of truth for "is the footnotes pane ACTUALLY rendered": the same value gates the
   // `FootnotesLayout` render below AND (mirrored into `footnotesPaneRenderedRef`) the
@@ -3154,13 +3164,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useEffect(() => {
     const autoVisibility = resolveFootnotesPaneAutoVisibility({
       isAutoShowEnabled: footnotesAutoShow,
-      viewType,
       chapterHasNotes,
       manualOverrideChapterKey: footnotesManualOverrideChapterRef.current,
       currentChapterKey: chapterKey,
     });
     if (autoVisibility !== undefined) setFootnotesPaneVisible(autoVisibility);
-  }, [footnotesAutoShow, viewType, chapterHasNotes, chapterKey, setFootnotesPaneVisible]);
+  }, [footnotesAutoShow, chapterHasNotes, chapterKey, setFootnotesPaneVisible]);
 
   // #endregion Footnotes Auto-Show Decision
 
