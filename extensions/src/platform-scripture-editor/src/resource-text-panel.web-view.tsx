@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
   useExtraValidMarkers,
   useTabIconSelection,
+  useViewVisibility,
   type TabIconUrls,
 } from 'platform-bible-react';
 import {
@@ -39,6 +40,7 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
+import { scrollToVerse } from './editor-dom.util';
 import { FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY } from './focused-resource-state-key.const';
 import { usePublishFocusedResourceProjectId } from './use-publish-focused-resource.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
@@ -59,6 +61,9 @@ import { RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
+
+/** Max ms to retry scrolling via rAF before giving up (e.g. verse marker missing from USJ) */
+const SCROLL_MAX_WAIT_MS = 2000;
 
 const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_noProject%',
@@ -169,6 +174,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const [localizedStrings] = useLocalizedStrings(RESOURCE_PANEL_STRING_KEYS);
 
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+
+  // Whether this tab is the active one in its stack — the trigger for the verse scroll below.
+  const isViewVisible = useViewVisibility();
 
   // #region Web view state
 
@@ -544,6 +552,73 @@ globalThis.webViewComponent = function ResourceTextPanel({
   useEffect(() => {
     if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
   }, [usjFromPdp]);
+
+  // Scroll to the current verse when this tab is shown, and again once a chapter's content lands.
+  //
+  // `Editorial` renders the reference it is given but does not scroll to the verse — every consumer
+  // that scrolls does it by calling `scrollToVerse` (the Scripture editor and the model text panel
+  // both do; this panel did not, which is why a Find result activated here revealed the tab at
+  // whatever position it was already parked at).
+  //
+  // Triggering on VISIBILITY rather than on `scrRef` is deliberate, and is what lets this skip the
+  // echo suppression the model text panel needs: this panel is on scroll group 0, so a verse click
+  // inside it publishes to the group and bounces straight back as a prop update — a `scrRef`-keyed
+  // scroll would snap the user's own click target to the top of the viewport. A tab activation never
+  // echoes. `usjFromPdp` is included because a reveal can beat the chapter load, and querying the DOM
+  // before the new chapter paints would scroll within the previous chapter's content; a same-chapter
+  // verse move does not change it, so the echo case still cannot fire this.
+  useEffect(() => {
+    if (!isViewVisible || !usjFromPdp) return undefined;
+
+    // Wait for the revealed pane's layout to SETTLE, then scroll exactly once.
+    //
+    // Two traps here, both measured. First, the verse marker enters the DOM before the chapter has
+    // finished laying out, so an offset computed at that moment is measured against a much shorter
+    // content box and scrolls to a fraction of the real target. Second — and why a naive rAF retry
+    // does not rescue it — `scrollToVerse` scrolls with `behavior: 'smooth'`, so re-calling it every
+    // frame restarts the animation from wherever it had crept to and it never converges.
+    //
+    // Sampling the scroll container's height until it stops changing avoids both: the geometry is
+    // trustworthy by then, and the single call that follows animates uninterrupted.
+    let cancelled = false;
+    const start = Date.now();
+    let lastScrollHeight = -1;
+    const scrollWhenSettled = () => {
+      if (cancelled) return;
+
+      // Verse 0/1 targets the chapter top, which needs no settled geometry.
+      if (scrRef.verseNum <= 1) {
+        scrollToVerse(scrRef);
+        return;
+      }
+
+      const timedOut = Date.now() - start > SCROLL_MAX_WAIT_MS;
+      // `.editor-container` is the editor's own scroll container — the same element
+      // `scrollToVerse` resolves via `findScrollContainer`.
+      const scrollContainer = document.querySelector<HTMLElement>('.editor-container');
+      // `querySelector` yields null, not undefined, so compare truthily — treating a missing
+      // container as "settled" would scroll against geometry that does not exist yet.
+      const scrollHeight = scrollContainer ? scrollContainer.scrollHeight : -1;
+      const isSettled = !!scrollContainer && scrollHeight === lastScrollHeight;
+      lastScrollHeight = scrollHeight;
+
+      // Scroll on a settled layout, or once out of time — a best-effort scroll beats none, and the
+      // timeout is also the exit for a verse marker genuinely absent from the USJ.
+      if (isSettled || timedOut) {
+        scrollToVerse(scrRef);
+        return;
+      }
+      requestAnimationFrame(scrollWhenSettled);
+    };
+    scrollWhenSettled();
+    return () => {
+      cancelled = true;
+    };
+    // `scrollToVerse` is a stable module-level import; listing it would cause spurious re-runs.
+    // Keyed on the reference's parts rather than the object so a new identity for an unchanged
+    // reference does not re-scroll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isViewVisible, usjFromPdp, scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
 
   // #endregion
 
