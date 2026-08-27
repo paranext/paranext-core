@@ -228,6 +228,37 @@ async function announceLocalizedToScreenReader(
 }
 
 /**
+ * The two static palette-announcement templates, resolved ONCE per palette open instead of per
+ * announcement: `announceCommandPaletteState` runs on nearly every filtering keystroke (its de-dupe
+ * guard keys on the highlighted item and the match count, and typing changes the count), and
+ * resolving through `localizationService` is a JSON-RPC round trip to the extension host — so
+ * without this cache the palette pays one IPC round trip per keystroke, independent of item count.
+ * Refreshed at open so a language change is picked up by the next palette; until the resolve lands
+ * (or if it yields nothing), announcements fall back to the per-call path.
+ */
+let paletteAnnounceStrings: { noResults: string; highlightedItem: string } | undefined;
+
+/** Kicks off (fire-and-forget) the per-open resolution backing {@link paletteAnnounceStrings}. */
+function refreshPaletteAnnounceStrings(): void {
+  paletteAnnounceStrings = undefined;
+  localizationService
+    .getLocalizedStrings({
+      localizeKeys: [
+        '%overlay_aria_commandPaletteNoResults%',
+        '%overlay_aria_commandPaletteHighlightedItem%',
+      ],
+    })
+    .then((strings) => {
+      const noResults = strings['%overlay_aria_commandPaletteNoResults%'];
+      const highlightedItem = strings['%overlay_aria_commandPaletteHighlightedItem%'];
+      if (noResults !== undefined && highlightedItem !== undefined)
+        paletteAnnounceStrings = { noResults, highlightedItem };
+      return undefined;
+    })
+    .catch(() => undefined); // the per-call fallback keeps announcing (raw keys at worst)
+}
+
+/**
  * The command palette state most recently announced to screen readers. Compared against on every
  * update so an update that changes neither the highlighted item nor the match count announces
  * nothing — a live region that repeats itself talks over the user's next keystroke.
@@ -275,15 +306,21 @@ function announceCommandPaletteState(
   };
 
   if (filteredItems.length === 0) {
-    announceLocalizedToScreenReader('%overlay_aria_commandPaletteNoResults%');
+    if (paletteAnnounceStrings) announceToScreenReader(paletteAnnounceStrings.noResults);
+    else announceLocalizedToScreenReader('%overlay_aria_commandPaletteNoResults%');
     return;
   }
   if (!highlightedItem) return;
-  announceLocalizedToScreenReader('%overlay_aria_commandPaletteHighlightedItem%', {
+  const replacers = {
     label: highlightedItem.label,
     index: `${selectedIndex + 1}`,
     count: `${filteredItems.length}`,
-  });
+  };
+  if (paletteAnnounceStrings)
+    announceToScreenReader(
+      formatReplacementString(paletteAnnounceStrings.highlightedItem, replacers),
+    );
+  else announceLocalizedToScreenReader('%overlay_aria_commandPaletteHighlightedItem%', replacers);
 }
 
 // ── Auto-Dismiss Helpers ──
@@ -763,6 +800,9 @@ async function showCommandPalette(
   }
 
   announceLocalizedToScreenReader('%overlay_aria_commandPaletteOpened%');
+  // Pre-resolve the per-update announcement templates so the filtering keystrokes that follow
+  // format locally instead of paying a localization round trip each (see the cache's doc).
+  refreshPaletteAnnounceStrings();
   // Baseline for the highlight/match-count announcements: what the palette shows the moment it
   // opens, unfiltered and highlighting its first item. The first update then announces only if it
   // actually changes one of them.

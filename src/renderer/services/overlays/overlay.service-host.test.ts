@@ -1140,11 +1140,16 @@ describe('overlay.service-host', () => {
       expect(overlays).toHaveLength(1);
       // A fully-resolved request never consults the localization service for ITEM text — the
       // await that would introduce is the window where keystrokes typed right after show were
-      // dropped. (The fire-and-forget screen-reader announcement is the one legitimate lookup on
-      // this path, and it never gates overlay creation.)
+      // dropped. (The fire-and-forget screen-reader lookups are the only legitimate ones on this
+      // path — the opened announcement plus the per-open hoist of the two update-announcement
+      // templates — and neither gates overlay creation.)
+      const legitimateAnnouncementLookups = [
+        ['%overlay_aria_commandPaletteOpened%'],
+        ['%overlay_aria_commandPaletteNoResults%', '%overlay_aria_commandPaletteHighlightedItem%'],
+      ];
       vi.mocked(localizationService.getLocalizedStrings).mock.calls.forEach(
         ([{ localizeKeys }]) => {
-          expect(localizeKeys).toEqual(['%overlay_aria_commandPaletteOpened%']);
+          expect(legitimateAnnouncementLookups).toContainEqual(localizeKeys);
         },
       );
       // Only commandPalette overlays exist in this test
@@ -1336,6 +1341,55 @@ describe('overlay.service-host', () => {
       const { palette } = await showAnnouncingPalette('sr-filter');
 
       await overlayService.updateCommandPalette('sr-filter', { filterText: 'fe' });
+      await flushAnnouncements();
+
+      expect(ariaLiveText()).toBe('fe, 1 of 1');
+
+      await dismissAndAwait(palette);
+    });
+
+    it('resolves the announcement templates once at open — filtering keystrokes cost no further localization round trips', async () => {
+      // The per-update announcement runs on nearly every filtering keystroke (its de-dupe keys on
+      // highlight + match count), and each localization resolve is a JSON-RPC round trip to the
+      // extension host — so the templates are hoisted to palette open. Both static keys resolve
+      // there; every later keystroke formats locally.
+      const { palette } = await showAnnouncingPalette('sr-hoist');
+      vi.mocked(localizationService.getLocalizedStrings).mockClear();
+
+      await overlayService.updateCommandPalette('sr-hoist', { filterText: 'f' });
+      await flushAnnouncements();
+      await overlayService.updateCommandPalette('sr-hoist', { filterText: 'fe' });
+      await flushAnnouncements();
+      await overlayService.updateCommandPalette('sr-hoist', { filterText: 'zz' });
+      await flushAnnouncements();
+
+      // The announcements themselves happened, from the hoisted templates...
+      expect(ariaLiveText()).toBe('No results');
+      // ...and no per-keystroke localization lookups were paid for them.
+      expect(localizationService.getLocalizedStrings).not.toHaveBeenCalled();
+
+      await dismissAndAwait(palette);
+    });
+
+    it('still announces per-call while the hoisted templates have not resolved yet', async () => {
+      // First keystroke racing the open-time resolve: the fallback path awaits localization per
+      // announcement, so nothing goes silent — it just pays the round trip the hoist normally
+      // saves. The hang is scoped to the TEMPLATE resolve; the per-call announcement path (and the
+      // opened announcement) keep resolving.
+      const hangs: Promise<never> = new Promise(() => {});
+      vi.mocked(localizationService.getLocalizedStrings).mockImplementation(
+        async ({ localizeKeys }) => {
+          if (localizeKeys.length === 2) return hangs; // the hoist's two-key template resolve
+          const strings: LanguageStrings = {};
+          localizeKeys.forEach((key) => {
+            if (ANNOUNCEMENT_STRINGS[key] !== undefined) strings[key] = ANNOUNCEMENT_STRINGS[key];
+          });
+          return strings;
+        },
+      );
+      const { palette } = await showAnnouncingPalette('sr-hoist-race');
+
+      await overlayService.updateCommandPalette('sr-hoist-race', { filterText: 'fe' });
       await flushAnnouncements();
 
       expect(ariaLiveText()).toBe('fe, 1 of 1');
