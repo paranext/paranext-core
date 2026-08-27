@@ -165,6 +165,7 @@ import {
   generateInlineMarkerMenuListItems,
   getChapterKey,
   markerMenuItemsToResolvedPaletteItems,
+  resolvePaletteItemStrings,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
@@ -2239,16 +2240,30 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // `\`/Backspace commit semantics never ran.
       show: (items, anchor, passive, keyForwarding) =>
         papi.overlays.showCommandPalette(
-          // Marker palette: label-only matching (the label IS the marker), same as the main
-          // editor's `\`/Enter palettes above.
-          { items, anchor, passive, keyForwarding, searchFields: ['label'] },
+          {
+            // Resolved here for the same reason the main editor resolves its own items: an
+            // unresolved LocalizeKey (the close-tag badge) sends the request down the overlay
+            // host's localization await, and keys typed during that await are dropped — which,
+            // for a palette opened MID-typing, opens it with an empty filter over a session that
+            // has already moved on.
+            items: resolvePaletteItemStrings(items, localizedStrings),
+            anchor,
+            passive,
+            keyForwarding,
+            // Marker palette: label-only matching (the label IS the marker), same as the main
+            // editor's `\`/Enter palettes above.
+            searchFields: ['label'],
+            // The same placeholder the main editor's marker palettes use, so the popover's palette
+            // does not fall back to the generic "Search...".
+            placeholder: '%markerMenu_searchPlaceholder%',
+          },
           webViewId,
         ),
       update: (update) => papi.overlays.updateCommandPalette(webViewId, update),
       commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
       dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
     }),
-    [webViewId],
+    [webViewId, localizedStrings],
   );
 
   // Capture the last live selection whenever focus leaves the main editor's input. A palette

@@ -317,18 +317,34 @@ export function markerMenuItemsToResolvedPaletteItems(
   items: readonly EditorMarkerMenuItem[],
   localizedStrings: LanguageStrings,
 ): PaletteItem[] {
+  return resolvePaletteItemStrings(items.map(markerMenuItemToPaletteItem), localizedStrings);
+}
+
+/**
+ * Resolves every `LocalizeKey` field of already-built palette items, so a request handed to
+ * `papi.overlays.showCommandPalette` carries NO unresolved keys.
+ *
+ * The single place the localizable `PaletteItem` fields are enumerated — every palette-opening
+ * path routes through here so none of them can reintroduce the overlay host's localization await
+ * (and with it the dropped-keystroke window) by forgetting a field.
+ *
+ * @param items Palette items whose text may still contain `LocalizeKey`s
+ * @param localizedStrings Localized strings the caller already holds
+ * @returns The items with each key-bearing field resolved; an unknown key keeps its raw key text,
+ *   the same fallback the overlay host and the palette component apply
+ */
+export function resolvePaletteItemStrings(
+  items: readonly PaletteItem[],
+  localizedStrings: LanguageStrings,
+): PaletteItem[] {
   const resolve = (value: string): string =>
     isLocalizeKey(value) ? (localizedStrings[value] ?? value) : value;
-  return items.map((item) => {
-    const paletteItem = markerMenuItemToPaletteItem(item);
-    return {
-      ...paletteItem,
-      label: resolve(paletteItem.label),
-      description:
-        paletteItem.description === undefined ? undefined : resolve(paletteItem.description),
-      badge: paletteItem.badge === undefined ? undefined : resolve(paletteItem.badge),
-    };
-  });
+  return items.map((item) => ({
+    ...item,
+    label: resolve(item.label),
+    description: item.description === undefined ? undefined : resolve(item.description),
+    badge: item.badge === undefined ? undefined : resolve(item.badge),
+  }));
 }
 
 /**
