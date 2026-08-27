@@ -74,7 +74,7 @@ describe.skipIf(built.length === 0 && !inCi())(
           // `LICENSE.svg` the generator refuses to reproduce - and a copy would go on asserting the
           // old definition after the real one changed. Its looseness about WHERE the word sits is
           // sound here for the same reason it is in the NuGet reproduction path: the declared
-          // `manifest.json` licence, asserted below, is the second signal that decides the terms.
+          // `manifest.json` license, asserted below, is the second signal that decides the terms.
           if (!isLicenseTextFileName(f)) return false;
           try {
             const stat = fs.statSync(path.join(dir, f));
@@ -90,7 +90,7 @@ describe.skipIf(built.length === 0 && !inCi())(
           throw new Error(`${name} declares "${String(license)}" but ships no license text`);
         expect(licenseFiles.length).toBeGreaterThan(0);
 
-        // A file NAMED like a licence is not proof of the licence DECLARED. The mechanism that puts
+        // A file NAMED like a license is not proof of the license DECLARED. The mechanism that puts
         // a mismatched pair here is real and specific: `stampExtensionLicense` corrects the `license`
         // FIELD of a folder merged from the MIT extension template, so without a text comparison the
         // folder keeps whatever `LICENSE` the merge brought - declaring AGPL-3.0-or-later while

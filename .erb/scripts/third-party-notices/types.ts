@@ -8,7 +8,7 @@
  * alone stays in that module, where it is read beside the code that maintains it.
  */
 
-/** One licence file licensee read from a package directory, as `detect.rb` reports it. */
+/** One license file licensee read from a package directory, as `detect.rb` reports it. */
 export type DetectedFile = {
   filename: string;
   /** An SPDX id, or licensee's `NOASSERTION`/`NONE` sentinel when it could not identify the text. */
@@ -25,7 +25,7 @@ export type Detection = {
   files: DetectedFile[];
 };
 
-/** How a package's licence was resolved, and on what evidence. */
+/** How a package's license was resolved, and on what evidence. */
 export type Verdict = {
   verdict: 'allowed' | 'elected' | 'excepted' | 'overridden' | 'blocked';
   spdxId: string | undefined;
@@ -58,10 +58,10 @@ export type Override = {
 };
 
 /**
- * A licence text this repository holds on behalf of a package that bundles none of its own.
+ * A license text this repository holds on behalf of a package that bundles none of its own.
  *
  * Pinned to the version it was read from AND to its own hash - it is reproduced verbatim as that
- * package's licence, so neither a version change nor an edit may pass unreviewed.
+ * package's license, so neither a version change nor an edit may pass unreviewed.
  */
 export type VendoredLicenseText = {
   /** Filename under `vendored-texts/`. */
@@ -231,7 +231,7 @@ export type Lock = {
    * Sha256 of the rendered `THIRD-PARTY-NOTICES.md` this lock was written beside.
    *
    * The lock records metadata and hashes and never the document's bytes, so nothing in it could see
-   * a hand-edited document: delete a copyleft row, or swap one licence text for another, and every
+   * a hand-edited document: delete a copyleft row, or swap one license text for another, and every
    * other field stays identical. Only the full `--verify` re-rendered the document to catch that,
    * and that path needs Ruby and four `dotnet restore` passes - so it runs on one CI leg, while the
    * check the RELEASE workflows run (`--verify-shipping-set`) could not answer the question at all.
@@ -244,7 +244,7 @@ export type Lock = {
   packages: LockPackage[];
 };
 
-/** A named text reproduced in the document - a package's own licence file, or a NOTICE. */
+/** A named text reproduced in the document - a package's own license file, or a NOTICE. */
 export type NamedText = {
   name: string;
   text: string;
@@ -320,7 +320,7 @@ export type NugetLicenseEntry = {
   PackageId: string;
   PackageVersion: string;
   License?: string;
-  /** 2 is "Unknown" - the tool could not establish a licence. See `mergeRidResults`. */
+  /** 2 is "Unknown" - the tool could not establish a license. See `mergeRidResults`. */
   LicenseInformationOrigin?: number;
   Copyright?: string;
   ValidationErrors?: unknown;
@@ -343,7 +343,7 @@ export type MergedNugetPackage = {
    * which is the distinction `render.ts` draws in the document.
    */
   inspected?: boolean;
-  /** The package's own licence files, read from the restored package folder. */
+  /** The package's own license files, read from the restored package folder. */
   licenseFiles?: NamedText[];
   /** Any NOTICE files beside them - what the document's NOTICE section is written from. */
   notices?: NamedText[];

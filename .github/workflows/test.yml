@@ -189,7 +189,7 @@ jobs:
       # The whole notices gate for this repository, in ONE pass. It derives the shipping set, runs
       # `classify` over it (so the strong-copyleft gate runs on every pull request), diffs the
       # derived set against THIRD-PARTY-NOTICES.lock.json - which records each package's licensee
-      # version, matched file, SPDX id and TEXT HASH, and is the only thing that reports a licence
+      # version, matched file, SPDX id and TEXT HASH, and is the only thing that reports a license
       # text CHANGING under an unchanged name@version - and compares the rendered document byte for
       # byte against the committed one, which IS the staleness check. A legitimate dependency bump
       # fails here with a diff naming the package and the file, which a human reads and
@@ -209,11 +209,11 @@ jobs:
 
       # The notices file is packaged into every platform's installer, so a Linux-generated
       # artifact is a claim carried by Windows and macOS binaries too. The full check (`--verify`,
-      # available via `npm run verify:third-party-notices`) cannot run on these legs: licence
+      # available via `npm run verify:third-party-notices`) cannot run on these legs: license
       # identification needs Ruby, installed on the Linux leg only, and the NuGet closure needs four
       # `dotnet restore` passes against an internal SIL feed. Neither of those varies by platform, so
       # re-running them here would only repeat the Linux leg's answer at a cost this leg cannot pay.
-      # Licence identification is platform-invariant (same files, same pinned licensee version) and
+      # License identification is platform-invariant (same files, same pinned licensee version) and
       # the NuGet closure is already made platform-complete FROM Linux by the four-RID union.
       # The one thing that genuinely varies is the npm closure - npm installs an optional dependency
       # only where its os/cpu constraints match - so that is the one thing this leg checks: its own

@@ -217,8 +217,9 @@ describe('collectShippedPackages', () => {
 
     const collect = () =>
       collectShippedPackages({ manifestDir: path.join(repo, '.notices', 'modules'), repo });
-    // Unguarded this was `TypeError: modules.forEach is not a function`, which names neither the
-    // file nor anything a reader could act on - in a pipeline where every other failure names both.
+    // Unguarded this surfaces as `TypeError: modules.forEach is not a function`, which names
+    // neither the file nor anything a reader could act on - in a pipeline where every other
+    // failure names both.
     expect(collect).not.toThrow(/is not a function/);
     expect(collect).toThrow(stray);
     expect(collect).toThrow(/no "modules" array/);
@@ -293,13 +294,13 @@ describe('collectShippedPackages - prebuilt lib scan', () => {
   }
 
   // The import scan is TypeScript's own parser, not a pattern over source text - see
-  // `runtimeModuleSpecifiers`. Each case below is a shape the pattern got wrong, and two of them
-  // were wrong on this repository's own sources rather than in principle.
+  // `runtimeModuleSpecifiers`. Each case below is a shape the pattern gets wrong, and two of them
+  // are wrong on this repository's own sources rather than in principle.
   it('sees a SIDE-EFFECT import that precedes a named one', () => {
-    // The pattern's clause window crossed statement boundaries, so `import 'polyfill';\nimport x
-    // from 'y';` was ONE match capturing only `y` - and the alternative added to catch a bare
-    // `import 'pkg'` could never be reached. A polyfill entering a bundle is the ordinary shape of
-    // this, and it left no trace: the run exits 0 with the notice missing.
+    // The pattern's clause window crosses statement boundaries, so `import 'polyfill';\nimport x
+    // from 'y';` is ONE match capturing only `y`, and the alternative meant to catch a bare
+    // `import 'pkg'` can never be reached. A polyfill entering a bundle is the ordinary shape of
+    // this, and it leaves no trace: the run exits 0 with the notice missing.
     writePackage('node_modules/side-effect-dep', 'side-effect-dep', '1.0.0');
     writePackage('node_modules/named-dep', 'named-dep', '1.0.0');
 
@@ -372,8 +373,8 @@ describe('collectShippedPackages - prebuilt lib scan', () => {
     expect(packages.find((p) => p.name === 'build-only-dep')).toBeUndefined();
   });
 
-  it('scans a shipped lib package whatever licence it declares', () => {
-    // The scan set must not be selected by `license === 'MIT'`, which uses the licence as a proxy
+  it('scans a shipped lib package whatever license it declares', () => {
+    // The scan set must not be selected by `license === 'MIT'`, which uses the license as a proxy
     // for "ships at runtime". They coincide today, but relicensing a package would then silently
     // stop this scan covering it and take every dependency vite inlined into it out of the
     // document.
@@ -407,8 +408,8 @@ describe('collectShippedPackages - prebuilt lib scan', () => {
   });
 
   it('finds a specifier whose import clause is longer than a couple of lines', () => {
-    // The clause window was 200 characters, which an `import { … }` listing thirty named exports
-    // across as many lines passes easily - three real specifiers were being dropped for it.
+    // A 200-character clause window is passed easily by an `import { … }` listing thirty named
+    // exports across as many lines - three real specifiers in this tree fall outside one.
     const wide = writePackage('node_modules/wide-import-dep', 'wide-import-dep', '1.0.0');
     // Deliberately names that contain neither "import" nor "export" as a substring: the pattern
     // matches those keywords anywhere, so `exportedName39` would restart the match a few characters
@@ -942,7 +943,7 @@ describe('a yalc dev link is described from package-lock.json, subtree and all',
     const dep = shipped(packages, 'dep');
     expect(dep.version).toBe('2.0.0');
     // Described from the lockfile, so nothing of its directory may be read - the directory holds
-    // the wrong copy, and therefore a different licence text.
+    // the wrong copy, and therefore a different license text.
     expect(dep).toMatchObject({ fromLock: true, declaredField: 'Apache-2.0' });
     // Not the link itself, which is a different fact and is reported differently.
     expect(dep.devLinked).toBeUndefined();
@@ -977,11 +978,11 @@ describe('a yalc dev link is described from package-lock.json, subtree and all',
   });
 
   it('CONTROL: leaves a hoisted copy alone when THIS repository\u2019s own source resolves to it', () => {
-    // The same soundness guard, for the reach the original scan could not see: it looked only at
-    // other THIRD-PARTY packages, so a hoisted copy imported by this repository's own source was
-    // invisible and the row was rewritten to a version the bundle does not contain. That was live -
-    // `extensions/src/platform-enhanced-resources` imports `@xmldom/xmldom`, every extension
-    // web-view manifest recorded the hoisted 0.8.13, and the document said 0.9.10.
+    // The same soundness guard, for the reach a third-party-only scan cannot see: looking at other
+    // THIRD-PARTY packages alone leaves a hoisted copy imported by this repository's own source
+    // invisible, and rewrites the row to a version the bundle does not contain. Not hypothetical -
+    // `extensions/src/platform-enhanced-resources` imports `@xmldom/xmldom`, and every extension
+    // web-view manifest records the hoisted 0.8.13 rather than the 0.9.10 the link resolves to.
     const link = writeLinkedPackage('linked-pkg', '9.9.9');
     const hoisted = writePackage('node_modules/dep', 'dep', '1.0.0');
     writeManifest('main', [path.join(link, 'index.js'), path.join(hoisted, 'index.js')]);
@@ -1345,7 +1346,7 @@ describe('a manifest built against a warm filesystem cache is refused', () => {
 
   // `warmCache: 'report'` is what a LOCAL `--verify-shipping-set` asks for, where a twice-built tree
   // is the normal state and refusing would report a difference the run cannot trust. It is a
-  // separate branch from the refusal and had no case of its own.
+  // separate branch from the refusal, and this is its case.
   it('reports the warm bundles instead of throwing when asked to', () => {
     const pkg = writePackage('node_modules/dep', 'dep', '1.0.0');
     writeManifestWithCacheFlag('main', false, [path.join(pkg, 'index.js')]);

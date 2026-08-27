@@ -2,14 +2,18 @@ import { ReactComponent as InlineLogoAndName } from '@assets/Lockup Inline.svg';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { appService } from '@shared/services/app.service';
 import { AppInfo } from '@shared/services/app.service-model';
-import { usePromise } from 'platform-bible-react';
+import { sendCommand } from '@shared/services/command.service';
+import { logger } from '@shared/services/logger.service';
+import { ExternalLink } from 'lucide-react';
+import { Button, usePromise } from 'platform-bible-react';
 import {
   formatReplacementString,
   formatReplacementStringToArray,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { Fragment, useCallback } from 'react';
+import { Fragment, ReactNode, useCallback } from 'react';
 import packageInfo from '../../../../release/app/package.json';
+import { resolveLicenseDisplay } from './about-dialog.data';
 import './about-dialog.component.scss';
 import { DIALOG_BASE } from './dialog-base.data';
 import { ABOUT_DIALOG_TYPE, DialogDefinition } from './dialog-definition.model';
@@ -22,22 +26,22 @@ const DB_IP_LICENSE = 'CC BY 4.0';
 const DB_IP_ATTRIBUTION_LINK = 'https://creativecommons.org/licenses/by/4.0/';
 
 /**
- * What `release/app/package.json` declares: npm's registered form for terms that are not an SPDX
- * licence, pointing at the file the installer carries. The distributed application is licensed to
- * the user under the Terms of Service rather than under this repository's AGPL source (see
- * LICENSING.md). Mapped to a readable name here because the raw declaration is a manifest
- * convention, not something to show a user.
+ * Years the application's copyright covers. Kept out of the localized string so advancing the range
+ * does not need a new key in every language. Canonical statement: LICENSING.md's Copyright section,
+ * which README.md repeats.
  */
-const TERMS_OF_SERVICE_DECLARATION = 'SEE LICENSE IN TERMS-OF-SERVICE.md';
+const COPYRIGHT_YEARS = '2017-2026';
 
 const STRING_KEYS: LocalizeKey[] = [
   '%product_name%',
   '%about_versionLabel_format%',
   '%about_licenseLabel_format%',
   '%about_licenseLabel_termsOfService%',
+  '%about_copyright_format%',
   '%about_db_ip_attribution_format%',
   '%about_db_ip_attribution_intro%',
   '%about_db_ip_attribution_terms%',
+  '%ariaLabel_opensInBrowser%',
 ];
 
 const defaultAppInfo: AppInfo = {
@@ -53,9 +57,11 @@ function AboutDialog() {
       '%about_versionLabel_format%': versionLabelFormat,
       '%about_licenseLabel_format%': licenseLabelFormat,
       '%about_licenseLabel_termsOfService%': termsOfService,
+      '%about_copyright_format%': copyrightFormat,
       '%about_db_ip_attribution_format%': dbIpAttributionFormat,
       '%about_db_ip_attribution_intro%': dbIpAttributionIntro,
       '%about_db_ip_attribution_terms%': dbIpAttributionTerms,
+      '%ariaLabel_opensInBrowser%': opensExternallyLabel,
     },
   ] = useLocalizedStrings(STRING_KEYS);
 
@@ -67,6 +73,25 @@ function AboutDialog() {
   );
   if (appInfo.version) packageInfo.version = appInfo.version;
 
+  const openTermsOfService = useCallback(() => {
+    sendCommand('platform.openTermsOfService').catch((e) => {
+      logger.warn(`About dialog could not open the Terms of Service. ${e}`);
+    });
+  }, []);
+
+  const licenseDisplay = resolveLicenseDisplay(packageInfo.license, termsOfService);
+  // The Terms of Service ship beside the application rather than at a URL, so this opens the
+  // installed document through the operating system instead of navigating anywhere. The label goes
+  // on the icon rather than the button so the visible name stays the button's accessible name.
+  const licenseContent: ReactNode = licenseDisplay.isTermsOfService ? (
+    <Button variant="link" className="tw:h-auto tw:p-0" onClick={openTermsOfService}>
+      {licenseDisplay.name}
+      <ExternalLink aria-label={opensExternallyLabel} />
+    </Button>
+  ) : (
+    licenseDisplay.name
+  );
+
   return (
     <div className="about-scroll-container">
       <div className="about-content">
@@ -75,16 +100,19 @@ function AboutDialog() {
         <p className="about-description">{packageInfo.description}</p>
         <p className="about-version">{formatReplacementString(versionLabelFormat, packageInfo)}</p>
         <p className="about-license">
-          {formatReplacementString(licenseLabelFormat, {
+          {/* The explicit type argument keeps `packageInfo`'s non-string fields (`author`, `scripts`)
+              from widening what the array is inferred to hold. */}
+          {formatReplacementStringToArray<ReactNode>(licenseLabelFormat, {
             ...packageInfo,
-            license:
-              packageInfo.license === TERMS_OF_SERVICE_DECLARATION
-                ? termsOfService
-                : packageInfo.license,
-          })}
+            license: licenseContent,
+          }).map((contribution, index) => (
+            // We can use index as key here because the array is static and will not change.
+            // eslint-disable-next-line react/no-array-index-key
+            <Fragment key={`key-${index}`}>{contribution}</Fragment>
+          ))}
         </p>
         <p className="about-attribution">
-          Copyright © 2017-2026 SIL Global and United Bible Societies
+          {formatReplacementString(copyrightFormat, { years: COPYRIGHT_YEARS })}
         </p>
         <p className="about-db-ip-attribution">
           {formatReplacementStringToArray(dbIpAttributionFormat, {

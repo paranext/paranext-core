@@ -1,5 +1,5 @@
-import * as crypto from 'crypto';
 import * as path from 'path';
+import { sha256 } from './lock';
 import { readJsonFile } from './read-json';
 
 /** The committed provenance record for the canonical SPDX texts: source, version, sha256 per id. */
@@ -42,11 +42,11 @@ function licenseList(): Record<string, { licenseText: string }> {
 }
 
 /**
- * Canonical SPDX licence text for an identifier, verified against the committed checksum index.
+ * Canonical SPDX license text for an identifier, verified against the committed checksum index.
  *
  * The texts live in the pinned `spdx-license-list` dependency rather than being vendored: the full
- * corpus is 10.47 MB for roughly 600 licences. What IS committed is `index.json` - source, version,
- * and a sha256 for each licence a verdict can resolve to - so provenance is mechanical and any
+ * corpus is 10.47 MB for roughly 600 licenses. What IS committed is `index.json` - source, version,
+ * and a sha256 for each license a verdict can resolve to - so provenance is mechanical and any
  * drift or substitution in the dependency is detected rather than silently reproduced, without
  * carrying 10 MB to do it. `build-corpus-index.ts` writes that file and defines which identifiers
  * are in it.
@@ -64,7 +64,7 @@ export function canonicalText(spdxId: string): string | undefined {
   const entry = licenseList()[spdxId];
   if (!entry || !entry.licenseText) return undefined;
 
-  const actual = crypto.createHash('sha256').update(entry.licenseText).digest('hex');
+  const actual = sha256(entry.licenseText);
   if (actual !== expected)
     throw new Error(
       `canonical text for ${spdxId} does not match the committed checksum (expected ${expected}, ` +

@@ -83,13 +83,13 @@ describe.skipIf(!hasLicensee)('detect.rb', () => {
   });
 
   // Ruby tags anything read with `File.read` as `Encoding.default_external`, which comes from
-  // `LC_ALL`/`LANG` - so under a non-UTF-8 locale a UTF-8 licence carrying a copyright symbol reads
+  // `LC_ALL`/`LANG` - so under a non-UTF-8 locale a UTF-8 license carrying a copyright symbol reads
   // as invalid and `detect.rb`'s verbatim-reproduction check aborts the whole batch asserting the
   // opposite of the truth. The pinned licensee hands back UTF-8 whatever the locale, so this holds
   // today through a dependency's internals; the case runs the whole script under `LC_ALL=C` so that
   // a licensee upgrade which stopped doing that is a test failure rather than an unregenerable
   // legal document on any machine without a UTF-8 locale.
-  it('reads a licence carrying non-ASCII bytes under a non-UTF-8 locale', () => {
+  it('reads a license carrying non-ASCII bytes under a non-UTF-8 locale', () => {
     const dir = path.join(REPO, 'node_modules', 'acorn-import-phases');
     const cLocale = { ...process.env, LC_ALL: 'C', LANG: 'C', LANGUAGE: 'C' };
     const [result] = detect([dir], cLocale);

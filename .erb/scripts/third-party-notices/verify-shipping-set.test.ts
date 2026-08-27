@@ -91,7 +91,7 @@ stub('./nuget-set', {
   assertFloor: throwing('assertFloor'),
   DOTNET_PROJECT: 'unused',
 });
-// Same proof for licence identification.
+// Same proof for license identification.
 stub('./identify', {
   identify: throwing('identify'),
 });
@@ -250,7 +250,7 @@ describe('--verify-shipping-set', () => {
     // The DOCUMENT half still ran: it compares two committed files and reads no manifest, so a warm
     // cache says nothing about whether it can answer.
     expect(run.stdout).toContain('against the hash its lock records');
-    // The floor would have said this, about a set it had no business trusting.
+    // The floor would say this, about a set it has no business trusting.
     expect(run.stderr).not.toContain('expected at least');
     expect(run.stderr).toBe('');
     expect(run.status).toBe(0);
@@ -260,7 +260,7 @@ describe('--verify-shipping-set', () => {
     // `--verify-shipping-set` is the ONLY notices gate `publish.yml` and `package-main.yml` run, and
     // it compared npm `name@version` and nothing else - so THIRD-PARTY-NOTICES.md, which
     // electron-builder packs into every installer, reached those artifacts unverified. Delete a
-    // copyleft row or swap a licence text and every field the lock records stays identical.
+    // copyleft row or swap a license text and every field the lock records stays identical.
     const packages = [{ name: 'a', version: '1.0.0' }];
     const run = runVerifyShippingSet(
       stubShippedPackages(packages) + stubLock(packages, 'f'.repeat(64)),
@@ -287,7 +287,7 @@ describe('--verify-shipping-set', () => {
   // In CI every workflow runs this immediately after the job's first build, so a warm stamp is a
   // real anomaly - and skipping there would turn the one leg that checks Windows and macOS into a
   // step that silently passes without comparing anything. Which mode is selected is therefore part
-  // of the contract, and it was asserted nowhere: only the `report` branch had a case.
+  // of the contract, and this is its case.
   it('asks for a refusal rather than a report when CI is set', () => {
     const run = runVerifyShippingSet(
       `
@@ -397,7 +397,7 @@ describe('the platform-only union both sides of the check apply', () => {
   });
 
   it('adds no second row on the platform that DOES install it', () => {
-    // The macOS case. The module graph already reported it, from a real directory whose licence
+    // The macOS case. The module graph already reported it, from a real directory whose license
     // text was read; a second row from the policy would duplicate the package in the document and
     // in the lock.
     const observed = npm('fsevents', '2.3.3');
@@ -414,9 +414,9 @@ describe('the platform-only union both sides of the check apply', () => {
 
 describe('inCi', () => {
   // `warmCache: process.env.CI ? 'throw' : 'report'` is a truthiness test on a STRING, so `CI=false`
-  // and `CI=0` - the two spellings somebody uses to say the opposite - both chose the CI branch and
-  // hard-failed on a condition the check had explicitly decided not to fail on locally. The same
-  // defect was fixed in `acceptShrinkFromEnv`; this pins the pipeline's other environment read.
+  // and `CI=0` - the two spellings somebody uses to say the opposite - both choose the CI branch and
+  // hard-fail on a condition the check has explicitly decided not to fail on locally.
+  // `acceptShrinkFromEnv` reads its variable the same way; this pins the other environment read.
   it.each([
     ['true', true],
     ['1', true],

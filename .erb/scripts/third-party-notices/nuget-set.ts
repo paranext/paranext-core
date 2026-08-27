@@ -233,7 +233,7 @@ function readShippingSet(rid: string): Map<string, string[]> {
  * The NuGet package folders named by a restore, filtered to the ones that exist on this machine.
  *
  * These are the roots the packages themselves were unpacked into - normally `~/.nuget/packages/` -
- * and they are what makes reproducing a package's own licence text possible without a network:
+ * and they are what makes reproducing a package's own license text possible without a network:
  * everything is already on disk from the restore this function's caller just performed.
  *
  * @param assets Parsed project.assets.json.
@@ -258,14 +258,14 @@ export function resolvePackageDir(
 }
 
 /**
- * Attaches each package's own bundled licence file(s), read from the package folder.
+ * Attaches each package's own bundled license file(s), read from the package folder.
  *
- * A NuGet package that ships a licence file must have THAT text reproduced, not the canonical SPDX
+ * A NuGet package that ships a license file must have THAT text reproduced, not the canonical SPDX
  * text of whatever its nuspec declares. The two are not interchangeable: 58 packages in this
  * closure bundle the shared Microsoft `LICENSE.TXT`, whose copyright notice names ".NET Foundation
  * and Contributors", while their nuspecs name "© Microsoft Corporation". MIT obliges "the above
  * copyright notice ... shall be included in all copies", and the notice it means is the one in the
- * licence file - so substituting SPDX's `<copyright holders>` placeholder plus a different entity's
+ * license file - so substituting SPDX's `<copyright holders>` placeholder plus a different entity's
  * credit line discharges nothing.
  *
  * This is REPRODUCTION only, never classification: the text is not fed to `policy.ts` as a second
@@ -274,7 +274,7 @@ export function resolvePackageDir(
  *
  * Throws when no package folder exists, and equally when one PACKAGE's folder does not, rather than
  * quietly reporting the package as shipping no text: that failure looks exactly like a package that
- * bundles no licence, and it would silently drop its own notice from a legal artifact.
+ * bundles no license, and it would silently drop its own notice from a legal artifact.
  */
 export function attachLicenseFiles(
   packages: MergedNugetPackage[],
@@ -286,11 +286,11 @@ export function attachLicenseFiles(
         `${path.relative(REPO, DOTNET_ASSETS)} exist on this machine, so no package's own license ` +
         `text could be read.\nRun: dotnet restore ${DOTNET_PROJECT}`,
     );
-  // The all-or-nothing case was guarded above; this is the per-package one, and it fails the same
+  // The all-or-nothing case is guarded above; this is the per-package one, and it fails the same
   // way for the same reason. `resolvePackageDir` answers `undefined` for a folder that is not there
   // - a version NuGet normalized differently on disk, a package pruned out of `~/.nuget/packages`
   // since the restore - and `readNugetLicenseFiles(undefined)` then answers `[]`, which is
-  // indistinguishable from a package that genuinely bundles no licence file. The document would say
+  // indistinguishable from a package that genuinely bundles no license file. The document would say
   // so, and substitute SPDX's `<copyright holders>` placeholder for a real ".NET Foundation and
   // Contributors" notice that MIT obliges to travel with copies.
   const unresolved = packages.filter((pkg) => !resolvePackageDir(folders, pkg.name, pkg.version));
@@ -309,8 +309,8 @@ export function attachLicenseFiles(
     return {
       ...pkg,
       licenseFiles: readNugetLicenseFiles(dir),
-      // A NOTICE is not a licence, but Apache-2.0 section 4(d) requires its attributions to travel
-      // with every redistribution - an obligation the licence text alone does not discharge. Read
+      // A NOTICE is not a license, but Apache-2.0 section 4(d) requires its attributions to travel
+      // with every redistribution - an obligation the license text alone does not discharge. Read
       // on this side as well as the npm one, or `render.ts`'s NOTICE section can never fire for a
       // NuGet package: four in the current closure ship one (all MIT today, so none is owed, but
       // two NuGet packages here are Apache-2.0 and the next one to ship a NOTICE would be).
@@ -365,7 +365,7 @@ export function normalizeValidationErrors(errors: unknown): string[] {
     throw new Error(
       `nuget-license reported a ValidationErrors value that is not an array: ${describeValue(
         errors,
-      )}. This pipeline reads those strings to decide whether the tool could establish a licence ` +
+      )}. This pipeline reads those strings to decide whether the tool could establish a license ` +
         'at all, so it cannot treat an unreadable value as an empty one.',
     );
   const messages: string[] = errors.map((error: unknown) => {
@@ -488,7 +488,7 @@ export function assertClosureCoversShippingSet(
           .map((key) => `  ${key}`)
           .join('\n')}\n` +
         'The two read the same restore, so the tool stopped before it enumerated the whole ' +
-        'closure. Re-run; a licence document is never written from a partial one.',
+        'closure. Re-run; a license document is never written from a partial one.',
     );
 }
 
@@ -507,19 +507,19 @@ export function collectNugetPackages({
   rids = RIDS,
 }: { project?: string; rids?: string[] } = {}): MergedNugetPackage[] {
   // `nuget-license` is a LOCAL dotnet tool, pinned in the repository-root `.config/
-  // dotnet-tools.json`. Nothing restored that manifest: the repo's only `dotnet tool restore` runs
-  // in `c-sharp/`, whose own manifest sets `"isRoot": true`, so the manifest walk stops there and
-  // never reaches the root file. On any machine without a matching GLOBAL install - every CI runner,
-  // every fresh checkout - the `dotnet nuget-license` call below therefore failed, and this whole
-  // pipeline worked only where someone had installed the tool by hand. Restoring here rather than in
-  // a workflow step keeps the requirement with the one call that has it, and pins the version the
-  // manifest names rather than whatever a global install happens to be.
+  // dotnet-tools.json`, and nothing else restores that manifest: the repo's only other `dotnet tool
+  // restore` runs in `c-sharp/`, whose own manifest sets `"isRoot": true`, so the manifest walk
+  // stops there and never reaches the root file. Without this line, on any machine with no matching
+  // GLOBAL install - every CI runner, every fresh checkout - the `dotnet nuget-license` call below
+  // fails, and the pipeline works only where someone installed the tool by hand. Restoring here
+  // rather than in a workflow step keeps the requirement with the one call that has it, and pins
+  // the version the manifest names rather than whatever a global install happens to be.
   execFileSync('dotnet', ['tool', 'restore'], { cwd: REPO, stdio: 'inherit' });
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-nuget-'));
   // The four RID restores overwrite `c-sharp/obj/project.assets.json`, which belongs to the ORDINARY
-  // build, not to this pipeline - so a run left the tree restored for whichever RID happened to run
-  // last (`osx-arm64`) whatever the host is. `npm run verify:third-party-notices` is billed as a
-  // read-only report and did this too, and `dotnet test c-sharp-tests/` is the next step in CI.
+  // build, not to this pipeline - so unrestored, a run leaves the tree set up for whichever RID ran
+  // last (`osx-arm64`) whatever the host is. That reaches `npm run verify:third-party-notices`,
+  // billed as a read-only report, and `dotnet test c-sharp-tests/` is the next step in CI.
   // Captured before the first restore and put back in the `finally`, so the tree is as this found
   // it whether the run succeeds or throws.
   const assetsBefore = fs.existsSync(DOTNET_ASSETS) ? fs.readFileSync(DOTNET_ASSETS) : undefined;
@@ -542,8 +542,8 @@ export function collectNugetPackages({
         // mergeRidResults/policy.ts already gate on via LicenseInformationOrigin and
         // ValidationErrors, so re-throw only if the run did not FINISH.
         //
-        // A process killed by a signal never reported a count of anything - it was stopped, by an
-        // OOM killer or by a job timeout - so whatever it left on disk describes no complete run.
+        // A process killed by a signal never reports a count of anything - it is stopped, by an
+        // OOM killer or by a job timeout - so whatever it leaves on disk describes no complete run.
         // The existence of the output file is not evidence either way; what the closure has to
         // CONTAIN is, and `assertClosureCoversShippingSet` below is that test.
         if (killedBySignal(error) || !fs.existsSync(out)) throw error;
@@ -571,8 +571,8 @@ export function collectNugetPackages({
     fs.rmSync(tmp, { recursive: true, force: true });
     // Restoring the bytes rather than re-running `dotnet restore` for the host RID: this has to run
     // on the failure path too, and a second restore there would be slow, could fail on its own, and
-    // would still not reproduce a state this never observed. If there was no assets file to begin
-    // with, the tree had not been restored and is left that way.
+    // would still not reproduce a state this never observed. If there is no assets file to begin
+    // with, the tree has not been restored and is left that way.
     if (assetsBefore) fs.writeFileSync(DOTNET_ASSETS, assetsBefore);
     else fs.rmSync(DOTNET_ASSETS, { force: true });
   }

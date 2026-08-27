@@ -31,7 +31,27 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const REPO = path.resolve(__dirname, '..', '..');
-const FILE = path.join(REPO, '.notices', 'build-id');
+
+/** Name of the stamp file, spelled once so the writer and both readers cannot drift apart. */
+const BUILD_ID = 'build-id';
+
+const FILE = path.join(REPO, '.notices', BUILD_ID);
+
+/**
+ * Where the stamp file sits relative to the module manifests.
+ *
+ * Both readers - the webpack plugin that stamps each manifest as it writes it
+ * (`.erb/configs/emit-shipped-modules-plugin.ts`) and the generator that checks the stamps agree
+ * (`readBuildId` in `.erb/scripts/third-party-notices/shipping-set.ts`) - know only the manifest
+ * directory, and reach the stamp from it. Shared so that moving the file cannot leave one of them
+ * reading a path nothing writes, which fails as an absent stamp: the plugin falls back to
+ * `unstamped-`, and every manifest then carries a value that matches no other.
+ *
+ * @param manifestDir Directory the module manifests are written to.
+ */
+export function buildIdFile(manifestDir: string): string {
+  return path.join(manifestDir, '..', BUILD_ID);
+}
 
 export function main(): void {
   fs.mkdirSync(path.dirname(FILE), { recursive: true });

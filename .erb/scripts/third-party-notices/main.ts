@@ -17,13 +17,13 @@
  * incomplete set.
  *
  *     npm run build:third-party-notices                  # regenerate (Linux)
- *     npm run verify:third-party-notices                 # full check: licence + NuGet + npm (Linux)
+ *     npm run verify:third-party-notices                 # full check: license + NuGet + npm (Linux)
  *     npm run verify:third-party-notices:shipping-set     # cheap check: npm shipping set only (Windows/macOS)
  *
  * `--verify` and `--verify-shipping-set` answer different questions and cost different amounts.
  * `--verify` re-derives every verdict (`buildReport`) and diffs the WHOLE lock - it needs Ruby
  * (`identify`) and four `dotnet restore` passes (`nuget-set.ts`), so it only runs where those are
- * installed. `--verify-shipping-set` (`verifyNpmShippingSet` below) skips both: licence
+ * installed. `--verify-shipping-set` (`verifyNpmShippingSet` below) skips both: license
  * identification is platform-invariant - the same files, matched by the same pinned licensee
  * version, identify the same way everywhere - and the NuGet closure is already made
  * platform-complete FROM Linux by the four-RID union. The one thing that genuinely varies per
@@ -60,6 +60,7 @@ import {
   readDirectPackageReferences,
   DOTNET_PROJECT,
 } from './nuget-set';
+import type { DirectPackageReference } from './nuget-set';
 import { corpusVersion, verifyCorpus } from './corpus';
 import { assertStaticAssetNoticesRecorded, staticAssetNoticeTexts } from './static-assets';
 import { buildLock, writeLock, readLock, diffLock, diffDocument, diffShippingSet } from './lock';
@@ -71,6 +72,7 @@ import type {
   Detection,
   Lock,
   MergedNugetPackage,
+  NamedText,
   Policy,
   ReportRow,
   ShippedPackage,
@@ -243,7 +245,7 @@ export function assertSnapStagePackagesClassified(
 
 /**
  * The licensee version detection ran against, recorded in the lock so a verdict that moved because
- * the matcher was upgraded stays distinguishable from one that moved because a licence changed.
+ * the matcher was upgraded stays distinguishable from one that moved because a license changed.
  *
  * Read from `Gemfile.lock` rather than by asking Ruby. This is not an inference: `detect.rb` runs
  * under `bundle exec`, and bundler resolves `require "licensee"` against this very lockfile or
@@ -275,7 +277,7 @@ function licenseeVersion(): string {
  * points at a moving branch of another repository rather than at the release this repository pins,
  * and a package a link DISPLACED, whose directory holds a different copy than the one the lockfile
  * resolves. Either way the directory is not evidence about what ships, so it lands on `classify`'s
- * no-licence-file path and has the canonical text of its declared identifier reproduced on its
+ * no-license-file path and has the canonical text of its declared identifier reproduced on its
  * behalf, paired with whatever copyright notice `notices-policy.json` records for it. `inspected:
  * false` says the folder was never read, which is not the same as having read it and found no
  * notice.
@@ -283,9 +285,9 @@ function licenseeVersion(): string {
  * `text`, `matchedFile` and `textSha256` are kept COHERENT on purpose. `classify` decides which
  * detected file the verdict rests on, and that is the file whose confidence is reported and whose
  * hash the lock pins - so the reproduced text is selected the same way rather than being taken from
- * whichever file happened to sort first. Every detected licence file is still reproduced (see
+ * whichever file happened to sort first. Every detected license file is still reproduced (see
  * `joinTexts`): a dual-licensed package ships one file per branch, and reproducing only the elected
- * one satisfies neither licence.
+ * one satisfies neither license.
  */
 function npmVerdict(pkg: ShippedPackage, detection: Detection, policy: Policy): ReportRow {
   const declaredField = pkg.fromLock
@@ -305,12 +307,12 @@ function npmVerdict(pkg: ShippedPackage, detection: Detection, policy: Policy): 
     detection,
     policy,
   });
-  // Only the file the verdict actually rests on. `|| files[0]` reported an ARBITRARY file's
-  // confidence whenever `matchedFile` was undefined - which is every blocked and every
-  // text-less verdict - and `buildLock` pins that number beside a `matchedFile` of `undefined`.
-  // `diffLock` then printed "the license file the verdict rests on changed from undefined (87%) to
-  // undefined (91%)": a drift report about a file it cannot name, from two numbers that describe no
-  // decision.
+  // Only the file the verdict actually rests on, and 0 where it rests on none. A `|| files[0]`
+  // fallback reports an ARBITRARY file's confidence wherever `matchedFile` is undefined - which is
+  // every blocked and every text-less verdict - and `buildLock` pins that number beside a
+  // `matchedFile` of `undefined`. `diffLock` then reports "the license file the verdict rests on
+  // changed from undefined (87%) to undefined (91%)": a drift report about a file it cannot name,
+  // from two numbers that describe no decision.
   const matched = verdict.matchedFile
     ? files.find((file) => file.filename === verdict.matchedFile)
     : undefined;
@@ -324,12 +326,12 @@ function npmVerdict(pkg: ShippedPackage, detection: Detection, policy: Policy): 
     // Carried for the RENDERER, not for the verdict: a package can be cleared by an exception and
     // still have a recorded election, and the table has to show both - see `displayLicense`.
     election: (policy.elections || {})[`npm:${pkg.name}`],
-    // An npm manifest has no copyright field, so the notice has to come from the licence text.
+    // An npm manifest has no copyright field, so the notice has to come from the license text.
     // The curated entry wins where there is one: it is a human's reading, and most of those entries
-    // were read from the REPOSITORY licence of a package that publishes none in its tarball, which
-    // nothing here can see. Reading the text this run already has covers the case the table was
-    // never for - the package did ship its licence file, and the document was crediting it with "no
-    // copyright notice" a few sections above reproducing the file that states one.
+    // are read from the REPOSITORY license of a package that publishes none in its tarball, which
+    // nothing here can see. Reading the text this run already has covers the case the table is not
+    // for - the package DOES ship its license file, where crediting it with "no copyright notice"
+    // a few sections above reproducing the file that states one contradicts the document itself.
     copyright:
       (policy.copyrightNotices || {})[`npm:${pkg.name}`] ||
       copyrightNoticeIn(files.map((file) => file.text)),
@@ -339,12 +341,12 @@ function npmVerdict(pkg: ShippedPackage, detection: Detection, policy: Policy): 
 /**
  * Composes one NuGet package's verdict.
  *
- * `nuget-license` reports nuspec metadata, not licence files, so `detection` is always empty here
+ * `nuget-license` reports nuspec metadata, not license files, so `detection` is always empty here
  * and every NuGet package resolves on its declared expression - which is not a special case in
- * `policy.ts`, just the no-licence-file path that any ecosystem can take.
+ * `policy.ts`, just the no-license-file path that any ecosystem can take.
  *
  * REPRODUCTION is a separate question from classification, and the two must not be conflated. Where
- * the package folder holds the package's own licence file(s), that text is what gets reproduced
+ * the package folder holds the package's own license file(s), that text is what gets reproduced
  * (`nuget-set.ts`'s `attachLicenseFiles`); the canonical SPDX text is the fallback for a package
  * that bundles none. Substituting canonical text for a bundled one loses the copyright notice the
  * bundled file carries, which is the notice MIT/BSD/ISC actually oblige to travel with copies.
@@ -352,9 +354,8 @@ function npmVerdict(pkg: ShippedPackage, detection: Detection, policy: Policy): 
  * A package that bundles nothing AND publishes its terms at a URL gets a third option before the
  * canonical fallback: a copy of that text checked into this repository, hash-pinned and pinned to
  * the version it was read from (`vendoredLicenseText`). The canonical text is only the right
- * substitute where a package's grant IS the unmodified standard text, and `Icu4c.Win.Min`'s is not
- *
- * - ICU's LICENSE carries five third-party notices for data inside the DLL this package ships.
+ * substitute where a package's grant IS the unmodified standard text, and `Icu4c.Win.Min`'s is not:
+ * ICU's LICENSE carries five third-party notices for data inside the DLL this package ships.
  */
 function nugetVerdict(pkg: MergedNugetPackage, policy: Policy): ReportRow {
   const override = (policy.overrides || {})[`nuget:${pkg.name}`] || {};
@@ -362,9 +363,10 @@ function nugetVerdict(pkg: MergedNugetPackage, policy: Policy): ReportRow {
   return {
     ...pkg,
     // A nuspec DOES have a copyright field, so unlike the npm side this is a real second source
-    // rather than the only one - but a package that leaves it empty and ships a licence file
-    // stating the notice plainly was still credited with "its nuspec declares no copyright notice"
-    // beside the reproduced text. The nuspec wins; the file answers for it when it says nothing.
+    // rather than the only one - but on the nuspec alone, a package that leaves it empty and ships
+    // a license file stating the notice plainly is credited with "its nuspec declares no copyright
+    // notice" beside the reproduced text. The nuspec wins; the file answers for it when it says
+    // nothing.
     copyright:
       pkg.copyright || copyrightNoticeIn((pkg.licenseFiles ?? []).map((file) => file.text)),
     ...classify({
@@ -387,12 +389,12 @@ function nugetVerdict(pkg: MergedNugetPackage, policy: Policy): ReportRow {
             (entry) => entry !== undefined,
           ),
     ),
-    // Read by `nuget-set.ts` from the restored package folder, the same place its licence files
+    // Read by `nuget-set.ts` from the restored package folder, the same place its license files
     // come from. Without this `render.ts`'s NOTICE section could never fire for a NuGet package.
     notices: pkg.notices,
     // A curated note replaces the nuspec copyright in the Notes column because it is the more
     // specific statement about that package; the copyright itself is kept in its own field, which
-    // is what pairs with a canonical licence text.
+    // is what pairs with a canonical license text.
     note: [ships, override.note || pkg.copyright].filter(Boolean).join(' '),
   };
 }
@@ -440,7 +442,7 @@ export function alwaysListedPackages(
       validationErrors: [],
       assemblies: [],
       rids: [],
-      // No restore on this machine resolves it, so there is no package folder to read a licence
+      // No restore on this machine resolves it, so there is no package folder to read a license
       // file from - the canonical text of the recorded determination is all there can be.
       licenseFiles: [],
       inspected: false,
@@ -451,7 +453,7 @@ export function alwaysListedPackages(
  * The npm shipping set plus the packages only another platform installs.
  *
  * Unioned by NAME, not by directory: on the platform that does install one, the module graph
- * already reports it - from a real directory, with its own licence text read - and the policy entry
+ * already reports it - from a real directory, with its own license text read - and the policy entry
  * must not add a second row for the same package. Everywhere else the lockfile is the only source
  * there is. Both callers union the same way, or the per-platform check would compare a set that
  * includes these against a lock that does not.
@@ -467,12 +469,14 @@ export function withPlatformOnlyPackages(
   return [...packages, ...extra];
 }
 
-export function buildReport() {
-  const corruptTexts = verifyCorpus();
-  if (corruptTexts.length)
-    throw new Error(`vendored SPDX corpus is corrupt for: ${corruptTexts.join(', ')}`);
-
-  const policy = loadPolicy(POLICY);
+/**
+ * The npm packages this build ships, checked against both floors and against the runtime
+ * dependencies this repository declares.
+ */
+function buildNpmShippingSet(policy: Policy): {
+  npmPackages: ShippedPackage[];
+  unresolvedStylesheetSpecifiers: string[];
+} {
   // Returns `{ packages, unresolvedStylesheetSpecifiers }`, not a bare array. The second field is
   // load-bearing: a stylesheet specifier that resolves to no installed package is SKIPPED rather
   // than thrown (there are real false positives - a specifier inside a code comment, and Sass
@@ -491,9 +495,10 @@ export function buildReport() {
   // Likewise the floors: this is the call that knows the set describes Platform.Bible rather than a
   // three-package fixture. `assertNpmFloor` is the absolute backstop; `assertNpmNotShrunk` is the
   // sensitive one, measured against the npm half of the committed lock.
-  // `!!process.env[...]` was true for `0`, `false`, `off` and `no` alike, so the one documented way
-  // to turn this gate OFF also turned it off when spelled as an attempt to turn it ON - and
-  // `assertNpmNotShrunk`'s own docstring calls the escape "impossible to do by accident". Below the
+  // The escape is read by VALUE, never by presence: `!!process.env[...]` is true for `0`, `false`,
+  // `off` and `no` alike, so the one documented way to turn this gate OFF would also turn it off
+  // when spelled as an attempt to turn it ON - and `assertNpmNotShrunk`'s own docstring calls the
+  // escape "impossible to do by accident". Below the
   // floors that remain, only `NPM_MIN_PACKAGES` (a frozen 120, against a closure of 218) would then
   // stand between a short set and the committed artifact. An unrecognised value is reported rather
   // than silently ignored: it is nearly always someone trying to reach the escape, and saying
@@ -545,17 +550,23 @@ export function buildReport() {
           )
           .join(',\n')}`,
     );
+
+  return { npmPackages, unresolvedStylesheetSpecifiers };
+}
+
+/** One verdict per shipped npm package, from what licensee read out of each directory. */
+function classifyNpmPackages(npmPackages: ShippedPackage[], policy: Policy): ReportRow[] {
   // Lockfile-described packages are excluded from detection entirely rather than having their
   // result discarded afterwards: licensee must never read a `.yalc` tree, because anything found
   // there would be another repository's branch content reaching a decision about this repository's
   // artifact - and it must not read a displaced package's directory either, because that holds a
-  // different copy than the one the lockfile resolves and so a different licence text.
+  // different copy than the one the lockfile resolves and so a different license text.
   const inspected = npmPackages.filter((pkg) => !pkg.fromLock);
   const detections = identify(inspected.map((pkg) => pkg.dir));
   // `detect.rb` answers once per directory it is given, so a directory it did not answer for means
   // the two sides disagree about what was asked - a path that did not round-trip byte-identically
   // (it strips each input line), or a truncated result. Without this the miss is INDISTINGUISHABLE
-  // from the legitimate "this package ships no licence file" case that `|| { files: [] }` exists
+  // from the legitimate "this package ships no license file" case that `|| { files: [] }` exists
   // for below, and the package would then resolve on its declared field alone: a package declaring
   // MIT while shipping a GPL LICENSE would come out `allowed MIT`, silently.
   const undetected = inspected.filter((pkg) => !detections.has(pkg.dir));
@@ -573,16 +584,37 @@ export function buildReport() {
     npmVerdict(pkg, detections.get(pkg.dir) || { dir: pkg.dir, files: [] }, policy),
   );
 
+  return npmVerdicts;
+}
+
+/** The restore closure, the direct references it is checked against, and the `alwaysList` rows. */
+function collectNugetClosure(policy: Policy): {
+  collected: MergedNugetPackage[];
+  directReferences: DirectPackageReference[];
+  alwaysListed: MergedNugetPackage[];
+} {
   const collected = collectNugetPackages();
   const directReferences = readDirectPackageReferences();
   const alwaysListed = alwaysListedPackages(policy, collected, directReferences);
+
+  return { collected, directReferences, alwaysListed };
+}
+
+/** One verdict per shipped NuGet package, once the closure covers every direct reference. */
+function buildNugetVerdicts({
+  policy,
+  collected,
+  directReferences,
+  alwaysListed,
+}: {
+  policy: Policy;
+  collected: MergedNugetPackage[];
+  directReferences: DirectPackageReference[];
+  alwaysListed: MergedNugetPackage[];
+}): ReportRow[] {
   // The direct references are the one part of the closure that can be checked against a second
   // source. `assertFloor` cannot see this failure: losing the three SIL packages would take 88 to
   // 85, far above its plausibility floor and entirely silent.
-  // Refused BEFORE the artifact is composed, like every other whole-set assertion here: a notice
-  // file nobody recorded is a claim the document would omit, not a row it would get wrong.
-  assertStaticAssetNoticesRecorded(REPO, policy);
-
   const missing = missingDirectReferences(
     [...collected, ...alwaysListed],
     directReferences,
@@ -595,6 +627,66 @@ export function buildReport() {
     );
 
   const nugetVerdicts = [...collected, ...alwaysListed].map((pkg) => nugetVerdict(pkg, policy));
+
+  return nugetVerdicts;
+}
+
+/**
+ * Everything one run derives, as `buildReport` composes it.
+ *
+ * Written out rather than inferred from `buildReport`, so a field that changes shape fails at the
+ * function that produces it as well as at the several `main` helpers that read it - and so the
+ * document's inputs can be read in one place without following eleven call sites.
+ */
+type BuiltReport = {
+  verdicts: ReportRow[];
+  policy: Policy;
+  unresolvedStylesheetSpecifiers: string[];
+  stalePolicyEntries: string[];
+  openPolicyQuestions: string[];
+  corpusVersion: string;
+  licenseeVersion: string;
+  snapStagePackages: string[];
+  snapStagePackageLicenses: Record<string, SnapStagePackage>;
+  snapCopyrightTexts: NamedText[];
+  staticAssetNotices: NamedText[];
+};
+
+/**
+ * Everything the document and its lock are written from, derived from this tree in one pass.
+ *
+ * Derives; never writes. `main` decides what becomes of the result - write the pair, diff it
+ * against the committed lock, or print the blocks - so a real generation and `--verify` rest on the
+ * SAME derivation rather than on two code paths free to drift apart.
+ *
+ * The order is load-bearing. The corpus is verified first, because every canonical SPDX text the
+ * document reproduces is read from it, and a corrupt one is worth discovering before a Ruby
+ * licensee batch and four `dotnet restore` passes rather than after. Every whole-set assertion -
+ * the missing-direct-reference check inside `buildNugetVerdicts`,
+ * `assertStaticAssetNoticesRecorded`, `assertSnapStagePackagesClassified` - then runs before
+ * anything is composed, because each of them guards against an OMISSION, and an omitted row is
+ * invisible in the finished artifact: a component nobody recorded reads exactly like one nobody
+ * ships.
+ *
+ * Expensive by construction (Ruby, and one restore per published runtime identifier), which is why
+ * the per-platform check does not come through here - see `verifyNpmShippingSet`.
+ */
+export function buildReport(): BuiltReport {
+  const corruptTexts = verifyCorpus();
+  if (corruptTexts.length)
+    throw new Error(`vendored SPDX corpus is corrupt for: ${corruptTexts.join(', ')}`);
+
+  const policy = loadPolicy(POLICY);
+
+  const { npmPackages, unresolvedStylesheetSpecifiers } = buildNpmShippingSet(policy);
+  const npmVerdicts = classifyNpmPackages(npmPackages, policy);
+
+  const { collected, directReferences, alwaysListed } = collectNugetClosure(policy);
+  // Refused BEFORE the artifact is composed, like every other whole-set assertion here: a notice
+  // file nobody recorded is a claim the document would omit, not a row it would get wrong.
+  assertStaticAssetNoticesRecorded(REPO, policy);
+
+  const nugetVerdicts = buildNugetVerdicts({ policy, collected, directReferences, alwaysListed });
 
   const verdicts = [...npmVerdicts, ...nugetVerdicts];
   // Refused here rather than at render time: the document is written from this table, so a staged
@@ -613,9 +705,9 @@ export function buildReport() {
     // `main` as a note - see `stalePolicyEntries`. Never a failure: a dead entry means a dependency
     // left, which is not a licensing problem.
     stalePolicyEntries: stalePolicyEntries(policy, verdicts),
-    // Overrides that record a question nobody has answered - see `openPolicyQuestions`.
-    // The pipeline had no state between "cleared" and "blocked", so a package the project
-    // had explicitly NOT cleared went green with the only record of that in prose.
+    // Overrides that record a question nobody has answered - see `openPolicyQuestions`. A verdict
+    // has no state between "cleared" and "blocked", so without this a package the project has
+    // explicitly NOT cleared goes green with the only record of that in prose.
     openPolicyQuestions: openPolicyQuestions(policy),
     corpusVersion: corpusVersion(),
     licenseeVersion: licenseeVersion(),
@@ -636,11 +728,11 @@ export function buildReport() {
 /**
  * Whether this run is in CI, from the conventional `CI` variable.
  *
- * `process.env.CI ? …` is a truthiness test on a STRING, so `CI=false` and `CI=0` - the two
- * spellings somebody uses to say the opposite - both selected the CI branch, and the check then
- * hard-failed on a condition it had explicitly decided not to fail on locally. The same defect was
- * fixed in `acceptShrinkFromEnv` (`shipping-set.ts`); this is the pipeline's other environment
- * read.
+ * Read by VALUE, not by presence. `process.env.CI ? …` is a truthiness test on a STRING, so
+ * `CI=false` and `CI=0` - the two spellings somebody uses to say the opposite - both select the CI
+ * branch, after which the check hard-fails on a condition it has explicitly decided not to fail on
+ * locally. `acceptShrinkFromEnv` (`shipping-set.ts`) reads its variable the same way for the same
+ * reason; these two are the pipeline's only environment reads.
  */
 export function inCi(env: typeof process.env = process.env): boolean {
   const raw = (env.CI || '').trim().toLowerCase();
@@ -686,17 +778,17 @@ function verifyCommittedDocument(): Lock | undefined {
  * The cheap cross-platform check (`--verify-shipping-set`): does THIS platform's build ship the
  * same npm packages the committed notices document was generated from?
  *
- * Deliberately narrower than `buildReport` + `diffLock` - see the module docstring for why licence
+ * Deliberately narrower than `buildReport` + `diffLock` - see the module docstring for why license
  * identification and the NuGet closure do not need re-checking per platform. This calls only
  * `collectShippedPackages` (webpack's module manifests, the stylesheet leaf scan, and
  * `release/app`'s closure - `shipping-set.ts`) and `diffShippingSet` against the committed lock's
  * npm entries: no `identify` (Ruby), no `nuget-set` (dotnet), no network.
  *
  * It ALSO checks the document itself against the hash the lock records. This is the only notices
- * gate `publish.yml` and `package-main.yml` run, and it compared npm `name@version` and nothing
- * else - so `THIRD-PARTY-NOTICES.md`, which `electron-builder.json5` packs into every installer,
- * reached those artifacts unverified. A hand-edited document with an untouched lock was caught only
- * by the full `--verify`, on test.yml's Linux leg alone.
+ * gate `publish.yml` and `package-main.yml` run: comparing npm `name@version` and nothing else
+ * leaves `THIRD-PARTY-NOTICES.md`, which `electron-builder.json5` packs into every installer,
+ * unverified on every path that produces one - a hand-edited document with an untouched lock caught
+ * only by the full `--verify`, on test.yml's Linux leg alone.
  */
 function verifyNpmShippingSet() {
   let npmPackages;
@@ -813,7 +905,7 @@ function effectivePlatform(env: typeof process.env, actual: string): string {
  *
  * Notes, not failures: each names something a reader has to weigh rather than something the gate
  * can decide. They go to stdout on both paths because the `--verify` run is the one CI performs,
- * and a note only the write path printed was a note CI never saw.
+ * and a note printed only on the write path is a note CI never sees.
  */
 function printRunNotes(report: {
   stalePolicyEntries: string[];
@@ -842,11 +934,20 @@ function printRunNotes(report: {
         `${report.unresolvedStylesheetSpecifiers.join(', ')}.`,
     );
 }
-export function main(): void {
-  const verifyOnly = process.argv.includes('--verify');
-  const verifyShippingSetOnly = process.argv.includes('--verify-shipping-set');
-  const verifyDocumentOnly = process.argv.includes('--verify-document');
-
+/**
+ * Refuses to write the artifact anywhere but Linux, where the committed npm closure was resolved.
+ *
+ * @returns Whether the run was refused, with `exitCode` already set.
+ */
+function refuseNonLinuxWrite({
+  verifyOnly,
+  verifyShippingSetOnly,
+  verifyDocumentOnly,
+}: {
+  verifyOnly: boolean;
+  verifyShippingSetOnly: boolean;
+  verifyDocumentOnly: boolean;
+}): boolean {
   // The committed artifact describes the npm closure resolved on Linux. On any other platform this
   // refuses to write rather than overwriting the committed file with a legitimately different one.
   const platform = effectivePlatform(process.env, process.platform);
@@ -856,36 +957,17 @@ export function main(): void {
         'Run with --verify-shipping-set to check this platform against the committed lock instead.\n',
     );
     process.exitCode = 1;
-    return;
+    return true;
   }
+  return false;
+}
 
-  if (verifyDocumentOnly) {
-    if (verifyCommittedDocument())
-      console.log(`Verified ${path.relative(REPO, OUT)} against the hash its lock records.`);
-    return;
-  }
-
-  if (verifyShippingSetOnly) {
-    verifyNpmShippingSet();
-    return;
-  }
-
-  let report;
-  try {
-    report = buildReport();
-  } catch (err) {
-    // A stack trace buries the one thing that matters here - what to run to fix it - so report the
-    // message alone. The previous artifact is left untouched rather than replaced with a short one.
-    console.error(`\nERROR: ${messageOf(err)}\n`);
-    process.exitCode = 1;
-    return;
-  }
-
-  // The block gate runs before EITHER outcome, not just before the write. The lock records
-  // `spdxId` rather than `verdict`, so a blocked package is unrepresented in what `--verify`
-  // compares: run the gate after the verify branch returns and the check that documents itself as
-  // the full one passes on a set the generator would refuse to write, leaving its coverage a
-  // property of CI's step ordering rather than of this function.
+/**
+ * Reports every package the policy could not clear, and the fact that nothing was written.
+ *
+ * @returns Whether the run was stopped, with `exitCode` already set.
+ */
+function reportBlockedPackages(report: BuiltReport): boolean {
   const blocks = report.verdicts.filter((verdict) => verdict.verdict === 'blocked');
   if (blocks.length) {
     console.error(`\n${blocks.length} package(s) could not be cleared:\n`);
@@ -895,96 +977,104 @@ export function main(): void {
         'incomplete set - fix or record an exception for each package above.\n',
     );
     process.exitCode = 1;
-    return;
+    return true;
   }
+  return false;
+}
 
-  // Inside the module's message-only convention, like every other failure here. `render` throws
-  // deliberately in three places (an unknown ecosystem, a package named in a paragraph whose
-  // canonical text was not reproduced, a NuGet row with no text) and `canonicalText` throws on a
-  // corpus checksum mismatch - all of them findings this pipeline exists to make, and all of them
-  // reaching the developer as a raw stack trace because these two calls sat outside any `try`.
-  let lock;
-  let rendered;
+/**
+ * Renders the document, and the lock that describes the bytes just rendered.
+ *
+ * Inside the module's message-only convention, like every other failure here. `render` throws
+ * deliberately in three places (an unknown ecosystem, a package named in a paragraph whose
+ * canonical text was not reproduced, a NuGet row with no text) and `canonicalText` throws on a
+ * corpus checksum mismatch - all of them findings this pipeline exists to make, and all of them
+ * reaching the developer as a raw stack trace from outside a `try`.
+ *
+ * @returns The pair, or `undefined` after reporting, with `exitCode` set.
+ */
+function renderArtifactPair(report: BuiltReport): { rendered: string; lock: Lock } | undefined {
   try {
     // Rendered FIRST: the lock records a sha256 of the document it is written beside, so the
     // document has to exist before the lock describing it can.
-    rendered = render(report);
-    lock = buildLock(report, rendered);
+    const rendered = render(report);
+    return { rendered, lock: buildLock(report, rendered) };
   } catch (err) {
+    console.error(`\nERROR: ${messageOf(err)}\n`);
+    process.exitCode = 1;
+    return undefined;
+  }
+}
+
+/**
+ * The full check (`--verify`): diffs this run against the committed lock AND the committed
+ * document, reporting every line of drift with the remedy for it.
+ */
+function verifyAgainstCommittedLock(report: BuiltReport, lock: Lock, rendered: string): void {
+  let drift;
+  try {
+    const committedLock = readLock(LOCK);
+    drift = diffLock(committedLock, lock);
+    // The lock carries metadata and hashes, never the rendered bytes, so without this comparison
+    // `--verify` cannot see a hand-edited document at all: delete a copyleft row, or swap one
+    // license text for another, and every lock field stays identical while the check reports
+    // success. Comparing the render is free (`render` is pure and already needed below).
+    const committedDocument = fs.readFileSync(OUT, 'utf8');
+    if (committedDocument !== rendered)
+      drift.push(
+        `${path.relative(REPO, OUT)} is not what this run renders - the committed file was ` +
+          'edited by hand, or was generated from a different set',
+      );
+    // And the recorded hash against the same bytes, so the field the cheap cross-platform check
+    // rests on is proven on the one leg that can re-render. A `documentSha256` that has drifted
+    // from the document beside it would leave every release-workflow run comparing against a
+    // stale claim, and nothing else would ever look at it.
+    drift.push(...diffDocument(committedLock, path.relative(REPO, OUT), committedDocument));
+  } catch (err) {
+    // A missing or truncated lock, or a missing document, reaches here rather than escaping as a
+    // raw ENOENT stack trace - the shape this script's message-only convention exists to avoid.
     console.error(`\nERROR: ${messageOf(err)}\n`);
     process.exitCode = 1;
     return;
   }
-
-  // Printed on BOTH paths, and before either one acts. They describe what this run could not
-  // account for - a stylesheet specifier that resolved to no installed package is the one thing
-  // that can quietly shorten the npm half - so they belong with the decision to write rather than
-  // after it, where a failed write swallows them entirely. The write path alone is not enough: CI
-  // runs `--verify` and nothing else, and it is the run that most needs an unaccounted-for
-  // specifier surfaced.
-  printRunNotes(report);
-
-  if (verifyOnly) {
-    let drift;
-    try {
-      const committedLock = readLock(LOCK);
-      drift = diffLock(committedLock, lock);
-      // The lock carries metadata and hashes, never the rendered bytes, so without this comparison
-      // `--verify` cannot see a hand-edited document at all: delete a copyleft row, or swap one
-      // licence text for another, and every lock field stays identical while the check reports
-      // success. Comparing the render is free (`render` is pure and already needed below).
-      const committedDocument = fs.readFileSync(OUT, 'utf8');
-      if (committedDocument !== rendered)
-        drift.push(
-          `${path.relative(REPO, OUT)} is not what this run renders - the committed file was ` +
-            'edited by hand, or was generated from a different set',
-        );
-      // And the recorded hash against the same bytes, so the field the cheap cross-platform check
-      // rests on is proven on the one leg that can re-render. A `documentSha256` that had drifted
-      // from the document beside it would leave every release-workflow run comparing against a
-      // stale claim, and nothing else would ever look at it.
-      drift.push(...diffDocument(committedLock, path.relative(REPO, OUT), committedDocument));
-    } catch (err) {
-      // A missing or truncated lock, or a missing document, reaches here rather than escaping as a
-      // raw ENOENT stack trace - the shape this script's message-only convention exists to avoid.
-      console.error(`\nERROR: ${messageOf(err)}\n`);
-      process.exitCode = 1;
-      return;
-    }
-    if (drift.length) {
-      console.error(`\nERROR: the derived shipping set does not match the committed lock:\n`);
-      drift.forEach((entry) => console.error(`  ${entry}`));
-      // The remedy is spelled out because this is the step that fires on a legitimate dependency
-      // bump, and what it is asking for is an ACKNOWLEDGEMENT: read the lines above, satisfy
-      // yourself that each one is a change you meant, then regenerate. A licence text changing
-      // under an unchanged name@version is the case this exists for - nobody re-reads a licence
-      // they have already cleared - and it is reported HERE rather than left to the staleness
-      // check, which can only say that some file changed.
-      console.error(
-        '\nTHIRD-PARTY-NOTICES.md is shipped inside every platform installer, so every line above',
-      );
-      console.error(
-        'is a change to a legal claim. Check each one, then regenerate on Linux and commit both',
-      );
-      console.error('THIRD-PARTY-NOTICES.md and THIRD-PARTY-NOTICES.lock.json:\n');
-      console.error(`    dotnet restore ${path.relative(REPO, DOTNET_PROJECT)}`);
-      console.error('    npm run build:third-party-notices\n');
-      // The npm verdicts carry `devLinked` through from the shipping set - see `npmVerdict`.
-      unlinkedTreeNote(report.verdicts.filter((verdict) => verdict.ecosystem === 'npm')).forEach(
-        (line) => console.error(line),
-      );
-      process.exitCode = 1;
-    } else {
-      console.log(`Verified ${lock.packages.length} packages against the committed lock.`);
-    }
-    return;
+  if (drift.length) {
+    console.error(`\nERROR: the derived shipping set does not match the committed lock:\n`);
+    drift.forEach((entry) => console.error(`  ${entry}`));
+    // The remedy is spelled out because this is the step that fires on a legitimate dependency
+    // bump, and what it is asking for is an ACKNOWLEDGEMENT: read the lines above, satisfy
+    // yourself that each one is a change you meant, then regenerate. A license text changing
+    // under an unchanged name@version is the case this exists for - nobody re-reads a license
+    // they have already cleared - and it is reported HERE rather than left to the staleness
+    // check, which can only say that some file changed.
+    console.error(
+      '\nTHIRD-PARTY-NOTICES.md is shipped inside every platform installer, so every line above',
+    );
+    console.error(
+      'is a change to a legal claim. Check each one, then regenerate on Linux and commit both',
+    );
+    console.error('THIRD-PARTY-NOTICES.md and THIRD-PARTY-NOTICES.lock.json:\n');
+    console.error(`    dotnet restore ${path.relative(REPO, DOTNET_PROJECT)}`);
+    console.error('    npm run build:third-party-notices\n');
+    // The npm verdicts carry `devLinked` through from the shipping set - see `npmVerdict`.
+    unlinkedTreeNote(report.verdicts.filter((verdict) => verdict.ecosystem === 'npm')).forEach(
+      (line) => console.error(line),
+    );
+    process.exitCode = 1;
+  } else {
+    console.log(`Verified ${lock.packages.length} packages against the committed lock.`);
   }
+}
 
-  // The artifact and its lock are written as a PAIR - the lock is what `--verify` and the
-  // per-platform check compare against, so a lock describing a different run than the document
-  // beside it is worse than either being stale. Both are staged as temporary files first and then
-  // renamed, so the only window in which they can disagree is between two renames on the same
-  // directory rather than spanning a full render and serialize.
+/**
+ * Writes the document and its lock, then says what was written.
+ *
+ * The artifact and its lock are written as a PAIR - the lock is what `--verify` and the
+ * per-platform check compare against, so a lock describing a different run than the document beside
+ * it is worse than either being stale. Both are staged as temporary files first and then renamed,
+ * so the only window in which they can disagree is between two renames on the same directory rather
+ * than spanning a full render and serialize.
+ */
+function writeArtifactPair(report: BuiltReport, lock: Lock, rendered: string): void {
   const outTmp = `${OUT}.tmp`;
   const lockTmp = `${LOCK}.tmp`;
   let renamedDocument = false;
@@ -1021,6 +1111,61 @@ export function main(): void {
   const npm = report.verdicts.filter((verdict) => verdict.ecosystem === 'npm').length;
   const nuget = report.verdicts.length - npm;
   console.log(`Wrote ${path.relative(REPO, OUT)}: ${npm} npm packages, ${nuget} NuGet packages.`);
+}
+
+export function main(): void {
+  const verifyOnly = process.argv.includes('--verify');
+  const verifyShippingSetOnly = process.argv.includes('--verify-shipping-set');
+  const verifyDocumentOnly = process.argv.includes('--verify-document');
+
+  if (refuseNonLinuxWrite({ verifyOnly, verifyShippingSetOnly, verifyDocumentOnly })) return;
+
+  if (verifyDocumentOnly) {
+    if (verifyCommittedDocument())
+      console.log(`Verified ${path.relative(REPO, OUT)} against the hash its lock records.`);
+    return;
+  }
+
+  if (verifyShippingSetOnly) {
+    verifyNpmShippingSet();
+    return;
+  }
+
+  let report;
+  try {
+    report = buildReport();
+  } catch (err) {
+    // A stack trace buries the one thing that matters here - what to run to fix it - so report the
+    // message alone. The previous artifact is left untouched rather than replaced with a short one.
+    console.error(`\nERROR: ${messageOf(err)}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // The block gate runs before EITHER outcome, not just before the write. The lock records
+  // `spdxId` rather than `verdict`, so a blocked package is unrepresented in what `--verify`
+  // compares: run the gate after the verify branch returns and the check that documents itself as
+  // the full one passes on a set the generator would refuse to write, leaving its coverage a
+  // property of CI's step ordering rather than of this function.
+  if (reportBlockedPackages(report)) return;
+
+  const artifact = renderArtifactPair(report);
+  if (!artifact) return;
+
+  // Printed on BOTH paths, and before either one acts. They describe what this run could not
+  // account for - a stylesheet specifier that resolved to no installed package is the one thing
+  // that can quietly shorten the npm half - so they belong with the decision to write rather than
+  // after it, where a failed write swallows them entirely. The write path alone is not enough: CI
+  // runs `--verify` and nothing else, and it is the run that most needs an unaccounted-for
+  // specifier surfaced.
+  printRunNotes(report);
+
+  if (verifyOnly) {
+    verifyAgainstCommittedLock(report, artifact.lock, artifact.rendered);
+    return;
+  }
+
+  writeArtifactPair(report, artifact.lock, artifact.rendered);
 }
 
 // Guarded rather than called unconditionally, so `buildReport` can be imported and driven without

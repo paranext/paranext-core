@@ -19,7 +19,11 @@ import { getWebViewEntries } from './webpack.util';
 // #endregion
 
 import { EmitShippedModulesPlugin } from '../../.erb/configs/emit-shipped-modules-plugin';
-import { extensionCacheDirectory } from './webpack.util';
+// `extensionCacheDirectory` is paranext-core only, so it cannot be added to the shared region's
+// own `./webpack.util` import above without putting a core-only name inside that region. A
+// namespace import is what lets a second statement name the same module here:
+// `import/no-duplicates` expects named imports from one module to be merged into one statement.
+import * as webpackUtil from './webpack.util';
 
 /** Webpack configuration for building WebViews */
 const configWebView: webpack.Configuration = merge(configBase, {
@@ -46,20 +50,20 @@ const configWebView: webpack.Configuration = merge(configBase, {
   // Writes .notices/modules/extension-web-view.json: the modules webpack actually compiled into
   // this bundle, for the third-party notices generator.
   //
-  // Emitted on EVERY build, not only a production one. It was production-gated on the theory that a
-  // development graph carries hot-reload machinery that does not ship - but the root `npm run build`
-  // does NOT set NODE_ENV for its extensions leg (unlike its main, renderer and extension-host
-  // legs), so the gate meant this manifest and `extension-main` were never written by the one
-  // command CI runs. On a fresh CI checkout, where `.notices/` does not exist at all, the generator
-  // therefore built its shipping set from three manifests instead of five and silently dropped
-  // `react-reverse-portal` - the very package `adr-notices-derived-from-what-ships` cites as the one
-  // a manifest-based scan misses, reached only through an extension web view.
+  // Emitted on EVERY build, not only a production one. A production gate here would rest on the
+  // premise that a development graph carries hot-reload machinery that does not ship - but the root
+  // `npm run build` does NOT set NODE_ENV for its extensions leg (unlike its main, renderer and
+  // extension-host legs), so such a gate leaves this manifest and `extension-main` unwritten by the
+  // one command CI runs. On a fresh CI checkout, where `.notices/` does not exist at all, the
+  // generator would then build its shipping set from three manifests instead of five and silently
+  // drop `react-reverse-portal` - the very package `adr-notices-derived-from-what-ships` cites as
+  // the one a manifest-based scan misses, reached only through an extension web view.
   //
-  // The theory does not hold here either: a plain (non-devServer) webpack build injects no HMR
-  // runtime NormalModules, and the two graphs were measured identical - 8,207 module paths and the
-  // same 118 packages from the development and production builds alike. What catches it if that
-  // ever changes is the MODE each manifest records, not the build id: `prebuild` mints an id for
-  // the root `build` only, so the production extension build that follows re-stamps the same one.
+  // The premise does not hold here either: a plain (non-devServer) webpack build injects no HMR
+  // runtime NormalModules, and the two graphs measure identical - 8,207 module paths and the same
+  // 118 packages from the development and production builds alike. What catches it if that ever
+  // changes is the MODE each manifest records, not the build id: `prebuild` mints an id for the
+  // root `build` only, so the production extension build that follows re-stamps the same one.
   // `collectShippedPackages` refuses a set that mixes modes.
   plugins: [
     new EmitShippedModulesPlugin({
@@ -68,7 +72,7 @@ const configWebView: webpack.Configuration = merge(configBase, {
     }),
   ],
 
-  // Keep the licence banners terser preserves INSIDE the bundle instead of extracting them to a
+  // Keep the license banners terser preserves INSIDE the bundle instead of extracting them to a
   // sidecar file.
   //
   // A web view is not shipped as a file: `web-view-resolve-webpack-plugin` inlines
@@ -78,7 +82,7 @@ const configWebView: webpack.Configuration = merge(configBase, {
   // `/*! For license information please see <name>.js.LICENSE.txt */`. Only the string is inlined,
   // `temp-build` is a gitignored build intermediate that `copy-webpack-plugin` never copies into
   // `extensions/dist`, and `electron-builder.json5` packs `extensions/dist` into every installer.
-  // The result is a redistributed artifact that points at a licence file it does not carry.
+  // The result is a redistributed artifact that points at a license file it does not carry.
   //
   // `format.comments: 'some'` is terser's own "keep `@license`, `@preserve` and `/*!` banners"
   // rule, so the notices those packages require travel inside the bundle that ships them. The
@@ -95,7 +99,7 @@ const configWebView: webpack.Configuration = merge(configBase, {
 
   // Its own cache directory, not the one `webpack.config.base.ts` names for every extension bundle
   // - see `extensionCacheDirectory` for why the manifest above cannot be trusted without that.
-  cache: { cacheDirectory: extensionCacheDirectory('web-view') },
+  cache: { cacheDirectory: webpackUtil.extensionCacheDirectory('web-view') },
 });
 
 export default configWebView;

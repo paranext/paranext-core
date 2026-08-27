@@ -108,9 +108,9 @@ describe('findStaticAssetNotices', () => {
 describe('assertStaticAssetNoticesRecorded', () => {
   it('refuses a notice file the policy does not record, with a pasteable entry', () => {
     // The live gap this closes: `extensions/src/quick-verse/assets/letter-q.png` is third-party
-    // artwork whose `ATTRIBUTION.md` names an author and terms, it is packed into every installer,
-    // and it appeared nowhere in THIRD-PARTY-NOTICES.md - because no module graph can see a file
-    // that was copied rather than compiled.
+    // artwork whose `ATTRIBUTION.md` names an author and terms, and it is packed into every
+    // installer while being invisible to every module graph, because it is copied rather than
+    // compiled.
     write('extensions/src/quick-verse/assets/ATTRIBUTION.md', 'Author: Somebody\n');
 
     expect(() => assertStaticAssetNoticesRecorded(repo, policyOf({}))).toThrow(
@@ -137,7 +137,7 @@ describe('assertStaticAssetNoticesRecorded', () => {
 
   it('refuses a recorded file that has been edited since it was read', () => {
     // The text is reproduced verbatim in the document, so an edited copy is a changed legal claim -
-    // the same reason a vendored licence text is hash-pinned.
+    // the same reason a vendored license text is hash-pinned.
     write('extensions/src/quick-verse/assets/ATTRIBUTION.md', 'Author: Somebody else\n');
 
     expect(() =>

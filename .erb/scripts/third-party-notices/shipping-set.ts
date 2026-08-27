@@ -58,6 +58,7 @@ import * as fs from 'fs';
 import * as ts from 'typescript';
 import * as path from 'path';
 import { builtinModules } from 'module';
+import { buildIdFile } from '../notices-build-id';
 import { compareByNameThenVersion, compareStrings } from './compare';
 import { declaredLicenseField } from './package-files';
 import { readJsonFile } from './read-json';
@@ -114,7 +115,7 @@ type Leaf = { dir: string; bundle: string };
  */
 export function readBuildId(manifestDir: string): string | undefined {
   try {
-    return fs.readFileSync(path.join(manifestDir, '..', 'build-id'), 'utf8').trim() || undefined;
+    return fs.readFileSync(buildIdFile(manifestDir), 'utf8').trim() || undefined;
   } catch {
     return undefined;
   }
@@ -253,7 +254,7 @@ export function readDirectDependencies(repo: string): DirectDependency[] {
  * Two kinds of declaration are discounted rather than exempted by hand:
  *
  * - A `file:` range is a workspace link to first-party code, which is covered by this repository's
- *   own licence and correctly has no row. Reading these from the range rather than a policy list
+ *   own license and correctly has no row. Reading these from the range rather than a policy list
  *   means adding a package under `lib/` never needs an entry.
  * - `optionalDependencies` are not read at all: npm installs one only where its `os`/`cpu`
  *   constraints match, which is what `platformOnlyPackages` already describes.
@@ -376,8 +377,8 @@ export function assertNpmNotShrunk(
  * `@eten-tech-foundation/platform-editor` 0.8.15 while `package-lock.json` pins 0.8.14.
  *
  * A dev-linked package is therefore described from `package-lock.json` - the version this
- * repository pins and the licence recorded against it - and NOTHING is read from its directory,
- * which is also why no licence text is reproduced for it: the published tarball is not unpacked
+ * repository pins and the license recorded against it - and NOTHING is read from its directory,
+ * which is also why no license text is reproduced for it: the published tarball is not unpacked
  * anywhere to read one from. Its copyright notice comes instead from `notices-policy.json`'s
  * `copyrightNotices`, a table that exists for exactly these packages.
  *
@@ -630,7 +631,7 @@ function correctLinkDistortedResolutions(
     // `extensions/src/platform-enhanced-resources` imports `@xmldom/xmldom` directly, resolving the
     // hoisted 0.8.13, which every extension web-view manifest records - while this correction
     // rewrote the row to the 0.9.10 the lockfile nests under a dev-linked package. The document
-    // named a version the bundle does not contain, with no licence text read from the copy that
+    // named a version the bundle does not contain, with no license text read from the copy that
     // does, and `--verify` agreed with itself throughout.
     //
     // First-party keys are the root (`''`) and the workspace directories, which are exactly the
@@ -704,8 +705,8 @@ function describePackage(
       reachedVia,
     };
 
-  // `lockKeyOf` rather than an inlined `path.relative`, which is what this was: the two differ only
-  // by `containedPath`, and that is the whole check. A directory resolving OUTSIDE the repository
+  // `lockKeyOf` rather than an inlined `path.relative`: the two differ only by `containedPath`,
+  // and that is the whole check. A directory resolving OUTSIDE the repository
   // yields a `../..`-shaped string that matches no lockfile key, misses `byPath` silently, and
   // falls through to the bare-name lookup - describing this link from whatever unrelated entry
   // happens to share its name, at that entry's version.
@@ -778,7 +779,7 @@ const PACKAGE_CONTAINERS = ['node_modules', '.yalc'];
  * `<container>/@scope/<name>`) segment closest to the file.
  *
  * The LAST container in the path is the right one - for
- * `node_modules/outer/node_modules/inner/lib/x.js` the owner is `inner`, whose licence applies to
+ * `node_modules/outer/node_modules/inner/lib/x.js` the owner is `inner`, whose license applies to
  * that code, not `outer`.
  */
 function packageBoundaryOf(resource: string): string | undefined {
@@ -1003,16 +1004,16 @@ function childSourceRoots(dir: string): string[] {
 /**
  * The production source roots the module manifests cover, for the stylesheet scan to mirror.
  *
- * `lib/*` is in the list for the same reason `extensions/src/*` is, and its absence was a real gap
- * rather than a theoretical one. `lib/platform-bible-react/src/index.css` imports `tailwindcss`,
- * `tw-animate-css`, `shadcn/tailwind.css` and `@fontsource-variable/ibm-plex-sans`, and Vite
- * inlines the compiled CSS into `lib/platform-bible-react/dist/index.js` - a path with no
+ * `lib/*` is in the list for the same reason `extensions/src/*` is, and leaving it out is a real
+ * gap rather than a theoretical one. `lib/platform-bible-react/src/index.css` imports
+ * `tailwindcss`, `tw-animate-css`, `shadcn/tailwind.css` and `@fontsource-variable/ibm-plex-sans`,
+ * and Vite inlines the compiled CSS into `lib/platform-bible-react/dist/index.js` - a path with no
  * `node_modules` segment, so `packageDirOf` returns nothing for it and the module manifests cannot
- * see those packages either. Three of the four were reaching the document ONLY through the ten
- * extension `tailwind.css` files, which are marked in their own headers as copies of that very
- * file: a coincidence, not a mechanism. A new CSS or font package added where it naturally belongs
- * (in the component library the whole application styles itself from) would have shipped embedded
- * in every bundle and appeared nowhere in the notices, with the run exiting 0.
+ * see those packages either. Without this entry three of the four reach the document ONLY through
+ * the ten extension `tailwind.css` files, which are marked in their own headers as copies of that
+ * very file: a coincidence, not a mechanism. A new CSS or font package added where it naturally
+ * belongs (in the component library the whole application styles itself from) would then ship
+ * embedded in every bundle and appear nowhere in the notices, with the run exiting 0.
  *
  * The glob is deliberately wide: `lib/eslint-plugin-paranext` and `lib/browserslist-config-detect-
  * electron` are build-time tooling, so a stylesheet there would be over-reported. That is the safe
@@ -1149,15 +1150,15 @@ function scriptKindOf(file: string): ts.ScriptKind {
  * The obvious pattern - `(?:^|[^\w.])(?:import|export)[\s\S]{0,4000}?from\s*['"]…['"]` - fails two
  * ways, both live in this tree rather than hypothetical:
  *
- * - The clause window CROSSED statement boundaries. On `import 'polyfill';\nimport React from
- *   'react';` the whole thing was one match capturing `react`, so the side-effect import - the
+ * - The clause window CROSSES statement boundaries. On `import 'polyfill';\nimport React from
+ *   'react';` the whole thing is one match capturing `react`, so the side-effect import - the
  *   ordinary way a polyfill or a stylesheet enters a bundle, and the exact shape the second
- *   alternative was added to catch - could never be reached.
- * - The start anchor `[^\w.]` matched INSIDE a word, so a hyphenated word in a comment began a match.
- *   Nine matches in the scanned sources start that way today, and one of them swallows the `export
- *   type { Usj } from '@eten-tech-foundation/scripture-utilities'` two lines below a comment
- *   reading `// Re-exported so consumers can type the argument…` - recording a type-only re-export
- *   as a runtime dependency of `platform-bible-utils`.
+ *   alternative exists to catch - can never be reached.
+ * - The start anchor `[^\w.]` matches INSIDE a word, so a hyphenated word in a comment begins a
+ *   match. Nine matches in the scanned sources start that way today, and one of them swallows the
+ *   `export type { Usj } from '@eten-tech-foundation/scripture-utilities'` two lines below a
+ *   comment reading `// Re-exported so consumers can type the argument…` - recording a type-only
+ *   re-export as a runtime dependency of `platform-bible-utils`.
  *
  * Comments, template literals, string contents and the exact placement of `type` are the parser's
  * problem now, not this file's. The 4,000-character clause window goes with them: it existed only
@@ -1220,7 +1221,7 @@ function runtimeModuleSpecifiers(text: string, file: string): string[] {
  * `papi-dts`) appear in no manifest, and scanning them would put lint and Storybook tooling into a
  * document about what ships - not a safe direction, a wrong one.
  *
- * Selecting them by `license === 'MIT'` instead used the licence as a proxy for "ships at runtime".
+ * Selecting them by `license === 'MIT'` instead used the license as a proxy for "ships at runtime".
  * The two coincide today because LICENSING.md draws the carve-out at runtime linkage, but they are
  * not the same fact, and tying one to the other means RELICENSING a package silently stops this
  * scan covering it - taking dozens of vite-inlined dependencies out of the document with it, in a
@@ -1274,37 +1275,27 @@ function collectPrebuiltLibLeaves(
   return { leaves, unresolvedNames: [...unresolvedNames].sort() };
 }
 
-/**
- * Resolves which npm packages ship, from webpack's own module manifests, unioned with the
- * stylesheet leaf scan and the `release/app` unbundled closure above.
- *
- * This replaces a regex scan over source files. The scan was the right instinct - manifests lie
- * about what a bundler includes - but for JS/TS it was inferring something the compiler reports
- * exactly. Stylesheets are the one part of that scan the module graph cannot fully replace - see
- * the module docstring.
- *
- * `warmCache` decides what a warm-cache stamp does here - see the refusal below for what it means.
- * `'throw'` is the default and the only setting under which an ARTIFACT is written; `'report'`
- * returns the warm bundles instead, for a caller whose own answer to "this build cannot be checked"
- * is to say so and stop rather than to fail.
- */
-export function collectShippedPackages({
-  manifestDir,
-  repo,
-  requiredBundles = [],
-  requireUnbundledClosure = false,
-  warmCache = 'throw',
-}: {
-  manifestDir: string;
-  repo: string;
-  requiredBundles?: string[];
-  requireUnbundledClosure?: boolean;
-  warmCache?: 'throw' | 'report';
-}): {
-  packages: ShippedPackage[];
-  unresolvedStylesheetSpecifiers: string[];
+/** What one pass over the module manifests accumulates. */
+type ManifestScan = {
+  /** Installed-package directory -> the bundles that compiled a module out of it. */
+  byDir: Map<string, Set<string>>;
+  /** Module paths under `node_modules` whose package directory could not be read. */
+  unresolved: Set<string>;
+  /** Build id -> the bundles stamped with it. */
+  stamps: Map<string, string[]>;
+  /** Webpack mode -> the required bundles compiled in it. */
+  modes: Map<string, string[]>;
+  /** Bundles whose manifest was written against a warm webpack filesystem cache. */
   warmBundles: string[];
-} {
+  /** The `lib/*` workspace packages webpack compiled into a bundle. */
+  shippedLibNames: Set<string>;
+};
+
+/**
+ * The module manifests in `manifestDir`, refused unless every required bundle is present and
+ * carries a non-empty module list.
+ */
+function readManifestFiles(manifestDir: string, requiredBundles: string[]): string[] {
   const files = fs.existsSync(manifestDir)
     ? fs.readdirSync(manifestDir).filter((f) => f.endsWith('.json'))
     : [];
@@ -1334,8 +1325,9 @@ export function collectShippedPackages({
   // declare a bundle with nothing in it.
   const emptyBundles = requiredBundles
     .filter((bundle) => {
-      const { modules } = JSON.parse(
-        fs.readFileSync(path.join(manifestDir, `${bundle}.json`), 'utf8'),
+      const { modules } = readJsonFile<ModuleManifest>(
+        path.join(manifestDir, `${bundle}.json`),
+        'a webpack module manifest',
       );
       return !Array.isArray(modules) || modules.length === 0;
     })
@@ -1348,6 +1340,24 @@ export function collectShippedPackages({
         'Run: rm -rf .notices && npm run build',
     );
 
+  return files;
+}
+
+/**
+ * Reads every manifest in the directory into one accumulated view of what the bundles compiled, and
+ * of what each manifest says about the build that wrote it.
+ */
+function readModuleManifests({
+  files,
+  manifestDir,
+  repo,
+  requiredBundles,
+}: {
+  files: string[];
+  manifestDir: string;
+  repo: string;
+  requiredBundles: string[];
+}): ManifestScan {
   const byDir = new Map<string, Set<string>>();
   const unresolved = new Set<string>();
   const stamps = new Map<string, string[]>();
@@ -1373,8 +1383,9 @@ export function collectShippedPackages({
     // `*.json` in the directory. `.notices/` is gitignored, and only `npm run package` clears it
     // (see `clean.ts`) - an ordinary build does not - so a bundle renamed in a later commit leaves
     // its old manifest behind indefinitely, and any file here that is not a manifest reaches this
-    // line. Unguarded it threw a bare `TypeError: modules.forEach is not a function` naming no
-    // file, in a pipeline where every other failure names the file and the command that repairs it.
+    // line. Unguarded, that surfaces as a bare `TypeError: modules.forEach is not a function`
+    // naming no file, in a pipeline where every other failure names the file and the command that
+    // repairs it.
     if (!Array.isArray(modules))
       throw new Error(
         `${path.join(manifestDir, file)} has no "modules" array, so it is not a webpack module ` +
@@ -1413,25 +1424,33 @@ export function collectShippedPackages({
     });
   });
 
-  // A build served from a warm persistent webpack cache can under-report: a module webpack
-  // restores from cache does not re-run its loader, and a loader that injects new modules AS PART
-  // OF running (css-loader emitting require()s for its own runtime helpers) never gets the chance
-  // to add them on a cache hit - so `finishModules` sees fewer modules than the bundle actually
-  // contains, silently. Measured directly (see `emit-shipped-modules-plugin.ts`
-  // `isWarmFilesystemCache`): a warm `webpack-renderer` cache dropped 3 modules from the manifest
-  // while the emitted bundle still shipped them.
-  //
-  // The refusal is about the MANIFEST, never about the build: a warm rebuild compiles and emits
-  // exactly as it always did, and `cacheWarm` is a stamp the compiler writes beside it. Ordinary
-  // local rebuilds are therefore unaffected; what refuses is deriving a legal document from a
-  // manifest whose module list cannot be trusted.
-  //
-  // It reaches CI as well as a developer's tree. `npm ci` wipes `node_modules`, so a CI job's first
-  // build is cold - but a release job builds twice from one commit (development extensions, then
-  // production ones), and each extension bundle caches per bundle AND per mode
-  // (`extensionCacheDirectory`) precisely so the second build is the first to touch its own
-  // directories. Without that split, the production build inherited the development build's cache
-  // and the per-platform check had to be run BEFORE it, verifying a graph the job does not ship.
+  return { byDir, unresolved, stamps, modes, warmBundles, shippedLibNames };
+}
+
+/**
+ * Orders the warm bundles, and under `'throw'` refuses to derive anything from them.
+ *
+ * A build served from a warm persistent webpack cache can under-report: a module webpack restores
+ * from cache does not re-run its loader, and a loader that injects new modules AS PART OF running
+ * (css-loader emitting require()s for its own runtime helpers) never gets the chance to add them on
+ * a cache hit - so `finishModules` sees fewer modules than the bundle actually contains, silently.
+ * Measured directly (see `emit-shipped-modules-plugin.ts` `isWarmFilesystemCache`): a warm
+ * `webpack-renderer` cache dropped 3 modules from the manifest while the emitted bundle still
+ * shipped them.
+ *
+ * The refusal is about the MANIFEST, never about the build: a warm rebuild compiles and emits
+ * exactly as it always did, and `cacheWarm` is a stamp the compiler writes beside it. Ordinary
+ * local rebuilds are therefore unaffected; what refuses is deriving a legal document from a
+ * manifest whose module list cannot be trusted.
+ *
+ * It reaches CI as well as a developer's tree. `npm ci` wipes `node_modules`, so a CI job's first
+ * build is cold - but a release job builds twice from one commit (development extensions, then
+ * production ones), and each extension bundle caches per bundle AND per mode
+ * (`extensionCacheDirectory`) precisely so the second build is the first to touch its own
+ * directories. Without that split, the production build inherits the development build's cache and
+ * the per-platform check can only run BEFORE it, verifying a graph the job does not ship.
+ */
+function refuseWarmCacheManifests(warmBundles: string[], warmCache: 'throw' | 'report'): void {
   warmBundles.sort(compareStrings);
   if (warmBundles.length && warmCache === 'throw') {
     throw new Error(
@@ -1442,7 +1461,23 @@ export function collectShippedPackages({
         'Delete the cache and rebuild: rm -rf node_modules/.cache/webpack-* && npm run build',
     );
   }
+}
 
+/**
+ * Refuses a manifest set that is not one whole, current build: mixed vintages, mixed webpack modes,
+ * a stamp older than the last build to start, or a module tree that could not be read.
+ */
+function assertOneBuildGraph({
+  manifestDir,
+  stamps,
+  modes,
+  unresolved,
+}: {
+  manifestDir: string;
+  stamps: Map<string, string[]>;
+  modes: Map<string, string[]>;
+  unresolved: Set<string>;
+}): void {
   // A set of MIXED VINTAGE is a silent under-report: a stale manifest names modules that are gone,
   // or misses ones that are now there, and either way the document comes out shorter or wrong while
   // the build exits 0. This repository shipped exactly that state - two extension manifests hours
@@ -1506,7 +1541,18 @@ export function collectShippedPackages({
         `${[...unresolved].slice(0, 10).join('\n')}\n` +
         'The dependency tree is incomplete. Run: npm ci && npm run build',
     );
+}
 
+/**
+ * Unions the stylesheet and prebuilt-lib leaf scans into the directories the module graph reached.
+ *
+ * @returns The specifiers those scans resolved to no installed package.
+ */
+function addLeafScannedPackages(
+  byDir: Map<string, Set<string>>,
+  repo: string,
+  shippedLibNames: Set<string>,
+): string[] {
   // Union in the stylesheet leaf scan (see module docstring for why the module graph alone misses
   // these) - as LEAVES, so a package reached only through CSS never pulls its own dependencies in.
   // Both compensating scans, for the two things webpack's graph cannot see through: a stylesheet
@@ -1524,6 +1570,11 @@ export function collectShippedPackages({
     bundles.add(bundle);
   });
 
+  return unresolvedNames;
+}
+
+/** Describes every reached directory as a package, with the lockfile in hand to correct it. */
+function describeShippedPackages(byDir: Map<string, Set<string>>, repo: string): ShippedPackage[] {
   const readLock = lockIndexReader(repo);
   // Ordered with the byte comparators, not `localeCompare`: ICU collation depends on the machine's
   // locale and on the ICU version Node was built against, and `localeCompare` additionally orders
@@ -1539,6 +1590,15 @@ export function collectShippedPackages({
     readLock,
   ).sort(compareByNameThenVersion);
 
+  return packages;
+}
+
+/** The described packages, unioned with `release/app`'s own unbundled closure. */
+function withUnbundledPackages(
+  packages: ShippedPackage[],
+  repo: string,
+  requireUnbundledClosure: boolean,
+): ShippedPackage[] {
   // Union in release/app's own unbundled closure, keyed by directory like the sources above, so a
   // package this and an earlier source both reach (a currently-hypothetical case: release/app has
   // no dependencies today) merges its reachedVia tags instead of duplicating the entry.
@@ -1550,8 +1610,60 @@ export function collectShippedPackages({
     else byDirFinal.set(pkg.dir, pkg);
   });
 
+  return [...byDirFinal.values()].sort(compareByNameThenVersion);
+}
+
+/**
+ * Resolves which npm packages ship, from webpack's own module manifests, unioned with the
+ * stylesheet leaf scan and the `release/app` unbundled closure above.
+ *
+ * A regex scan over source files is the right instinct - a `package.json` lies about what a bundler
+ * includes - but for JS/TS it infers something the compiler already reports exactly. Stylesheets
+ * are the one part such a scan covers that the module graph cannot fully replace - see the module
+ * docstring.
+ *
+ * `warmCache` decides what a warm-cache stamp does here - see the refusal below for what it means.
+ * `'throw'` is the default and the only setting under which an ARTIFACT is written; `'report'`
+ * returns the warm bundles instead, for a caller whose own answer to "this build cannot be checked"
+ * is to say so and stop rather than to fail.
+ */
+export function collectShippedPackages({
+  manifestDir,
+  repo,
+  requiredBundles = [],
+  requireUnbundledClosure = false,
+  warmCache = 'throw',
+}: {
+  manifestDir: string;
+  repo: string;
+  requiredBundles?: string[];
+  requireUnbundledClosure?: boolean;
+  warmCache?: 'throw' | 'report';
+}): {
+  packages: ShippedPackage[];
+  unresolvedStylesheetSpecifiers: string[];
+  warmBundles: string[];
+} {
+  const files = readManifestFiles(manifestDir, requiredBundles);
+
+  const { byDir, unresolved, stamps, modes, warmBundles, shippedLibNames } = readModuleManifests({
+    files,
+    manifestDir,
+    repo,
+    requiredBundles,
+  });
+
+  refuseWarmCacheManifests(warmBundles, warmCache);
+  assertOneBuildGraph({ manifestDir, stamps, modes, unresolved });
+
+  const unresolvedNames = addLeafScannedPackages(byDir, repo, shippedLibNames);
+
   return {
-    packages: [...byDirFinal.values()].sort(compareByNameThenVersion),
+    packages: withUnbundledPackages(
+      describeShippedPackages(byDir, repo),
+      repo,
+      requireUnbundledClosure,
+    ),
     unresolvedStylesheetSpecifiers: unresolvedNames,
     warmBundles,
   };
@@ -1655,8 +1767,8 @@ export function collectPlatformOnlyPackages(repo: string, names: string[]): Ship
  * application always has one: `electron-builder.json5` points `directories.app` at it, so a
  * checkout without it does not package at all. `required` is therefore set by the call that
  * describes the real application (`main.ts`), exactly as `requiredBundles` and `assertNpmFloor`
- * are, while a fixture repo that has no `release/app` stays a usable fixture. Without it this was
- * the only union source that could contribute nothing for a reason nobody would see - every other
+ * are, while a fixture repo that has no `release/app` stays a usable fixture. Without it this is
+ * the only union source that can contribute nothing for a reason nobody would see - every other
  * source either throws or has a floor.
  */
 export function collectUnbundledPackages(

@@ -1,17 +1,82 @@
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { sha256 } from './lock';
 import type { NamedText, Policy, SnapStagePackage } from './types';
 
 const DIR = path.join(__dirname, 'vendored-texts');
 
 /**
- * The licence text this repository holds on behalf of a package that ships none of its own.
+ * One hash-pinned text this repository carries on another party's behalf, read and checked.
+ *
+ * Both kinds of vendored text - a package's own license and a staged library's Debian `copyright`
+ * file - are the same obligation: a legal text a human read from a named source, checked in, and
+ * reproduced verbatim. So both fail the same two ways, and the wording of each failure is the only
+ * thing that differs between them.
+ *
+ * @param file Name of the file as the policy records it, relative to `dir`. Named in every message,
+ *   because it is what a reader has to go find.
+ * @param pinnedAs What the policy pins and on whose behalf, completing "..., but that file is not
+ *   in `<dir>`".
+ * @param onlyCopyOf What this repository holds no second copy of, completing "..., so the document
+ *   cannot be written without it".
+ * @param recordedFor Which entry the hash is recorded against, completing "the notices policy
+ *   records for ...".
+ * @param reproducedAs What the text is reproduced as, completing "It is reproduced verbatim as
+ *   ...".
+ * @param source Where a human read the terms, printed as the remedy for a hash that no longer
+ *   matches.
+ * @param name `NamedText.name` for the returned text.
+ */
+function pinnedText({
+  dir,
+  file,
+  pinnedAs,
+  onlyCopyOf,
+  recordedFor,
+  reproducedAs,
+  source,
+  recordedSha256,
+  name,
+}: {
+  dir: string;
+  file: string;
+  pinnedAs: string;
+  onlyCopyOf: string;
+  recordedFor: string;
+  reproducedAs: string;
+  source: string;
+  recordedSha256: string;
+  name: string;
+}): NamedText {
+  let text;
+  try {
+    text = fs.readFileSync(path.join(dir, file), 'utf8');
+  } catch {
+    throw new Error(
+      `${pinnedAs}, but that file is not in ${path.relative(process.cwd(), dir)}. ` +
+        `${onlyCopyOf}, so the document cannot be written without it.`,
+    );
+  }
+
+  const actual = sha256(text);
+  if (actual !== recordedSha256)
+    throw new Error(
+      `${file} no longer hashes to what the notices policy records for ${recordedFor} ` +
+        `(recorded ${recordedSha256}, found ${actual}). It is reproduced verbatim as ` +
+        `${reproducedAs}, so an edited copy is a changed legal claim - re-read ${source} and ` +
+        'update the entry, or restore the file.',
+    );
+
+  return { name, text };
+}
+
+/**
+ * The license text this repository holds on behalf of a package that ships none of its own.
  *
  * A package whose nuspec carries only a pre-SPDX `<licenseUrl>` publishes its terms at a URL and
  * bundles nothing, so there is no text to reproduce and the document can only fall back to the
  * canonical SPDX text of whatever identifier a human recorded. That is right for a package whose
- * grant IS the unmodified standard text, and wrong for one whose own licence file carries more:
+ * grant IS the unmodified standard text, and wrong for one whose own license file carries more:
  * `Icu4c.Win.Min` ships `icudt59.dll`, and ICU's LICENSE lists five third-party notices - the
  * pre-58 IBM ICU grant, three word-break dictionaries, and the time zone database - for data that
  * is inside that DLL. SPDX's `Unicode-DFS-2016` text is the first section of that file and none of
@@ -20,7 +85,7 @@ const DIR = path.join(__dirname, 'vendored-texts');
  * CLASSIFICATION is still the recorded SPDX identifier and is unaffected by this: the override
  * decides which terms the package is under and is checked against the policy's lists, while this
  * decides what text is reproduced on its behalf. `nugetVerdict` keeps the two apart deliberately,
- * for the same reason a package that DOES bundle a licence file has its own copy reproduced rather
+ * for the same reason a package that DOES bundle a license file has its own copy reproduced rather
  * than the canonical one - a bundled file carries notices the canonical text cannot.
  *
  * Hash-pinned like a reviewed exception, and for the same reason: this is a legal text a human read
@@ -37,34 +102,23 @@ export function vendoredLicenseText(
   if (!entry) return undefined;
   if (entry.version !== version)
     throw new Error(
-      `the notices policy holds a licence text for "${key}" read from version ${entry.version}, ` +
-        `and this is ${version}. A licence text is reproduced verbatim on the package's behalf, ` +
+      `the notices policy holds a license text for "${key}" read from version ${entry.version}, ` +
+        `and this is ${version}. A license text is reproduced verbatim on the package's behalf, ` +
         'so it does not carry across a version change - re-read the terms at ' +
         `${entry.source} for this version and update the entry.`,
     );
 
-  const file = path.join(DIR, entry.file);
-  let text;
-  try {
-    text = fs.readFileSync(file, 'utf8');
-  } catch {
-    throw new Error(
-      `the notices policy holds a licence text for "${key}" in ${entry.file}, but that file is ` +
-        `not in ${path.relative(process.cwd(), DIR)}. It is the only copy of the terms this ` +
-        'package publishes, so the document cannot be written without it.',
-    );
-  }
-
-  const sha256 = crypto.createHash('sha256').update(text).digest('hex');
-  if (sha256 !== entry.sha256)
-    throw new Error(
-      `${entry.file} no longer hashes to what the notices policy records for "${key}" ` +
-        `(recorded ${entry.sha256}, found ${sha256}). It is reproduced verbatim as this package's ` +
-        `licence, so an edited copy is a changed legal claim - re-read ${entry.source} and update ` +
-        'the entry, or restore the file.',
-    );
-
-  return { name: entry.file, text };
+  return pinnedText({
+    dir: DIR,
+    file: entry.file,
+    pinnedAs: `the notices policy holds a license text for "${key}" in ${entry.file}`,
+    onlyCopyOf: 'It is the only copy of the terms this package publishes',
+    recordedFor: `"${key}"`,
+    reproducedAs: "this package's license",
+    source: entry.source,
+    recordedSha256: entry.sha256,
+    name: entry.file,
+  });
 }
 
 /**
@@ -78,7 +132,7 @@ export function vendoredLicenseText(
  * entry: the obligation is that the notice travels, not that it sits at a particular path.
  *
  * Verbatim and hash-pinned rather than summarised, for the reason `vendoredLicenseText` gives: a
- * Debian `copyright` file names per-file licences and copyright holders that no single SPDX
+ * Debian `copyright` file names per-file licenses and copyright holders that no single SPDX
  * identifier reproduces. `libgtk-3-0`'s runs to 651 lines across LGPL-2+, LGPL-2.1+, Expat, SWL,
  * ZPL-2.1 and X11R5 stanzas.
  *
@@ -87,27 +141,17 @@ export function vendoredLicenseText(
  */
 export function snapCopyrightText(pkg: string, entry: SnapStagePackage): NamedText {
   const { copyright } = entry;
-  const file = path.join(DIR, 'snap', copyright.file);
-  let text;
-  try {
-    text = fs.readFileSync(file, 'utf8');
-  } catch {
-    throw new Error(
+  return pinnedText({
+    dir: path.join(DIR, 'snap'),
+    file: copyright.file,
+    pinnedAs:
       `the notices policy pins ${copyright.file} as the copyright notice for the staged library ` +
-        `"${pkg}", but that file is not in ${path.relative(process.cwd(), path.join(DIR, 'snap'))}. ` +
-        "It is the only copy of that library's notice this repository carries, so the document " +
-        'cannot be written without it.',
-    );
-  }
-
-  const sha256 = crypto.createHash('sha256').update(text).digest('hex');
-  if (sha256 !== copyright.sha256)
-    throw new Error(
-      `${copyright.file} no longer hashes to what the notices policy records for the staged ` +
-        `library "${pkg}" (recorded ${copyright.sha256}, found ${sha256}). It is reproduced ` +
-        `verbatim as that library's notice, so an edited copy is a changed legal claim - re-read ` +
-        `${copyright.source} and update the entry, or restore the file.`,
-    );
-
-  return { name: `${pkg} \u2014 ${copyright.source}`, text };
+      `"${pkg}"`,
+    onlyCopyOf: "It is the only copy of that library's notice this repository carries",
+    recordedFor: `the staged library "${pkg}"`,
+    reproducedAs: "that library's notice",
+    source: copyright.source,
+    recordedSha256: copyright.sha256,
+    name: `${pkg} \u2014 ${copyright.source}`,
+  });
 }

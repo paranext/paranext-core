@@ -4,6 +4,13 @@ import merge from 'webpack-merge';
 import CopyPlugin from 'copy-webpack-plugin';
 import configBase, { rootDir } from './webpack.config.base';
 import WebViewResolveWebpackPlugin from './web-view-resolve-webpack-plugin';
+// paranext-core only: this import and the `EmitShippedModulesPlugin` registration it feeds have
+// no counterpart in the extension template, so both must stay OUTSIDE the shared region below.
+// The path also reaches past `extensions/` into `.erb/`, which the template does not carry at
+// all. A paranext-core-only path inside that region either breaks the template on the next merge
+// or is silently reverted by one - and reverting the registration stops `extension-main.json`
+// being written, which drops this bundle's packages from the notices document with the build
+// still exiting 0.
 import { EmitShippedModulesPlugin } from '../../.erb/configs/emit-shipped-modules-plugin';
 import {
   outputFolder,
@@ -66,8 +73,8 @@ const configMain: () => Promise<webpack.Configuration> = async () => {
       }),
       // Writes .notices/modules/extension-main.json: the modules webpack actually compiled into
       // this bundle, for the third-party notices generator. Emitted on every build rather than only
-      // a production one - see the matching comment in webpack.config.web-view.ts for why the
-      // production gate silently cost the notices generator two of its five manifests.
+      // a production one - see the matching comment in webpack.config.web-view.ts for why a
+      // production gate silently costs the notices generator two of its five manifests.
       new EmitShippedModulesPlugin({
         bundleName: 'extension-main',
         outputDir: path.join(rootDir, '..', '.notices', 'modules'),
@@ -76,8 +83,8 @@ const configMain: () => Promise<webpack.Configuration> = async () => {
 
     // Its own cache directory, not the one `webpack.config.base.ts` names for every extension
     // bundle. This config declares `dependencies: ['webView']`, so it starts only after
-    // `extension-web-view` has written its entries - and sharing a directory with it meant this
-    // bundle read as warm on a build that was cold. See `extensionCacheDirectory`.
+    // `extension-web-view` has written its entries - and sharing a directory with it makes this
+    // bundle read as warm on a build that is cold. See `extensionCacheDirectory`.
     cache: { cacheDirectory: extensionCacheDirectory('main') },
   });
 };

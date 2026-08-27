@@ -2,11 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { isWarmFilesystemCache } from '../../configs/emit-shipped-modules-plugin';
-
-// Lives under `.erb/scripts/third-party-notices/` rather than beside the plugin in `.erb/configs/`
-// because only `.erb/scripts/**/*.test.ts` is in the root `vitest.config.ts` include list - a test
-// file next to the plugin itself would silently never run.
+import { isWarmFilesystemCache } from './emit-shipped-modules-plugin';
 
 let dir: string;
 
@@ -76,7 +72,7 @@ describe('isWarmFilesystemCache when the directory cannot be read', () => {
     // A directory that may well be full and simply could not be read - EACCES after a container
     // build, EMFILE under the five webpacks `npm run build` runs at once. Answering "cold" there
     // stamps the manifest trustworthy on the strength of information nobody has, and a module list
-    // a cache hit had shortened then goes into a legal artifact. Reproduced here as ENOTDIR, which
+    // a cache hit has shortened then goes into a legal artifact. Reproduced here as ENOTDIR, which
     // is the same class: a path that exists and is not a readable directory.
     const notADirectory = path.join(dir, 'cache-is-a-file');
     fs.writeFileSync(notADirectory, 'not a directory');

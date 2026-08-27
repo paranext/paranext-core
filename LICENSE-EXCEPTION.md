@@ -1,4 +1,4 @@
-# Platform.Bible Extension Licence Exception
+# Platform.Bible Extension License Exception
 
 **Version 1.0**
 
@@ -41,18 +41,18 @@ making an Independent Extension available to users interacting with it remotely 
 
 This exception applies **only** to an Independent Extension. It does not:
 
-- change the licence of Platform.Bible itself, which remains AGPL-3.0-or-later;
+- change the license of Platform.Bible itself, which remains AGPL-3.0-or-later;
 - permit conveying a modified Platform.Bible, or any work containing Platform.Bible source, under
   other terms — those remain subject to the AGPL in full, including its section 13 requirement to
   offer source to remote users;
 - apply to a work that reaches past the Extension Interface into Platform.Bible's internals; or
-- affect the separate MIT licence on `lib/platform-bible-react` and `lib/platform-bible-utils`,
+- affect the separate MIT license on `lib/platform-bible-react` and `lib/platform-bible-utils`,
   which is unchanged and independent of this exception.
 
 ## No recommendation
 
-This exception exists so that the licence of Platform.Bible does not by itself determine the licence
-of an extension. **It makes no recommendation about what licence an extension should carry.** An
+This exception exists so that the license of Platform.Bible does not by itself determine the license
+of an extension. **It makes no recommendation about what license an extension should carry.** An
 extension author remains responsible for the licensing of their own work, including for any
 third-party code they incorporate and for any obligations arising other than from Platform.Bible.
 Nothing here is legal advice.
@@ -63,4 +63,4 @@ An extension author need do nothing to rely on this exception. Authors who wish 
 have may state:
 
 > This extension is an Independent Extension under version 1.0 of the Platform.Bible Extension
-> Licence Exception.
+> License Exception.
