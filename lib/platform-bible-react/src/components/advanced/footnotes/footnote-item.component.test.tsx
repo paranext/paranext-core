@@ -61,3 +61,43 @@ test('renders both identically worded sibling spans of a footnote, with no React
   expect(screen.getAllByText(SPAN_TEXT)).toHaveLength(2);
   expect(consoleError).not.toHaveBeenCalled();
 });
+
+// A note's category rides in the file as a `\cat` run directly after the caller
+// (`\f + \cat People\cat*\fr 1.1 …`), which the USJ parser folds onto the note as `category` — so
+// unlike every other part of a footnote it is NOT in `content` and has to be rendered from the
+// note's own field. Without that it is simply absent from the pane, which reads as data the editor
+// accepted and then lost.
+const footnoteWithCategory: MarkerObject = {
+  type: 'note',
+  marker: 'f',
+  caller: '+',
+  category: 'People',
+  content: [
+    { type: 'char', marker: 'fr', content: ['1.1'] },
+    { type: 'char', marker: 'ft', content: ['A note'] },
+  ],
+};
+
+test('shows a footnote category, with its markers, in the same position the file puts it', () => {
+  render(<FootnoteItem footnote={footnoteWithCategory} />);
+
+  expect(screen.getByText('People')).toBeInTheDocument();
+  expect(screen.getByText('\\cat')).toBeInTheDocument();
+  expect(screen.getByText('\\cat*')).toBeInTheDocument();
+});
+
+test('shows the category value with markers suppressed, but not its markers', () => {
+  render(<FootnoteItem footnote={footnoteWithCategory} showMarkers={false} />);
+
+  // The value is the note's data and stays visible; the `\cat` glyphs are marker display, and
+  // follow the same switch every other marker in this component does.
+  expect(screen.getByText('People')).toBeInTheDocument();
+  expect(screen.queryByText('\\cat')).not.toBeInTheDocument();
+  expect(screen.queryByText('\\cat*')).not.toBeInTheDocument();
+});
+
+test('renders nothing extra for a footnote with no category', () => {
+  const { container } = render(<FootnoteItem footnote={footnoteWithTwinSpans} />);
+
+  expect(container.querySelector('.note-category')).toBeNull();
+});

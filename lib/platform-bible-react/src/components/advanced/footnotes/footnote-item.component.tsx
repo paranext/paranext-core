@@ -157,6 +157,19 @@ export function FootnoteItem({
       {caller}{' '}
     </span>
   );
+  // The category is the one part of a footnote that never appears in `content`: it rides in the
+  // file as a `\cat` run directly after the caller (`\f + \cat People\cat*\fr 1.1 …`), and the USJ
+  // parser folds it onto the note as a field — so nothing renders it unless the note's own field
+  // is read. Placed after the caller so the pane reads in the file's order. Given its own class
+  // rather than a `usfm_*` one for the same reason the caller has one: `\cat` delimits the value
+  // but is not a style for it.
+  const footnoteCategory = footnote.category && (
+    <span className="note-category tw:inline-block">
+      {showMarkers && <span className="marker">{`\\cat `}</span>}
+      {footnote.category}
+      {showMarkers && <span className="marker">{`\\cat*`}</span>}{' '}
+    </span>
+  );
   const footnoteTargetRef = targetRef && (
     <>{renderContent(footnote.marker, [targetRef], showMarkers, false)} </>
   );
@@ -172,6 +185,7 @@ export function FootnoteItem({
       <div className={cn('textual-note-header tw:col-span-1 tw:w-fit tw:text-nowrap', baseClasses)}>
         {footnoteOpening}
         {footnoteCaller}
+        {footnoteCategory}
       </div>
       <div className={cn('textual-note-header tw:col-span-1 tw:w-fit tw:text-nowrap', baseClasses)}>
         {footnoteTargetRef}
