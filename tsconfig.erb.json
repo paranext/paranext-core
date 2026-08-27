@@ -1,7 +1,8 @@
 {
   // Type-check gate for the build-time TypeScript under .erb, which the root tsconfig's `include`
   // ("src", "assets") leaves out: the packaging clean-up entry point, the startup-waterfall parser
-  // + CLI, and the third-party-notices pipeline. Without this, a type error in any of them would
+  // + CLI, the wire-surface generator, and the third-party-notices pipeline. Without this, a type
+  // error in any of them would
   // keep CI green and surface only at manual runtime - and the notices pipeline is ~4,700 lines
   // that decide which licenses may ship and then write the artifact asserting it, so a renamed
   // verdict field has to fail here rather than produce a wrong document. Scoped to these files (not
@@ -24,6 +25,8 @@
     ".erb/scripts/clean.ts",
     ".erb/scripts/startup-waterfall.ts",
     ".erb/scripts/startup-waterfall.util.ts",
+    ".erb/scripts/generate-wire-surface.ts",
+    ".erb/scripts/generate-wire-surface.util.ts",
     ".erb/scripts/notices-build-id.ts",
     ".erb/scripts/third-party-notices/*.ts",
     ".erb/configs/emit-shipped-modules-plugin.ts"
