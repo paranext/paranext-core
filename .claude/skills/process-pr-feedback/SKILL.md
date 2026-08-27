@@ -31,45 +31,45 @@ has to mean "ask again".
 
 ## 0. Is the branch in good shape?
 
+**This step measures. It changes nothing** — no rebase, no push, no checkout. What it finds is
+either a stop or the first decision item at step 4.
+
 ```bash
-gh pr view <pr> --json state,isDraft,mergeable,mergeStateStatus,baseRefName,headRefOid
+gh pr view <pr> --json state,isDraft,mergeable,mergeStateStatus,baseRefName,headRefOid,author
 gh api repos/paranext/paranext-core/compare/<base>...<headRefOid> --jq '{ahead_by,behind_by}'
+git rev-parse --abbrev-ref HEAD                  # which branch this checkout is on
+git status --porcelain                           # tracked modifications
+git rev-list --left-right --count @{u}...HEAD    # behind <tab> ahead, against the remote branch
 ```
 
-Run this per PR the round covers and record a row each **in `findings.md`**: PR · branch · base ·
-`headRefOid` · behind-count · mergeable. `headRefOid` is also step 10's lease pin, so take it from
-the API rather than `git rev-parse origin/<branch>`, which reports whatever this checkout last
-fetched. The gates can take days — a pin that lives only in this session's context is one the
-session running step 10 cannot read. Any push this round makes — the step-0 rebase included —
-re-records that row: the pin is the last SHA *this round* put on the remote, not the one it first
-saw.
+Run it for **every** branch the round covers, not just the PR under review — a broken checkout
+three branches up surfaces at step 10, which is the worst moment to find it. Record a row each in
+`findings.md`: PR · branch · base · `headRefOid` · behind-count · mergeable · local branch ·
+clean · ahead/behind. `headRefOid` is also step 10's lease pin — take it from the API rather than
+`git rev-parse origin/<branch>`, which reports whatever this checkout last fetched. Step 10 is the
+only push in this flow, so that value stays good for the whole round: if the lease later rejects,
+someone else moved the branch.
 
-`behind_by > 0` or `mergeable: CONFLICTING` → **rebase before anything else**; every fix estimate is
-against a tree that will change. On a stack each PR's base is the branch below it, not `main`, and
-**rebasing a base means restacking every branch above it in the same operation**, bottom up. That
-restack needs the base's tip from *before* the rebase, so capture it first — nothing recovers it
-afterwards:
+**Stop — the work would not land where the PR can show it:**
 
-```bash
-git rev-parse <base> <child> <grandchild>          # BEFORE any rewrite — keep every tip
-# …rebase <base>…
-git rebase --onto <base>  <base's kept tip>  <child>        # then, bottom up:
-git rebase --onto <child> <child's kept tip> <grandchild>
-```
+- **HEAD is not this PR's branch, or is detached.** Every fix lands somewhere the PR will never
+  display, and nothing later in the flow notices.
+- **Tracked modifications in the working tree.** They get folded into this round's commits and
+  into step 10's push. Untracked and ignored files are fine; the notes directory is one.
 
-Each level's upstream is its **own** base's kept tip, never the bottom one's: `--onto X Y Z`
-replays `Y..Z`, so reusing the bottom tip higher up replays the intermediate branches' commits
-too. Git's patch-id check often skips those silently, which hides the mistake until a restack
-that resolved a conflict makes the duplicates real.
+Those are stops for a branch **we** own. For a branch someone else owns — compare the PR's
+`author` against `gh api user --jq .login` — **warn and carry on**. It is not ours to tidy, and
+halting the round over it helps nobody.
 
-Do **not** reach for 10.1's `merge-base` form here. A child that has not been restacked yet still
-forks from the base's pre-rebase tip, so `merge-base` resolves below the base's own commits and the
-rebase replays them onto the child. Restacking immediately is what makes `merge-base` valid later:
-it is correct only once every child sits on an ancestor of its base. A child left on a rewritten
-base is broken for the rest of the round and its `behind_by` will not say so, because that number
-is measured against a base tip which no longer exists. The same applies to any later rewrite — an
-amend or fixup during steps 5–8 — so either capture and restack together, or land the fix as a new
-commit rather than a rewrite.
+**Decision item one at step 4 — carry on, but every estimate below it is provisional:**
+
+- **`behind_by > 0` or `mergeable: CONFLICTING`.** The fixes are being sized against a tree that
+  will change. Rebasing is the user's call and no step here does it unasked, so it goes to step 4
+  as its own item.
+- **Local is ahead of the remote.** The reviewer read something older than this tree. Step 2 has
+  to check each item against both refs, because some may already be fixed, and step 10 will push
+  those commits too — reviewed this round or not.
+- **Local is behind the remote.** You would be verifying against stale code. Fetch first.
 
 Three traps:
 - **`mergeable: UNKNOWN` is a non-answer, not a pass.** GitHub computes it lazily, so the first
@@ -82,9 +82,6 @@ Three traps:
   reads `BLOCKED` or `CLEAN` instead. `behind_by` from the compare call is the authority.
 - **A conflicted PR silently stops CI.** GitHub cannot compute a merge ref, so no `pull_request`
   workflow runs at all. "No checks reported" is not "checks passed".
-
-Rebasing is the user's call: no step here rebases on its own initiative, so raise it as the first
-decision item at step 4 and say every estimate is provisional until it lands.
 
 ## 1. Read the feedback
 
@@ -119,8 +116,10 @@ their story is plausible. That ref is usually one a force-push orphaned, so `git
 fails and the tempting fallback — reading the working tree — silently answers a different question:
 `gh api repos/paranext/paranext-core/contents/<path>?ref=<sha> --jq .content | base64 -d` reads any
 commit GitHub still holds. When you need this branch's own changes rather than a file, the range is
-`origin/main...HEAD` — **three dots**; two dots reports every change on main since the fork as
-though it were ours.
+`origin/main...HEAD` — **three dots** — because the two-dot form diffs the endpoint trees and
+renders main's post-fork changes as spurious deletions. For `git log` and `git rev-list` it
+inverts: three dots is the symmetric difference and pulls main's own commits in alongside ours, so
+there `origin/main..HEAD` — two dots — is the form that means "ours".
 
 - **Run runtime claims instead of arguing about them.** Ten lines in the real runtime settles what a
   page of reasoning cannot, and is usually cheaper.
@@ -235,22 +234,44 @@ SHA that is not on GitHub is a broken citation in public. Approval here also cov
 
 ## 10. Restack, push, post
 
+0. **Check the approval before anything else.** Open `approval.md`. Missing means stop and ask:
+   a session running step 10 days later has no other record that this round was approved. Where
+   it names particular items or branches, act on those only — everything it does not name stays
+   unpushed and unposted.
 1. **Restack first, push second.** If anything sits on top of this branch, rebase it before
    pushing anything, bottom of the stack up:
-   `git rebase --onto <base> "$(git merge-base <base> <branch>)" <branch>`. Compute the fork
-   point; do not record one. `merge-base` is correct here because step 0 requires a rewritten base
-   to have its children restacked in the same operation, so by now every child sits on an ancestor
-   of its base. That is the only condition under which it holds — see step 0 for the rewrite case,
-   which needs the pre-rewrite tip instead. A SHA remembered across the round is wrong the moment
-   the stack moves again, and the rebase then replays the base's own commits onto the child.
+   `git rebase --onto <base> "$(git merge-base <base> <branch>)" <branch>`.
+
+   `merge-base` gives the tip the child currently sits on, which is what you want **as long as the
+   base only gained commits**. It is wrong if the base was *rewritten* this round — an approved
+   rebase, an amend, a fixup. A rewrite gives the base's commits new patch-ids while the child
+   still points at the pre-rewrite tip, so `merge-base` falls back below those commits and the
+   rebase tries to replay the base's own work onto the child, stopping on a conflict inside the
+   base's change. Resolving that conflict re-injects the pre-rewrite content and silently undoes
+   the rebase that caused it, and `--skip` — the only correct recovery — is banned just below.
+
+   So **whenever you rewrite a base, capture its tip first and restack its children in the same
+   operation**, with the captured tip as the upstream; nothing recovers that tip afterwards. Each
+   level's upstream is its **own** base's captured tip, never the bottom one's: `--onto X Y Z`
+   replays `Y..Z`, so reusing the bottom tip higher up replays the intermediate branches' commits
+   too. Once that restack has happened, `merge-base` is right again for the rest of the round.
    Never blanket `--continue || --skip` in a loop — `--skip` silently drops real commits, and an
    untracked-file collision or a hook failure looks exactly like an empty commit. Then **re-run
    step 7's battery at each new tip**, since the restack rewrote the commits it passed on.
-2. **Push** every branch you touched, bottom of the stack first, one command at a time, with
-   `--force-with-lease=<branch>:<that branch's pin>`. Never bare: with no expected value the lease
-   is checked against the remote-tracking ref, which any fetch across the two stops has already
-   advanced, so it protects nothing. A restacked branch that is never pushed leaves its PR on the
-   old commits while the replies cite a tip that exists only on disk.
+2. **Push** every branch you touched, bottom of the stack first, one command at a time:
+
+   ```bash
+   git push origin <branch> --force-with-lease=<branch>:<that branch's step-0 headRefOid>
+   ```
+
+   Name the branch in the refspec. 10.1 leaves HEAD on the last branch it restacked, and under
+   `push.default=simple` a bare `git push` carrying only a lease flag pushes the **current**
+   branch: the branch you meant to push silently does not go, and the one that does carries a
+   lease naming a different ref, so it is force-updated with no protection at all. Never a bare
+   `--force-with-lease` either — with no expected value it is checked against the remote-tracking
+   ref, which any fetch across the two stops has already advanced. A restacked branch that is
+   never pushed leaves its PR on the old commits while the replies cite a tip that exists only on
+   disk.
    A rejected lease means the branch moved since this round last pushed it — do not re-pin to
    the current remote,
    which is the defeated form; read the remote back and put it to the user as a new decision.
@@ -267,8 +288,10 @@ SHA that is not on GitHub is a broken citation in public. Approval here also cov
 4. **Read back** what landed and compare it against what you meant to post. "Posted successfully"
    without a read-back is not a result.
 
-**Do not resolve the reviewer's threads** — `.context/standards/Code-Review-Guide.md` reserves that
-to them. Threads *we* opened are ours to close, after a visible reply.
+**Do not resolve the reviewer's threads.** `.context/standards/Code-Review-Guide.md` does allow an
+author to self-resolve items the reviewer marked *Discussing*; this flow declines that latitude on
+purpose. Resolving someone else's thread by mistake is public and awkward, and leaving one open
+costs nothing. Threads *we* opened are ours to close, after a visible reply.
 
 Then copy anything that lives only in a thread somewhere durable — an ADR, a standards entry, an
 agreed ticket. Review threads die with the squash-merge.
