@@ -37,9 +37,11 @@ Platform.Bible uses **JSON-RPC 2.0 over WebSocket** for inter-process communicat
 ```
 
 One renderer process per window, not one for the application: a window is a full renderer hosting
-its own dock layout and its own window-scoped services, and main is the only process all of them
-have in common. Services that must answer for the whole application therefore live in main, which
-outlives any individual window.
+its own dock layout and its own window-scoped services, and main is the only process every renderer
+connects to directly. Services that must coordinate across every open window therefore live in
+main, which outlives any individual window. Other whole-application services — settings, menus,
+themes, extension lifecycle — live in the extension host, which is likewise a single process shared
+by every window (see the service tables below).
 
 ### Communication Patterns
 

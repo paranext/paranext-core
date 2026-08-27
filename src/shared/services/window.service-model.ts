@@ -13,9 +13,11 @@ export const windowServiceObjectToProxy = Object.freeze({
   /**
    * JSDOC SOURCE windowServiceProviderName
    *
-   * This name identifies the window data provider on the papi. You can use this name to find the
-   * data provider when accessing it using the useData hook, and it resolves to the provider serving
-   * the window you are in — each window has one of its own.
+   * This name identifies the window data provider on the papi. Each window registers a provider of
+   * its own under a window-scoped name, and this unscoped name resolves to a proxy that forwards to
+   * whichever window currently has focus. So finding the data provider by this name — with the
+   * useData hook, for instance — answers for the focused window, which is not necessarily the
+   * window you are in. Use `papi.window` to reach the caller's own window.
    */
   dataProviderName: windowServiceProviderName,
 });
@@ -86,8 +88,9 @@ declare module 'papi-shared-types' {
 /**
  * JSDOC SOURCE windowService
  *
- * Service for interacting with the application window it is used in. Every window hosts its own, so
- * a call acts on the caller's own window rather than on one app-wide window.
+ * Service for interacting with an application window. Every window hosts its own, so a call from a
+ * renderer acts on the window it runs in. The extension host is in no window, so a call made there
+ * acts on whichever window has focus at that moment, which can differ between two calls.
  */
 export type IWindowService = {
   /**
