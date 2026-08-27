@@ -25,7 +25,14 @@
  * isolation.
  */
 import { FrameLocator, Locator, Page } from '@playwright/test';
-import { test, expect } from '../../../fixtures/find.fixture';
+import {
+  test,
+  expect,
+  getAvailableProjects,
+  openScriptureEditor,
+  WEB_COPY_PROJECT_ID,
+} from '../../../fixtures/find.fixture';
+import { waitForAppReady, PROCESS_READY_TIMEOUT } from '../../../fixtures/helpers';
 import {
   EDITOR_HAMBURGER_SELECTOR,
   findScriptureEditorFrame,
@@ -145,6 +152,62 @@ async function setupReplaceMode(
   await expect(firstResultCard(frame)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
   return frame;
 }
+
+// ---------------------------------------------------------------------------
+// Worker-level setup
+// ---------------------------------------------------------------------------
+
+/**
+ * Open a scripture editor before any test runs.
+ *
+ * Required, not merely convenient: every test here reaches Find through the editor's hamburger
+ * menu, and in Power mode nothing is seeded into the layout — the app starts on the Home tab with
+ * no editor open at all. Without this the whole suite fails identically at "Scripture editor not
+ * found: no Project button visible", which says nothing about Replace.
+ */
+test.beforeAll(async ({ electronApp }) => {
+  // App start plus the project-lookup poll below; a retried worker restarts Electron from scratch.
+  test.setTimeout(240_000);
+
+  const page = await electronApp.firstWindow({ timeout: PROCESS_READY_TIMEOUT });
+  await waitForAppReady(page);
+
+  // `getMetadataForAllProjects` only retries internally during the process's first 30 s, and
+  // `waitForAppReady` can eat that window on a slow machine — after which it returns an empty
+  // array immediately rather than waiting. Poll here instead of trusting a single call.
+  let projects: Awaited<ReturnType<typeof getAvailableProjects>> = [];
+  const pollDeadline = Date.now() + 90_000;
+  while (projects.length === 0 && Date.now() < pollDeadline) {
+    try {
+      // Sequential by design: each attempt must finish before deciding whether to retry.
+      // eslint-disable-next-line no-await-in-loop
+      projects = await getAvailableProjects(15_000);
+    } catch {
+      // Project lookup not ready yet — retry below.
+    }
+    if (projects.length === 0) {
+      // Sequential by design: the pause between attempts paces the poll.
+      // eslint-disable-next-line no-await-in-loop
+      await page.waitForTimeout(5_000);
+    }
+  }
+
+  // The seeded, editable WEB copy specifically. Replace WRITES to the project, so falling back to
+  // whatever project happened to be available could edit something this suite does not own.
+  const project = projects.find((candidate) => candidate.id === WEB_COPY_PROJECT_ID);
+  if (!project) {
+    throw new Error(
+      `The seeded testWEB copy (${WEB_COPY_PROJECT_ID}) was not available after 90 s. These tests ` +
+        `perform real replace operations, so they will not fall back to another project. Found: ` +
+        `${projects.map((candidate) => candidate.id).join(', ') || '(none)'}`,
+    );
+  }
+
+  await openScriptureEditor(project.id);
+  // Confirms the editor is actually mounted and its hamburger reachable, which is what every test
+  // here depends on.
+  await findScriptureEditorFrame(page);
+});
 
 // ---------------------------------------------------------------------------
 // Tests: the Replace surface exists in Power mode
