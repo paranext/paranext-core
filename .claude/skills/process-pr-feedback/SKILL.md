@@ -61,10 +61,11 @@ git status --porcelain              # tracked modifications
 Then per branch, for **every branch in every stack the round touches — from the branch directly
 above `main` to the top**, whether or not it has feedback. A fix routinely lands below the PR that
 was commented on, and every branch we own above a changed one gets restacked and pushed, so each
-needs a row. Walk down from a PR's `baseRefName` with `gh pr list --head <baseRefName> --state all`
-until
-`main`, and up from its `headRefName` with `gh pr list --base <headRefName> --state all` until
-nothing answers:
+needs a row. Walk down from a PR's `baseRefName` with
+`gh pr list --head <baseRefName> --state open` until `main`, and up from its `headRefName` with
+`gh pr list --base <headRefName> --state open` until nothing answers. Only open PRs get rows: a
+base whose PR is merged or closed is a base with no PR, and a branch above ours with a closed PR
+is not part of the stack:
 
 ```bash
 gh pr view <pr> --json \
@@ -80,7 +81,9 @@ steps 5 and 10 change; `headRefOid` itself is never overwritten, because step 5 
 this
 round started from. Take both from the API, not from `git rev-parse origin/<branch>`, which
 reports only what was last fetched. A base branch with no PR gets a row from
-`git rev-parse origin/<branch>` — fresh, after the fetch above — and empty PR fields.
+`git rev-parse origin/<branch>` — fresh, after the fetch above — empty PR fields, and is treated
+as ours; step 5 re-checks it the same way. `main` itself has no row: it is never rewritten, so
+plain `merge-base` is always right against it.
 
 **Stop — about this checkout, which is ours whoever owns the PR:**
 
@@ -98,7 +101,8 @@ reports only what was last fetched. A base branch with no PR gets a row from
 - **`behind_by > 0` or `mergeable: CONFLICTING` — decision item one at step 4.** The fixes are
   being sized against a tree that will change; every estimate below it is provisional. Moving a
   branch onto a new base is the user's call and no step here does it unasked; restacking a
-  branch onto its own base's new tip is part of whatever moved the base, and needs no ruling.
+  branch onto its own base's new tip is part of whatever moved the base, and needs no ruling — so
+  a ruling to leave a behind child alone holds only while its base goes untouched this round.
 - **Local-only commits — decision item at step 4: do they ride along?** The reviewer read
   something older than this tree, so some items may already be fixed; step 2 checks each one
   against both refs. If they ride, step 10 pushes them with the rest; if not, the ruling says what
@@ -106,7 +110,8 @@ reports only what was last fetched. A base branch with no PR gets a row from
 
 **On a branch someone else owns**, those three are warnings, listed at step 4 under "No decision
 needed". It is not ours to tidy, and this flow never restacks or pushes such a branch: where one
-sits above a branch we changed, step 4 and step 9 both say so, and its owner restacks it.
+sits above a branch we will change, that is a fourth warning for step 4, step 9 lists it again,
+and its owner restacks it.
 
 Three traps:
 
@@ -227,9 +232,11 @@ put it back to the user as a new decision, and append the exchange to `rulings.m
 Implement only what was ruled. A ruled rebase goes onto the branch's **own** base, using the
 block under **Finish the stack** with `origin/<baseRefName>` as `<base>` — a plain
 `git rebase <upstream>` uses `merge-base` and fails the way that block describes when the base was
-rewritten. Ruled integration of remote-only commits is `git rebase origin/<branch> <branch>`, after
-which the row's `pin` becomes the re-queried `headRefOid`, or step 10's lease can only fail.
-Red-first for every behaviour change. Never `--no-verify`.
+rewritten. Ruled integration of remote-only commits is `git rebase origin/<branch> <branch>`. After
+that ruling — and equally after a ruling to overwrite them — the row's `pin` becomes the
+re-queried `headRefOid`, or step 10's lease can only fail.
+Red-first for every behaviour change. Never `--no-verify`. As each fix lands, append
+"item → commit → branch" below the table in `findings.md`; step 9 presents from that.
 New public API needs the `@experimental` marker on **both** surfaces — TSDoc on the type-visible
 one and `'x-experimental': true` in the
 registration's OpenRPC docs; the authoritative table is
@@ -315,9 +322,11 @@ not.**
 
 ## 8. Draft replies
 
-One draft per item that gets one. The body goes in its own `reply-<nn>.md`; `replies.md` indexes
+One draft per item that gets one; on a later pass, posted drafts keep their numbers and files, and
+new drafts take new numbers. The body goes in its own `reply-<nn>.md`; `replies.md` indexes
 them, one line each: number, PR, surface, the id from step 1's record, the endpoint, and for an
-off-PR thread its anchor — `commit_id`, `path`, `line`. What is approved at step 9 is the body
+off-PR thread its anchor — `path` and `line`, the `commit_id` being supplied when posted. What is
+approved at step 9 is the body
 file, and step 10 posts it unchanged.
 
 `🤖 Claude: ` once at the top. Verdict in the first sentence, then what is confirmed, then the
@@ -341,8 +350,8 @@ reviewer; when the sequencing was ours, say so.
 ## 9. STOP — present the changes and the drafts
 
 Present per **Presenting a gate** below. Per item: disposition, fix, commit, branch. The contents of
-`verification.md`. Every conflict resolved by hand at steps 5–7, as the saved diff and its
-resolution. The **full reply texts** with
+`verification.md`. Every conflict resolved by hand at steps 5–7: the saved diff, and
+`git show <replayed commit> -- <file>` as the resolution. The **full reply texts** with
 their targets, flagging each that refutes the reviewer, asks them for something, retracts something
 already posted, announces a decline, or names a deferral with no ticket — those are the ones to
 read word for word. Then everything step 10 will do under the user's name, as a list they can
@@ -368,20 +377,20 @@ review threads die with the squash-merge; it is not committed silently after ste
 0. **Check the approval before anything else.** Open `approval.md` and read its last entry.
    Missing means stop and ask: a session running step 10 days later has no other record that
    this round was approved. Act only on what it names.
-1. **Re-check the stack, without touching it.** The tree must be clean, and for every branch
-   above a changed one its fork point must be its base's tip:
+1. **Re-check the stack, without touching it.** The tree must be clean, and every branch we own
+   above a changed one must sit on its base's tip — a plain read, no reflog involved:
 
    ```bash
-   [ "$(git merge-base --fork-point <base> <child>)" = "$(git rev-parse <base>)" ] \
+   [ "$(git merge-base <base> <child>)" = "$(git rev-parse <base>)" ] \
      && echo "<child> sits on <base>" || echo "STOP: <child> does not sit on <base>"
    ```
 
-   Every child must print the first message. Any STOP means the stack moved since approval or
-   the reflog can no longer say — either way step 10 does not rebase: record it in
-   `verification.md` and re-present at step 9. This is the reason step 8 can cite SHAs: nothing
-   in step 10 rewrites a commit.
-2. **Push** every branch in every stack the approval names, bottom of the stack first, one
-   command at a time:
+   Every child must print the first message. A STOP means the stack moved since approval, and
+   step 10 does not rebase: record it in `verification.md`, then back to step 5 and through
+   every step after it, with a fresh approval entry at 9. This is the reason step 8 can cite
+   SHAs: nothing in step 10 rewrites a commit.
+2. **Push** every branch we own in every stack the approval names — never one of someone
+   else's — bottom of the stack first, one command at a time:
 
    ```bash
    git push --force-with-lease=<branch>:<pin> origin <branch>
@@ -397,14 +406,16 @@ review threads die with the squash-merge; it is not committed silently after ste
    already advanced. A rejected lease means one of two things: the row's pin was not overwritten
    after an earlier push this round — check that first — or someone else moved the branch. Never
    re-pin to the current remote, which is the defeated form; read the remote back and put it to
-   the user as a new decision. A push with nothing to send does not evaluate the lease at all, so
+   the user as a new decision. A ruling to integrate or overwrite is step 5's, so it goes back
+   there and through every step after it. A push with nothing to send does not evaluate the lease
+   at all, so
    "Everything up-to-date" proves nothing about the pin. A force-push can dismiss approvals:
    compare `reviewDecision` against the row afterwards and note the result in `verification.md`.
 3. **Post** — one comment at a time, no automatic retries, **spaced a second or two apart**, each
    body
    wrapped mechanically from its file and sent to the target its index line names; a new thread
    for an off-PR item adds the index line's `path` and `line` to the same payload, with
-   `commit_id` set to the row's `pin` — the SHA 10.2 just pushed.
+   `commit_id` set to that branch's remote head as read back after 10.2.
    Record each new comment's id on its index line as it lands, and on a second pass through this
    step post only lines that have none:
 
@@ -414,9 +425,11 @@ review threads die with the squash-merge; it is not committed silently after ste
 
    If a POST fails with `422` and `"code":"abuse"` in the body, that is the secondary rate limit
    and not a malformed body — however much "Validation Failed" invites it, do not edit a reply
-   the user has already approved to get past it. Stop and read the live state back: every
-   comment now on the PR that is not in the approved set is a stray, and only an empty stray
-   list licenses a re-post. A `gh` failure does **not** prove nothing was created.
+   the user has already approved to get past it. Stop and read the live state back. An approved
+   body that landed despite the failure gets its id written to its index line first, so it is
+   not posted twice; every comment now on the PR that is *not* an approved body is a stray, and
+   only an empty stray list licenses a re-post. A `gh` failure does **not** prove nothing was
+   created.
 4. **Read back** what landed and compare it against the body files. "Posted successfully" without
    a read-back is not a result. The comparison goes in `verification.md`.
 5. **Watch CI to a conclusion.** A watcher must report every terminal state, treat an incomplete
