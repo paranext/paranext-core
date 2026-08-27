@@ -380,6 +380,42 @@ function makeDockLayoutThatTracksAdds(simpleLayout: LayoutInfo) {
   return { dockLayout, loadedLayouts, addWebViewToDockCalls };
 }
 
+/**
+ * A dock layout stand-in that tracks whether one specific (window-scoped) web view id is present,
+ * derived from whatever layout it was most recently handed — the same shape a real dock takes,
+ * where `loadLayout` replaces the dock's whole contents and later lookups reflect that. Modeled on
+ * `makeDockLayoutThatTracksAdds` rather than extending `makeDockLayout`, so no existing test's
+ * behavior shifts.
+ */
+function makeDockLayoutTrackingOneWebView(initialLayout: LayoutInfo, webViewId: string) {
+  const loadedLayouts: LayoutInfo[] = [];
+  const removeTabFromDockCalls: string[] = [];
+  let webViewIsPresent = tabIdsIn(initialLayout).includes(webViewId);
+  const webViewDefinition = {
+    id: webViewId,
+    webViewType: 'test.type',
+    contentType: 'html',
+    content: '<p>captured</p>',
+    state: {},
+  } as unknown as WebViewTabProps;
+  const dockLayout = {
+    onLayoutChangeRef: { current: undefined },
+    loadLayout: (layout: LayoutInfo) => {
+      loadedLayouts.push(layout);
+      webViewIsPresent = tabIdsIn(layout).includes(webViewId);
+    },
+    getAllWebViewDefinitions: () => (webViewIsPresent ? [webViewDefinition] : []),
+    getWebViewDefinition: (id: string) =>
+      webViewIsPresent && id === webViewId ? webViewDefinition : undefined,
+    removeTabFromDock: (id: string) => {
+      removeTabFromDockCalls.push(id);
+    },
+    simpleLayout: initialLayout,
+    testLayout: initialLayout,
+  } as unknown as PapiDockLayout;
+  return { dockLayout, loadedLayouts, removeTabFromDockCalls };
+}
+
 /** Wire up a web view provider and theme so `openWebView`'s dock-add path can run to completion */
 async function primeWebViewOpenPath() {
   const module = await import('@renderer/services/web-view.service-shard');
@@ -423,6 +459,7 @@ async function registeredShard() {
     openSettingsTab: (projectIdToLimitSettings?: string) => Promise<unknown>;
     openWebView: (webViewType: string) => Promise<string | undefined>;
     adoptWebView: (savedWebViewDefinition: unknown) => Promise<string | undefined>;
+    captureAndCloseWebView: (webViewId: string) => Promise<unknown>;
   };
 }
 
@@ -2788,5 +2825,62 @@ describe('a failed dock add rolls back what the open already did', () => {
         webView: expect.objectContaining({ webViewType: 'test.type' }),
       }),
     );
+  });
+});
+
+describe('captureAndCloseWebView', () => {
+  test('a load in flight is read only after it settles, so a web view it drops is never captured', async () => {
+    const TARGET_WEB_VIEW_ID = 'target-web-view';
+    // The window-scoped id `loadLayout` gives the tab once it lands (see
+    // `withWindowScopedWebViewIds`) — `globalThis.windowId` is `'2'` for every test in this file.
+    const SCOPED_TARGET_WEB_VIEW_ID = `${TARGET_WEB_VIEW_ID}-w2`;
+    let interfaceMode = 'simple';
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? interfaceMode : false,
+    );
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    mocks.settingsSubscribe.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    // Hold the power-mode load's saved-layout request open the way a slow main process would. The
+    // initial (simple-mode) load below never touches this — simple mode loads the static
+    // `simpleLayout` directly — so it lands with the target web view already in the dock before this
+    // hold ever matters.
+    const heldGet = holdGetLayout();
+
+    const module = await primeWebViewOpenPath();
+    const { dockLayout, removeTabFromDockCalls } = makeDockLayoutTrackingOneWebView(
+      layoutWithTab(TARGET_WEB_VIEW_ID),
+      SCOPED_TARGET_WEB_VIEW_ID,
+    );
+    module.registerDockLayout(dockLayout);
+    await vi.waitFor(() =>
+      expect(dockLayout.getWebViewDefinition(SCOPED_TARGET_WEB_VIEW_ID)).toBeDefined(),
+    );
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+
+    // The premise the rest of this test depends on: the dock genuinely holds the web view right
+    // before the second load starts, which is what makes that load register as one `loadLayout`
+    // tracks as in flight (see its `webViewsBeforeLoad.length > 0` check) rather than the wait this
+    // test exists to pin being a no-op.
+    expect(dockLayout.getAllWebViewDefinitions().length).toBeGreaterThan(0);
+
+    interfaceMode = 'power';
+    const switchToPower = interfaceModeCallback('power');
+    // The load is genuinely parked mid-flight, not merely started
+    await vi.waitFor(() => expect(heldGet.hasRequest()).toBe(true));
+
+    const shard = await registeredShard();
+    const capturePromise = shard.captureAndCloseWebView(SCOPED_TARGET_WEB_VIEW_ID);
+
+    // The load lands with a layout that no longer holds the target web view
+    heldGet.answerWith({ kind: 'entry', layout: layoutWithTab('other-tab') });
+    await switchToPower;
+
+    await expect(capturePromise).resolves.toBeUndefined();
+    expect(removeTabFromDockCalls).toEqual([]);
   });
 });

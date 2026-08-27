@@ -3603,9 +3603,6 @@ async function captureAndCloseWebView(
   // while the adopt opens it in the target — one id, two windows, which is what the
   // timed-out-adopt machinery exists to prevent. Waiting first means a load that dropped this web
   // view leaves nothing to capture and the move fails cleanly instead.
-  //
-  // Not unit-tested: driving a load in flight needs a load-in-flight harness the shard does not
-  // expose to tests. A test is owed once that harness exists.
   await waitForLayoutLoadToSettle();
   const dockLayout = await getDockLayout();
   const webViewDefinition = dockLayout.getWebViewDefinition(webViewId);
