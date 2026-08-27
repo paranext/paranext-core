@@ -48,15 +48,25 @@ let nextWindowId: number | undefined;
 function mintWindowId(): number {
   if (nextWindowId === undefined) {
     const stored = Number(localStorage.getItem(NEXT_WINDOW_ID_KEY));
-    // A missing, malformed or non-positive value restarts the sequence. That can repeat an id,
-    // which is the one thing the counter exists to prevent — but refusing to open a window is a
-    // worse answer to a corrupt integer than reusing one, and a reused id is survivable: nothing
-    // persisted is keyed by it.
-    nextWindowId = Number.isInteger(stored) && stored > 0 ? stored : 1;
+    // A missing, malformed, non-positive or unsafely large value restarts the sequence. That can
+    // repeat an id, which is the one thing the counter exists to prevent — but refusing to open a
+    // window is a worse answer to a corrupt integer than reusing one, and a reused id is
+    // survivable: nothing persisted is keyed by it. Safe rather than merely integral, because
+    // adding 1 to an integer at or beyond 2^53 gives the same number back — a counter there would
+    // hand every window of the session the same id, which the tracker's lookups take at face value.
+    nextWindowId = Number.isSafeInteger(stored) && stored > 0 ? stored : 1;
   }
   const windowId = nextWindowId;
   nextWindowId += 1;
-  localStorage.setItem(NEXT_WINDOW_ID_KEY, `${nextWindowId}`);
+  try {
+    localStorage.setItem(NEXT_WINDOW_ID_KEY, `${nextWindowId}`);
+  } catch (e) {
+    // Storage that cannot be written (full disk, locked directory) leaves the counter running in
+    // memory: ids stay unique for this session, and a later launch may repeat one, which the guard
+    // above already treats as survivable. Throwing would come out of `createWindow` instead, and a
+    // profile whose storage cannot be written would open no window at all.
+    logger.warn(`Could not persist the next window id: ${getErrorMessage(e)}`);
+  }
   return windowId;
 }
 
@@ -221,7 +231,7 @@ export const onDidChangeRoutingTarget = onDidChangeRoutingTargetEmitter.event;
  * Answers the tracked set at the moment it is called; it is not a live array.
  */
 export function getWindows(): BrowserWindow[] {
-  return trackedWindows.filter(({ window }) => !window.isDestroyed()).map(({ window }) => window);
+  return getTrackedWindows().map(({ window }) => window);
 }
 
 /**
@@ -586,14 +596,17 @@ export function addWindow(window: BrowserWindow): number {
 }
 
 /**
- * Every tracked window paired with its platform id, in creation order.
+ * Every tracked window paired with its platform id, in creation order, excluding any window
+ * Electron has already destroyed — see {@link getWindows} for why those must not be handed out.
  *
  * For callers that need to name the windows they are looking at. A `BrowserWindow` cannot answer
  * what the platform calls it, so anything reporting on windows has to come through here rather than
  * through {@link getWindows}.
  */
 export function getTrackedWindows(): { windowId: number; window: BrowserWindow }[] {
-  return trackedWindows.map(({ windowId, window }) => ({ windowId, window }));
+  return trackedWindows
+    .filter(({ window }) => !window.isDestroyed())
+    .map(({ windowId, window }) => ({ windowId, window }));
 }
 
 /**

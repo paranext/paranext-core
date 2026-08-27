@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 import localWindowStorage, {
+  getSlotIdsWithStoredState,
+  removeStateOfSlots,
   setWindowSlotId,
   testingLocalWindowStorage,
+  WEB_VIEW_STATE_KEY,
 } from '@renderer/services/local-storage.service';
 
 const KEY = 'some.storage.key';
@@ -94,6 +97,30 @@ describe('localWindowStorage', () => {
     expect(() => localWindowStorage.setItem(KEY, 'x')).toThrow(/does not know its slot/);
   });
 
+  describe('slots that no longer exist', () => {
+    test('are the ones this profile stores state for, minus the pre-slot scheme’s', () => {
+      localStorage.setItem(`slot-a_${WEB_VIEW_STATE_KEY}`, 'a');
+      localStorage.setItem(`slot-b_${WEB_VIEW_STATE_KEY}`, 'b');
+      // The old scheme's keys belong to the one-time sweep, which spares the legacy dock layout
+      // stored under the same kind of prefix — a prune must not reach either
+      localStorage.setItem(`3_${WEB_VIEW_STATE_KEY}`, 'old scheme');
+      localStorage.setItem('3_dock-saved-layout', 'still read by the layout load');
+      localStorage.setItem(WEB_VIEW_STATE_KEY, 'legacy unprefixed');
+
+      expect(getSlotIdsWithStoredState().sort()).toEqual(['slot-a', 'slot-b']);
+    });
+
+    test('have their state removed, and only theirs', () => {
+      localStorage.setItem(`slot-a_${WEB_VIEW_STATE_KEY}`, 'a');
+      localStorage.setItem(`slot-b_${WEB_VIEW_STATE_KEY}`, 'b');
+
+      removeStateOfSlots(['slot-a']);
+
+      expect(localStorage.getItem(`slot-a_${WEB_VIEW_STATE_KEY}`)).toBeNull();
+      expect(localStorage.getItem(`slot-b_${WEB_VIEW_STATE_KEY}`)).toBe('b');
+    });
+  });
+
   describe('state keyed by the old window-id scheme', () => {
     test('is removed on first use rather than left orphaned, and does not resurrect', () => {
       // Written by a build that keyed per-window state by window id. No restored window can ever
@@ -117,6 +144,23 @@ describe('localWindowStorage', () => {
       expect(localStorage.getItem('2024-notes')).toBe('not a window-id key');
       // The slot-keyed copy the read just made must not itself look like an old key
       expect(localStorage.getItem(`${SLOT_A}_${KEY}`)).toBe('legacy unprefixed, kept');
+    });
+
+    test('takes the older unprefixed blob with it rather than leaving it to be restored', () => {
+      // An upgraded profile holds both: the unprefixed blob from before multi-window, which the
+      // window-id scheme copied and deliberately left in place, and the window-id-keyed blob that
+      // scheme then kept up to date. Sweeping only the newer one would leave the legacy migration
+      // below to answer this window with state older than the state just dropped — a silent
+      // rollback to pre-multi-window state, where a reset is what this upgrade promises.
+      localStorage.setItem(`1_${WEB_VIEW_STATE_KEY}`, 'current, from the window-id build');
+      localStorage.setItem(WEB_VIEW_STATE_KEY, 'ancient, from before multi-window');
+
+      expect(localWindowStorage.getItem(WEB_VIEW_STATE_KEY)).toBeNull();
+
+      expect(localStorage.getItem(`1_${WEB_VIEW_STATE_KEY}`)).toBeNull();
+      expect(localStorage.getItem(WEB_VIEW_STATE_KEY)).toBeNull();
+      // Nor was the ancient blob copied to this window's slot on its way out
+      expect(localStorage.getItem(`${SLOT_A}_${WEB_VIEW_STATE_KEY}`)).toBeNull();
     });
 
     test('is swept once per process, not on every access', () => {

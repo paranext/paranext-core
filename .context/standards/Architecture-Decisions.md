@@ -2456,6 +2456,23 @@ step, no automation. Just a record.
   state resets once; layouts, bounds and open tabs live in the structure and are untouched, and so
   is every other digit-prefixed key — the pre-multi-window dock layout is still read from its
   window-id-prefixed key, and the renderer's `localStorage` is shared with every web view iframe.
-  Existing structures get a `slotId` minted per entry on first load.
+  The unprefixed blob that predates even the window-id scheme goes with them, because that scheme
+  copied it and left it in place: sweeping only the newer keys would let the legacy migration hand
+  a window state older than the state just dropped, turning a one-time reset into a silent
+  rollback. Existing structures get a `slotId` minted per entry on first load, and every mint —
+  on load, on the legacy startup window, on a window opened mid-session — writes the structure,
+  since an id that exists only in memory orphans whatever the renderer stored under it if the
+  session ends before anything else writes.
+
+  **State whose slot has left the structure is pruned, and the main process decides what has
+  left.** A slot id is never reissued, so a blob under a departed slot can never be read again;
+  under the window-id scheme the key set stayed bounded only because Electron reused ids and a
+  later window overwrote the blob. Each renderer therefore asks main once, at startup, which of
+  the slot ids it actually holds state for no longer have an entry (`windowLayout:filterDeadSlots`)
+  and drops those. Asked rather than worked out locally on two grounds: only main holds the
+  structure, and a renderer filtering against a snapshot could delete the state of a window created
+  while that snapshot was in flight, whereas an answer about ids the renderer already holds cannot
+  name a slot that did not exist when it asked. A process with no slots loaded answers "none", so a
+  caller can never be told that everything is dead.
 - **Source:** PT-4464; lead dev's review of PR #2670 (2026-08-25), item 11. Surface inventory
   measured against the top of the multi-window stack.
