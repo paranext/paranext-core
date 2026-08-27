@@ -233,25 +233,43 @@ export async function openScriptureEditor(projectId: string): Promise<void> {
 }
 
 /**
- * Empty the find search history for a project.
+ * Empty both of the find panel's persisted keys for a project: the search history and the last
+ * search term.
  *
- * The history is NOT panel state — the find WebView reads and writes it through the
- * `platformScripture.findHistory` data provider, which persists it in extension user data
- * (`dev-appdata/extensions/platformScripture/user-data/`). It therefore outlives the WebView, the
- * Electron process, and the whole test run, and it is capped at `MAX_FIND_HISTORY_ITEMS`, so what a
- * test sees depends both on the tests that ran before it and on how many entries earlier RUNS left
- * behind. Clearing it through the data provider is the only reset available: the panel exposes no
- * clear-history control, and every mounted find WebView is subscribed, so the panel re-renders with
- * the empty list.
+ * Neither is panel state — the find WebView reads and writes them through the
+ * `platformScripture.findHistory` data provider, which persists them in extension user data
+ * (`dev-appdata/extensions/platformScripture/user-data/`). They therefore outlive the WebView, the
+ * Electron process, and the whole test run, so what a test sees depends both on the tests that ran
+ * before it and on what earlier RUNS left behind. History is additionally capped at
+ * `MAX_FIND_HISTORY_ITEMS`, and the last search term is seeded straight back into an empty search
+ * box on mount (`find.web-view.tsx`), so a stale term reappears as a pre-filled query.
  *
- * `projectId` must be the project whose history the panel is showing (the find WebView keys history
- * by the scroll group's source project); history for a different project would be cleared without
+ * Clearing through the data provider is the only reset available: the panel exposes no
+ * clear-history control, and every mounted find WebView is subscribed, so the panel re-renders
+ * against the cleared values.
+ *
+ * `projectId` must be the project whose state the panel is showing (the find WebView keys both
+ * values by the scroll group's source project); another project's state would be cleared without
  * changing anything the panel displays.
  */
 export async function clearFindHistory(projectId: string | undefined): Promise<void> {
+  // The provider maps a falsy projectId to the project-less storage key, so an unset id would
+  // clear a different project's state and report success. The resulting failure surfaces much
+  // later as an unrelated timeout, so refuse it here where the cause is still visible.
+  if (!projectId)
+    throw new Error(
+      'clearFindHistory needs the id of the project the panel is showing; it was unset. The ' +
+        'suite assigns it in beforeAll, so check that beforeAll ran and found its project.',
+    );
   await sendPapiRequestOnce(
     'object:platformScripture.findHistory-data.setHistory',
     [projectId, []],
+    undefined,
+    15_000,
+  );
+  await sendPapiRequestOnce(
+    'object:platformScripture.findHistory-data.setLastSearchTerm',
+    [projectId, ''],
     undefined,
     15_000,
   );
