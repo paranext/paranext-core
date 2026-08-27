@@ -175,9 +175,16 @@ test.beforeAll(async ({ electronApp }) => {
   // `getMetadataForAllProjects` only retries internally during the process's first 30 s, and
   // `waitForAppReady` can eat that window on a slow machine — after which it returns an empty
   // array immediately rather than waiting. Poll here instead of trusting a single call.
+  //
+  // Poll for the seeded copy specifically, never merely for a non-empty list: projects register one
+  // at a time, and a non-scripture project (SDBG) is routinely visible before testWEB is, so a poll
+  // that stops at the first project returns a list the strict lookup below then rejects.
   let projects: Awaited<ReturnType<typeof getAvailableProjects>> = [];
+  // The seeded, editable WEB copy specifically. Replace WRITES to the project, so falling back to
+  // whatever project happened to be available could edit something this suite does not own.
+  let project: Awaited<ReturnType<typeof getAvailableProjects>>[number] | undefined;
   const pollDeadline = Date.now() + 90_000;
-  while (projects.length === 0 && Date.now() < pollDeadline) {
+  while (!project && Date.now() < pollDeadline) {
     try {
       // Sequential by design: each attempt must finish before deciding whether to retry.
       // eslint-disable-next-line no-await-in-loop
@@ -185,16 +192,14 @@ test.beforeAll(async ({ electronApp }) => {
     } catch {
       // Project lookup not ready yet — retry below.
     }
-    if (projects.length === 0) {
+    project = projects.find((candidate) => candidate.id === WEB_COPY_PROJECT_ID);
+    if (!project) {
       // Sequential by design: the pause between attempts paces the poll.
       // eslint-disable-next-line no-await-in-loop
       await page.waitForTimeout(5_000);
     }
   }
 
-  // The seeded, editable WEB copy specifically. Replace WRITES to the project, so falling back to
-  // whatever project happened to be available could edit something this suite does not own.
-  const project = projects.find((candidate) => candidate.id === WEB_COPY_PROJECT_ID);
   if (!project) {
     throw new Error(
       `The seeded testWEB copy (${WEB_COPY_PROJECT_ID}) was not available after 90 s. These tests ` +
