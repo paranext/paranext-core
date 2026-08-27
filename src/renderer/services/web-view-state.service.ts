@@ -9,10 +9,10 @@ const WEBVIEW_STATE_KEY = 'web-view-state';
  * The docking layout scopes web view ids to the window that loaded them, so the same web view is
  * addressed as `<id>` while it is being created and as `<id>-w<window>` once a layout carrying it
  * has been reloaded. Storage is already per window — `localWindowStorage` prefixes every key with
- * the window id — so this store drops the window scope from the ids it is handed and keys purely on
- * the minted id. Keying on the scoped id instead would file a web view's state under one key and
- * then look for it under another, both across a restart and whenever a window comes back with a
- * different id.
+ * the window's slot — so this store drops the window scope from the ids it is handed and keys
+ * purely on the minted id. Keying on the scoped id instead would file a web view's state under one
+ * key and then look for it under another, both across a restart and whenever a window comes back
+ * with a different id.
  */
 const stateMap = new Map<string, Record<string, unknown>>();
 const idsLookedUp = new Set<string>();
