@@ -25,6 +25,7 @@ const {
   getTabInfoByIdMock,
   getSavedWebViewDefinitionSyncMock,
   getAllOpenWebViewDefinitionsSyncMock,
+  readDirectionMock,
 } = vi.hoisted(() => {
   const callbacks: CloseWebViewCallback[] = [];
   const openCallbacks: WebViewLifecycleCallback[] = [];
@@ -47,6 +48,9 @@ const {
   const allOpenDefinitionsMock = vi.fn(
     (): { id: string; webViewType: string; projectId?: string }[] => [],
   );
+  // Layout direction is read from the document, which only a renderer has; LTR unless a test says
+  // otherwise
+  const directionMock = vi.fn((): 'ltr' | 'rtl' => 'ltr');
   return {
     closeWebViewCallbacks: callbacks,
     openWebViewCallbacks: openCallbacks,
@@ -54,6 +58,7 @@ const {
     getTabInfoByIdMock: tabInfoMock,
     getSavedWebViewDefinitionSyncMock: definitionMock,
     getAllOpenWebViewDefinitionsSyncMock: allOpenDefinitionsMock,
+    readDirectionMock: directionMock,
   };
 });
 
@@ -80,8 +85,25 @@ vi.mock('@renderer/services/web-view.service-shard', () => ({
   getAllOpenWebViewDefinitionsSync: getAllOpenWebViewDefinitionsSyncMock,
 }));
 
-vi.mock('@shared/services/data-provider.service', () => ({
-  dataProviderService: { registerEngine: vi.fn(async (_name, engine) => engine) },
+vi.mock('@shared/services/data-provider.service', async (importOriginal) => {
+  const { dataProviderService: realDataProviderService } =
+    await importOriginal<typeof import('@shared/services/data-provider.service')>();
+  return {
+    dataProviderService: {
+      registerEngine: vi.fn(async (_name, engine) => engine),
+      // The REAL decorator, not a stub. `getNavigationContext` carries it, and it is the only
+      // thing standing between this engine and a registration that fails for want of a
+      // `setNavigationContext`. Stubbing it out would hide a decorator dropped from the shard —
+      // the whole unit suite would stay green while every window failed to start.
+      decorators: { ignore: realDataProviderService.decorators.ignore },
+    },
+  };
+});
+
+// Only a renderer can read the layout direction, and there is no document here — so the one thing
+// this window reports about itself that the tests vary is stubbed
+vi.mock('platform-bible-react/experimental', () => ({
+  readDirection: readDirectionMock,
 }));
 
 // The module-load `platform.interfaceMode` subscription drives Simple-mode nav-target pinning. This
@@ -131,6 +153,7 @@ describe('last selected scripture-navigable web view tracking', () => {
   beforeEach(() => {
     getTabInfoByIdMock.mockReset();
     getTabInfoByIdMock.mockReturnValue(undefined);
+    readDirectionMock.mockReturnValue('ltr');
     getSavedWebViewDefinitionSyncMock.mockReset();
     getSavedWebViewDefinitionSyncMock.mockImplementation((id: string) => ({
       id,
@@ -286,6 +309,7 @@ describe('last focused tab tracking', () => {
   beforeEach(() => {
     getTabInfoByIdMock.mockReset();
     getTabInfoByIdMock.mockReturnValue(undefined);
+    readDirectionMock.mockReturnValue('ltr');
     getSavedWebViewDefinitionSyncMock.mockReset();
     getSavedWebViewDefinitionSyncMock.mockImplementation((id: string) => ({
       id,
@@ -350,6 +374,7 @@ describe('navigation target web view', () => {
   beforeEach(() => {
     getTabInfoByIdMock.mockReset();
     getTabInfoByIdMock.mockReturnValue(undefined);
+    readDirectionMock.mockReturnValue('ltr');
     getSavedWebViewDefinitionSyncMock.mockReset();
     getSavedWebViewDefinitionSyncMock.mockImplementation((id: string) => ({
       id,
@@ -438,5 +463,57 @@ describe('navigation target web view', () => {
     emitCloseWebView('editor-1');
 
     expect(getNavigationTargetWebView()).toBeUndefined();
+  });
+});
+
+describe('getNavigationContext', () => {
+  test('reports no target when this window has nothing to navigate', async () => {
+    // The history commands still act (on scroll group 0) with no target, so the context itself has
+    // to come back rather than being absent
+    const engine = createTestEngine();
+    // Nothing has been focused and no editor is open, so resolution has nothing to land on
+    expect(getNavigationTargetWebView()).toBeUndefined();
+
+    await expect(engine.getNavigationContext()).resolves.toEqual({
+      readDirection: 'ltr',
+      target: undefined,
+    });
+  });
+
+  test('reports the resolved target and this window’s layout direction in one answer', async () => {
+    const engine = createTestEngine();
+    await engine.setFocus({ focusType: 'webView', id: 'web-view-nav-1' });
+
+    await expect(engine.getNavigationContext()).resolves.toEqual({
+      readDirection: 'ltr',
+      target: {
+        webViewId: 'web-view-nav-1',
+        scrollGroupScrRef: 0,
+        projectId: 'project-1',
+      },
+    });
+  });
+
+  test('reports an RTL window as RTL, which is what decides the history direction', async () => {
+    // Only a renderer can read the layout direction, so the main process gets it from here
+    readDirectionMock.mockReturnValue('rtl');
+    const engine = createTestEngine();
+
+    await expect(engine.getNavigationContext()).resolves.toEqual(
+      expect.objectContaining({ readDirection: 'rtl' }),
+    );
+  });
+
+  test('is marked so registration does not read it as the getter for a data type', async () => {
+    // A `get___` method on an engine is otherwise classified as the getter for a
+    // `NavigationContext` data type, and registration fails for want of a `setNavigationContext` —
+    // taking this window's startup with it. The mark is what keeps it a plain method the network
+    // object exposes, and it is the single most easily-deleted line on the whole navigation path.
+    const engine = createTestEngine();
+
+    // Read off the method rather than declared on it: the mark is what the decorator leaves behind
+    const isIgnored: unknown = Reflect.get(engine.getNavigationContext, 'isIgnored');
+
+    expect(isIgnored).toBe(true);
   });
 });

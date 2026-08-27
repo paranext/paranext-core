@@ -26,7 +26,7 @@ import {
   PapiFrontendProjectDataProviderService,
 } from '@shared/services/project-data-provider.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
-import { scrollGroupService } from '@shared/services/scroll-group.service';
+import { rendererScrollGroupService } from '@renderer/services/scroll-group.service';
 import { IScrollGroupService } from '@shared/services/scroll-group.service-model';
 import { settingsService } from '@shared/services/settings.service';
 import { ISettingsService } from '@shared/services/settings.service-model';
@@ -34,7 +34,7 @@ import { windowService } from '@shared/services/window.service';
 import { IWindowService } from '@shared/services/window.service-model';
 import { overlayService } from '@renderer/services/overlays/overlay.service-host';
 import { IOverlayService } from '@renderer/services/overlays/overlay.service-model';
-import { localThemeService } from '@renderer/services/theme.service-host';
+import { localThemeService } from '@renderer/services/theme.service';
 import { IThemeServiceLocal } from '@shared/services/theme.service-model';
 import { webViewService } from '@shared/services/web-view.service';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
@@ -104,7 +104,11 @@ const papi = {
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
   /** JSDOC DESTINATION scrollGroupService */
-  scrollGroups: scrollGroupService as IScrollGroupService,
+  // This window's own scroll group service rather than the shared proxy to the host: everything in
+  // this window — these calls, the renderer's hooks, and every web view that borrows this object —
+  // has to get the same answer about where a scroll group is, including while a write this window
+  // predicted is still on its way to the host.
+  scrollGroups: rendererScrollGroupService as IScrollGroupService,
   /** JSDOC DESTINATION localizationDataService */
   localization: localizationService as ILocalizationService,
   /** JSDOC DESTINATION notificationService */

@@ -98,11 +98,11 @@ vi.mock('@shared/services/web-view-provider.service', () => ({
   webViewProviderService: { getWebViewProvider: getWebViewProviderMock },
 }));
 
-// theme.service-host.ts calls `window.matchMedia` at module load to seed its dark-mode default,
-// which jsdom does not implement. Stub the whole module — none of the functions under test read
-// the theme, except `trackSimpleEditorReplaceTab`'s coverage, which drives `openOrReloadWebView`
-// far enough to need a minimal-but-real-shaped theme object.
-vi.mock('@renderer/services/theme.service-host', () => ({
+// theme.service.ts calls `window.matchMedia` at module load to seed its dark-mode default, which
+// jsdom does not implement. Stub the whole module — none of the functions under test read the
+// theme, except `trackSimpleEditorReplaceTab`'s coverage, which drives `openOrReloadWebView` far
+// enough to need a minimal-but-real-shaped theme object.
+vi.mock('@renderer/services/theme.service', () => ({
   localThemeService: {
     getCurrentThemeSync: vi.fn(() => ({ id: 'test-theme', cssVariables: {} })),
   },
@@ -369,9 +369,16 @@ function layoutPushes() {
     .map(([, windowId, layout]) => [windowId, layout]);
 }
 
+// Starting the shard deletes `globalThis.open` so web views cannot make popups. That is a one-way
+// change to the real `window`, which these tests share across every re-import — and the module
+// aliases `window.open` while it is being evaluated, so the second import after a start would throw
+// on a `window` the first one had already stripped.
+const openWindow = globalThis.open;
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
+  globalThis.open = openWindow;
   localStorage.clear();
   globalThis.windowId = '2';
   respondToGetLayout({ kind: 'empty' });
@@ -2005,5 +2012,70 @@ describe('registerDockLayout unregister', () => {
         'Dock layout failed to unsubscribe from platform.interfaceMode: unsub failed',
       ),
     );
+  });
+});
+
+describe('setDetachedScrRef', () => {
+  /**
+   * Register the shard over a dock layout that accepts every update, and hand back both the
+   * published shard object and the updates the dock layout was asked to make.
+   */
+  async function shardOverLiveDockLayout() {
+    const updates: { webViewId: string; updateInfo: unknown }[] = [];
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { networkObjectService } = await import('@shared/services/network-object.service');
+    const dockLayout = {
+      onLayoutChangeRef: { current: undefined },
+      loadLayout: () => {},
+      getAllWebViewDefinitions: () => [],
+      updateWebViewDefinition: (webViewId: string, updateInfo: unknown) => {
+        updates.push({ webViewId, updateInfo });
+        return true;
+      },
+      getWebViewDefinition: () => undefined,
+      simpleLayout: layoutWithAnchor(),
+      testLayout: layoutWithAnchor(),
+    } as unknown as PapiDockLayout;
+    module.registerDockLayout(dockLayout);
+    await module.startWebViewServiceShard();
+    const [, shard] = vi.mocked(networkObjectService.set).mock.calls[0];
+    return {
+      shard: shard as unknown as {
+        setDetachedScrRef: (webViewId: string, scrRef: unknown) => Promise<boolean>;
+      },
+      updates,
+    };
+  }
+
+  const validScrRef = { book: 'MAT', chapterNum: 1, verseNum: 1 };
+
+  test('moves a detached web view to the reference it is given', async () => {
+    const { shard, updates } = await shardOverLiveDockLayout();
+
+    expect(await shard.setDetachedScrRef('some-web-view', validScrRef)).toBe(true);
+    expect(updates).toEqual([
+      { webViewId: 'some-web-view', updateInfo: { scrollGroupScrRef: validScrRef } },
+    ]);
+  });
+
+  test('refuses a scroll group id where an independent reference belongs', async () => {
+    // `scrollGroupScrRef` is a union, and a number in it means "follow this scroll group". This
+    // method moves a web view that carries its OWN reference, and its arguments arrive off the wire
+    // untyped — so without a check, a numeric one attaches a detached web view to a group instead,
+    // which is a change to the definition beyond anything this method is able to be asked for
+    const { shard, updates } = await shardOverLiveDockLayout();
+
+    expect(await shard.setDetachedScrRef('some-web-view', 0)).toBe(false);
+    expect(await shard.setDetachedScrRef('some-web-view', 3)).toBe(false);
+    expect(updates).toEqual([]);
+  });
+
+  test('refuses anything else that is not shaped like a Scripture reference', async () => {
+    const { shard, updates } = await shardOverLiveDockLayout();
+
+    expect(await shard.setDetachedScrRef('some-web-view', undefined)).toBe(false);
+    expect(await shard.setDetachedScrRef('some-web-view', { book: 'MAT' })).toBe(false);
+    expect(await shard.setDetachedScrRef('some-web-view', 'MAT 1:1')).toBe(false);
+    expect(updates).toEqual([]);
   });
 });

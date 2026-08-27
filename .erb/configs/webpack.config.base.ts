@@ -69,11 +69,23 @@ const configuration: webpack.Configuration = {
   /** Determine the array of extensions that should be used to resolve modules. */
   resolve: {
     extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
-    modules: [
-      webpackPaths.srcPath,
-      webpackPaths.rootNodeModulesPath,
-      webpackPaths.appNodeModulesPath,
-    ],
+    // The bare `'node_modules'` entry is webpack's node-style upward lookup: walk up from the
+    // IMPORTING file until a directory of that name is found. It is load-bearing here, not
+    // decoration. Listing only absolute directories replaces that lookup for the entire graph, so a
+    // package's own nested `node_modules` is never searched and every bare request resolves against
+    // the repo root — meaning a package that declares a version other than the hoisted one silently
+    // gets the hoisted one.
+    //
+    // Not hypothetical: `write-file-atomic@5` destructures a NAMED `onExit` from the `signal-exit@4`
+    // it declares and has installed under itself, while the `signal-exit@3` other packages hoist to
+    // the root exports a bare function. The destructure yielded `undefined` and every call through it
+    // threw "onExit is not a function". `write-file-atomic` is how `node-localstorage` writes, which
+    // backs the `localStorage` polyfill in main and the extension host, so every
+    // `localStorage.setItem` in a bundled Node process failed.
+    //
+    // `appNodeModulesPath` stays as a trailing fallback: `release/app` is where a native dependency
+    // would be installed for packaging, and nothing walks up into it from `src`.
+    modules: [webpackPaths.srcPath, 'node_modules', webpackPaths.appNodeModulesPath],
     // There is no need to add aliases here, the paths in tsconfig get mirrored
     plugins: [new TsconfigPathsPlugins()],
     fallback: {

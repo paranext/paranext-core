@@ -20,7 +20,7 @@ import {
   type SettingsTabData,
   TAB_TYPE_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
-import { localThemeService } from '@renderer/services/theme.service-host';
+import { localThemeService } from '@renderer/services/theme.service';
 import {
   deleteFullWebViewStateById,
   getFullWebViewStateById,
@@ -68,7 +68,6 @@ import {
   getServiceShardAttributes,
   WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
 } from '@shared/models/service-shard.model';
-import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
 import {
   createBufferedNetworkEventEmitter,
   getNetworkEvent,
@@ -86,6 +85,7 @@ import {
   getWebViewController,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   OpenWebViewEvent,
+  WebViewServiceType,
 } from '@shared/services/web-view.service-model';
 import { markStartupOnce } from '@shared/utils/startup-timing.util';
 import { newNonce } from '@shared/utils/util';
@@ -113,10 +113,8 @@ import withWindowScopedWebViewIds, {
   stripWindowScopeFromWebViewId,
   withWindowScopedWebViewIdInTab,
 } from '@renderer/components/docking/window-scoped-web-view-ids.util';
-import {
-  registerScopedCommands,
-  RendererHostedCommandHandlers,
-} from '@renderer/services/renderer-hosted-command-registry';
+import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   buildSimpleLayoutForProject,
   SIMPLE_LAYOUT_EDITOR_TAB_ID,
@@ -130,13 +128,6 @@ import {
   WindowLayoutGetResponse,
 } from '@shared/data/window-layout-persistence.model';
 import { reconcileSavedLayout } from '@shared/utils/saved-layout-reconciliation.util';
-import {
-  closeOpenUsersnapForm,
-  isUsersnapFormCurrentlyOpen,
-  openUsersnapForm,
-  USERSNAP_PROJECT_REPORT_ISSUE_API_KEY,
-  USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY,
-} from './usersnap.service';
 import {
   buildLegacyColorVarsLogMessage,
   transformLegacyColorVars,
@@ -3013,7 +3004,7 @@ export const initialize = () => {
 
 // #endregion Initialization
 
-const papiWebViewService: WebViewServiceShard = {
+const papiWebViewService: WebViewServiceType = {
   onDidAddWebView: onDidOpenWebView,
   onDidOpenWebView,
   onDidUpdateWebView,
@@ -3025,19 +3016,21 @@ const papiWebViewService: WebViewServiceShard = {
   getOpenWebViewDefinition,
   getAllOpenWebViewDefinitions,
   getWebViewController,
-  dockContainsTab,
 };
 
-async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined> {
+/**
+ * Open a Settings tab in this window. See {@link WebViewServiceShard.openSettingsTab} for why the
+ * project arrives as an argument rather than being looked up here.
+ */
+async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layout | undefined> {
   const settingsTabId = newGuid();
-  const projectIdFromWebView = (await getOpenWebViewDefinition(webViewId))?.projectId;
 
   return addTab<SettingsTabData>(
     {
       id: settingsTabId,
       tabType: TAB_TYPE_SETTINGS_TAB,
       data: {
-        projectIdToLimitSettings: projectIdFromWebView,
+        projectIdToLimitSettings,
       },
     },
     {
@@ -3047,6 +3040,66 @@ async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined
     },
   );
 }
+
+/** Whether a value that arrived over the wire is a Scripture reference and not a scroll group id */
+function isSerializedVerseRef(scrRef: unknown): boolean {
+  return (
+    typeof scrRef === 'object' &&
+    !!scrRef &&
+    'book' in scrRef &&
+    typeof scrRef.book === 'string' &&
+    'chapterNum' in scrRef &&
+    typeof scrRef.chapterNum === 'number' &&
+    'verseNum' in scrRef &&
+    typeof scrRef.verseNum === 'number'
+  );
+}
+
+/**
+ * Point a web view that carries its own independent reference at a new one. Only this window can:
+ * the definition lives in its dock layout.
+ *
+ * The argument is checked rather than trusted because this is a registered network object method:
+ * it is reachable from any process, and what it writes is typed `ScrollGroupId |
+ * SerializedVerseRef` — so a numeric argument would not set a reference at all, it would attach a
+ * detached web view to a scroll group. That is a change to the definition beyond anything this
+ * method exists to make.
+ *
+ * A failure is warned about and reported rather than thrown — a reference the user asked to move to
+ * that one tab could not take is not worth failing the whole navigation command over.
+ */
+async function setDetachedScrRef(
+  webViewId: WebViewId,
+  scrRef: SerializedVerseRef,
+): Promise<boolean> {
+  if (!isSerializedVerseRef(scrRef)) {
+    logger.warn(
+      `Refused to set the detached ref on ${webViewId}: expected a Scripture reference, got ${typeof scrRef}`,
+    );
+    return false;
+  }
+
+  try {
+    return updateWebViewDefinitionSync(webViewId, { scrollGroupScrRef: scrRef });
+  } catch (e) {
+    logger.warn(
+      `Navigation command could not update detached ref on ${webViewId}: ${getErrorMessage(e)}`,
+    );
+    return false;
+  }
+}
+
+/**
+ * What this window serves under its scoped WebView service name: everything public, plus what only
+ * this window can do to its own dock layout. Declared as the shard type so a member added there
+ * cannot silently become a name this window does not answer for.
+ */
+const webViewServiceShard: WebViewServiceShard = {
+  ...papiWebViewService,
+  dockContainsTab,
+  openSettingsTab,
+  setDetachedScrRef,
+};
 
 /** Register the network object that backs the PAPI webview service */
 // To use this service, you should use `web-view.service.ts`
@@ -3060,7 +3113,7 @@ export async function startWebViewServiceShard(): Promise<void> {
   // router finds this shard; the name it is registered under is nobody else's business.
   await networkObjectService.set<WebViewServiceShard>(
     `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`,
-    papiWebViewService,
+    webViewServiceShard,
     WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
     getServiceShardAttributes(globalThis.windowId),
     // Experimental at the object level, which fans out over every method: this is a window-scoped
@@ -3068,24 +3121,4 @@ export async function startWebViewServiceShard(): Promise<void> {
     // between what a shard answers and what its router answers are still moving.
     { 'x-experimental': true },
   );
-
-  // Register commands under window-scoped names (e.g. "platform.openSettings-1") so multiple
-  // renderers can coexist. The main process registers routers under the generic names. Typing this
-  // against RendererHostedCommandHandlers makes an unrecognized or misspelled key a compile error;
-  // registerScopedCommands records each name so a command that is on RENDERER_HOSTED_COMMAND_NAMES
-  // but never registered anywhere is caught too, at startup (see
-  // assertAllRendererHostedCommandsRegistered).
-  const commandHandlers: RendererHostedCommandHandlers = {
-    'platform.openSettings': openSettingsTab,
-    'platform.openProjectSettings': openSettingsTab,
-    'platform.openUserSettings': openSettingsTab,
-    'platform.usersnapSubmitIdea': () => openUsersnapForm(USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY),
-    'platform.usersnapReportIssue': () => openUsersnapForm(USERSNAP_PROJECT_REPORT_ISSUE_API_KEY),
-    'platform.isUsersnapFormCurrentlyOpen': () => isUsersnapFormCurrentlyOpen(),
-    'platform.closeOpenUsersnapForm': () => closeOpenUsersnapForm(),
-  };
-  // Awaited the way the other callers await theirs: the startup coverage check reads what these
-  // registrations record, and leaving them in flight would both let that check run before they had
-  // landed and turn a rejected registration into an unhandled rejection.
-  await Promise.all(registerScopedCommands(commandHandlers));
 }

@@ -98,7 +98,7 @@ vi.mock('@renderer/services/papi-frontend.service', () => ({
   },
 }));
 
-vi.mock('@renderer/services/theme.service-host', () => ({
+vi.mock('@renderer/services/theme.service', () => ({
   localThemeService: {
     getCurrentThemeSync: vi.fn(() => ({
       type: 'light',
@@ -110,7 +110,7 @@ vi.mock('@renderer/services/theme.service-host', () => ({
   },
 }));
 
-vi.mock('@renderer/services/scroll-group.service-host', () => ({
+vi.mock('@renderer/services/scroll-group.service', () => ({
   availableScrollGroupIds: [1, 2, 3, 4, 5],
   getReferenceHistorySync: vi.fn(() => ({ current: undefined, back: [], forward: [] })),
   navigateReferenceHistorySync: vi.fn(() => false),
