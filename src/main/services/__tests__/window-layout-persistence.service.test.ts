@@ -282,6 +282,48 @@ describe('window layout persistence service', () => {
     expect(service.isPrimaryWindow(13)).toBe(false);
   });
 
+  test('a window created with no others open holds the primary role', async () => {
+    const service = await startService();
+
+    service.trackNewWindow(11);
+
+    expect(service.isPrimaryWindow(11)).toBe(true);
+  });
+
+  test('a window created alongside a living window leaves the role where it is', async () => {
+    const service = await startService();
+    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
+
+    service.trackNewWindow(12);
+
+    expect(service.isPrimaryWindow(11)).toBe(true);
+    expect(service.isPrimaryWindow(12)).toBe(false);
+  });
+
+  test('a window created once every restored window has gone answers for the app, and the marked entry keeps its flag', async () => {
+    // Both halves matter and they pull in opposite directions. Some live window must answer for the
+    // app's lifetime, or nothing asks before closing and an emptied window closes itself. But the
+    // flag names the entry simple mode restores and the only entry allowed the legacy layout
+    // fallback, so handing it to a window created into this gap would lose the user that layout on
+    // the next launch.
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      11,
+    );
+    service.handleWindowRemoved(11, 'entry-stays');
+    service.handleWindowRemoved(12, 'entry-stays');
+
+    service.trackNewWindow(13);
+
+    expect(service.isPrimaryWindow(13)).toBe(true);
+    await service.writeNow();
+    const written = writtenStructure().windows;
+    expect(written.filter((entry) => entry.isMain)).toHaveLength(1);
+    expect(firstTabIdOf(written.find((entry) => entry.isMain)?.layout)).toBe('one');
+  });
+
   test('a main entry that leaves the structure takes isMain with it; the next load picks the first', async () => {
     // Main-ness is a property of the ENTRY, so an entry that leaves takes the flag with it rather
     // than handing it to a neighbour at write time. A structure left carrying no flag at all is the
