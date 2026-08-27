@@ -1043,6 +1043,12 @@ async function main() {
     // the window until the sync completes.
     let isCloseInProgress = false;
     /**
+     * Whether this window is showing the close-all question. Distinct from a close in progress: no
+     * shutdown work has started, nothing is latched, and a cancel leaves the window exactly as it
+     * was — so a further close arriving now must be ignored, not treated as an escape.
+     */
+    let isAskingAboutClose = false;
+    /**
      * Whether this window's close is the app going down, decided on the first pass through the
      * close handler below.
      *
@@ -1069,7 +1075,12 @@ async function main() {
       // Below the `isCloseInProgress` guard, though: the second close click has to reach Electron's
       // default close, which is the user's only escape from the wait this handler is about to start.
       event.preventDefault();
-      isCloseInProgress = true;
+
+      // While the question below is open, a further `close` on this window — a Cmd+Q, an OS
+      // logout, a second ✕ where the dialog is not truly modal — must not reach the escape hatch
+      // above, which exists for a close stuck in the bounded sync wait and would take this window
+      // down with none of its shutdown work. Ignored instead; the open question still stands.
+      if (isAskingAboutClose) return;
 
       // Closing the primary window while others are open takes every window with it, so the user
       // is asked first. Decided before anything is marked closing: a cancelled close is not a close
@@ -1079,13 +1090,19 @@ async function main() {
       // Secondary windows and a primary on its own skip the question and close as they always did.
       // TODO(PT-4286): a live switch to Simple mode must also close the secondary windows; that
       // half waits on #2425.
-      const decision = await decideWindowClose(windowId, () => confirmCloseAllWindows(newWindow));
-      if (decision === 'stay-open') {
-        // The guard is released so the next close click asks again rather than falling through to
-        // Electron's default close with none of the shutdown work below
-        isCloseInProgress = false;
-        return;
+      isAskingAboutClose = true;
+      let decision;
+      try {
+        decision = await decideWindowClose(windowId, () => confirmCloseAllWindows(newWindow));
+      } finally {
+        isAskingAboutClose = false;
       }
+      // A cancelled close is not a close: nothing was latched, so the next close click asks again
+      if (decision === 'stay-open') return;
+
+      // Only now is this a close in progress, and only now may a second click reach the escape
+      // hatch: the wait it escapes from starts below, not during the question.
+      isCloseInProgress = true;
       if (decision === 'quit-all') {
         // Told to close now, ahead of this window's own shutdown work, so all of them go down
         // together rather than after this one has finished. Each runs its own handler and finds

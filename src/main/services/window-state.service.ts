@@ -222,6 +222,16 @@ export function getWindows(): BrowserWindow[] {
  * Destroyed windows are left out for the same reason {@link getWindows} filters them — a window
  * stays tracked until its `closed` handler runs.
  */
+export function countWindowsThatCouldBeTheLastOne(): number {
+  return trackedWindows.filter(
+    ({ windowId, window }) =>
+      !window.isDestroyed() &&
+      !closingWindowIds.has(windowId) &&
+      !isWindowPendingContent(windowId) &&
+      !abandonedWindowIds.has(windowId),
+  ).length;
+}
+
 /**
  * Record which window holds the primary role. Called once, when that window is created.
  *
@@ -244,16 +254,6 @@ export function getPrimaryWindowId(): number | undefined {
  */
 export function isPrimaryWindow(windowId: number): boolean {
   return primaryWindowId !== undefined && primaryWindowId === windowId;
-}
-
-export function countWindowsThatCouldBeTheLastOne(): number {
-  return trackedWindows.filter(
-    ({ windowId, window }) =>
-      !window.isDestroyed() &&
-      !closingWindowIds.has(windowId) &&
-      !isWindowPendingContent(windowId) &&
-      !abandonedWindowIds.has(windowId),
-  ).length;
 }
 
 /** Whether a window's renderer has registered its window service, so routing to it can succeed */
