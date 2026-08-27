@@ -62,10 +62,12 @@ Then per branch, for **every branch in every stack the round touches — from th
 above `main` to the top**, whether or not it has feedback. A fix routinely lands below the PR that
 was commented on, and every branch we own above a changed one gets restacked and pushed, so each
 needs a row. Walk down from a PR's `baseRefName` with
-`gh pr list --head <baseRefName> --state open` until `main`, and up from its `headRefName` with
-`gh pr list --base <headRefName> --state open` until nothing answers. Only open PRs get rows: a
-base whose PR is merged or closed is a base with no PR, and a branch above ours with a closed PR
-is not part of the stack:
+`gh pr list --head <baseRefName> --state all` until `main`, and up from its `headRefName` with
+`gh pr list --base <headRefName> --state all` until nothing answers — every PR, open or not,
+because a merged or closed one is where its branch's `baseRefName` and `author` still live. Only
+**open** PRs join the stack that step 5 restacks and step 10 pushes. A merged or closed PR below
+ours ends the stack there and is decision item one at step 4: our branch's real base is now
+whatever that PR merged into. A closed PR above ours is simply not in the stack:
 
 ```bash
 gh pr view <pr> --json \
@@ -80,9 +82,10 @@ versus `gh api user --jq .login`). `pin` starts equal to `headRefOid` and is the
 steps 5 and 10 change; `headRefOid` itself is never overwritten, because step 5 may need the tip
 this
 round started from. Take both from the API, not from `git rev-parse origin/<branch>`, which
-reports only what was last fetched. A base branch with no PR gets a row from
-`git rev-parse origin/<branch>` — fresh, after the fetch above — empty PR fields, and is treated
-as ours; step 5 re-checks it the same way. `main` itself has no row: it is never rewritten, so
+reports only what was last fetched. A base branch with no PR at all gets a row from
+`git rev-parse origin/<branch>` — fresh, after the fetch above — with empty PR fields, and is ours
+only if `git log -1 --format=%ae <branch>` says so; step 5 re-checks it the same way. `main` itself
+has no row: it is never rewritten, so
 plain `merge-base` is always right against it.
 
 **Stop — about this checkout, which is ours whoever owns the PR:**
