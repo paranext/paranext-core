@@ -87,7 +87,7 @@ declare global {
    *
    * @experimental
    */
-  var windowId: number | undefined;
+  var windowId: string | undefined;
 }
 /* eslint-enable */
 

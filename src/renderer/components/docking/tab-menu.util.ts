@@ -1,5 +1,9 @@
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 import type { WindowSummary } from '@shared/services/window.service-model';
+import { WINDOW_ID_SHAPE_PATTERN_SOURCE } from '@shared/utils/util';
+
+/** A window id as this app mints them — what a generated move target's suffix must look like */
+const WINDOW_ID_PATTERN = new RegExp(`^${WINDOW_ID_SHAPE_PATTERN_SOURCE}$`, 'i');
 
 /** Contributed id of the submenu whose targets are only known when the menu opens */
 const MOVE_TO_WINDOW_ITEM_ID = 'platform.moveTabToWindow';
@@ -35,13 +39,14 @@ export type TabMenuContext = {
 };
 
 /** Reads the target window id back out of a generated submenu entry, if that is what was selected */
-export function getMoveTargetWindowId(itemId: string): number | undefined {
+export function getMoveTargetWindowId(itemId: string): string | undefined {
   if (!itemId.startsWith(MOVE_TO_WINDOW_TARGET_ID_PREFIX)) return undefined;
-  const suffix = itemId.slice(MOVE_TO_WINDOW_TARGET_ID_PREFIX.length);
-  // Digits only, checked before converting: `Number` reads '' as 0, and accepts whitespace, hex and
-  // exponent forms, so a suffix that is not a window id at all would otherwise name window 0
-  if (!/^\d+$/.test(suffix)) return undefined;
-  return Number(suffix);
+  const windowId = itemId.slice(MOVE_TO_WINDOW_TARGET_ID_PREFIX.length);
+  // Checked rather than trusted: everything under this prefix is generated from a live window's own
+  // id, so a suffix that is not shaped like one did not come from that generation and names no
+  // window. Rejecting it here keeps a malformed contributed id from reaching the move as a target.
+  if (!WINDOW_ID_PATTERN.test(windowId)) return undefined;
+  return windowId;
 }
 
 /** Whether a contributed item is one this tab cannot currently act on */

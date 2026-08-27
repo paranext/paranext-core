@@ -40,19 +40,18 @@ export const WINDOW_SERVICE_SHARD_OBJECT_TYPE = 'windowServiceShard';
 /** Attributes every service shard registers, so a router can tell which window it belongs to */
 export type ServiceShardAttributes = {
   /** Platform id of the window this shard implements the service for */
-  windowId: number;
+  windowId: string;
 };
 
 /**
  * The attributes a window's shard registers with.
  *
  * @param windowId Platform id of the registering window
- * @throws If `windowId` is not an integer, since a shard nothing can be routed to is worse than a
- *   window that fails to finish starting
+ * @throws If `windowId` is not a non-empty string, since a shard nothing can be routed to is worse
+ *   than a window that fails to finish starting
  */
-export function getServiceShardAttributes(windowId: number): ServiceShardAttributes {
-  if (!Number.isInteger(windowId))
-    throw new Error(`Cannot register a service shard for window id "${windowId}"`);
+export function getServiceShardAttributes(windowId: string): ServiceShardAttributes {
+  if (!windowId) throw new Error(`Cannot register a service shard for window id "${windowId}"`);
   return { windowId };
 }
 
@@ -66,7 +65,7 @@ export function getServiceShardAttributes(windowId: number): ServiceShardAttribu
  */
 export function getServiceShardWindowId(
   networkObjectDetails: NetworkObjectDetails,
-): number | undefined {
+): string | undefined {
   const { windowId } = networkObjectDetails.attributes ?? {};
-  return typeof windowId === 'number' ? windowId : undefined;
+  return typeof windowId === 'string' ? windowId : undefined;
 }
