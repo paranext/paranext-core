@@ -2127,7 +2127,7 @@ step, no automation. Just a record.
 - **Source:** PT-4275 (multi-window epic), multi-window architecture plan §7 and §9.1; branch
   `pt-4275-commands-to-main`.
 
-## ADR-0033: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
+## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
 - **Date:** 2026-08-11
 - **Status:** Accepted
