@@ -9758,9 +9758,9 @@ declare module 'renderer/services/overlays/overlay-store' {
    * @param patch `filterText` replaces the stored filter text (omit to leave it unchanged; the empty
    *   string is normalized to undefined so the entry never stores `''`); `selectedIndex` sets the
    *   highlighted index ABSOLUTELY (the active palette mirrors cmdk's arrow-key highlight this way —
-   *   it knows the resulting index, not a delta) and wins over `selectedIndexDelta`, which moves the
-   *   current index by this many items; both clamp; `itemCount` is the length of the filtered item
-   *   list used to clamp `selectedIndex`
+   *   it knows the resulting index, not a delta); `selectedIndexDelta` moves the current index by
+   *   this many items; both clamp; `itemCount` is the length of the filtered item list used to clamp
+   *   `selectedIndex`
    * @returns True if the overlay was found and updated, false otherwise
    */
   export function updateCommandPaletteState(
@@ -12246,10 +12246,12 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
   /**
    * Filters command palette items by matching `filterText` against each item's text, with
    * per-{@link PaletteFilterMode} semantics and the request's `searchFields` deciding which fields
-   * participate:
+   * participate. Every leg — including the label leg — runs only when the effective search fields
+   * include its field, so a request declaring e.g. `searchFields: ['description']` gets no label
+   * matches.
    *
-   * - `'passive'` prefix-matches the `label` only (with a leading `+` stripped from the filter first),
-   *   whatever `searchFields` says — PT9 marker-dropdown semantics for in-document marker typing.
+   * - `'passive'` prefix-matches the `label` and never searches the other fields — PT9 marker-dropdown
+   *   semantics for in-document marker typing.
    * - `'active'` containment-matches over `searchFields` (default
    *   {@link DEFAULT_PALETTE_SEARCH_FIELDS}): label matches come FIRST, ranked exact-first (exact
    *   label match, then prefix matches, then containment matches, ties keeping their original context
@@ -12257,7 +12259,10 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
    *   exact label match can never be buried under description/badge hits.
    *
    * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input should
-   * never be case-picky). Returns `items` unchanged when `filterText` is empty or undefined.
+   * never be case-picky), and every leg strips the `+` marker-nesting prefix from the filter before
+   * comparing (the label leg strips it from labels too — see `stripMarkerNestingPrefix`), so the legs
+   * all match the same typed text. Returns `items` unchanged when `filterText` is empty or
+   * undefined.
    *
    * Label matching delegates to `filterAndRankPaletteItems` (platform-bible-react), which wraps the
    * editor package's own `filterAndRankItems` — the exact ranking behind the in-editor `\` palette —

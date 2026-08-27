@@ -653,9 +653,7 @@ describe('overlay.service-host', () => {
       );
       const palettes = getOverlays().filter((o) => o.type === 'commandPalette');
       expect(palettes).toHaveLength(1);
-      // Type narrowed by the filter above
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const palette = palettes[0] as Extract<(typeof palettes)[0], { type: 'commandPalette' }>;
+      const palette = palettes[0];
       expect(palette.items).toBe(request2.items);
 
       palette.resolve(undefined);
@@ -1195,8 +1193,11 @@ describe('overlay.service-host', () => {
       // The two requests are >50ms apart in production; collapse the cooldown for the test
       resetDebounceState();
       const promiseB = overlayService.showCommandPalette(requestB, 'test-webview');
-      const promiseARejects = expect(promiseA).rejects.toSatisfy(
-        (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+      // Handled promptly, so the ABORTED rejection is never momentarily unhandled when B's sweep
+      // rejects A mid-flush; the outcome is asserted once it lands
+      const promiseAOutcome = promiseA.then(
+        () => 'resolved unexpectedly',
+        (error: unknown) => error,
       );
       await flushMicrotasks();
       expect(pendingItemLookups).toHaveLength(2);
@@ -1209,7 +1210,8 @@ describe('overlay.service-host', () => {
       // B's localization resolves: its post-await sweep replaces A's palette
       pendingItemLookups[1]();
       await flushMicrotasks();
-      await promiseARejects;
+      const abortError = await promiseAOutcome;
+      expect(isPlatformError(abortError) && abortError.code === ABORTED).toBe(true);
       const palettes = getOverlays().filter((o) => o.type === 'commandPalette');
       expect(palettes).toHaveLength(1);
 

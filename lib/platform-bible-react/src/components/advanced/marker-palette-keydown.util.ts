@@ -31,19 +31,19 @@
  *   ordinary character and no palette reopens. Because they commit, neither `*` nor `\` is a filter
  *   character — a close-tag entry can no longer be narrowed to by typing its trailing `*`, since
  *   pressing `*` commits the end state that entry would have applied.
- * - `'enter'` — FOCUSED Enter-split menu (collapsed caret). Barely driven by this table: the menu
- *   is always focused with no key forwarding (the overlay's own input owns every key), so the only
+ * - `'enter'` — FOCUSED Enter-split menu (collapsed caret). Barely driven by this table: the menu is
+ *   always focused with no key forwarding (the overlay's own input owns every key), so the only
  *   keys that reach the table are the ones typed during the sub-frame race before the overlay wins
  *   focus. Enter (commit) and Escape (dismiss) are claimed there, because letting them through
  *   reaches the document; every other key passes through untouched (see `ForwardedSessionKind`).
  * - `'selection'` — FOCUSED selection-wrap palette: EVERY non-chord key is claimed — nothing may land
  *   while it is open, because typing would replace the wrapped selection. Space commits the item
  *   the typed filter names EXACTLY, ignoring case and the `+` nesting prefix
- *   ({@link MarkerPaletteSessionDriver.commitItem} — the wrap), or
- *   refuses visibly when the typed marker is not offered (claimed dismiss, selection intact). `*`
- *   commits here too, deleting the selection and landing the typed closer in its place (Paratext 9
- *   parity) — a different gesture from Space's wrap. `\` is NOT a commit key here: the wrap
- *   consumes the selection, leaving nothing for a second marker to attach to.
+ *   ({@link MarkerPaletteSessionDriver.commitItem} — the wrap), or refuses visibly when the typed
+ *   marker is not offered (claimed dismiss, selection intact). `*` commits here too, deleting the
+ *   selection and landing the typed closer in its place (Paratext 9 parity) — a different gesture
+ *   from Space's wrap. `\` is NOT a commit key here: the wrap consumes the selection, leaving
+ *   nothing for a second marker to attach to.
  *
  * A session that opens a HOST-rendered palette also declares the keys it claims
  * ({@link getMarkerPaletteClaimedKeys}) so the palette forwards exactly those back instead of
@@ -52,11 +52,11 @@
  *
  * Modifier-only keydowns (the Shift half of a `+` chord) pass through untouched, and matching
  * strips the `+` nesting prefix from BOTH the filter and item labels (`stripMarkerNestingPrefix`),
- * so chords like `\+w` filter to the same items as `\w` — including nested close-tag entries,
- * whose labels carry the prefix (`+wj*`). Real chords (Ctrl/Cmd/Alt + key) are never ingested into
- * the filter — the session is dismissed and the chord does its normal job (e.g. Ctrl+C copies the
- * wrapped selection instead of being swallowed while a wrap palette is open). The one chord that
- * IS claimed is chord+Enter: cmdk acts on an un-prevented Enter regardless of modifiers, so on a
+ * so chords like `\+w` filter to the same items as `\w` — including nested close-tag entries, whose
+ * labels carry the prefix (`+wj*`). Real chords (Ctrl/Cmd/Alt + key) are never ingested into the
+ * filter — the session is dismissed and the chord does its normal job (e.g. Ctrl+C copies the
+ * wrapped selection instead of being swallowed while a wrap palette is open). The one chord that IS
+ * claimed is chord+Enter: cmdk acts on an un-prevented Enter regardless of modifiers, so on a
  * focused palette an unclaimed Ctrl+Enter would click the highlighted item while the dismissal is
  * in flight.
  */
@@ -125,8 +125,8 @@ export interface MarkerPaletteSessionState {
    * footnote exactly like `\f` + Enter.
    *
    * Implementations must compare the filter with the shared marker normalization (case-fold, `+`
-   * nesting prefix stripped — `stripMarkerNestingPrefix`), the same way the visible list matches:
-   * a raw compare lets `\F` + Space slip past the exception and materialize the very literal the
+   * nesting prefix stripped — `stripMarkerNestingPrefix`), the same way the visible list matches: a
+   * raw compare lets `\F` + Space slip past the exception and materialize the very literal the
    * exception exists to avoid.
    */
   shouldSpaceCommit?: (filter: string) => boolean;

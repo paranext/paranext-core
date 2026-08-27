@@ -797,7 +797,7 @@ async function showCommandPalette(
   // with the on-screen list. Skipped entirely (no await) when every item field is a plain string,
   // preserving synchronous overlay creation for those callers.
   const itemLocalizeKeys = collectPaletteItemLocalizeKeys(request.items);
-  let items = request.items;
+  let { items } = request;
   if (itemLocalizeKeys.length > 0) {
     items = await localizePaletteItems(request.items, itemLocalizeKeys);
     // The await reopened the window the pre-await sweep closed: another request could have added a

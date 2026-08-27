@@ -5,7 +5,11 @@
  * consumer of the contract's types.
  */
 
-import { filterAndRankPaletteItems, type PaletteFilterMode } from 'platform-bible-react';
+import {
+  filterAndRankPaletteItems,
+  stripMarkerNestingPrefix,
+  type PaletteFilterMode,
+} from 'platform-bible-react';
 import type {
   CommandPaletteItem,
   PaletteSearchField,
@@ -26,10 +30,12 @@ export const DEFAULT_PALETTE_SEARCH_FIELDS: readonly PaletteSearchField[] = [
 /**
  * Filters command palette items by matching `filterText` against each item's text, with
  * per-{@link PaletteFilterMode} semantics and the request's `searchFields` deciding which fields
- * participate:
+ * participate. Every leg — including the label leg — runs only when the effective search fields
+ * include its field, so a request declaring e.g. `searchFields: ['description']` gets no label
+ * matches.
  *
- * - `'passive'` prefix-matches the `label` only (with a leading `+` stripped from the filter first),
- *   whatever `searchFields` says — PT9 marker-dropdown semantics for in-document marker typing.
+ * - `'passive'` prefix-matches the `label` and never searches the other fields — PT9 marker-dropdown
+ *   semantics for in-document marker typing.
  * - `'active'` containment-matches over `searchFields` (default
  *   {@link DEFAULT_PALETTE_SEARCH_FIELDS}): label matches come FIRST, ranked exact-first (exact
  *   label match, then prefix matches, then containment matches, ties keeping their original context
@@ -37,7 +43,10 @@ export const DEFAULT_PALETTE_SEARCH_FIELDS: readonly PaletteSearchField[] = [
  *   exact label match can never be buried under description/badge hits.
  *
  * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input should
- * never be case-picky). Returns `items` unchanged when `filterText` is empty or undefined.
+ * never be case-picky), and every leg strips the `+` marker-nesting prefix from the filter before
+ * comparing (the label leg strips it from labels too — see `stripMarkerNestingPrefix`), so the legs
+ * all match the same typed text. Returns `items` unchanged when `filterText` is empty or
+ * undefined.
  *
  * Label matching delegates to `filterAndRankPaletteItems` (platform-bible-react), which wraps the
  * editor package's own `filterAndRankItems` — the exact ranking behind the in-editor `\` palette —
@@ -69,16 +78,20 @@ export function filterPaletteItems(
   mode: PaletteFilterMode,
   searchFields: readonly PaletteSearchField[] = DEFAULT_PALETTE_SEARCH_FIELDS,
 ): CommandPaletteItem[] {
-  const labelMatches = filterAndRankPaletteItems(items, filterText, mode);
-  if (!filterText || mode === 'passive') return labelMatches;
+  if (!filterText) return [...items];
+
+  const labelMatches = searchFields.includes('label')
+    ? filterAndRankPaletteItems(items, filterText, mode)
+    : [];
+  if (mode === 'passive') return labelMatches;
 
   const extraFields = searchFields.filter((field) => field !== 'label');
   if (extraFields.length === 0) return labelMatches;
 
-  // Historical containment semantics for the non-label fields: raw filter text, case-insensitive.
-  // (The label leg strips the `+` marker-nesting prefix; that prefix is a marker-typing concern
-  // and marker palettes are label-only, so it does not apply here.)
-  const normalizedFilter = filterText.toLowerCase();
+  // Containment over the non-label fields, with the same query normalization as the label leg
+  // (`+` nesting prefix stripped, case-folded) so the two legs match the same typed text. The
+  // field text itself is not marker-decorated, so it has nothing to strip.
+  const normalizedFilter = stripMarkerNestingPrefix(filterText).toLowerCase();
   const labelMatchSet = new Set(labelMatches);
   const extraMatches = items.filter(
     (item) =>

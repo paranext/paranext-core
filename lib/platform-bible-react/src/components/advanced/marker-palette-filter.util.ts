@@ -37,9 +37,9 @@ type RankableItem = Item & { label: string };
  * Strips the USFM nesting prefix (`+`) from marker text before matching: `\+nd` names the same
  * marker as `\nd` (PT9's dropdown strips it too). Applied to BOTH sides of every comparison — the
  * typed filter AND the item's marker text — because nested close-tag items DO carry the prefix in
- * their labels (the editor package emits `+wj*` for every open char span except the outermost).
- * THE one strip for every matching site — both modes below, the keydown table's commit-key
- * lookups, and the legacy inline `MarkerMenu` — so the rule cannot drift between them.
+ * their labels (the editor package emits `+wj*` for every open char span except the outermost). THE
+ * one strip for every matching site — both modes below, the keydown table's commit-key lookups, and
+ * the legacy inline `MarkerMenu` — so the rule cannot drift between them.
  *
  * Matching only: commits preserve an item's own bytes (a nested closer keeps its leading `+`), and
  * `commitTyped` passes the typed text verbatim.

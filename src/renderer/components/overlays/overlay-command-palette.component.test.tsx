@@ -12,6 +12,7 @@ import {
   addOverlay,
   clearAllOverlays,
   getOverlayById,
+  updateCommandPaletteState,
 } from '../../services/overlays/overlay-store';
 import {
   OverlayCommandPalette,
@@ -24,6 +25,17 @@ import { CommandPaletteItem, OverlayEntry } from '../../services/overlays/overla
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [{}, false]),
 }));
+
+// Real store behavior throughout, with updateCommandPaletteState additionally observable as a spy:
+// the filter-reset test must assert WHICH write carried the highlight reset, because cmdk's own
+// auto-highlight also lands the store on index 0 in this harness and would mask a missing reset.
+vi.mock('../../services/overlays/overlay-store', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/overlays/overlay-store')>();
+  return {
+    ...actual,
+    updateCommandPaletteState: vi.fn(actual.updateCommandPaletteState),
+  };
+});
 
 beforeAll(() => {
   // Radix Popover uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
@@ -1018,6 +1030,33 @@ describe('OverlayCommandPalette (store-connected)', () => {
     expect(stored.selectedIndex).toBe(0);
   });
 
+  it('resets the stored highlight to the top match when typing changes the filter', () => {
+    // A new filter produces a newly ranked list, so the old index means nothing in it — without
+    // the reset, the store kept the stale (merely clamped) index and a forwarded Enter committed
+    // whatever item now sat at that position.
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'ArrowDown' });
+    expect(getStoredPalette('palette-1').selectedIndex).toBe(1);
+
+    // 'File' still matches two items, so a merely-clamped stale index of 1 would survive
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'File' } });
+
+    // The filter-mirroring write itself carries the reset (the same rule the host applies on its
+    // forwarded path). Asserting only the store's final value could not pin that: cmdk's own
+    // auto-highlight also reports index 0 here, while live, the store's un-reset stale index can
+    // flow back over cmdk's rescue on the next store-driven render.
+    expect(vi.mocked(updateCommandPaletteState)).toHaveBeenCalledWith(
+      'palette-1',
+      expect.objectContaining({ filterText: 'File', selectedIndex: 0 }),
+    );
+    const stored = getStoredPalette('palette-1');
+    expect(stored.filterText).toBe('File');
+    expect(stored.selectedIndex).toBe(0);
+  });
+
   it('mirrors arrow-key highlight moves into the store as an absolute selectedIndex', () => {
     const entry = createPaletteEntry();
     addOverlay(entry);
@@ -1161,8 +1200,8 @@ describe('key forwarding — the session keeps its keys even when the palette ho
   it('overlay-focused + EMPTY filter + Space does NOT commit the highlighted entry', () => {
     // Previously: the app-wide CommandInput patch synthesised a click on the highlighted cmdk
     // item, committing something the user never typed and bypassing the session entirely. With
-    // the patch now opt-in (this palette does not opt in) and Space forwarded, the session's own
-    // visible refusal runs instead.
+    // the patch opt-in (a palette with key forwarding does not opt in) and Space forwarded, the
+    // session's own visible refusal runs instead.
     const session: MarkerPaletteSessionState & { kind: ForwardedSessionKind } = {
       kind: 'selection',
       filter: '',
@@ -1214,5 +1253,24 @@ describe('key forwarding — the session keeps its keys even when the palette ho
     fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
 
     expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it('WITHOUT key forwarding: Space on the empty input picks the highlighted item (the Enter UX)', () => {
+    // The counterpart to the forwarded case above: a plain caller declares no keyForwarding, so
+    // nothing outside the palette owns Space and the list is the whole point — Space on the empty
+    // input selects the highlighted item instead of typing a leading space.
+    const onSelect = vi.fn();
+    render(
+      <OverlayCommandPalettePresentational
+        items={markerItems}
+        onSelect={onSelect}
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: ' ' });
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith('nd');
   });
 });

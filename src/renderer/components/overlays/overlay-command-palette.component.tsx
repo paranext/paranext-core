@@ -480,6 +480,11 @@ export function OverlayCommandPalettePresentational({
       onValueChange={passive ? undefined : handleInputValueChange}
       readOnly={passive}
       tabIndex={passive ? -1 : undefined}
+      // Space-on-empty-input picks the highlighted item (the Enter UX) for plain callers, where
+      // the list is the whole point. A palette with key forwarding must NOT opt in: its session
+      // owns Space (the wrap commit / visible refusal), so a local pick would bypass the session's
+      // own resolution.
+      spaceSelectsHighlightedItem={!keyForwarding}
     />
   );
 
@@ -761,6 +766,11 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
     (filterText: string) => {
       updateCommandPaletteState(overlay.id, {
         filterText,
+        // A new filter produces a NEWLY RANKED list, so the old highlight index means nothing in
+        // it — same rule as the host's forwarded updateCommandPalette path. Carrying the index
+        // forward (the store only clamps) left the highlight on whatever now sat at the stale
+        // position, and Enter committed that item.
+        selectedIndex: 0,
         itemCount: filterPaletteItems(
           overlay.items,
           filterText,

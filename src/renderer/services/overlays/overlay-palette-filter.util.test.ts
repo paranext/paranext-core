@@ -139,6 +139,24 @@ describe('filterPaletteItems', () => {
       ]);
     });
 
+    it("should not match labels when searchFields excludes 'label' — every leg is field-gated", () => {
+      // 'Pronoun' hits only the pro item's LABEL; a request searching descriptions must not get it
+      expect(filterPaletteItems(items, 'Pronoun', 'active', ['description'])).toEqual([]);
+      expect(filterPaletteItems(items, 'Line', 'active', ['description', 'badge'])).toEqual([]);
+      // The declared fields still match on the same request
+      expect(
+        filterPaletteItems(items, 'Normal', 'active', ['description']).map((i) => i.id),
+      ).toEqual(['p']);
+      // And the empty filter still returns everything, whatever the fields say
+      expect(filterPaletteItems(items, '', 'active', ['description'])).toEqual(items);
+    });
+
+    it('should strip the + nesting prefix on the description/badge leg, like the label leg', () => {
+      // The legs must match the same typed text: '+normal' names the same query as 'normal'
+      expect(filterPaletteItems(items, '+normal', 'active').map((i) => i.id)).toEqual(['p']);
+      expect(filterPaletteItems(items, '+deprecated', 'active').map((i) => i.id)).toEqual(['pro']);
+    });
+
     it('should require containment, not fuzzy subsequence matching', () => {
       // cmdk's fuzzy scoring would match 'pgh' across 'ParaGrapH'; plain containment must not —
       // the host commit resolves from this same filter, so display and commit must agree

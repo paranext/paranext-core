@@ -143,14 +143,17 @@ describe('debounce', () => {
     const first = debounceFn(false);
     const flushed = debounceFn.flush();
     // Scheduled inside the flushed invocation's settling window; the rejection handler is
-    // attached before the timer fires so the rejection is never momentarily unhandled
-    const secondRejects = expect(debounceFn(true)).rejects.toThrow('second invocation failed');
+    // attached immediately so the rejection is never momentarily unhandled
+    const secondOutcome = debounceFn(true).then(
+      () => 'resolved unexpectedly',
+      (error: unknown) => error,
+    );
 
     await expect(flushed).resolves.toBe('first result');
     await expect(first).resolves.toBe('first result');
 
     await vi.advanceTimersByTimeAsync(1000);
-    await secondRejects;
+    await expect(secondOutcome).resolves.toEqual(new Error('second invocation failed'));
   });
 
   it('should preserve a re-schedule made from inside the flushed invocation', async () => {
