@@ -161,7 +161,7 @@ declare module 'papi-shared-types' {
     'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
     /**
      * Move a web view to an existing window, named by its window id (see
-     * `platform.getFocusedWindowId`). Ids are platform-assigned and never reused.
+     * `platform.getFocusedWindowId`). Ids are platform-assigned and never reused within a profile.
      *
      * Same semantics as `platform.moveWebViewToNewWindow` — including the marker a failed move
      * carries to say where it left the web view — and: moving a web view to the window it is

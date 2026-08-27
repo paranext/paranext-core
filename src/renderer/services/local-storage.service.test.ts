@@ -79,51 +79,57 @@ describe('localWindowStorage', () => {
     // going to throw because the slot is not yet known must throw BEFORE that sweep runs, or the
     // throwing call would have quietly removed every old blob on its way out.
     testingLocalWindowStorage.resetForTesting();
-    localStorage.setItem(`3_${KEY}`, 'stale, keyed by window id 3');
+    localStorage.setItem('3_web-view-state', 'stale, keyed by window id 3');
 
-    expect(() => localWindowStorage.getItem(KEY)).toThrow(/does not yet know its slot/);
-    expect(() => localWindowStorage.setItem(KEY, 'x')).toThrow(/does not yet know its slot/);
+    expect(() => localWindowStorage.getItem(KEY)).toThrow(/does not know its slot/);
+    expect(() => localWindowStorage.setItem(KEY, 'x')).toThrow(/does not know its slot/);
 
-    expect(localStorage.getItem(`3_${KEY}`)).toBe('stale, keyed by window id 3');
+    expect(localStorage.getItem('3_web-view-state')).toBe('stale, keyed by window id 3');
   });
 
-  test('refuses to guess at a key before main has said which slot this window is', () => {
+  test('refuses to guess at a key when this window was not told which slot it is', () => {
     testingLocalWindowStorage.resetForTesting();
 
-    expect(() => localWindowStorage.getItem(KEY)).toThrow(/does not yet know its slot/);
-    expect(() => localWindowStorage.setItem(KEY, 'x')).toThrow(/does not yet know its slot/);
+    expect(() => localWindowStorage.getItem(KEY)).toThrow(/does not know its slot/);
+    expect(() => localWindowStorage.setItem(KEY, 'x')).toThrow(/does not know its slot/);
   });
 
   describe('state keyed by the old window-id scheme', () => {
     test('is removed on first use rather than left orphaned, and does not resurrect', () => {
       // Written by a build that keyed per-window state by window id. No restored window can ever
       // read it, since none gets that id again, so it is dropped rather than migrated.
-      localStorage.setItem(`3_${KEY}`, 'stale, keyed by window id 3');
+      localStorage.setItem('3_web-view-state', 'stale, keyed by window id 3');
       localStorage.setItem('12_web-view-state', 'stale, keyed by window id 12');
-      // Keys that merely start with digits but are not the old scheme are left alone
+      // Keys that merely start with digits but are not the old scheme are left alone: the layout
+      // load still reads the pre-multi-window dock layout from its window-id-prefixed key, and this
+      // storage is shared with every web view iframe, whose own keys can start with digits too
+      localStorage.setItem('3_dock-saved-layout', 'still read by the layout load');
+      localStorage.setItem('2024_dismissed', 'an extension’s own key');
       localStorage.setItem('2024-notes', 'not a window-id key');
       localStorage.setItem(KEY, 'legacy unprefixed, kept');
 
       expect(localWindowStorage.getItem(KEY)).toBe('legacy unprefixed, kept');
 
-      expect(localStorage.getItem(`3_${KEY}`)).toBeNull();
+      expect(localStorage.getItem('3_web-view-state')).toBeNull();
       expect(localStorage.getItem('12_web-view-state')).toBeNull();
+      expect(localStorage.getItem('3_dock-saved-layout')).toBe('still read by the layout load');
+      expect(localStorage.getItem('2024_dismissed')).toBe('an extension’s own key');
       expect(localStorage.getItem('2024-notes')).toBe('not a window-id key');
       // The slot-keyed copy the read just made must not itself look like an old key
       expect(localStorage.getItem(`${SLOT_A}_${KEY}`)).toBe('legacy unprefixed, kept');
     });
 
     test('is swept once per process, not on every access', () => {
-      localStorage.setItem(`3_${KEY}`, 'stale');
+      localStorage.setItem('3_web-view-state', 'stale');
       localWindowStorage.getItem(KEY);
-      expect(localStorage.getItem(`3_${KEY}`)).toBeNull();
+      expect(localStorage.getItem('3_web-view-state')).toBeNull();
 
       // A key of the old shape appearing after the sweep is not this process's concern — the
       // sweep is a one-time upgrade step, and re-running it on every read would turn a cheap
       // prefix check into a full storage scan on the hot path
-      localStorage.setItem(`3_${KEY}`, 'written after the sweep');
+      localStorage.setItem('3_web-view-state', 'written after the sweep');
       localWindowStorage.getItem(KEY);
-      expect(localStorage.getItem(`3_${KEY}`)).toBe('written after the sweep');
+      expect(localStorage.getItem('3_web-view-state')).toBe('written after the sweep');
     });
   });
 });

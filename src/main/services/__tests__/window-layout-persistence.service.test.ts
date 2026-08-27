@@ -143,6 +143,7 @@ describe('window layout persistence service', () => {
     // A structure file from a build that keyed nothing by slot carries entries with no `slotId`.
     // Each gets one on load — minted, not derived from its position, so it never changes once the
     // file is rewritten — and the ids are distinct, or two slots' storage would collide.
+    vi.useFakeTimers();
     const service = await startService();
     seedFiles({
       structure: {
@@ -158,16 +159,61 @@ describe('window layout persistence service', () => {
     slotIds.forEach((slotId) => expect(slotId).toEqual(expect.any(String)));
     expect(new Set(slotIds).size).toBe(2);
 
-    // The minted ids are what a window is told, and what the next write persists, so a second
+    // The minted ids are what a window is told, and what the file carries from now on, so a second
     // launch finds the same slot rather than minting again
     service.assignEntryToWindow(11, 0);
-    await expect(registeredHandler('windowLayout:get')(11)).resolves.toEqual({
-      kind: 'entry',
-      slotId: slotIds[0],
-      layout: layoutWithTab('one'),
-    });
-    await service.writeNow();
+    expect(service.getSlotIdOf(11)).toBe(slotIds[0]);
+    // Persisted by the load itself, not left for the next bounds change or layout push to carry:
+    // a session that ends before either would otherwise mint again and orphan whatever the
+    // renderer stored under these ids
+    expect(mocks.writeFile).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2000);
     expect(writtenStructure().windows.map((entry) => entry.slotId)).toEqual(slotIds);
+  });
+
+  test('a load that minted nothing writes nothing', async () => {
+    vi.useFakeTimers();
+    const service = await startService();
+    seedFiles({ structure: { windows: [{ slotId: 'kept', layout: layoutWithTab('one') }] } });
+
+    await service.loadWindowLayouts();
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(mocks.writeFile).not.toHaveBeenCalled();
+  });
+
+  test('a slot id is never the entry’s position, so dropping an entry cannot repoint a neighbour', async () => {
+    // The reason the id exists: `handleWindowRemoved` splices entries, so an id derived from an
+    // entry's position would silently come to name the state a neighbouring slot stored. Load a
+    // structure that has no ids, drop the first entry, append a window — the survivor's id must not
+    // move, and the newcomer must not be handed the survivor's.
+    const service = await startService();
+    seedFiles({
+      structure: {
+        windows: [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      },
+    });
+    const plan = await service.loadWindowLayouts();
+    if (plan.kind !== 'restore') throw new Error('expected a restore plan');
+    service.assignEntryToWindow(11, 0);
+    service.assignEntryToWindow(12, 1);
+    const survivorSlotId = service.getSlotIdOf(12);
+
+    service.handleWindowRemoved(11, 'entry-goes-with-it');
+    service.trackNewWindow(13);
+
+    expect(service.getSlotIdOf(12)).toBe(survivorSlotId);
+    const slotIds = [survivorSlotId, service.getSlotIdOf(13)];
+    expect(new Set(slotIds).size).toBe(2);
+    slotIds.forEach((slotId, index) => expect(slotId).not.toBe(String(index)));
+  });
+
+  test('asking for the slot of a window that was never tracked is an error, not an empty answer', async () => {
+    const service = await startService();
+    await loadAndAssignAll(service, [{ slotId: 'slot-one', layout: layoutWithTab('one') }], 11);
+
+    expect(service.getSlotIdOf(11)).toBe('slot-one');
+    expect(() => service.getSlotIdOf(99)).toThrow(/not tracked/);
   });
 
   test('keeps a slot id the structure already carries rather than minting a fresh one', async () => {
@@ -256,12 +302,10 @@ describe('window layout persistence service', () => {
     await expect(getLayout(12)).resolves.toEqual({
       kind: 'entry',
       layout: layoutWithTab('two'),
-      slotId: expect.any(String),
     });
     await expect(getLayout(13)).resolves.toEqual({
       kind: 'entry',
       layout: layoutWithTab('three'),
-      slotId: expect.any(String),
     });
   });
 
@@ -533,7 +577,6 @@ describe('window layout persistence service', () => {
     service.assignEntryToWindow(12, 1);
     await expect(registeredHandler('windowLayout:get')(12)).resolves.toEqual({
       kind: 'entry',
-      slotId: expect.any(String),
       layout: emptyLayout,
     });
   });
@@ -560,7 +603,6 @@ describe('window layout persistence service', () => {
     service.assignEntryToWindow(12, 1);
     await expect(registeredHandler('windowLayout:get')(12)).resolves.toEqual({
       kind: 'empty',
-      slotId: expect.any(String),
     });
   });
 
@@ -591,7 +633,6 @@ describe('window layout persistence service', () => {
     service.assignEntryToWindow(12, 1);
     await expect(registeredHandler('windowLayout:get')(12)).resolves.toEqual({
       kind: 'entry',
-      slotId: expect.any(String),
       layout: pushedEmptyShape,
     });
   });
@@ -611,7 +652,6 @@ describe('window layout persistence service', () => {
     service.assignEntryToWindow(41, 0);
     await expect(registeredHandler('windowLayout:get')(41)).resolves.toEqual({
       kind: 'legacy',
-      slotId: expect.any(String),
     });
   });
 
@@ -622,8 +662,8 @@ describe('window layout persistence service', () => {
     service.trackNewWindow(52);
 
     const getLayout = registeredHandler('windowLayout:get');
-    await expect(getLayout(51)).resolves.toEqual({ kind: 'legacy', slotId: expect.any(String) });
-    await expect(getLayout(52)).resolves.toEqual({ kind: 'empty', slotId: expect.any(String) });
+    await expect(getLayout(51)).resolves.toEqual({ kind: 'legacy' });
+    await expect(getLayout(52)).resolves.toEqual({ kind: 'empty' });
     await expect(getLayout(999)).resolves.toEqual({ kind: 'empty' });
   });
 
@@ -638,7 +678,6 @@ describe('window layout persistence service', () => {
 
     await expect(registeredHandler('windowLayout:get')(61)).resolves.toEqual({
       kind: 'entry',
-      slotId: expect.any(String),
       layout: pushed,
     });
     await service.writeNow();
@@ -655,14 +694,12 @@ describe('window layout persistence service', () => {
     service.markWindowPendingContent(81);
     await expect(registeredHandler('windowLayout:get')(81)).resolves.toEqual({
       kind: 'pending-content',
-      slotId: expect.any(String),
     });
 
     const pushed = layoutWithTab('routed');
     await registeredHandler('windowLayout:save')(81, pushed);
     await expect(registeredHandler('windowLayout:get')(81)).resolves.toEqual({
       kind: 'entry',
-      slotId: expect.any(String),
       layout: pushed,
     });
   });
@@ -677,7 +714,6 @@ describe('window layout persistence service', () => {
 
     await expect(registeredHandler('windowLayout:get')(86)).resolves.toEqual({
       kind: 'empty',
-      slotId: expect.any(String),
     });
   });
 
@@ -733,7 +769,6 @@ describe('window layout persistence service', () => {
 
     await expect(registeredHandler('windowLayout:get')(83)).resolves.toEqual({
       kind: 'empty',
-      slotId: expect.any(String),
     });
   });
 
@@ -751,7 +786,6 @@ describe('window layout persistence service', () => {
 
     await expect(registeredHandler('windowLayout:get')(84)).resolves.toEqual({
       kind: 'empty',
-      slotId: expect.any(String),
     });
   });
 
@@ -945,7 +979,6 @@ describe('window layout persistence service', () => {
 
     await expect(registeredHandler('windowLayout:get')(85)).resolves.toEqual({
       kind: 'empty',
-      slotId: expect.any(String),
     });
   });
 
@@ -1236,7 +1269,6 @@ describe('window layout persistence service', () => {
     const reconciled = reconcileSavedLayout(pushed);
     await expect(registeredHandler('windowLayout:get')(61)).resolves.toEqual({
       kind: 'entry',
-      slotId: expect.any(String),
       layout: reconciled,
     });
     await service.writeNow();
@@ -1259,7 +1291,6 @@ describe('window layout persistence service', () => {
     // The window is tracked (it appears in writes) but received no entry layout
     await expect(registeredHandler('windowLayout:get')(99)).resolves.toEqual({
       kind: 'empty',
-      slotId: expect.any(String),
     });
     await service.writeNow();
     const written = writtenStructure();
@@ -1281,11 +1312,9 @@ describe('window layout persistence service', () => {
     // Window 12 must not receive entry 0's layout — that slot belongs to window 11
     await expect(registeredHandler('windowLayout:get')(12)).resolves.toEqual({
       kind: 'empty',
-      slotId: expect.any(String),
     });
     await expect(registeredHandler('windowLayout:get')(11)).resolves.toEqual({
       kind: 'entry',
-      slotId: 'slot-one',
       layout: layoutWithTab('one'),
     });
   });
@@ -1309,7 +1338,6 @@ describe('window layout persistence service', () => {
 
     await expect(registeredHandler('windowLayout:get')(11)).resolves.toEqual({
       kind: 'entry',
-      slotId: 'slot-one',
       layout: layoutWithTab('one'),
     });
     // Entry 'two' survives as a preserved, unassigned slot
@@ -1336,7 +1364,6 @@ describe('window layout persistence service', () => {
     expect(mocks.writeFile).not.toHaveBeenCalled();
     await expect(registeredHandler('windowLayout:get')(61)).resolves.toEqual({
       kind: 'legacy',
-      slotId: expect.any(String),
     });
   });
 

@@ -2308,15 +2308,22 @@ step, no automation. Just a record.
   each launch, so the same window usually found its own blob. Once an id is never reused, a
   restored window's id never matches the one that saved its state, and every launch would start
   empty. Each entry in the persisted structure therefore carries a stable `slotId`, minted when
-  the slot is created and never changed, and main returns it in the window's layout-get answer —
-  the only place a window can learn which slot it occupies. Storage is keyed by that. It is
-  deliberately not the entry's list position: `handleWindowRemoved` splices entries, so a position
-  can silently come to mean a neighbouring slot's state. This does not reopen PT-4285's decision —
-  the slot is still what identifies a window across restarts, and the id is still runtime-only;
-  what changed is that the id can no longer double as the storage key by coincidence. The blobs
-  already on disk under the old `${windowId}_` keys cannot be mapped to slots (nothing recorded
-  the pairing, and windows were never created in slot order), so they are removed on first launch
-  and per-tab UI state resets once; layouts, bounds and open tabs live in the structure and are
-  untouched. Existing structures get a `slotId` minted per entry on first load.
+  the slot is created — and written to the file by the load that minted it — and never changed.
+  Main settles a window's slot when it tracks the window, ahead of the window's first load, and
+  hands it over on the renderer URL beside the window id: not in the layout-get answer, which
+  Simple mode never asks for and which a routed move into a brand-new window can outrun. The
+  renderer's boot module records it before anything else runs, so per-window storage works from
+  the first render in every interface mode. Storage is keyed by that. It is deliberately not the
+  entry's list position: `handleWindowRemoved` splices entries, so a position can silently come to
+  mean a neighbouring slot's state. This does not reopen PT-4285's decision — position still
+  decides which saved layout and bounds a restored window gets, and the id still names one runtime
+  window rather than a cross-restart identity (PT-4285's sense); what changed is that the id can
+  no longer double as the storage key by coincidence. The blobs already on disk under the old
+  `${windowId}_web-view-state` keys cannot be mapped to slots (nothing recorded the pairing, and
+  windows were never created in slot order), so they are removed on first use and per-tab UI
+  state resets once; layouts, bounds and open tabs live in the structure and are untouched, and so
+  is every other digit-prefixed key — the pre-multi-window dock layout is still read from its
+  window-id-prefixed key, and the renderer's `localStorage` is shared with every web view iframe.
+  Existing structures get a `slotId` minted per entry on first load.
 - **Source:** PT-4464; lead dev's review of PR #2670 (2026-08-25), item 11. Surface inventory
   measured against the top of the multi-window stack.

@@ -1331,8 +1331,8 @@ async function openWebView(
   // `existingId` reuse above — an existing view stays wherever it lives.
   if (options?.targetWindowId !== undefined) {
     // `options` is a network message, so its type here describes what a well-behaved caller sends
-    // rather than what arrived. The move commands have always checked their target; this one is
-    // reached the same way and by the same callers, so it is checked identically.
+    // rather than what arrived. Checked the same way the move commands check their target: this
+    // is reached the same way and by the same callers.
     assertWindowExists(options.targetWindowId, 'openWebView');
     // A window whose close has been decided is a stale target the caller cannot know about — same
     // rule the move commands apply: opening into it would report success and then lose the web

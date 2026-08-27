@@ -26,7 +26,6 @@ import {
   getFullWebViewStateById,
   setFullWebViewStateById,
 } from '@renderer/services/web-view-state.service';
-import { setWindowSlotId } from '@renderer/services/local-storage.service';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { LogError } from '@shared/log-error.model';
@@ -636,9 +635,8 @@ const EMPTY_DOCK_LAYOUT: LayoutInfo = { dockbox: { mode: 'horizontal', children:
  * @throws If the window id is not set
  */
 function getWindowIdOrThrow(): number {
-  // No parsing left to do: the id is read and validated once, where the renderer reads the URL.
-  // Compared against `undefined` rather than tested for truthiness, so a 0 could never be mistaken
-  // for an absent id.
+  // The id is read and validated once, where the renderer reads the URL. Compared against
+  // `undefined` rather than tested for truthiness, so a 0 could never be mistaken for an absent id.
   if (globalThis.windowId === undefined)
     throw new Error('windowId is not set. Check that the URL includes the windowId parameter.');
   return globalThis.windowId;
@@ -1323,19 +1321,9 @@ async function getPersistedLayout(
     logger.warn(
       `Could not get this window's saved layout after ${GET_PERSISTED_LAYOUT_ATTEMPTS} attempts; starting empty and holding layout pushes until a load succeeds`,
     );
-    // Main never said which slot this window occupies, and per-window storage cannot key on
-    // nothing. A session-only slot keeps every web view able to read and write its state for as
-    // long as this window runs; that state is simply not found again after a restart, which is
-    // the same standing this path already gives the layout by holding its pushes. Throwing
-    // instead would turn "start empty and keep going" into a window that cannot open anything.
-    setWindowSlotId(`session-only-${newGuid()}`);
     return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false };
   }
   isRunningOnFallbackLayout = false;
-  // Main's answer is the only place this window learns which slot it occupies, and per-window
-  // storage is keyed by that slot. Recorded before any of the returns below so that nothing that
-  // restores web view state during the load reads storage under a key that is not yet known.
-  if (response.slotId !== undefined) setWindowSlotId(response.slotId);
   if (response.kind === 'entry') return { layout: response.layout, isPendingContent: false };
   if (response.kind === 'empty') return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false };
   if (response.kind === 'pending-content')
