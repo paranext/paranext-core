@@ -6,9 +6,8 @@ import { defineConfig } from '@playwright/test';
  * - `smoke` (default): tests share a single Electron instance per worker — fast, for CI.
  * - `isolated`: each suite gets its own Electron, but how varies by fixture —
  *   `fixtures/isolated.fixture.ts` launches one per test, `comment.fixture`/`find.fixture` one per
- *   worker, and the `title-bar/` and `navigation-history/` subsets launch nothing at all: they use
- *   `fixtures/cdp.fixture.ts` and attach to an app started separately. See the note on that project
- *   below.
+ *   worker, and the `title-bar/` subset launches nothing at all: it uses `fixtures/cdp.fixture.ts`
+ *   and attaches to an app started separately. See the note on that project below.
  */
 const config = defineConfig({
   testDir: './tests',
@@ -41,9 +40,9 @@ const config = defineConfig({
   // `_example/` — reference template for new tests, not a runnable test suite.
   // Experimental tests that should not be wired into any standard test run. (e.g.,
   // `manage-books/` and `markers-checklist/`)
-  // `navigation-history/` — needs the CDP fixture (it attaches to an already-running app), which
-  // this config's launch strategy cannot provide. It is registered in `playwright-cdp.config.ts`
-  // instead and runs via `npm run test:e2e-cdp`.
+  // `navigation-history/` (top-level, NOT an isolated subset) — needs the CDP fixture (it
+  // attaches to an already-running app), which this config's launch strategy cannot provide. It
+  // runs through `playwright-cdp.config.ts` (`npm run test:e2e-cdp`) instead.
   projects: [
     {
       name: 'smoke',
@@ -54,12 +53,12 @@ const config = defineConfig({
       // `npm run test:e2e:isolated` (via e2e-tests/run-isolated.mjs) lists the subsets;
       // `npm run test:e2e:isolated <subset>` runs one; `... all` runs every subset.
       //
-      // `... all` cannot currently pass. The `title-bar/` and `navigation-history/` subsets use
-      // fixtures/cdp.fixture.ts, which attaches to an already-running app, but this config's
-      // globalSetup aborts when port 8876 is bound — so there is no state in which both they and
-      // their launch-based neighbours run. playwright-cdp.config.ts cannot run them either; it
-      // testIgnores **/isolated/**. Run the other subsets individually until those two move out
-      // of this project or globalSetup grows an opt-out.
+      // `... all` cannot currently pass. The `title-bar/` subset uses fixtures/cdp.fixture.ts,
+      // which attaches to an already-running app, but this config's globalSetup aborts when port
+      // 8876 is bound — so there is no state in which both it and its launch-based neighbours
+      // run. playwright-cdp.config.ts cannot run it either; it testIgnores **/isolated/**. Run
+      // the other subsets individually until it moves out of this project or globalSetup grows
+      // an opt-out.
       name: 'isolated',
       testDir: './tests/isolated',
     },

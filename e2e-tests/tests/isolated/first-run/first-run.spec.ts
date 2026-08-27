@@ -72,6 +72,16 @@ async function injectDemoMode(mainPage: import('@playwright/test').Page): Promis
 }
 
 test.describe('First-run wizard', () => {
+  // The demo-reload path is fast, but the sub-waits along the worst path are sized for a COLD
+  // start: injectDemoMode waits up to 90 s for the first boot to settle, then waitForWizard
+  // allows 90 s for the dialog plus 75 s for the interactive "Next" — the registration probes
+  // legitimately take tens of seconds (up to 3 attempts x ~10-15 s plus backoffs; see
+  // resolveRegistrationValidity) — and each step advance allows 60 s for its async settings
+  // reads. Those budgets cannot all fit the config's 120 s default, which made the per-step
+  // timeouts unreachable paper limits; 240 s lets the documented probe worst case actually
+  // complete while still failing in bounded time.
+  test.describe.configure({ timeout: 240_000 });
+
   // Every test runs in demo mode, including these first two: on a machine with a valid Paratext
   // registration the REAL resolution path never shows the wizard at all (registered users skip
   // setup by design), so only demo mode makes the wizard reachable machine-independently. The
