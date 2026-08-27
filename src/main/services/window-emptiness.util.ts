@@ -219,16 +219,6 @@ export function createWindowEmptinessHandler(
       return { action: 'open-home' };
     }
 
-    // The primary never closes because it emptied — only its ✕ and the Quit menu may close it —
-    // so moving its last tab out reopens Home, as closing that tab would. Decided ahead of the
-    // count: it does not matter how many other windows there are.
-    if (deps.isPrimaryWindow?.(windowId)) {
-      logger.debug(
-        `windowLayout:emptied window ${windowId} reason ${reason}: primary window, answering open-home`,
-      );
-      return { action: 'open-home' };
-    }
-
     const remainingWindows = deps.countWindows();
     if (remainingWindows <= 1) {
       logger.debug(
@@ -270,6 +260,19 @@ export function createWindowEmptinessHandler(
     if (windowsLeftAfterRecheck <= 1) {
       logger.debug(
         `windowLayout:emptied window ${windowId} reason ${reason} saw ${windowsLeftAfterRecheck} window(s) remaining once its re-check answered: answering open-home`,
+      );
+      return { action: 'open-home' };
+    }
+
+    // The primary never closes because it emptied — only its ✕ and the Quit menu may close it — so
+    // moving its last tab out reopens Home, as closing that tab would. Checked here, after the
+    // content re-check above rather than ahead of it: content routed into the primary while its
+    // report was in flight already took the `stay` answer, so reaching this point with the primary
+    // still means it is genuinely empty. Checking earlier would dock a stray Home tab beside
+    // whatever just arrived.
+    if (deps.isPrimaryWindow?.(windowId)) {
+      logger.debug(
+        `windowLayout:emptied window ${windowId} reason ${reason}: primary window, answering open-home`,
       );
       return { action: 'open-home' };
     }
