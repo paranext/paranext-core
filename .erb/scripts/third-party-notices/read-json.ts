@@ -26,14 +26,14 @@ export function codeOf(err: unknown): string | undefined {
 /**
  * Reads and parses a JSON file, naming the file in every failure.
  *
- * `JSON.parse(fs.readFileSync(file, 'utf8'))` was written inline at thirteen places here, across
- * the lockfile, the policy, the notices lock, the vendored SPDX index, the webpack module
- * manifests, the .NET restore assets and roughly 8,500 third-party `package.json` files. None of
- * them named the file. `main.ts` deliberately prints `err.message` alone rather than a stack - the
+ * This pipeline reads JSON from the lockfile, the policy, the notices lock, the SPDX corpus index,
+ * the webpack module manifests, the .NET restore assets and roughly 8,500 third-party
+ * `package.json` files. `main.ts` deliberately prints `err.message` alone rather than a stack - the
  * whole pipeline's convention is that a failure states what is wrong and what repairs it - so a
- * truncated manifest from an interrupted install surfaced as a bare `SyntaxError: Unexpected end of
- * JSON input` identifying none of them, and an unreadable one as a raw ENOENT. That is precisely
- * the shape the message-only convention exists to avoid.
+ * bare `JSON.parse(fs.readFileSync(...))` reports a truncated manifest from an interrupted install
+ * as `SyntaxError: Unexpected end of JSON input` naming none of those files, and an unreadable one
+ * as a raw ENOENT. That is precisely the shape the message-only convention exists to avoid, which
+ * is why every read goes through here.
  *
  * Read failure and parse failure are reported separately because they have different remedies: one
  * is a missing or unreadable file, the other is a file whose contents are wrong.
@@ -61,10 +61,9 @@ export function readJsonFile<T>(file: string, what: string): T {
     // `unknown` under strict TypeScript, and `throw 'a string'` is legal JavaScript - so the
     // message is extracted rather than assumed, or this path would itself throw while reporting.
     //
-    // `code` is CARRIED THROUGH. Replacing a system error with a plain `Error` dropped it, and a
-    // caller that needs to tell "the file is not there yet" from "the file is unreadable" - the
-    // first-ever notices generation is exactly that caller - had its ENOENT branch made
-    // unreachable: the tolerance was dead code and the bootstrap could not run at all.
+    // `code` is CARRIED THROUGH, because a plain `Error` drops it and some callers have to tell
+    // "the file is not there yet" from "the file is unreadable" - the first-ever notices
+    // generation, which has no committed lock to read, is exactly that caller.
     throw Object.assign(new Error(`could not read ${what} at ${file}: ${messageOf(err)}`), {
       code: codeOf(err),
     });

@@ -544,8 +544,8 @@ export function collectNugetPackages({
         //
         // A process killed by a signal never reported a count of anything - it was stopped, by an
         // OOM killer or by a job timeout - so whatever it left on disk describes no complete run.
-        // The existence of the output file is not evidence either way, which is why it is no longer
-        // the whole test: `assertClosureCoversShippingSet` below is.
+        // The existence of the output file is not evidence either way; what the closure has to
+        // CONTAIN is, and `assertClosureCoversShippingSet` below is that test.
         if (killedBySignal(error) || !fs.existsSync(out)) throw error;
       }
       const closure = readJsonFile<NugetLicenseEntry[]>(out, "nuget-license's output");

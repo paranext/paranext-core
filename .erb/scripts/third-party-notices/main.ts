@@ -919,9 +919,9 @@ export function main(): void {
   // Printed on BOTH paths, and before either one acts. They describe what this run could not
   // account for - a stylesheet specifier that resolved to no installed package is the one thing
   // that can quietly shorten the npm half - so they belong with the decision to write rather than
-  // after it, where a failed write swallows them entirely. Printing them only on the write path
-  // meant CI, which runs `--verify` and nothing else, never saw one: the run that most needs to
-  // surface an unaccounted-for specifier was the run that stayed silent about it.
+  // after it, where a failed write swallows them entirely. The write path alone is not enough: CI
+  // runs `--verify` and nothing else, and it is the run that most needs an unaccounted-for
+  // specifier surfaced.
   printRunNotes(report);
 
   if (verifyOnly) {
@@ -1023,8 +1023,7 @@ export function main(): void {
   console.log(`Wrote ${path.relative(REPO, OUT)}: ${npm} npm packages, ${nuget} NuGet packages.`);
 }
 
-// Guarded rather than called unconditionally so the report can be built without the side effects of
-// a full run - writing the artifact, writing the lock, setting an exit code. That is what let the
-// old and new generators' output be diffed side by side while the exceptions list was still empty
-// and every run therefore ended at the block gate.
+// Guarded rather than called unconditionally, so `buildReport` can be imported and driven without
+// the side effects of a full run - writing the artifact, writing the lock, setting an exit code.
+// That is what `degradation.test.ts` and `verify-shipping-set.test.ts` rest on.
 if (require.main === module) main();

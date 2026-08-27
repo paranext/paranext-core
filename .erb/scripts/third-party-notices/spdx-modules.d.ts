@@ -1,11 +1,13 @@
 /**
- * Declarations for the SPDX packages this pipeline depends on, none of which ships its own.
+ * Declarations for the SPDX packages this pipeline depends on that ship no types of their own.
+ * `spdx-license-list` is not among them - it bundles `full.d.ts`, so declaring it here would only
+ * shadow the package's own shape with a copy free to drift from it.
  *
  * Without these, `checkJs` reports each `require` as an implicit `any` - and an `any` at the
- * boundary spreads: every parsed expression, every corrected identifier and every corpus text
- * downstream inherits it, which is exactly the checking this gate exists to add. Each shape is only
- * as wide as this pipeline actually uses, so a wrong assumption surfaces here rather than being
- * hidden behind a permissive declaration.
+ * boundary spreads: every parsed expression and every corrected identifier downstream inherits it,
+ * which is exactly the checking this gate exists to add. Each shape is only as wide as this
+ * pipeline actually uses, so a wrong assumption surfaces here rather than being hidden behind a
+ * permissive declaration.
  */
 
 declare module 'spdx-expression-parse' {
@@ -53,13 +55,4 @@ declare module 'spdx-license-ids/deprecated.json' {
   /** Every deprecated SPDX identifier - still in wide circulation, see `declared.ts`. */
   const ids: string[];
   export = ids;
-}
-
-declare module 'spdx-license-list/full' {
-  /** Every licence SPDX publishes, keyed by identifier, with its full text. */
-  const list: Record<
-    string,
-    { name: string; licenseText: string; url?: string; osiApproved?: boolean }
-  >;
-  export = list;
 }

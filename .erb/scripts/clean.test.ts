@@ -8,14 +8,13 @@ const SCRIPT = path.join(__dirname, 'clean.ts');
  * Runs the real entry point, which is the only thing that can catch this regression.
  *
  * `webpack.paths.ts` mixes `require()` with `export default`, so it compiles to CommonJS - and what
- * a default import of it resolves to depends on the MODULE KIND OF THE IMPORTER. From a `.ts` file
- * the loader applies interop and hands over the object; from a `.js` file Node parses as ESM it
- * hands over the CommonJS namespace, `{ default: … }`, whose every property is `undefined`.
+ * a default import of it resolves to depends on the MODULE KIND OF THE IMPORTER. Resolved wrong,
+ * every path below is `undefined`, `fs.existsSync(undefined)` returns false rather than throwing,
+ * and `npm run package` cleans NOTHING while exiting 0.
  *
- * This script was that `.js` file, and `fs.existsSync(undefined)` returns false rather than
- * throwing - so `npm run package` cleaned NOTHING, silently, and exited 0. Importing the module
- * from a test cannot see that: the test is TypeScript, so it gets the working interop either way.
- * Only spawning the entry point the way npm does exercises the resolution that was broken.
+ * Importing the module from a test cannot see that: the test is TypeScript, so it gets the working
+ * interop either way. Only spawning the entry point the way npm does exercises the resolution that
+ * can break.
  */
 function printedFolders(): string[] {
   const out = execFileSync(process.execPath, ['--import', 'tsx', SCRIPT, '--print'], {

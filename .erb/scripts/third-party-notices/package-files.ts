@@ -39,37 +39,34 @@ const NOT_LICENSE_TEXT =
   /\.(js|cjs|mjs|jsx|tsx?|mts|cts|map|json|svg|png|jpe?g|gif|ico|css|node|wasm|pdf|rtf|docx?|zip|gz|exe|dll|nupkg|snupkg|nuspec|sha512|p7s|pdb|targets|props|xml)$/i;
 
 /**
- * Matches a licence file whose name does not begin with the word, which NuGet packages do and npm
- * packages essentially never do.
+ * Matches a licence file whose name does not BEGIN with the word, which `LICENSE_FILE` requires.
  *
- * `System.Net.Http` 4.3.4 ships its grant as `dotnet_library_license.txt` - 9,451 bytes opening
- * "MICROSOFT SOFTWARE LICENSE TERMS / MICROSOFT .NET LIBRARY", verbatim the licence its nuspec
- * `<licenseUrl>` points at. `LICENSE_FILE` does not match that name, so the document asserted that
- * the package bundles no licence file and reproduced nothing for it, while the text sat in the
- * restored package folder. Nineteen `Microsoft.*` packages use the same filename, and several use
- * `MIT-LICENSE.txt`.
+ * Nineteen `Microsoft.*` NuGet packages ship their grant as `dotnet_library_license.txt` - 9,451
+ * bytes opening "MICROSOFT SOFTWARE LICENSE TERMS / MICROSOFT .NET LIBRARY", verbatim the licence
+ * their nuspec `<licenseUrl>` points at - and several more use `MIT-LICENSE.txt`. A match anchored
+ * to the start of the name reports every one of them as bundling no licence text.
  *
  * Applied to the STEM, so an extension can never be read as the word, and only alongside
  * `NOT_LICENSE_TEXT` - `nuget-license.nuspec` and `nuget-license.nupkg` both end in `-license`
- * before their extension and are emphatically not prose. Kept separate from `LICENSE_FILE` rather
- * than widening it, because it is only sound where a second signal already establishes what the
- * package is licensed under: NuGet resolves on nuspec metadata and reads files ONLY to reproduce
- * them, while for npm the file IS the signal `policy.ts` reconciles the manifest against, and
- * feeding a loosely-matched filename into that would weaken a verdict rather than enrich a
- * reproduction.
+ * before their extension and are emphatically not prose.
+ *
+ * Sound only where a second signal already establishes what the package is licensed under, because
+ * a loosely-matched filename may then be read to REPRODUCE terms but never to decide them. A
+ * verdict path has no such margin: for npm the licence file IS the signal `policy.ts` reconciles
+ * the manifest against, and licensee (`detect.rb`) is what selects it there.
  */
 const EMBEDDED_LICENSE_FILE = /(^|[._-])licen[cs]e($|[._-])/i;
 
-/** Whether a file name (not a path) is one whose contents should be reproduced as licence text. */
-export function isLicenseFileName(name: string): boolean {
-  return LICENSE_FILE.test(name) && !NOT_LICENSE_TEXT.test(name);
-}
-
 /**
- * Whether a file name is one to reproduce as licence text for a NUGET package, which is a looser
- * question than for npm - see `EMBEDDED_LICENSE_FILE` for why the two differ.
+ * Whether a file name (not a path) is one whose contents should be reproduced as licence text.
+ *
+ * See `EMBEDDED_LICENSE_FILE` for why this is looser than a bare `LICENSE_FILE` match, and for the
+ * condition that makes the looseness sound: a second signal has to establish what the package is
+ * licensed under before a loosely-matched filename is read only to REPRODUCE terms. Both callers
+ * meet it - a NuGet package's nuspec metadata, and a bundled extension's declared `manifest.json`
+ * licence.
  */
-export function isNugetLicenseFileName(name: string): boolean {
+export function isLicenseTextFileName(name: string): boolean {
   if (NOT_LICENSE_TEXT.test(name)) return false;
   return LICENSE_FILE.test(name) || EMBEDDED_LICENSE_FILE.test(name.replace(/\.[^.]*$/, ''));
 }
@@ -82,11 +79,11 @@ export function isNoticeFileName(name: string): boolean {
 /**
  * Normalizes reproduced text: LF line endings, no leading or trailing blank lines.
  *
- * Shared with `render.ts`, which normalizes the same texts again on the way into the document. The
- * two spelled it out separately, and they must not drift: the committed artifact is BYTE-COMPARED
- * against freshly generated output, so a difference between the normalisation applied when a text
- * is read and the one applied when it is written shows up as a permanent spurious diff with nothing
- * naming the cause.
+ * Shared with `render.ts`, which normalizes the same texts again on the way into the document, and
+ * shared rather than restated because the two must not drift: the committed artifact is
+ * BYTE-COMPARED against freshly generated output, so a difference between the normalisation applied
+ * when a text is read and the one applied when it is written shows up as a permanent spurious diff
+ * with nothing naming the cause.
  */
 export function normalizeText(text: unknown): string {
   return String(text ?? '')
@@ -145,7 +142,7 @@ function readPackageFiles(
 
 /** Every licence file a NuGet package ships, including one whose name does not begin with the word. */
 export function readNugetLicenseFiles(dir: string | undefined): NamedText[] {
-  return readPackageFiles(dir, isNugetLicenseFileName);
+  return readPackageFiles(dir, isLicenseTextFileName);
 }
 
 /** Every `NOTICE` a package ships. */

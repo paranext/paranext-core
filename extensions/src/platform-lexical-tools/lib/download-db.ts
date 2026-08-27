@@ -169,12 +169,12 @@ function downloadFile(url: string, destination: string): Promise<void> {
   return new Promise((resolve, reject) => {
     // The body is written to a staging file beside the destination and renamed into place only
     // once it is complete, so nothing this call did not itself create is ever removed and a
-    // half-written body never becomes the destination. Writing straight to `destination` made
+    // half-written body never becomes the destination. Writing straight to `destination` makes
     // every failure path destructive: the notice files are re-fetched on EVERY install (see
     // `runDownload`), so `destination` is normally a correct file, and a 404 from a renamed
-    // upstream path - or a connection dropped mid-body - deleted the CC BY-SA 4.0 text and left
-    // the packaged extension carrying the database with no attribution. On Windows it was worse:
-    // the unlink raced an asynchronous `close()` and its error was discarded, leaving the
+    // upstream path - or a connection dropped mid-body - would delete the CC BY-SA 4.0 text and
+    // leave the packaged extension carrying the database with no attribution. On Windows it is
+    // worse still: the unlink races an asynchronous `close()`, and losing that race leaves the
     // truncated body in place under the real name.
     const staged = `${destination}.part`;
 
@@ -505,16 +505,16 @@ export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps):
     // Fetched after the DB rather than with it because they describe data that is now on disk, and
     // fetched EVERY time rather than only when one is missing. The DB is skipped when a checksum
     // says the local copy is already the right one; a notice file has no checksum to compare, so
-    // the only gate available was existence - and existence is not evidence of CONTENT. A truncated
+    // the only gate available is existence - and existence is not evidence of CONTENT. A truncated
     // write, or a captive-portal interstitial answered with HTTP 200, lands a file that exists and
-    // is wrong, and it was then kept forever and copied into every installer where the CC BY-SA 4.0
-    // text should be. They are a few kilobytes; re-fetching is cheaper than the gate that would
-    // make skipping safe.
+    // is wrong, which a skip-if-present rule would then keep forever and copy into every installer
+    // where the CC BY-SA 4.0 text belongs. They are a few kilobytes; re-fetching is cheaper than
+    // the gate that would make skipping safe.
     if (noticeFilenames.length > 0) {
       // `allSettled`, not `all`: `all` rejects on the FIRST failure and abandons the other fetch
-      // still in flight, so a run where BOTH notices are missing reported only whichever URL
-      // happened to fail first, while telling the maintainer to publish both. Every fetch is now
-      // allowed to finish and every failure is reported.
+      // still in flight, so a run where BOTH notices are missing would report only whichever URL
+      // happened to fail first, while telling the maintainer to publish both. Every fetch finishes
+      // and every failure is reported.
       const results = await Promise.allSettled(
         noticeFilenames.map(async (noticeFilename) => {
           deps.log(`Downloading ${noticeFilename}...`);

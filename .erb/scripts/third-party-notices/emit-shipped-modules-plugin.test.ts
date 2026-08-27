@@ -46,10 +46,10 @@ describe('isWarmFilesystemCache', () => {
     expect(isWarmFilesystemCache(false)).toBe(false);
   });
 
-  // Reporting COLD here was the one branch that produced a permissive verdict from absent
-  // information: webpack's default directory is warm on any tree built twice, so a manifest written
-  // over it would have been trusted for a legal artifact. The answer to "which directory is this
-  // cache in?" is webpack's default, not "there isn't one".
+  // The one branch that could answer permissively from absent information. "Which directory is
+  // this cache in?" has an answer when the config names none - webpack's default - and that
+  // directory is warm on any tree built twice, so reporting COLD here would let a manifest written
+  // over a warm cache be trusted for a legal artifact.
   it('falls back to webpack’s default directory when a filesystem cache names none', () => {
     const cwd = process.cwd();
     const defaultDir = path.join(dir, 'node_modules', '.cache', 'webpack');

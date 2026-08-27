@@ -118,8 +118,8 @@ jobs:
 
       # The notices generator restores the .NET closure once per runtime identifier - four passes,
       # against an internal SIL feed - on top of the build's own restore. `~/.npm` is cached by
-      # setup-node and the bundler gems by setup-ruby; this was the one dependency store fetched
-      # cold on every run.
+      # setup-node and the bundler gems by setup-ruby; without this, the NuGet store is the one
+      # dependency store fetched cold on every run.
       #
       # The key names the files that actually decide what gets restored. `packages.lock.json` is not
       # one of them - this repository uses no NuGet lock files, so that pattern hashed nothing and
@@ -179,12 +179,10 @@ jobs:
       # leaves its extensions leg in DEVELOPMENT mode, and every job that packages an installer
       # (publish.yml, package-main.yml, `npm run package`) follows it with this step. The notices
       # document has to be verified against the graph the installers carry, not the one that is
-      # thrown away - so this leg builds them the same way before checking anything. Without it the
-      # committed document was byte-verified here against a development graph and packaged from a
-      # production one, with equality between the two asserted only by a comment.
+      # thrown away - so this leg builds them the same way before checking anything.
       #
-      # `collectShippedPackages` now refuses a manifest set that mixes modes, so a job that forgets
-      # this step fails naming the mismatch rather than describing the wrong graph.
+      # `collectShippedPackages` refuses a manifest set that mixes modes, so a job that forgets this
+      # step fails naming the mismatch rather than describing the wrong graph.
       - name: Build extensions for production
         run: npm run build:extensions:production
 
@@ -197,10 +195,10 @@ jobs:
       # fails here with a diff naming the package and the file, which a human reads and
       # acknowledges by regenerating.
       #
-      # Regenerating in CI as well used to follow this step, and it repeated the entire pipeline -
-      # `dotnet tool restore`, four `dotnet restore` passes, four `nuget-license` runs and a full
-      # licensee batch - to produce bytes this step has already established are identical. It could
-      # only ever run when this one passed, so it asserted nothing this one had not.
+      # This is the only notices step on this leg. Regenerating afterwards would repeat the entire
+      # pipeline - `dotnet tool restore`, four `dotnet restore` passes, four `nuget-license` runs and
+      # a full licensee batch - to produce bytes this step has already established are identical,
+      # and it could only ever run when this step passed, so it would assert nothing new.
       #
       # Linux only: the NuGet section is read from the restore closure, which is RID-dependent, so
       # exactly one platform has to be canonical or the three legs would each produce a different
@@ -231,35 +229,10 @@ jobs:
 
       - name: Report file changes
         if: steps.verify-changed-files.outputs.files_changed == 'true'
-        # This step runs on all three legs, and `case`/`esac` is POSIX shell: without this the
-        # windows leg runs it under pwsh, where it is a parse error - the leg still fails, but the
-        # list of changed files it exists to print is lost, which is the only thing it does.
-        shell: bash
         env:
           CHANGED_FILES: ${{ steps.verify-changed-files.outputs.changed_files }}
         run: |
           echo "Error - changed files after build: $CHANGED_FILES"
-          # THIRD-PARTY-NOTICES.md is the one build output whose remedy is not "run the build":
-          # regenerating it needs a Linux machine with a full `dotnet restore` and a complete
-          # node_modules, which is why a dependency-version bump lands here rather than at review.
-          # The lock is matched too: it is written as the document's pair, and a run that rewrites
-          # only the lock (a licence text changing under an unchanged name@version) would otherwise
-          # print the generic message and none of the remedy.
-          case "$CHANGED_FILES" in
-            *THIRD-PARTY-NOTICES*)
-              echo
-              echo "THIRD-PARTY-NOTICES.md is out of date. It is generated, never edited by hand."
-              echo "On Linux, with dependencies installed:"
-              echo
-              echo "    dotnet restore c-sharp/ParanextDataProvider.csproj"
-              echo "    npm run build:third-party-notices"
-              echo
-              echo "Then commit BOTH regenerated files - THIRD-PARTY-NOTICES.md and"
-              echo "THIRD-PARTY-NOTICES.lock.json are written as a pair. A dependency version"
-              echo "change - npm or NuGet, including the ParatextData/ParatextChecks pins in"
-              echo "c-sharp/ParanextDataProvider.csproj - always changes them."
-              ;;
-          esac
           exit 1
 
       - name: dotnet unit tests
