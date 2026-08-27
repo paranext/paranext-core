@@ -181,7 +181,8 @@ describe('resolveFirstRunState', () => {
     mockResolveReg.mockResolvedValue('unknown');
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'error' });
-    // Flag is consumed regardless.
+    // The durable flag is spent on the first read so it can never leak into the next launch. The
+    // guard itself survives for the rest of THIS startup — see the retryFirstRunResolution suite.
     expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
   });
 
@@ -432,6 +433,28 @@ describe('retryFirstRunResolution', () => {
     mockResolveReg.mockResolvedValue('invalid');
     await retryFirstRunResolution();
     expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+  });
+
+  it('still guards a just-registered user when the transient invalid lands on the retry', async () => {
+    // The durable one-shot is spent by the first probe, which answers 'unknown' and so never uses
+    // it. The transient 'invalid' the flag exists to absorb then arrives on the retry — where,
+    // unguarded, it would send a user who just registered successfully back to the front of the
+    // wizard instead of resuming at sync consent.
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('unknown'); // backend not up yet → "couldn't verify" screen
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'error' });
+    // The durable flag is still spent on the first read — it must not survive into the next launch.
+    expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
+
+    mockResolveReg.mockResolvedValue('invalid'); // the fluke the flag exists to absorb
+    await retryFirstRunResolution();
+
+    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'syncConsent' });
+    // The dot must agree with the gate rather than nag about the registration just fixed.
+    expect(getRegistrationValidity()).toBe('valid');
   });
 });
 

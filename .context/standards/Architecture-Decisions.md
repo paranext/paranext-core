@@ -2090,13 +2090,7 @@ step, no automation. Just a record.
 - **Source:** PT-4275 (multi-window epic), multi-window architecture plan §7 and §9.1; branch
   `pt-4275-commands-to-main`.
 
-## registration-validity-once-per-session
-
-> Referenced by slug, not a number. Numbers in this log collide on every rebase — this entry hit
-> three collisions (0014 → 0026 → 0027) before landing. A slug is stable, self-describing, and
-> survives reordering. Proposed as the convention for new entries; see the PR discussion.
->
-> _Registration validity is resolved once per session in a renderer store the first-run gate consumes._
+## adr-registration-validity-once-per-session: Registration validity resolves once per session, in a store the first-run gate and the UI share
 
 - **Date:** 2026-08-22
 - **Status:** Accepted
@@ -2126,10 +2120,14 @@ step, no automation. Just a record.
   whose read/consume ordering differs deliberately between the gate's two sites — and expresses the
   suppressed answer through `publishRegistrationValidity(...)` rather than through the probe. That
   publish seeds the session; it is **not** sticky, so a later forced re-check can re-probe past it
-  (see Consequences). UI
-  consumers read the store through `useRegistrationValidity`, which kicks the session's probe on
-  mount; that mount probe is what makes registration-dependent UI work in the paths where the gate
-  never probes. `'unknown'` renders nothing, matching the fail-open convention
+  (see Consequences). Every path that *acts* on the flag publishes `'valid'`, including the ones
+  that return before probing, so a suppression the gate decides always reaches the UI. A path that
+  gets `'unknown'` publishes nothing — there is no answer to hand over — so the durable flag is
+  cleared on its first read (it grants exactly one launch of trust) while the guard itself survives
+  in memory for the rest of that startup, keeping the Retry on the "couldn't verify" screen covered.
+  UI consumers read the store through `useRegistrationValidity`, which kicks the session's probe on
+  mount; that mount probe is what makes registration-dependent UI work in the
+  paths where the gate never probes. `'unknown'` renders nothing, matching the fail-open convention
   `useSendReceiveAvailability` documents.
 - **Why not two independent probes:** the redundant traffic above is the smaller reason. The larger
   one is that a single answer per session is what lets the gate and the UI agree. Independent probes
@@ -2158,9 +2156,8 @@ step, no automation. Just a record.
   imperfect. A registration that goes invalid mid-session is not detected until the next launch or
   the next popover open. On the launch right after re-registering, the dot can briefly appear before
   the gate publishes its suppressed answer — and because that publish is not sticky, opening the
-  profile popover force-re-probes and can bring the dot back for the rest of that session; on the one
-  path where the gate never publishes (Simple + completed + reminder suppressed + just registered) it
-  simply stays on. All are false positives on an unobtrusive indicator that self-correct next launch.
+  profile popover force-re-probes and can bring the dot back for the rest of that session. Both are
+  wrong answers on an unobtrusive indicator, and both self-correct on the next launch.
   One cost is new rather than merely imperfect: Power mode previously issued **zero** registration
   commands and now issues one per launch, because the toolbar mounts unconditionally and the hook's
   probe is what makes the dot work there at all. Demo mode is explicitly exempt — `useRegistrationValidity`
