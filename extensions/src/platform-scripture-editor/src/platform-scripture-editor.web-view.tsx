@@ -173,6 +173,7 @@ import {
   shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
+import { useGuardedProjectSetting } from './use-guarded-project-setting.hook';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
 import { CharacterMarkerBarOverlay } from './character-marker-bar/character-marker-bar-overlay.component';
@@ -973,11 +974,35 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Project-settings-sourced separators/callers for `nodeOptions` below (PT9
   // ChapterVerseSeparator / RangeIndicator / DefaultFootnoteCaller / DefaultCrossRefCaller). Each
   // fallback matches the CONTRIBUTION's default (projectSettings.json — '.' like Paratext, not
-  // ':'), so a read error and an unset setting render the same reference. Each memo also guards
-  // the empty string: `GetProjectSetting` returns ParametersDictionary values verbatim, so an
-  // empty `<ChapterVerseSeparator/>` in Settings.xml would otherwise yield '' and render
+  // ':'), so a read error and an unset setting render the same reference. The guarded reader also
+  // covers the empty string: `GetProjectSetting` returns ParametersDictionary values verbatim, so
+  // an empty `<ChapterVerseSeparator/>` in Settings.xml would otherwise yield '' and render
   // `Mt 13` — the same guard the `textDirection` memo above applies.
-  //
+  const chapterVerseSeparator = useGuardedProjectSetting(
+    projectId,
+    'platformScripture.chapterVerseSeparator',
+    '.',
+    'chapter/verse separator',
+  );
+  const verseRangeSeparator = useGuardedProjectSetting(
+    projectId,
+    'platformScripture.verseRangeSeparator',
+    '-',
+    'verse range separator',
+  );
+  const defaultFootnoteCaller = useGuardedProjectSetting(
+    projectId,
+    'platformScripture.defaultFootnoteCaller',
+    GENERATOR_NOTE_CALLER,
+    'default footnote caller',
+  );
+  const defaultCrossRefCaller = useGuardedProjectSetting(
+    projectId,
+    'platformScripture.defaultCrossRefCaller',
+    HIDDEN_NOTE_CALLER,
+    'default cross-reference caller',
+  );
+
   // The auto-generated caller SEQUENCES are Paratext settings too, but LANGUAGE-backed rather
   // than Settings.xml tags: PT9 stores them as per-language character sets
   // (`ScrLanguage.FootnoteCallers` / `.CrossReferenceCallers`, Paratext repo,
@@ -987,98 +1012,31 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // (ParatextInternalShared/ScriptureEditor/UsfmXsltExtensions.cs:322) cycles the sequence modulo
   // its length and defaults to a-z when it is empty. They reach this web view through the
   // language-backed `platformScripture.footnoteCallers` / `platformScripture.crossRefCallers`
-  // project settings; an empty/unset footnote sequence leaves `noteCallers` unset so the editor's
-  // built-in a-z default applies (matching GetNthCaller), and an empty cross-reference sequence
-  // keeps PT9's exact '†' fallback.
-  const [chapterVerseSeparatorPossiblyError] = useProjectSetting(
-    projectId,
-    'platformScripture.chapterVerseSeparator',
-    '.',
-  );
-  const chapterVerseSeparator = useMemo(() => {
-    if (isPlatformError(chapterVerseSeparatorPossiblyError)) {
-      logger.warn(
-        `Error getting chapter/verse separator: ${getErrorMessage(chapterVerseSeparatorPossiblyError)}`,
-      );
-      return '.';
-    }
-    return chapterVerseSeparatorPossiblyError || '.';
-  }, [chapterVerseSeparatorPossiblyError]);
-
-  const [verseRangeSeparatorPossiblyError] = useProjectSetting(
-    projectId,
-    'platformScripture.verseRangeSeparator',
-    '-',
-  );
-  const verseRangeSeparator = useMemo(() => {
-    if (isPlatformError(verseRangeSeparatorPossiblyError)) {
-      logger.warn(
-        `Error getting verse range separator: ${getErrorMessage(verseRangeSeparatorPossiblyError)}`,
-      );
-      return '-';
-    }
-    return verseRangeSeparatorPossiblyError || '-';
-  }, [verseRangeSeparatorPossiblyError]);
-
-  const [defaultFootnoteCallerPossiblyError] = useProjectSetting(
-    projectId,
-    'platformScripture.defaultFootnoteCaller',
-    GENERATOR_NOTE_CALLER,
-  );
-  const defaultFootnoteCaller = useMemo(() => {
-    if (isPlatformError(defaultFootnoteCallerPossiblyError)) {
-      logger.warn(
-        `Error getting default footnote caller: ${getErrorMessage(defaultFootnoteCallerPossiblyError)}`,
-      );
-      return GENERATOR_NOTE_CALLER;
-    }
-    return defaultFootnoteCallerPossiblyError || GENERATOR_NOTE_CALLER;
-  }, [defaultFootnoteCallerPossiblyError]);
-
-  const [defaultCrossRefCallerPossiblyError] = useProjectSetting(
-    projectId,
-    'platformScripture.defaultCrossRefCaller',
-    HIDDEN_NOTE_CALLER,
-  );
-  const defaultCrossRefCaller = useMemo(() => {
-    if (isPlatformError(defaultCrossRefCallerPossiblyError)) {
-      logger.warn(
-        `Error getting default cross-reference caller: ${getErrorMessage(defaultCrossRefCallerPossiblyError)}`,
-      );
-      return HIDDEN_NOTE_CALLER;
-    }
-    return defaultCrossRefCallerPossiblyError || HIDDEN_NOTE_CALLER;
-  }, [defaultCrossRefCallerPossiblyError]);
-
-  const [footnoteCallersPossiblyError] = useProjectSetting(
+  // project settings, read with '' as the fallback ('' IS the no-sequence value, so a read error
+  // degrades to it); `parseCallerSequenceSetting` then maps '' to `undefined`, which leaves
+  // `noteCallers` unset so the editor's built-in a-z default applies (matching GetNthCaller), and
+  // an empty cross-reference sequence keeps PT9's exact '†' fallback.
+  const footnoteCallersSetting = useGuardedProjectSetting(
     projectId,
     'platformScripture.footnoteCallers',
     '',
+    'footnote caller sequence',
   );
-  const footnoteCallers = useMemo(() => {
-    if (isPlatformError(footnoteCallersPossiblyError)) {
-      logger.warn(
-        `Error getting footnote caller sequence: ${getErrorMessage(footnoteCallersPossiblyError)}`,
-      );
-      return undefined;
-    }
-    return parseCallerSequenceSetting(footnoteCallersPossiblyError);
-  }, [footnoteCallersPossiblyError]);
+  const footnoteCallers = useMemo(
+    () => parseCallerSequenceSetting(footnoteCallersSetting),
+    [footnoteCallersSetting],
+  );
 
-  const [crossRefCallersPossiblyError] = useProjectSetting(
+  const crossRefCallersSetting = useGuardedProjectSetting(
     projectId,
     'platformScripture.crossRefCallers',
     '',
+    'cross-reference caller sequence',
   );
-  const crossRefCallers = useMemo(() => {
-    if (isPlatformError(crossRefCallersPossiblyError)) {
-      logger.warn(
-        `Error getting cross-reference caller sequence: ${getErrorMessage(crossRefCallersPossiblyError)}`,
-      );
-      return ['†'];
-    }
-    return parseCallerSequenceSetting(crossRefCallersPossiblyError) ?? ['†'];
-  }, [crossRefCallersPossiblyError]);
+  const crossRefCallers = useMemo(
+    () => parseCallerSequenceSetting(crossRefCallersSetting) ?? ['†'],
+    [crossRefCallersSetting],
+  );
 
   /**
    * Whether the editor is effectively read-only, considering the isReadOnly flag, the project's
