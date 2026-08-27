@@ -7,7 +7,9 @@ namespace Paranext.DataProvider.Projects;
 /// <summary>
 /// PDP factory dedicated to <em>published</em> Paratext projects (the same projects
 /// <c>platform.isPublished</c> reports as true). The factory advertises every projectInterface the
-/// regular factory does EXCEPT <c>legacyCommentManager.comments</c>, because:
+/// regular factory does EXCEPT the unpublished-only ones. <c>platformScripture.Pt9Interlinear</c>
+/// is excluded because published projects are distributed archives that do not carry interlinear
+/// authoring data. <c>legacyCommentManager.comments</c> is excluded because:
 /// <list type="bullet">
 ///   <item>Published projects are read-only at the storage layer -
 ///     <c>ResourceProjectFileManager.SetXml</c> throws
