@@ -1100,10 +1100,12 @@ async function main() {
       // default close, which is the user's only escape from the wait this handler is about to start.
       event.preventDefault();
 
-      // While the question below is open, a further `close` on this window — a Cmd+Q, an OS
-      // logout, a second ✕ where the dialog is not truly modal — must not reach the escape hatch
-      // above, which exists for a close stuck in the bounded sync wait and would take this window
-      // down with none of its shutdown work. Ignored instead; the open question still stands.
+      // While the question below is open, a further `close` on this window must not reach the
+      // escape hatch above, which exists for a close stuck in the bounded sync wait and would take
+      // this window down with none of its shutdown work. A second ✕ where the dialog is not truly
+      // modal is simply ignored; the open question still stands. A quit-driven close (Cmd+Q, OS
+      // logout) is ignored here too — the decision below is already giving way to that quit, and
+      // the shutdown work runs from THAT pass, so this pass has nothing to add.
       if (isAskingAboutClose) return;
 
       // Closing the primary window while others are open takes every window with it, so the user
