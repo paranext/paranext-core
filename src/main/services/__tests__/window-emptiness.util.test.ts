@@ -310,6 +310,45 @@ describe('re-checking whether a window is still empty before closing it', () => 
     expect(hasContentArrivedSinceEmptyReport).not.toHaveBeenCalled();
   });
 
+  test('a primary that is still empty once its re-check answers docks Home, spending the re-check on it', async () => {
+    // Unlike the last-window-standing case above, the primary exemption is NOT decided ahead of the
+    // re-check: it has to run so a primary that gained content while its report was in flight can
+    // answer `stay` instead (see the test below) rather than docking a stray Home tab beside content
+    // that just arrived.
+    const handler = createWindowEmptinessHandler({
+      countWindows,
+      closeWindow,
+      isWindowTracked: () => true,
+      markWindowClosing,
+      hasContentArrivedSinceEmptyReport,
+      isPrimaryWindow: (windowId) => windowId === 1,
+    });
+    countWindows.mockReturnValue(2);
+
+    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
+
+    expect(hasContentArrivedSinceEmptyReport).toHaveBeenCalledWith(1);
+    expect(closeWindow).not.toHaveBeenCalled();
+    expect(markWindowClosing).not.toHaveBeenCalled();
+  });
+
+  test('a primary that gained content during its re-check is told to stay, not handed a stray Home tab', async () => {
+    hasContentArrivedSinceEmptyReport.mockResolvedValue(true);
+    const handler = createWindowEmptinessHandler({
+      countWindows,
+      closeWindow,
+      isWindowTracked: () => true,
+      markWindowClosing,
+      hasContentArrivedSinceEmptyReport,
+      isPrimaryWindow: (windowId) => windowId === 1,
+    });
+    countWindows.mockReturnValue(2);
+
+    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'stay' });
+    expect(closeWindow).not.toHaveBeenCalled();
+    expect(markWindowClosing).not.toHaveBeenCalled();
+  });
+
   test('a window whose last sibling starts closing during the re-check docks Home', async () => {
     // Decisions from this handler are serialized against each other, but a window the user closes
     // with its own X button marks itself closing on a path that serialization does not cover. So
