@@ -6,7 +6,7 @@ import type { NamedText, Policy } from './types';
 
 /**
  * The third-party files this repository copies rather than compiles, which reach NONE of this
- * pipeline's three sources.
+ * pipeline's four sources.
  *
  * `collectShippedPackages` derives the npm half from webpack's module manifests, a stylesheet leaf
  * scan and `release/app`'s closure - all three of which describe MODULES. The static trees are not
@@ -59,22 +59,43 @@ const NOTICE_DOCUMENT = /\.(txt|md|markdown|rst|html?|text)$/i;
 function statesTerms(name: string): boolean {
   // A dotfile is configuration, never a notice - and `.gitattributes` matches `attributes`.
   if (name.startsWith('.')) return false;
-  if (NOTICE_FILE_PREFIX.test(name)) return true;
-  return (NOTICE_DOCUMENT.test(name) || !path.extname(name)) && NOTICE_WORD.test(name);
+  // The file-type test bounds BOTH branches. `license` is a word boundary in `license.png`, so the
+  // prefix branch alone flagged an icon as a statement of terms - which then reached
+  // `staticAssetNoticeTexts` and was read as UTF-8 into a fenced block of replacement characters.
+  if (!NOTICE_DOCUMENT.test(name) && path.extname(name)) return false;
+  return NOTICE_FILE_PREFIX.test(name) || NOTICE_WORD.test(name);
 }
 
-/** The static trees `copy-webpack-plugin` copies into `extensions/dist` verbatim. */
-const STATIC_TREES = ['assets', 'public'];
+/**
+ * The per-extension trees `copy-webpack-plugin` copies into `extensions/dist` verbatim.
+ *
+ * `contributions/` belongs here for the same reason `assets/` and `public/` do - the copy patterns
+ * in `extensions/webpack/webpack.util.ts` and in every per-extension `webpack.config.main.ts` copy
+ * all three wholesale, so a notice file dropped in any of them reaches every installer with no
+ * webpack module compiled for it and nothing else in this pipeline able to see it.
+ */
+const STATIC_TREES = ['assets', 'public', 'contributions'];
+
+/**
+ * Extensions whose whole source directory `copy-webpack-plugin` copies, not just the static trees.
+ *
+ * `extensions/src/evil` is copied wholesale so that its deliberately-misbehaving source ships as
+ * source. Reading only `STATIC_TREES` under it would miss a notice file anywhere else in the tree.
+ */
+const WHOLESALE_COPIED_EXTENSIONS = ['evil'];
 
 /**
  * Every tree `electron-builder.json5` packs verbatim, so every tree this gate has to read.
  *
  * `extraResources` names two of them, not one: `./extensions/dist/` (which is where
- * `copy-webpack-plugin` puts each extension's `assets/` and `public/`) and `./assets/**` at the
- * repository root. Both reach every installer by the same mechanism, so a notice file is equally
- * invisible and equally redistributed in either. The root tree holds only first-party icons,
- * entitlements and localization today; the point of reading it is that nothing else would notice
- * when that stops being true.
+ * `copy-webpack-plugin` puts each extension's `assets/`, `public/` and `contributions/`) and
+ * `./assets/**` at the repository root. Both reach every installer by the same mechanism, so a
+ * notice file is equally invisible and equally redistributed in either. The root tree holds only
+ * first-party icons, entitlements and localization today; the point of reading it is that nothing
+ * else would notice when that stops being true.
+ *
+ * `extensions/src/evil` is copied WHOLESALE rather than tree by tree (see `webpack.util.ts`), so
+ * the whole extension directory is read for it - anything under it ships.
  */
 function packedStaticTrees(repo: string): string[] {
   const trees: string[] = [];
@@ -84,13 +105,20 @@ function packedStaticTrees(repo: string): string[] {
     fs.readdirSync(extensionsRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .forEach((extension) =>
-        trees.push(...STATIC_TREES.map((tree) => path.join(extensionsRoot, extension.name, tree))),
+        trees.push(
+          ...(WHOLESALE_COPIED_EXTENSIONS.includes(extension.name)
+            ? [path.join(extensionsRoot, extension.name)]
+            : STATIC_TREES.map((tree) => path.join(extensionsRoot, extension.name, tree))),
+        ),
       );
 
   trees.push(path.join(repo, 'assets'));
 
   return trees.filter((tree) => fs.existsSync(tree));
 }
+
+/** An extension's own `LICENSE`, which this repository writes and ships with every extension. */
+const FIRST_PARTY_EXTENSION_LICENSE = /^extensions\/src\/[^/]+\/LICENSE$/;
 
 /** Every notice-shaped file under a packed static tree, repo-relative and sorted. */
 export function findStaticAssetNotices(repo: string): string[] {
@@ -108,7 +136,12 @@ export function findStaticAssetNotices(repo: string): string[] {
 
   packedStaticTrees(repo).forEach(walk);
 
-  return found.sort(compareStrings);
+  // An extension's own top-level `LICENSE` is this repository's text, not a third-party notice: the
+  // copy patterns put one in every extension's output beside the manifest that declares it, and
+  // `extension-licenses.test.ts` is the gate for those. It only reaches this walk for an extension
+  // copied wholesale, and recording it here would have the document reproduce the whole AGPL under
+  // a heading that says these texts came from third parties.
+  return found.filter((file) => !FIRST_PARTY_EXTENSION_LICENSE.test(file)).sort(compareStrings);
 }
 
 /** Sha256 of a file's exact bytes, as `staticAssetNotices` records them. */
@@ -172,6 +205,22 @@ export function assertStaticAssetNoticesRecorded(repo: string, policy: Policy): 
   // Every entry with neither field, whether or not the file happens to be on disk. Testing only the
   // absent ones would let a PRESENT file with an unpinned entry through - which is the worse case,
   // since its text is then reproduced by nothing and checked by nothing.
+  // A hash-pinned entry whose file is gone reaches neither of the checks above - both iterate the
+  // files found ON DISK - and `unreviewed` skips it because it HAS a sha256. Without this the run
+  // reached `staticAssetNoticeTexts` and died on a bare ENOENT naming no policy and no remedy,
+  // after the Ruby batch and four `dotnet restore` passes had already run.
+  const missing = Object.entries(recorded)
+    .filter(([file, entry]) => entry.sha256 && !fs.existsSync(path.join(repo, file)))
+    .map(([file]) => file)
+    .sort(compareStrings);
+  if (missing.length)
+    throw new Error(
+      `${missing.length} hash-pinned "staticAssetNotices" entr(y|ies) name a file that is not in ` +
+        `the repository:\n  ${missing.join('\n  ')}\n` +
+        'The document reproduces each of these verbatim, so the entry cannot be honoured. Restore ' +
+        'the file, or remove the entry from notices-policy.json if the asset it covered has gone.',
+    );
+
   const unreviewed = Object.entries(recorded)
     .filter(([, entry]) => !entry.sha256 && !entry.notTracked)
     .map(([file]) => file)

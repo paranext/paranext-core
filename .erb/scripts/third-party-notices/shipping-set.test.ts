@@ -120,6 +120,25 @@ describe('packageDirOf', () => {
     expect(packageDirOf(file, repo)).toBeUndefined();
   });
 
+  it('attributes a subdirectory manifest that DOES have a name to the real package', () => {
+    // A `name` does not distinguish a package root from a resolution marker. This tree really
+    // installs `terser/dist/package.json` as `{"name":"dist","version":"1.0.0"}`,
+    // `detect-port/dist/package.json` as `{"name":"detect-port","version":"2.1.0"}` and
+    // `web-streams-polyfill/es2018/package.json` with a name and no version - so a module bundled
+    // from one produced a row named `dist@1.0.0`, pointed licensee at a directory with no LICENSE,
+    // and the real package got no row at all. The path names the owner unambiguously.
+    const dir = writePackage('node_modules/terser', 'terser', '5.44.0');
+    const distDir = path.join(dir, 'dist');
+    fs.mkdirSync(distDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(distDir, 'package.json'),
+      JSON.stringify({ name: 'dist', version: '1.0.0' }),
+    );
+    const file = path.join(distDir, 'bundle.min.js');
+    fs.writeFileSync(file, '');
+    expect(packageDirOf(file, repo)).toBe(dir);
+  });
+
   it('walks past a directory-scoped package.json with no name to the real package root', () => {
     // Some packages (e.g. @babel/runtime/helpers/esm/package.json, real on-disk file: just
     // `{"type":"module"}`) drop a minimal package.json partway down their own tree purely to flip
@@ -532,6 +551,58 @@ describe('collectShippedPackages - stylesheet leaf scan', () => {
       repo,
     });
     expect(packages.map((p) => p.name)).toEqual(['some-font']);
+    expect(unresolvedStylesheetSpecifiers).toEqual([]);
+  });
+
+  it('finds a package reached only through a Sass @forward', () => {
+    // `@forward` emits a module's CSS exactly as `@use` does, and this scan is the only source in
+    // this pipeline that sees pre-webpack Sass resolution - so a package reached only this way
+    // would ship in every bundle with no row, no lock entry and not even an unresolved-specifier
+    // note.
+    writePackage('node_modules/some-theme', 'some-theme', '1.0.0');
+    writeStylesheet('src/renderer/app.scss', "@forward 'some-theme/scss/variables';");
+    writeManifest('main', []);
+    const { packages, unresolvedStylesheetSpecifiers } = collectShippedPackages({
+      manifestDir: path.join(repo, '.notices', 'modules'),
+      repo,
+    });
+    expect(packages.map((p) => p.name)).toEqual(['some-theme']);
+    expect(unresolvedStylesheetSpecifiers).toEqual([]);
+  });
+
+  it('finds every package named by one comma-separated @import statement', () => {
+    // One statement, two stylesheets. Reading only the head of the statement drops the rest
+    // silently.
+    writePackage('node_modules/font-a', 'font-a', '1.0.0');
+    writePackage('node_modules/font-b', 'font-b', '1.0.0');
+    writeStylesheet('src/renderer/app.css', "@import 'font-a', 'font-b';");
+    writeManifest('main', []);
+    const { packages } = collectShippedPackages({
+      manifestDir: path.join(repo, '.notices', 'modules'),
+      repo,
+    });
+    expect(packages.map((p) => p.name).sort()).toEqual(['font-a', 'font-b']);
+  });
+
+  it('does not report a first-party workspace package reached through a stylesheet', () => {
+    // npm installs a workspace package as a symlink, so the resolved path looks like any other
+    // dependency until the link is followed. Emitting it would put this repository's own code in
+    // the document as a third-party notice.
+    const libDir = path.join(repo, 'lib', 'platform-bible-react');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: 'platform-bible-react', version: '1.0.0' }),
+    );
+    fs.mkdirSync(path.join(repo, 'node_modules'), { recursive: true });
+    fs.symlinkSync(libDir, path.join(repo, 'node_modules', 'platform-bible-react'), 'dir');
+    writeStylesheet('src/renderer/app.css', "@import 'platform-bible-react/dist/index.css';");
+    writeManifest('main', []);
+    const { packages, unresolvedStylesheetSpecifiers } = collectShippedPackages({
+      manifestDir: path.join(repo, '.notices', 'modules'),
+      repo,
+    });
+    expect(packages.map((p) => p.name)).toEqual([]);
     expect(unresolvedStylesheetSpecifiers).toEqual([]);
   });
 

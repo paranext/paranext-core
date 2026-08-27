@@ -165,7 +165,7 @@ function calculateChecksum(filePath: string): Promise<string> {
  * @param destination Local path to save the file
  * @returns Promise that resolves when download is complete
  */
-function downloadFile(url: string, destination: string): Promise<void> {
+export function downloadFile(url: string, destination: string): Promise<void> {
   return new Promise((resolve, reject) => {
     // The body is written to a staging file beside the destination and renamed into place only
     // once it is complete, so nothing this call did not itself create is ever removed and a
@@ -259,6 +259,11 @@ function downloadFile(url: string, destination: string): Promise<void> {
       response.pipe(file);
 
       file.on('finish', () => {
+        // `fail` closes the stream to release the handle before removing the staging file, and
+        // `close()` ends the stream, which emits `finish`. Without this guard that teardown path
+        // runs the success path: the truncated staging file is renamed over a destination that
+        // held a complete file, and the promise resolves reporting a download that failed.
+        if (settled) return;
         // Closed before the rename, and the rename before `resolve`, so a caller that sees this
         // promise settle sees a complete file under the real name - never a staging file, and
         // never a handle still open on Windows.

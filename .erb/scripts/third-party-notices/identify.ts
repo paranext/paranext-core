@@ -1,10 +1,19 @@
 import { execFileSync } from 'child_process';
 import * as path from 'path';
-import { codeOf } from './read-json';
+import { codeOf, messageOf } from './read-json';
 import type { Detection } from './types';
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
 const SCRIPT = path.join(__dirname, 'detect.rb');
+
+/**
+ * Bundler's executable name.
+ *
+ * On Windows the RubyGems shim is `bundle.cmd`, and `execFileSync` without a shell cannot launch a
+ * `.cmd` at all - it reports ENOENT, which reads as "Bundler is not installed" on a machine where
+ * it is. `--verify` is permitted on Windows, so that path is reachable there.
+ */
+const BUNDLE = process.platform === 'win32' ? 'bundle.cmd' : 'bundle';
 
 /**
  * Detects license texts for many directories in ONE Ruby process.
@@ -22,7 +31,7 @@ export function identify(dirs: string[]): Map<string, Detection> {
 
   let out: string;
   try {
-    out = execFileSync('bundle', ['exec', 'ruby', SCRIPT], {
+    out = execFileSync(BUNDLE, ['exec', 'ruby', SCRIPT], {
       cwd: REPO,
       input: dirs.join('\n'),
       encoding: 'utf8',
@@ -49,6 +58,19 @@ export function identify(dirs: string[]): Map<string, Detection> {
     throw error;
   }
 
-  const detections: Detection[] = JSON.parse(out);
+  let detections: Detection[];
+  try {
+    detections = JSON.parse(out);
+  } catch (error: unknown) {
+    // `detect.rb` writes JSON on stdout and nothing else, so anything unparseable is the Ruby side
+    // having printed a warning or a partial payload. A bare `SyntaxError: Unexpected token` names
+    // neither the producer nor the remedy, after the whole Ruby batch has already run.
+    throw new Error(
+      `license identification returned output that is not JSON (${messageOf(error)}). This is ` +
+        "`detect.rb`'s stdout, so something in the Ruby toolchain wrote to it alongside the " +
+        'payload.\nRun it directly to see what:\n' +
+        `    bundle exec ruby ${path.relative(REPO, SCRIPT)}`,
+    );
+  }
   return new Map(detections.map((entry) => [entry.dir, entry]));
 }

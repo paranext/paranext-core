@@ -34,8 +34,8 @@ describe('decideLicenseStamp', () => {
     });
   });
 
-  // Decided per FILE, this rewrote the manifest to AGPL while the package.json kept Apache-2.0:
-  // two files in one folder declaring different licenses, and no text copied for either.
+  // The decision is per FOLDER, not per file: stamping one file while a sibling keeps other terms
+  // leaves two files in one folder declaring different licenses, with no text copied for either.
   it('leaves the whole folder alone when any file declares other terms', () => {
     const decision = decideLicenseStamp([
       declared('package.json', 'Apache-2.0'),

@@ -30,15 +30,28 @@ const foldersToRemove = [
   path.join(webpackPaths.rootPath, '.notices'),
 ];
 
+/**
+ * Caches removed by glob rather than by name.
+ *
+ * The notices generator refuses to write from a WARM webpack filesystem cache, because a build
+ * served from cache under-reports the modules it compiled. Its regeneration procedure therefore
+ * opens with `rm -rf node_modules/.cache/webpack-*` by hand - which is this script's job, and the
+ * same reason `.notices` is listed above. One entry per bundle and per mode
+ * (`extensionCacheDirectory` in `extensions/webpack/webpack.util.ts`), so the set is a glob.
+ */
+const globsToRemove = [path.join(webpackPaths.rootPath, 'node_modules', '.cache', 'webpack-*')];
+
 function clean(): void {
   foldersToRemove.forEach((folder) => {
     if (fs.existsSync(folder)) rimrafSync(folder);
   });
+  globsToRemove.forEach((pattern) => rimrafSync(pattern, { glob: true }));
 }
 
 // `--print` lists what would be removed and removes nothing, so the entry point can be exercised
 // without deleting a tree - see the module docstring for why only the entry point can be.
 if (require.main === module) {
-  if (process.argv.includes('--print')) foldersToRemove.forEach((folder) => console.log(folder));
+  if (process.argv.includes('--print'))
+    [...foldersToRemove, ...globsToRemove].forEach((folder) => console.log(folder));
   else clean();
 }

@@ -88,6 +88,12 @@ const configWebView: webpack.Configuration = merge(configBase, {
   // rule, so the notices those packages require travel inside the bundle that ships them. The
   // three bundles under `release/app/dist` are files rather than strings, so their sidecars are
   // packed beside them and are left extracted.
+  //
+  // TODO(PT-4477): this is the AGGREGATE build only. Each extension also has its own `package`
+  // script that builds a redistributable zip from its own `webpack/webpack.config.web-view.ts`, and
+  // none of those set this - so that path still ships the dangling pointer. The fix belongs in
+  // `paranext-multi-extension-template`, because those files are shared regions end to end and
+  // `terser-webpack-plugin` is not declared in the extensions workspace.
   optimization: {
     minimizer: [
       new TerserPlugin({

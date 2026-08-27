@@ -31,10 +31,19 @@ type CollectedTexts = Map<string, { text: string; packages: string[] }>;
  * identifiers: reproducing the unmodified text of a license the package is NOT under would be worse
  * than reproducing none, and the corpus holds no exception texts.
  */
+const spdxIdsCache = new Map<string | undefined, string[]>();
+
 export function spdxIdsOf(spdxId: string | undefined): string[] {
+  // Memoized: every row is asked this three to four times on one pass (the compound test, the
+  // canonical-text collection, the credit line and the accounting assertion), and each call reparses
+  // the same SPDX expression. Keyed by the expression, which is the whole input.
+  const cached = spdxIdsCache.get(spdxId);
+  if (cached) return cached;
+
   const parsed = parseDeclared(spdxId);
-  if (!parsed.ok || parsed.exceptions.length) return [];
-  return parsed.ids;
+  const ids = !parsed.ok || parsed.exceptions.length ? [] : parsed.ids;
+  spdxIdsCache.set(spdxId, ids);
+  return ids;
 }
 
 /** How each ecosystem is spelled in the document. The verdict carries the internal key. */
@@ -64,7 +73,11 @@ export function fenceFor(text: string | undefined): string {
  * other, and one `|` in it silently shifts every column of that row.
  */
 export function cell(value: string | undefined): string {
-  return (value || '').replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
+  // Backslashes FIRST: escaping the pipe introduces backslashes of its own, so doing it the other
+  // way round would double those and leave the pipe live. A value ending in a backslash - a Windows
+  // path in a NuGet `Notes` field - otherwise escapes the escape and GFM reads the pipe as a column
+  // break, shifting every cell of that row in a document packed into every installer.
+  return (value || '').replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -618,12 +631,11 @@ function pushSnapSection(
     'content snap the application plugs into are satisfied at runtime and are not copied in.',
     'Those that are copied in are unmodified Ubuntu archive builds, linked dynamically.',
     '',
-    // Generated from the policy's own table rather than written as prose. The sentence this
-    // replaces named ALSA, AppIndicator, NSS, NSPR, DRM, Mesa, X11 and terminfo - ten of the twelve
-    // staged libraries - and nothing tied it to `stagePackages`, so GTK and libsecret sat in the
-    // installer and in none of its clauses, and the next library added would have joined them
-    // silently. `snapLicensing` refuses a staged package the table does not classify, so that
-    // cannot recur.
+    // Generated from the policy's own table rather than written as prose, so the clauses cannot
+    // name a different set of libraries than `snap.stagePackages` stages. Hand-written prose here
+    // would leave the next library added to the installer described by nothing;
+    // `assertSnapStagePackagesClassified` is what makes an unclassified staged package a build
+    // failure rather than a silent omission.
     ...snapLicensing(snapStagePackages, snapStagePackageLicenses),
     '',
     'Their notices travel in this document. electron-builder unpacks the shared objects from each',
@@ -701,7 +713,9 @@ function pushDotnetSection(out: string[], dotnetDescribed: DescribedRow[]): void
   );
   out.push('| Package | Version | License | Notes |', '| --- | --- | --- | --- |');
   dotnetDescribed.forEach((row) =>
-    out.push(`| \`${row.name}\` | ${row.version} | ${cell(row.license)} | ${cell(row.note)} |`),
+    out.push(
+      `| \`${row.name}\` | ${cell(row.version)} | ${cell(row.license)} | ${cell(row.note)} |`,
+    ),
   );
   out.push('');
   // `!hasText` first, not `!hasCanonicalText` alone: a package that reproduces its OWN bundled
@@ -884,6 +898,7 @@ function assertNpmRowsAccountedFor(
     platformOnly,
     platformOnlyNoCanonical,
   }: NpmAccount,
+  canonical: CollectedTexts,
 ): void {
   const rowKey = (row: { name: string; version: string }) => `${row.name}@${row.version}`;
   const named = new Set(
@@ -909,9 +924,16 @@ function assertNpmRowsAccountedFor(
         'Every such package must appear in one of them - the document otherwise omits, silently, ' +
         'the fact that nothing of theirs is reproduced.',
     );
-  const overclaimed = [...platformOnly, ...noTextCanonical, ...unreadCanonical].filter(
-    (row) => !row.hasCanonicalText,
-  );
+  // Tested against the section the document actually renders, not against the flag that put the row
+  // in these buckets: all three are DEFINED by filtering on `hasCanonicalText`, so re-reading it
+  // here can only ever be true and the check could never fire. What can diverge is the flag and the
+  // texts - `useCanonicalText` sets one and populates the other in the same pass - so the question
+  // worth asking is whether every identifier the row claims is reproduced is present in
+  // `canonical`.
+  const overclaimed = [...platformOnly, ...noTextCanonical, ...unreadCanonical].filter((row) => {
+    const ids = spdxIdsOf(row.spdxId);
+    return !ids.length || ids.some((id) => !canonical.has(id));
+  });
   if (overclaimed.length)
     throw new Error(
       `${overclaimed.length} npm package(s) are named in a paragraph stating their canonical ` +
@@ -1075,7 +1097,7 @@ export function render({
   pushSnapSection(out, snapStagePackages, snapStagePackageLicenses, snapCopyrightTexts);
   pushDotnetSection(out, dotnetDescribed);
   pushNpmSection(out, npmDescribed, npmAccount);
-  assertNpmRowsAccountedFor(npmDescribed, npmAccount);
+  assertNpmRowsAccountedFor(npmDescribed, npmAccount, canonical);
   pushNpmTable(out, npmDescribed);
   pushLicenseTextsSection(out, texts, canonical);
   pushCanonicalTextsSection(out, canonical);

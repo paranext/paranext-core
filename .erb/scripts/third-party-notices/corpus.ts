@@ -76,8 +76,41 @@ export function canonicalText(spdxId: string): string | undefined {
   return entry.licenseText;
 }
 
+/**
+ * The version of `spdx-license-list` INSTALLED, read from its own manifest.
+ *
+ * `package.json` records a range, so it cannot answer this; `build-corpus-index.ts` reads the same
+ * manifest for the same reason when it stamps the index.
+ */
+function installedCorpusVersion(): string {
+  return readJsonFile<{ version: string }>(
+    require.resolve('spdx-license-list/package.json'),
+    'the spdx-license-list package manifest',
+  ).version;
+}
+
+/**
+ * The version the document and lock record as the source of every canonical text.
+ *
+ * Checked against the installed dependency on every call rather than returned from the index alone.
+ * The checksums catch a text that CHANGED, but a release that leaves every indexed text
+ * byte-identical passes `verifyCorpus()` while the artifact keeps asserting a version that is no
+ * longer what produced it - which defeats the reason the version is recorded at all, that a verdict
+ * which moved because the matcher was upgraded stays distinguishable from one that moved because a
+ * package did. `licenseeVersion` in `main.ts` re-reads its pinned version every run for the same
+ * reason; this is the SPDX half of it.
+ */
 export function corpusVersion(): string {
-  return corpusIndex().version;
+  const recorded = corpusIndex().version;
+  const installed = installedCorpusVersion();
+  if (recorded !== installed)
+    throw new Error(
+      `the committed SPDX corpus index records version ${recorded}, but the installed ` +
+        `spdx-license-list is ${installed}. The document would assert texts came from a version ` +
+        'that did not produce them. Regenerate the index deliberately and review the diff:\n' +
+        '    npm run build:third-party-notices:corpus',
+    );
+  return recorded;
 }
 
 /** @returns Ids whose text is missing from the dependency or fails its checksum. */

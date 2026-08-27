@@ -417,8 +417,26 @@ export function alwaysListedPackages(
   directReferences: { id: string; version: string | undefined }[],
 ): MergedNugetPackage[] {
   const present = new Set(collected.map((pkg) => pkg.name.toLowerCase()));
-  return Object.entries(policy.overrides || {})
-    .filter(([key, override]) => override.alwaysList && key.startsWith('nuget:'))
+  const alwaysListed = Object.entries(policy.overrides || {}).filter(
+    ([, override]) => override.alwaysList,
+  );
+  // Refused rather than filtered away. `alwaysList` is documented ecosystem-neutrally, but only the
+  // NuGet half of this pipeline implements it - an entry under any other prefix would produce no
+  // row, and `stalePolicyEntries` exempts every `alwaysList` entry from the stale report, so it
+  // would also produce no note. A recorded determination that does nothing and says nothing is
+  // worse than a build failure naming it.
+  const unsupported = alwaysListed
+    .map(([key]) => key)
+    .filter((key) => !key.startsWith('nuget:'))
+    .sort();
+  if (unsupported.length)
+    throw new Error(
+      `"alwaysList" is implemented for NuGet packages only, but notices-policy.json sets it on ` +
+        `${unsupported.join(', ')}. An npm package that ships is found by reading webpack's own ` +
+        'module graph, which needs no such instrument; remove the flag, or fix the derivation if ' +
+        'a package that ships is missing from it.',
+    );
+  return alwaysListed
     .map(([key]) => key.slice('nuget:'.length))
     .filter((name) => !present.has(name.toLowerCase()))
     .map((name) => ({
@@ -1142,6 +1160,15 @@ export function main(): void {
     return;
   }
 
+  // Printed before ANY outcome, including the blocked one. They describe what this run could not
+  // account for - a stylesheet specifier that resolved to no installed package is the one thing
+  // that can quietly shorten the npm half - so they belong with the decision to write rather than
+  // after it, where a failed write swallows them entirely. Printing them after the block gate meant
+  // the run that most needs them, the one already stopping to be looked at, was the one run that
+  // printed none. CI runs `--verify` and nothing else, and it is equally the run that needs an
+  // unaccounted-for specifier surfaced.
+  printRunNotes(report);
+
   // The block gate runs before EITHER outcome, not just before the write. The lock records
   // `spdxId` rather than `verdict`, so a blocked package is unrepresented in what `--verify`
   // compares: run the gate after the verify branch returns and the check that documents itself as
@@ -1151,14 +1178,6 @@ export function main(): void {
 
   const artifact = renderArtifactPair(report);
   if (!artifact) return;
-
-  // Printed on BOTH paths, and before either one acts. They describe what this run could not
-  // account for - a stylesheet specifier that resolved to no installed package is the one thing
-  // that can quietly shorten the npm half - so they belong with the decision to write rather than
-  // after it, where a failed write swallows them entirely. The write path alone is not enough: CI
-  // runs `--verify` and nothing else, and it is the run that most needs an unaccounted-for
-  // specifier surfaced.
-  printRunNotes(report);
 
   if (verifyOnly) {
     verifyAgainstCommittedLock(report, artifact.lock, artifact.rendered);

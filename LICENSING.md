@@ -119,9 +119,12 @@ does not reach one for them.
 
 The facts, which are not in doubt:
 
-- `extensions/webpack/webpack.config.base.ts` names `@papi/backend`, `@papi/core`,
-  `@papi/frontend` and `@papi/frontend/react` as externals, so an extension's own bundle contains
-  none of them and every call into them is resolved at runtime.
+- `extensions/webpack/webpack.config.base.ts` names eleven modules as externals — `crypto`,
+  `react`, `react/jsx-runtime`, `react-dom`, `react-dom/client`, `@papi/backend`, `@papi/core`,
+  `@papi/frontend`, `@papi/frontend/react`, `@sillsdev/scripture` and `platform-bible-utils` — so an
+  extension's own bundle contains none of them and every call into them is resolved at runtime. The
+  four `@papi/*` entries are the ones the linkage question turns on; the rest are libraries the host
+  supplies, which is why the paragraph above reasons from `platform-bible-utils` being on this list.
 - They are supplied by `src/extension-host/services/extension.service.ts`, which shims
   `Module.prototype.require` so that `require('@papi/backend')` returns the host's own `papi`
   object. An extension does not load a copy of a library; it is loaded **by** the host, into the
@@ -218,13 +221,16 @@ Read that as a statement about what those two scans see, which is narrower than 
 installer contains". The npm half is derived from what the compiler reports it bundled, so a package
 reached only at runtime (a `require` resolved at run time, a native module, anything that never
 passes through webpack) is outside it; `.erb/scripts/third-party-notices/shipping-set.ts` sets out
-why that source was chosen over a `package.json` closure, and what each of its three inputs covers.
+why that source was chosen over a `package.json` closure, and what each of its four inputs covers.
 It is also not a claim that nothing copyleft is in the Linux artifact. The snap stages Ubuntu shared libraries inside
 itself (`electron-builder.json5` → `snap.stagePackages`), and several are copyleft — ALSA and
 AppIndicator under the LGPL, NSS and NSPR under MPL-2.0. They obstruct nothing: they are unmodified
 archive builds, linked dynamically, and both licenses are compatible with AGPL source. But they are
-redistributed inside the `.snap`, no scan in this repository reaches them, and the snap does not
-currently carry their license texts. THIRD-PARTY-NOTICES.md records that gap under "Linux snap".
+redistributed inside the `.snap`. `assertSnapStagePackagesClassified` reads `snap.stagePackages`
+and fails the build on a staged library the policy has not classified, and each library's own Ubuntu
+`copyright` file is checked into this repository, hash-pinned, and reproduced verbatim under
+"Linux snap" in THIRD-PARTY-NOTICES.md — which `electron-builder.json5` packs into the snap through
+`extraResources`, so the notices travel inside the artifact that redistributes the libraries.
 
 ### Why `CsvHelper` is taken under Apache-2.0 and not MS-PL
 
@@ -356,12 +362,12 @@ Two things follow the binary:
 
   Regenerate it whenever production dependencies change - the procedure, including the cold-cache
   requirement and the two verification commands, is in the README under
-  [Third-party notices](./README.md#third-party-notices). CI regenerates it on Linux and fails if
-  the committed copy is stale, which is also what runs the copyleft gate on every pull request.
-  Before regenerating, CI runs `npm run verify:third-party-notices`, which diffs the freshly derived
-  set against the committed `THIRD-PARTY-NOTICES.lock.json` and fails naming what moved - so a
-  license text that changed under an unchanged `name@version`, which nobody would otherwise re-read,
-  has to be looked at and acknowledged rather than silently regenerated away.
+  [Third-party notices](./README.md#third-party-notices). CI never regenerates it; it runs
+  `npm run verify:third-party-notices`, which re-derives the set, diffs it against the committed
+  `THIRD-PARTY-NOTICES.lock.json` and fails naming what moved - which is also what runs the copyleft
+  gate on every pull request. Regeneration is a deliberate local step, so a license text that changed
+  under an unchanged `name@version`, which nobody would otherwise re-read, has to be looked at and
+  acknowledged rather than silently regenerated away.
 
   A package that production source imports ships even when it is declared as a `devDependency` —
   the same trap described under "MIT" above, seen from the notices side. Neither build derives what

@@ -116,8 +116,12 @@ type Leaf = { dir: string; bundle: string };
 export function readBuildId(manifestDir: string): string | undefined {
   try {
     return fs.readFileSync(buildIdFile(manifestDir), 'utf8').trim() || undefined;
-  } catch {
-    return undefined;
+  } catch (error) {
+    // Only "there is no build id", which is a normal state. A permission error or a directory in
+    // its place is a broken tree reading as an unstamped one, and the mixed-vintage check that
+    // depends on this id then compares against nothing and passes.
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined;
+    throw error;
   }
 }
 
@@ -348,7 +352,10 @@ export function assertNpmNotShrunk(
   committedNpmCount: number | undefined,
   { accepted = false }: { accepted?: boolean } = {},
 ): ShippedPackage[] {
-  if (!committedNpmCount || accepted) return packages;
+  // `=== undefined`, not falsy: `0` is the most degraded lock state there is - an npm half
+  // truncated to `[]` - and treating it as "no lock to compare against" turns the relative gate off
+  // on the one input it most needs to catch, leaving only the frozen absolute floor.
+  if (committedNpmCount === undefined || accepted) return packages;
   const floor = Math.ceil(committedNpmCount * (1 - NPM_MAX_SHRINK));
   if (packages.length < floor)
     throw new Error(
@@ -538,9 +545,18 @@ export function resolveFromLock(lock: Lockfile, fromKey: string, name: string): 
 function lockDependsOn(lock: Lockfile, key: string, name: string): boolean {
   const { entry } = lockEntry(lock, key);
   if (!entry) return false;
-  return [entry.dependencies, entry.optionalDependencies, entry.peerDependencies].some((edges) =>
-    Object.prototype.hasOwnProperty.call(edges || {}, name),
-  );
+  // `devDependencies` counts here, unlike anywhere a runtime closure is being walked. The keys this
+  // is asked about include this repository's own workspace manifests, and a package a first-party
+  // manifest BUNDLES is normally declared there - a bundled dependency is consumed at build time,
+  // which is what the code style guide asks for. Omitting the section made the correction below
+  // unreachable for exactly the manifests it exists to serve, so a hoisted copy webpack really
+  // compiled was re-described as a nested version it never saw.
+  return [
+    entry.dependencies,
+    entry.devDependencies,
+    entry.optionalDependencies,
+    entry.peerDependencies,
+  ].some((edges) => Object.prototype.hasOwnProperty.call(edges || {}, name));
 }
 
 /**
@@ -750,15 +766,28 @@ function describePackage(
  * package boundary, so a `name` field (which every real npm package.json carries) is what
  * distinguishes it from one.
  */
+const packageRootCache = new Map<string, boolean>();
+
 function isPackageRoot(packageJsonPath: string): boolean {
-  if (!fs.existsSync(packageJsonPath)) return false;
-  // Loosely typed on purpose: this function's whole question is whether the manifest names a
-  // package, so it cannot start from a shape that assumes one.
-  const manifest = readJsonFile<{ name?: unknown }>(
-    packageJsonPath,
-    "an installed package's manifest",
-  );
-  return typeof manifest.name === 'string' && manifest.name.length > 0;
+  // Memoized because the same few hundred manifests are probed once per MODULE: a full run asked
+  // this about 213 distinct files roughly 65,000 times, parsing 17,000 of them. The cache is keyed
+  // by absolute path and lives for one process, which is exactly the lifetime of one derivation -
+  // nothing rewrites a manifest mid-run.
+  const cached = packageRootCache.get(packageJsonPath);
+  if (cached !== undefined) return cached;
+
+  let answer = false;
+  if (fs.existsSync(packageJsonPath)) {
+    // Loosely typed on purpose: this function's whole question is whether the manifest names a
+    // package, so it cannot start from a shape that assumes one.
+    const manifest = readJsonFile<{ name?: unknown }>(
+      packageJsonPath,
+      "an installed package's manifest",
+    );
+    answer = typeof manifest.name === 'string' && manifest.name.length > 0;
+  }
+  packageRootCache.set(packageJsonPath, answer);
+  return answer;
 }
 
 /**
@@ -831,6 +860,20 @@ export function packageDirOf(resource: string, repo: string): string | undefined
   // one. It is the tested helper the rest of this module already resolves lockfile keys with.
   if (!boundary || !containedPath(repo, boundary)) return undefined;
 
+  // The BOUNDARY first, not the nearest manifest walking up. A `name` field does not distinguish a
+  // package root from a resolution marker the way `isPackageRoot` assumes: this tree installs
+  // `terser/dist/package.json` as `{"name":"dist","version":"1.0.0"}`,
+  // `detect-port/dist/package.json` as `{"name":"detect-port","version":"2.1.0"}` and
+  // `web-streams-polyfill/es2018/package.json` as `{"name":"web-streams-polyfill-es2018"}` with no
+  // version at all. A module bundled from such a subdirectory produced a row named `dist@1.0.0`,
+  // pointed licensee at a directory holding no LICENSE, and left the real package with no row.
+  //
+  // The path already names the owner unambiguously, so where that directory carries a manifest it
+  // is the answer and no walk can improve on it. The walk below is kept for the case the boundary
+  // itself cannot answer - a package directory taken off disk by a `yalc` link, a pruned tree - and
+  // still stops AT the boundary, so a missing package is never attributed to the one enclosing it.
+  if (isPackageRoot(path.join(boundary, 'package.json'))) return boundary;
+
   let dir = path.dirname(resource);
   while (dir === boundary || dir.startsWith(boundary + path.sep)) {
     if (isPackageRoot(path.join(dir, 'package.json'))) return dir;
@@ -896,8 +939,8 @@ const MODULE_SPECIFIER = /^(@[\w.-]+\/)?[\w.-]+(\/[\w.@-]+)*$/;
 const SOURCE_ALIAS = /^@(assets|client|main|node|extension-host|renderer|shared)\//;
 
 /**
- * Specifiers a stylesheet pulls in: `@import`, `@use`, `url()`, and Tailwind v4's `@plugin`,
- * `@source` and `@config`.
+ * Specifiers a stylesheet pulls in: `@import`, `@use`, `@forward`, `url()`, and Tailwind v4's
+ * `@plugin`, `@source` and `@config`.
  *
  * Stylesheets reach the bundle the same way modules do - a bare specifier in an `@import` resolves
  * through `node_modules`, fonts and all. A leading `~` is webpack's older "this is a module, not a
@@ -912,6 +955,16 @@ const SOURCE_ALIAS = /^@(assets|client|main|node|extension-host|renderer|shared)
  * obligation undischarged. `@source` and `@config` name a local path today (`packageOfSpecifier`
  * discards those), and are matched for the same reason `@plugin` now is - the next one to name a
  * package must not be lost silently.
+ *
+ * `@forward` is matched for a stronger reason than symmetry: it emits a module's CSS exactly as
+ * `@use` does, so a package reached only through one ships in every bundle, and this scan is the
+ * only source in this pipeline that can see pre-webpack Sass resolution at all - it would reach
+ * neither the module graph nor an `unresolvedStylesheetSpecifiers` note.
+ *
+ * EVERY quoted string in the statement is recorded, not the first: `@import 'a', 'b';` is one
+ * statement naming two stylesheets, and reading only the head silently drops the rest. The
+ * statement is bounded by `;` or `{` so a `@plugin` options block does not swallow the rest of the
+ * file.
  */
 function stylesheetImportSpecifiers(text: string): string[] {
   const source = withoutStylesheetComments(text);
@@ -919,11 +972,12 @@ function stylesheetImportSpecifiers(text: string): string[] {
   const record = (value: string | undefined) => {
     if (value) specifiers.push(value.replace(/^~/, '').split('?')[0]);
   };
-  // `@plugin` may be followed by a `{ … }` options block rather than a `;`, so the specifier is
-  // matched on the quoted string alone rather than on the statement's terminator.
-  [
-    ...source.matchAll(/@(?:import|use|plugin|source|config)\s+(?:url\(\s*)?['"]([^'"\n)]+)['"]/g),
-  ].forEach((match) => record(match[1]));
+  // Matched in two steps - the statement, then every quoted string inside it - because a single
+  // pattern can capture only one specifier per match, and these at-rules may name several.
+  [...source.matchAll(/@(?:import|use|forward|plugin|source|config)\b([^;{]*)/g)].forEach(
+    (statement) =>
+      [...statement[1].matchAll(/['"]([^'"\n]+)['"]/g)].forEach((quoted) => record(quoted[1])),
+  );
   [...source.matchAll(/url\(\s*['"]?([^'")\n]+)['"]?\s*\)/g)].forEach((match) => record(match[1]));
   return specifiers.filter(Boolean);
 }
@@ -1032,7 +1086,7 @@ function productionStylesheetRoots(repo: string): string[] {
   ].filter((root) => fs.existsSync(root));
 }
 
-const STYLESHEET_FILE = /\.s?css$/;
+const STYLESHEET_FILE = /\.s?css$/i;
 
 /** Every stylesheet under `dir`, recursing but never descending into a `node_modules`. */
 function findStylesheets(dir: string, found: string[] = []): string[] {
@@ -1098,6 +1152,7 @@ function resolvePackageLeaf(name: string, fromDir: string, repo: string): string
 function collectStylesheetLeaves(repo: string): { leaves: Leaf[]; unresolvedNames: string[] } {
   const leaves: Leaf[] = [];
   const unresolvedNames = new Set<string>();
+  const libReal = realPathOf(path.join(repo, 'lib'));
   productionStylesheetRoots(repo).forEach((root) => {
     findStylesheets(root).forEach((file) => {
       const text = fs.readFileSync(file, 'utf8');
@@ -1106,8 +1161,18 @@ function collectStylesheetLeaves(repo: string): { leaves: Leaf[]; unresolvedName
         if (!name) return;
         if (firstPartyStylesheetSpecifier(specifier, path.dirname(file))) return;
         const dir = resolvePackageLeaf(name, path.dirname(file), repo);
-        if (dir) leaves.push({ dir, bundle: 'stylesheet' });
-        else unresolvedNames.add(name);
+        // The same two guards `collectPrebuiltLibLeaves` applies, and for the same reasons: npm
+        // installs a workspace package as a SYMLINK, so `@import 'platform-bible-react/dist/...'`
+        // resolves to a path that looks like any other dependency until the link is followed, and
+        // emitting it would report this repository's own AGPL code as a third-party notice. A
+        // dev-linked package is described from `package-lock.json` rather than its on-disk
+        // directory, so adding it here would key a second lock entry to the very directory that
+        // policy exists to avoid. `firstPartyStylesheetSpecifier` above is a different test - it
+        // catches a bare Sass specifier that names a file of this repository's own, not an
+        // installed directory that turns out to be first-party.
+        if (dir && !containedPath(libReal, realPathOf(dir)) && !isDevLinked(dir))
+          leaves.push({ dir, bundle: 'stylesheet' });
+        else if (!dir) unresolvedNames.add(name);
       });
     });
   });
@@ -1614,8 +1679,9 @@ function withUnbundledPackages(
 }
 
 /**
- * Resolves which npm packages ship, from webpack's own module manifests, unioned with the
- * stylesheet leaf scan and the `release/app` unbundled closure above.
+ * Resolves which npm packages ship, from webpack's own module manifests, unioned with the three
+ * scans the module graph cannot answer for: the stylesheet leaf scan, the prebuilt-`lib` leaf scan,
+ * and the `release/app` unbundled closure above.
  *
  * A regex scan over source files is the right instinct - a `package.json` lies about what a bundler
  * includes - but for JS/TS it infers something the compiler already reports exactly. Stylesheets
