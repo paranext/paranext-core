@@ -31,12 +31,18 @@ import {
 // imports above, so the static import resolves against this stub.
 vi.mock('electron', () => ({ BrowserWindow: class {} }));
 
-const mocks = vi.hoisted(() => ({ loggerError: vi.fn() }));
+const mocks = vi.hoisted(() => ({ loggerError: vi.fn(), loggerWarn: vi.fn() }));
+
+/**
+ * Key the id counter is persisted under, spelled here as the service spells it privately. The test
+ * that seeds it proves the spelling still matches before it relies on it.
+ */
+const NEXT_WINDOW_ID_KEY = 'window-state.service.nextWindowId';
 
 // Stood in for so a swallowed subscriber throw can be asserted to have been reported rather than
 // merely swallowed, and so the real logger's file/console transports stay out of the test run
 vi.mock('@shared/services/logger.service', () => ({
-  logger: { error: mocks.loggerError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+  logger: { error: mocks.loggerError, warn: mocks.loggerWarn, info: vi.fn(), debug: vi.fn() },
 }));
 
 /**
@@ -178,6 +184,43 @@ describe('window state tracking', () => {
       const reloaded = await import('@main/services/window-state.service');
 
       expect(reloaded.addWindow(fakeWindow(3))).toBe(3);
+    });
+
+    test('restarts the sequence rather than trusting a counter too large to increment', async () => {
+      // The positive control first: a sound stored value IS honoured, so the seeding below is
+      // reaching the counter rather than silently missing it.
+      localStorage.setItem(NEXT_WINDOW_ID_KEY, '5');
+      expect(addWindow(fakeWindow(1))).toBe(5);
+
+      // At or beyond 2^53, `+ 1` gives the same number back, so a counter left there would hand
+      // every window of the session the same id — and the tracker's lookups would answer with
+      // whichever window matched first. `Number.isInteger` accepts such a value; being able to
+      // count is what the guard is actually for.
+      resetForTesting();
+      localStorage.setItem(NEXT_WINDOW_ID_KEY, `${2 ** 53}`);
+
+      expect([addWindow(fakeWindow(1)), addWindow(fakeWindow(2))]).toEqual([1, 2]);
+    });
+
+    test('keeps opening windows when the counter cannot be written', () => {
+      // main's `localStorage` is file-backed, so a full disk or a locked storage directory makes
+      // `setItem` throw. That happens inside `createWindow`, so a throw escaping here would leave
+      // the app unable to open any window at all — every session, until the directory is fixed.
+      const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('no space left on device');
+      });
+      try {
+        const ids = [addWindow(fakeWindow(1)), addWindow(fakeWindow(2))];
+
+        // Unique for this session, which is what the tracker needs to stay correct while the app
+        // runs; a later launch may repeat one, which the module already treats as survivable
+        expect(ids).toEqual([1, 2]);
+        expect(mocks.loggerWarn).toHaveBeenCalledWith(
+          expect.stringMatching(/could not persist the next window id/i),
+        );
+      } finally {
+        setItem.mockRestore();
+      }
     });
 
     test('answers a window’s platform id from the window itself, never from Electron’s', () => {
