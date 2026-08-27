@@ -152,14 +152,17 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   );
 
   // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid. The
-  // 5th tuple member is the project driving the active Scripture reference (the editor's project):
-  // follow it when opened without an explicit project — e.g. from the default layout, whose tab
-  // carries no projectId. An explicit `projectId` (e.g. a direct openWebView) takes precedence.
-  const [scrRef, setScrRef, , , activeEditorProjectId] = useWebViewScrollGroupScrRef();
-  const candidateProjectId = projectId ?? activeEditorProjectId;
+  // 5th tuple member is the group's SOURCE project — whichever project last SET the group's
+  // reference — which is not the same thing as the active editor's project: a project switch does
+  // not change the reference, so this value lags a switch until the user next navigates. It is only
+  // a fallback for a grid opened without an explicit project (e.g. from the default layout, whose
+  // tab carries no projectId). An explicit `projectId` takes precedence, and a project switch
+  // re-points this panel by supplying exactly that (see updateRelatedTextCollectionPanel).
+  const [scrRef, setScrRef, , , scrollGroupSourceProjectId] = useWebViewScrollGroupScrRef();
+  const candidateProjectId = projectId ?? scrollGroupSourceProjectId;
 
   // `effectiveProjectId` is the project whose text collection the grid shows. It starts from the
-  // active editor and is refined by a latch effect (below, once `resources` is known) so that
+  // candidate above and is refined by a latch effect (below, once `resources` is known) so that
   // focusing one of the grid's own resource cells doesn't hijack it. See resolveTextCollectionProjectId.
   const [effectiveProjectId, setEffectiveProjectId] = useState<string | undefined>(
     candidateProjectId,

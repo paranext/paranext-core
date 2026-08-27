@@ -11,7 +11,7 @@
  * on any module the host's `require` shim does not supply.
  */
 
-import { LocalizationSelectors, SavedWebViewDefinition } from '@papi/core';
+import { LocalizationSelectors, OpenWebViewOptions, SavedWebViewDefinition } from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
 // Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
@@ -46,6 +46,9 @@ import type { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+
+/** Web view type of the Text Collection panel (the Scripture Text Grid) in Column 3. */
+export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 
 /**
  * Resolves the view type the editor is allowed to show under the current `platform.interfaceMode`.
@@ -1188,7 +1191,11 @@ export async function finalizeProjectSwitch(
 
 /**
  * Opens or updates the model text and the various views to be displayed in tabs in "column 3" (
- * reference texts, commentaries, comments, etc.) for a project.
+ * reference texts, commentaries, comments, Text Collection, etc.) for a project.
+ *
+ * Every panel here is error-isolated, so one failing panel never stops the rest from being
+ * re-pointed. Find is NOT here: it needs the id of the editor web view the switch produces, so it
+ * is re-pointed separately by {@link updateRelatedFindPanel} once that editor exists.
  *
  * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for
@@ -1224,6 +1231,66 @@ export async function openOrUpdateRelatedPanels(
     await papi.commands.sendCommand('legacyCommentManager.openCommentListPanel', projectId);
   } catch (e) {
     papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
+  }
+  // Not wrapped like the four above: this one swallows its own failures (see its TSDoc).
+  await updateRelatedTextCollectionPanel(papi, projectId);
+}
+
+/**
+ * Options the Text Collection panel's provider reads out of its `openWebViewOptions`.
+ *
+ * `reloadWebView` types its options as `ReloadWebViewOptions`, which carries only `bringToFront` —
+ * but both `openWebView` and `reloadWebView` hand their options straight to
+ * `IWebViewProvider.getWebView`, so a wider type that structurally satisfies it is how a project
+ * change reaches the provider. Declared as a named type rather than passed as an object literal
+ * because an inline literal would trip TypeScript's excess-property check.
+ */
+type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
+
+/**
+ * Re-points the Text Collection panel at `projectId`, the way {@link openOrUpdateRelatedPanels}
+ * re-points the rest of Column 3.
+ *
+ * Re-pointing is a reload because `projectId` is not one of the
+ * `WebViewDefinitionUpdatableProperties`: only a reload re-runs the provider, which is what picks
+ * the new project up. Without this the panel would have to infer its own project from the scroll
+ * group's source project — the project that last SET the group's reference, which a project switch
+ * does not change — and would keep rendering the outgoing project's texts until the user next
+ * navigated.
+ *
+ * Three deliberate constraints:
+ *
+ * - Never creates a panel when none is open. In Simple mode the Text Collection is part of the fixed
+ *   Column 3 layout and is always already there; in Power mode it is a panel the user opened
+ *   deliberately (and is gated by the `platformScriptureEditor.enableScriptureTextGrid` setting),
+ *   where a project switch is not a request to open it.
+ * - Skips the reload when the panel already shows `projectId`, because rebuilding the iframe drops
+ *   transient grid state (an open chapter-context split, per-cell zoom) for no gain.
+ * - Never brings the panel to front. This runs as part of re-pointing the whole column, not because
+ *   anyone asked for the Text Collection, and the admin's shared layout chooses the front tab
+ *   immediately afterward.
+ *
+ * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
+ * swallowed, because the project switch itself has already succeeded by this point.
+ *
+ * @param papi The instance of papi to read web view definitions with and request the reload from
+ * @param projectId The id of the project whose text collection the panel should show
+ */
+export async function updateRelatedTextCollectionPanel(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<void> {
+  try {
+    const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+    const existingPanel = allOpenDefs.find(
+      (def) => def.webViewType === SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+    );
+    if (!existingPanel || existingPanel.projectId === projectId) return;
+
+    const options: TextCollectionPanelOptions = { projectId, bringToFront: false };
+    await papi.webViews.reloadWebView(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, existingPanel.id, options);
+  } catch (e) {
+    papi.logger.warn(`Error updating text collection panel project: ${getErrorMessage(e)}`);
   }
 }
 

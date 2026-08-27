@@ -43,6 +43,7 @@ import {
   updateRelatedFindPanel,
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
@@ -56,7 +57,6 @@ logger.debug('Scripture Editor is importing!');
 const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
-const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 /** Tab title/tooltip for the Text Collection (Scripture Text Grid) tab. */
 const SCRIPTURE_TEXT_GRID_TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 
@@ -388,10 +388,10 @@ async function open(
     };
 
     // If in Simple interface mode, open/update the related panels (model text, Bible texts,
-    // commentaries, comments) and auto-apply the admin's shared layout for the project being
-    // opened (re-arm the buffered panels, focus the desired col-3 tab). Note: A manual/later
-    // sync's held change is applied via the notification's "Apply now" rather than automatically
-    // here.
+    // commentaries, comments, Text Collection) and auto-apply the admin's shared layout for the
+    // project being opened (re-arm the buffered panels, focus the desired col-3 tab). Note: A
+    // manual/later sync's held change is applied via the notification's "Apply now" rather than
+    // automatically here.
     if (interfaceMode === 'simple' && projectForWebView.projectId) {
       await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
       await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
