@@ -17,6 +17,13 @@ export const POWER_EVENTS: readonly string[] = [
   'unlock-screen',
 ];
 
+// Guards against a second `registerPowerMonitorListeners` call on the same `powerMonitor`
+// doubling up listeners (and thus doubling every power log line) if a future caller invokes it
+// again, e.g. on a second window or a restart path that re-runs startup. Keyed by the
+// `powerMonitor` instance (rather than a single module-level flag) so unrelated `PowerMonitorLike`
+// instances — such as separate fakes in tests — are not conflated with each other.
+const registeredMonitors = new WeakSet<PowerMonitorLike>();
+
 /**
  * Log OS power transitions so a disconnect can be correlated with what the machine was doing.
  *
@@ -33,10 +40,13 @@ export function registerPowerMonitorListeners(powerMonitor?: PowerMonitorLike): 
     return false;
   }
 
+  if (registeredMonitors.has(powerMonitor)) return true;
+
   POWER_EVENTS.forEach((event) => {
     powerMonitor.on(event, () => {
       logger.info(`Power transition: ${event}`);
     });
   });
+  registeredMonitors.add(powerMonitor);
   return true;
 }

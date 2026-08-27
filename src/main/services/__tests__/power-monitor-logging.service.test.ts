@@ -1,4 +1,6 @@
 import { describe, expect, test, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   registerPowerMonitorListeners,
   POWER_EVENTS,
@@ -48,5 +50,52 @@ describe('registerPowerMonitorListeners', () => {
     // reconnect lands and someone reaches for the nearest suspend hook.
     expect(mockLoggerInfo).toHaveBeenCalledTimes(POWER_EVENTS.length);
     expect(on).toHaveBeenCalledTimes(POWER_EVENTS.length);
+  });
+
+  test('does not register duplicate listeners when called again with the same powerMonitor', () => {
+    const on = vi.fn();
+    const powerMonitor = { on };
+
+    expect(registerPowerMonitorListeners(powerMonitor)).toBe(true);
+    expect(registerPowerMonitorListeners(powerMonitor)).toBe(true);
+
+    // A second registration on the same instance must not double the listener count — otherwise
+    // every power transition would be logged twice.
+    expect(on).toHaveBeenCalledTimes(POWER_EVENTS.length);
+  });
+
+  // Call-count assertions above only observe what the handlers under test happen to call — a
+  // handler edited to also call e.g. `reconnectService.reconnect()` would still pass them
+  // unchanged as long as it still logs once per event. These two tests instead constrain the
+  // service's SOURCE, so a change that adds a call into another service is caught even before it
+  // reaches a test double.
+  describe('architectural guard: handlers stay log-only', () => {
+    const serviceSource = readFileSync(
+      resolve(__dirname, '../power-monitor-logging.service.ts'),
+      'utf-8',
+    );
+
+    test('imports nothing but the logger service', () => {
+      const importedModules = [...serviceSource.matchAll(/^import .+ from '([^']+)';$/gm)].map(
+        (match) => match[1],
+      );
+
+      // Calling into another service (e.g. a reconnect service) requires importing it. Keeping
+      // the import list to just the logger is what actually prevents this diagnostic hook from
+      // growing into a reconnect trigger — if this assertion fails, the new import is crossing a
+      // deliberate boundary: this file logs power transitions and must not act on them.
+      expect(importedModules).toStrictEqual(['@shared/services/logger.service']);
+    });
+
+    test("each handler's body is a single logger.info call", () => {
+      const handlerBodies = [
+        ...serviceSource.matchAll(/powerMonitor\.on\(event, \(\) => \{\s*([\s\S]*?)\s*\}\);/g),
+      ].map((match) => match[1].trim());
+
+      expect(handlerBodies).toHaveLength(1); // one handler literal shared by all POWER_EVENTS
+      handlerBodies.forEach((body) => {
+        expect(body).toMatch(/^logger\.info\(`[^`]*`\);$/);
+      });
+    });
   });
 });
