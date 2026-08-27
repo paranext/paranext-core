@@ -18,16 +18,17 @@
  *    Home tab of its own, and the app ends with two windows.
  * 2. The COMMAND routes, where the id a move answers with is observable: `moveWebViewToWindow` into an
  *    already-open window, then `moveWebViewToNewWindow` back out of it. The first move empties its
- *    source window while another window is standing, so that window closes; the second move leaves
- *    its source window holding its other tab, so that window stays. It then moves the tab back in
- *    through the tab menu's "Move tab to window" submenu — the user's route to docking a tab back,
- *    and the only route that needs a window to be NAMED, so it also pins that each window is called
- *    after the tab it shows and that a window is never offered as a target for a tab it already
- *    holds. Both windows show a Home tab there, so both are named "Home"; that collision is the
- *    designed behaviour, and it is what makes the target COUNT rather than the target's label the
- *    assertion that catches a window wrongly offering itself. That rides this instance because two
- *    windows are already standing by then. Ends with a graceful quit, so the whole flow is also
- *    swept for faults and duplicate registrations.
+ *    source window — the PRIMARY, which docks a Home tab of its own rather than closing, since only
+ *    its ✕ and the Quit menu close it; the second move leaves its source window holding its other
+ *    tab, so that window stays too. It then moves the tab back in through the tab menu's "Move tab
+ *    to window" submenu — the user's route to docking a tab back, and the only route that needs a
+ *    window to be NAMED, so it also pins that each window is called after the tab it shows and that
+ *    a window is never offered as a target for a tab it already holds. Every window is showing a
+ *    Home tab by then, so all are named "Home"; that collision is the designed behaviour, and it is
+ *    what makes the target COUNT rather than the target's label the assertion that catches a window
+ *    wrongly offering itself. That rides this instance because three windows are already standing
+ *    by then. Ends with a graceful quit, so the whole flow is also swept for faults and duplicate
+ *    registrations.
  *
  * ## Asserting identity, not shape
  *
@@ -523,15 +524,15 @@ test.describe('moving a web view between windows', () => {
 
     await expectAppWindowCount(
       electronApp,
-      2,
+      3,
       60_000,
-      'the app to end the second move with exactly two windows',
+      'the app to end the second move with exactly three windows',
     );
 
     // MOVE BACK IN THROUGH THE SUBMENU — the user's route to what the requirement calls docking a
-    // tab back, and the only one of the three routes that needs a window to be NAMED. Two windows
-    // are already standing at this point, which is what the submenu needs, so this rides the same
-    // Electron instance rather than paying for another launch.
+    // tab back, and the only one of the three routes that needs a window to be NAMED. Three windows
+    // are already standing at this point — the primary docked Home rather than closing when it was
+    // emptied — so this rides the same Electron instance rather than paying for another launch.
     //
     // Each window is named after the tab it is showing, which is what gives it its own OS switcher
     // entry (NN-3) and what the submenu names its targets by. BOTH windows here show a Home tab, so
@@ -557,15 +558,19 @@ test.describe('moving a web view between windows', () => {
     await expect(moveToWindowItem).toBeVisible({ timeout: 30_000 });
     await moveToWindowItem.hover();
 
-    // Exactly ONE target with two windows open: the window the tab is already in is left out,
-    // because moving it there would do nothing. The COUNT is what proves that rule here — both
-    // windows carry the same name, so a submenu wrongly offering this one would show two entries
-    // reading "Home" rather than an entry with a label to tell apart.
+    // TWO targets with three windows open: the window the tab is already in is left out, because
+    // moving it there would do nothing. The COUNT is what proves that rule here — every window is
+    // showing a Home tab, so all three carry the same name, and a submenu wrongly offering this
+    // one would show three entries reading "Home" rather than one with a label to tell it apart.
     const targetItems = page3.getByRole('menuitem', { name: window2Title, exact: true });
-    await expect(targetItems).toHaveCount(1, { timeout: 30_000 });
-    logStep(`the submenu offers one target, "${window2Title}", and not the window the tab is in`);
+    await expect(targetItems).toHaveCount(2, { timeout: 30_000 });
+    logStep(
+      `the submenu offers two targets named "${window2Title}", and not the window the tab is in`,
+    );
 
-    await targetItems.click();
+    // Targets are offered in window order, so the second is window 2 — the one this move aims at.
+    // Where the tab actually landed is asserted below rather than assumed from the click.
+    await targetItems.nth(1).click();
 
     // Window 2 holds both again, which is the requirement met through the menu rather than the API.
     // The moved web view's id is asserted against the spellings the contract allows rather than
@@ -595,9 +600,9 @@ test.describe('moving a web view between windows', () => {
     // window 2 was standing, so window 3 closes rather than docking a Home tab of its own
     await expectAppWindowCount(
       electronApp,
-      1,
+      2,
       120_000,
-      `window ${window3Id} to close after the submenu move emptied it`,
+      `window ${window3Id} to close after the submenu move emptied it, leaving the other two`,
     );
     expect(page3.isClosed()).toBe(true);
     logStep(`window ${window3Id} closed after the submenu move emptied it`);
