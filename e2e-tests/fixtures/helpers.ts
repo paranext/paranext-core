@@ -271,6 +271,11 @@ export async function launchElectronApp(
   // relaunch into a preserved profile) is used as-is.
   const userDataDir = opts.userDataDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'paranext-e2e-'));
 
+  // Only for a FRESH profile. A relaunch into a preserved profile is deliberately continuing the
+  // state its own earlier launch wrote — including whatever reference that launch ended on — so
+  // re-pinning here would erase the very thing such a test exists to check.
+  if (!opts.userDataDir) pinAppGlobalState();
+
   // VSCode/Claude Code set ELECTRON_RUN_AS_NODE=1 which forces the Electron
   // binary to run as plain Node.js. We must omit it (do not set it to undefined:
   // Playwright's env type is Record<string, string>).
@@ -312,7 +317,10 @@ export async function launchElectronApp(
     console.error('Failed to launch Electron:', error);
     // Clean up the temp directory created above — launch never succeeded. Preserved profiles are
     // kept even here so a failed relaunch does not destroy the state under investigation.
-    if (!opts.preserveUserDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
+    if (!opts.preserveUserDataDir) {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+      restoreAppGlobalState();
+    }
     throw error;
   }
 
@@ -336,7 +344,10 @@ export async function launchElectronApp(
         }
       }
     }
-    if (!opts.preserveUserDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
+    if (!opts.preserveUserDataDir) {
+      fs.rmSync(userDataDir, { recursive: true, force: true });
+      restoreAppGlobalState();
+    }
     throw error;
   }
   console.log('WebSocket server is ready');
@@ -468,6 +479,11 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
       console.warn(`[teardown] Could not remove ${userDataDir}: ${e}`);
     }
   }
+
+  // After the app has closed, so its own shutdown writes cannot land on top of what is restored.
+  // Reached only on the final teardown: a preserved profile returned above, leaving the pin in
+  // place for the next launch in the chain.
+  restoreAppGlobalState();
   console.log('[teardown] Complete');
 }
 
@@ -687,6 +703,96 @@ function settingsPath(): string {
  */
 function settingsBackupPath(): string {
   return `${settingsPath()}.e2e-backup`;
+}
+
+/**
+ * Directory backing the MAIN process's `localStorage`.
+ *
+ * The main process has no browser `localStorage`, so it uses a polyfill
+ * (`src/node/polyfills/local-storage.polyfill.ts`) that writes one file per key under `getAppDir()`
+ * — the shared, gitignored `dev-appdata`. A renderer's `localStorage`, by contrast, lives inside
+ * Electron's `--user-data-dir`, which every isolated launch creates fresh.
+ *
+ * That difference is the whole reason this pin exists: app-global state held in main (the scroll
+ * group's reference, the theme) survives an app launch, so without a reset each test inherits
+ * whatever reference the previous test — or the developer's own last session — left behind.
+ *
+ * Resolved per call so the tests covering this logic can point it at a temp directory.
+ */
+function mainLocalStorageDir(): string {
+  return (
+    process.env.PT_E2E_MAIN_LOCAL_STORAGE_DIR ??
+    path.resolve(__dirname, '../../dev-appdata/local-storage/main')
+  );
+}
+
+/** Where {@link pinAppGlobalState} parks the developer's real app-global state. */
+function mainLocalStorageBackupDir(): string {
+  return `${mainLocalStorageDir()}.e2e-backup`;
+}
+
+/** Names of the keys currently stored, or an empty array when the store does not exist yet. */
+function storedKeyNames(dir: string): string[] {
+  return fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+}
+
+/**
+ * Empty the main process's app-global storage for the duration of a run, parking the developer's
+ * own values so they can be put back.
+ *
+ * The whole directory rather than a list of keys: what must not carry over is "app-global state the
+ * main process persists outside the isolated user-data directory", and a named list silently stops
+ * covering that the next time a service starts persisting something. Emptying it means a future
+ * spec that seeds main-side storage before launch fails visibly instead of leaking quietly.
+ *
+ * Only the FIRST pin writes a backup, so a relaunch chain (which pins once and reads the state its
+ * own earlier launch wrote) cannot overwrite the developer's values with test ones.
+ *
+ * @returns A function that restores what was parked. Safe to call when nothing was pinned.
+ */
+export function pinAppGlobalState(): () => void {
+  const liveDir = mainLocalStorageDir();
+  const backupDir = mainLocalStorageBackupDir();
+
+  if (!fs.existsSync(backupDir)) {
+    fs.mkdirSync(backupDir, { recursive: true });
+    storedKeyNames(liveDir).forEach((key) => {
+      fs.copyFileSync(path.join(liveDir, key), path.join(backupDir, key));
+    });
+  }
+  storedKeyNames(liveDir).forEach((key) => fs.rmSync(path.join(liveDir, key), { force: true }));
+
+  return () => {
+    restoreAppGlobalState();
+  };
+}
+
+/**
+ * Put back app-global state a previous run parked and never restored, and report which keys were
+ * recovered.
+ *
+ * Called both at teardown and from global setup, because a run killed mid-flight leaves the
+ * developer's scroll position and theme emptied out until something puts them back.
+ *
+ * An absent store and an empty one are treated alike: the polyfill recreates the directory on
+ * demand, so leaving an empty one behind changes nothing.
+ *
+ * @returns The recovered key names, or undefined when there was nothing to restore. Names only —
+ *   the values are the developer's own state, not something to print.
+ */
+export function restoreAppGlobalState(): string[] | undefined {
+  const liveDir = mainLocalStorageDir();
+  const backupDir = mainLocalStorageBackupDir();
+  if (!fs.existsSync(backupDir)) return undefined;
+
+  storedKeyNames(liveDir).forEach((key) => fs.rmSync(path.join(liveDir, key), { force: true }));
+  const recovered = storedKeyNames(backupDir);
+  if (recovered.length > 0) fs.mkdirSync(liveDir, { recursive: true });
+  recovered.forEach((key) => {
+    fs.copyFileSync(path.join(backupDir, key), path.join(liveDir, key));
+  });
+  fs.rmSync(backupDir, { recursive: true, force: true });
+  return recovered.length > 0 ? recovered : undefined;
 }
 
 /**
