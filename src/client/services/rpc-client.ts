@@ -19,6 +19,7 @@ import {
   EventHandler,
   INTENTIONAL_CLOSE_CODE,
   InternalRequestHandler,
+  isCleanCloseCode,
   REGISTER_EVENT,
   REGISTER_METHOD,
   RequestParams,
@@ -56,12 +57,19 @@ export class RpcClient implements IRpcMethodRegistrar {
   // instantly and reports Connected before the handshake finishes. Recreate it per attempt
   // (and move applyMiddleware to the constructor) before adding reconnect.
   private readonly connectionComplete = new AsyncVariable<void>('websocket connected');
-  /** Label identifying this process in connection log lines, so multi-window logs stay readable */
+  /**
+   * Label identifying this process in connection log lines, so multi-window logs stay readable.
+   *
+   * The logger already prefixes every line with a per-process-type tag (`[rend]`/`[exth]`), so
+   * `peerName` alone (e.g. plain `'renderer'`) would add nothing. Each `BrowserWindow` is its own
+   * renderer process, so two windows would otherwise emit identical lines; a per-instance
+   * discriminator is appended so they can be told apart.
+   */
   private readonly peerName: string;
 
   constructor(peerName: string = 'client') {
     bindClassMethods.call(this);
-    this.peerName = peerName;
+    this.peerName = `${peerName}#${RpcClient.getPeerDiscriminator()}`;
     this.jsonRpcServer = new JSONRPCServer();
     this.jsonRpcClient = new JSONRPCClient(
       (payload) => sendPayloadToWebSocket(this.ws, payload),
@@ -74,6 +82,19 @@ export class RpcClient implements IRpcMethodRegistrar {
 
   private static handleError(message: string, data: unknown): void {
     logger.error(`${message}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
+  }
+
+  /**
+   * A discriminator distinguishing this process from another of the same type, for the `peerName`
+   * label. `process.pid` is the natural choice, differing across `BrowserWindow`s (each its own
+   * renderer process). The renderer may or may not expose `process` depending on Electron's
+   * `webPreferences`, so fall back to a random id rather than printing `undefined` when it doesn't
+   * — two clients in the very same process will then share a pid anyway, which is expected and
+   * harmless: the label still identifies the process pair, not a specific in-process instance.
+   */
+  private static getPeerDiscriminator(): string {
+    if (typeof process !== 'undefined' && typeof process.pid === 'number') return `${process.pid}`;
+    return Math.random().toString(36).slice(2, 8);
   }
 
   private static onError(ev: Event): void {
@@ -267,7 +288,7 @@ export class RpcClient implements IRpcMethodRegistrar {
     const summary = `Websocket for ${this.peerName} closed (${detail})`;
     // Intent travels in the close code, so a close that arrives after an intentional
     // disconnect is still reported honestly if the socket actually died.
-    if (ev?.code === INTENTIONAL_CLOSE_CODE) logger.info(summary);
+    if (isCleanCloseCode(ev?.code)) logger.info(summary);
     else logger.warn(summary);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;

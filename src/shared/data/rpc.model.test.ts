@@ -5,6 +5,8 @@ import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
 import {
   describeWebSocketCloseEvent,
   describeWebSocketErrorEvent,
+  INTENTIONAL_CLOSE_CODE,
+  isCleanCloseCode,
   MAX_LOGGED_DETAIL_LENGTH,
   MAX_REQUEST_ATTEMPTS,
   REQUEST_ATTEMPT_WAIT_TIME_MS,
@@ -257,6 +259,24 @@ Object.defineProperty(WsLikeCloseEvent.prototype, 'code', { enumerable: true });
 Object.defineProperty(WsLikeCloseEvent.prototype, 'reason', { enumerable: true });
 Object.defineProperty(WsLikeCloseEvent.prototype, 'wasClean', { enumerable: true });
 
+describe('isCleanCloseCode', () => {
+  test.each([
+    [1000, true],
+    [1001, true],
+    [INTENTIONAL_CLOSE_CODE, true],
+    [1005, false],
+    [1006, false],
+    [4999, false],
+  ])('code %i is clean: %s', (code, expected) => {
+    expect(isCleanCloseCode(code)).toBe(expected);
+  });
+
+  test('rejects a non-numeric code without throwing', () => {
+    expect(isCleanCloseCode(undefined)).toBe(false);
+    expect(isCleanCloseCode('1000')).toBe(false);
+  });
+});
+
 describe('describeWebSocketCloseEvent', () => {
   test('the fixture reproduces the JSON.stringify collapse the formatter exists to avoid', () => {
     // Guards the fixture itself: if this ever stops being `{}`, the fixture stopped
@@ -283,6 +303,17 @@ describe('describeWebSocketCloseEvent', () => {
     const dom = new CloseEvent('close', { code: 1006, reason: 'gone', wasClean: false });
     const wsLike = new WsLikeCloseEvent(1006, 'gone', false);
     expect(describeWebSocketCloseEvent(dom)).toBe(describeWebSocketCloseEvent(wsLike));
+  });
+
+  test.each([
+    [1000, false],
+    [1001, false],
+    [4000, false],
+    [1005, true],
+    [1006, true],
+  ])('marks code %i abnormal: %s', (code, isAbnormal) => {
+    const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(code, '', true));
+    expect(result.includes('(abnormal)')).toBe(isAbnormal);
   });
 
   test('renders code 0 rather than swallowing it as falsy', () => {

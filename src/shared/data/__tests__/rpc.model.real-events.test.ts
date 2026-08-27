@@ -1,7 +1,27 @@
 // @vitest-environment node
 import { describe, expect, test } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
-import { describeWebSocketCloseEvent } from '@shared/data/rpc.model';
+import { describeWebSocketCloseEvent, describeWebSocketErrorEvent } from '@shared/data/rpc.model';
+
+/**
+ * Find a port nothing is listening on: bind an ephemeral server, read the port it was assigned,
+ * then close it immediately. Deterministic (the OS won't hand out that port to anything else in the
+ * tiny window before the test dials it) without hard-coding a port number that could collide with
+ * something else running on the machine.
+ */
+async function getUnusedPort(): Promise<number> {
+  const probe = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+  await new Promise<void>((resolve) => {
+    probe.once('listening', resolve);
+  });
+  const address = probe.address();
+  if (typeof address === 'string' || !address) throw new Error('no port assigned');
+  const { port } = address;
+  await new Promise<void>((resolve) => {
+    probe.close(() => resolve());
+  });
+  return port;
+}
 
 /** Open a server on an ephemeral port, connect, kill the connection, return the close event. */
 async function captureCloseEvent(kill: (serverSocket: WebSocket) => void): Promise<unknown> {
@@ -58,4 +78,32 @@ describe('describeWebSocketCloseEvent against real ws events', () => {
     expect(JSON.stringify(ev)).toBe('{}');
     expect(typeof ev === 'object' && ev && 'reason' in ev && typeof ev.reason).toBe('string');
   });
+});
+
+describe('describeWebSocketErrorEvent against a real ws refused connection', () => {
+  test('a refused connection reports ECONNREFUSED and confirms the {} fixture premise', async () => {
+    // No server is listening on this port — the same shape a client dialing before the
+    // server is up would see, and the real-world fingerprint this case exists to catch.
+    const port = await getUnusedPort();
+    const client = new WebSocket(`ws://127.0.0.1:${port}`);
+    try {
+      const errorEvent = await new Promise<unknown>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error('timed out waiting for error event')),
+          5000,
+        );
+        client.addEventListener('error', (ev) => {
+          clearTimeout(timer);
+          resolve(ev);
+        });
+      });
+
+      // Same premise the unit fixtures rest on: a real `ws` error event carries no own
+      // properties, so JSON.stringify collapses it and fields must be read explicitly.
+      expect(JSON.stringify(errorEvent)).toBe('{}');
+      expect(describeWebSocketErrorEvent(errorEvent)).toContain('ECONNREFUSED');
+    } finally {
+      client.terminate();
+    }
+  }, 10000);
 });

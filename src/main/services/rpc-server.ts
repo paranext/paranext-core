@@ -25,6 +25,7 @@ import {
   describeWebSocketErrorEvent,
   INTENTIONAL_CLOSE_CODE,
   InternalRequestHandler,
+  isCleanCloseCode,
   REGISTER_EVENT,
   REGISTER_METHOD,
   RequestParams,
@@ -112,7 +113,7 @@ export class RpcServer implements IRpcHandler {
       logger.warn(`Server connected but websocket is not set`);
       return;
     }
-    this.ws.close();
+    this.ws.close(INTENTIONAL_CLOSE_CODE, 'server shutdown');
   }
 
   async request(
@@ -227,9 +228,9 @@ export class RpcServer implements IRpcHandler {
 
     this.jsonRpcClient.rejectAllPendingRequests(`Web socket ${this.name} has closed`);
     const detail = describeWebSocketCloseEvent(ev);
-    const wasIntentional = ev?.code === INTENTIONAL_CLOSE_CODE;
+    const wasClean = isCleanCloseCode(ev?.code);
     const summary = `Websocket ${this.name} closed (${detail}). Removing ${this.rpcMethodDetailsByMethodName.size} methods`;
-    if (wasIntentional) logger.info(summary);
+    if (wasClean) logger.info(summary);
     else logger.warn(summary);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;

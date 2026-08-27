@@ -1135,6 +1135,21 @@ declare module 'shared/data/rpc.model' {
    */
   export const INTENTIONAL_CLOSE_CODE = 4000;
   /**
+   * Whether a WebSocket close `code` represents a clean, expected shutdown rather than a connection
+   * that died.
+   *
+   * 1000 (normal) and 1001 (going away, e.g. a page/window navigating away or closing) are the two
+   * codes the WebSocket spec itself defines as orderly closes, and {@link INTENTIONAL_CLOSE_CODE} is
+   * this codebase's own marker for a close we initiated on purpose. Everything else — most notably
+   * 1006 (abnormal closure: no close frame was ever received, the fingerprint of a socket that just
+   * died, e.g. across a suspend) and 1005 (no status code present) — is unexpected and worth a
+   * `warn`.
+   *
+   * Shared so the client and server close handlers cannot independently drift on which codes count as
+   * clean.
+   */
+  export function isCleanCloseCode(code: unknown): boolean;
+  /**
    * Describe a WebSocket `close` event for a log line.
    *
    * Chromium and the `ws` library deliver structurally different close events, and both keep
@@ -1142,7 +1157,9 @@ declare module 'shared/data/rpc.model' {
    * `JSON.stringify` on one yields `{}`. Read the fields explicitly instead.
    *
    * `code` is the single most diagnostic field: 1006 (abnormal, no close frame) means the connection
-   * died rather than being closed politely.
+   * died rather than being closed politely. A reader should not need the WebSocket code table
+   * memorized to see that, so a code that {@link isCleanCloseCode} rejects is marked `(abnormal)`
+   * inline rather than left as a bare number.
    */
   export function describeWebSocketCloseEvent(ev: unknown): string;
   /**
@@ -1936,10 +1953,26 @@ declare module 'client/services/rpc-client' {
     private readonly connectionMutex;
     private readonly registrationMutexMap;
     private readonly connectionComplete;
-    /** Label identifying this process in connection log lines, so multi-window logs stay readable */
+    /**
+     * Label identifying this process in connection log lines, so multi-window logs stay readable.
+     *
+     * The logger already prefixes every line with a per-process-type tag (`[rend]`/`[exth]`), so
+     * `peerName` alone (e.g. plain `'renderer'`) would add nothing. Each `BrowserWindow` is its own
+     * renderer process, so two windows would otherwise emit identical lines; a per-instance
+     * discriminator is appended so they can be told apart.
+     */
     private readonly peerName;
     constructor(peerName?: string);
     private static handleError;
+    /**
+     * A discriminator distinguishing this process from another of the same type, for the `peerName`
+     * label. `process.pid` is the natural choice, differing across `BrowserWindow`s (each its own
+     * renderer process). The renderer may or may not expose `process` depending on Electron's
+     * `webPreferences`, so fall back to a random id rather than printing `undefined` when it doesn't
+     * — two clients in the very same process will then share a pid anyway, which is expected and
+     * harmless: the label still identifies the process pair, not a specific in-process instance.
+     */
+    private static getPeerDiscriminator;
     private static onError;
     connect(localEventHandler: EventHandler): Promise<boolean>;
     disconnect(): Promise<void>;

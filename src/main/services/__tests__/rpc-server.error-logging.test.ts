@@ -90,6 +90,28 @@ describe('RpcServer close logging', () => {
     mockLoggerInfo.mockClear();
   });
 
+  test.each([1000, 1001, 4000])('logs a clean close (code %i) at info, not warn', async (code) => {
+    const { socket, dispatch } = makeFakeSocket();
+    const server = makeServer(socket);
+    await server.connect();
+
+    dispatch('close', new CloseEvent('close', { code }));
+
+    expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  test.each([1005, 1006])('logs an abnormal close (code %i) at warn, not info', async (code) => {
+    const { socket, dispatch } = makeFakeSocket();
+    const server = makeServer(socket);
+    await server.connect();
+
+    dispatch('close', new CloseEvent('close', { code }));
+
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    expect(mockLoggerInfo).not.toHaveBeenCalled();
+  });
+
   test('logs an unexpected close at warn, with the close code', async () => {
     const { socket, dispatch } = makeFakeSocket();
     const server = makeServer(socket);

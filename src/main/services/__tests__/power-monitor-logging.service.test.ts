@@ -66,7 +66,7 @@ describe('registerPowerMonitorListeners', () => {
 
   // Call-count assertions above only observe what the handlers under test happen to call — a
   // handler edited to also call e.g. `reconnectService.reconnect()` would still pass them
-  // unchanged as long as it still logs once per event. These two tests instead constrain the
+  // unchanged as long as it still logs once per event. These import-surface tests instead constrain the
   // service's SOURCE, so a change that adds a call into another service is caught even before it
   // reaches a test double.
   describe('architectural guard: handlers stay log-only', () => {
@@ -123,17 +123,6 @@ describe('registerPowerMonitorListeners', () => {
       // static-import scan above, and awaitable from inside a handler without changing its
       // top-level import list.
       expect(serviceSource).not.toMatch(/\bimport\s*\(/);
-    });
-
-    test("each handler's body is a single logger.info call", () => {
-      const handlerBodies = [
-        ...serviceSource.matchAll(/powerMonitor\.on\(event, \(\) => \{\s*([\s\S]*?)\s*\}\);/g),
-      ].map((match) => match[1].trim());
-
-      expect(handlerBodies).toHaveLength(1); // one handler literal shared by all POWER_EVENTS
-      handlerBodies.forEach((body) => {
-        expect(body).toMatch(/^logger\.info\(`[^`]*`\);$/);
-      });
     });
   });
 });

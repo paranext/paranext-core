@@ -12,6 +12,26 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: mockLoggerWarn, info: mockLoggerInfo, error: mockLoggerError, debug: vi.fn() },
 }));
 
+/**
+ * Mirrors how the `ws` library builds its ErrorEvent: the message lives on a symbol key with an
+ * enumerable accessor on the prototype, so `JSON.stringify` yields `{}` — an event built from own
+ * properties (e.g. a plain `{ message }` object) would not actually reproduce that collapse and
+ * would pass even against a `JSON.stringify`-based handler.
+ */
+const kMessage = Symbol('message');
+class WsLikeErrorEvent {
+  [key: symbol]: unknown;
+
+  constructor(message: string) {
+    this[kMessage] = message;
+  }
+
+  get message() {
+    return this[kMessage];
+  }
+}
+Object.defineProperty(WsLikeErrorEvent.prototype, 'message', { enumerable: true });
+
 /** Minimal event-target stand-in: records listeners so tests can dispatch to them. */
 function makeFakeSocket() {
   const listeners = new Map<string, (ev: unknown) => void>();
@@ -62,6 +82,51 @@ describe('RpcClient close logging', () => {
     mockLoggerWarn.mockClear();
     mockLoggerInfo.mockClear();
     mockLoggerError.mockClear();
+  });
+
+  test('appends a per-instance discriminator so the peer label is not just the bare processType', async () => {
+    // createRpcHandler always passes globalThis.processType as peerName, so two clients built the
+    // same way (as two BrowserWindow renderer processes would be) must carry a discriminator
+    // beyond the bare 'renderer' label, or two windows' log lines stay indistinguishable.
+    await connectedClient('renderer');
+    dispatch('close', new CloseEvent('close', { code: 1006 }));
+    const firstLabel = mockLoggerWarn.mock.calls[0][0];
+
+    mockLoggerWarn.mockClear();
+    const fake = makeFakeSocket();
+    fakeSocket = fake.socket;
+    dispatch = fake.dispatch;
+    await connectedClient('renderer');
+    dispatch('close', new CloseEvent('close', { code: 1006 }));
+    const secondLabel = mockLoggerWarn.mock.calls[0][0];
+
+    // Two clients in the same process share `process.pid`, so the labels are allowed to match —
+    // what must hold is that neither collapses back to the bare 'renderer' peerName; across two
+    // separate BrowserWindow processes the pid differs and the labels genuinely diverge.
+    expect(firstLabel).toMatch(/renderer#\S+/);
+    expect(secondLabel).toMatch(/renderer#\S+/);
+  });
+
+  test.each([1000, 1001, 4000])('logs a clean close (code %i) at info, not warn', async (code) => {
+    await connectedClient();
+    // connect() itself logs at info ("Websocket connected to ..."); clear that so the assertions
+    // below observe only the close-logging behavior under test.
+    mockLoggerInfo.mockClear();
+
+    dispatch('close', new CloseEvent('close', { code }));
+
+    expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  test.each([1005, 1006])('logs an abnormal close (code %i) at warn, not info', async (code) => {
+    await connectedClient();
+    mockLoggerInfo.mockClear();
+
+    dispatch('close', new CloseEvent('close', { code }));
+
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    expect(mockLoggerInfo).not.toHaveBeenCalled();
   });
 
   test('logs an unexpected close at warn, naming the peer and the close code', async () => {
@@ -138,7 +203,7 @@ describe('RpcClient close logging', () => {
   test('logs a real error detail instead of {}', async () => {
     await connectedClient();
 
-    dispatch('error', { message: 'read ECONNRESET' });
+    dispatch('error', new WsLikeErrorEvent('read ECONNRESET'));
 
     expect(mockLoggerError).toHaveBeenCalled();
     const logged = mockLoggerError.mock.calls[0][0];
@@ -149,13 +214,12 @@ describe('RpcClient close logging', () => {
   test('logs the error detail exactly once, not doubled', async () => {
     await connectedClient();
 
-    dispatch('error', { message: 'read ECONNRESET' });
+    dispatch('error', new WsLikeErrorEvent('read ECONNRESET'));
 
     const logged = mockLoggerError.mock.calls[0][0];
-    // The formatted detail is fully determined by describeWebSocketErrorEvent's output for this
-    // input, so pin the exact line: a regression that re-interpolates the detail into the message
-    // as well as the data argument would double it and fail this exact match.
-    expect(logged).toBe('Client websocket error event occurred: message=read ECONNRESET code=n/a');
+    // A regression that re-interpolates the detail into the message as well as the data
+    // argument would double it, so assert the occurrence count rather than pinning the full
+    // log line (which would break on harmless wording changes).
     expect(logged.split('read ECONNRESET')).toHaveLength(2);
   });
 

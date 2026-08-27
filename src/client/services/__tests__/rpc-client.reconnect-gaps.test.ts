@@ -24,7 +24,7 @@ function dispatch(type: string, ev: unknown) {
   listeners.get(type)?.(ev);
 }
 
-describe('RpcClient reconnect gaps (deferred — see TODO(PT-4435) at rpc-client.ts:51)', () => {
+describe('RpcClient reconnect gaps (deferred — see TODO(PT-4435) in rpc-client.ts)', () => {
   beforeEach(() => {
     listeners.clear();
     fakeSocket.readyState = 1;
@@ -54,7 +54,7 @@ describe('RpcClient reconnect gaps (deferred — see TODO(PT-4435) at rpc-client
     const client = new RpcClient('renderer-1');
     fakeSocket.readyState = 0;
     const first = client.connect(() => {});
-    // AsyncVariable rejects after its 10s default (async-variable.ts:19)
+    // AsyncVariable rejects after its 10s default (platform-bible-utils's async-variable.ts)
     await vi.advanceTimersByTimeAsync(10_001);
     await first;
     vi.useRealTimers();
@@ -77,7 +77,7 @@ describe('RpcClient reconnect gaps (deferred — see TODO(PT-4435) at rpc-client
     });
     await Promise.resolve();
 
-    // applyMiddleware runs on every connect() (rpc-client.ts:82), duplicating delivery.
+    // applyMiddleware runs on every connect() in rpc-client.ts, duplicating delivery.
     expect(handler).toHaveBeenCalledTimes(1);
   });
 });

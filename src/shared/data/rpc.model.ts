@@ -126,6 +126,24 @@ export const MAX_LOGGED_DETAIL_LENGTH = 200;
 export const INTENTIONAL_CLOSE_CODE = 4000;
 
 /**
+ * Whether a WebSocket close `code` represents a clean, expected shutdown rather than a connection
+ * that died.
+ *
+ * 1000 (normal) and 1001 (going away, e.g. a page/window navigating away or closing) are the two
+ * codes the WebSocket spec itself defines as orderly closes, and {@link INTENTIONAL_CLOSE_CODE} is
+ * this codebase's own marker for a close we initiated on purpose. Everything else — most notably
+ * 1006 (abnormal closure: no close frame was ever received, the fingerprint of a socket that just
+ * died, e.g. across a suspend) and 1005 (no status code present) — is unexpected and worth a
+ * `warn`.
+ *
+ * Shared so the client and server close handlers cannot independently drift on which codes count as
+ * clean.
+ */
+export function isCleanCloseCode(code: unknown): boolean {
+  return code === 1000 || code === 1001 || code === INTENTIONAL_CLOSE_CODE;
+}
+
+/**
  * Read a property without trusting the source object. Returns `undefined` if the property is absent
  * or if reading it throws — a hostile or exotic accessor must not turn a logged disconnect into an
  * unhandled exception inside a close handler.
@@ -157,13 +175,18 @@ function sanitizeForLog(value: string): string {
  * `JSON.stringify` on one yields `{}`. Read the fields explicitly instead.
  *
  * `code` is the single most diagnostic field: 1006 (abnormal, no close frame) means the connection
- * died rather than being closed politely.
+ * died rather than being closed politely. A reader should not need the WebSocket code table
+ * memorized to see that, so a code that {@link isCleanCloseCode} rejects is marked `(abnormal)`
+ * inline rather than left as a bare number.
  */
 export function describeWebSocketCloseEvent(ev: unknown): string {
   if (typeof ev !== 'object' || !ev) return 'code=n/a reason=n/a wasClean=n/a';
 
   const rawCode = readEventProperty(ev, 'code');
-  const code = typeof rawCode === 'number' ? `${rawCode}` : 'n/a';
+  const code =
+    typeof rawCode === 'number'
+      ? `${rawCode}${isCleanCloseCode(rawCode) ? '' : ' (abnormal)'}`
+      : 'n/a';
 
   const rawReason = readEventProperty(ev, 'reason');
   const reason = typeof rawReason === 'string' ? `"${sanitizeForLog(rawReason)}"` : 'n/a';
