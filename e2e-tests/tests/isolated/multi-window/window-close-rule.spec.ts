@@ -170,21 +170,29 @@ async function readMessageBoxCalls(
 }
 
 /** Ask a window to close the way its ✕ does — through Electron's `close`, not `app.quit()` */
-async function clickCloseOn(electronApp: ElectronApplication, windowId: number): Promise<void> {
+async function clickCloseOn(electronApp: ElectronApplication, windowId: string): Promise<void> {
   await electronApp.evaluate(({ BrowserWindow }, id) => {
-    const win = BrowserWindow.fromId(id);
-    if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+    const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) => {
+      try {
+        return new URL(someWindow.webContents.getURL()).searchParams.get('windowId') ?? undefined;
+      } catch {
+        return undefined;
+      }
+    };
+    const win = BrowserWindow.getAllWindows().find((someWindow) => platformIdOf(someWindow) === id);
+    if (!win) throw new Error(`No BrowserWindow with platform id ${id}`);
     win.close();
   }, windowId);
 }
 
-/** IDs of the windows still alive in the main process */
-async function liveWindowIds(electronApp: ElectronApplication): Promise<number[]> {
+/** Platform ids of the windows still alive in the main process, sorted for stable comparison */
+async function liveWindowIds(electronApp: ElectronApplication): Promise<string[]> {
   return electronApp.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()
       .filter((win) => !win.isDestroyed())
-      .map((win) => win.id)
-      .sort((a, b) => a - b),
+      .map((win) => new URL(win.webContents.getURL()).searchParams.get('windowId') ?? undefined)
+      .filter((id): id is string => id !== undefined)
+      .sort(),
   );
 }
 
@@ -269,7 +277,7 @@ test.describe('window close rule', () => {
     logStep('asked once; cancelled');
 
     // …and cancelling changed nothing: both windows are still alive and the app is up
-    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort((a, b) => a - b));
+    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort());
     await expect(mainPage.locator('body')).toBeVisible();
 
     // The primary is still a window that ASKS, not one whose close guard is stuck: a second ✕ must
@@ -281,7 +289,7 @@ test.describe('window close rule', () => {
       30_000,
       'the close-all question to be asked a second time',
     );
-    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort((a, b) => a - b));
+    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort());
     logStep('asked again on the second close; still both windows');
 
     expectNoFaultsWhileRunning(output);
@@ -498,7 +506,7 @@ test.describe('window close rule', () => {
     await clickCloseOn(electronApp, primaryId);
     await mainPage.waitForTimeout(2_000);
     expect(await readMessageBoxCalls(electronApp)).toHaveLength(1);
-    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort((a, b) => a - b));
+    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort());
     logStep('still asked only once; both windows still open');
 
     expectNoFaultsWhileRunning(output);

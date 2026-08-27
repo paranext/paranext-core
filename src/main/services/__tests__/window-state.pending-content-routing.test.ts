@@ -34,30 +34,30 @@ describe('routing around pending-content windows', () => {
 
   test('a focused pending-content window is passed over for the last real window', () => {
     addWindow(fakeWindow(1));
-    markWindowReady(1);
-    setFocusedWindowId(1);
+    markWindowReady('1');
+    setFocusedWindowId('1');
     addWindow(fakeWindow(7));
-    markWindowReady(7);
-    setWindowPendingContentPredicate((windowId) => windowId === 7);
+    markWindowReady('7');
+    setWindowPendingContentPredicate((windowId) => windowId === '7');
     // A window created for routed content is shown — and takes OS focus — before its content
     // arrives
-    setFocusedWindowId(7);
+    setFocusedWindowId('7');
 
-    expect(getTargetWindowId()).toBe(1);
+    expect(getTargetWindowId()).toBe('1');
   });
 
   test('the window becomes the routing target once its content has arrived', () => {
     addWindow(fakeWindow(1));
-    markWindowReady(1);
-    setFocusedWindowId(1);
+    markWindowReady('1');
+    setFocusedWindowId('1');
     addWindow(fakeWindow(7));
-    markWindowReady(7);
+    markWindowReady('7');
     let isPending = true;
-    setWindowPendingContentPredicate((windowId) => windowId === 7 && isPending);
-    setFocusedWindowId(7);
+    setWindowPendingContentPredicate((windowId) => windowId === '7' && isPending);
+    setFocusedWindowId('7');
 
     isPending = false;
 
-    expect(getTargetWindowId()).toBe(7);
+    expect(getTargetWindowId()).toBe('7');
   });
 });

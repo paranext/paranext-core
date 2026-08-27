@@ -29,8 +29,8 @@ function fakeWindow(id: number): BrowserWindow {
 
 describe('marking a window closing at the moment its close is decided', () => {
   let countWindows: ReturnType<typeof vi.fn<() => number>>;
-  let closeWindow: ReturnType<typeof vi.fn<(windowId: number) => void>>;
-  let markWindowClosing: ReturnType<typeof vi.fn<(windowId: number) => void>>;
+  let closeWindow: ReturnType<typeof vi.fn<(windowId: string) => void>>;
+  let markWindowClosing: ReturnType<typeof vi.fn<(windowId: string) => void>>;
   let handler: ReturnType<typeof createWindowEmptinessHandler>;
 
   beforeEach(() => {
@@ -50,23 +50,23 @@ describe('marking a window closing at the moment its close is decided', () => {
     vi.useFakeTimers();
     countWindows.mockReturnValue(2);
 
-    const response = await handler(1, 'emptied-by-removal');
+    const response = await handler('1', 'emptied-by-removal');
 
     expect(response).toEqual({ action: 'closing' });
     // Marked synchronously with the decision — before the deferred close timer has even run — so
     // nobody's last-window arithmetic can still count this window in the gap
-    expect(markWindowClosing).toHaveBeenCalledWith(1);
+    expect(markWindowClosing).toHaveBeenCalledWith('1');
     expect(closeWindow).not.toHaveBeenCalled();
 
     vi.runAllTimers();
 
-    expect(closeWindow).toHaveBeenCalledWith(1);
+    expect(closeWindow).toHaveBeenCalledWith('1');
   });
 
   test('born-empty never marks', async () => {
     countWindows.mockReturnValue(3);
 
-    await expect(handler(1, 'born-empty')).resolves.toEqual({ action: 'open-home' });
+    await expect(handler('1', 'born-empty')).resolves.toEqual({ action: 'open-home' });
 
     expect(markWindowClosing).not.toHaveBeenCalled();
   });
@@ -74,10 +74,10 @@ describe('marking a window closing at the moment its close is decided', () => {
   test('invalid arguments never mark', async () => {
     countWindows.mockReturnValue(3);
 
-    await expect(handler('not-a-number', 'emptied-by-removal')).resolves.toEqual({
+    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({
       action: 'open-home',
     });
-    await expect(handler(1, 'some-other-reason')).resolves.toEqual({ action: 'open-home' });
+    await expect(handler('1', 'some-other-reason')).resolves.toEqual({ action: 'open-home' });
 
     expect(markWindowClosing).not.toHaveBeenCalled();
   });
@@ -86,8 +86,8 @@ describe('marking a window closing at the moment its close is decided', () => {
     vi.useFakeTimers();
     countWindows.mockReturnValue(3);
 
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
 
     expect(markWindowClosing).toHaveBeenCalledTimes(1);
 
@@ -99,7 +99,7 @@ describe('marking a window closing at the moment its close is decided', () => {
   test('the last window is answered open-home and never marked', async () => {
     countWindows.mockReturnValue(1);
 
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
 
     expect(markWindowClosing).not.toHaveBeenCalled();
     expect(closeWindow).not.toHaveBeenCalled();
@@ -123,7 +123,7 @@ describe('a window nothing can run in is not a reason to close the last working 
     vi.useFakeTimers();
     addWindow(fakeWindow(1));
     addWindow(fakeWindow(2));
-    markWindowAbandoned(2);
+    markWindowAbandoned('2');
     const closeWindow = vi.fn();
     const markWindowClosing = vi.fn(markWindowClosingInTracker);
     const handler = createWindowEmptinessHandler({
@@ -133,10 +133,10 @@ describe('a window nothing can run in is not a reason to close the last working 
       markWindowClosing,
     });
 
-    const response = await handler(1, 'emptied-by-removal');
+    const response = await handler('1', 'emptied-by-removal');
 
     expect(response).toEqual({ action: 'open-home' });
-    expect(markWindowClosing).not.toHaveBeenCalledWith(1);
+    expect(markWindowClosing).not.toHaveBeenCalledWith('1');
 
     vi.runAllTimers();
     expect(closeWindow).not.toHaveBeenCalled();

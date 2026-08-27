@@ -43,7 +43,7 @@ import { getErrorMessage, Mutex, Unsubscriber, UnsubscriberAsync } from 'platfor
  * Resolve the window service shard for a given window. Injected so the engine can be tested without
  * the Electron window plumbing that owns the real lookup.
  */
-export type GetWindowService = (windowId: number) => Promise<IWindowService | undefined>;
+export type GetWindowService = (windowId: string) => Promise<IWindowService | undefined>;
 
 /**
  * The window service shard each window registers, found by network object type and window attribute
@@ -72,7 +72,7 @@ const windowServiceShards = createServiceShardIndex<WindowServiceShard>({
  * @param windowId Platform id of the window whose shard to get
  */
 export async function getWindowServiceShard(
-  windowId: number,
+  windowId: string,
 ): Promise<WindowServiceShard | undefined> {
   return windowServiceShards.getShard(windowId);
 }
@@ -106,7 +106,7 @@ export const onDidRegisterWindowServiceShard = windowServiceShards.onDidAddShard
  * that registered before the subscription is never marked ready and stays unroutable for the rest
  * of the session.
  */
-export function getWindowIdsWithServiceShard(): number[] {
+export function getWindowIdsWithServiceShard(): string[] {
   return windowServiceShards.getShardWindowIds();
 }
 

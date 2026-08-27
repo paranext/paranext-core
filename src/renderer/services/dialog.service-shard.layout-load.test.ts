@@ -202,7 +202,7 @@ beforeEach(() => {
   mocks.publishedShards.length = 0;
   globalThis.open = openWindow;
   localStorage.clear();
-  globalThis.windowId = 7;
+  globalThis.windowId = '7';
   mocks.settingsGet.mockImplementation(async (key: string) =>
     key === 'platform.interfaceMode' ? 'power' : false,
   );

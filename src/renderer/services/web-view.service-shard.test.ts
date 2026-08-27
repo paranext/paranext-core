@@ -531,7 +531,7 @@ beforeEach(() => {
   mocks.bufferedEmitters.clear();
   globalThis.open = openWindow;
   localStorage.clear();
-  globalThis.windowId = 2;
+  globalThis.windowId = '2';
   respondToGetLayout({ kind: 'empty' });
 });
 
@@ -560,10 +560,10 @@ describe('loadLayout scopes web view ids to this window', () => {
   test('gives two windows different supplement tab ids', async () => {
     const sharedLayout = layoutWithAnchor();
 
-    globalThis.windowId = 1;
+    globalThis.windowId = '1';
     const inWindow1 = tabIdsIn(await loadLayoutInWindow(sharedLayout));
     vi.resetModules();
-    globalThis.windowId = 2;
+    globalThis.windowId = '2';
     const inWindow2 = tabIdsIn(await loadLayoutInWindow(sharedLayout));
 
     expect(inWindow1).not.toContain(`${SUPPLEMENT_TAB_ID}-w2`);
@@ -1551,7 +1551,7 @@ describe('loadLayout restores this window’s layout from the main process', () 
 
     const loaded = await loadLayoutInWindow(layoutWithAnchor());
 
-    expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:get', 2);
+    expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:get', '2');
     expect(tabIdsIn(loaded)).toEqual(['saved-tab-w2']);
   });
 
@@ -1688,7 +1688,7 @@ describe('loadLayout reports a dock that landed empty', () => {
     module.registerDockLayout(dockLayout);
 
     await vi.waitFor(() =>
-      expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', 2, 'born-empty'),
+      expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', '2', 'born-empty'),
     );
     await vi.waitFor(() =>
       expect(addWebViewToDockCalls).toEqual([
@@ -1709,7 +1709,7 @@ describe('loadLayout reports a dock that landed empty', () => {
     await loadLayoutInWindow(layoutWithAnchor());
 
     await vi.waitFor(() =>
-      expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', 2, 'born-empty'),
+      expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', '2', 'born-empty'),
     );
   });
 
@@ -1750,7 +1750,7 @@ describe('loadLayout reports a dock that landed empty', () => {
     module.registerDockLayout(dockLayout);
 
     await vi.waitFor(() =>
-      expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', 2, 'born-empty'),
+      expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', '2', 'born-empty'),
     );
     await flushMicrotasks();
     expect(addWebViewToDockCalls).toEqual([]);
@@ -1889,7 +1889,7 @@ describe('loadLayout reports a dock that landed empty', () => {
 
       expect(mocks.networkRequest).toHaveBeenCalledWith(
         'windowLayout:emptied',
-        2,
+        '2',
         'emptied-by-removal',
       );
       // Main answered `closing`, so nothing is docked into a window on its way out
@@ -1922,7 +1922,11 @@ describe('loadLayout reports a dock that landed empty', () => {
 
       module.registerDockLayout(dockLayout);
       await vi.waitFor(() =>
-        expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', 2, 'born-empty'),
+        expect(mocks.networkRequest).toHaveBeenCalledWith(
+          'windowLayout:emptied',
+          '2',
+          'born-empty',
+        ),
       );
       await flushMicrotasks();
 
@@ -2135,7 +2139,7 @@ describe('a window the main process has told is closing', () => {
     module.registerDockLayout(dockLayout);
     await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
     await vi.waitFor(() =>
-      expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', 2, 'born-empty'),
+      expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', '2', 'born-empty'),
     );
     // Let the answer to that report land before anything asks this window to do work
     await new Promise<void>((resolve) => {
@@ -2452,7 +2456,7 @@ describe('saveLayout pushes this window’s layout to the main process', () => {
 
     expect(layoutPushes()).toEqual([
       [
-        2,
+        '2',
         {
           dockbox: {
             mode: 'horizontal',

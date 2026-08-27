@@ -89,7 +89,7 @@ export const URL_PARAMETERS: Readonly<Record<string, UrlParameterSpec>> = {
     allowed: ['error', 'warn', 'info', 'verbose', 'debug', 'silly'],
   },
   [DEV_MODE_QUERY_PARAMETER]: { kind: 'flag' },
-  [WINDOW_ID]: { kind: 'integer' },
+  [WINDOW_ID]: { kind: 'string' },
   [WINDOW_SLOT_ID_QUERY_PARAMETER]: { kind: 'string' },
   [STARTUP_MARKS_QUERY_PARAMETER]: { kind: 'flag' },
   [SCROLL_GROUP_STATE_QUERY_PARAMETER]: { kind: 'serialized' },
