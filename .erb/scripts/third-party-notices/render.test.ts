@@ -601,6 +601,13 @@ describe('cell', () => {
   it('renders a missing value as an empty cell', () => {
     expect(cell(undefined)).toBe('');
   });
+
+  it('escapes a backslash so it cannot escape the pipe escape', () => {
+    // A value ending in a backslash - a Windows path in a NuGet Notes field - would otherwise
+    // produce `...\\|`, where the backslash escapes the backslash and GFM reads the pipe as a live
+    // column break.
+    expect(cell('C:\\path\\|more')).toBe('C:\\\\path\\\\\\|more');
+  });
 });
 
 describe('the license cell for a row that was both elected and excepted', () => {

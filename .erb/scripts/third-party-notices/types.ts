@@ -94,7 +94,7 @@ export type Election = {
 /**
  * A third-party notice file shipped inside an extension's copied static assets.
  *
- * See `static-assets.ts`: these trees reach none of the three sources the npm half is derived from,
+ * See `static-assets.ts`: these trees reach none of the four sources the npm half is derived from,
  * so what is redistributed there is recorded here or the build refuses.
  */
 export type StaticAssetNotice = {
@@ -195,6 +195,12 @@ export type LockfileEntry = {
   resolved?: string;
   link?: boolean;
   dependencies?: Record<string, string>;
+  /**
+   * Present on this repository's own workspace manifests, where a BUNDLED dependency normally
+   * lives: it is consumed at build time, so nothing about being a devDependency says it does not
+   * reach the artifact. `lockDependsOn` reads it for that reason.
+   */
+  devDependencies?: Record<string, string>;
   optionalDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
 };

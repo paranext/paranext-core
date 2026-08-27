@@ -3401,6 +3401,43 @@ step, no automation. Just a record.
 - **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
 
+## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** Three declared shapes reach `resolveDeclaredPrefix` in `policy.ts` and block before
+  any policy list is consulted: a `WITH` exception (`Apache-2.0 WITH LLVM-exception`), an
+  unrepresentable `+` (`Apache-2.0+`, for which SPDX publishes no "or later" identifier), and a
+  disjunct that is not a grant we can verify (`LicenseRef-Commercial`). The first two are usually
+  AGPL-COMPATIBLE — they block on an expressibility problem, not an incompatibility. SPDX names no
+  identifier for "Apache-2.0 or later", and the corpus this pipeline reproduces texts from holds no
+  exception texts, so resolving on the base identifier would put a text into the artifact that
+  describes a license the package is not under, or state terms narrower than it grants.
+
+  No instrument in `notices-policy.json` can clear any of the three, and this was not obvious from
+  the code: `applyException` refuses a `WITH` and an unrepresentable `+` by name, and
+  `applyOverride` is reachable only where `declared.ok` is false — which is false for all three,
+  because each parses. Both block messages nonetheless told the reader "a reviewed exception or a
+  curated override records what applies."
+- **Decision:** Accept dropping the dependency. These are not routed to a new instrument; the block
+  message and `report.ts`'s `policyRemedy` now say plainly which instruments cannot clear the shape
+  and why, and end at "the dependency has to change." A package whose declaration this pipeline
+  cannot resolve into an identifier it can reproduce a text for does not ship.
+- **Alternatives:** Add an instrument that records a human's determination for `+` and `WITH` —
+  rejected for now: it would admit a package on a reviewer's word where the artifact still cannot
+  reproduce a text matching the grant, which is the half-answer
+  `adr-notices-derived-from-what-ships` rules out. Resolve on the base identifier — rejected: it
+  states terms narrower than the package grants, and for `WITH` it names a license the package is
+  not under. Leave the messages naming instruments that cannot clear the block — rejected: advice
+  the gate then refuses is the failure `policyRemedy` exists to prevent.
+- **Consequences:** nothing in the current closure declares any of the three, so this costs nothing
+  today; the decision is recorded because it would otherwise be re-litigated the first time a real
+  dependency hits it. **Revisit** if a dependency this project genuinely needs declares
+  `<id>+` or `<id> WITH <exception>` — the answer then is an instrument that records the
+  determination AND the text to reproduce, not a relaxation of the gate.
+- **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
+  `policyRemedy`.
+
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 
 - **Date:** 2026-08-27

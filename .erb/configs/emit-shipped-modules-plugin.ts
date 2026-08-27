@@ -139,6 +139,23 @@ export class EmitShippedModulesPlugin {
     compiler.hooks.beforeRun.tap(NAME, startRun);
     compiler.hooks.watchRun.tap(NAME, startRun);
 
+    // The PARENT compilation only. A child compiler (`compilation.createChildCompiler()`) runs its
+    // own module graph that this hook never sees, and two kinds exist in webpack: one whose output
+    // ships (`new Worker(new URL(…))`) and one whose output is executed at build time and thrown
+    // away (`HtmlWebpackPlugin`, which compiles `src/renderer/index.ejs` to a function that emits
+    // the HTML). Tapping children indiscriminately would put the second kind's packages into a
+    // legal document as things this project redistributes, which is the same error as omitting the
+    // first kind, inverted.
+    //
+    // Measured across all five bundles: `main`, `extension-host`, `extension-main` and
+    // `extension-web-view` create no child compilers at all, and `renderer` creates exactly one -
+    // `HtmlWebpackCompiler`, whose entire graph is two modules, a `data:` URI and this
+    // repository's own `index.ejs`. Neither is an installed package, so today children contribute
+    // nothing the parent graph does not already carry and none of them ship.
+    //
+    // What changes that: the first `new Worker(new URL('./x', import.meta.url))` in this codebase.
+    // Its child compilation DOES ship, and it would need tapping - excluding `HtmlWebpackCompiler`
+    // by the name the `childCompiler` hook passes.
     compiler.hooks.compilation.tap(NAME, (compilation) => {
       compilation.hooks.finishModules.tap(NAME, (modules) => {
         // `Iterable<Module>`, not an array: webpack passes a Set at runtime, so `.forEach` happens

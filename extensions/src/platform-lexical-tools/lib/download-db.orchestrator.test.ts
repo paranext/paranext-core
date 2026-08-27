@@ -319,9 +319,9 @@ describe('runDownload', () => {
   });
 
   it('lenient + both notices missing: names every URL it could not fetch', async () => {
-    // `Promise.all` rejected on the first failure and abandoned the fetch still in flight, so this
-    // warning named ONE url while telling the maintainer to publish both files - and which one it
-    // named depended on which request happened to fail first.
+    // Every url has to be named. `Promise.all` would reject on the first failure and abandon the
+    // fetch still in flight, leaving the warning naming ONE url while telling the maintainer to
+    // publish both files - and which one depends on whichever request happens to fail first.
     const warn = vi.fn();
     const deps = makeDeps({
       downloadFile: vi.fn(async (url: string) => {
