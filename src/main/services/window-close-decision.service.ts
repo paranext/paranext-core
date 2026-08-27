@@ -8,7 +8,11 @@
  * be tested without a BrowserWindow.
  */
 
-import { isAppQuitRequested, markQuitRequested } from '@main/services/shutdown-latch.service';
+import {
+  isAppQuitRequested,
+  markQuitRequested,
+  whenQuitRequested,
+} from '@main/services/shutdown-latch.service';
 import {
   countWindowsThatWouldStayOpen,
   isPrimaryWindow,
@@ -54,7 +58,14 @@ export async function decideWindowClose(
   // loading its content does
   if (countWindowsThatWouldStayOpen(windowId) === 0) return 'close-this-window';
 
-  const answer = await confirmCloseAll();
+  // The user's answer, unless a quit arrives first. A quit while the question is open — Cmd+Q,
+  // File → Quit, `platform.quit` — is a stronger statement than any button, and a native dialog
+  // cannot be dismissed from code, so the wait has to give way to it or the app hangs with the
+  // question up and the quit swallowed underneath it.
+  const answer = await Promise.race([
+    confirmCloseAll(),
+    whenQuitRequested().then((): CloseAllAnswer => 'close-all'),
+  ]);
   if (answer === 'cancel') return 'stay-open';
 
   markQuitRequested();
