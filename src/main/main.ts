@@ -9,6 +9,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   RenderProcessGoneDetails,
   screen,
@@ -43,6 +44,7 @@ import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
+import type { CloseAllAnswer } from '@main/services/window-close-decision.service';
 import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationServiceRouter } from '@main/services/notification.service-router';
 import {
@@ -95,8 +97,10 @@ import {
   markWindowReady,
   removeWindow,
   setFocusedWindowId,
+  setPrimaryWindowId,
   setWindowPendingContentPredicate,
 } from '@main/services/window-state.service';
+import { decideWindowClose } from '@main/services/window-close-decision.service';
 import {
   assignEntryToWindow,
   getMainWindowId,
@@ -151,6 +155,7 @@ import {
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import * as commandService from '@shared/services/command.service';
+import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -164,6 +169,7 @@ import { CommandNames, SettingTypes } from 'papi-shared-types';
 import {
   getErrorMessage,
   isPlatformError,
+  LocalizeKey,
   serialize,
   ThemeDefinitionExpanded,
   UnsubscriberAsyncList,
@@ -1065,6 +1071,30 @@ async function main() {
       event.preventDefault();
       isCloseInProgress = true;
 
+      // Closing the primary window while others are open takes every window with it, so the user
+      // is asked first. Decided before anything is marked closing: a cancelled close is not a close
+      // at all, and a window latched as closing that then stays open would be inert for the rest
+      // of the session. On confirm the quit latch is already set by the time this resolves, which
+      // is what makes every other window's handler record its layout as staying for next session.
+      // Secondary windows and a primary on its own skip the question and close as they always did.
+      // TODO(PT-4286): a live switch to Simple mode must also close the secondary windows; that
+      // half waits on #2425.
+      const decision = await decideWindowClose(windowId, () => confirmCloseAllWindows(newWindow));
+      if (decision === 'stay-open') {
+        // The guard is released so the next close click asks again rather than falling through to
+        // Electron's default close with none of the shutdown work below
+        isCloseInProgress = false;
+        return;
+      }
+      if (decision === 'quit-all') {
+        // Told to close now, ahead of this window's own shutdown work, so all of them go down
+        // together rather than after this one has finished. Each runs its own handler and finds
+        // the quit latch already set.
+        getWindows().forEach((otherWindow) => {
+          if (otherWindow.id !== windowId && !otherWindow.isDestroyed()) otherWindow.close();
+        });
+      }
+
       // Everything from here down is inside the guard: the window is now prevented from closing and
       // latched as closing, so a throw that escaped would strand it exactly there — visible, inert,
       // and (from an async listener) reported only as a rejection Electron never sees.
@@ -1447,6 +1477,7 @@ async function main() {
     if (plan.kind === 'legacy') {
       const legacyWindow = await createWindow({ kind: 'legacy', boundsState: plan.boundsState });
       setMainWindowId(legacyWindow.id);
+      setPrimaryWindowId(legacyWindow.id);
       return;
     }
 
@@ -1460,6 +1491,7 @@ async function main() {
       entry: entries[mainEntryIndex],
     });
     setMainWindowId(mainWindow.id);
+    setPrimaryWindowId(mainWindow.id);
     if (entries.length <= 1) return;
 
     // Simple mode is single-window: restore only the main window no matter how many entries the
@@ -1485,6 +1517,56 @@ async function main() {
       }
     }
   };
+
+  /**
+   * Ask the user whether closing the primary window should close every window. Shown modal to that
+   * window so it cannot be lost behind another one.
+   *
+   * A string lookup that fails must not decide the close: the dialog shows with its English text
+   * rather than the window refusing to close, which is the worse outcome.
+   *
+   * @param primaryWindow The window whose close is being confirmed
+   */
+  async function confirmCloseAllWindows(primaryWindow: BrowserWindow): Promise<CloseAllAnswer> {
+    const titleKey: LocalizeKey = '%closeApp_confirm_title%';
+    const messageKey: LocalizeKey = '%closeApp_confirm_message%';
+    const closeAllKey: LocalizeKey = '%closeApp_confirm_closeAll%';
+    const cancelKey: LocalizeKey = '%closeApp_confirm_cancel%';
+    const fallbackStrings: Record<LocalizeKey, string> = {
+      [titleKey]: 'Close the application?',
+      [messageKey]:
+        'All windows will close. They will be restored the next time you open the application.',
+      [closeAllKey]: 'Close all windows',
+      [cancelKey]: 'Cancel',
+    };
+    let strings = fallbackStrings;
+    try {
+      strings = {
+        ...fallbackStrings,
+        ...(await localizationService.getLocalizedStrings({
+          localizeKeys: [titleKey, messageKey, closeAllKey, cancelKey],
+        })),
+      };
+    } catch (e) {
+      logger.warn(
+        `Could not localize the close-all prompt; showing English: ${getErrorMessage(e)}`,
+      );
+    }
+    const closeAllIndex = 0;
+    const cancelIndex = 1;
+    const { response } = await dialog.showMessageBox(primaryWindow, {
+      type: 'question',
+      title: strings['%closeApp_confirm_title%'],
+      message: strings['%closeApp_confirm_title%'],
+      detail: strings['%closeApp_confirm_message%'],
+      buttons: [strings['%closeApp_confirm_closeAll%'], strings['%closeApp_confirm_cancel%']],
+      defaultId: closeAllIndex,
+      // Esc and the window manager's dismiss both land here, so neither can close every window
+      cancelId: cancelIndex,
+      noLink: true,
+    });
+    return response === closeAllIndex ? 'close-all' : 'cancel';
+  }
 
   app.on('window-all-closed', () => {
     // The macOS convention of keeping the application resident after its last window closes only
