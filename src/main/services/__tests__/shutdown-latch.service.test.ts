@@ -6,6 +6,7 @@ import {
   markQuitRequested,
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
+  whenQuitRequested,
 } from '@main/services/shutdown-latch.service';
 import {
   addWindow,
@@ -31,6 +32,35 @@ describe('shutdown latches', () => {
     // Both modules hold process-wide state, so unwind it between tests
     resetShutdownLatchesForNewSession();
     resetWindowStateForTesting();
+  });
+
+  test('a quit settles a wait that began before it', async () => {
+    // What the close path does while the close-all question is open: it holds the signal from
+    // before the question and needs the quit to settle THAT one.
+    const waiting = whenQuitRequested();
+
+    markQuitRequested();
+
+    await expect(waiting).resolves.toBeUndefined();
+  });
+
+  test('a new session leaves nothing waiting on the last session’s quit', async () => {
+    // The signal has to be REPLACED, not merely re-armed: a settled one carried into the next
+    // session would resolve a fresh wait instantly, and the close path reads that as "the user
+    // is quitting" — it would close every window without asking. The cost of replacing it is that
+    // a wait begun before a reset never settles, which is why only a window created where there
+    // were NONE resets at all (see `createWindow`): with no windows there is no close-all question
+    // in flight to strand.
+    markQuitRequested();
+
+    resetShutdownLatchesForNewSession();
+
+    const settled = await Promise.race([
+      whenQuitRequested().then(() => 'settled'),
+      Promise.resolve().then(() => 'still waiting'),
+    ]);
+    expect(settled).toBe('still waiting');
+    expect(isAppQuitRequested()).toBe(false);
   });
 
   test('does not report a quit until one is requested', () => {

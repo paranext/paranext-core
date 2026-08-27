@@ -461,18 +461,20 @@ test.describe('moving a web view between windows', () => {
     });
     logStep(`window ${window2Id} holds the moved web view`);
 
-    // Window 1 held nothing else, so moving its one web view out empties it — and with window 2
-    // standing there holding content, it is NOT the last window that could be the one the user is
-    // left with, so it closes rather than docking Home. (Contrast the first test, where the same
-    // move leaves Home behind because the only other window is still waiting for content.)
+    // Window 1 held nothing else, so moving its one web view out empties it — but window 1 is the
+    // PRIMARY, and an emptied primary docks Home rather than closing: moving its last tab out does
+    // the same thing as closing that last tab. Only its ✕ and the Quit menu close it. Were it to
+    // close here, the live primary reference would name a dead window and window 2 — the one the
+    // user is now working in — would be a secondary whose ✕ drops its layout.
     await expectAppWindowCount(
       electronApp,
-      1,
+      2,
       120_000,
-      `window ${window1Id} to close after the move emptied it`,
+      `window ${window1Id} to stay open after the move emptied it`,
     );
-    expect(mainPage.isClosed()).toBe(true);
-    logStep(`window ${window1Id} closed after being emptied`);
+    expect(mainPage.isClosed()).toBe(false);
+    await expect(homeTabTitle(mainPage, window1Id)).toBeAttached({ timeout: 120_000 });
+    logStep(`window ${window1Id} docked Home after being emptied, as the primary`);
 
     // MOVE BACK OUT, to a window created for it. The source survives this one: it keeps its own
     // Home tab, so it is never empty.

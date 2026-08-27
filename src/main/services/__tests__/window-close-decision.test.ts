@@ -10,11 +10,21 @@ import {
   addWindow,
   markWindowClosing,
   resetForTesting as resetWindowStateForTesting,
-  setPrimaryWindowId,
   setWindowPendingContentPredicate,
 } from '@main/services/window-state.service';
+import { isPrimaryWindow } from '@main/services/window-layout-persistence.service';
 
 vi.mock('electron', () => ({ BrowserWindow: class {} }));
+
+// The primary role is read from the persisted `isMain` slot; this stands in for that structure
+vi.mock('@main/services/window-layout-persistence.service', () => ({
+  isPrimaryWindow: vi.fn(() => false),
+}));
+
+/** Say which window the persisted structure calls primary */
+function setPrimaryWindowId(windowId: number) {
+  vi.mocked(isPrimaryWindow).mockImplementation((id: number) => id === windowId);
+}
 
 vi.mock('@shared/services/logger.service', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
@@ -127,32 +137,12 @@ describe('deciding what a window close means', () => {
     });
   });
 
-  describe('primary window the app has already decided to close', () => {
-    test('does not ask — an emptied window closes by rule, not by the user', async () => {
-      // When the last web view is moved out of the primary, the emptiness handler decides it
-      // closes and marks it closing BEFORE scheduling the close. That close is the app's own, made
-      // under the equal-siblings rule, not a ✕ the user pressed — asking "close the application?"
-      // here would block a decision already taken, with a dialog on a window that has nothing in it.
-      addWindow(fakeWindow(1));
-      addWindow(fakeWindow(2));
-      setPrimaryWindowId(1);
-      markWindowClosing(1);
-      const { confirm } = promptAnswering('cancel');
-
-      const decision = await decideWindowClose(1, confirm);
-
-      expect(confirm).not.toHaveBeenCalled();
-      expect(decision).toBe('close-this-window');
-      expect(isAppQuitRequested()).toBe(false);
-    });
-  });
-
   describe('a quit arriving while the question is still open', () => {
     test('is the answer: the decision resolves to quit-all without waiting for the user', async () => {
       // The user is looking at the question when Cmd+Q, File → Quit or platform.quit fires. That
-      // quit is a stronger statement than any button, and the dialog cannot be dismissed from
-      // code — so the decision has to notice the latch and stop waiting, or the app hangs with the
-      // question up and the quit swallowed underneath it.
+      // quit is a stronger statement than any button. The asker takes the question down when one
+      // arrives, but the decision must not depend on it doing so — an asker that never answers,
+      // as here, still has to stop waiting, or the app hangs with the quit swallowed underneath.
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
       setPrimaryWindowId(1);

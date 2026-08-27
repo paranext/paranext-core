@@ -13,11 +13,8 @@ import {
   markQuitRequested,
   whenQuitRequested,
 } from '@main/services/shutdown-latch.service';
-import {
-  countWindowsThatWouldStayOpen,
-  isPrimaryWindow,
-  isWindowClosing,
-} from '@main/services/window-state.service';
+import { countWindowsThatWouldStayOpen } from '@main/services/window-state.service';
+import { isPrimaryWindow } from '@main/services/window-layout-persistence.service';
 
 /** What the user chose when asked whether to close every window */
 export type CloseAllAnswer = 'close-all' | 'cancel';
@@ -49,11 +46,6 @@ export async function decideWindowClose(
   confirmCloseAll: () => Promise<CloseAllAnswer>,
 ): Promise<WindowCloseDecision> {
   if (!isPrimaryWindow(windowId)) return 'close-this-window';
-  // A close the app already decided on — the primary emptied of its last web view closes under the
-  // equal-siblings rule, and the emptiness handler marks it closing before scheduling that close —
-  // is not a ✕ the user pressed. Asking "close the application?" here would block a decision
-  // already taken, with a dialog on a window that has nothing in it.
-  if (isWindowClosing(windowId)) return 'close-this-window';
   // A quit already asked for (Cmd+Q, File → Quit, `platform.quit`) sets the latch from `before-quit`
   // and then closes each window in creation order, the primary first — before any secondary has
   // been marked closing, so from here it looks like a primary ✕ with others open. It is not: the
@@ -65,13 +57,19 @@ export async function decideWindowClose(
   if (countWindowsThatWouldStayOpen(windowId) === 0) return 'close-this-window';
 
   // The user's answer, unless a quit arrives first. A quit while the question is open — Cmd+Q,
-  // File → Quit, `platform.quit` — is a stronger statement than any button, and a native dialog
-  // cannot be dismissed from code, so the wait has to give way to it or the app hangs with the
-  // question up and the quit swallowed underneath it.
+  // File → Quit, `platform.quit` — is a stronger statement than any button, and the asker takes
+  // the question down when one arrives (Electron closes a signalled message box and reports it as
+  // cancelled). Racing the latch as well is what ends the wait for an asker that does not, so the
+  // app can never hang with the question up and the quit swallowed underneath it.
   const answer = await Promise.race([
-    confirmCloseAll(),
+    // The losing side is never observed; a rejection from an asker whose window is being torn down
+    // would otherwise surface as an unhandled rejection
+    confirmCloseAll().catch((): CloseAllAnswer => 'cancel'),
     whenQuitRequested().then((): CloseAllAnswer => 'close-all'),
   ]);
+  // The latch decides, not the answer: a question taken down by the quit reports itself cancelled,
+  // and a cancel that arrives after the quit has been requested is a click on a dead dialog.
+  if (isAppQuitRequested()) return 'quit-all';
   if (answer === 'cancel') return 'stay-open';
 
   markQuitRequested();
