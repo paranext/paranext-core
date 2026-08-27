@@ -9,7 +9,24 @@ import type { DotnetAssets, MergedNugetPackage, NugetLicenseEntry } from './type
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
 export const DOTNET_PROJECT = path.join(REPO, 'c-sharp', 'ParanextDataProvider.csproj');
-const DOTNET_ASSETS = path.join(REPO, 'c-sharp', 'obj', 'project.assets.json');
+const DOTNET_OBJ = path.join(REPO, 'c-sharp', 'obj');
+const DOTNET_ASSETS = path.join(DOTNET_OBJ, 'project.assets.json');
+
+/**
+ * Every file a `dotnet restore` rewrites, so every file this has to put back.
+ *
+ * `project.assets.json` is not restore's only output: it writes the generated MSBuild imports and
+ * the restore cache beside it, and the next build reads all of them together. Restoring one of a
+ * matched set leaves the tree describing the LAST RID this scanned rather than the host - a state
+ * no command the developer ran produced, and one that outlives the run.
+ */
+const DOTNET_RESTORE_OUTPUTS = [
+  DOTNET_ASSETS,
+  path.join(DOTNET_OBJ, 'project.nuget.cache'),
+  path.join(DOTNET_OBJ, 'ParanextDataProvider.csproj.nuget.g.props'),
+  path.join(DOTNET_OBJ, 'ParanextDataProvider.csproj.nuget.g.targets'),
+  path.join(DOTNET_OBJ, 'ParanextDataProvider.csproj.nuget.dgspec.json'),
+];
 
 /**
  * Every runtime the application is published for. The NuGet closure is RID-dependent, and a notices
@@ -522,7 +539,10 @@ export function collectNugetPackages({
   // billed as a read-only report, and `dotnet test c-sharp-tests/` is the next step in CI.
   // Captured before the first restore and put back in the `finally`, so the tree is as this found
   // it whether the run succeeds or throws.
-  const assetsBefore = fs.existsSync(DOTNET_ASSETS) ? fs.readFileSync(DOTNET_ASSETS) : undefined;
+  const restoreOutputsBefore = DOTNET_RESTORE_OUTPUTS.map((file) => ({
+    file,
+    bytes: fs.existsSync(file) ? fs.readFileSync(file) : undefined,
+  }));
   try {
     const runs = rids.map((rid) => {
       execFileSync('dotnet', ['restore', project, '-r', rid], { cwd: REPO, stdio: 'inherit' });
@@ -573,8 +593,10 @@ export function collectNugetPackages({
     // on the failure path too, and a second restore there would be slow, could fail on its own, and
     // would still not reproduce a state this never observed. If there is no assets file to begin
     // with, the tree has not been restored and is left that way.
-    if (assetsBefore) fs.writeFileSync(DOTNET_ASSETS, assetsBefore);
-    else fs.rmSync(DOTNET_ASSETS, { force: true });
+    restoreOutputsBefore.forEach(({ file, bytes }) => {
+      if (bytes) fs.writeFileSync(file, bytes);
+      else fs.rmSync(file, { force: true });
+    });
   }
 }
 
@@ -655,7 +677,11 @@ export function readDirectPackageReferences(
   return elements.flatMap((element) => {
     const id = attributeOf(element, 'Include');
     if (!id) return [];
-    const version = attributeOf(element, 'Version');
+    // `metadataOf`, not `attributeOf`: MSBuild treats `<Version>9.0.0</Version>` as identical to the
+    // attribute form, and Central Package Management writes the child-element form. Reading only the
+    // attribute writes the `'—'` placeholder into the document and lock as a shipped dependency's
+    // version.
+    const version = metadataOf(element, 'Version');
     const excluded = (metadataOf(element, 'ExcludeAssets') || '').toLowerCase();
     const included = metadataOf(element, 'IncludeAssets');
     const namesRuntime = (assets: string) =>

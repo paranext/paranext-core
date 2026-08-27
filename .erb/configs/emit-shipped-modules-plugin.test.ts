@@ -14,10 +14,9 @@ afterEach(() => {
 });
 
 describe('isWarmFilesystemCache', () => {
-  // The revert test for this suite: comment out the `warmBundles.length` refusal in
-  // `shipping-set.ts` (or make this function always return `false`) and `shipping-set.test.ts`'s
-  // "a manifest built against a warm filesystem cache is refused" suite fails - confirmed by hand
-  // during this fix, per the repo's TDD discipline.
+  // What this predicate protects: making it always return `false`, or removing the
+  // `warmBundles.length` refusal in `shipping-set.ts`, is what `shipping-set.test.ts`'s "a manifest
+  // built against a warm filesystem cache is refused" suite catches. Keep the two in step.
 
   it('is cold when the configured cache directory does not exist yet', () => {
     const neverBuilt = path.join(dir, 'never-built');

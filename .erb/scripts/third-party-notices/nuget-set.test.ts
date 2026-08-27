@@ -31,7 +31,7 @@ const TSX = ['--import', 'tsx'];
 // normalizeValidationErrors, which strips it down to the string policy.ts's contract expects.
 const validationError = (message: string) => ({
   Error: message,
-  Context: '/home/lyonsm/paranext-core/c-sharp/ParanextDataProvider.csproj',
+  Context: path.join('/repo', 'c-sharp', 'ParanextDataProvider.csproj'),
 });
 
 const pkg = (
@@ -521,7 +521,8 @@ describe('isFrameworkPackage', () => {
 });
 
 describe('readDirectPackageReferences', () => {
-  // See the matching note in `bundled license files`: this helper leaked a temp directory per case.
+  // Every case here mints a temp directory, so they are collected and removed together - see the
+  // matching note in `bundled license files`.
   const created: string[] = [];
   afterAll(() => created.forEach((dir) => fs.rmSync(dir, { recursive: true, force: true })));
 
@@ -547,6 +548,22 @@ describe('readDirectPackageReferences', () => {
     expect(readDirectPackageReferences(file)).toEqual([
       { id: 'icu.net', version: '3.0.1', shipsRuntimeAssets: true },
       { id: 'StreamJsonRpc', version: '2.22.11', shipsRuntimeAssets: true },
+    ]);
+  });
+
+  it('reads a Version declared as a child element', () => {
+    // MSBuild treats `<Version>` as identical to the attribute, and Central Package Management
+    // writes the child-element form. Missing it writes the em-dash placeholder into the document
+    // and lock as a shipped dependency's version.
+    const file = projectFile(
+      [
+        '<Project><ItemGroup>',
+        '  <PackageReference Include="icu.net"><Version>3.0.1</Version></PackageReference>',
+        '</ItemGroup></Project>',
+      ].join('\n'),
+    );
+    expect(readDirectPackageReferences(file)).toEqual([
+      { id: 'icu.net', version: '3.0.1', shipsRuntimeAssets: true },
     ]);
   });
 

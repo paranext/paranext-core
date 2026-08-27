@@ -1999,9 +1999,9 @@ step, no automation. Just a record.
      paste — checked against the policy first, so it never proposes a route the gate would reject. A
      committed lock sidecar (`THIRD-PARTY-NOTICES.lock.json`) records each package's SPDX id, matched
      file and text hash plus the licensee and corpus versions, so a license text changing under an
-     unchanged version is detectable. CI runs `--verify` **before** regeneration: ordering is
-     load-bearing, since regeneration overwrites the lock and a check after it compares a file
-     against itself.
+     unchanged version is detectable. CI only ever runs `--verify`; regeneration is a deliberate
+     local step. Within that local step the ordering is load-bearing - verify **before** regenerate,
+     since regeneration overwrites the lock and a check after it compares a file against itself.
 
   Two mechanical consequences of "derived from the build" round this out. The artifact is generated
   on **Linux**, because the NuGet closure is RID-dependent and one platform has to be canonical;
@@ -2033,9 +2033,10 @@ step, no automation. Just a record.
   package ships no readable license file at all, its copyright notice is recorded in the policy's
   `copyrightNotices`, read from that package's own license file by whatever route it publishes one.
   **Revisit** if the build cost becomes a problem for pull-request CI.
-- **Source:** the third-party-notices tooling replacement
-  (`.superpowers/sdd/2026-08-20-third-party-notices-tooling/`); `LICENSING.md`; the multi-agent
-  review of #2654. Supersedes and absorbs the intermediate designs recorded during that work
+- **Source:** the third-party-notices tooling replacement; `LICENSING.md`; the multi-agent review
+  of #2654. (The design note for that work lives under a gitignored path, so it is not a citable
+  reference — the reasoning is reproduced here precisely because that path is not readable from the
+  repo.) Supersedes and absorbs the intermediate designs recorded during that work
   (checked-in canonical texts; a regex import scan; a copyleft denylist), none of which reached
   `main`.
 
@@ -2081,10 +2082,49 @@ step, no automation. Just a record.
 - **Consequences:** the "Linux snap" and lexical-database sections are generated, so they cannot
   drift from the packaging config. Every staged library is now classified from its own Ubuntu
   `copyright` file, so `not-established` is currently unused — it stays in the schema because the
-  next library added starts there. Their license TEXTS are still not carried inside the `.snap`:
-  electron-builder's snapcraft template excludes `usr/share` from the `app` part's stage list
-  (`parts.app.stage`), which is where `usr/share/doc/<package>/copyright` lives, and that list is
-  only overridable wholesale via the `appPartStage` option. That is a known, open packaging gap —
-  stated in the document rather than left silent, and not a determination that no notice is owed.
-  **Revisit** when the staged set changes, and when a route for carrying those texts is chosen.
+  next library added starts there. Their license texts DO travel inside the `.snap`, by a different
+  route than the one electron-builder would have taken: its snapcraft template excludes `usr/share`
+  from the `app` part's stage list (`parts.app.stage`), which is where
+  `usr/share/doc/<package>/copyright` lives, and that list is only overridable wholesale via the
+  `appPartStage` option — so each library's own copyright file is checked into this repository,
+  hash-pinned, and reproduced verbatim in `THIRD-PARTY-NOTICES.md`, which `electron-builder.json5`
+  packs through `extraResources`. **Revisit** when the staged set changes, or if a future
+  electron-builder makes staging the upstream files directly practical.
 - **Source:** the AGPL relicense branch; the multi-agent review of #2654.
+
+## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** Three declared shapes reach `resolveDeclaredPrefix` in `policy.ts` and block before
+  any policy list is consulted: a `WITH` exception (`Apache-2.0 WITH LLVM-exception`), an
+  unrepresentable `+` (`Apache-2.0+`, for which SPDX publishes no "or later" identifier), and a
+  disjunct that is not a grant we can verify (`LicenseRef-Commercial`). The first two are usually
+  AGPL-COMPATIBLE — they block on an expressibility problem, not an incompatibility. SPDX names no
+  identifier for "Apache-2.0 or later", and the corpus this pipeline reproduces texts from holds no
+  exception texts, so resolving on the base identifier would put a text into the artifact that
+  describes a license the package is not under, or state terms narrower than it grants.
+
+  No instrument in `notices-policy.json` can clear any of the three, and this was not obvious from
+  the code: `applyException` refuses a `WITH` and an unrepresentable `+` by name, and
+  `applyOverride` is reachable only where `declared.ok` is false — which is false for all three,
+  because each parses. Both block messages nonetheless told the reader "a reviewed exception or a
+  curated override records what applies."
+- **Decision:** Accept dropping the dependency. These are not routed to a new instrument; the block
+  message and `report.ts`'s `policyRemedy` now say plainly which instruments cannot clear the shape
+  and why, and end at "the dependency has to change." A package whose declaration this pipeline
+  cannot resolve into an identifier it can reproduce a text for does not ship.
+- **Alternatives:** Add an instrument that records a human's determination for `+` and `WITH` —
+  rejected for now: it would admit a package on a reviewer's word where the artifact still cannot
+  reproduce a text matching the grant, which is the half-answer
+  `adr-notices-derived-from-what-ships` rules out. Resolve on the base identifier — rejected: it
+  states terms narrower than the package grants, and for `WITH` it names a license the package is
+  not under. Leave the messages naming instruments that cannot clear the block — rejected: advice
+  the gate then refuses is the failure `policyRemedy` exists to prevent.
+- **Consequences:** nothing in the current closure declares any of the three, so this costs nothing
+  today; the decision is recorded because it would otherwise be re-litigated the first time a real
+  dependency hits it. **Revisit** if a dependency this project genuinely needs declares
+  `<id>+` or `<id> WITH <exception>` — the answer then is an instrument that records the
+  determination AND the text to reproduce, not a relaxation of the gate.
+- **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
+  `policyRemedy`.

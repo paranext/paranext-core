@@ -11,7 +11,7 @@ import {
   formatReplacementStringToArray,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { Fragment, ReactNode, useCallback } from 'react';
+import { Fragment, ReactNode, useCallback, useId } from 'react';
 import packageInfo from '../../../../release/app/package.json';
 import { resolveLicenseDisplay } from './about-dialog.data';
 import './about-dialog.component.scss';
@@ -73,6 +73,8 @@ function AboutDialog() {
   );
   if (appInfo.version) packageInfo.version = appInfo.version;
 
+  const opensExternallyId = useId();
+
   const openTermsOfService = useCallback(() => {
     sendCommand('platform.openTermsOfService').catch((e) => {
       logger.warn(`About dialog could not open the Terms of Service. ${e}`);
@@ -81,13 +83,30 @@ function AboutDialog() {
 
   const licenseDisplay = resolveLicenseDisplay(packageInfo.license, termsOfService);
   // The Terms of Service ship beside the application rather than at a URL, so this opens the
-  // installed document through the operating system instead of navigating anywhere. The label goes
-  // on the icon rather than the button so the visible name stays the button's accessible name.
+  // installed document through the operating system instead of navigating anywhere.
+  //
+  // A button is named from its contents, which folds in every descendant's accessible name - so a
+  // label on the icon becomes part of the button's name ("Terms of Service Opens externally in a
+  // browser window") rather than staying beside it. It is carried as a DESCRIPTION instead, on a
+  // visually-hidden sibling outside the button so name-from-contents cannot reach it, leaving the
+  // visible text as the whole accessible name (WCAG 2.5.3). The icon is decorative and hidden:
+  // lucide adds `aria-hidden` only when no accessibility prop is passed, so passing one is exactly
+  // what exposes the icon.
   const licenseContent: ReactNode = licenseDisplay.isTermsOfService ? (
-    <Button variant="link" className="tw:h-auto tw:p-0" onClick={openTermsOfService}>
-      {licenseDisplay.name}
-      <ExternalLink aria-label={opensExternallyLabel} />
-    </Button>
+    <>
+      <Button
+        variant="link"
+        className="tw:h-auto tw:p-0"
+        onClick={openTermsOfService}
+        aria-describedby={opensExternallyId}
+      >
+        {licenseDisplay.name}
+        <ExternalLink aria-hidden="true" />
+      </Button>
+      <span id={opensExternallyId} className="tw:sr-only">
+        {opensExternallyLabel}
+      </span>
+    </>
   ) : (
     licenseDisplay.name
   );

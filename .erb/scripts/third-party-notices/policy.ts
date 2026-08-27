@@ -190,6 +190,9 @@ function blocked(reason: string, extra: Partial<Verdict> = {}): BlockedFields {
   return { verdict: 'blocked', spdxId: undefined, reason, ...extra };
 }
 
+/** The `reason` placeholder `report.ts` prints in its paste-ready exception template. */
+const PLACEHOLDER_REASON = /^<.*>$/;
+
 /**
  * Applies a reviewed exception. Exceptions are an override applied AFTER a block, never a path
  * reconciliation can reach on its own, and they are pinned to name@version AND the exact text hash
@@ -235,6 +238,11 @@ function applyException(
   const unsigned = [
     ['reviewer', entry.reviewer],
     ['date', entry.date],
+    // `reason` too, and for the same reason the other two are here. It is the determination
+    // itself - `applyException` puts it verbatim into the verdict - so an entry without one clears
+    // the gate recording nothing about WHY, and `undefined` reads back as
+    // "reviewed exception: undefined".
+    ['reason', entry.reason],
   ]
     .filter(([, value]) => !String(value || '').trim())
     .map(([field]) => field);
@@ -242,7 +250,16 @@ function applyException(
     return blocked(
       `the reviewed exception for ${key}@${version} records no ${unsigned.join(' and no ')}. An ` +
         "exception is a determination someone made by reading the package's license file; " +
-        'without a name and a date it is not reviewable, and nothing else records who accepted it.',
+        'without a name, a date and a stated reason it is not reviewable, and nothing else records ' +
+        'who accepted it or why.',
+    );
+  // The template `report.ts` prints carries this literal placeholder for the reader to replace.
+  // Pasted and half-filled, it clears every other check and stands as the recorded determination.
+  if (PLACEHOLDER_REASON.test(entry.reason))
+    return blocked(
+      `the reviewed exception for ${key}@${version} still carries the placeholder reason from the ` +
+        'template ("' +
+        `${entry.reason}"). Replace it with the determination you actually made.`,
     );
   if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.date))
     return blocked(
@@ -436,8 +453,10 @@ function resolveDeclaredPrefix({
       ...common,
       ...blocked(
         `${declaredField} contains ${declared.unrepresentablePlus.join(', ')}, and SPDX publishes ` +
-          'no "or later" identifier for it - so no identifier states what this package offers. A ' +
-          'reviewed exception or a curated override records what applies.',
+          'no "or later" identifier for it - so no identifier states what this package offers. No ' +
+          'policy entry can clear this: `applyException` refuses an unrepresentable "+" by name, ' +
+          'and an override applies only where the declaration does not parse. The dependency has ' +
+          'to declare a version SPDX can express, or it has to change.',
       ),
     };
 
@@ -447,7 +466,9 @@ function resolveDeclaredPrefix({
       ...blocked(
         `${declaredField} carries the license exception ${declared.exceptions.join(', ')}, which ` +
           'modifies the grant its identifier makes and has no text in the SPDX corpus this ' +
-          'pipeline reproduces from, so it is recorded by a human rather than resolved',
+          'pipeline reproduces from. No policy entry can clear this either: `applyException` ' +
+          'refuses a "WITH" operand by name, and an override applies only where the declaration ' +
+          'does not parse. The dependency has to change.',
       ),
     };
 
@@ -525,6 +546,14 @@ type DetectedSignals = {
 type Reconciliation = {
   best: DetectedFile | undefined;
   reconciliationBlocked: BlockedFields | undefined;
+  /**
+   * The bundled file that RAISED the objection, where one did.
+   *
+   * Carried out because it, not `best`, is what the verdict rests on in that case - and a reviewed
+   * exception is hash-pinned to whatever the verdict names. Pinning `best` instead let upstream
+   * change the objecting file at the same version with the exception still clearing it.
+   */
+  objectingFile: DetectedFile | undefined;
 };
 
 /**
@@ -609,7 +638,7 @@ function objectingUnusableFile(
   usable: DetectedFile[],
   allowed: Set<string>,
   copyleft: Set<string>,
-): BlockedFields | undefined {
+): { fields: BlockedFields; file: DetectedFile } | undefined {
   const unusableDisallowed = files.find(
     (file) =>
       !usable.includes(file) &&
@@ -617,13 +646,18 @@ function objectingUnusableFile(
       isDisallowedId(file.spdxId, allowed, copyleft),
   );
   if (!unusableDisallowed) return undefined;
-  return blocked(
-    `bundles ${unusableDisallowed.filename}, which identifies as ${unusableDisallowed.spdxId} ` +
-      `at ${unusableDisallowed.confidence}% confidence - below the ${CONFIDENCE_THRESHOLD}% ` +
-      `threshold that would let it resolve a verdict, but ${
-        copyleft.has(unusableDisallowed.spdxId) ? 'copyleft' : 'not on the allowed list'
-      } either way and reproduced in the document either way`,
-  );
+  // The file is returned with the message because the verdict has to be PINNED to it - see
+  // `Reconciliation.objectingFile`.
+  return {
+    file: unusableDisallowed,
+    fields: blocked(
+      `bundles ${unusableDisallowed.filename}, which identifies as ${unusableDisallowed.spdxId} ` +
+        `at ${unusableDisallowed.confidence}% confidence - below the ${CONFIDENCE_THRESHOLD}% ` +
+        `threshold that would let it resolve a verdict, but ${
+          copyleft.has(unusableDisallowed.spdxId) ? 'copyleft' : 'not on the allowed list'
+        } either way and reproduced in the document either way`,
+    ),
+  };
 }
 
 /**
@@ -730,10 +764,14 @@ function reconcileDetection({
     );
   }
 
-  if (!reconciliationBlocked)
-    reconciliationBlocked = objectingUnusableFile(files, usable, allowed, copyleft);
+  let objectingFile: DetectedFile | undefined;
+  if (!reconciliationBlocked) {
+    const objection = objectingUnusableFile(files, usable, allowed, copyleft);
+    reconciliationBlocked = objection?.fields;
+    objectingFile = objection?.file;
+  }
 
-  return { best, reconciliationBlocked };
+  return { best, reconciliationBlocked, objectingFile };
 }
 
 /**
@@ -1020,21 +1058,14 @@ function resolveWithText(ctx: ClassifyContext, best: DetectedFile): Verdict {
       ),
     };
 
-  if (copyleft.has(declaredId))
-    return {
-      ...common,
-      ...blocked(`${declaredId} is copyleft with no election available`),
-    };
-
-  if (!allowed.has(declaredId))
-    return { ...common, ...blocked(`${declaredId} is not on the allowed list`) };
-
-  return {
-    ...common,
-    verdict: 'allowed',
-    spdxId: declaredId,
+  // The same three branches `resolveSingleId` applies, so the two cannot drift into disagreeing
+  // about what a single identifier resolves to - only the recorded reason differs here.
+  return resolveSingleId(declaredId, {
+    allowed,
+    copyleft,
+    common,
     reason: `declared and detected agree on ${declaredId}`,
-  };
+  });
 }
 
 /** The two instruments that may reconsider a blocked verdict, and what bounds each. */
@@ -1144,7 +1175,7 @@ export function classify({
 
   const declared = parseDeclared(declaredField);
 
-  const { best, reconciliationBlocked } = reconcileDetection({
+  const { best, reconciliationBlocked, objectingFile } = reconcileDetection({
     signals,
     declared,
     declaredField,
@@ -1152,18 +1183,29 @@ export function classify({
     copyleft,
   });
 
-  // Hashes the file that actually produced the verdict (`best`), not an arbitrary "first file in
-  // the array" - a package can change the license text of its matched file while an unrelated
-  // file at index 0 stays untouched, which would otherwise let a hash-pinned exception silently
-  // survive a real license change. Falls back to the first file present only when there is no
-  // usable match at all, so an exception can still be pinned against unidentified text (e.g. a
-  // NOASSERTION compound document).
-  const sha256 = (best || anyText)?.sha256;
+  // The file the verdict actually rests on, which is not always `best`.
+  //
+  // `objectingFile` leads, because where one exists the verdict rests on IT: a package shipping
+  // LICENSE (MIT, above threshold) beside LICENSE.gpl (GPL-3.0, below it) is blocked by the second
+  // file while `best` is the first. Pinning `best` there let upstream rewrite the objecting file at
+  // the same version with a reviewed exception still clearing it - the one drift a hash pin exists
+  // to catch, watching the wrong file.
+  //
+  // Otherwise `best`, not an arbitrary "first file in the array" - a package can change the license
+  // text of its matched file while an unrelated file at index 0 stays untouched. `anyText` is the
+  // last resort, so an exception can still be pinned against unidentified text (e.g. a NOASSERTION
+  // compound document).
+  const pinned = objectingFile || best || anyText;
+  const sha256 = pinned?.sha256;
 
+  // All three describe ONE file, so they move together. Recording `best`'s identifier beside the
+  // objecting file's hash would leave a block message naming a permissive license and an exception
+  // pinned to a restrictive text - and `exceptionRemedy` reads `detected` to decide whether an
+  // exception could clear the block at all.
   const common = {
     declared: declaredField,
-    detected: best ? best.spdxId : undefined,
-    matchedFile: best ? best.filename : undefined,
+    detected: objectingFile ? objectingFile.spdxId : best?.spdxId,
+    matchedFile: objectingFile ? objectingFile.filename : best?.filename,
     textSha256: sha256,
   };
 

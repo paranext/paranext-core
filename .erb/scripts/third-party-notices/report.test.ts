@@ -286,6 +286,62 @@ describe('a remedy the gate would reject is not offered', () => {
     expect(message).not.toContain('<SPDX identifier this package is actually under>');
   });
 
+  // The three operator shapes reach `policyRemedy` when the package ships no license text, and NO
+  // policy entry can clear any of them - `resolveDeclaredPrefix` refuses them before any list
+  // lookup, `applyException` refuses two of them by name, and `applyOverride` is only reached for a
+  // declaration that does not parse. Offering an allow-list or elections route is advice the gate
+  // rejects, which is the failure this function exists to prevent.
+  it.each([
+    ['Apache-2.0 WITH LLVM-exception', 'license exception'],
+    ['Apache-2.0+', 'or later'],
+    ['LicenseRef-Commercial', 'not a grant this project can verify'],
+  ])('offers no policy instrument for %s, which none of them can clear', (declared, expected) => {
+    const message = describeBlock(
+      {
+        ecosystem: 'npm' as const,
+        name: 'operator-pkg',
+        version: '1.0.0',
+        verdict: 'blocked' as const,
+        spdxId: undefined,
+        reason: 'blocked on an SPDX operator',
+        declared,
+        detected: undefined,
+        matchedFile: undefined,
+        textSha256: undefined,
+      },
+      POLICY,
+    );
+    expect(message).toContain(expected);
+    expect(message).toContain('the dependency');
+    expect(message).not.toContain('"elections"');
+    expect(message).not.toContain('"overrides"');
+    expect(message).not.toContain('add that identifier to');
+  });
+
+  // An SPDX `WITH` operand names a license exception that modifies the grant its base identifier
+  // makes, and `applyException` refuses one outright. Filling the template's `spdx` with the base
+  // identifier hands back an entry the gate accepts while the document reproduces the plain text
+  // for a grant that is not plain.
+  it('does not drop a WITH operand from the template it prints', () => {
+    const message = describeBlock(
+      {
+        ecosystem: 'npm' as const,
+        name: 'with-pkg',
+        version: '1.0.0',
+        verdict: 'blocked' as const,
+        spdxId: undefined,
+        reason: 'Apache-2.0 WITH LLVM-exception carries a license exception',
+        declared: 'Apache-2.0 WITH LLVM-exception',
+        detected: undefined,
+        matchedFile: undefined,
+        textSha256: 'beef',
+      },
+      POLICY,
+    );
+    const json = message.slice(message.indexOf('{'), message.lastIndexOf('}') + 1);
+    expect(JSON.parse(json).spdx).toBe('<SPDX identifier this package is actually under>');
+  });
+
   // The live case: `npm:jszip@3.10.1` declares `(MIT OR GPL-3.0-or-later)` and its LICENSE.markdown
   // concatenates both texts, so nothing clears the threshold and `detected` is undefined. Falling
   // back to the whole expression printed a paste-ready entry `applyException` is guaranteed to
