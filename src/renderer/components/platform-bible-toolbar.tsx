@@ -197,7 +197,7 @@ function ProjectSelectorTrigger({
 }
 
 export function PlatformBibleToolbar() {
-  const { currentProject, recentProjects, allProjects, currentProjectError } =
+  const { currentSimpleProject, recentProjects, allProjects, currentSimpleProjectError } =
     useProjectPickerData();
 
   const isPowerMode = useIsPowerMode();
@@ -480,7 +480,7 @@ export function PlatformBibleToolbar() {
         )}
         {!isPowerMode && (
           <Select
-            value={currentProject?.id ?? ''}
+            value={currentSimpleProject?.id ?? ''}
             onValueChange={async (projectId: string) => {
               try {
                 await openProject(projectId);
@@ -499,11 +499,11 @@ export function PlatformBibleToolbar() {
                   : localizedStrings['%projectPicker_toolbar_no_projects%']
               }
             >
-              {currentProject && (
+              {currentSimpleProject && (
                 <ProjectSelectorLabel
-                  fullName={currentProject.fullName}
-                  shortName={currentProject.shortName}
-                  errorMessage={currentProjectError}
+                  fullName={currentSimpleProject.fullName}
+                  shortName={currentSimpleProject.shortName}
+                  errorMessage={currentSimpleProjectError}
                 />
               )}
             </ProjectSelectorTrigger>

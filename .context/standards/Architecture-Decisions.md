@@ -1556,6 +1556,43 @@ step, no automation. Just a record.
   move together; the test cannot import the Electron-side value, so its comment says to change both.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
 
+## adr-layout-persistence-guard-retirement: Two layout-persistence guards kept side by side pending deliberate retirement of the older one
+
+- **Formerly:** ADR-0024
+- **Date:** 2026-08-20
+- **Status:** Accepted (interim — retirement of the superseded guard is deferred, not decided against)
+- **Context:** Two PRs independently added a guard to `saveLayout` in
+  `src/renderer/services/web-view.service-host.ts` to stop a stale/wrong layout from being persisted
+  during a Power↔Simple interface-mode switch. PR #2425 ("Improve performance when switching to
+  Simple") added a **content-based** guard: refuse to persist any layout that still contains one of
+  the fixed `SIMPLE_LAYOUT_TAB_IDS`. PR #2681 ("Hold layout pushes while a layout load is in flight",
+  merged 2026-08-19) added a **structural** guard: track which `loadLayout` generation's layout the
+  dock actually holds (`layoutLoadGenerationInDock` vs `layoutLoadGeneration`) and hold pushes until
+  they match. The two guards were discussed directly in the #2681 PR thread
+  (https://github.com/paranext/paranext-core/pull/2681#issuecomment-5297967135) before either branch
+  merged: the structural guard is a strict superset of the content-based one (it also catches the
+  empty-initial-dock case and a scoped-id case the content check's `.has(id)` misses), so the
+  content-based guard is a reasonable one to retire — but as a **deliberate follow-up step with
+  #2425's tests still green**, not silently as part of the branches' eventual merge conflict, since a
+  content guard failing open looks identical to a structural guard working and the two could
+  otherwise be lost together without anyone noticing.
+- **Decision:** When merging main (carrying #2681) into `improve_simple-power_switching` (carrying
+  #2425), keep **both** guards in `saveLayout`, structural check first (cheap, and a strict superset
+  makes it the more useful early-exit), content-based check second with a `TODO` marking it for
+  retirement. Neither branch's guard, or its tests, was dropped by the merge itself.
+- **Alternatives:** (a) Drop the content-based guard during the merge, keeping only the structural
+  one — rejected per the PR-thread agreement: correct in the end state, but conflict-resolution time
+  is exactly the moment a silent, unverified drop is easiest to miss. (b) Keep only the content-based
+  guard and skip integrating the structural one — rejected: the structural guard fixes two real gaps
+  (initial-load and scoped-id cases) the content-based guard cannot reach.
+- **Consequences:** `saveLayout` currently runs a redundant check on every save while both guards are
+  live. Retiring the content-based guard (`SIMPLE_LAYOUT_TAB_IDS`/`collectWebViewIdsFromLayoutInfo`
+  branch, marked with a `TODO` at the call site) is tracked as explicit follow-up work: verify the
+  structural guard's test suite already covers every case `web-view.service-host.test.ts`'s
+  content-based-guard test exercises, then delete the content-based branch and that guard's
+  now-redundant test in one deliberate commit.
+- **Source:** PR #2425
+
 ## adr-resource-missing-book-message: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
 
 - **Date:** 2026-08-20

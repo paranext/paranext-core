@@ -101,7 +101,7 @@ function metadata(fixture: MetadataFixture) {
 /**
  * Maps fixtures to the metadata list `getMetadataForAllProjects` resolves. The hook fetches the
  * list once per refresh (filtered service-side to the picker's projectInterface) and derives
- * currentProject/recents/allProjects locally, so tests resolve the mapped list directly via
+ * currentSimpleProject/recents/allProjects locally, so tests resolve the mapped list directly via
  * `mockResolvedValue` - the same idiom `beforeEach` uses for this mock.
  */
 function metadataList(items: MetadataFixture[]) {
@@ -192,15 +192,15 @@ describe('useProjectPickerData', () => {
       );
   });
 
-  it('returns undefined currentProject when no Scripture Editor web view is open', async () => {
+  it('returns undefined currentSimpleProject when no Scripture Editor web view is open', async () => {
     const { result } = renderHook(() => useProjectPickerData());
 
     await settle(result);
     expect(result.current.isLoading).toBe(false);
-    expect(result.current.currentProject).toBeUndefined();
+    expect(result.current.currentSimpleProject).toBeUndefined();
   });
 
-  it('returns currentProject from the first open Scripture Editor web view, from metadata alone', async () => {
+  it('returns currentSimpleProject from the first open Scripture Editor web view, from metadata alone', async () => {
     const { getAllOpenWebViewDefinitionsSync, projectLookupService } = await importMocks();
     vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
       { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-abc' },
@@ -213,8 +213,8 @@ describe('useProjectPickerData', () => {
 
     await settle(result);
     expect(result.current.isLoading).toBe(false);
-    expect(result.current.currentProject?.fullName).toBe('Genesis Project');
-    expect(result.current.currentProject?.id).toBe('proj-abc');
+    expect(result.current.currentSimpleProject?.fullName).toBe('Genesis Project');
+    expect(result.current.currentSimpleProject?.id).toBe('proj-abc');
   });
 
   it('names the current project from THIS window only, never another window’s editor', async () => {
@@ -238,7 +238,7 @@ describe('useProjectPickerData', () => {
 
     await settle(result);
     expect(result.current.isLoading).toBe(false);
-    expect(result.current.currentProject).toBeUndefined();
+    expect(result.current.currentSimpleProject).toBeUndefined();
     expect(webViews.getAllOpenWebViewDefinitions).not.toHaveBeenCalled();
   });
 
@@ -350,11 +350,11 @@ describe('useProjectPickerData', () => {
 
     await settle(result);
     expect(result.current.isLoading).toBe(false);
-    // currentProject, recentProjects, and allProjects must all derive from ONE metadata fan-out
+    // currentSimpleProject, recentProjects, and allProjects must all derive from ONE metadata fan-out
     // per refresh - the service contacts every PDP factory per call, so three filtered calls
     // would triple the startup-path cost this hook exists to avoid.
     expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
-    expect(result.current.currentProject?.id).toBe('proj-r1');
+    expect(result.current.currentSimpleProject?.id).toBe('proj-r1');
     expect(result.current.recentProjects).toHaveLength(1);
   });
 
@@ -430,7 +430,7 @@ describe('useProjectPickerData', () => {
     expect(result.current.recentProjects[0].id).toBe('proj-r1');
   });
 
-  it('refreshes currentProject when onDidUpdateWebView fires', async () => {
+  it('refreshes currentSimpleProject when onDidUpdateWebView fires', async () => {
     const { getNetworkEvent, getAllOpenWebViewDefinitionsSync, projectLookupService } =
       await importMocks();
     let capturedCallback: (() => void) | undefined;
@@ -454,13 +454,13 @@ describe('useProjectPickerData', () => {
     const { result } = renderHook(() => useProjectPickerData());
     await settle(result);
     expect(result.current.isLoading).toBe(false);
-    expect(result.current.currentProject).toBeUndefined();
+    expect(result.current.currentSimpleProject).toBeUndefined();
 
     expect(capturedCallback).toBeDefined();
     act(() => capturedCallback!());
 
     await settle(result);
-    expect(result.current.currentProject?.fullName).toBe('Updated Project');
+    expect(result.current.currentSimpleProject?.fullName).toBe('Updated Project');
   });
 
   it('resolves the current project by direct lookup when it is absent from the filtered list snapshot', async () => {
@@ -481,9 +481,9 @@ describe('useProjectPickerData', () => {
     const { result } = renderHook(() => useProjectPickerData());
     await settle(result);
 
-    expect(result.current.currentProject?.id).toBe('proj-late');
-    expect(result.current.currentProject?.fullName).toBe('Late Project');
-    expect(result.current.currentProjectError).toBeUndefined();
+    expect(result.current.currentSimpleProject?.id).toBe('proj-late');
+    expect(result.current.currentSimpleProject?.fullName).toBe('Late Project');
+    expect(result.current.currentSimpleProjectError).toBeUndefined();
     expect(vi.mocked(projectLookupService.getMetadataForProject)).toHaveBeenCalledWith('proj-late');
   });
 
@@ -520,23 +520,23 @@ describe('useProjectPickerData', () => {
     const { result } = renderHook(() => useProjectPickerData());
     await settle(result);
     // Phase 1: absent from snapshot and direct lookup fails → error card.
-    expect(result.current.currentProjectError).toBe('Unable to load current project details');
+    expect(result.current.currentSimpleProjectError).toBe('Unable to load current project details');
 
     // Phase 2: editor closes → current project clears (and the error resets).
     openDefs = [];
     act(() => webViewCallback!());
     await settle(result);
-    expect(result.current.currentProject).toBeUndefined();
-    expect(result.current.currentProjectError).toBeUndefined();
+    expect(result.current.currentSimpleProject).toBeUndefined();
+    expect(result.current.currentSimpleProjectError).toBeUndefined();
 
     // Phase 3: the same project reopens, now resolvable by the direct lookup → it resolves instead
     // of staying stuck on the error card.
     openDefs = [{ id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-stuck' }];
     act(() => webViewCallback!());
     await settle(result);
-    expect(result.current.currentProject?.id).toBe('proj-stuck');
-    expect(result.current.currentProject?.fullName).toBe('Recovered Project');
-    expect(result.current.currentProjectError).toBeUndefined();
+    expect(result.current.currentSimpleProject?.id).toBe('proj-stuck');
+    expect(result.current.currentSimpleProject?.fullName).toBe('Recovered Project');
+    expect(result.current.currentSimpleProjectError).toBeUndefined();
   });
 
   it('does not re-fetch metadata on web view events (metadata cache is decoupled from them)', async () => {
@@ -562,15 +562,15 @@ describe('useProjectPickerData', () => {
     const { result } = renderHook(() => useProjectPickerData());
     await settle(result);
     expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
-    expect(result.current.currentProject?.id).toBe('proj-r1');
+    expect(result.current.currentSimpleProject?.id).toBe('proj-r1');
 
     expect(webViewCallback).toBeDefined();
     act(() => webViewCallback!());
     await settle(result);
 
-    // The web view event re-ran currentProject but reused the cached metadata: still one fetch.
+    // The web view event re-ran currentSimpleProject but reused the cached metadata: still one fetch.
     expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
-    expect(result.current.currentProject?.id).toBe('proj-r1');
+    expect(result.current.currentSimpleProject?.id).toBe('proj-r1');
   });
 
   it('re-fetches metadata when onDidReloadExtensions fires (project set may have changed)', async () => {

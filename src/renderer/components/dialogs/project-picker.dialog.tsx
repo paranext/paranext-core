@@ -20,11 +20,11 @@ function ProjectPickerWrapper({
   submitDialog,
 }: DialogTypes[typeof PROJECT_PICKER_DIALOG_TYPE]['props']) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
-  const { currentProject, recentProjects, allProjects, isLoading } = useProjectPickerData();
+  const { currentSimpleProject, recentProjects, allProjects, isLoading } = useProjectPickerData();
 
   return (
     <ProjectPicker
-      currentProject={currentProject}
+      currentProject={currentSimpleProject}
       recentProjects={recentProjects}
       allProjects={allProjects}
       isLoading={isLoading}

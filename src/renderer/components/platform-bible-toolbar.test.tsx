@@ -142,7 +142,7 @@ vi.mock('@shared/services/notification.service', () => ({
 
 vi.mock('@renderer/hooks/use-project-picker-data.hook', () => ({
   useProjectPickerData: vi.fn(() => ({
-    currentProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+    currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
     recentProjects: [{ id: 'proj-1', fullName: 'Test Project', shortName: 'TP' }],
     allProjects: [],
     isLoading: false,
@@ -946,10 +946,10 @@ describe('PlatformBibleToolbar project selector label', () => {
   it('shows an error in place of the label, not alongside it', async () => {
     const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
     vi.mocked(useProjectPickerData).mockReturnValueOnce({
-      currentProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
       recentProjects: [],
       allProjects: [],
-      currentProjectError: 'Project failed to load',
+      currentSimpleProjectError: 'Project failed to load',
       isLoading: false,
     });
 
@@ -995,10 +995,10 @@ describe('PlatformBibleToolbar project selector label', () => {
   it('re-enables pointer events on the error label too, so its title can be read', async () => {
     const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
     vi.mocked(useProjectPickerData).mockReturnValueOnce({
-      currentProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
       recentProjects: [],
       allProjects: [],
-      currentProjectError: 'Project failed to load',
+      currentSimpleProjectError: 'Project failed to load',
       isLoading: false,
     });
 
@@ -1013,10 +1013,10 @@ describe('PlatformBibleToolbar project selector label', () => {
     // name and no statement of what went wrong.
     const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
     vi.mocked(useProjectPickerData).mockReturnValueOnce({
-      currentProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
       recentProjects: [],
       allProjects: [],
-      currentProjectError: 'Project failed to load',
+      currentSimpleProjectError: 'Project failed to load',
       isLoading: false,
     });
 
