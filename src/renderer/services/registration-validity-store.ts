@@ -3,14 +3,17 @@
  * affordance that reacts to it (currently the user-profile popover's reminder dot).
  *
  * This store owns the session's ONE registration probe; the first-run gate consumes it instead of
- * probing separately. That sharing is load-bearing, not tidiness: a command sent to a handler that
- * has not registered yet costs 10 retry attempts and 10 main-process warning logs (see
- * `requestNoRetry` in `network.service.ts`), so a second probe chain would double that during the
- * most contended phase of startup.
+ * probing separately. That sharing is load-bearing, not tidiness. The larger reason is correctness:
+ * one answer per session is what lets the gate and the UI agree, and it is the only way the gate's
+ * just-registered suppression reaches the UI at all. The smaller reason is traffic: a command sent
+ * to a handler that has not registered yet is re-dispatched by `requestWithRetry`
+ * (`shared/data/rpc.model.ts`) up to `MAX_REQUEST_ATTEMPTS` times a second apart, so a second probe
+ * chain would double that during the most contended phase of startup. (Those retries log at
+ * `debug`, not `warn`.)
  *
  * The gate keeps sole ownership of the just-registered suppression; it records the suppressed
- * answer here via {@link publishRegistrationValidity} rather than through the probe. See ADR
- * `registration-validity-once-per-session`.
+ * answer here via {@link publishRegistrationValidity} rather than through the probe. See
+ * `adr-registration-validity-once-per-session`.
  */
 
 import { logger } from '@shared/services/logger.service';

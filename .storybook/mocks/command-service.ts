@@ -9,9 +9,11 @@
  * spy on export ... Module namespace is not configurable in ESM". Stories drive this mock through
  * `setCommandServiceMock` in `command-service-mock-channel.ts` instead.
  *
- * The real service opens a PAPI WebSocket that has no backend in Storybook. Defaulting to
- * `undefined` (rather than throwing) keeps stories that never opt in behaving as they did before,
- * since their callers already had to tolerate a command that never usefully answers.
+ * The real service opens a PAPI WebSocket that has no backend in Storybook, so no story gets a
+ * useful answer from it either way. Stories that do not opt in get `undefined` — a benign
+ * non-answer, so a caller that ignores the result still renders. That is deliberately NOT the same
+ * as the real service's failure, so a story that depends on a particular answer — including a
+ * rejection — must set a responder rather than rely on this default.
  *
  * Webpack-only: this file is outside `tsconfig.json`'s `include`, so it is never type-checked. Keep
  * it dependency-free apart from the channel.
