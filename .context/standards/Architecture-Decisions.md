@@ -2439,7 +2439,7 @@ step, no automation. Just a record.
   tracked by the main process, with its own renderer, dock layout, and window-scoped service
   shards; cross-window placement flows through the main-process routers (window layout,
   `targetWindowId`, the move primitive), never through rc-dock's windowbox. Layout traversal
-  code still walks the `windowbox` box shape defensively (`hasAnyTabs`), so foreign or legacy
+  code still walks the `windowbox` box shape defensively (`savedLayoutHasAnyTabs`), so foreign or legacy
   layout nodes cannot make a non-empty dock read as empty.
 - **Alternatives:** rc-dock windowbox — rejected on the spike evidence above. Keeping the
   single-window model — rejected; multi-window is the epic. Patching rc-dock's windowbox into
