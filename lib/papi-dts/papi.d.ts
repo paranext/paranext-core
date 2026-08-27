@@ -1936,7 +1936,9 @@ declare module 'client/services/rpc-client' {
     private readonly connectionMutex;
     private readonly registrationMutexMap;
     private readonly connectionComplete;
-    constructor();
+    /** Label identifying this process in connection log lines, so multi-window logs stay readable */
+    private readonly peerName;
+    constructor(peerName?: string);
     private static handleError;
     private static onError;
     connect(localEventHandler: EventHandler): Promise<boolean>;

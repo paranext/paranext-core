@@ -13,8 +13,11 @@ import {
   ConnectionStatus,
   createErrorResponse,
   createRequest,
+  describeWebSocketCloseEvent,
+  describeWebSocketErrorEvent,
   deserializeMessage,
   EventHandler,
+  INTENTIONAL_CLOSE_CODE,
   InternalRequestHandler,
   REGISTER_EVENT,
   REGISTER_METHOD,
@@ -49,9 +52,12 @@ export class RpcClient implements IRpcMethodRegistrar {
   private readonly connectionMutex: Mutex = new Mutex();
   private readonly registrationMutexMap: MutexMap = new MutexMap();
   private readonly connectionComplete = new AsyncVariable<void>('websocket connected');
+  /** Label identifying this process in connection log lines, so multi-window logs stay readable */
+  private readonly peerName: string;
 
-  constructor() {
+  constructor(peerName: string = 'client') {
     bindClassMethods.call(this);
+    this.peerName = peerName;
     this.jsonRpcServer = new JSONRPCServer();
     this.jsonRpcClient = new JSONRPCClient(
       (payload) => sendPayloadToWebSocket(this.ws, payload),
@@ -67,7 +73,10 @@ export class RpcClient implements IRpcMethodRegistrar {
   }
 
   private static onError(ev: Event): void {
-    RpcClient.handleError('Client websocket error event occurred', ev);
+    RpcClient.handleError(
+      `Client websocket error event occurred: ${describeWebSocketErrorEvent(ev)}`,
+      describeWebSocketErrorEvent(ev),
+    );
   }
 
   async connect(localEventHandler: EventHandler): Promise<boolean> {
@@ -103,7 +112,12 @@ export class RpcClient implements IRpcMethodRegistrar {
         this.connectionStatus = ConnectionStatus.Connected;
         logger.info(`Websocket connected to ${this.ws.url}`);
       } catch (error) {
-        RpcClient.handleError(`RPC client connection error: ${getErrorMessage(error)}`, this.ws);
+        // Log the peer and the failure text; the socket object itself carries no own
+        // properties worth serializing.
+        RpcClient.handleError(
+          `RPC client connection error for ${this.peerName}`,
+          getErrorMessage(error),
+        );
         this.removeEventListenersFromWebSocket();
         this.connectionStatus = ConnectionStatus.Disconnected;
         this.ws = undefined;
@@ -125,8 +139,8 @@ export class RpcClient implements IRpcMethodRegistrar {
         logger.warn(`Client connected but websocket is not set`);
         return;
       }
-      logger.info(`Websocket disconnecting from ${this.ws.url}`);
-      this.ws.close();
+      logger.info(`Websocket for ${this.peerName} disconnecting from ${this.ws.url}`);
+      this.ws.close(INTENTIONAL_CLOSE_CODE, 'app shutdown');
     });
   }
 
@@ -241,8 +255,19 @@ export class RpcClient implements IRpcMethodRegistrar {
     this.connectionComplete.resolveToValue();
   }
 
-  private onWebSocketClose(): void {
+  private onWebSocketClose(ev: CloseEvent): void {
+    // A closed socket's listener is already removed, but a caller holding a stale reference to
+    // this bound handler could still invoke it directly; guard so a second call is a no-op rather
+    // than double-logging and re-running teardown.
+    if (this.connectionStatus === ConnectionStatus.Disconnected) return;
+
     this.jsonRpcClientServer.rejectAllPendingRequests('The web socket has closed');
+    const detail = describeWebSocketCloseEvent(ev);
+    const summary = `Websocket for ${this.peerName} closed (${detail})`;
+    // Intent travels in the close code, so a close that arrives after an intentional
+    // disconnect is still reported honestly if the socket actually died.
+    if (ev?.code === INTENTIONAL_CLOSE_CODE) logger.info(summary);
+    else logger.warn(summary);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
   }
