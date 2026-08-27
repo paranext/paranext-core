@@ -141,7 +141,7 @@ test.describe('First-run wizard', () => {
     await expect(frPage.dialog).not.toBeVisible();
   });
 
-  test('Sync progress step shows "Syncing your projects" with Finish disabled', async ({
+  test('Sync progress step shows "Syncing your projects" and its own Finish button', async ({
     mainPage,
   }) => {
     // Demo mode: "Save and restart" calls onNext() directly without a real backend call.

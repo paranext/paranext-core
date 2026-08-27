@@ -206,13 +206,24 @@ export async function openEditableScriptureEditorForProject(
 }
 
 /**
+ * Escapes regex metacharacters so a reference can be embedded in a pattern literally. References
+ * carry `.` (in abbreviations) and other metacharacters that would otherwise widen the match.
+ */
+function escapeForRegExp(value: string): string {
+  return value.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/-/g, '\\x2d');
+}
+
+/**
  * Navigate the main toolbar's book-chapter-verse control (drives scroll group A).
  *
  * Commits with Enter only AFTER cmdk's highlighted (`data-selected`) item is the top match for the
  * typed reference: cmdk moves its highlight asynchronously after the input changes, so an immediate
  * Enter can race it and activate the previously-highlighted book instead (observed as "typed EXO
  * 2:3, still on Genesis 1:1"). The `\b` anchor keeps a wrong-chapter highlight from false-matching
- * (e.g. "MRK 4\b" accepts "MRK 4:1" but rejects "MRK 40:1").
+ * (e.g. "Mark 4\b" accepts "Mark 4:1" but rejects "Mark 40:1").
+ *
+ * Pass `reference` with the ENGLISH book name ("Exodus 2:3", not "EXO 2:3"): the top-match item
+ * renders through `formatScrRef(..., 'English')`, so a book CODE never matches its own item.
  */
 export async function navigateToolbarBcv(mainPage: Page, reference: string): Promise<void> {
   await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
@@ -220,7 +231,7 @@ export async function navigateToolbarBcv(mainPage: Page, reference: string): Pro
   await input.fill(reference);
   const highlightedTopMatch = mainPage.locator(
     '[data-radix-popper-content-wrapper] [cmdk-item][data-selected="true"]',
-    { hasText: new RegExp(`${reference}\\b`, 'i') },
+    { hasText: new RegExp(`${escapeForRegExp(reference)}\\b`, 'i') },
   );
   await highlightedTopMatch.waitFor({ timeout: 10_000 });
   await input.press('Enter');

@@ -34,13 +34,14 @@ async function navigateToRef(mainPage: Page, refText: string, expectedRef: RegEx
   const commandInput = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await expect(commandInput).toBeVisible({ timeout: 5_000 });
   await commandInput.fill(refText);
-  // Wait for cmdk to highlight the top match (its text starts with the typed reference, e.g.
-  // "MRK 4" → "MRK 4:1"). Only then is Enter guaranteed to activate it. The `\b` anchor keeps a
-  // wrong-chapter highlight from false-passing: "MRK 4\b" accepts "MRK 4:1" but rejects
-  // "MRK 12:1" (and a hypothetical "MRK 40:1").
+  // Wait for cmdk to highlight the top match. Only then is Enter guaranteed to activate it. The
+  // match uses `expectedRef` — the DISPLAY spelling — because the item renders through
+  // `formatScrRef(..., 'English')`, so the typed book code ("MRK") never appears in it. Its `\b`
+  // anchor keeps a wrong-chapter highlight from false-passing: /Mark 4\b/ accepts "Mark 4:1" but
+  // rejects "Mark 12:1" (and a hypothetical "Mark 40:1").
   const highlightedTopMatch = mainPage.locator(
     '[data-radix-popper-content-wrapper] [cmdk-item][data-selected="true"]',
-    { hasText: new RegExp(`${refText}\\b`, 'i') },
+    { hasText: expectedRef },
   );
   await expect(highlightedTopMatch).toBeVisible({ timeout: 5_000 });
   await commandInput.press('Enter');

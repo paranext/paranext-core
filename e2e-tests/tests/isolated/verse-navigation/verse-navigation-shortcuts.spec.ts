@@ -58,17 +58,17 @@ test.describe('verse navigation keyboard shortcuts', () => {
     // whole spec's coverage.
     await expect(trigger).toBeEnabled({ timeout: 15_000 });
 
-    // Navigate to a reference that is NOT the app default (GEN 1:1) first, so the assertion
+    // Navigate to a reference that is NOT the app default (Genesis 1:1) first, so the assertion
     // proves the submit flow actually changes state — asserting only the default reference
     // could pass even if submit silently broke. The helper waits out cmdk's async highlight
     // before committing (an immediate Enter activates the PREVIOUS highlight).
-    await navigateToolbarBcv(mainPage, 'EXO 2:3');
+    await navigateToolbarBcv(mainPage, 'Exodus 2:3');
     await expect(trigger).toContainText('2:3');
     const exodusLabel = (await trigger.innerText()).trim();
 
     // Now navigate back to GEN 1:1 — a second real transition (book, chapter, and verse all
     // change), asserting both the chapter:verse tail and the Genesis book name
-    await navigateToolbarBcv(mainPage, 'GEN 1:1');
+    await navigateToolbarBcv(mainPage, 'Genesis 1:1');
     await expect(trigger).toContainText('1:1');
     await expect(trigger).toContainText(/Genesis|GEN/);
     const genesisLabel = (await trigger.innerText()).trim();
@@ -99,7 +99,7 @@ test.describe('verse navigation keyboard shortcuts', () => {
     await expect(trigger).toBeEnabled({ timeout: 15_000 });
 
     // Normalize to a known reference via the UI so navigation targets are predictable
-    await navigateToolbarBcv(mainPage, 'GEN 1:1');
+    await navigateToolbarBcv(mainPage, 'Genesis 1:1');
     await expect(trigger).toContainText('1:1');
     const baseLabel = (await trigger.innerText()).trim();
 
