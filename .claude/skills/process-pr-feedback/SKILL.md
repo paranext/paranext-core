@@ -260,9 +260,11 @@ whether the base gained commits or was rewritten, and nothing needs capturing be
 the base's work onto the child, stops on a conflict inside the base's change, and resolving that
 undoes the rewrite. When the reflog cannot answer — a fresh clone, an expired reflog — the first
 line prints STOP and the second does nothing; the block's exit status of 1 is that STOP, not an
-error. The upstream then is the base's `headRefOid` from step 0's table — the column that is never
-overwritten — which is its tip before this round touched it, and is right only if that base had
-no local-only commits; if it did, there is no safe value and it goes to the user.
+error. The upstream then is the tip the child was last built on: plain
+`git merge-base <base> <child>` where the base has only gained commits since the child last sat
+on it, or the base's `headRefOid` from step 0's table — the column that is never overwritten —
+for a child never restacked this round, provided that base had no local-only commits. Neither
+applies? There is no safe value; it goes to the user.
 
 A restack that conflicts does so here, in front of you. The rule for the hunk: the base's lines
 win, and only the child's own insertion is the child's — resolving the other way reverts the
@@ -278,9 +280,10 @@ is finished before step 8, so the commits step 8 cites are the commits that will
 ## 6. Review your own diff
 
 `/code-review` at `high`, or `max` for a large or risky round, over the range the branch was
-rebased onto: `<base>...<branch>` where this round rewrote `<base>` locally — nothing is pushed
-yet, so `origin/<base>` is still what the round started from — and `origin/<base>...<branch>`
-otherwise, `main` included, since local `main` is whatever was last checked out. Its findings are
+rebased onto: `<base>...<branch>` where this round changed `<base>` locally — rewrote it or added
+to it, since nothing is pushed yet and `origin/<base>` is still what the round started from — and
+`origin/<base>...<branch>` otherwise, `main` included, since local `main` is whatever was last
+checked out. Its findings are
 hypotheses: verify each before acting, and write the ones you refuted into `verification.md` with
 the reason. A verified defect in this round's own changes is fixed here, and a fix on a branch
 with branches above it re-runs **Finish the stack**. Anything beyond what was ruled stops now and
