@@ -63,6 +63,27 @@ describe('shutdown latches', () => {
     expect(isAppQuitRequested()).toBe(false);
   });
 
+  test('a wait begun before a reset is not settled by a quit requested after it', async () => {
+    // The mirror of the test above: there the capture happens after the reset; here it happens
+    // before. A primary holding open the close-all question captures its wait this way, ahead of
+    // any reset a later window creation might trigger, and the signal it is holding must stay its
+    // own — a quit requested afterward has to settle only the session's new signal, not reach back
+    // and settle the one this wait is still holding.
+    const waitingBeforeReset = whenQuitRequested();
+
+    resetShutdownLatchesForNewSession();
+    markQuitRequested();
+
+    const settled = await Promise.race([
+      waitingBeforeReset.then(() => 'settled'),
+      Promise.resolve().then(() => 'still waiting'),
+    ]);
+    expect(settled).toBe('still waiting');
+
+    // The new session's own wait is unaffected — it settles normally from the same quit.
+    await expect(whenQuitRequested()).resolves.toBeUndefined();
+  });
+
   test('does not report a quit until one is requested', () => {
     expect(isAppQuitRequested()).toBe(false);
 
