@@ -25,7 +25,9 @@ const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDa
 // (assets/localization). Both merge in the combiner, so the extension keys need no en.json entry.
 const STRING_KEYS: LocalizeKey[] = [
   '%internetSettings_button_retry%',
+  '%firstRun_step_internetSettings_body%',
   '%firstRun_step_internetSettings_connecting%',
+  '%firstRun_step_internetSettings_heading%',
   '%firstRun_step_internetSettings_loadError%',
   ...INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
   ...DEVELOPER_SECTION_STRING_KEYS,
@@ -65,26 +67,36 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
     if (provider === undefined) setCanProceed?.(false);
   }, [provider, setCanProceed]);
 
-  if (provider === undefined) {
-    return (
-      <StepLoading
-        message={
-          showConnectingMessage
-            ? localizedStrings['%firstRun_step_internetSettings_connecting%']
-            : undefined
-        }
-      />
-    );
-  }
-
+  // The heading sits outside the provider/loading branches so it is stable across every state of
+  // the step — the step's identity shouldn't appear only once the settings finish loading.
   return (
-    <InternetSettingsLoaded
-      key={retryCount}
-      provider={provider}
-      localizedStrings={localizedStrings}
-      setCanProceed={setCanProceed}
-      onRetry={() => setRetryCount((c) => c + 1)}
-    />
+    <div className="tw:flex tw:flex-col tw:gap-3">
+      <div className="tw:flex tw:flex-col tw:gap-1">
+        <h2 className="tw:text-base tw:font-medium">
+          {localizedStrings['%firstRun_step_internetSettings_heading%']}
+        </h2>
+        <p className="tw:text-sm tw:text-muted-foreground">
+          {localizedStrings['%firstRun_step_internetSettings_body%']}
+        </p>
+      </div>
+      {provider === undefined ? (
+        <StepLoading
+          message={
+            showConnectingMessage
+              ? localizedStrings['%firstRun_step_internetSettings_connecting%']
+              : undefined
+          }
+        />
+      ) : (
+        <InternetSettingsLoaded
+          key={retryCount}
+          provider={provider}
+          localizedStrings={localizedStrings}
+          setCanProceed={setCanProceed}
+          onRetry={() => setRetryCount((c) => c + 1)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -207,11 +219,15 @@ function InternetSettingsLoaded({
           <AlertDescription>{saveError}</AlertDescription>
         </Alert>
       )}
+      {/* The step's heading and description already consume vertical space here, so drop the
+          list's footer note to keep the wizard's Next button above the fold. The per-row
+          "Coming soon" badges still mark the unavailable options. */}
       <InternetAccessOptionList
         localizedStrings={localizedStrings}
         value={settings.permittedInternetUse}
         onChange={(v) => handleChange({ ...settings, permittedInternetUse: v })}
         disabled={isSaving}
+        showFooter={false}
       />
       <DeveloperSection
         localizedStrings={localizedStrings}

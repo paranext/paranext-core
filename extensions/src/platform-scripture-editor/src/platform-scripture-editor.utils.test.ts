@@ -2449,6 +2449,36 @@ describe('generateParagraphMenuListItems', () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
+  it('fills the detail column from the marker description, so the paragraph menu is not the one menu with an empty second column', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateParagraphMenuListItems(
+      ref,
+      {
+        '%paragraphMenu_p_markerDescription%': 'Paragraph',
+        '%markerMenu_marker_p_description%': 'Normal paragraph',
+      },
+      false,
+      vi.fn(),
+    );
+
+    const paragraphItem = items.find((item) => item.marker === 'p');
+
+    expect(paragraphItem?.title).toBe('Paragraph');
+    expect(paragraphItem?.subtitle).toBe('Normal paragraph');
+  });
+
+  it('leaves the detail column empty while the description strings are still loading, rather than showing a raw localize key', () => {
+    // The web view loads every marker description asynchronously, so this is the real state for the
+    // first frames after mount — not a hypothetical.
+    const { ref } = makeMockEditorRef();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn());
+
+    expect(items.length).toBeGreaterThan(0);
+    items.forEach((item) => {
+      expect(item.subtitle).toBeUndefined();
+    });
+  });
+
   it('restores the caret before formatting, so a pick made after the menu took focus still lands', () => {
     const { ref, formatPara } = makeMockEditorRef();
     const restoreSelection = vi.fn();

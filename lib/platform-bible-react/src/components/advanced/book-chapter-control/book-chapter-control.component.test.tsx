@@ -82,9 +82,12 @@ describe('BookChapterControl imperative handle', () => {
       />,
     );
 
-    // Open via the trigger and drill into chapters view by picking a multi-chapter book
+    // Open via the trigger and drill into chapters view by picking a multi-chapter book.
+    // Matched by its `option` role rather than its text: the trigger renders the book name in a
+    // span of its own (the shrink ladder splits the reference into book + chapter:verse), so a bare
+    // text query matches both the trigger and the list entry.
     await user.click(screen.getByRole('combobox', { name: 'book-chapter-trigger' }));
-    await user.click(await screen.findByText('Genesis'));
+    await user.click(await screen.findByRole('option', { name: /Genesis/ }));
     // CommandInput only renders in books view — its absence proves we're in chapters view
     await waitFor(() => {
       expect(document.querySelector('[cmdk-input]')).toBeNull();
@@ -245,7 +248,13 @@ describe('BookChapterControl — Space on the empty search input', () => {
     const input = await openBooksView(user);
     expect(input).toHaveValue('');
     // Genesis is the highlighted entry for this reference, and it has chapters to drill into.
-    expect(await screen.findByText('Genesis')).toBeVisible();
+    // Scoped to the cmdk list: the trigger ALSO renders "Genesis" (the shrink ladder's widest
+    // step), so a bare text query matches twice.
+    await waitFor(() => {
+      expect(document.querySelector('[cmdk-item][data-selected="true"]')).toHaveTextContent(
+        'Genesis',
+      );
+    });
 
     await user.keyboard(' ');
 
@@ -301,5 +310,63 @@ describe('BookChapterControl — Space on the empty search input', () => {
       expect(handleSubmit).toHaveBeenCalledTimes(1);
     });
     expect(handleSubmit).toHaveBeenCalledWith({ book: 'MAT', chapterNum: 5, verseNum: 3 });
+  });
+});
+
+describe('BookChapterControl trigger shrink ladder', () => {
+  const scrRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+
+  test('shows the full book name and the chapter:verse at the widest step', () => {
+    render(<BookChapterControl scrRef={scrRef} handleSubmit={() => {}} shrinkStep={0} />);
+
+    const trigger = screen.getByRole('combobox');
+    expect(trigger).toHaveTextContent('Genesis');
+    expect(trigger).toHaveTextContent('1:1');
+  });
+
+  test('swaps the full book name for the three-letter id once space is tight', () => {
+    render(<BookChapterControl scrRef={scrRef} handleSubmit={() => {}} shrinkStep={1} />);
+
+    const trigger = screen.getByRole('combobox');
+    expect(trigger).toHaveTextContent('GEN');
+    expect(trigger).not.toHaveTextContent('Genesis');
+    expect(trigger).toHaveTextContent('1:1');
+  });
+
+  test('drops the chapter:verse entirely at the narrowest step, keeping the book', () => {
+    render(<BookChapterControl scrRef={scrRef} handleSubmit={() => {}} shrinkStep={3} />);
+
+    const trigger = screen.getByRole('combobox');
+    expect(trigger).toHaveTextContent('GEN');
+    expect(trigger).not.toHaveTextContent('1:1');
+  });
+
+  test('still renders its full-width form with no toolbar above it, so standalone embeddings are unchanged', () => {
+    render(<BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />);
+
+    expect(screen.getByRole('combobox')).toHaveTextContent('Genesis');
+  });
+
+  test('keeps a bounded slot so a longer reference cannot shift the controls beside it', () => {
+    // The trigger's width comes from these bounds, not from its content, so `Genesis 1:1` and
+    // `1 Chronicles 29:30` occupy the same slot and neighbours never move.
+    render(<BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />);
+
+    const trigger = screen.getByRole('combobox');
+    expect(trigger.className).toMatch(/(?:^|\s)tw:max-w-48(?:\s|$)/);
+    expect(trigger.className).toMatch(/(?:^|\s)tw:min-w-16(?:\s|$)/);
+  });
+
+  test('prefers a localized book id over the plain id when the consumer supplies one', () => {
+    render(
+      <BookChapterControl
+        scrRef={scrRef}
+        handleSubmit={() => {}}
+        shrinkStep={1}
+        localizedBookNames={new Map([['GEN', { localizedId: 'GN', localizedName: 'Génesis' }]])}
+      />,
+    );
+
+    expect(screen.getByRole('combobox')).toHaveTextContent('GN');
   });
 });

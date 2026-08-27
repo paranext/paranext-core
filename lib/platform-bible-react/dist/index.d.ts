@@ -196,6 +196,15 @@ export type BookChapterControlProps = {
 	 * {@link BookChapterControlHandle.open} is a no-op
 	 */
 	disabled?: boolean;
+	/**
+	 * Overrides the shrink step this control would otherwise read from the enclosing toolbar. Higher
+	 * means narrower: at step 1 the trigger shows the abbreviated book id instead of the spelled-out
+	 * book name, and at step 3 it drops the chapter:verse entirely.
+	 *
+	 * Intended for stories and tests — in the app the step comes from the toolbar's own measured
+	 * width via `ShrinkStepContext`, and this control reads it automatically.
+	 */
+	shrinkStep?: number;
 };
 /**
  * `BookChapterControl` is a component that provides an interactive UI for selecting book chapters.
@@ -205,7 +214,7 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  */
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, showTriggerChevron, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, showTriggerChevron, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, shrinkStep: shrinkStepOverride, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -2170,13 +2179,21 @@ export type TabToolbarProps = TabToolbarCommonProps & {
 	 * side in ltr, left side in rtl). Recommended for secondary tools and view options.
 	 */
 	endAreaChildren?: React$1.ReactNode;
+	/**
+	 * Overrides the shrink step this toolbar would otherwise measure from its own width, and
+	 * publishes it to descendants. Higher means narrower.
+	 *
+	 * For stories and tests: measuring needs a layout engine, which jsdom does not have. In the app,
+	 * leave it unset and let the toolbar measure itself.
+	 */
+	shrinkStep?: number;
 };
 /**
  * Toolbar that holds the project menu icon on one side followed by three different areas/categories
  * for toolbar icons followed by an optional view info menu icon. See the Tab Floating Menu Button
  * component for a menu component that takes up less screen real estate yet is always visible.
  */
-export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, menuButtonIcon, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, menuButtonIcon, shrinkStep, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Renders a TabDropdownMenu with a trigger button that looks like the menuButtonIcon or like the
  * default of three stacked horizontal lines (aka the hamburger). The menu "floats" over the content
@@ -2253,6 +2270,14 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	configAreaChildren?: React$1.ReactNode;
 	/** Variant of the menubar */
 	menubarVariant?: "default" | "muted";
+	/**
+	 * Overrides the shrink step this toolbar would otherwise measure from its own width, and
+	 * publishes it to descendants through `ShrinkStepContext`. Higher means narrower.
+	 *
+	 * Intended for stories and tests: measuring needs a layout engine, which jsdom does not have. In
+	 * the app, leave this unset and let the toolbar measure itself.
+	 */
+	shrinkStep?: number;
 }>;
 /**
  * Get tailwind class for reserved space for the window controls / macos "traffic lights". Passing
@@ -2279,7 +2304,48 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  *
  * @param {ToolbarProps} props - The props for the component.
  */
-export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, shrinkStep: shrinkStepOverride, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export type ToolbarCompoundLabelProps = {
+	/** The field that identifies the item — a book abbreviation, project short name, marker code. */
+	primary: React$1.ReactNode;
+	/** The field that gives way first: clipped with an ellipsis, then dropped entirely. */
+	secondary?: React$1.ReactNode;
+	/**
+	 * Text placed between the two fields. Rendered as a real text node, so it survives into
+	 * `textContent` where a CSS `gap` would not — assertions and screen readers both read it.
+	 */
+	separator?: string;
+	/**
+	 * Render `secondary` before `primary`, for labels that read that way round — a project selector
+	 * shows `Translation Project 1 (TP1)`, full name first, short name last.
+	 */
+	secondaryFirst?: boolean;
+	/** Whether the secondary field is rendered at all. Defaults to `true`. */
+	showSecondary?: boolean;
+	/**
+	 * Whether what is rendered is only part of {@link ToolbarCompoundLabelProps.fullText}, so the
+	 * tooltip should open on hover even though nothing is visibly clipped. Set this when the primary
+	 * field is an abbreviation — `GEN` for `Genesis` — which CSS cannot detect.
+	 *
+	 * Defaults to true whenever the secondary field has been dropped.
+	 */
+	isPartial?: boolean;
+	/** The complete label. Shown in the tooltip whenever the rendered form is not the whole thing. */
+	fullText: string;
+	/** Additional classes for the label row. */
+	className?: string;
+};
+/**
+ * A two-field toolbar label that degrades predictably as its slot narrows: the secondary field
+ * clips with an ellipsis, then disappears, leaving the primary field alone. A tooltip carries the
+ * complete text whenever what is rendered is not all of it.
+ *
+ * The ellipsis step needs no JavaScript. Both fields can shrink, but the secondary is weighted to
+ * absorb ~all of it, so it clips to nothing before the primary gives up a character — and the
+ * primary keeps an ellipsis of its own rather than being cut mid-glyph by the trigger's
+ * `overflow-hidden`. Only the abbreviation and dropped steps need the caller to say so.
+ */
+export declare function ToolbarCompoundLabel({ primary, secondary, separator, secondaryFirst, showSecondary, isPartial, fullText, className, }: ToolbarCompoundLabelProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_fallbackLanguages%"
 ];
@@ -4045,6 +4111,71 @@ export declare const useListbox: ({ options, onFocusChange, onOptionSelect, onCh
 	/** Focus an option by its ID */
 	focusOption: (id: string) => void;
 };
+/**
+ * Observes an element's inline size and reports a discrete shrink step for it.
+ *
+ * Takes the element itself rather than a ref: mutating `ref.current` does not re-run an effect, so
+ * a ref-based version would silently never observe a node that attaches after mount. Callers keep
+ * the node in state behind a callback ref.
+ *
+ * Observe the element whose box IS the space available to content — a padding-free inner row rather
+ * than a wrapper that reserves space with padding. The measurement is a border box, so padding on
+ * the observed element counts as usable width; where a toolbar's reserved space lives can differ
+ * between platforms for the same window, which would otherwise make the steps platform-dependent.
+ *
+ * `thresholds` must be a stable reference (a module-level constant). A fresh array on every render
+ * would tear down and rebuild the observer on every render.
+ *
+ * Hidden views: rc-dock keeps an inactive tab's web view mounted with `display: none`, where the
+ * width reads 0 and the step pins to the narrowest value. `ResizeObserver` fires again with the
+ * real width when the tab is shown, so no catch-up mechanism is needed — but a width of 0 is not a
+ * measurement, and the step taken from it must not make the next real one sticky. Being shown again
+ * is a reveal, not a drag, so hysteresis is skipped for that first width. Without this a consumer
+ * with a single threshold has no other band to relax into and stays at its narrowest form at a
+ * width where it should not be. See `.claude/rules/cross-view-sync-hidden-views.md`.
+ *
+ * @param element The container to observe, or `undefined` before it mounts.
+ * @param thresholds Widest-first list of pixel breakpoints.
+ * @returns The current shrink step; `0` (widest) until the first measurement lands.
+ */
+export declare function useShrinkStep(element: HTMLElement | undefined, thresholds: readonly number[]): number;
+/**
+ * Named shrink steps, ordered widest to narrowest. Consumers compare against these (`step >=
+ * SHRINK_STEP.MINIMUM`), so the ascending order is part of the contract.
+ *
+ * Not every surface uses all four. `BookChapterControl` walks the whole ladder, while a control
+ * with only one shorter form — the project selector, the paragraph style label — reads a single
+ * boundary (`step >= SHRINK_STEP.MINIMUM`) and ignores the rest.
+ */
+export declare const SHRINK_STEP: Readonly<{
+	/** Full labels. */
+	WIDE: 0;
+	/** Abbreviated primary label form. */
+	TIGHT: 1;
+	/** Secondary field clipped with an ellipsis — CSS does this on its own. */
+	TIGHTER: 2;
+	/** Secondary field dropped entirely; primary field alone. */
+	MINIMUM: 3;
+}>;
+/**
+ * The shrink step published by the nearest toolbar root.
+ *
+ * Deliberately defaults to `SHRINK_STEP.WIDE` rather than throwing the way `useMenuContext` does:
+ * every component that reads this is also usable standalone (a `BookChapterControl` in a dialog, a
+ * story, a test), and those must keep rendering their full-width form when no toolbar is above
+ * them.
+ */
+export declare const ShrinkStepContext: import("react").Context<number>;
+/**
+ * Reads the shrink step published by the nearest toolbar root.
+ *
+ * The value is resolved at the position of the component that calls this. A component that
+ * _renders_ the provider sits above it and will always read the default — so anything that needs
+ * the real step must be a child of the toolbar, not the thing that builds it.
+ *
+ * @returns The current step, or `SHRINK_STEP.WIDE` when there is no provider.
+ */
+export declare function useShrinkStepValue(): number;
 /** Z-index for elements that need to appear above rc-dock floating tabs and potential modals (~200) */
 export declare const Z_INDEX_ABOVE_DOCK = 600;
 /** Z-index for the footnote editor layer */

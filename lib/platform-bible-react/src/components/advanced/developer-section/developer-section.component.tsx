@@ -20,16 +20,18 @@ type ServerType = 'Production' | 'QualityAssurance' | 'Development' | 'Test';
 export const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_developer_section_label%',
   '%paratextRegistration_label_serverType_option_Production%',
+  '%paratextRegistration_label_serverType_option_QualityAssurance%',
   '%paratextRegistration_label_serverType_option_Development%',
+  '%paratextRegistration_label_serverType_option_Test%',
 ];
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export type DeveloperSectionProps = {
   /** Localized strings; pass strings resolved from `DEVELOPER_SECTION_STRING_KEYS`. */
   localizedStrings: LanguageStrings;
-  /** The currently selected server type. QA and Test values display as Production. */
+  /** The currently selected server type. Every `ServerType` has its own item in the toggle. */
   selectedServer: ServerType;
-  /** Called when the user switches to Production or Development. */
+  /** Called when the user switches to a different server type. */
   onServerChange: (server: ServerType) => void;
   /** When true, the toggle items are non-interactive (loading or saving in progress). */
   disabled: boolean;
@@ -43,8 +45,6 @@ export function DeveloperSection({
   disabled,
 }: DeveloperSectionProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  // QA and Test are not surfaced in this UI; they display as Production.
-  const displayValue = selectedServer === 'Development' ? 'Development' : 'Production';
 
   return (
     <div className="tw:border-t tw:pt-2">
@@ -62,20 +62,22 @@ export function DeveloperSection({
         />
       </Button>
       <div id="developer-section-content" className="tw:mt-2 tw:px-2" hidden={!isExpanded}>
+        {/* Every ServerType has its own item, so `selectedServer` is always representable and the
+            group is never blank — no placeholder value and no escape hatch are needed. */}
         <ToggleGroup
           type="single"
-          value={displayValue}
+          value={selectedServer}
           onValueChange={(v) => {
-            if (v === 'Production' || v === 'Development') onServerChange(v);
             // Radix single-toggle fires '' when the already-selected item is clicked (deselect).
-            // If the user is on QA/Test (displayed as Production), that click should switch them
-            // to actual Production so they're not stranded with no escape route.
-            else if (
-              v === '' &&
-              selectedServer !== 'Production' &&
-              selectedServer !== 'Development'
+            // Ignore it: exactly one server is always in effect, so there is no "no server" state
+            // to represent.
+            if (
+              v === 'Production' ||
+              v === 'QualityAssurance' ||
+              v === 'Development' ||
+              v === 'Test'
             )
-              onServerChange('Production');
+              onServerChange(v);
           }}
           disabled={disabled}
         >
@@ -87,11 +89,21 @@ export function DeveloperSection({
             {localizedStrings['%paratextRegistration_label_serverType_option_Production%']}
           </ToggleGroupItem>
           <ToggleGroupItem
+            value="QualityAssurance"
+            variant="outline"
+            data-testid="server-type-quality-assurance"
+          >
+            {localizedStrings['%paratextRegistration_label_serverType_option_QualityAssurance%']}
+          </ToggleGroupItem>
+          <ToggleGroupItem
             value="Development"
             variant="outline"
             data-testid="server-type-development"
           >
             {localizedStrings['%paratextRegistration_label_serverType_option_Development%']}
+          </ToggleGroupItem>
+          <ToggleGroupItem value="Test" variant="outline" data-testid="server-type-test">
+            {localizedStrings['%paratextRegistration_label_serverType_option_Test%']}
           </ToggleGroupItem>
         </ToggleGroup>
       </div>

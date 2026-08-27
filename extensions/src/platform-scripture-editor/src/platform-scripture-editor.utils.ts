@@ -29,6 +29,7 @@ import {
   serialize,
   Unsubscriber,
   USFM_MARKERS_MAP_PARATEXT_3_0,
+  usfmMarkers,
   UsjDocumentLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
@@ -520,9 +521,15 @@ export function generateParagraphMenuListItems(
   restoreSelection?: () => void,
 ): MarkerMenuItem[] {
   return Object.entries(blockMarkerToBlockNames).map(([marker, title]) => {
+    // The trailing detail column would otherwise sit empty for exactly the menu this feature is
+    // named after. `usfmMarkers[marker].description` is a localize key the web view already
+    // resolves (it loads every marker description), so this needs no new key and no new
+    // localization work. Falls back to no subtitle for any marker without a description.
+    const descriptionKey = usfmMarkers[marker]?.description;
     const markerMenuItem: MarkerMenuItem = {
       marker,
       title: localizedStrings[title] ?? title,
+      subtitle: descriptionKey ? localizedStrings[descriptionKey] : undefined,
       action: () => {
         // Defense-in-depth: unreachable while the paragraph control is disabled
         // (`disabled={isStructureProtected}` in the web view), so the popover never opens and this

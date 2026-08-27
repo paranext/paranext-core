@@ -159,15 +159,14 @@ test.describe('Title bar at narrow window widths', () => {
       'The toolbar content area must be able to shrink below its intrinsic width, or narrow windows clip the trailing controls',
     ).toBe('0px');
 
-    // NOT asserted here: that the DOCUMENT does not scroll horizontally. The reporter's follow-up
-    // on PT-4218 mentions "the scrollbar that appears because of the overflow", which reads like
-    // the same bug — it is not. Measured at the 800px minimum, the document still overflows by
-    // ~108px, and the source is the dock layout, not the title bar: `simple-layout.data.ts` locks
-    // each of Simple mode's three columns to `panelLock: { minWidth: 300 }`, so rc-dock's
-    // `dock-hbox` computes a 908px minimum width that no window narrow enough to hit `minWidth`
-    // can satisfy. Nothing in the toolbar can fix that, and what Simple mode should do below 908px
-    // (drop a column, or let the columns go under 300px) is the open design question in PT-2480.
-    // Asserting it here would just wire this spec to a failure it does not own.
+    // NOT asserted here: that the DOCUMENT does not scroll horizontally. That overflow is a
+    // separate mechanism owned by the dock layout, not the title bar — rc-dock sums each Simple
+    // mode column's `panelLock.minWidth` and adds a per-divider reserve, so the columns and the
+    // window minimum have to be derived from each other or the dock demands more width than the
+    // narrowest permitted window can give (see `simple-layout.data.ts` and
+    // `adr-simple-mode-column-minimums`). Keeping that out of this spec is deliberate: it would wire
+    // these toolbar assertions to a failure they do not own, and `simple-layout.data.test.ts`
+    // already pins the column arithmetic directly.
   });
 
   test('essential Simple-mode controls stay visible and in-bounds when narrow', async ({
