@@ -496,6 +496,21 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.dismiss).not.toHaveBeenCalled();
   });
 
+  it('backslash session: Space with nothing typed closes the palette and commits nothing', () => {
+    // `\` then Space used to materialize the typed run — which with an empty filter is a bare
+    // backslash and a space, landing two characters in the document that name no marker.
+    // Paratext 9 closes the popup and leaves the document untouched.
+    const driver = makeDriver();
+    const event = makeEvent(' ');
+    expect(handleMarkerPaletteSessionKeyDown(event, session('backslash', ''), driver)).toBe(
+      'ended',
+    );
+    expect(event.defaultPrevented).toBe(true);
+    expect(driver.dismiss).toHaveBeenCalledTimes(1);
+    expect(driver.commitTyped).not.toHaveBeenCalled();
+    expect(driver.commit).not.toHaveBeenCalled();
+  });
+
   it('enter session: keys other than the two that decide its fate pass through untouched', () => {
     // The Enter-split palette is always FOCUSED with no key forwarding (the overlay's own input
     // owns every key), so its per-kind filter/commit entries were dead code — including a latent

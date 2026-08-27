@@ -459,42 +459,21 @@ export default function FootnoteEditor({
    * optionally applies the change to the parent editor via replaceEmbedUpdate.
    */
   const saveCurrentNoteOp = useCallback(
-    (
-      resolvedCallerType: FootnoteCallerType,
-      resolvedCustomCaller: string,
-      applyToParent = false,
-      /**
-       * Whether to apply the rewritten caller back to THIS popover's editor. The caller is not a
-       * chrome-only field — in editable marker mode the editor renders it as text the user can see
-       * (` + `), built from the note node's own caller state — so a change made in the dropdown is
-       * invisible until the note is replaced in the editor, exactly as `handleNoteTypeChange` does
-       * for the note style. Off for the auto-save path, which runs INSIDE an editor change and must
-       * not write back into it.
-       */
-      applyToSelf = false,
-    ) => {
+    (applyToParent = false) => {
       // Every user-driven save funnels through here — the auto-save content path
-      // (handleUsjChange) and both caller-change paths — and the initial content load never does
-      // (handleUsjChange's hasInitializedEditor guard skips its first call), so this is the one
-      // place that reports user edits to the host.
+      // (handleUsjChange) and, through it, the caller and note-type changes — and the initial
+      // content load never does (handleUsjChange's hasInitializedEditor guard skips its first
+      // call), so this is the one place that reports user edits to the host.
+      //
+      // Saves what the EDITOR holds, and rewrites nothing on the way out. The caller used to be
+      // re-derived from this component's `callerType`/`customCaller` state here, which made every
+      // save a chance to write a stale value: the state is set in the same React batch as the
+      // change, so a save triggered from inside that batch still read the pre-change value.
+      // Applying a caller change to the editor (below) and reading it back is what removes that
+      // class of bug rather than sequencing around it.
       onNoteEdit?.();
       const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
       if (currentNoteOp && isInsertEmbedOpOfType('note', currentNoteOp)) {
-        if (currentNoteOp.insert.note) {
-          let caller: string;
-          if (resolvedCallerType === 'custom') {
-            caller = resolvedCustomCaller;
-          } else if (resolvedCallerType === 'generated') {
-            caller = GENERATOR_NOTE_CALLER;
-          } else {
-            caller = HIDDEN_NOTE_CALLER;
-          }
-          currentNoteOp.insert.note.caller = caller;
-          // Replace the note in this popover's own editor so the displayed caller matches the
-          // dropdown. Same replace idiom the note-type switch uses: insert the rewritten embed,
-          // then delete the one unit it replaces.
-          if (applyToSelf) editorRef.current?.applyUpdate([currentNoteOp, { delete: 1 }]);
-        }
         onChange?.([currentNoteOp]);
         if (applyToParent && parentEditorRef && noteKey) {
           parentEditorRef.current?.replaceEmbedUpdate(noteKey, [currentNoteOp]);
@@ -502,6 +481,35 @@ export default function FootnoteEditor({
       }
     },
     [noteKey, onChange, onNoteEdit, parentEditorRef],
+  );
+
+  /**
+   * Writes a new caller into the note the popover is editing, exactly as
+   * {@link handleNoteTypeChange} writes a new style: mutate the embed and replace it in the
+   * editor. The editor is what the caller is DISPLAYED from in editable marker mode (` + ` is
+   * text the user can see), so this is what makes the dropdown's effect visible — and the
+   * resulting editor change drives the save through `handleUsjChange`, so there is exactly one
+   * save per change and it reads the caller back out of the editor rather than from React state.
+   */
+  const applyCallerToEditor = useCallback(
+    (resolvedCallerType: FootnoteCallerType, resolvedCustomCaller: string) => {
+      const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
+      if (!currentNoteOp || !isInsertEmbedOpOfType('note', currentNoteOp)) return;
+      if (!currentNoteOp.insert.note) return;
+      let caller: string;
+      if (resolvedCallerType === 'custom') {
+        caller = resolvedCustomCaller;
+      } else if (resolvedCallerType === 'generated') {
+        caller = GENERATOR_NOTE_CALLER;
+      } else {
+        caller = HIDDEN_NOTE_CALLER;
+      }
+      if (currentNoteOp.insert.note.caller === caller) return;
+      currentNoteOp.insert.note.caller = caller;
+      // Insert the rewritten embed, then delete the one unit it replaces.
+      editorRef.current?.applyUpdate([currentNoteOp, { delete: 1 }]);
+    },
+    [],
   );
 
   const closeAndSave = useCallback(() => {
@@ -513,9 +521,9 @@ export default function FootnoteEditor({
     // NOT in saveCurrentNoteOp: the auto-save path runs inside a Lexical update listener,
     // where dispatching another (discrete) update mid-commit is unsafe.
     if (!paletteSession.current) editorRef.current?.commitPendingMarkerEdits();
-    saveCurrentNoteOp(callerType, customCaller, true);
+    saveCurrentNoteOp(true);
     onClose();
-  }, [callerType, customCaller, onClose, saveCurrentNoteOp]);
+  }, [onClose, saveCurrentNoteOp]);
 
   // Keep a stable ref to closeAndSave so the chapter-change effect below only needs to depend on
   // scrRef.book and scrRef.chapterNum (not on caller state that changes during editing).
@@ -548,18 +556,24 @@ export default function FootnoteEditor({
 
   const handleCallerTypeChange = useCallback(
     (newCallerType: FootnoteCallerType) => {
+      // Stamped on the INTERACTION, not on the resulting save: this refreshes the host's
+      // note-session staleness clock, and a user who opens the dropdown and re-picks what was
+      // already selected has still just told us they are alive. The save that follows a real
+      // change stamps it again, which is a no-op.
+      onNoteEdit?.();
       setCallerType(newCallerType);
-      saveCurrentNoteOp(newCallerType, customCaller, false, true);
+      applyCallerToEditor(newCallerType, customCaller);
     },
-    [customCaller, saveCurrentNoteOp],
+    [applyCallerToEditor, customCaller, onNoteEdit],
   );
 
   const handleCustomCallerChange = useCallback(
     (newCustomCaller: string) => {
+      onNoteEdit?.();
       setCustomCaller(newCustomCaller);
-      saveCurrentNoteOp(callerType, newCustomCaller, false, true);
+      applyCallerToEditor(callerType, newCustomCaller);
     },
-    [callerType, saveCurrentNoteOp],
+    [applyCallerToEditor, callerType, onNoteEdit],
   );
 
   const handleNoteTypeChange = (value: string) => {
@@ -640,13 +654,13 @@ export default function FootnoteEditor({
         setIsAtInitialState(JSON.stringify(noteOp) === initialNoteOpsJson.current);
 
         // Auto-save on every content change (does not apply to parent editor)
-        saveCurrentNoteOp(callerType, customCaller);
+        saveCurrentNoteOp();
       } else {
         setIsTypeSwitchable(false);
         setIsAtInitialState(true);
       }
     },
-    [callerType, customCaller, saveCurrentNoteOp],
+    [saveCurrentNoteOp],
   );
 
   const showInlineMarkersMenu = useCallback(() => {

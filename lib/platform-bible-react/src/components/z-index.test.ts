@@ -2,21 +2,22 @@ import { describe, expect, it } from 'vitest';
 import {
   Z_INDEX_ABOVE_DOCK,
   Z_INDEX_FIRST_RUN,
-  Z_INDEX_FOOTNOTE_EDITOR,
+  Z_INDEX_ABOVE_POPOVER,
 } from '@/components/z-index';
 
 describe('z-index scale', () => {
-  // The footnote editor's note-type and caller dropdowns are Radix dropdowns, which portal to
-  // `document.body` instead of nesting inside the popover that hosts them. That makes them
-  // stacking SIBLINGS of `PopoverContent` (which stamps Z_INDEX_ABOVE_DOCK on itself), so an open
-  // dropdown renders behind its own popover whenever this ordering is lost — the symptom that
-  // returns every time the popover's layer is raised without this one following.
-  it('keeps the footnote editor above the popover layer it renders inside', () => {
-    expect(Z_INDEX_FOOTNOTE_EDITOR).toBeGreaterThan(Z_INDEX_ABOVE_DOCK);
+  // Radix portals a dropdown opened inside a popover to `document.body` instead of nesting it, so
+  // the two are stacking SIBLINGS of each other and `PopoverContent`'s own Z_INDEX_ABOVE_DOCK
+  // competes directly with the dropdown's. This ordering is the whole reason the constant exists;
+  // losing it puts the footnote editor's note-type and caller dropdowns behind the popover they
+  // belong to, which is what happened when Z_INDEX_ABOVE_DOCK was raised from 250 to 600 and
+  // nothing pinned relative to it followed.
+  it('keeps content portalled out of a popover above the popover layer', () => {
+    expect(Z_INDEX_ABOVE_POPOVER).toBeGreaterThan(Z_INDEX_ABOVE_DOCK);
   });
 
   // The first-run wizard gates the entire app at startup; nothing may cover it.
-  it('keeps the first-run gate above the footnote editor', () => {
-    expect(Z_INDEX_FIRST_RUN).toBeGreaterThan(Z_INDEX_FOOTNOTE_EDITOR);
+  it('keeps the first-run gate above everything else', () => {
+    expect(Z_INDEX_FIRST_RUN).toBeGreaterThan(Z_INDEX_ABOVE_POPOVER);
   });
 });

@@ -361,7 +361,7 @@ export { ShrinkStepContext, useShrinkStepValue, SHRINK_STEP } from './context/sh
 export {
   Z_INDEX_ABOVE_DOCK,
   Z_INDEX_FIRST_RUN,
-  Z_INDEX_FOOTNOTE_EDITOR,
+  Z_INDEX_ABOVE_POPOVER,
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,

@@ -369,6 +369,15 @@ export function handleMarkerPaletteSessionKeyDown(
     if (kind === 'backslash') {
       // The active palette's Space commit ("commit what was typed"). Claimed: nothing may land.
       claim(event);
+      if (session.filter === '') {
+        // Nothing typed, so there is no marker to commit — materializing anyway put a bare `\`
+        // and a space into the document, which is neither a marker nor anything the user asked
+        // for. Paratext 9 closes the popup and leaves the document alone; so does this. Same
+        // shape as the `*` refusal below, and as the `\` commit key, which is likewise an
+        // ordinary character with an empty filter.
+        driver.dismiss();
+        return 'ended';
+      }
       if (session.shouldSpaceCommit?.(session.filter)) {
         // Note markers commit like Enter through the overlay (exact-first resolution) — see
         // MarkerPaletteSessionState.shouldSpaceCommit for why the typed-literal route misbehaves.

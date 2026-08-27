@@ -16,7 +16,7 @@ import { Button } from '@/components/shadcn-ui/button';
 import { GENERATOR_NOTE_CALLER, HIDDEN_NOTE_CALLER } from '@eten-tech-foundation/platform-editor';
 import { Input } from '@/components/shadcn-ui/input';
 import { KeyboardEvent, useEffect, useRef, useState } from 'react';
-import { Z_INDEX_FOOTNOTE_EDITOR } from '@/components/z-index';
+import { Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 
 interface FootnoteCallerDropdownProps {
@@ -174,7 +174,7 @@ export function FootnoteCallerDropdown({
         </Tooltip>
       </TooltipProvider>
       <DropdownMenuContent
-        style={{ zIndex: Z_INDEX_FOOTNOTE_EDITOR }}
+        style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
         onClick={() => {
           if (isCustomCallerInputFocused.current) isCustomCallerInputFocused.current = false;
         }}
