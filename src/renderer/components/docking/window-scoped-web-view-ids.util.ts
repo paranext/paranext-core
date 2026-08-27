@@ -23,10 +23,10 @@ const WINDOW_SUFFIX_PATTERN = /-w\d+$/;
  * view was minted with.
  *
  * Web view state is stored under this unscoped id. `localWindowStorage` already keeps each window's
- * storage under its own key prefix, so the suffix would buy nothing there — and since ids are
- * minted unscoped and only pick up a suffix when a layout is loaded, storing state under the scoped
- * id would file a web view's state under one key while it was open and look for it under another
- * after a restart.
+ * storage under its own slot's key prefix, so the suffix would buy nothing there — and since ids
+ * are minted unscoped and only pick up a suffix when a layout is loaded, storing state under the
+ * scoped id would file a web view's state under one key while it was open and look for it under
+ * another after a restart.
  *
  * @param webViewId Web view id, window-scoped or not
  * @returns `webViewId` without a window suffix
@@ -114,8 +114,9 @@ function withWindowScopedWebViewIdsInBox(box: LayoutBox): LayoutBox {
  * - `simpleLayout` and `testLayout` are module constants with ids baked in, so every window loading
  *   one starts from the same ids
  * - A layout saved before multi-window support lives under an unprefixed storage key that
- *   `localWindowStorage` migrates per window WITHOUT deleting (window ids are not stable across
- *   restarts), so two windows can each migrate the same legacy blob and get the same ids
+ *   `localWindowStorage` migrates per window WITHOUT deleting (more than one window can restore
+ *   from a single-window profile), so two windows can each migrate the same legacy blob and get the
+ *   same ids
  *
  * Re-scoping an already-scoped id replaces the suffix instead of stacking another one, which is
  * what makes it safe to run on every load — including a layout this window saved earlier.
