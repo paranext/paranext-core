@@ -2268,6 +2268,19 @@ export function getAllOpenWebViewDefinitionsSync(): SavedWebViewDefinition[] {
     });
 }
 
+/**
+ * Synchronous count of every open tab in this window's dock layout, of any type — not only web
+ * views. Mirrors the sync/async pairing already established by
+ * {@link getAllOpenWebViewDefinitionsSync} for renderer-internal callers (e.g. the tab menu deciding
+ * whether moving a tab out would leave this window empty) that need the count without an async
+ * round trip through the dock layout's async variable.
+ *
+ * @throws If the papi dock layout has not been registered
+ */
+export function getOpenTabCountSync(): number {
+  return getDockLayoutSync().getOpenTabCount();
+}
+
 // #endregion WebView definitions
 
 // #region WebViewState

@@ -3973,6 +3973,16 @@ declare module 'shared/models/docking-framework.model' {
      */
     getAllWebViewDefinitions: () => WebViewDefinition[];
     /**
+     * Counts every open tab in the dock layout, of any type — not only web views.
+     *
+     * Used to tell whether moving a tab out of a window would leave that window with nothing at all,
+     * which depends on every tab it holds, not only on its web views.
+     *
+     * @returns The number of tabs open anywhere in the layout, docked or floated
+     * @experimental
+     */
+    getOpenTabCount: () => number;
+    /**
      * Gets the WebView definition for the web view with the specified ID
      *
      * @param webViewId The ID of the WebView whose web view definition to get

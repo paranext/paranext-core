@@ -645,6 +645,30 @@ export function getAllWebViewDefinitions(dockLayout: DockLayout): WebViewDefinit
 }
 
 /**
+ * Counts every open tab in the dock layout, of any type — not only web views. A window can still
+ * hold a dialog, an error tab, or any other non-web-view tab after its last web view is gone, so
+ * whether a window is about to go empty is a question about every tab in it, not about its web
+ * views specifically.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @returns The number of tabs open anywhere in the layout, docked or floated
+ */
+export function getOpenTabCount(dockLayout: DockLayout): number {
+  let tabCount = 0;
+
+  // Always return false from the callback so rc-dock visits every tab instead of stopping at the
+  // first match. Filter.AnyTab traverses both docked and floated panels.
+  dockLayout.find((item) => {
+    // Still have to check isTab because of a bug https://github.com/ticlo/rc-dock/pull/253
+    if (isTab(item)) tabCount += 1;
+    return false;
+  }, Filter.AnyTab);
+
+  return tabCount;
+}
+
+/**
  * Gets the WebView definition for the web view with the specified id
  *
  * @param webViewId The id of the WebView whose web view definition to get
