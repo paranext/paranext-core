@@ -2283,7 +2283,14 @@ step, no automation. Just a record.
   the next popover open. On the launch right after re-registering, the dot can briefly appear before
   the gate publishes its suppressed answer — and because that publish is not sticky, opening the
   profile popover force-re-probes and can bring the dot back for the rest of that session. Both are
-  wrong answers on an unobtrusive indicator, and both self-correct on the next launch.
+  wrong answers on an unobtrusive indicator, and both self-correct on the next launch. The exposure
+  is deliberately bounded, and it is worth being precise about what "wrong" can mean here: the only
+  thing either case can get wrong is whether the reminder dot is showing. No registration detail is
+  ever rendered incorrectly, nothing the user can do is gated on the dot, and the authoritative
+  check — the first-run gate, which re-raises the wizard when registration is invalid — still runs
+  on every launch against a store that starts each session at `'unknown'`, so no answer is carried
+  across launches. A stale dot is therefore a nag to ignore or clear by opening the popover, never
+  a state the user can be stuck in or misled by.
   One cost is new rather than merely imperfect: Power mode previously issued **zero** registration
   commands and now issues one per launch, because the toolbar mounts unconditionally and the hook's
   probe is what makes the dot work there at all. Demo mode is explicitly exempt — `useRegistrationValidity`
