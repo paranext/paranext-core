@@ -1183,13 +1183,6 @@ async function moveWebViewToWindow(
 }
 
 /**
- * Internal-only export for testing; not for use in development.
- *
- * `createFreshWindow` is here because what it promises about overlapping closes cannot be exercised
- * through any router method: every caller of one awaits each close before the next, which is the
- * sequential case the promise is not about.
- */
-/**
  * Puts the window creator back to its unwired startup state — a fresh latch nothing has resolved —
  * so a test can exercise {@link createFreshWindow}'s before-wiring wait more than once. Testing
  * only.
@@ -1202,6 +1195,13 @@ function resetWindowCreatorForTesting(): void {
   );
 }
 
+/**
+ * Internal-only export for testing; not for use in development.
+ *
+ * `createFreshWindow` is here because what it promises about overlapping closes cannot be exercised
+ * through any router method: every caller of one awaits each close before the next, which is the
+ * sequential case the promise is not about.
+ */
 export const testingWebViewServiceRouter = {
   moveWebView,
   createFreshWindow,
