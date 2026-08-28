@@ -1419,7 +1419,10 @@ async function main() {
   };
 
   // The router that serves `openWebView` starts before this closure exists, so it is handed the
-  // window facilities once they are real
+  // window facilities once they are real. A caller that reaches the router first (e.g. an extension
+  // opening a window from `activate()`) waits, bounded, for this call rather than failing outright —
+  // so this must stay wired without first waiting for extension-host readiness: a wait here for an
+  // extension-host ready signal would deadlock against that wait.
   setWebViewWindowCreator({
     createPendingContentWindow: async () =>
       (await createWindow(undefined, { pendingContent: true })).id,
