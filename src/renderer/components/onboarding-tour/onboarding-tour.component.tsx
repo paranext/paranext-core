@@ -26,7 +26,10 @@ const STEP_LOCALIZE_KEYS: LocalizeKey[] = [
   '%onboardingTour_step_modelText_description%',
   '%onboardingTour_step_resources_title%',
   '%onboardingTour_step_resources_description%',
-  '%onboardingTour_step_sendReceive_title%',
+  // The Send/Receive stop's heading reuses the toolbar's own label for the control it spotlights,
+  // rather than shipping a third "Sync" for translators alongside %toolbar_sync% and
+  // %firstRun_button_sync%.
+  '%toolbar_sync%',
   '%onboardingTour_step_sendReceive_description%',
   '%onboardingTour_step_profile_title%',
   '%onboardingTour_step_profile_description%',
@@ -91,7 +94,7 @@ function OnboardingTourNotYetDone() {
         // tour runs with four. Nothing here needs to change once the button is back; this note
         // exists so a four-stop tour is recognized as that bug rather than a regression here.
         target: '[data-testid="toolbar-sync-area"]',
-        title: strings['%onboardingTour_step_sendReceive_title%'] ?? '',
+        title: strings['%toolbar_sync%'] ?? '',
         description: strings['%onboardingTour_step_sendReceive_description%'] ?? '',
         side: 'bottom',
       },
