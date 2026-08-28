@@ -63,6 +63,7 @@ roborev config set --global review_model sonnet         # per-commit reviews on 
 roborev daemon restart
 roborev check-agents                                    # confirm the agent is reachable
 roborev skills install                                  # optional: /roborev-fix, /roborev-refine, /roborev-snooze
+roborev agent-hook install --agent claude               # drives the reminders; roborev is inert without it
 ```
 
 Per-commit review volume is high, so pin the review model to Sonnet; the interactive
@@ -70,14 +71,6 @@ Per-commit review volume is high, so pin the review model to Sonnet; the interac
 A rebase re-mints commit SHAs but enqueues no reviews (a 130-commit restack queued zero jobs; only
 the real commit made afterwards was reviewed), so there is no reason to pause roborev while
 rebasing — fix-round commits made during a rebase are exactly the ones a review should catch.
-
-**Do not install the agent hooks** (`roborev agent-hook install`). They wire roborev into the
-agent's tool-use and stop hooks, which inject "invoke the /roborev-fix skill now" into whatever
-session happens to be running — including a reviewer agent roborev spawned itself. A diverted
-reviewer edits the working tree and can launch an e2e run outside any coordination, which is how
-one session lost a run on 2026-08-28. Read open findings with `roborev list` instead, and close
-them with `roborev close` — `roborev comment` leaves a finding open, and the open count is what
-the hooks act on.
 
 Do not skip `roborev check-agents`. A configured-but-unreachable agent makes every review fail,
 and that failure is genuinely invisible from the outside: the daemon rejects the enqueue with a
@@ -103,6 +96,30 @@ work genuinely should not be interrupted, use `/roborev-snooze on 2h` rather tha
 keep enqueueing while it is active.
 
 Then browse findings with `roborev tui`, or pull them into an agent session with `/roborev-fix`.
+
+#### When the reminder fires mid-task
+
+The reminder arrives on a turn counter, not because this moment is a good one to stop. It is a
+prompt, not an order: finish the unit of work you are in, then run `/roborev-fix`. Decline it for
+now when any of these hold, and say why rather than silently ignoring it:
+
+- **You are mid-operation** — a rebase in progress, a dirty tree, a half-applied fix. `/roborev-fix`
+  edits files; running it over unfinished work mixes two changes and leaves neither reviewable.
+- **You are an agent roborev spawned.** A review job exists to produce a verdict. Its agent must not
+  edit a working tree or start processes — on 2026-08-28 one did, and it launched an e2e run that
+  killed another session's.
+- **The findings are not on your branch.** Tell the session that owns it; do not fix someone else's
+  branch under them.
+- **Another session holds a shared resource** the fix would need (the e2e port, a dev server). Ask
+  first, the same as for any other run.
+
+For a long stretch that genuinely must not be interrupted, `/roborev-snooze on 2h` is the supported
+answer — it is temporary, scoped to this worktree and branch, and reviews keep enqueueing while it
+is active. Raising `turn_threshold` is not: it hides the backlog everywhere, permanently.
+
+Close findings with `roborev close` once handled. `roborev comment` records a note but leaves the
+finding OPEN, and the open count is exactly what the reminder counts — comment-only closure is how a
+branch accumulates fourteen "open" findings that were all dealt with days ago.
 
 ### What the repository already provides
 
