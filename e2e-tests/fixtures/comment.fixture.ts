@@ -27,6 +27,7 @@ import {
   ConsoleMessage,
 } from '@playwright/test';
 import {
+  applyDeclaredWindowSize,
   launchElectronApp,
   ElectronAppContext,
   teardownElectronApp,
@@ -111,14 +112,15 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
   mainPage: async ({ commentElectronApp, windowSize }, use, testInfo: TestInfo) => {
     const page = await commentElectronApp.firstWindow({ timeout: 90_000 });
 
-    // Ensure the window is large enough for WebView content to be visible.
-    await commentElectronApp.evaluate(({ BrowserWindow }, size) => {
-      const win = BrowserWindow.getAllWindows()[0];
-      if (win) {
-        if (win.isMaximized()) win.unmaximize();
-        win.setSize(size.width, size.height);
-      }
-    }, windowSize);
+    // Ensure the window is large enough for WebView content to be visible. Retried: `setSize`
+    // returns before the renderer's `outerWidth`/`outerHeight` reflect the new size, so a single
+    // read can race the resize.
+    await applyDeclaredWindowSize(
+      commentElectronApp,
+      page,
+      windowSize,
+      'This fixture sets this size at launch; check that the window manager is not overriding it.',
+    );
 
     console.log(`Window URL: ${page.url()}`);
     const onPageError = (err: Error) => console.error(`Page error: ${err.message}`);

@@ -28,8 +28,8 @@ import { FrameLocator, Locator, Page } from '@playwright/test';
 import {
   test,
   expect,
-  getAvailableProjects,
   openScriptureEditor,
+  waitForProjects,
   WEB_COPY_PROJECT_ID,
 } from '../../../fixtures/find.fixture';
 import { waitForAppReady, PROCESS_READY_TIMEOUT } from '../../../fixtures/helpers';
@@ -179,26 +179,11 @@ test.beforeAll(async ({ electronApp }) => {
   // Poll for the seeded copy specifically, never merely for a non-empty list: projects register one
   // at a time, and a non-scripture project (SDBG) is routinely visible before testWEB is, so a poll
   // that stops at the first project returns a list the strict lookup below then rejects.
-  let projects: Awaited<ReturnType<typeof getAvailableProjects>> = [];
+  //
   // The seeded, editable WEB copy specifically. Replace WRITES to the project, so falling back to
   // whatever project happened to be available could edit something this suite does not own.
-  let project: Awaited<ReturnType<typeof getAvailableProjects>>[number] | undefined;
-  const pollDeadline = Date.now() + 90_000;
-  while (!project && Date.now() < pollDeadline) {
-    try {
-      // Sequential by design: each attempt must finish before deciding whether to retry.
-      // eslint-disable-next-line no-await-in-loop
-      projects = await getAvailableProjects(15_000);
-    } catch {
-      // Project lookup not ready yet — retry below.
-    }
-    project = projects.find((candidate) => candidate.id === WEB_COPY_PROJECT_ID);
-    if (!project) {
-      // Sequential by design: the pause between attempts paces the poll.
-      // eslint-disable-next-line no-await-in-loop
-      await page.waitForTimeout(5_000);
-    }
-  }
+  const projects = await waitForProjects(page, (candidate) => candidate.id === WEB_COPY_PROJECT_ID);
+  const project = projects.find((candidate) => candidate.id === WEB_COPY_PROJECT_ID);
 
   if (!project) {
     throw new Error(

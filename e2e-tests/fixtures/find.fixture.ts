@@ -21,10 +21,10 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { ElectronApplication, expect } from '@playwright/test';
+import { ElectronApplication, Page } from '@playwright/test';
 import { test as appTest } from './app.fixture';
 import {
-  assertDeclaredWindowSize,
+  applyDeclaredWindowSize,
   assertInterfaceMode,
   DEFAULT_WINDOW_SIZE,
   launchElectronApp,
@@ -136,9 +136,10 @@ export const test = appTest.extend<
         'platform.interfaceLanguage': ['en'],
       });
       // Inside its own try: a launch that throws — a bound port, a crash on start — would
-      // otherwise skip the restore below entirely and leave the pin in the developer's settings
-      // file. The next run's global setup does recover it from the backup, but restoring here means
-      // the developer's own next app start is already correct rather than one run later.
+      // otherwise skip the restore and temp-dir cleanup below entirely, leaving the pin in the
+      // developer's settings file and one copied project per failed run in the OS temp dir. The
+      // next run's global setup does recover the settings pin from the backup, but restoring here
+      // means the developer's own next app start is already correct rather than one run later.
       let ctx;
       try {
         ctx = await launchElectronApp({
@@ -146,6 +147,7 @@ export const test = appTest.extend<
         });
       } catch (err) {
         restoreSettings();
+        fs.rmSync(projectsDir, { recursive: true, force: true });
         throw err;
       }
       try {
@@ -164,24 +166,13 @@ export const test = appTest.extend<
             `take: check preConfigureSettings ran before launchElectronApp.`,
         );
 
-        await ctx.electronApp.evaluate(({ BrowserWindow }, size) => {
-          const win = BrowserWindow.getAllWindows()[0];
-          if (win) {
-            if (win.isMaximized()) win.unmaximize();
-            win.setSize(size.width, size.height);
-          }
-        }, windowSize);
-        // Confirm the OS honoured it; a spec that silently ran at another size would be testing a
-        // layout nobody wrote. Retried because `setSize` returns before the renderer's
-        // `outerWidth`/`outerHeight` reflect the new size, so a single read can race the resize.
-        await expect(async () => {
-          await assertDeclaredWindowSize(
-            page,
-            windowSize,
-            'The find fixture sets this size at launch; check that the window manager is not ' +
-              'overriding it.',
-          );
-        }).toPass({ timeout: 15_000 });
+        await applyDeclaredWindowSize(
+          ctx.electronApp,
+          page,
+          windowSize,
+          'The find fixture sets this size at launch; check that the window manager is not ' +
+            'overriding it.',
+        );
 
         await use(ctx.electronApp);
       } finally {
@@ -217,6 +208,40 @@ export async function getAvailableProjects(timeoutMs = 30_000): Promise<ProjectM
       timeoutMs,
     )) ?? []
   );
+}
+
+/**
+ * Poll {@link getAvailableProjects} until a project matching `predicate` shows up, or `maxPollMs`
+ * elapses, and return whatever the last successful call returned.
+ *
+ * `getAvailableProjects` only retries internally during the first 30 s of process uptime — after
+ * that a call returns immediately, empty or not, so a single call cannot be trusted right after app
+ * startup. Poll on the specific project a caller needs, never merely on a non-empty list: projects
+ * register one at a time, so a list that already has one project (e.g. a non-scripture project like
+ * SDBG) does not mean the one the caller needs has registered yet.
+ */
+export async function waitForProjects(
+  page: Page,
+  predicate: (project: ProjectMetadata) => boolean,
+  { maxPollMs = 90_000, attemptTimeoutMs = 15_000, pollIntervalMs = 5_000 } = {},
+): Promise<ProjectMetadata[]> {
+  let projects: ProjectMetadata[] = [];
+  const pollDeadline = Date.now() + maxPollMs;
+  while (!projects.some(predicate) && Date.now() < pollDeadline) {
+    try {
+      // Sequential by design: each attempt must finish before deciding whether to retry.
+      // eslint-disable-next-line no-await-in-loop
+      projects = await getAvailableProjects(attemptTimeoutMs);
+    } catch {
+      // Project lookup not ready yet — retry below.
+    }
+    if (!projects.some(predicate) && Date.now() < pollDeadline) {
+      // Sequential by design: the pause between attempts paces the poll.
+      // eslint-disable-next-line no-await-in-loop
+      await page.waitForTimeout(pollIntervalMs);
+    }
+  }
+  return projects;
 }
 
 /**

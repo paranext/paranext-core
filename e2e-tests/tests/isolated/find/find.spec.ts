@@ -57,8 +57,8 @@ import {
   test,
   expect,
   clearFindPersistedState,
-  getAvailableProjects,
   openScriptureEditor,
+  waitForProjects,
   WEB_COPY_PROJECT_ID,
 } from '../../../fixtures/find.fixture';
 import { waitForAppReady, PROCESS_READY_TIMEOUT } from '../../../fixtures/helpers';
@@ -262,6 +262,8 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   if (await allowRegex.isChecked()) await allowRegex.click();
   const noWordRestriction = frame.locator('#wordRestriction-none');
   if (!(await noWordRestriction.isChecked())) await noWordRestriction.click();
+  const allTextType = frame.locator('#searchTextType-all');
+  if (!(await allTextType.isChecked())) await allTextType.click();
   // Every toggle in the filters panel has to be listed here, not just the ones a test happens to
   // use today: the panel belongs to a worker-scoped app, so anything left on leaks into every later
   // test in the file. A toggle added to the panel and not added here is invisible until some future
@@ -456,31 +458,12 @@ test.beforeAll(async ({ electronApp }) => {
   // testWEB project or at least one platformScripture.* project appears (max 90 s total) to
   // cover that window and avoid accidentally falling back to a non-scripture project like SDBG.
   const preferredProjectId = WEB_COPY_PROJECT_ID;
-  let projects: Awaited<ReturnType<typeof getAvailableProjects>> = [];
-  const maxPollMs = 90_000;
-  const attemptTimeoutMs = 15_000;
-  const pollIntervalMs = 5_000;
-  const pollDeadline = Date.now() + maxPollMs;
-  const hasUsableProject = (ps: Awaited<ReturnType<typeof getAvailableProjects>>): boolean =>
-    ps.some(
-      (p) =>
-        p.id === preferredProjectId ||
-        p.projectInterfaces?.some((iface) => iface.startsWith('platformScripture.')),
-    );
-  while (!hasUsableProject(projects) && Date.now() < pollDeadline) {
-    try {
-      // Intentional sequential polling — each attempt must complete before deciding to retry
-      // eslint-disable-next-line no-await-in-loop
-      projects = await getAvailableProjects(attemptTimeoutMs);
-    } catch {
-      // Service not ready yet — try again after a short delay
-    }
-    if (!hasUsableProject(projects) && Date.now() < pollDeadline) {
-      // Intentional sequential delay between polling attempts
-      // eslint-disable-next-line no-await-in-loop
-      await page.waitForTimeout(pollIntervalMs);
-    }
-  }
+  const projects = await waitForProjects(
+    page,
+    (p) =>
+      p.id === preferredProjectId ||
+      p.projectInterfaces?.some((iface) => iface.startsWith('platformScripture.')) === true,
+  );
   const scriptureProject =
     projects.find((p) => p.id === preferredProjectId) ??
     projects.find((p) =>
