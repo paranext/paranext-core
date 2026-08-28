@@ -29,7 +29,8 @@ export type CSharpRegistrationCategory =
   | 'networkObject'
   | 'dataProvider'
   | 'pdpFactory'
-  | 'standaloneMethod';
+  | 'standaloneMethod'
+  | 'networkEvent';
 
 /** A C# source file to scan: a repo-relative POSIX path and its full text. */
 export interface VirtualFile {
@@ -104,17 +105,16 @@ export const CSHARP_RECOGNIZED_PATTERNS: string[] = [
     '`using static` import) are recognised as an always-x-experimental idiom by call shape alone, ' +
     'without inspecting their arguments, since every documentation object that helper builds ' +
     'hardcodes Experimental = true',
+  'C# — PapiClient.SendRequestAsync(requestType, requestContents), generic-typed or not, where ' +
+    'requestType resolves to the literal "network:registerEvent": a network event registered ' +
+    'directly via the generic request method rather than through a dedicated wrapper like ' +
+    'RegisterRequestHandlerAsync (PapiClient has none for this method). The event name and its ' +
+    "documentation are packed inside the second argument's array literal ([eventType, documentation]) " +
+    'rather than passed as separate positional parameters, so this scanner parses that array ' +
+    'literal\'s own top-level segments to recover them -> category "networkEvent"',
 ];
 
-export const CSHARP_EXCLUDED_PATTERNS: string[] = [
-  'C# — PapiClient.SendRequestAsync("network:registerEvent", [eventType, documentation]): a network ' +
-    'event registered directly via the generic request method (used once today, by ' +
-    'SendReceiveBlockNotifierService) rather than through a dedicated wrapper like ' +
-    'RegisterRequestHandlerAsync. The event type and its documentation are packed inside a ' +
-    'request-contents array-literal argument rather than passed as separate positional parameters, ' +
-    'which this scanner does not unpack. Excluded rather than force-fit; add a dedicated pattern here ' +
-    'if this idiom is repeated elsewhere.',
-];
+export const CSHARP_EXCLUDED_PATTERNS: string[] = [];
 
 // #endregion
 
@@ -348,15 +348,44 @@ interface CallSiteMatch {
 }
 
 /**
+ * If `masked[i]` starts a balanced `<...>` generic type-argument list (as in
+ * `SendRequestAsync<bool>(`), returns the index just past its closing `>`; otherwise undefined.
+ * Bails out (undefined) on hitting `;`, `{`, or `}` before the angle brackets balance, since that
+ * means the opening `<` was a less-than comparison rather than a generic argument list — this
+ * codebase's generic call sites never span a statement boundary.
+ */
+function skipGenericArgumentList(masked: string, i: number): number | undefined {
+  if (masked[i] !== '<') return undefined;
+  let depth = 0;
+  let j = i;
+  while (j < masked.length) {
+    const ch = masked[j];
+    if (ch === '<') depth += 1;
+    else if (ch === '>') {
+      depth -= 1;
+      if (depth === 0) return j + 1;
+    } else if (ch === ';' || ch === '{' || ch === '}') {
+      return undefined;
+    }
+    j += 1;
+  }
+  return undefined;
+}
+
+/**
  * If `masked[i]` starts a whole-word occurrence of `calleeName(` (not part of a longer identifier),
  * returns its match; otherwise undefined. A declaration (`Task Foo(...) { ... }`) is distinguished
  * from a call (`Foo(...);`, `= Foo(...)`, ...) by whether `{`/`=>` immediately follows the
- * parameter list — the one signal available without a real parser.
+ * parameter list — the one signal available without a real parser. When `allowGenericArgs` is set,
+ * a `<...>` generic type-argument list (e.g. `SendRequestAsync<bool>(`) is skipped between the name
+ * and the opening `(`, exactly like C# itself resolves it — never both with and without, so a
+ * caller that doesn't expect generics is never surprised by one.
  */
 function tryMatchCallSite(
   masked: string,
   i: number,
   calleeName: string,
+  { allowGenericArgs = false }: { allowGenericArgs?: boolean } = {},
 ): CallSiteMatch | undefined {
   if (
     !masked.startsWith(calleeName, i) ||
@@ -368,6 +397,14 @@ function tryMatchCallSite(
 
   let j = i + calleeName.length;
   while (j < masked.length && /\s/.test(masked[j])) j += 1;
+
+  if (allowGenericArgs && masked[j] === '<') {
+    const afterGeneric = skipGenericArgumentList(masked, j);
+    if (afterGeneric === undefined) return undefined;
+    j = afterGeneric;
+    while (j < masked.length && /\s/.test(masked[j])) j += 1;
+  }
+
   if (masked[j] !== '(') return undefined;
 
   const match = matchBracket(masked, j);
@@ -383,11 +420,15 @@ function tryMatchCallSite(
  * Finds every call-like occurrence of `calleeName(` in `masked` text (see `tryMatchCallSite`).
  * Returns the index of each match's opening `(`.
  */
-function findCallSites(masked: string, calleeName: string): number[] {
+function findCallSites(
+  masked: string,
+  calleeName: string,
+  options: { allowGenericArgs?: boolean } = {},
+): number[] {
   const results: number[] = [];
   let i = 0;
   while (i < masked.length) {
-    const callSite = tryMatchCallSite(masked, i, calleeName);
+    const callSite = tryMatchCallSite(masked, i, calleeName, options);
     if (callSite) {
       if (!callSite.isDeclaration) results.push(callSite.openIndex);
       i = callSite.nextIndex;
@@ -523,17 +564,37 @@ const ALWAYS_EXPERIMENTAL_HELPER_RE =
   /^(ExperimentalMethodDocumentation\.)?(Create|Marker|ExistenceMarker)\s*\(/;
 
 /**
+ * Which object shape {@link resolveDocumentationArgument} should expect its argument to unpack to.
+ * `'networkObjectStyle'` (the default) is `NetworkObjectDocumentation`'s shape, whose object-level
+ * `Experimental` flag sits at the argument's own top level. `'notificationStyle'` is
+ * `OpenRpcSingleNotificationDocumentation`'s shape (the `network:registerEvent` idiom's
+ * documentation argument), whose object-level flag instead sits nested one level down, under
+ * `Notification.Experimental` — mirroring the TypeScript scan's
+ * `DOCS_EXPERIMENTAL_PATH.networkEvent = ['notification', 'x-experimental']`. Both shapes can be
+ * written as a target-typed `new() { ... }` at the call site, so the caller must say which one it
+ * is expecting rather than this function guessing from the text alone.
+ */
+type DocumentationShape = 'networkObjectStyle' | 'notificationStyle';
+
+/**
  * Resolves a documentation argument/return-expression to its `documented`/experimental status.
  * Recognises the `ExperimentalMethodDocumentation` helper idiom (always experimental, by call
- * shape), and an inline `new NetworkObjectDocumentation { ... }` / target-typed `new() { ... }`
- * object initializer (reads its top-level `Experimental` property, if any — deliberately not
- * descending into a nested `Methods = { ... }` property, which can itself carry per-method
- * `Experimental` flags that must not be confused with the object-level one; matches this
+ * shape); a bare identifier referencing a same-file field's own object initializer (one hop, the
+ * idiom of keeping a bulky documentation object, e.g. a network event's
+ * `OpenRpcSingleNotificationDocumentation`, out of the call site); and an inline object initializer
+ * matching `shape` — reading its top-level `Experimental` property for `'networkObjectStyle'`
+ * (deliberately not descending into a nested `Methods = { ... }` property, which can itself carry
+ * per-method `Experimental` flags that must not be confused with the object-level one; matches this
  * generator's established policy of recording one entry per declared registration, not expanding
- * the per-method fan-out). Anything else (an arbitrary expression, a referenced-but-unrecognised
+ * the per-method fan-out), or the nested `Notification.Experimental` property for
+ * `'notificationStyle'`. Anything else (an arbitrary expression, a referenced-but-unrecognised
  * identifier) is reported present-but-uncertain rather than guessed.
  */
-function resolveDocumentationArgument(argText: string | undefined): DocsResolution {
+function resolveDocumentationArgument(
+  argText: string | undefined,
+  fields: ReadonlyMap<string, string> = new Map(),
+  shape: DocumentationShape = 'networkObjectStyle',
+): DocsResolution {
   if (argText === undefined)
     return { documented: false, docsStaticallyResolved: true, experimental: false };
 
@@ -545,15 +606,64 @@ function resolveDocumentationArgument(argText: string | undefined): DocsResoluti
     return { documented: true, docsStaticallyResolved: true, experimental: true };
   }
 
+  if (/^[A-Za-z_]\w*$/.test(trimmed)) {
+    const fieldInit = fields.get(trimmed);
+    if (fieldInit !== undefined) return resolveDocumentationArgument(fieldInit, fields, shape);
+  }
+
   if (
-    /^new\s+NetworkObjectDocumentation\s*\{/.test(trimmed) ||
-    /^new\s*\(\s*\)\s*\{/.test(trimmed)
+    shape === 'networkObjectStyle' &&
+    (/^new\s+NetworkObjectDocumentation\s*\{/.test(trimmed) || /^new\s*\(\s*\)\s*\{/.test(trimmed))
   ) {
     const braceIndex = trimmed.indexOf('{');
     const match = matchBracket(trimmed, braceIndex);
     if (!match) return { documented: true, docsStaticallyResolved: false, experimental: false };
 
     const experimentalSegment = match.segments
+      .map((segment) => stripLeadingTrivia(segment))
+      .find((segment) => /^Experimental\s*=/.test(segment));
+    if (!experimentalSegment)
+      return { documented: true, docsStaticallyResolved: true, experimental: false };
+
+    const valueMatch = experimentalSegment.match(/^Experimental\s*=\s*(true|false)\s*$/);
+    if (!valueMatch)
+      return { documented: true, docsStaticallyResolved: false, experimental: false };
+    return {
+      documented: true,
+      docsStaticallyResolved: true,
+      experimental: valueMatch[1] === 'true',
+    };
+  }
+
+  if (
+    shape === 'notificationStyle' &&
+    (/^new\s+OpenRpcSingleNotificationDocumentation\s*\{/.test(trimmed) ||
+      /^new\s*\(\s*\)\s*\{/.test(trimmed))
+  ) {
+    const braceIndex = trimmed.indexOf('{');
+    const match = matchBracket(trimmed, braceIndex);
+    if (!match) return { documented: true, docsStaticallyResolved: false, experimental: false };
+
+    const notificationSegment = match.segments
+      .map((segment) => stripLeadingTrivia(segment))
+      .find((segment) => /^Notification\s*=/.test(segment));
+    if (!notificationSegment)
+      return { documented: true, docsStaticallyResolved: true, experimental: false };
+
+    const notificationValue = notificationSegment.replace(/^Notification\s*=\s*/, '').trim();
+    if (
+      !/^new\s+OpenRpcNotificationDocumentation\s*\{/.test(notificationValue) &&
+      !/^new\s*\(\s*\)\s*\{/.test(notificationValue)
+    ) {
+      return { documented: true, docsStaticallyResolved: false, experimental: false };
+    }
+
+    const innerBraceIndex = notificationValue.indexOf('{');
+    const innerMatch = matchBracket(notificationValue, innerBraceIndex);
+    if (!innerMatch)
+      return { documented: true, docsStaticallyResolved: false, experimental: false };
+
+    const experimentalSegment = innerMatch.segments
       .map((segment) => stripLeadingTrivia(segment))
       .find((segment) => /^Experimental\s*=/.test(segment));
     if (!experimentalSegment)
@@ -623,6 +733,29 @@ function findVarLocalAssignments(text: string, masked: string): Map<string, stri
   // scanToTopLevelSemicolon below independently walks ORIGINAL text and already skips any real
   // whitespace itself, so nothing further needs to be consumed by this regex.
   const re = /\bvar\s+(\w+)\s*=/g;
+  let m = re.exec(masked);
+  while (m) {
+    const statement = scanToTopLevelSemicolon(text, m.index + m[0].length);
+    if (statement && !result.has(m[1])) result.set(m[1], statement.expr);
+    m = re.exec(masked);
+  }
+  return result;
+}
+
+/**
+ * Same-file field declarations of the form `<modifiers> Type Name = new...;`, keyed by field name
+ * with the initializer's raw text (starting at `new`) as the value. This is the idiom a bulky
+ * documentation object is kept in — e.g. SendReceiveBlockNotifierService's
+ * `s_blockStateChangedEventDocumentation` field — rather than written inline at the call site;
+ * `resolveDocumentationArgument` takes one hop through this map when a documentation argument is a
+ * bare identifier. Deliberately narrow (only fields whose initializer starts with `new`, found via
+ * a lookahead so the match position lands exactly on it): this is not a general field-declaration
+ * scanner, and a field initialized to anything else is of no interest here.
+ */
+function findObjectFieldInitializers(text: string, masked: string): Map<string, string> {
+  const result = new Map<string, string>();
+  const re =
+    /\b(?:private|public|internal|protected)\s+(?:static\s+)?(?:readonly\s+)?\w+\??\s+(\w+)\s*=\s*(?=new\b)/g;
   let m = re.exec(masked);
   while (m) {
     const statement = scanToTopLevelSemicolon(text, m.index + m[0].length);
@@ -873,6 +1006,95 @@ function scanStandaloneRequestHandlerCalls(
   });
 }
 
+/**
+ * Wire name of the main-process method that registers a network event (see `rpc.model.ts`'s
+ * `REGISTER_EVENT`).
+ */
+const NETWORK_REGISTER_EVENT_METHOD = 'network:registerEvent';
+
+/**
+ * `PapiClient.SendRequestAsync(requestType, requestContents)` — generic-typed
+ * (`SendRequestAsync<T>`) or not — where `requestType` resolves to the literal
+ * `network:registerEvent`: the generic request method used to register a network event directly,
+ * since `PapiClient` has no dedicated wrapper for it the way it does for
+ * `RegisterRequestHandlerAsync`/`RegisterNetworkObjectAsync`. `SendRequestAsync` itself serves many
+ * unrelated requests (settings, notifications, ...), so every call site is inspected and only the
+ * ones addressed to this exact method are recorded. The event name and its documentation are packed
+ * inside the second argument's array literal (`[eventType, documentation]`) rather than passed as
+ * separate positional parameters, so this scanner parses that array literal's own top-level
+ * segments (via `matchBracket`, same as any other bracketed argument list) to recover them.
+ */
+function scanNetworkEventRegistrationCalls(
+  file: VirtualFile,
+  masked: string,
+  consts: ReadonlyMap<string, string>,
+  vars: ReadonlyMap<string, string>,
+  fields: ReadonlyMap<string, string>,
+  registrations: CSharpStaticRegistration[],
+  dynamicRegistrations: CSharpDynamicRegistration[],
+): void {
+  const registeredVia = 'PapiClient.SendRequestAsync("network:registerEvent")';
+
+  findCallSites(masked, 'SendRequestAsync', { allowGenericArgs: true }).forEach((openIndex) => {
+    const match = matchBracket(file.text, openIndex);
+    if (!match) return;
+
+    const methodArg = match.segments[0];
+    if (methodArg === undefined) return;
+    const methodResolution = resolveNameExpression(methodArg, consts, vars);
+    if (!methodResolution.resolved || methodResolution.value !== NETWORK_REGISTER_EVENT_METHOD) {
+      return; // SendRequestAsync serves many other requests -- only network:registerEvent applies here
+    }
+
+    const contentsArg = match.segments[1];
+    const contentsText =
+      contentsArg === undefined ? undefined : stripLeadingTrivia(contentsArg).trim();
+    if (contentsText === undefined || !contentsText.startsWith('[')) {
+      dynamicRegistrations.push({
+        category: 'networkEvent',
+        file: file.path,
+        registeredVia,
+        expression: contentsText ?? '(missing request-contents argument)',
+        language: 'csharp',
+      });
+      return;
+    }
+
+    const arrayMatch = matchBracket(contentsText, 0);
+    if (!arrayMatch) return;
+
+    const eventNameArg = arrayMatch.segments[0];
+    if (eventNameArg === undefined) return;
+    const nameResolution = resolveNameExpression(eventNameArg, consts, vars);
+    if (!nameResolution.resolved) {
+      dynamicRegistrations.push({
+        category: 'networkEvent',
+        file: file.path,
+        registeredVia,
+        expression: nameResolution.expression,
+        language: 'csharp',
+      });
+      return;
+    }
+
+    const docsInfo = resolveDocumentationArgument(
+      arrayMatch.segments[1],
+      fields,
+      'notificationStyle',
+    );
+    registrations.push({
+      category: 'networkEvent',
+      name: nameResolution.value,
+      file: file.path,
+      registeredVia,
+      documented: docsInfo.documented,
+      docsStaticallyResolved: docsInfo.docsStaticallyResolved,
+      experimental: docsInfo.experimental,
+      language: 'csharp',
+    });
+  });
+}
+
 // #endregion
 
 // #region Orchestration
@@ -902,6 +1124,7 @@ export function scanCSharpFiles(files: VirtualFile[]): CSharpScanResult {
     const masked = maskCommentsAndStrings(file.text);
     const consts = findConstStringDeclarations(file.text, masked);
     const vars = findVarLocalAssignments(file.text, masked);
+    const fields = findObjectFieldInitializers(file.text, masked);
 
     scanRegisterNetworkObjectAsyncCalls(
       file,
@@ -925,6 +1148,15 @@ export function scanCSharpFiles(files: VirtualFile[]): CSharpScanResult {
       masked,
       consts,
       vars,
+      registrations,
+      dynamicRegistrations,
+    );
+    scanNetworkEventRegistrationCalls(
+      file,
+      masked,
+      consts,
+      vars,
+      fields,
       registrations,
       dynamicRegistrations,
     );
