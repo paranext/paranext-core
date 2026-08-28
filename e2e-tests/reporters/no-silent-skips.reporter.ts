@@ -1,5 +1,5 @@
 import path from 'path';
-import type { FullConfig, FullResult, Reporter, Suite, TestCase } from '@playwright/test/reporter';
+import type { FullConfig, FullResult, Reporter, Suite } from '@playwright/test/reporter';
 
 /**
  * Fails the run when a test is reported as skipped without anyone having asked for it to be
@@ -20,34 +20,57 @@ import type { FullConfig, FullResult, Reporter, Suite, TestCase } from '@playwri
  * describe-scoped forms all add one, including when called at runtime. A test that never ran
  * carries none. That difference is the whole check.
  */
+/**
+ * The parts of a Playwright `TestCase` this reporter reasons about.
+ *
+ * Structural rather than the real type so the decision below can be exercised directly, with plain
+ * objects and no casting. A real `TestCase` satisfies it.
+ */
+export interface TestOutcomeLike {
+  expectedStatus: string;
+  results: { status: string }[];
+}
+
+/**
+ * Whether a test was lost rather than skipped on purpose.
+ *
+ * Mirrors Playwright's own discrimination in `computeTestCaseOutcome`
+ * (`playwright/lib/isomorphic/teleReceiver.js`), which counts a `skipped` result as a real skip
+ * only when `expectedStatus` is also `skipped` — i.e. when something actually asked for it — and
+ * otherwise counts it as "did not run". `TestCase.outcome()` then collapses both into the single
+ * string `'skipped'`, which is why the distinction has to be made from the raw results.
+ *
+ * A test with no results at all never started, which counts too.
+ */
+export function wasLost(test: TestOutcomeLike): boolean {
+  if (test.expectedStatus === 'skipped') return false;
+  if (test.results.length === 0) return true;
+  // `every`, not `some`: when a setup failure loses tests, the dispatcher gives each one a
+  // `skipped` result AND queues it for retry, so a test whose first attempt was lost but which
+  // passed on a later attempt has a mix of results. Reporting that as lost would fail runs whose
+  // tests all ultimately passed — the inverse of this reporter's purpose, landing hardest on the
+  // flakiest suites, which are exactly the ones `retries` exists for. A test is lost only when no
+  // attempt produced a real result, which is also what `computeTestCaseOutcome` requires
+  // (`expected === 0 && unexpected === 0`).
+  return test.results.every(
+    (testResult) => testResult.status === 'skipped' || testResult.status === 'interrupted',
+  );
+}
+
+/**
+ * The tests a run lost, given every test it declared.
+ *
+ * Empty when nothing executed at all: that is `--list` (or an abort before the first test, which
+ * already fails loudly on its own). The signal worth reporting is that SOME tests ran while others
+ * were lost, so at least one test must have produced a result.
+ */
+export function findLostTests<T extends TestOutcomeLike>(tests: T[]): T[] {
+  if (!tests.some((test) => test.results.length > 0)) return [];
+  return tests.filter(wasLost);
+}
+
 class NoSilentSkipsReporter implements Reporter {
   private rootSuite: Suite | undefined;
-
-  /**
-   * Whether a test was lost rather than skipped on purpose.
-   *
-   * Mirrors Playwright's own discrimination in `computeTestCaseOutcome`
-   * (`playwright/lib/isomorphic/teleReceiver.js`), which counts a `skipped` result as a real skip
-   * only when `expectedStatus` is also `skipped` — i.e. when something actually asked for it — and
-   * otherwise counts it as "did not run". `TestCase.outcome()` then collapses both into the single
-   * string `'skipped'`, which is why the distinction has to be made from the raw results.
-   *
-   * A test with no results at all never started, which counts too.
-   */
-  private static neverRan(test: TestCase): boolean {
-    if (test.expectedStatus === 'skipped') return false;
-    if (test.results.length === 0) return true;
-    // `every`, not `some`: when a setup failure loses tests, the dispatcher gives each one a
-    // `skipped` result AND queues it for retry, so a test whose first attempt was lost but which
-    // passed on a later attempt has a mix of results. Reporting that as lost would fail runs whose
-    // tests all ultimately passed — the inverse of this reporter's purpose, landing hardest on the
-    // flakiest suites, which are exactly the ones `retries` exists for. A test is lost only when no
-    // attempt produced a real result, which is also what `computeTestCaseOutcome` requires
-    // (`expected === 0 && unexpected === 0`).
-    return test.results.every(
-      (testResult) => testResult.status === 'skipped' || testResult.status === 'interrupted',
-    );
-  }
 
   onBegin(_config: FullConfig, suite: Suite): void {
     this.rootSuite = suite;
@@ -57,13 +80,7 @@ class NoSilentSkipsReporter implements Reporter {
     if (!this.rootSuite) return undefined;
 
     const allTests = this.rootSuite.allTests();
-
-    // If nothing executed at all, this is `--list` (or an abort before the first test, which
-    // already fails loudly on its own). The signal worth reporting is that SOME tests ran while
-    // others were lost, so require at least one test to have produced a result.
-    if (!allTests.some((test) => test.results.length > 0)) return undefined;
-
-    const lost = allTests.filter(NoSilentSkipsReporter.neverRan);
+    const lost = findLostTests(allTests);
     if (lost.length === 0) return undefined;
 
     const listed = lost

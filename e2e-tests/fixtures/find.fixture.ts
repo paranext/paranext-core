@@ -118,8 +118,8 @@ export const test = appTest.extend<
       // `iframe.web-view nth(0)` selectors; envOverrides is spread last so both win over the defaults.
       // Pin every setting this suite's selectors depend on. `preConfigureSettings` MERGES into the
       // shared dev-appdata settings file and preserves keys it does not set, so anything left
-      // unpinned is inherited from whatever the checkout happens to hold — which is why this
-      // suite's result used to differ between machines.
+      // unpinned is inherited from whatever the checkout happens to hold, which makes this
+      // suite's result depend on the machine it runs on.
       //
       // - firstRunComplete: without it the app starts on the first-run wizard, a full-screen modal
       //   that aria-hides the rest of the app and intercepts pointer events, blocking beforeAll

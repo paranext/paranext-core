@@ -676,11 +676,15 @@ test.describe('Search Results', () => {
 // ---------------------------------------------------------------------------
 // Tests: Search History
 //
-// Two things commit a term to the recent-searches list, and only two: pressing Enter, and five
-// seconds of inactivity. `addToHistory` has exactly four callers — unmount, the idle debounce, a
-// search-options change, and an explicit search — so neither clearing the box nor opening a result
-// records anything, and a test asserting either would be asserting behaviour the panel does not
-// have. Add one only alongside the product change that makes it true.
+// `addToHistory` has four callers: the idle debounce, an explicit search (Enter), a search-options
+// change, and unmount. The two covered below are the two this suite can drive — Find is a permanent
+// tab in Simple mode, so it never unmounts, and a covering test would have to live where the panel
+// can be closed.
+//
+// What is NOT a route matters as much here: neither clearing the box nor opening a result records
+// anything, so a test asserting either would assert behaviour the panel does not have. Two such
+// tests were removed rather than repaired; add one only alongside the product change that makes it
+// true.
 // ---------------------------------------------------------------------------
 
 test.describe('Search History', () => {
