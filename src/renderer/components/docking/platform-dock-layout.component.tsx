@@ -35,6 +35,7 @@ import {
   containsTab,
   floatTabById,
   getAllWebViewDefinitions,
+  getOpenTabCount,
   getTabInfoByElement,
   getTabInfoById,
   getWebViewDefinition,
@@ -119,6 +120,7 @@ export function PlatformDockLayout() {
       },
       floatTabById: (tabId: string) => floatTabById(tabId, dockLayoutRef.current),
       getAllWebViewDefinitions: () => getAllWebViewDefinitions(dockLayoutRef.current),
+      getOpenTabCount: () => getOpenTabCount(dockLayoutRef.current),
       getWebViewDefinition: (webViewId: string) =>
         getWebViewDefinition(webViewId, dockLayoutRef.current),
       updateTabPartial: (

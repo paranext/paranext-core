@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
+import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import { TabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import { createRCDockTabFromTabInfo } from './platform-dock-tab.component';
@@ -12,9 +13,13 @@ vi.mock('@renderer/services/theme.service', () => ({
   localThemeService: {},
 }));
 
-// Stub child components that are heavy or pull in unrelated deps.
+// Stub child components that are heavy or pull in unrelated deps. Surfaces `webViewType` as a data
+// attribute so a test can see which name (if any) reached the child, without rendering the real
+// tab title and everything it pulls in.
 vi.mock('./platform-tab-title.component', () => ({
-  PlatformTabTitle: () => <span data-testid="mock-tab-title" />,
+  PlatformTabTitle: ({ webViewType }: { webViewType?: string }) => (
+    <span data-testid="mock-tab-title" data-web-view-type={webViewType} />
+  ),
 }));
 vi.mock('./platform-panel.component', () => ({
   PlatformPanel: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
@@ -75,5 +80,38 @@ describe('createRCDockTabFromTabInfo closable gating', () => {
   it('default (no options): closable is true', () => {
     const result = createRCDockTabFromTabInfo(makeTabInfo());
     expect(result.closable).toBe(true);
+  });
+});
+
+describe('createRCDockTabFromTabInfo webViewType wiring', () => {
+  it('passes a web view tab’s webViewType through, naming its contributed menu', () => {
+    const tabInfo: TabInfo = {
+      id: 'test-id',
+      tabType: TAB_TYPE_WEBVIEW,
+      tabTitle: 'Test',
+      content: <div>content</div>,
+      data: { webViewType: 'greekWords.webView' },
+    };
+
+    render(<div>{createRCDockTabFromTabInfo(tabInfo).title}</div>);
+
+    expect(screen.getByTestId('mock-tab-title')).toHaveAttribute(
+      'data-web-view-type',
+      'greekWords.webView',
+    );
+  });
+
+  it('passes no webViewType for a tab that hosts no web view', () => {
+    const tabInfo: TabInfo = {
+      id: 'test-id',
+      tabType: 'dialog',
+      tabTitle: 'Test',
+      content: <div>content</div>,
+      data: { webViewType: 'greekWords.webView' },
+    };
+
+    render(<div>{createRCDockTabFromTabInfo(tabInfo).title}</div>);
+
+    expect(screen.getByTestId('mock-tab-title')).not.toHaveAttribute('data-web-view-type');
   });
 });

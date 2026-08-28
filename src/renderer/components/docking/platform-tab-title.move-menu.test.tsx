@@ -3,7 +3,7 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
-import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-shard';
+import { floatTab, getOpenTabCountSync } from '@renderer/services/web-view.service-shard';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
@@ -49,6 +49,12 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
               group: 'platform.tabWindow',
               order: 3,
             },
+            {
+              label: 'Look Up Word',
+              group: 'platform.tabWindow',
+              order: 4,
+              command: 'someExtension.lookUpWord',
+            },
           ],
         },
       },
@@ -81,8 +87,8 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   floatTab: vi.fn(),
   updateTabPartialSync: vi.fn(),
-  // Two web views open, so a tab is never the only one in its window unless a test says otherwise
-  getAllOpenWebViewDefinitionsSync: vi.fn(() => [{ id: 'web-view-1' }, { id: 'web-view-2' }]),
+  // Two tabs open, so a tab is never the only one in its window unless a test says otherwise
+  getOpenTabCountSync: vi.fn(() => 2),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -366,6 +372,34 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
   });
 });
 
+describe('PlatformTabTitle other tab-menu item selection', () => {
+  afterEach(() => {
+    cleanup();
+    vi.mocked(floatTab).mockClear();
+    vi.mocked(sendCommand).mockReset();
+  });
+
+  it('clicking Float Tab floats this tab', async () => {
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+
+    fireEvent.click(screen.getByText('Float Tab'));
+
+    await waitFor(() => expect(floatTab).toHaveBeenCalledWith('tab-1'));
+  });
+
+  it('clicking an extension-contributed item runs it as a menu command', async () => {
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+
+    fireEvent.click(screen.getByText('Look Up Word'));
+
+    // `handleMenuCommand` falls through to running the item's own command via `sendCommand`, the
+    // way every other contributed menu runs an item it does not recognize as one of its own
+    await waitFor(() =>
+      expect(sendCommand).toHaveBeenCalledWith('someExtension.lookUpWord', 'tab-1'),
+    );
+  });
+});
+
 describe('PlatformTabTitle keyboard access to the tab menu', () => {
   /**
    * The tab title inside a stand-in for the focusable `role="tab"` element rc-tabs wraps it in.
@@ -443,15 +477,6 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
   const MAIN_WINDOW = { windowId: 1, label: 'MRK — wgPIDGIN', isMain: true };
   const OTHER_WINDOW = { windowId: 2, label: 'Biblical Terms', isMain: false };
 
-  /**
-   * Stand-ins for the web views open in this window. The tab menu only reads their ids, so a full
-   * `WebViewDefinition` each would be noise; the assertion is what keeps them to that one field.
-   */
-  const openWebViews = (...ids: string[]): ReturnType<typeof getAllOpenWebViewDefinitionsSync> =>
-    // The literals carry only `id` on purpose, so TypeScript cannot see them as full definitions
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    ids.map((id) => ({ id })) as ReturnType<typeof getAllOpenWebViewDefinitionsSync>;
-
   /** Mount a web view tab and open its menu, which is when the window list is read */
   const openMenuOn = async (windows: unknown[]) => {
     vi.mocked(sendCommand).mockImplementation(async (command: string) =>
@@ -467,9 +492,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     vi.mocked(sendCommand).mockReset();
     vi.mocked(logger.warn).mockClear();
     vi.mocked(notificationService.send).mockClear();
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue(
-      openWebViews('web-view-1', 'web-view-2'),
-    );
+    vi.mocked(getOpenTabCountSync).mockReturnValue(2);
     globalThis.windowId = undefined;
   });
 
@@ -525,10 +548,10 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
 
   it('drops move-to-new-window when this tab is alone in a window that is not the primary one', async () => {
     // The wiring for that guard, not just the predicate: this window is absent from the list's
-    // primary entry AND holds a single web view. `buildTabMenuItems` is unit-tested for the flag,
+    // primary entry AND holds only this one tab. `buildTabMenuItems` is unit-tested for the flag,
     // but nothing else exercises the three reads that compute it here
     globalThis.windowId = '2';
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue(openWebViews('web-view-1'));
+    vi.mocked(getOpenTabCountSync).mockReturnValue(1);
     await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
 
     expect(screen.queryByText('Move tab to new window')).not.toBeInTheDocument();
@@ -538,12 +561,12 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     expect(await screen.findByTestId('submenu-content')).toBeInTheDocument();
   });
 
-  it('keeps move-to-new-window when the window holds more than this tab', async () => {
-    // The other side of the same wiring: same window, more than one web view
+  it('keeps move-to-new-window when the window also holds a non-web-view tab', async () => {
+    // The case a web-view-only count would miss: this tab is the window's only web view, but a
+    // dialog (or any other non-web-view tab) is also open there, so moving this tab out would not
+    // in fact leave the window empty. Counting every tab, not just web views, is what this pins.
     globalThis.windowId = '2';
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue(
-      openWebViews('web-view-1', 'web-view-2'),
-    );
+    vi.mocked(getOpenTabCountSync).mockReturnValue(2);
     await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
 
     expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
@@ -552,7 +575,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
   it('keeps move-to-new-window for a lone tab in the window holding the primary role', async () => {
     // And the third read: alone, but this IS the primary window, so the move is not a no-op
     globalThis.windowId = '1';
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue(openWebViews('web-view-1'));
+    vi.mocked(getOpenTabCountSync).mockReturnValue(1);
     await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
 
     expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
@@ -566,12 +589,12 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     expect(submenu.textContent).toContain('Empty window');
   });
 
-  it('keeps the target list when counting this window`s web views fails', async () => {
+  it('keeps the target list when counting this window`s tabs fails', async () => {
     // The count throws before the dock layout registers, which says nothing about the windows. A
     // shared catch would have thrown away a window list that arrived perfectly well and reported
     // the failure as one the open windows could not be read
     globalThis.windowId = '2';
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockImplementation(() => {
+    vi.mocked(getOpenTabCountSync).mockImplementation(() => {
       throw new Error('dock layout is not registered yet');
     });
     await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
@@ -579,7 +602,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     expect(await screen.findByTestId('submenu-content')).toBeInTheDocument();
     // Offering the action is the safe way to be wrong when the count is unknown
     expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
-    expect(vi.mocked(logger.warn).mock.calls.flat().join(' ')).toContain('web views');
+    expect(vi.mocked(logger.warn).mock.calls.flat().join(' ')).toContain('tabs');
   });
 
   it('leaves the submenu out when the window list cannot be read', async () => {
@@ -593,5 +616,38 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     expect(screen.queryByTestId('submenu-content')).toBeNull();
     // An empty target list would read as "there are no other windows", which is a different claim
     expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
+  });
+
+  it('discards a stale window list that resolves after a newer request', async () => {
+    // Two opens of the same tab's menu in quick succession, the first (now-stale) request's round
+    // trip landing after the second (current) one's
+    globalThis.windowId = '2';
+    const STALE_WINDOW = { windowId: 3, label: 'Stale Window', isMain: true };
+    const resolvers: ((windows: unknown[]) => void)[] = [];
+    vi.mocked(sendCommand).mockImplementation(
+      (command: string) =>
+        new Promise((resolve) => {
+          if (command !== 'platform.getWindows') {
+            resolve(undefined);
+            return;
+          }
+          resolvers.push(resolve);
+        }),
+    );
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+
+    fireEvent.click(screen.getByTestId('open-menu'));
+    fireEvent.click(screen.getByTestId('open-menu'));
+    await waitFor(() => expect(resolvers).toHaveLength(2));
+
+    // The second (current) request resolves first, naming the target this test expects to win
+    resolvers[1]([MAIN_WINDOW, OTHER_WINDOW]);
+    // The first (stale) request resolves after it, naming a different target — this must not
+    // overwrite what the newer request found
+    resolvers[0]([STALE_WINDOW, OTHER_WINDOW]);
+
+    const submenu = await screen.findByTestId('submenu-content');
+    expect(submenu.textContent).toContain('MRK — wgPIDGIN');
+    expect(submenu.textContent).not.toContain('Stale Window');
   });
 });

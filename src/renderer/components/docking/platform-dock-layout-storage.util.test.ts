@@ -15,6 +15,7 @@ import {
   addWebViewToDock,
   findFirstWebViewDefinitionByType,
   getAllWebViewDefinitions,
+  getOpenTabCount,
   loadLayout,
   loadTab,
 } from './platform-dock-layout-storage.util';
@@ -119,6 +120,37 @@ describe('Dock Layout Component', () => {
         },
       );
       expect(getAllWebViewDefinitions(instance(localMockDockLayout))).toEqual([docked, floated]);
+    });
+  });
+
+  describe('getOpenTabCount()', () => {
+    let localMockDockLayout: DockLayout;
+
+    beforeEach(() => {
+      localMockDockLayout = mock(DockLayout);
+    });
+
+    it('counts every tab regardless of type, not only web views', () => {
+      when(localMockDockLayout.find(anything(), anything())).thenCall(
+        (callback: (item: unknown) => boolean) => {
+          callback({ id: 'wv1', title: 'WebView 1', tabType: 'webView', data: {} });
+          callback({ id: 'dialog1', title: 'A Dialog', tabType: 'dialog' });
+          callback({ id: 'error1', title: 'An Error Tab', tabType: 'error' });
+          return undefined;
+        },
+      );
+      expect(getOpenTabCount(instance(localMockDockLayout))).toBe(3);
+    });
+
+    it('returns zero when the layout holds no tabs', () => {
+      when(localMockDockLayout.find(anything(), anything())).thenCall(
+        (callback: (item: unknown) => boolean) => {
+          // A box, not a tab — isTab rejects anything without a title
+          callback({ id: 'box1', children: [] });
+          return undefined;
+        },
+      );
+      expect(getOpenTabCount(instance(localMockDockLayout))).toBe(0);
     });
   });
 
