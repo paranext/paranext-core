@@ -395,13 +395,17 @@ async function open(
     // here.
     if (interfaceMode === 'simple' && projectForWebView.projectId) {
       await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
-      // Fire-and-forget: must not block the switch/overlay on a papi.scrollGroups round trip (can
-      // hang up to 30s mid re-arm). Views injected via the default-layout supplement rather than
-      // pinned into simple-layout.data.ts (e.g., Text Collection) update via onDidUpdateScrRef
-      // whenever this resolves.
-      claimScrollGroupSourceProject(papi, projectForWebView.projectId);
       await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
     }
+
+    // Same guard as `updateRelatedFindPanel` below: Column 3 follows the active translation
+    // project, so a read-only resource opened in the editor column must not drag Text Collection
+    // along with it. Fire-and-forget: must not block the switch/overlay on a papi.scrollGroups
+    // round trip (can hang up to 30s mid re-arm). Views injected via the default-layout supplement
+    // rather than pinned into simple-layout.data.ts (e.g., Text Collection) update via
+    // onDidUpdateScrRef whenever this resolves.
+    if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable)
+      claimScrollGroupSourceProject(papi, projectForWebView.projectId);
 
     // Re-check the replace-tab target after openOrUpdateRelatedPanels: concurrent panel
     // operations can remove the target tab between when the dispatch was resolved (above) and
