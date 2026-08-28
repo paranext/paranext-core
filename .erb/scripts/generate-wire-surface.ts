@@ -1,6 +1,7 @@
 /**
- * CLI entry point: walks `src/**` and the bundled `extensions/src/**`, scans every TypeScript file
- * for the wire-visible registration patterns `generate-wire-surface.util.ts` recognises, and writes
+ * CLI entry point: walks `src/**` and the bundled `extensions/src/**` (TypeScript) plus
+ * `c-sharp/**` (C#), scans every file for the wire-visible registration patterns
+ * `generate-wire-surface.util.ts` and `generate-wire-surface.csharp.util.ts` recognise, and writes
  * the result to `lib/papi-dts/wire-surface.json` — the generated-public-surface snapshot alongside
  * `papi.d.ts`. Run via `npm run build:wire-surface`, and as part of `npm run build` so CI's "verify
  * no files changed after build" step catches a stale snapshot.
@@ -17,9 +18,23 @@ import {
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const SCAN_ROOTS = ['src', 'extensions/src'];
 const EXCLUDED_DIR_NAMES = new Set(['node_modules', 'dist', 'temp-build', '__tests__']);
-const OUTPUT_PATH = path.resolve(REPO_ROOT, 'lib/papi-dts/wire-surface.json');
+const CSHARP_SCAN_ROOT = 'c-sharp';
+// Paranext.Analyzers[.Tests] are Roslyn tooling, not part of the wire surface, and its test project
+// specifically embeds C#-look-alike source inside string fixtures that this pattern-based scanner
+// has no business trying to interpret as real declarations.
+const CSHARP_EXCLUDED_DIR_NAMES = new Set([
+  'bin',
+  'obj',
+  'Paranext.Analyzers',
+  'Paranext.Analyzers.Tests',
+]);
 
-function collectSourceFiles(): VirtualFile[] {
+function walkFiles(
+  absoluteRoot: string,
+  relativeRoot: string,
+  excludedDirNames: ReadonlySet<string>,
+  isMatch: (fileName: string) => boolean,
+): VirtualFile[] {
   const results: VirtualFile[] = [];
 
   function walk(absoluteDir: string, relativeDir: string): void {
@@ -30,7 +45,7 @@ function collectSourceFiles(): VirtualFile[] {
       .sort((a, b) => a.name.localeCompare(b.name));
 
     entries.forEach((dirEntry) => {
-      if (EXCLUDED_DIR_NAMES.has(dirEntry.name)) return;
+      if (excludedDirNames.has(dirEntry.name)) return;
 
       const absolutePath = path.join(absoluteDir, dirEntry.name);
       const relativePath = relativeDir ? `${relativeDir}/${dirEntry.name}` : dirEntry.name;
@@ -40,26 +55,55 @@ function collectSourceFiles(): VirtualFile[] {
         return;
       }
       if (!dirEntry.isFile()) return;
-      if (!/\.tsx?$/.test(dirEntry.name)) return;
-      if (/\.test\.tsx?$/.test(dirEntry.name)) return;
+      if (!isMatch(dirEntry.name)) return;
 
       results.push({ path: relativePath, text: fs.readFileSync(absolutePath, 'utf8') });
     });
   }
 
-  SCAN_ROOTS.forEach((root) => walk(path.join(REPO_ROOT, root), root));
-
+  walk(absoluteRoot, relativeRoot);
   return results;
 }
 
+function collectSourceFiles(): VirtualFile[] {
+  return SCAN_ROOTS.flatMap((root) =>
+    walkFiles(
+      path.join(REPO_ROOT, root),
+      root,
+      EXCLUDED_DIR_NAMES,
+      (fileName) => /\.tsx?$/.test(fileName) && !/\.test\.tsx?$/.test(fileName),
+    ),
+  );
+}
+
+function collectCSharpFiles(): VirtualFile[] {
+  return walkFiles(
+    path.join(REPO_ROOT, CSHARP_SCAN_ROOT),
+    CSHARP_SCAN_ROOT,
+    CSHARP_EXCLUDED_DIR_NAMES,
+    (fileName) => fileName.endsWith('.cs'),
+  );
+}
+
+const OUTPUT_PATH = path.resolve(REPO_ROOT, 'lib/papi-dts/wire-surface.json');
+
 const files = collectSourceFiles();
-const document = generateWireSurfaceDocument(files);
+const csharpFiles = collectCSharpFiles();
+const document = generateWireSurfaceDocument(files, csharpFiles);
 const serialized = serializeWireSurfaceDocument(document);
 
 fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
 fs.writeFileSync(OUTPUT_PATH, serialized);
 
+const csharpRegistrationCount = document.registrations.filter(
+  (r) => r.language === 'csharp',
+).length;
+const csharpDynamicCount = document.dynamicRegistrations.filter(
+  (r) => r.language === 'csharp',
+).length;
+
 console.log(
   `Generated wire surface snapshot at ${OUTPUT_PATH}: ${document.registrations.length} declared ` +
-    `registrations, ${document.dynamicRegistrations.length} dynamic (unresolvable-name) registrations.`,
+    `registrations (${csharpRegistrationCount} C#), ${document.dynamicRegistrations.length} dynamic ` +
+    `(unresolvable-name) registrations (${csharpDynamicCount} C#).`,
 );
