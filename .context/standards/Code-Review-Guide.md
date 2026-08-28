@@ -195,4 +195,4 @@ Request code reviews in the `#reviews` channel on the [Platform.Bible Discord se
 | 1.0.0   | 2026-03-04 | Initial version                                                     |
 | 1.1.0   | 2026-06-15 | De-ported the AI-Assisted-Review (porting) section for the general profile |
 | 1.2.0   | 2026-08-13 | Added optional roborev per-commit review section with per-machine setup |
-| 1.3.0   | 2026-08-27 | Pinned roborev's review model to Sonnet per machine; noted that a rebase enqueues no reviews |
+| 1.3.0   | 2026-08-27 | Pinned roborev's review model to Sonnet per machine; noted that a rebase enqueues no reviews; advised against installing the agent hooks |
