@@ -189,21 +189,31 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
 
   describe('chapter \\ca/\\cp attribute runs', () => {
     // A chapter's own `\ca`/`\cp` runs are nested INSIDE the chapter element, so they inherit
-    // `.usfm_c`'s bold and compound against its 150% font-size. Without these three rules the runs
-    // render bold at roughly 200%/225% of body text instead of matching their standalone
-    // `char ca`/`cp` twins, and `\ca` stays on the chapter's line instead of dropping below it.
+    // `.usfm_c`'s bold and compound against its 150% font-size. PT9 nests neither run, so both
+    // render against the base text (24 / 21.28 / 24px against a 16px base) and each occupies its
+    // own line. Without these rules the runs render bold at roughly 200%/225% of body text instead
+    // of matching their standalone `char ca`/`cp` twins, and both sit on the chapter's line.
     it('keeps a nested \\ca run non-bold like its standalone twin', () => {
       expect(css).toMatch(rule(['.formatted-font .usfm_ca'], 'font-weight: normal;'));
     });
 
-    it('uncompounds the nested run sizes against the chapter and drops \\ca to its own line', () => {
-      expect(css).toMatch(rule(['.formatted-font .usfm_c .usfm_ca'], 'display: block;'));
+    it('uncompounds the nested run sizes against the chapter and gives each its own line', () => {
+      expect(css).toMatch(rule(['.formatted-font .usfm_c .usfm_ca.usfm_ca'], 'display: block;'));
       expect(css).toMatch(
-        rule(['.formatted-font .usfm_c .usfm_ca'], 'font-size: calc(133% / 1.5);'),
+        rule(['.formatted-font .usfm_c .usfm_ca.usfm_ca'], 'font-size: calc(133% / 1.5);'),
       );
+      expect(css).toMatch(rule(['.formatted-font .usfm_c .usfm_cp.usfm_cp'], 'display: block;'));
       expect(css).toMatch(
-        rule(['.formatted-font .usfm_c .usfm_cp'], 'font-size: calc(150% / 1.5);'),
+        rule(['.formatted-font .usfm_c .usfm_cp.usfm_cp'], 'font-size: calc(150% / 1.5);'),
       );
+    });
+
+    // The doubling is what keeps the app's generated project stylesheet from re-compounding the
+    // runs: it emits `.editor-input.usfm .usfm_ca` at (0,3,0) and is injected later, so a
+    // single-class rule here would tie and lose.
+    it('out-specifies a generated project stylesheet rule for the same run', () => {
+      expect(declarations).not.toMatch(/\.usfm_c\s+\.usfm_ca\s*\{/);
+      expect(declarations).not.toMatch(/\.usfm_c\s+\.usfm_cp\s*\{/);
     });
   });
 
@@ -240,7 +250,9 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     // real <th> for th* markers, which PT9's td-only rule predates.
     it('boxes header cells alongside body cells', () => {
       expect(css).toMatch(rule(['.usfm table'], 'border-collapse: collapse;'));
-      expect(css).toMatch(rule(['.usfm td', '.usfm th'], 'border: 1px solid var(--foreground, #000000);'));
+      expect(css).toMatch(
+        rule(['.usfm td', '.usfm th'], 'border: 1px solid var(--foreground, #000000);'),
+      );
       expect(css).toMatch(rule(['.usfm td', '.usfm th'], 'padding-right: 0.28em;'));
     });
   });

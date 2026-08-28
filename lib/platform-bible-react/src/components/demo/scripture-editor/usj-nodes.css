@@ -103,28 +103,43 @@
   margin-top: 8pt;
 }
 
-/* The chapter's OWN `\ca`/`\cp` attribute runs, nested inside the chapter element. Font-size
-   percentages resolve against the PARENT's computed size, so the runs' 133%/150% would compound
-   with `.usfm_c`'s 150% (≈200%/225% of body text) and dwarf their standalone twins; dividing by
-   the same 1.5 lands each run at exactly the size its standalone form renders at (133%/150% of
-   body). If `.usfm_c`'s font-size changes, change the divisor with it. Glyph sizing needs no
-   `usfm_va`-style reset here: `.opening`/`.closing` render at 0.7em of the span in BOTH states,
-   so leaving them alone is what keeps the two states identical.
+/* The chapter's OWN `\ca`/`\cp` attribute runs, nested inside the chapter element.
 
-   `display: block` puts the `\ca` run on the line AFTER `\c N` — matching PT9's Standard view,
-   which renders the `\ca` span outside the chapter's block div, and matching the standalone
-   `char ca`, which sits at root between two blocks and so occupies its own line already. Purely
-   presentational: the run's bytes, document positions, and caret order are untouched (display
-   bytes are excluded from positions by node state, not by layout). `\cp` deliberately stays
-   inline on the chapter's line (moving it to its own line is tracked separately); when both runs
-   display, the block `\ca` run pushes the `\cp` run onto the following line as a layout
-   consequence — which is PT9's own three-line layout for that shape. */
-.formatted-font .usfm_c .usfm_ca {
+   PT9's Standard view emits both runs as SIBLINGS after the chapter's block, never inside it
+   (`ParatextInternalShared/ScriptureViews/Standard.xslt`, the `chapter` template: a `<div
+   class="usfm_c">`, then `<span class="usfm_ca">` and `<div class="usfm_cp">`), so their
+   stylesheet sizes resolve against the body text and every marker ends up sized against the BASE
+   — `\c` 150%, `\ca` 133%, `\cp` 150% of it, with the `.marker` glyphs at 0.7em of whichever run
+   they sit in. Measured live in PT9 against a 16px base: 24 / 21.28 / 24px of text and
+   16.8 / 14.896 / 16.8px of glyph.
+
+   Here the runs are the chapter node's own attribute display, so they are CHILDREN of the chapter
+   element and their percentages resolve against IT — 133%/150% would compound with `.usfm_c`'s
+   150% to ≈200%/225% of body and dwarf their standalone twins. Dividing by that same 1.5 is what
+   reproduces PT9's base-relative result: each run lands at exactly the size its standalone form
+   renders at. If `.usfm_c`'s font-size changes, change the divisor with it. Glyph sizing needs no
+   `usfm_va`-style reset: `.opening`/`.closing` render at 0.7em of the span in BOTH states, which
+   is both what keeps the two states identical and what PT9's `.marker` does.
+
+   `display: block` gives each run the line PT9's structure gives it for free — the `\ca` span
+   follows a closed block, and `\cp` is a block itself — so a chapter carrying only a published
+   number puts it on its own line rather than gluing it to the chapter number. Purely
+   presentational: the runs' bytes, document positions, and caret order are untouched (display
+   bytes are excluded from positions by node state, not by layout).
+
+   The class is DOUBLED for specificity (0,4,0): in the app the generated project stylesheet emits
+   `.editor-input.usfm .usfm_ca` at (0,3,0), injected later — a tie the generator resolves in the
+   project's favor by design ("project styles win where defined"), which is right for the
+   STANDALONE span but would re-apply the stylesheet's relative size inside the chapter and
+   re-compound. This demo injects no generated sheet, so the doubling is inert here; it is carried
+   anyway so the demo's Standard view stays byte-comparable with the app's. */
+.formatted-font .usfm_c .usfm_ca.usfm_ca {
   display: block;
   font-size: calc(133% / 1.5);
 }
 
-.formatted-font .usfm_c .usfm_cp {
+.formatted-font .usfm_c .usfm_cp.usfm_cp {
+  display: block;
   font-size: calc(150% / 1.5);
 }
 
