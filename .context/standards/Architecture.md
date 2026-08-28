@@ -40,8 +40,10 @@ One renderer process per window, not one for the application: a window is a full
 its own dock layout and its own window-scoped services, and main is the only process every renderer
 connects to directly. Services that must coordinate across every open window therefore live in
 main, which outlives any individual window. Other whole-application services — settings, menus,
-themes, extension lifecycle — live in the extension host, which is likewise a single process shared
-by every window (see the service tables below).
+theme definitions, extension lifecycle — live in the extension host, which is likewise a single
+process shared by every window (see the service tables below). Which process hosts a given service
+is worth reading out of the tables rather than inferred from what it is about: the theme
+*definitions* are extension-host data, while the theme *service* is hosted elsewhere.
 
 ### Communication Patterns
 
