@@ -1110,8 +1110,7 @@ async function main() {
       // of the session. On confirm the quit latch is already set by the time this resolves, which
       // is what makes every other window's handler record its layout as staying for next session.
       // Secondary windows and a primary on its own skip the question and close as they always did.
-      // TODO(PT-4286): a live switch to Simple mode must also close the secondary windows; that
-      // half waits on #2425.
+      // TODO(PT-4286): a live switch to Simple mode must also close the secondary windows.
       isAskingAboutClose = true;
       let decision;
       try {
@@ -1651,7 +1650,10 @@ async function main() {
       message: strings['%closeApp_confirm_title%'],
       detail: strings['%closeApp_confirm_message%'],
       buttons: [strings['%closeApp_confirm_closeAll%'], strings['%closeApp_confirm_cancel%']],
-      defaultId: closeAllIndex,
+      // The safe choice is what Enter takes: this question exists to interrupt a click whose reach
+      // is wider than expected, so the wide-reaching button must not also be the one a reflex press
+      // lands on. Button order is set by `buttons` above, not by this.
+      defaultId: cancelIndex,
       // Esc and the window manager's dismiss both land here, so neither can close every window
       cancelId: cancelIndex,
       noLink: true,
