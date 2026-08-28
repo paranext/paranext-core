@@ -22,12 +22,16 @@ import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-e
 interface FootnoteCallerDropdownProps {
   /** The caller type value to pass to the dropdown */
   callerType: FootnoteCallerType;
-  /** Function to update the caller type */
-  updateCallerType: (newCallerType: FootnoteCallerType) => void;
   /** The custom caller to pass to the custom caller input field */
   customCaller: string;
-  /** FUnction to update the custom caller */
-  updateCustomCaller: (newCustomCaller: string) => void;
+  /**
+   * Applies the caller the user settled on. Both halves travel together because they are ONE
+   * choice, and the applied caller is a function of both: a type of `custom` means nothing without
+   * its character. Split into a call per half, each would have to read the other from state its
+   * sibling had not updated yet, and a visit that changes both — choosing Custom and typing its
+   * character — would write neither.
+   */
+  updateCaller: (newCallerType: FootnoteCallerType, newCustomCaller: string) => void;
   /** Localized strings from the parent component */
   localizedStrings: FootnoteEditorLocalizedStrings;
 }
@@ -62,9 +66,8 @@ const renderCallerButtonContent = (
 
 export function FootnoteCallerDropdown({
   callerType,
-  updateCallerType,
   customCaller,
-  updateCustomCaller,
+  updateCaller,
   localizedStrings,
 }: FootnoteCallerDropdownProps) {
   // The ref must start with being null to be passed as an element ref
@@ -79,6 +82,9 @@ export function FootnoteCallerDropdown({
   const [selectedCallerType, setSelectedCallerType] = useState<FootnoteCallerType>(callerType);
   const [newCustomCaller, setNewCustomCaller] = useState<string>(customCaller);
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  // Whether the Custom row was already checked when the pointer went down on it — see its
+  // `onPointerDown` for why the click itself can no longer tell.
+  const wasCustomBeforePressRef = useRef(false);
 
   // The selection is COMMITTED when the menu closes (below), and choosing an item closes the menu
   // — so both happen in one React batch and the close handler's closure still holds the
@@ -114,10 +120,10 @@ export function FootnoteCallerDropdown({
       // This makes it so that if the custom caller is invalid, then reverts back to the previous
       // selected caller
       if (pendingCallerType !== 'custom' || pendingCustomCaller) {
-        // Only what actually changed: each of these is a save, and with the note replaced in the
-        // popover's editor on the way through, firing both would replace it twice per close.
-        if (pendingCallerType !== callerType) updateCallerType(pendingCallerType);
-        if (pendingCustomCaller !== customCaller) updateCustomCaller(pendingCustomCaller);
+        // One call for one choice: this is a save, and the note is replaced in the popover's
+        // editor on the way through, so a close must never produce two of them.
+        if (pendingCallerType !== callerType || pendingCustomCaller !== customCaller)
+          updateCaller(pendingCallerType, pendingCustomCaller);
       } else {
         setSelectedCallerType(callerType);
         setNewCustomCaller(customCaller);
@@ -209,8 +215,28 @@ export function FootnoteCallerDropdown({
           ref={customCallerSelectRef}
           checked={selectedCallerType === 'custom'}
           onCheckedChange={() => setSelectedCallerType('custom')}
+          // Radix selects a menu item on POINTER-UP, so by the time the click arrives this row is
+          // already checked and the click handler can no longer tell an arming click from a
+          // confirming one. The answer is only available before the press is resolved, so it is
+          // taken here.
+          onPointerDown={() => {
+            wasCustomBeforePressRef.current = selectedCallerType === 'custom';
+          }}
           onClick={(event) => {
             event.stopPropagation();
+            // Choosing Custom deliberately keeps the menu OPEN (see `onSelect` below) so a caller
+            // can be typed, which leaves this row's own check as the pointer gesture that confirms
+            // one — the same commit Enter performs, through the same close handler. The check's
+            // indicator is `pointer-events-none`, so a click on it arrives here, on the row.
+            //
+            // Only a row that was ALREADY checked commits: the first click is what selects Custom
+            // and focuses the field, and committing there would apply whatever the field held
+            // before the user typed. A click that landed in the FIELD is the user reaching for the
+            // text, never a confirmation — closing on that would make a caller impossible to type.
+            if (wasCustomBeforePressRef.current && event.target !== customCallerInputRef.current) {
+              handleDropdownOpenChange(false);
+              return;
+            }
             isCustomCallerInputFocused.current = true;
             customCallerInputRef.current?.focus();
           }}

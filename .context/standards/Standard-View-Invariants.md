@@ -109,6 +109,18 @@ Every keyboard handler change here must also update `src/stories/keyboard-shortc
   whole node: a lost caller, or a destroyed note. The editor's `NoteShellCaretGuardPlugin` is what
   keeps the caret out; the `scripture-editors` invariants carry the full rule. A `\cat` category run
   typed just after the caller belongs to the note's CONTENT, which is where the guard puts the caret.
+- **The caller is ONE choice, applied in one call.** The applied caller is a function of both the
+  type and the custom character (a type of `custom` means nothing without one), and the dropdown's
+  React state is set asynchronously — so a per-half call would read its sibling's half from state
+  that had not updated yet, and a visit changing both would write neither. `updateCaller` carries
+  both, which also keeps one choice to one save: the note is replaced in the popover's editor on
+  the way through.
+- **Custom is the one caller row a click does not commit.** It keeps the menu open on purpose
+  (`onSelect` preventDefault) so a character can be typed, which leaves its own check as the
+  confirming gesture — the same commit Enter performs. Two consequences worth knowing before
+  touching it: the check's indicator is `pointer-events-none`, so a click on it arrives on the ROW,
+  and Radix resolves selection on POINTER-UP, so by click time the row already reads as checked —
+  whether the click is arming or confirming can only be answered from before the press.
 - **The footnotes pane renders a note's `category` from the note's own field.** It is the one part
   of a footnote that never appears in `content`: the parser folds the file's `\cat People\cat*` run
   onto the note as an attribute, so anything rendering a footnote from `content` alone drops it

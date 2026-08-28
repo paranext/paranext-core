@@ -88,3 +88,85 @@ describe('footnote caller dropdown', () => {
     expect(editorInput?.textContent).not.toContain('+');
   });
 });
+
+/**
+ * Arm the Custom row, type `caller` into its field, then click the row again — the gesture that
+ * lands on its check, since the check's own indicator is `pointer-events-none` and a click there
+ * reaches the row beneath it.
+ */
+async function commitCustomCallerByClickingTheCheck(caller: string) {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const onChange: MockedFunction<OnChange> = vi.fn();
+  await renderPopoverAndWaitForInit(editableView, { onChange });
+  onChange.mockClear();
+
+  await user.click(screen.getByRole('button', { name: /callerDropdown/i }));
+  const customRow = screen.getByRole('menuitemcheckbox', { name: /custom/i });
+  // The first click only ARMS the row: it selects Custom and focuses the field to type into.
+  await user.click(customRow);
+  // The field holds a default caller and caps at one character, so it has to be emptied before
+  // the new one will land.
+  await user.clear(screen.getByRole('textbox'));
+  await user.type(screen.getByRole('textbox'), caller);
+  // The second click is on the check of an already-selected row — the confirmation.
+  await user.click(customRow);
+  await new Promise((resolve) => {
+    setTimeout(resolve, 50);
+  });
+  return { onChange, user };
+}
+
+describe('footnote caller dropdown, custom caller', () => {
+  it('applies the typed caller and closes when the row check is clicked', async () => {
+    // Unlike the fixed callers, choosing Custom deliberately keeps the menu open so a caller can
+    // be typed, which leaves the row's own check as the confirmation. Enter already commits this
+    // way (see the dropdown's key handling), so the check performing the same commit is the
+    // gesture that was missing rather than a new one.
+    const { onChange } = await commitCustomCallerByClickingTheCheck('%');
+
+    expect(reportedCallers(onChange)).toEqual(['%']);
+    expect(screen.queryByRole('menuitemcheckbox', { name: /custom/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the typed caller in the note the popover is editing', async () => {
+    await commitCustomCallerByClickingTheCheck('%');
+
+    const editorInput = document.querySelector('.editor-input');
+    expect(editorInput?.textContent).toContain('%');
+    expect(editorInput?.textContent).not.toContain('+');
+  });
+
+  it('keeps the menu open while the field is being used', async () => {
+    // Clicking INTO the field is the user reaching for the text, never a confirmation — closing
+    // there would make the caller impossible to type.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    await renderPopoverAndWaitForInit(editableView, {});
+
+    await user.click(screen.getByRole('button', { name: /callerDropdown/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /custom/i }));
+    await user.click(screen.getByRole('textbox'));
+
+    expect(screen.getByRole('menuitemcheckbox', { name: /custom/i })).toBeInTheDocument();
+  });
+
+  it('applies the typed caller on Enter, the keyboard form of the same commit', async () => {
+    // Enter has always been the way to confirm a custom caller, and it runs the same close
+    // handler the check now does — so it carries the same requirement: switching to Custom and
+    // typing its caller in ONE visit must write that caller, not the type it replaced.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onChange: MockedFunction<OnChange> = vi.fn();
+    await renderPopoverAndWaitForInit(editableView, { onChange });
+    onChange.mockClear();
+
+    await user.click(screen.getByRole('button', { name: /callerDropdown/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /custom/i }));
+    await user.clear(screen.getByRole('textbox'));
+    await user.type(screen.getByRole('textbox'), '#');
+    await user.keyboard('{Enter}');
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+
+    expect(reportedCallers(onChange)).toEqual(['#']);
+  });
+});
