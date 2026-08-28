@@ -517,9 +517,159 @@ describe('scanCSharpFiles: header pattern content', () => {
     ].forEach((pattern) => expect(joined).toContain(pattern));
   });
 
-  it('documents the excluded network:registerEvent idiom', () => {
-    const joined = CSHARP_EXCLUDED_PATTERNS.join('\n');
-    expect(joined).toContain('network:registerEvent');
-    expect(joined).toContain('SendReceiveBlockNotifierService');
+  it('documents the network:registerEvent idiom as recognized, not excluded', () => {
+    const recognized = CSHARP_RECOGNIZED_PATTERNS.join('\n');
+    expect(recognized).toContain('network:registerEvent');
+    expect(recognized).toContain('SendRequestAsync');
+    expect(CSHARP_EXCLUDED_PATTERNS.join('\n')).not.toContain('network:registerEvent');
+  });
+});
+
+describe('scanCSharpFiles: networkEvent shape', () => {
+  it('recognizes PapiClient.SendRequestAsync<T>("network:registerEvent", [name, docs]) and resolves a nested Notification.Experimental flag through a same-file field reference', () => {
+    const files: VirtualFile[] = [
+      {
+        path: 'c-sharp/Fixtures/FixtureEventNotifierService.cs',
+        text: `
+          namespace Paranext.DataProvider.Fixtures;
+
+          internal class FixtureEventNotifierService(PapiClient papiClient)
+          {
+              private const string BlockStateChangedEvent = "fixture.onSomethingChanged";
+              private const string RegisterEventMethod = "network:registerEvent";
+
+              private static readonly OpenRpcSingleNotificationDocumentation s_docs =
+                  new()
+                  {
+                      Notification = new()
+                      {
+                          Experimental = true,
+                          Summary = "Fixture event.",
+                      },
+                  };
+
+              public async Task InitializeAsync()
+              {
+                  bool accepted = await PapiClient.SendRequestAsync<bool>(
+                      RegisterEventMethod,
+                      [BlockStateChangedEvent, s_docs]
+                  );
+              }
+          }
+        `,
+      },
+    ];
+    const { registrations } = scanCSharpFiles(files);
+    expect(findRegistration(registrations, 'fixture.onSomethingChanged')).toMatchObject({
+      category: 'networkEvent',
+      registeredVia: 'PapiClient.SendRequestAsync("network:registerEvent")',
+      documented: true,
+      docsStaticallyResolved: true,
+      experimental: true,
+      language: 'csharp',
+    });
+  });
+
+  it('recognizes the non-generic SendRequestAsync overload with an inline literal event name and no documentation', () => {
+    const files: VirtualFile[] = [
+      {
+        path: 'c-sharp/Fixtures/FixtureEventNotifierServiceNoDocs.cs',
+        text: `
+          internal class FixtureEventNotifierServiceNoDocs(PapiClient papiClient)
+          {
+              public async Task InitializeAsync()
+              {
+                  await PapiClient.SendRequestAsync(
+                      "network:registerEvent",
+                      ["fixture.onOtherThingChanged"]
+                  );
+              }
+          }
+        `,
+      },
+    ];
+    const { registrations } = scanCSharpFiles(files);
+    expect(findRegistration(registrations, 'fixture.onOtherThingChanged')).toMatchObject({
+      category: 'networkEvent',
+      documented: false,
+      docsStaticallyResolved: true,
+      experimental: false,
+    });
+  });
+
+  it('does not mistake a SendRequestAsync call addressed to a different method for a network event registration', () => {
+    const files: VirtualFile[] = [
+      {
+        path: 'c-sharp/Fixtures/FixtureUnrelatedSendRequest.cs',
+        text: `
+          internal class FixtureUnrelatedSendRequest(PapiClient papiClient)
+          {
+              private const string ServiceGet = "service:get";
+
+              public Task<string?> GetAsync(string key) =>
+                  papiClient.SendRequestAsync<string?>(ServiceGet, [key]);
+          }
+        `,
+      },
+    ];
+    const { registrations, dynamicRegistrations } = scanCSharpFiles(files);
+    expect(registrations.filter((r) => r.category === 'networkEvent')).toHaveLength(0);
+    expect(dynamicRegistrations.filter((r) => r.category === 'networkEvent')).toHaveLength(0);
+  });
+
+  it('files the event name under dynamicRegistrations when the array literal name does not resolve to a literal', () => {
+    const files: VirtualFile[] = [
+      {
+        path: 'c-sharp/Fixtures/FixtureDynamicEventName.cs',
+        text: `
+          internal class FixtureDynamicEventName(PapiClient papiClient)
+          {
+              public Task InitializeAsync(string suffix) =>
+                  papiClient.SendRequestAsync<bool>(
+                      "network:registerEvent",
+                      [$"fixture.on{suffix}Changed", null]
+                  );
+          }
+        `,
+      },
+    ];
+    const { dynamicRegistrations } = scanCSharpFiles(files);
+    expect(findDynamic(dynamicRegistrations, '$"fixture.on{suffix}Changed"')).toMatchObject({
+      category: 'networkEvent',
+      registeredVia: 'PapiClient.SendRequestAsync("network:registerEvent")',
+    });
+  });
+
+  it("never mistakes SendRequestAsync's own generic and non-generic declarations for calls", () => {
+    const files: VirtualFile[] = [
+      {
+        path: 'c-sharp/PapiClient.cs',
+        text: `
+          namespace Paranext.DataProvider;
+
+          public class PapiClient
+          {
+              public virtual async Task<T?> SendRequestAsync<T>(
+                  string requestType,
+                  IReadOnlyList<object?>? requestContents = null
+              )
+              {
+                  return default;
+              }
+
+              public virtual async Task SendRequestAsync(
+                  string requestType,
+                  IReadOnlyList<object?>? requestContents = null
+              )
+              {
+                  await Task.CompletedTask;
+              }
+          }
+        `,
+      },
+    ];
+    const { registrations, dynamicRegistrations } = scanCSharpFiles(files);
+    expect(registrations).toHaveLength(0);
+    expect(dynamicRegistrations).toHaveLength(0);
   });
 });
