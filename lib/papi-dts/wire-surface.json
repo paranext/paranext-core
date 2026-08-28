@@ -219,6 +219,7 @@
       "registerWebViewProvider(webViewType, provider, attributes?, documentation?), including its deprecated `register` alias -> category \"webViewProvider\"",
       "registerProjectDataProviderEngineFactory(pdpFactoryId, projectInterfaces, factory, attributes?, documentation?) -> category \"pdpFactory\"",
       "createNetworkEventEmitterAsync(eventType, documentation?) and createBufferedNetworkEventEmitter(eventType, documentation?, options?) -> category \"networkEvent\"",
+      "createCoreMultiSourceEventEmitter(eventType, documentation?) -> category \"networkEvent\"; a core-internal pre-approved multi-source emitter (src/shared/services/network.service.ts) that is not exposed on papiNetworkService, so it is matched by its own call name rather than folded into the createNetworkEventEmitterAsync family above",
       "C# — a direct NetworkObject subclass calling the inherited RegisterNetworkObjectAsync(name, functions, details, documentation?) -> category \"networkObject\" (e.g. ChecklistNetworkObject, ManageBooksService, EnhancedResourceFactory)",
       "C# — ProjectDataProviderFactory.InitializeAsync's own RegisterNetworkObjectAsync call, whose name is always $\"platform.{pdpfName}-pdpf\" built from a constructor parameter rather than a literal at the call site -> category \"pdpFactory\", always recorded under dynamicRegistrations",
       "C# — a class extending DataProvider directly (either the primary-constructor form class X(...) : DataProvider(name, ...) or the traditional class X : DataProvider { X(...) : base(name, ...) {} } form); DataProvider.RegisterDataProviderAsync's own RegisterNetworkObjectAsync(DataProviderName, ...) call site (DataProviderName is a computed property, never a literal, so this is always dynamic); and a DataProvider.GetNetworkObjectDocumentation() override, recorded under the overriding class's name since the override supplies documentation independently of whatever name the provider is ultimately registered under (e.g. a per-project PDP's runtime-generated id) -> category \"dataProvider\"",
@@ -1383,6 +1384,26 @@
       "docsStaticallyResolved": true,
       "documented": true,
       "experimental": false,
+      "file": "src/shared/services/network-object.service.ts",
+      "language": "typescript",
+      "name": "object:onDidCreateNetworkObject",
+      "registeredVia": "createCoreMultiSourceEventEmitter"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/shared/services/network-object.service.ts",
+      "language": "typescript",
+      "name": "object:onDidDisposeNetworkObject",
+      "registeredVia": "createCoreMultiSourceEventEmitter"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
       "file": "src/extension-host/services/extension.service.ts",
       "language": "typescript",
       "name": "platform.onDidReloadExtensions",
@@ -1467,6 +1488,16 @@
       "language": "typescript",
       "name": "scrollGroup:onDidUpdateScrRef",
       "registeredVia": "createBufferedNetworkEventEmitter"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/shared/services/shared-store.service.ts",
+      "language": "typescript",
+      "name": "shared-store:change",
+      "registeredVia": "createCoreMultiSourceEventEmitter"
     },
     {
       "category": "networkEvent",
