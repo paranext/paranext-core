@@ -29,7 +29,8 @@ import { useCallback } from 'react';
  *
  *   - `setting`: The current state of the setting, either `defaultState`, the stored value, or a
  *       `PlatformError` if loading the value fails. Use `isPlatformError()` to check.
- *   - `setSetting`: Function that updates the setting to a new value
+ *   - `setSetting`: Function that updates the setting to a new value. Rejects while the underlying
+ *       subscription is throttled — see {@link useData} for that state.
  *   - `resetSetting`: Function that removes the setting and resets the value to `defaultState`
  *
  * @throws When subscription callback function is called with an update that has an unexpected

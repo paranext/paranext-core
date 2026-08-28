@@ -107,6 +107,14 @@ type UseDataHook = {
  *   data.
  * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
  *   provider
+ *
+ * _＠throttling_ This hook stops a runaway loop that would otherwise lock up the web view. If one
+ * subscription receives — or resubscribes — about 100 times within a second, the hook drops its
+ * subscription for a few seconds, then re-arms and resubscribes on its own. While throttled it
+ * reports `data` as a {@link PlatformError} whose `code` is `RESOURCE_EXHAUSTED`, `setData` as
+ * `undefined`, and `isLoading` as `true`, and it logs a warning naming the data type. Handle it as
+ * you would any other unresolved state; the usual cause is a `selector` or `subscriberOptions` that
+ * is rebuilt every render instead of being memoized.
  */
 // Assert the more general and more specific types.
 /* eslint-disable no-type-assertion/no-type-assertion */
