@@ -257,6 +257,12 @@ async function resolveInternal(generation: number): Promise<void> {
     // agreeing with the just-registered suppression decided here. A later forced re-check (opening
     // the profile popover) can still re-probe past it.
     // See `adr-registration-validity-once-per-session`.
+    //
+    // Deliberately ahead of the supersession check below, unlike every other side effect here. That
+    // guard exists to keep a superseded run from making *durable* writes; this is in-memory session
+    // state. The flag was already consumed above, so a run that bails out after consuming it and
+    // before publishing would spend the suppression without anyone acting on it, and the dot would
+    // then contradict a registration the user really did just complete.
     if (effectiveValidity !== registrationValidity) publishRegistrationValidity(effectiveValidity);
     const decision = decideFirstRun({
       firstRunComplete: false,

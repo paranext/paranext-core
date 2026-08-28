@@ -9,11 +9,12 @@
  * spy on export ... Module namespace is not configurable in ESM". Stories drive this mock through
  * `setCommandServiceMock` in `command-service-mock-channel.ts` instead.
  *
- * The real service opens a PAPI WebSocket that has no backend in Storybook, so no story gets a
- * useful answer from it either way. Stories that do not opt in get `undefined` — a benign
- * non-answer, so a caller that ignores the result still renders. That is deliberately NOT the same
- * as the real service's failure, so a story that depends on a particular answer — including a
- * rejection — must set a responder rather than rely on this default.
+ * This replacement is global: it stands in for the command service in EVERY story, not only the
+ * ones that opt in. Its default must therefore match the un-mocked path, which rejects — Storybook
+ * has no PAPI backend, so `papi-stubs/rpc-handler.factory.ts` answers every request with a JSON-RPC
+ * error and `networkService` throws it. Keep the default rejecting: resolving `undefined` instead
+ * would push every story that catches, or that renders an error or empty state, onto the success
+ * path without touching the story.
  *
  * Webpack-only: this file is outside `tsconfig.json`'s `include`, so it is never type-checked. Keep
  * it dependency-free apart from the channel.
@@ -23,7 +24,7 @@ import { getCommandServiceMock } from './command-service-mock-channel';
 /** @inheritdoc */
 export const sendCommand = async (commandName: string, ...args: unknown[]): Promise<unknown> => {
   const responder = getCommandServiceMock();
-  if (!responder) return undefined;
+  if (!responder) throw new Error(`Storybook: no PAPI backend to handle "command:${commandName}"`);
   return responder(commandName, ...args);
 };
 

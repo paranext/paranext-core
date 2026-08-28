@@ -194,12 +194,13 @@ const config: StorybookConfig = {
         /^@shared\/services\/rpc-handler\.factory$/,
         join(__dirname, 'papi-stubs/rpc-handler.factory.ts'),
       ),
-      // `spyOn(commandService, 'sendCommand')` cannot work in Storybook 9 — the module namespace is
-      // a non-configurable ESM namespace, so spying throws "Module namespace is not configurable in
-      // ESM". Stories that need to answer a PAPI command set a responder via
+      // `spyOn(commandService, 'sendCommand')` cannot work in Storybook 9 — webpack builds the
+      // module namespace with non-configurable getters and tags it `Symbol.toStringTag = 'Module'`,
+      // which is exactly what makes spying throw "Module namespace is not configurable in ESM".
+      // Stories that need to answer a PAPI command set a responder via
       // `mocks/command-service-mock-channel.ts` instead, which this replacement reads at call time.
-      // Stories that don't opt in get `undefined`, the same non-answer the real service gives with
-      // no backend.
+      // The replacement is global, so its default must match the unanswerable-request path every
+      // other story already takes: it rejects.
       new NormalModuleReplacementPlugin(
         /^@shared\/services\/command\.service$/,
         join(__dirname, 'mocks/command-service.ts'),
