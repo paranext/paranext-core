@@ -33,6 +33,14 @@
  * open at end of file is the real defect, so its opening line — not an aggregate count — is what
  * gets reported.
  *
+ * Known limits, so nobody reads this as a CommonMark implementation. It walks fences at the top
+ * level only: one inside a blockquote or indented under a list item is invisible to it, and an
+ * unclosed fence there passes. CommonMark closes such a fence at the end of its containing block,
+ * so the file still renders — the gap is in this checker's reach, not in the document. It also
+ * treats a backtick fence whose info string contains a backtick as a fence, which CommonMark does
+ * not. Both are places to widen the walk if damage ever turns up there; neither is a reason to
+ * distrust what it does report.
+ *
  * Usage:
  *   node .claude/scripts/verify-md-fences.mjs [file...]   # check the given files
  *   node .claude/scripts/verify-md-fences.mjs             # check every tracked *.md file
@@ -66,16 +74,20 @@ function trackedMarkdownFiles() {
     .filter((f) => !/(^|\/)(node_modules|vendor)\//.test(f));
 }
 
-function findDamagedFenceLines(lines) {
-  const damaged = [];
-  lines.forEach((line, index) => {
-    if (DAMAGED_FENCE_LINE.test(line)) damaged.push(index + 1);
-  });
-  return damaged;
-}
-
-/** Returns the 1-based line number of a fence still open at end of file, or null if all closed. */
-function findUnclosedFenceLine(lines) {
+/**
+ * Walk the file once, tracking fence state, and report both problems from that one pass.
+ *
+ * The two checks share a walk rather than running independently because the damage signature is
+ * only damage OUTSIDE a fence. Inside one, a two-backtick line is content — and the content most
+ * likely to contain it is a document explaining this very failure mode, which is exactly what a
+ * repo that owns this checker will end up writing. A scan with no fence state cannot tell those
+ * apart, and would block the documentation about the thing it detects.
+ *
+ * @returns `{ damagedLines, unclosedAt }` — damaged line numbers found outside any fence, and the
+ *   1-based line where a fence that never closes was opened (`null` when every fence closed).
+ */
+function findFenceProblems(lines) {
+  const damagedLines = [];
   let opener = null;
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
@@ -87,12 +99,16 @@ function findUnclosedFenceLine(lines) {
       // Any other line while a fence is open is content, however fence-like it looks — ignore it.
       continue;
     }
+    if (DAMAGED_FENCE_LINE.test(line)) {
+      damagedLines.push(index + 1);
+      continue;
+    }
     const open = FENCE_OPEN.exec(line);
     if (open) {
       opener = { char: open[1][0], length: open[1].length, lineNumber: index + 1 };
     }
   }
-  return opener ? opener.lineNumber : null;
+  return { damagedLines, unclosedAt: opener ? opener.lineNumber : null };
 }
 
 function checkFile(file) {
@@ -103,8 +119,7 @@ function checkFile(file) {
     return { file, readError: err.message };
   }
   const lines = text.split(/\r?\n/);
-  const damagedLines = findDamagedFenceLines(lines);
-  const unclosedAt = findUnclosedFenceLine(lines);
+  const { damagedLines, unclosedAt } = findFenceProblems(lines);
   if (damagedLines.length === 0 && unclosedAt === null) return null;
   return { file, damagedLines, unclosedAt };
 }

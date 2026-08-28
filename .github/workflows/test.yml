@@ -221,7 +221,12 @@ jobs:
       # Deliberately unguarded, unlike the formatting and linting steps above: `verify:testing-guide`
       # drives tsc, eslint and vitest over an example whose breakages have been platform-specific, so
       # running it only on Linux is how one went unnoticed for weeks.
+      # `shell: bash` so the two commands below behave the same on all three runners. The Windows
+      # default shell reports the LAST command's exit code, which would let a failing
+      # `verify:testing-guide` pass unnoticed whenever the fence check after it succeeded — the
+      # exact silence this step exists to end.
       - name: verify Testing-Guide example and Markdown code fences
+        shell: bash
         run: |
           npm run verify:testing-guide
           npm run verify:md-fences
