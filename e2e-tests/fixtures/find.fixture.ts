@@ -160,7 +160,6 @@ export const test = appTest.extend<
         // UIs — Simple hides the Find/Replace toggle and the entire Replace surface — so a pin that
         // silently failed would otherwise surface as a selector timeout deep inside a test.
         await assertInterfaceMode(
-          page,
           interfaceMode,
           `This fixture pins '${interfaceMode}' before launching its own app, so the pin did not ` +
             `take: check preConfigureSettings ran before launchElectronApp.`,

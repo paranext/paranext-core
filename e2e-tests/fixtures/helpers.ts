@@ -52,6 +52,12 @@ export const PROCESS_READY_TIMEOUT = 120_000;
 const GET_METHODS = 'rpc.discover';
 
 /**
+ * The settings service is exposed as a data-provider network object — data providers append a
+ * `-data` suffix to the provider name, so the JSON-RPC method is `object:<providerName>-data.get`.
+ */
+const SETTINGS_GET_METHOD = 'object:platform.settingsServiceDataProvider-data.get';
+
+/**
  * Subset of the OpenRPC `rpc.discover` result shape used by E2E helpers (see
  * `src/shared/models/openrpc.model` for the full type).
  */
@@ -241,40 +247,59 @@ export type RequiredInterfaceMode = 'simple' | 'power';
  * does not fail at the assertion it cares about. It fails much later, waiting for an element the
  * mode never renders, and reads as a timeout rather than as a setup problem.
  *
- * Read from `document.body[data-interface-mode]`, which the app sets from the live setting
- * (`app.component.tsx`) rather than from the settings file, so it reflects a mode changed at
- * runtime too.
+ * Reads `platform.interfaceMode` from the settings service directly over PAPI, not from
+ * `document.body[data-interface-mode]` (the renderer's own reflection of the same setting). That
+ * attribute has a seeded phase: `useInterfaceMode()` renders `readCachedInterfaceMode() ??
+ * 'simple'` synchronously, before its own async settings round-trip resolves — so polling it for
+ * `'simple'` can pass on the seed alone, before the pin could possibly have been read yet, and
+ * never actually exercises the check. The `'power'` branch never had this problem (the seed only
+ * ever reads `'simple'`), which is why this went unnoticed. The settings service has no equivalent
+ * seeded phase to race: its data provider is registered (and thus reachable at all) only once its
+ * own settings-file read has already resolved (`settings.service-host.ts`'s `initialize()`
+ * constructs the engine from an already-awaited file read), so `get()` is always either unreachable
+ * — handled by the same registration poll every other PAPI helper here uses — or already
+ * authoritative. It is also still live, not a launch-time snapshot: `set()` updates the same
+ * in-memory value `get()` reads, so a mode changed at runtime is reflected too, same as the
+ * attribute was.
+ *
+ * Takes no `page`: `platform.interfaceMode` is one app-wide setting, not per-window, so which
+ * window's PAPI connection asks is irrelevant — every one of them would get the same answer.
  */
 export async function assertInterfaceMode(
-  page: Page,
   required: RequiredInterfaceMode,
   howToFix: string,
   timeoutMs = 30_000,
 ): Promise<void> {
+  const start = Date.now();
   let actual: string | undefined;
   try {
-    // Polled, not read once: the attribute is written by a React effect, so it is briefly absent
-    // after the page exists. A single read would report 'unknown' for a correctly configured app
-    // purely on timing.
+    const remainingForRegistration = Math.max(1000, timeoutMs - (Date.now() - start));
+    await waitForPapiMethodRegistered(SETTINGS_GET_METHOD, undefined, remainingForRegistration);
+    // Polled, not read once: `set()` calls (including our own pin) are async too, so a single read
+    // right as the provider registers can still race a write that landed a moment later.
     await expect
       .poll(
         async () => {
-          actual =
-            (await page.evaluate(() => document.body.getAttribute('data-interface-mode'))) ??
-            undefined;
+          const remainingForGet = Math.max(1000, timeoutMs - (Date.now() - start));
+          actual = await sendPapiRequestOnce<string | undefined>(
+            SETTINGS_GET_METHOD,
+            ['platform.interfaceMode'],
+            undefined,
+            remainingForGet,
+          );
           return actual;
         },
-        { timeout: timeoutMs },
+        { timeout: Math.max(1000, timeoutMs - (Date.now() - start)) },
       )
       .toBe(required);
   } catch (err) {
     // Rethrown rather than left as the poll's own assertion error, which reports the mismatch but
     // none of the context that makes it actionable. `cause` keeps whatever the poll actually threw
-    // (e.g. the page's execution context being destroyed) attached, rather than replacing it wholesale
-    // with a mismatch message that may not be what happened.
+    // (e.g. a PAPI request timeout) attached, rather than replacing it wholesale with a mismatch
+    // message that may not be what happened.
     throw new Error(
       `e2e precondition: this spec requires '${required}' interface mode, but the running app is in ` +
-        `'${actual ?? 'unknown (the attribute is missing — the renderer may not have finished mounting)'}'. ` +
+        `'${actual ?? 'unknown (the settings service never became reachable — the renderer may not have finished mounting)'}'. ` +
         `${howToFix} If you did not choose this mode, a killed e2e run probably left it behind: ` +
         `preConfigureSettings merges into the shared settings file and only restores in teardown.`,
       { cause: err },

@@ -116,7 +116,6 @@ export const test = base.extend<IsolatedFixtures>({
     // it was not written for. Only checked when the suite declared one.
     if (requiredInterfaceMode)
       await assertInterfaceMode(
-        page,
         requiredInterfaceMode,
         `This suite launched its own app, so the mode it asked for did not take: check that its ` +
           `preConfigureSettings pin sets 'platform.interfaceMode' to '${requiredInterfaceMode}' ` +

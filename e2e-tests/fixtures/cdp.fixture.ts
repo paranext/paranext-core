@@ -254,7 +254,6 @@ export const test = base.extend<CdpFixtures>({
     // renders. Only checked when the spec declared one — plenty of specs work in either mode.
     if (requiredInterfaceMode)
       await assertInterfaceMode(
-        page,
         requiredInterfaceMode,
         `Attach mode cannot set the mode — it inherits whatever app you started. Restart the app ` +
           `in ${requiredInterfaceMode} mode, e.g. by setting 'platform.interfaceMode': ` +
