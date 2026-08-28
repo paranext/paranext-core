@@ -631,25 +631,39 @@ describe('web view service router', () => {
       expect(focused.openWebView).toHaveBeenCalled();
     });
 
-    test('refuses when power mode has no window creator wired up', async () => {
+    test('refuses once the bound is exceeded when power mode has no window creator wired up', async () => {
       // `windowCreator` is module-level state that outlives any one test — every other test in
       // this describe block sets it explicitly before opening — so seeing the state a router has
       // before anything ever wires a creator needs a module instance of its own, not reliance on
       // running before whichever test would otherwise set it first.
-      vi.resetModules();
-      const freshRouterModule = await import('@main/services/web-view.service-router');
-      const focused = windowShard([]);
-      withWindows({ 1: focused });
-      const router = await getRegisteredRouter<WebViewServiceType>(
-        mocks.networkObjectSet,
-        freshRouterModule.startWebViewServiceRouter,
-      );
+      //
+      // Fake timers are installed before the fresh import: the wiring latch's own bounded wait is
+      // scheduled the moment the module loads, so it has to be constructed under the fake clock for
+      // `runAllTimersAsync` below to reach it rather than waiting out the real 30 seconds.
+      vi.useFakeTimers();
+      try {
+        vi.resetModules();
+        const freshRouterModule = await import('@main/services/web-view.service-router');
+        const focused = windowShard([]);
+        withWindows({ 1: focused });
+        const router = await getRegisteredRouter<WebViewServiceType>(
+          mocks.networkObjectSet,
+          freshRouterModule.startWebViewServiceRouter,
+        );
 
-      await expect(router.openWebView('someType', { type: 'window' })).rejects.toThrow(
-        'not wired up',
-      );
+        const opening = router.openWebView('someType', { type: 'window' });
+        // Take hold of the rejection before advancing the clock — same reasoning as
+        // target-shard-resolver.util.test.ts: an unattached rejection during the timer run is
+        // reported as an unhandled rejection against the whole file.
+        opening.catch(() => undefined);
 
-      expect(focused.openWebView).not.toHaveBeenCalled();
+        await vi.runAllTimersAsync();
+
+        await expect(opening).rejects.toThrow('window creator was never wired up');
+        expect(focused.openWebView).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     test('closes the created window when its shard never appears', async () => {
