@@ -1,162 +1,216 @@
 {
   "dynamicRegistrations": [
     {
+      "category": "dataProvider",
+      "expression": "DataProviderName",
+      "file": "c-sharp/NetworkObjects/DataProvider.cs",
+      "language": "csharp",
+      "registeredVia": "DataProvider.RegisterDataProviderAsync"
+    },
+    {
+      "category": "dataProvider",
+      "expression": "name + \"-pdp\"",
+      "file": "c-sharp/Projects/ProjectDataProvider.cs",
+      "language": "csharp",
+      "registeredVia": "DataProvider(name, papiClient) constructor"
+    },
+    {
+      "category": "pdpFactory",
+      "expression": "$\"platform.{_pdpfName}-pdpf\"",
+      "file": "c-sharp/Projects/ProjectDataProviderFactory.cs",
+      "language": "csharp",
+      "registeredVia": "ProjectDataProviderFactory.InitializeAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "expression": "GetValidatorKey(key)",
+      "file": "c-sharp/Services/ProjectSettingsService.cs",
+      "language": "csharp",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
       "category": "command",
       "expression": "commandName as CommandNames",
       "file": "src/extension-host/extension-host.ts",
+      "language": "typescript",
       "registeredVia": "registerCommand"
     },
     {
       "category": "command",
       "expression": "commandName as CommandNames",
       "file": "src/main/main.ts",
+      "language": "typescript",
       "registeredVia": "registerCommand"
     },
     {
       "category": "command",
       "expression": "serializeRequestType(CATEGORY_COMMAND, commandName)",
       "file": "src/main/services/scroll-group-navigation.commands.ts",
+      "language": "typescript",
       "registeredVia": "registerRequestHandler+serializeRequestType(command)"
     },
     {
       "category": "command",
       "expression": "serializeRequestType(CATEGORY_COMMAND, commandName)",
       "file": "src/shared/services/command.service.ts",
+      "language": "typescript",
       "registeredVia": "registerRequestHandler+serializeRequestType(command)"
     },
     {
       "category": "dataProviderEngine",
       "expression": "`${windowServiceProviderName}-${windowId}` as typeof windowServiceProviderName",
       "file": "src/renderer/services/window.service-shard.ts",
+      "language": "typescript",
       "registeredVia": "registerEngine"
     },
     {
       "category": "dataProviderEngine",
       "expression": "providerName as any",
       "file": "src/shared/services/data-provider.service.ts",
+      "language": "typescript",
       "registeredVia": "registerEngine"
     },
     {
       "category": "dataProviderEngine",
       "expression": "pdpId",
       "file": "src/shared/services/project-data-provider.service.ts",
+      "language": "typescript",
       "registeredVia": "registerEngineByType"
     },
     {
       "category": "directRequestHandler",
       "expression": "getWebViewMessageRequestType(id)",
       "file": "src/renderer/components/web-view.component.tsx",
+      "language": "typescript",
       "registeredVia": "registerRequestHandler"
     },
     {
       "category": "directRequestHandler",
       "expression": "requestType",
       "file": "src/shared/services/extension-asset.service.ts",
+      "language": "typescript",
       "registeredVia": "registerRequestHandler"
     },
     {
       "category": "directRequestHandler",
       "expression": "getNetworkObjectRequestType(id)",
       "file": "src/shared/services/network-object.service.ts",
+      "language": "typescript",
       "registeredVia": "registerRequestHandler"
     },
     {
       "category": "directRequestHandler",
       "expression": "requestType",
       "file": "src/shared/services/network-object.service.ts",
+      "language": "typescript",
       "registeredVia": "registerRequestHandler"
     },
     {
       "category": "directRequestHandler",
       "expression": "serializeRequestType(CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR, key)",
       "file": "src/shared/services/project-settings.service-model.ts",
+      "language": "typescript",
       "registeredVia": "registerRequestHandler"
     },
     {
       "category": "directRequestHandler",
       "expression": "serializeRequestType(CATEGORY_EXTENSION_SETTING_VALIDATOR, key)",
       "file": "src/shared/services/settings.service-model.ts",
+      "language": "typescript",
       "registeredVia": "registerRequestHandler"
     },
     {
       "category": "networkEvent",
       "expression": "dynamicEventName as NetworkEventTypes",
       "file": "src/shared/services/data-provider.service.ts",
+      "language": "typescript",
       "registeredVia": "createNetworkEventEmitterAsync"
     },
     {
       "category": "networkEvent",
       "expression": "eventType",
       "file": "src/shared/services/network.service.ts",
+      "language": "typescript",
       "registeredVia": "createNetworkEventEmitterAsync"
     },
     {
       "category": "networkObject",
       "expression": "`${BOOK_CHAPTER_CONTROL_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${globalThis.windowId}`",
       "file": "src/renderer/services/book-chapter-control.service-shard.ts",
+      "language": "typescript",
       "registeredVia": "networkObjectService.set"
     },
     {
       "category": "networkObject",
       "expression": "`${DIALOG_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${globalThis.windowId}`",
       "file": "src/renderer/services/dialog.service-shard.ts",
+      "language": "typescript",
       "registeredVia": "networkObjectService.set"
     },
     {
       "category": "networkObject",
       "expression": "`${NotificationServiceNetworkObjectName}-${globalThis.windowId}`",
       "file": "src/renderer/services/notification.service-shard.ts",
+      "language": "typescript",
       "registeredVia": "networkObjectService.set"
     },
     {
       "category": "networkObject",
       "expression": "`${USERSNAP_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${globalThis.windowId}`",
       "file": "src/renderer/services/usersnap.service-shard.ts",
+      "language": "typescript",
       "registeredVia": "networkObjectService.set"
     },
     {
       "category": "networkObject",
       "expression": "`${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`",
       "file": "src/renderer/services/web-view.service-shard.ts",
+      "language": "typescript",
       "registeredVia": "networkObjectService.set"
     },
     {
       "category": "networkObject",
       "expression": "dataProviderObjectId",
       "file": "src/shared/services/data-provider.service.ts",
+      "language": "typescript",
       "registeredVia": "networkObjectService.set"
     },
     {
       "category": "networkObject",
       "expression": "factoryNetworkObjectId",
       "file": "src/shared/services/project-data-provider.service.ts",
+      "language": "typescript",
       "registeredVia": "networkObjectService.set"
     },
     {
       "category": "networkObject",
       "expression": "webViewControllerObjectId",
       "file": "src/shared/services/web-view-provider.service.ts",
+      "language": "typescript",
       "registeredVia": "networkObjectService.set"
     },
     {
       "category": "networkObject",
       "expression": "webViewProviderObjectId",
       "file": "src/shared/services/web-view-provider.service.ts",
+      "language": "typescript",
       "registeredVia": "networkObjectService.set"
     },
     {
       "category": "webViewProvider",
       "expression": "helloRock3ProjectWebViewProvider.webViewType",
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "registeredVia": "registerWebViewProvider"
     }
   ],
   "header": {
     "excludedPatterns": [
-      "createNetworkEventEmitter(eventType) — the deprecated synchronous event emitter. It does not participate in central registration and deliberately does not appear in the generated OpenRPC document, so it is excluded here for the same reason."
+      "createNetworkEventEmitter(eventType) — the deprecated synchronous event emitter. It does not participate in central registration and deliberately does not appear in the generated OpenRPC document, so it is excluded here for the same reason.",
+      "C# — PapiClient.SendRequestAsync(\"network:registerEvent\", [eventType, documentation]): a network event registered directly via the generic request method (used once today, by SendReceiveBlockNotifierService) rather than through a dedicated wrapper like RegisterRequestHandlerAsync. The event type and its documentation are packed inside a request-contents array-literal argument rather than passed as separate positional parameters, which this scanner does not unpack. Excluded rather than force-fit; add a dedicated pattern here if this idiom is repeated elsewhere."
     ],
-    "granularity": "Each entry records one declared registration call — the same granularity as the source code — rather than the OpenRPC document derived from it, because reproducing that document's per-method fan-out (e.g. a network object's individual methods, or a data provider's per-instance onDidUpdate event) statically is fragile, and several of the names involved are unsnapshottable: they exist only at runtime (a nonce-minted PDP id, a per-window service shard name, a per-provider onDidUpdate event name). A separate end-to-end assertion verifies this file's registrations against the live rpc.discover OpenRPC document served by a running app, which is where that fully-resolved, per-method view is checked instead.",
-    "purpose": "A snapshot of paranext-core's declared wire-visible registration surface (commands, request handlers, network objects, data provider engines, web view providers, PDP factories, and network events), meant to be diffed across PRs the way papi.d.ts already is. A wire-only 'x-experimental': true marker is invisible to every other check: omitting one regenerates a byte-identical papi.d.ts, so nothing else catches it. This file asserts nothing about which entries *ought* to be experimental, or ought to exist at all — plenty of wire registrations legitimately live off papi.d.ts without being experimental. It only records what is declared; a human reviewing the PR diff decides whether a change here is intended, and this generator never fails a build over a missing marker.",
+    "granularity": "Each entry records one declared registration call (TypeScript) or declaration (C#) — the same granularity as the source code — rather than the OpenRPC document derived from it, because reproducing that document's per-method fan-out (e.g. a network object's individual methods, or a data provider's per-instance onDidUpdate event) statically is fragile, and several of the names involved are unsnapshottable: they exist only at runtime (a nonce-minted PDP id, a per-window service shard name, a per-provider onDidUpdate event name, a per-project C# data provider id). The C# half applies the same policy: one entry per RegisterNetworkObjectAsync call or GetNetworkObjectDocumentation() override, never one per method inside a NetworkObjectDocumentation.Methods dictionary. A separate end-to-end assertion verifies this file's registrations against the live rpc.discover OpenRPC document served by a running app, which is where that fully-resolved, per-method view is checked instead.",
+    "purpose": "A snapshot of paranext-core's declared wire-visible registration surface — TypeScript commands, request handlers, network objects, data provider engines, web view providers, PDP factories, and network events, plus their C# counterparts (network objects, data providers, PDP factories, and standalone request-handler registrations) — meant to be diffed across PRs the way papi.d.ts already is. Every C# registration reaches the same wire registry as its TypeScript counterparts: PapiClient.RegisterRequestHandlerAsync (c-sharp/PapiClient.cs) sends the literal 'network:registerMethod' request, the very request REGISTER_METHOD names in src/shared/data/rpc.model.ts. So a wire-only 'x-experimental': true marker on a C# registration is exactly as invisible to every other check as one on a TypeScript registration: omitting one regenerates a byte-identical papi.d.ts, so nothing else catches it. This file asserts nothing about which entries *ought* to be experimental, or ought to exist at all — plenty of wire registrations legitimately live off papi.d.ts without being experimental. It only records what is declared; a human reviewing the PR diff decides whether a change here is intended, and this generator never fails a build over a missing marker.",
     "recognizedPatterns": [
       "registerCommand(name, handler, docs?, options?) -> category \"command\"",
       "registerRequestHandler(requestType, handler, docs?, options?) -> category \"directRequestHandler\"; when requestType is serializeRequestType(CATEGORY_COMMAND, directive) the registration is re-filed under category \"command\" with the resolved directive as its name, so a command registered by bypassing registerCommand is not missed",
@@ -164,17 +218,263 @@
       "registerEngine(name, engine, type?, attributes?, documentation?) and its registerEngineByType(name, engine, type?, attributes?, documentation?) sibling -> category \"dataProviderEngine\"",
       "registerWebViewProvider(webViewType, provider, attributes?, documentation?), including its deprecated `register` alias -> category \"webViewProvider\"",
       "registerProjectDataProviderEngineFactory(pdpFactoryId, projectInterfaces, factory, attributes?, documentation?) -> category \"pdpFactory\"",
-      "createNetworkEventEmitterAsync(eventType, documentation?) and createBufferedNetworkEventEmitter(eventType, documentation?, options?) -> category \"networkEvent\""
+      "createNetworkEventEmitterAsync(eventType, documentation?) and createBufferedNetworkEventEmitter(eventType, documentation?, options?) -> category \"networkEvent\"",
+      "C# — a direct NetworkObject subclass calling the inherited RegisterNetworkObjectAsync(name, functions, details, documentation?) -> category \"networkObject\" (e.g. ChecklistNetworkObject, ManageBooksService, EnhancedResourceFactory)",
+      "C# — ProjectDataProviderFactory.InitializeAsync's own RegisterNetworkObjectAsync call, whose name is always $\"platform.{pdpfName}-pdpf\" built from a constructor parameter rather than a literal at the call site -> category \"pdpFactory\", always recorded under dynamicRegistrations",
+      "C# — a class extending DataProvider directly (either the primary-constructor form class X(...) : DataProvider(name, ...) or the traditional class X : DataProvider { X(...) : base(name, ...) {} } form); DataProvider.RegisterDataProviderAsync's own RegisterNetworkObjectAsync(DataProviderName, ...) call site (DataProviderName is a computed property, never a literal, so this is always dynamic); and a DataProvider.GetNetworkObjectDocumentation() override, recorded under the overriding class's name since the override supplies documentation independently of whatever name the provider is ultimately registered under (e.g. a per-project PDP's runtime-generated id) -> category \"dataProvider\"",
+      "C# — PapiClient.RegisterRequestHandlerAsync(requestType, handler, timeout?, documentation?) called from anywhere other than NetworkObject's own per-function/per-existence-check fan-out -> category \"standaloneMethod\"",
+      "C# — ExperimentalMethodDocumentation.Create/.Marker/.ExistenceMarker (bare or qualified with a `using static` import) are recognised as an always-x-experimental idiom by call shape alone, without inspecting their arguments, since every documentation object that helper builds hardcodes Experimental = true"
     ],
-    "scope": "Scans core src/** and the bundled extensions/src/** (excluding __tests__ directories, *.test.ts(x) files, node_modules, dist, and temp-build). Third-party extensions live outside this repository and are excluded by construction, not by an explicit rule. The C# data provider surface is not yet covered by this generator; a second pass for it is coming separately."
+    "scope": "TypeScript: core src/** and the bundled extensions/src/** (excluding __tests__ directories, *.test.ts(x) files, node_modules, dist, and temp-build), walked with the TypeScript compiler API and matched against a real AST. Third-party extensions live outside this repository and are excluded by construction, not by an explicit rule. C#: the data provider backend under c-sharp/** (excluding bin, obj, and the Paranext.Analyzers/Paranext.Analyzers.Tests projects), matched with a pattern-based text scan — there is no C# parser (e.g. Roslyn) in this toolchain, so the C# half recognises a fixed set of call-site and declaration idioms (see recognizedPatterns) rather than a real syntax tree. That is a real difference in rigour from the TypeScript half: an unusual formatting choice, or a new C#-side registration idiom this generator has never seen, can evade the C# scan more easily than it could evade the TypeScript AST scan. Every entry carries a language field ('typescript' or 'csharp') so a reader can tell at a glance which half's guarantees apply to it."
   },
   "registrations": [
+    {
+      "category": "dataProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/NetworkObjects/TimeDataProvider.cs",
+      "language": "csharp",
+      "name": "current-time",
+      "registeredVia": "DataProvider(name, papiClient) constructor"
+    },
+    {
+      "category": "dataProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Checks/CheckRunner.cs",
+      "language": "csharp",
+      "name": "dotNetCheckRunner",
+      "registeredVia": "DataProvider(name, papiClient) constructor"
+    },
+    {
+      "category": "dataProvider",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "c-sharp/Projects/ParatextProjectDataProvider.cs",
+      "language": "csharp",
+      "name": "ParatextProjectDataProvider",
+      "registeredVia": "DataProvider.GetNetworkObjectDocumentation override"
+    },
+    {
+      "category": "dataProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Users/InternetSettingsDataProvider.cs",
+      "language": "csharp",
+      "name": "paratextRegistration.internetSettingsDataProvider",
+      "registeredVia": "DataProvider(name, papiClient) constructor"
+    },
+    {
+      "category": "dataProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Projects/DigitalBibleLibrary/DblDownloadableDataProvider.cs",
+      "language": "csharp",
+      "name": "platformGetResources.dblResourcesProvider",
+      "registeredVia": "DataProvider(name, papiClient) constructor"
+    },
+    {
+      "category": "dataProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Checks/InventoryDataProvider.cs",
+      "language": "csharp",
+      "name": "platformScripture.inventoryDataProvider",
+      "registeredVia": "DataProvider(name, papiClient) constructor"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "c-sharp/EnhancedResources/EnhancedResourceFactory.cs",
+      "language": "csharp",
+      "name": "platform.enhancedResources",
+      "registeredVia": "NetworkObject.RegisterNetworkObjectAsync"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "c-sharp/Checklists/ChecklistNetworkObject.cs",
+      "language": "csharp",
+      "name": "platformScripture.checklistService",
+      "registeredVia": "NetworkObject.RegisterNetworkObjectAsync"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "c-sharp/ManageBooks/ManageBooksService.cs",
+      "language": "csharp",
+      "name": "platformScripture.manageBooks",
+      "registeredVia": "NetworkObject.RegisterNetworkObjectAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "c-sharp/Projects/SendReceive/ParatextProjectSendReceiveService.cs",
+      "language": "csharp",
+      "name": "command:paratextBibleSendReceive.breakSyncLock",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Projects/SendReceive/ParatextProjectSendReceiveService.cs",
+      "language": "csharp",
+      "name": "command:paratextBibleSendReceive.cancelSync",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Projects/SendReceive/ParatextProjectSendReceiveService.cs",
+      "language": "csharp",
+      "name": "command:paratextBibleSendReceive.commitChanges",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Projects/SendReceive/ParatextProjectSendReceiveService.cs",
+      "language": "csharp",
+      "name": "command:paratextBibleSendReceive.commitDaily",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "c-sharp/Projects/SendReceive/SendReceiveBlockNotifierService.cs",
+      "language": "csharp",
+      "name": "command:paratextBibleSendReceive.getAutoSyncBlocking",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Projects/SendReceive/ParatextProjectSendReceiveService.cs",
+      "language": "csharp",
+      "name": "command:paratextBibleSendReceive.syncProjects",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Users/ParatextRegistrationService.cs",
+      "language": "csharp",
+      "name": "command:paratextRegistration.doesUserHaveValidRegistration",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Users/ParatextRegistrationService.cs",
+      "language": "csharp",
+      "name": "command:paratextRegistration.getParatextDataInternetSettings",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Users/ParatextRegistrationService.cs",
+      "language": "csharp",
+      "name": "command:paratextRegistration.getParatextRegistrationData",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Users/ParatextRegistrationService.cs",
+      "language": "csharp",
+      "name": "command:paratextRegistration.getParatextRegistryUrl",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Users/ParatextRegistrationService.cs",
+      "language": "csharp",
+      "name": "command:paratextRegistration.setParatextDataInternetSettings",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Users/ParatextRegistrationService.cs",
+      "language": "csharp",
+      "name": "command:paratextRegistration.setParatextRegistrationData",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Users/ParatextRegistrationService.cs",
+      "language": "csharp",
+      "name": "command:paratextRegistration.validateParatextRegistrationData",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "c-sharp/Projects/VersificationConversionService.cs",
+      "language": "csharp",
+      "name": "command:platformScripture.mapVerseRefBetweenProjects",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "c-sharp/Program.cs",
+      "language": "csharp",
+      "name": "command:test.addOne",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
+    },
     {
       "category": "command",
       "docsStaticallyResolved": true,
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.createNewProject",
       "registeredVia": "registerCommand"
     },
@@ -184,6 +484,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.deleteProject",
       "registeredVia": "registerCommand"
     },
@@ -193,6 +494,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.deleteProjectByWebViewId",
       "registeredVia": "registerCommand"
     },
@@ -202,6 +504,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.helloException",
       "registeredVia": "registerCommand"
     },
@@ -211,6 +514,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.helloRock3",
       "registeredVia": "registerCommand"
     },
@@ -220,6 +524,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.openProject",
       "registeredVia": "registerCommand"
     },
@@ -229,6 +534,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.openViewerByWebViewId",
       "registeredVia": "registerCommand"
     },
@@ -238,6 +544,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.showContextMenuAlert",
       "registeredVia": "registerCommand"
     },
@@ -247,6 +554,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/hello-someone/src/main.ts",
+      "language": "typescript",
       "name": "helloSomeone.helloSomeone",
       "registeredVia": "registerCommand"
     },
@@ -256,6 +564,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/legacy-comment-manager/src/main.ts",
+      "language": "typescript",
       "name": "legacyCommentManager.openCommentList",
       "registeredVia": "registerCommand"
     },
@@ -265,6 +574,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/legacy-comment-manager/src/main.ts",
+      "language": "typescript",
       "name": "legacyCommentManager.openCommentListPanel",
       "registeredVia": "registerCommand"
     },
@@ -274,6 +584,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/legacy-comment-manager/src/main.ts",
+      "language": "typescript",
       "name": "legacyCommentManager.selectCommentThreadInPanel",
       "registeredVia": "registerCommand"
     },
@@ -283,6 +594,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/paratext-registration/src/main.ts",
+      "language": "typescript",
       "name": "paratextRegistration.showInternetSettings",
       "registeredVia": "registerCommand"
     },
@@ -292,6 +604,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/paratext-registration/src/main.ts",
+      "language": "typescript",
       "name": "paratextRegistration.showParatextRegistration",
       "registeredVia": "registerCommand"
     },
@@ -301,6 +614,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/services/dialog.service-router.ts",
+      "language": "typescript",
       "name": "platform.about",
       "registeredVia": "registerRequestHandler+serializeRequestType(command)"
     },
@@ -310,6 +624,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/services/usersnap.service-router.ts",
+      "language": "typescript",
       "name": "platform.closeOpenUsersnapForm",
       "registeredVia": "registerRequestHandler+serializeRequestType(command)"
     },
@@ -319,6 +634,7 @@
       "documented": true,
       "experimental": true,
       "file": "src/main/main.ts",
+      "language": "typescript",
       "name": "platform.createWindow",
       "registeredVia": "registerCommand"
     },
@@ -328,6 +644,7 @@
       "documented": true,
       "experimental": true,
       "file": "src/main/main.ts",
+      "language": "typescript",
       "name": "platform.getFocusedWindowId",
       "registeredVia": "registerCommand"
     },
@@ -337,6 +654,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/main.ts",
+      "language": "typescript",
       "name": "platform.getLogFileContent",
       "registeredVia": "registerCommand"
     },
@@ -346,6 +664,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/main.ts",
+      "language": "typescript",
       "name": "platform.getOSPlatform",
       "registeredVia": "registerCommand"
     },
@@ -355,6 +674,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/main.ts",
+      "language": "typescript",
       "name": "platform.isFullScreen",
       "registeredVia": "registerCommand"
     },
@@ -364,6 +684,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/services/usersnap.service-router.ts",
+      "language": "typescript",
       "name": "platform.isUsersnapFormCurrentlyOpen",
       "registeredVia": "registerRequestHandler+serializeRequestType(command)"
     },
@@ -373,6 +694,7 @@
       "documented": true,
       "experimental": true,
       "file": "src/main/services/book-chapter-control.service-router.ts",
+      "language": "typescript",
       "name": "platform.openBookChapterControl",
       "registeredVia": "registerRequestHandler+serializeRequestType(command)"
     },
@@ -382,6 +704,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/main.ts",
+      "language": "typescript",
       "name": "platform.openDeveloperDocumentationUrl",
       "registeredVia": "registerCommand"
     },
@@ -391,6 +714,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/services/web-view.service-router.ts",
+      "language": "typescript",
       "name": "platform.openProjectSettings",
       "registeredVia": "registerRequestHandler+serializeRequestType(command)"
     },
@@ -400,6 +724,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/services/web-view.service-router.ts",
+      "language": "typescript",
       "name": "platform.openSettings",
       "registeredVia": "registerRequestHandler+serializeRequestType(command)"
     },
@@ -409,6 +734,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/services/web-view.service-router.ts",
+      "language": "typescript",
       "name": "platform.openUserSettings",
       "registeredVia": "registerRequestHandler+serializeRequestType(command)"
     },
@@ -418,6 +744,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/main.ts",
+      "language": "typescript",
       "name": "platform.openWindow",
       "registeredVia": "registerCommand"
     },
@@ -427,6 +754,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/main.ts",
+      "language": "typescript",
       "name": "platform.quit",
       "registeredVia": "registerCommand"
     },
@@ -436,6 +764,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/main.ts",
+      "language": "typescript",
       "name": "platform.restart",
       "registeredVia": "registerCommand"
     },
@@ -445,6 +774,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/main.ts",
+      "language": "typescript",
       "name": "platform.restartExtensionHost",
       "registeredVia": "registerCommand"
     },
@@ -454,6 +784,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/services/usersnap.service-router.ts",
+      "language": "typescript",
       "name": "platform.usersnapReportIssue",
       "registeredVia": "registerRequestHandler+serializeRequestType(command)"
     },
@@ -463,6 +794,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/services/usersnap.service-router.ts",
+      "language": "typescript",
       "name": "platform.usersnapSubmitIdea",
       "registeredVia": "registerRequestHandler+serializeRequestType(command)"
     },
@@ -472,6 +804,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/main.ts",
+      "language": "typescript",
       "name": "platform.zoomIn",
       "registeredVia": "registerCommand"
     },
@@ -481,6 +814,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/main.ts",
+      "language": "typescript",
       "name": "platform.zoomOut",
       "registeredVia": "registerCommand"
     },
@@ -490,6 +824,7 @@
       "documented": true,
       "experimental": true,
       "file": "extensions/src/platform-enhanced-resources/src/main.ts",
+      "language": "typescript",
       "name": "platformEnhancedResources.openEnhancedResource",
       "registeredVia": "registerCommand"
     },
@@ -499,6 +834,7 @@
       "documented": true,
       "experimental": true,
       "file": "extensions/src/platform-enhanced-resources/src/main.ts",
+      "language": "typescript",
       "name": "platformEnhancedResources.requestAutoShowGuide",
       "registeredVia": "registerCommand"
     },
@@ -508,6 +844,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-get-resources/src/main.ts",
+      "language": "typescript",
       "name": "platformGetResources.getCachedResources",
       "registeredVia": "registerCommand"
     },
@@ -517,6 +854,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-get-resources/src/main.ts",
+      "language": "typescript",
       "name": "platformGetResources.isSendReceiveAvailable",
       "registeredVia": "registerCommand"
     },
@@ -526,6 +864,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-get-resources/src/main.ts",
+      "language": "typescript",
       "name": "platformGetResources.openGetResources",
       "registeredVia": "registerCommand"
     },
@@ -535,6 +874,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-get-resources/src/main.ts",
+      "language": "typescript",
       "name": "platformGetResources.openHome",
       "registeredVia": "registerCommand"
     },
@@ -544,6 +884,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-get-resources/src/main.ts",
+      "language": "typescript",
       "name": "platformGetResources.openNewTab",
       "registeredVia": "registerCommand"
     },
@@ -553,6 +894,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-lexical-tools/src/main.ts",
+      "language": "typescript",
       "name": "platformLexicalTools.openDictionary",
       "registeredVia": "registerCommand"
     },
@@ -562,6 +904,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.invalidateCheckResults",
       "registeredVia": "registerCommand"
     },
@@ -571,6 +914,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.openCharactersInventory",
       "registeredVia": "registerCommand"
     },
@@ -580,6 +924,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.openChecksSidePanel",
       "registeredVia": "registerCommand"
     },
@@ -589,6 +934,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.openFind",
       "registeredVia": "registerCommand"
     },
@@ -598,6 +944,7 @@
       "documented": true,
       "experimental": true,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.openManageBooks",
       "registeredVia": "registerCommand"
     },
@@ -607,6 +954,7 @@
       "documented": true,
       "experimental": true,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.openMarkersChecklist",
       "registeredVia": "registerCommand"
     },
@@ -616,6 +964,7 @@
       "documented": true,
       "experimental": true,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.openMarkersChecklistSettings",
       "registeredVia": "registerCommand"
     },
@@ -625,6 +974,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.openMarkersInventory",
       "registeredVia": "registerCommand"
     },
@@ -634,6 +984,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.openPunctuationInventory",
       "registeredVia": "registerCommand"
     },
@@ -643,6 +994,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.openRepeatedWordsInventory",
       "registeredVia": "registerCommand"
     },
@@ -652,6 +1004,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/checks/extension-host-check-runner.service.ts",
+      "language": "typescript",
       "name": "platformScripture.registerCheck",
       "registeredVia": "registerCommand"
     },
@@ -661,6 +1014,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.updateFindProject",
       "registeredVia": "registerCommand"
     },
@@ -670,6 +1024,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.applySharedLayout",
       "registeredVia": "registerCommand"
     },
@@ -679,6 +1034,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.changeFootnotesPaneLocation",
       "registeredVia": "registerCommand"
     },
@@ -688,6 +1044,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.changeView",
       "registeredVia": "registerCommand"
     },
@@ -697,6 +1054,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/markers-view-notifier.model.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.dismissMarkerNotificationForProjectToday",
       "registeredVia": "registerCommand"
     },
@@ -706,6 +1064,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.insertCommentAtSelection",
       "registeredVia": "registerCommand"
     },
@@ -715,6 +1074,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.insertCrossReferenceAtSelection",
       "registeredVia": "registerCommand"
     },
@@ -724,6 +1084,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.insertFootnoteAtSelection",
       "registeredVia": "registerCommand"
     },
@@ -733,6 +1094,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.openModelText",
       "registeredVia": "registerCommand"
     },
@@ -742,6 +1104,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.openResourceText",
       "registeredVia": "registerCommand"
     },
@@ -751,6 +1114,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.openResourceViewer",
       "registeredVia": "registerCommand"
     },
@@ -760,6 +1124,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.openScriptureEditor",
       "registeredVia": "registerCommand"
     },
@@ -769,6 +1134,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.toggleFootnotes",
       "registeredVia": "registerCommand"
     },
@@ -778,6 +1144,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-someone/src/main.ts",
+      "language": "typescript",
       "name": "helloSomeone.people",
       "registeredVia": "registerEngine"
     },
@@ -787,6 +1154,7 @@
       "documented": false,
       "experimental": false,
       "file": "src/extension-host/services/localization.service-host.ts",
+      "language": "typescript",
       "name": "platform.localizationDataServiceDataProvider",
       "registeredVia": "registerEngine"
     },
@@ -796,6 +1164,7 @@
       "documented": false,
       "experimental": false,
       "file": "src/extension-host/services/menu-data.service-host.ts",
+      "language": "typescript",
       "name": "platform.menuDataServiceDataProvider",
       "registeredVia": "registerEngine"
     },
@@ -805,6 +1174,7 @@
       "documented": false,
       "experimental": false,
       "file": "src/extension-host/extension-host.ts",
+      "language": "typescript",
       "name": "platform.placeholder",
       "registeredVia": "registerEngine"
     },
@@ -814,6 +1184,7 @@
       "documented": false,
       "experimental": false,
       "file": "src/extension-host/services/settings.service-host.ts",
+      "language": "typescript",
       "name": "platform.settingsServiceDataProvider",
       "registeredVia": "registerEngine"
     },
@@ -823,6 +1194,7 @@
       "documented": false,
       "experimental": false,
       "file": "src/extension-host/services/theme-data.service-host.ts",
+      "language": "typescript",
       "name": "platform.themeDataServiceDataProvider",
       "registeredVia": "registerEngine"
     },
@@ -832,6 +1204,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/services/theme.service-host.ts",
+      "language": "typescript",
       "name": "platform.themeServiceDataProvider",
       "registeredVia": "registerEngine"
     },
@@ -841,6 +1214,7 @@
       "documented": true,
       "experimental": true,
       "file": "src/main/services/window.service-router.ts",
+      "language": "typescript",
       "name": "platform.windowServiceDataProvider",
       "registeredVia": "registerEngine"
     },
@@ -850,6 +1224,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-lexical-tools/src/main.ts",
+      "language": "typescript",
       "name": "platformLexicalTools.lexicalReferenceService",
       "registeredVia": "registerEngine"
     },
@@ -859,6 +1234,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/checks/check-aggregator.service.ts",
+      "language": "typescript",
       "name": "platformScripture.checkAggregator",
       "registeredVia": "registerEngine"
     },
@@ -868,6 +1244,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/checks/extension-host-check-runner.service.ts",
+      "language": "typescript",
       "name": "platformScripture.extensionHostCheckRunner",
       "registeredVia": "registerEngine"
     },
@@ -877,6 +1254,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.findHistory",
       "registeredVia": "registerEngine"
     },
@@ -886,6 +1264,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/recently-opened-projects.service.ts",
+      "language": "typescript",
       "name": "platformScripture.recentlyOpenedProjects",
       "registeredVia": "registerEngine"
     },
@@ -895,6 +1274,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.annotationStyle",
       "registeredVia": "registerEngine"
     },
@@ -904,6 +1284,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/quick-verse/src/main.ts",
+      "language": "typescript",
       "name": "quickVerse.quickVerse",
       "registeredVia": "registerEngine"
     },
@@ -913,6 +1294,7 @@
       "documented": true,
       "experimental": true,
       "file": "src/main/services/dialog.service-router.ts",
+      "language": "typescript",
       "name": "dialog:selectProject",
       "registeredVia": "registerRequestHandler"
     },
@@ -922,6 +1304,7 @@
       "documented": true,
       "experimental": true,
       "file": "src/main/services/dialog.service-router.ts",
+      "language": "typescript",
       "name": "dialog:showAboutDialog",
       "registeredVia": "registerRequestHandler"
     },
@@ -931,6 +1314,7 @@
       "documented": true,
       "experimental": true,
       "file": "src/main/services/dialog.service-router.ts",
+      "language": "typescript",
       "name": "dialog:showDialog",
       "registeredVia": "registerRequestHandler"
     },
@@ -940,6 +1324,7 @@
       "documented": false,
       "experimental": false,
       "file": "src/extension-host/services/extension.service.ts",
+      "language": "typescript",
       "name": "extensionService:handleUri",
       "registeredVia": "registerRequestHandler"
     },
@@ -949,6 +1334,7 @@
       "documented": true,
       "experimental": true,
       "file": "src/shared/services/shared-store.service.ts",
+      "language": "typescript",
       "name": "shared-store:get",
       "registeredVia": "registerRequestHandler"
     },
@@ -958,6 +1344,7 @@
       "documented": true,
       "experimental": true,
       "file": "src/main/services/window-layout-persistence.service.ts",
+      "language": "typescript",
       "name": "windowLayout:get",
       "registeredVia": "registerRequestHandler"
     },
@@ -967,6 +1354,7 @@
       "documented": true,
       "experimental": true,
       "file": "src/main/services/window-layout-persistence.service.ts",
+      "language": "typescript",
       "name": "windowLayout:save",
       "registeredVia": "registerRequestHandler"
     },
@@ -976,6 +1364,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/checks/check-aggregator.service.ts",
+      "language": "typescript",
       "name": "checkResultsInvalidated",
       "registeredVia": "createBufferedNetworkEventEmitter"
     },
@@ -985,6 +1374,7 @@
       "documented": true,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.onHelloRock3",
       "registeredVia": "createBufferedNetworkEventEmitter"
     },
@@ -994,6 +1384,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/extension-host/services/extension.service.ts",
+      "language": "typescript",
       "name": "platform.onDidReloadExtensions",
       "registeredVia": "createNetworkEventEmitterAsync"
     },
@@ -1003,6 +1394,7 @@
       "documented": true,
       "experimental": true,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.focusFindSearch",
       "registeredVia": "createNetworkEventEmitterAsync"
     },
@@ -1012,6 +1404,7 @@
       "documented": true,
       "experimental": true,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.openMarkersChecklistSettings",
       "registeredVia": "createNetworkEventEmitterAsync"
     },
@@ -1021,6 +1414,7 @@
       "documented": true,
       "experimental": true,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.onDidSwitchProject",
       "registeredVia": "createNetworkEventEmitterAsync"
     },
@@ -1030,6 +1424,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.onSharedLayoutApply",
       "registeredVia": "createNetworkEventEmitterAsync"
     },
@@ -1039,6 +1434,7 @@
       "documented": true,
       "experimental": true,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.onWillSwitchProject",
       "registeredVia": "createNetworkEventEmitterAsync"
     },
@@ -1048,6 +1444,7 @@
       "documented": true,
       "experimental": true,
       "file": "src/main/services/scroll-group.service-host.ts",
+      "language": "typescript",
       "name": "scrollGroup:onDidChangeReferenceHistory",
       "registeredVia": "createBufferedNetworkEventEmitter"
     },
@@ -1057,6 +1454,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/renderer/services/scroll-group.service.ts",
+      "language": "typescript",
       "name": "scrollGroup:onDidChangeVersification",
       "registeredVia": "createBufferedNetworkEventEmitter"
     },
@@ -1066,6 +1464,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/services/scroll-group.service-host.ts",
+      "language": "typescript",
       "name": "scrollGroup:onDidUpdateScrRef",
       "registeredVia": "createBufferedNetworkEventEmitter"
     },
@@ -1075,6 +1474,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/renderer/services/web-view.service-shard.ts",
+      "language": "typescript",
       "name": "webView:onDidAddWebView",
       "registeredVia": "createBufferedNetworkEventEmitter"
     },
@@ -1084,6 +1484,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/renderer/services/web-view.service-shard.ts",
+      "language": "typescript",
       "name": "webView:onDidCloseWebView",
       "registeredVia": "createBufferedNetworkEventEmitter"
     },
@@ -1093,6 +1494,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/renderer/services/web-view.service-shard.ts",
+      "language": "typescript",
       "name": "webView:onDidOpenWebView",
       "registeredVia": "createBufferedNetworkEventEmitter"
     },
@@ -1102,6 +1504,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/renderer/services/web-view.service-shard.ts",
+      "language": "typescript",
       "name": "webView:onDidUpdateWebView",
       "registeredVia": "createBufferedNetworkEventEmitter"
     },
@@ -1111,6 +1514,7 @@
       "documented": false,
       "experimental": false,
       "file": "src/main/services/app.service-host.ts",
+      "language": "typescript",
       "name": "AppService",
       "registeredVia": "networkObjectService.set"
     },
@@ -1120,6 +1524,7 @@
       "documented": false,
       "experimental": false,
       "file": "src/extension-host/services/database.service-host.ts",
+      "language": "typescript",
       "name": "DatabaseService",
       "registeredVia": "networkObjectService.set"
     },
@@ -1129,6 +1534,7 @@
       "documented": false,
       "experimental": false,
       "file": "src/main/services/data-protection.service-host.ts",
+      "language": "typescript",
       "name": "DataProtectionService",
       "registeredVia": "networkObjectService.set"
     },
@@ -1138,6 +1544,7 @@
       "documented": false,
       "experimental": false,
       "file": "src/main/services/network-object-status.service-host.ts",
+      "language": "typescript",
       "name": "NetworkObjectStatusService",
       "registeredVia": "networkObjectService.set"
     },
@@ -1147,6 +1554,7 @@
       "documented": true,
       "experimental": true,
       "file": "src/main/services/notification.service-router.ts",
+      "language": "typescript",
       "name": "NotificationService",
       "registeredVia": "networkObjectService.set"
     },
@@ -1156,6 +1564,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/services/project-lookup.service-host.ts",
+      "language": "typescript",
       "name": "ProjectLookupService",
       "registeredVia": "networkObjectService.set"
     },
@@ -1165,6 +1574,7 @@
       "documented": false,
       "experimental": false,
       "file": "src/extension-host/services/project-settings.service-host.ts",
+      "language": "typescript",
       "name": "ProjectSettingsService",
       "registeredVia": "networkObjectService.set"
     },
@@ -1174,6 +1584,7 @@
       "documented": true,
       "experimental": false,
       "file": "src/main/services/scroll-group.service-host.ts",
+      "language": "typescript",
       "name": "ScrollGroupService",
       "registeredVia": "networkObjectService.set"
     },
@@ -1183,6 +1594,7 @@
       "documented": false,
       "experimental": false,
       "file": "src/extension-host/extension-host.ts",
+      "language": "typescript",
       "name": "testExtensionHost",
       "registeredVia": "networkObjectService.set"
     },
@@ -1192,6 +1604,7 @@
       "documented": false,
       "experimental": false,
       "file": "src/main/main.ts",
+      "language": "typescript",
       "name": "testMain",
       "registeredVia": "networkObjectService.set"
     },
@@ -1201,6 +1614,7 @@
       "documented": true,
       "experimental": true,
       "file": "src/main/services/web-view.service-router.ts",
+      "language": "typescript",
       "name": "WebViewService",
       "registeredVia": "networkObjectService.set"
     },
@@ -1210,6 +1624,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.helloRock3Pdpf",
       "registeredVia": "registerProjectDataProviderEngineFactory"
     },
@@ -1219,6 +1634,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/legacy-comment-manager/src/main.ts",
+      "language": "typescript",
       "name": "legacyCommentManager.commentsUsjPdpf",
       "registeredVia": "registerProjectDataProviderEngineFactory"
     },
@@ -1228,6 +1644,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-lexical-tools/src/main.ts",
+      "language": "typescript",
       "name": "platformLexicalTools.lexicalReferencePdpf",
       "registeredVia": "registerProjectDataProviderEngineFactory"
     },
@@ -1237,6 +1654,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.scriptureExtenderPdpf",
       "registeredVia": "registerProjectDataProviderEngineFactory"
     },
@@ -1246,6 +1664,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.scriptureFinderPdpf",
       "registeredVia": "registerProjectDataProviderEngineFactory"
     },
@@ -1255,6 +1674,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.html",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1264,6 +1684,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.projectViewer",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1273,6 +1694,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.react",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1282,6 +1704,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-rock3/src/main.ts",
+      "language": "typescript",
       "name": "helloRock3.react2",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1291,6 +1714,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/hello-someone/src/main.ts",
+      "language": "typescript",
       "name": "helloSomeone.peopleViewer",
       "registeredVia": "webViewProviders.register (deprecated alias)"
     },
@@ -1300,6 +1724,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/legacy-comment-manager/src/main.ts",
+      "language": "typescript",
       "name": "legacyCommentManager.commentList",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1309,6 +1734,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/legacy-comment-manager/src/main.ts",
+      "language": "typescript",
       "name": "legacyCommentManager.commentListPanel",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1318,6 +1744,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/paratext-registration/src/main.ts",
+      "language": "typescript",
       "name": "paratextRegistration.internetSettingsView",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1327,6 +1754,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/paratext-registration/src/main.ts",
+      "language": "typescript",
       "name": "paratextRegistration.registrationView",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1336,6 +1764,7 @@
       "documented": true,
       "experimental": true,
       "file": "extensions/src/platform-enhanced-resources/src/main.ts",
+      "language": "typescript",
       "name": "platformEnhancedResources.enhancedResource",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1345,6 +1774,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-get-resources/src/main.ts",
+      "language": "typescript",
       "name": "platformGetResources.getResources",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1354,6 +1784,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-get-resources/src/main.ts",
+      "language": "typescript",
       "name": "platformGetResources.home",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1363,6 +1794,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-get-resources/src/main.ts",
+      "language": "typescript",
       "name": "platformGetResources.newTab",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1372,6 +1804,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-lexical-tools/src/main.ts",
+      "language": "typescript",
       "name": "platformLexicalTools.dictionary",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1381,6 +1814,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.characterInventory",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1390,6 +1824,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.checksSidePanel",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1399,6 +1834,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.find",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1408,6 +1844,7 @@
       "documented": true,
       "experimental": true,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.manageBooks",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1417,6 +1854,7 @@
       "documented": true,
       "experimental": true,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.markersChecklist",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1426,6 +1864,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.markersInventory",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1435,6 +1874,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.punctuationInventory",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1444,6 +1884,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture/src/main.ts",
+      "language": "typescript",
       "name": "platformScripture.repeatedWordsInventory",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1453,6 +1894,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.bibleTexts",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1462,6 +1904,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.commentaries",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1471,6 +1914,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.modelText",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1480,6 +1924,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.react",
       "registeredVia": "registerWebViewProvider"
     },
@@ -1489,6 +1934,7 @@
       "documented": false,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
       "name": "platformScriptureEditor.scriptureTextGrid",
       "registeredVia": "registerWebViewProvider"
     }
