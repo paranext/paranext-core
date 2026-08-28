@@ -1116,6 +1116,46 @@ describe('handleSwitchToSimpleMode', () => {
   });
 });
 
+describe('getWebView derives security-relevant WebViewDefinition keys instead of passing them through', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('derives allowScripts, allowSameOrigin, allowedFrameSources, and allowPopups from the provider webview rather than passing its raw values through', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+
+    const WEB_VIEW_ID = 'security-normalization-webview';
+    getWebViewProviderMock.mockResolvedValue({
+      // Stands in for a compromised or buggy provider: omits the three keys that are otherwise
+      // only defaulted (allowScripts, allowSameOrigin, allowPopups all left `undefined`) and
+      // supplies a disallowed scheme (plain `http:`, neither `https:` nor `http://localhost:`)
+      // alongside an allowed one in allowedFrameSources - exactly the kind of untrusted values
+      // `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS` exists to keep a reloaded WebView from inheriting.
+      getWebView: vi.fn(async () => ({
+        id: WEB_VIEW_ID,
+        webViewType: 'test.securityNormalization',
+        content: '',
+        allowedFrameSources: ['http://evil.example.com', 'https://good.example.com'],
+      })),
+    });
+
+    await host.openOrReloadWebView({ id: WEB_VIEW_ID, webViewType: 'test.securityNormalization' });
+
+    expect(fakeDockLayout.addWebViewToDock).toHaveBeenCalled();
+    const { lastCall } = vi.mocked(fakeDockLayout.addWebViewToDock).mock;
+    const [finalWebView] = lastCall ?? [];
+
+    // Defaulted, not left as the provider's raw `undefined`.
+    expect(finalWebView?.allowScripts).toBe(true);
+    expect(finalWebView?.allowSameOrigin).toBe(true);
+    expect(finalWebView?.allowPopups).toBe(false);
+    // Filtered, not the raw array with the disallowed scheme still present.
+    expect(finalWebView?.allowedFrameSources).toEqual(['https://good.example.com']);
+  });
+});
+
 describe('Scripture Editor tab events keep last-opened-project-cache current', () => {
   const FIXED_SIMPLE_EDITOR_TAB_ID = 'simple-editor-tab';
 

@@ -108,6 +108,33 @@ Extensions run in isolated contexts:
 
 ---
 
+## WebView Definition Security Keys
+
+Four `WebViewDefinition` properties gate a WebView's execution environment: `allowScripts`,
+`allowSameOrigin`, `allowedFrameSources`, and `allowPopups`. A WebView provider supplies these
+values, and only the provider can — none of the four is in the WebView definition's
+updatable-property list, so a running WebView's own content cannot widen its own sandbox. Even so,
+the platform never treats a value that merely passed through as trustworthy on its own:
+
+- **Stripped on save.** `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS` (`web-view.model.ts`) excludes all
+  four from what gets persisted into a saved layout, so a WebView never gets reloaded with a stale
+  or tampered value for one of these keys — the provider must re-supply them every time it provides
+  the WebView's content.
+- **Derived on read.** `openOrReloadWebView` (`web-view.service-shard.ts`) recomputes each of the
+  four from the provider's freshly-returned `WebViewDefinition` and assigns them into the resulting
+  `WebViewTabProps` after the initial object spread — never copying them straight through from the
+  provider's raw object. `allowScripts` and `allowSameOrigin` get an explicit default when unset;
+  `allowedFrameSources` is filtered down to `https:`, `papi-extension:`, and `http://localhost:`
+  schemes (HTML and React WebViews) or matched against the WebView's own patterns (URL WebViews);
+  `allowPopups` defaults to `false` when unset. The WebView component reads only these derived
+  values — never the provider's raw object — when building the iframe's `sandbox` attribute and CSP.
+
+Any key added to `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS` for the same reason (a provider-supplied
+value that must not reach the iframe unmediated) should get the same treatment: an explicit default
+and an assignment after the `{ ...webView }` spread, not a bare pass-through.
+
+---
+
 ## Security Best Practices
 
 When developing extensions:
