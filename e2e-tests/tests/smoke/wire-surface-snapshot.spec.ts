@@ -13,39 +13,45 @@
 // deterministic wire-naming suffixes, network-object fan-out collapse, and the dynamic-id patterns
 // for genuinely runtime-unique names — live in `../../fixtures/wire-surface-reduction.util.ts` (unit
 // tested there) so they stay testable without launching Electron. This file only drives the live
-// side: fetch `rpc.discover`, then run both directions of the comparison against it.
+// side: poll `rpc.discover` until the comparison itself is satisfied or a bounded budget expires,
+// then run every comparison against the final result.
 //
 // Deliberately does NOT use `papi-live.fixture` — its `canConnectToPapi` guard is built to skip
 // gracefully when no app is running, which would make this test report success without ever
-// comparing anything. If the live document cannot be fetched, this test fails loudly instead.
+// comparing anything. If the live document can never be fetched at all, this test fails loudly
+// instead.
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect } from '../../fixtures/app.fixture';
-import {
-  PROCESS_READY_TIMEOUT,
-  sendPapiRequestOnce,
-  waitForPapiMethodRegistered,
-} from '../../fixtures/helpers';
+import { PROCESS_READY_TIMEOUT, sendPapiRequestOnce } from '../../fixtures/helpers';
 import {
   buildExpectedLiveIdentifiers,
   checkMarkerAgreement,
   classifyLiveMethod,
   findMissingFromLive,
   type LiveMethod,
+  type MissingLiveEntry,
   type WireSurfaceDocument,
   type WireSurfaceRegistration,
 } from '../../fixtures/wire-surface-reduction.util';
 
 const SNAPSHOT_PATH = path.resolve(__dirname, '../../../lib/papi-dts/wire-surface.json');
 
-// The settings data provider's `set` method only becomes discoverable once
-// `extensionService.initialize()` finishes in the extension host — the same gate
-// ui-interaction.spec.ts uses to know every extension has finished registering. By the time it
-// appears, the wire surface for this run has settled too, so it doubles as this test's readiness
-// gate. Polling (never a sleep) means a slow runner fails with a named method, not a phantom diff.
-const READINESS_METHOD = 'object:platform.settingsServiceDataProvider-data.set';
-const READINESS_TIMEOUT_MS = PROCESS_READY_TIMEOUT;
-const DISCOVER_TIMEOUT_MS = 30_000;
+// There is no single event that fires once "every extension has finished registering" — extensions,
+// the bundled C# data providers, and core services each register independently and at their own
+// pace, so any one proxy signal can fire long before the rest have landed. Instead this test polls
+// `rpc.discover` directly and treats the comparison itself (direction 1 below: every snapshot entry
+// that should be live IS live) as the readiness condition — keep fetching until nothing is missing,
+// or the budget runs out. This turns a startup-ordering race into a legible bounded wait: a timeout
+// fails with the still-missing list rather than a phantom diff taken mid-startup.
+//
+// Budget: double PROCESS_READY_TIMEOUT (used elsewhere for the point the main window and WebSocket
+// come up). That milestone is much earlier than "every C# and bundled-extension registration has
+// landed" — the stragglers this test waits for start registering only after the app is already
+// up and are the slowest half of startup on a loaded CI runner — so this poll gets extra headroom
+// rather than inheriting a budget sized for an earlier milestone.
+const READINESS_TIMEOUT_MS = PROCESS_READY_TIMEOUT * 2;
+const POLL_INTERVAL_MS = 250;
 
 interface RpcDiscoverResult {
   methods?: LiveMethod[];
@@ -53,6 +59,51 @@ interface RpcDiscoverResult {
 
 function describeRegistration(reg: WireSurfaceRegistration): string {
   return `${reg.category} '${reg.name}' (${reg.language}, ${reg.file})`;
+}
+
+/**
+ * Poll `rpc.discover` until every snapshot entry that should be live IS live (direction 1 finds
+ * nothing missing), or `budgetMs` elapses. Always returns the last fetched live methods (empty if
+ * every attempt failed) and the last-computed missing list, so the caller can report a specific
+ * failure either way — this never lets the test report success without having actually compared.
+ */
+async function pollUntilSnapshotIsLive(
+  registrations: readonly WireSurfaceRegistration[],
+  budgetMs: number,
+): Promise<{ liveMethods: LiveMethod[]; missing: MissingLiveEntry[]; lastError: unknown }> {
+  let liveMethods: LiveMethod[] = [];
+  let missing: MissingLiveEntry[] = [];
+  let lastError: unknown;
+  const deadline = Date.now() + budgetMs;
+
+  for (;;) {
+    const remainingForRequest = deadline - Date.now();
+    try {
+      // Sequential polling: each attempt must finish (or time out) before the next; parallelizing
+      // would defeat the bounded-wait purpose.
+      // eslint-disable-next-line no-await-in-loop
+      const discoverResult = await sendPapiRequestOnce<RpcDiscoverResult>(
+        'rpc.discover',
+        [],
+        undefined,
+        Math.min(10_000, Math.max(1000, remainingForRequest)),
+      );
+      liveMethods = discoverResult.methods ?? [];
+      lastError = undefined;
+      missing = findMissingFromLive(registrations, new Set(liveMethods.map((m) => m.name)));
+      if (missing.length === 0) return { liveMethods, missing, lastError };
+    } catch (error) {
+      lastError = error;
+    }
+
+    const sleepMs = Math.min(POLL_INTERVAL_MS, deadline - Date.now());
+    if (sleepMs <= 0) return { liveMethods, missing, lastError };
+    // Sequential polling: see above.
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, sleepMs);
+    });
+  }
 }
 
 test.describe('Wire surface snapshot', () => {
@@ -63,43 +114,31 @@ test.describe('Wire surface snapshot', () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     electronApp,
   }) => {
-    test.setTimeout(READINESS_TIMEOUT_MS + DISCOVER_TIMEOUT_MS + 30_000);
+    test.setTimeout(READINESS_TIMEOUT_MS + 30_000);
 
-    await waitForPapiMethodRegistered(READINESS_METHOD, undefined, READINESS_TIMEOUT_MS);
+    // JSON.parse's return type is `any`, so `.header` needs no type assertion here.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const snapshot = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, 'utf8')) as WireSurfaceDocument;
 
-    let discoverResult: RpcDiscoverResult;
-    try {
-      discoverResult = await sendPapiRequestOnce<RpcDiscoverResult>(
-        'rpc.discover',
-        [],
-        undefined,
-        DISCOVER_TIMEOUT_MS,
-      );
-    } catch (error) {
+    const { liveMethods, missing, lastError } = await pollUntilSnapshotIsLive(
+      snapshot.registrations,
+      READINESS_TIMEOUT_MS,
+    );
+
+    if (liveMethods.length === 0) {
       // Fail loudly and specifically — this must never read as a vacuous pass. See the module
       // header for why this test does not use papi-live.fixture's skip-on-disconnect guard.
+      const lastErrorDetail = lastError
+        ? ` Underlying error from the last attempt: ${lastError instanceof Error ? lastError.message : String(lastError)}`
+        : ' The last rpc.discover response reported zero methods.';
       throw new Error(
-        `Could not fetch the live OpenRPC document via rpc.discover — the wire surface snapshot ` +
-          `cannot be verified against a running app. Underlying error: ` +
-          `${error instanceof Error ? error.message : String(error)}`,
+        `Could not fetch a non-empty live OpenRPC document via rpc.discover within ` +
+          `${READINESS_TIMEOUT_MS}ms — the wire surface snapshot cannot be verified against a ` +
+          `running app.${lastErrorDetail}`,
       );
     }
 
-    const liveMethods = discoverResult.methods ?? [];
-    expect(
-      liveMethods.length,
-      'rpc.discover returned zero methods — something is wrong with the running app itself, not ' +
-        'with this comparison.',
-    ).toBeGreaterThan(0);
-
-    // JSON.parse returns `any`; asserting the known shape of the checked-in snapshot file.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const snapshot = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, 'utf8')) as WireSurfaceDocument;
     const expected = buildExpectedLiveIdentifiers(snapshot.registrations);
-    const liveMethodNames = new Set(liveMethods.map((m) => m.name));
-
-    // Direction 1: every snapshot entry that should be live is present live.
-    const missing = findMissingFromLive(snapshot.registrations, liveMethodNames);
 
     // Direction 2 (the important one — see the module header): every live method reduces to a
     // snapshot entry, a documented dynamic pattern, or a known infrastructure method. Without this
@@ -114,11 +153,13 @@ test.describe('Wire surface snapshot', () => {
 
     if (missing.length > 0) {
       failureSections.push(
-        `Declared in wire-surface.json but not found live (${missing.length}):\n${missing
-          .map(
-            (m) => `  - ${describeRegistration(m.registration)} — expected '${m.expectedWireName}'`,
-          )
-          .join('\n')}`,
+        `Declared in wire-surface.json but not found live after polling for up to ` +
+          `${READINESS_TIMEOUT_MS}ms (${missing.length}):\n${missing
+            .map(
+              (m) =>
+                `  - ${describeRegistration(m.registration)} — expected '${m.expectedWireName}'`,
+            )
+            .join('\n')}`,
       );
     }
 
