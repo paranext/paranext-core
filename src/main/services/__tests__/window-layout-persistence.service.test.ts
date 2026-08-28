@@ -324,6 +324,27 @@ describe('window layout persistence service', () => {
     expect(firstTabIdOf(written.find((entry) => entry.isMain)?.layout)).toBe('one');
   });
 
+  test('when two windows land in that gap, the older one answers for the app, not the newer one', async () => {
+    // The doc comment on `isPrimaryWindow` promises the oldest live window answers when no marked
+    // entry survives the gap. The test above cannot tell that promise from "the only candidate
+    // wins" — it tracks exactly one window into the gap. This tracks two, so which one the
+    // fallback picks is actually pinned.
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      11,
+    );
+    service.handleWindowRemoved(11, 'entry-stays');
+    service.handleWindowRemoved(12, 'entry-stays');
+
+    service.trackNewWindow(13);
+    service.trackNewWindow(14);
+
+    expect(service.isPrimaryWindow(13)).toBe(true);
+    expect(service.isPrimaryWindow(14)).toBe(false);
+  });
+
   test('a main entry that leaves the structure takes isMain with it; the next load picks the first', async () => {
     // Main-ness is a property of the ENTRY, so an entry that leaves takes the flag with it rather
     // than handing it to a neighbour at write time. A structure left carrying no flag at all is the
