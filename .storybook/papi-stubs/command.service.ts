@@ -17,6 +17,11 @@
  *   An id, not a bare resolve: the command answers `undefined` when it created no web view, which
  *   the button treats as a failure exactly like a rejection.
  *
+ * This replacement is global: it stands in for the command service in EVERY story, not only the
+ * ones that opt in. Keep the delegating default, which rejects — resolving `undefined` instead
+ * would push every story that catches, or that renders an error or empty state, onto the success
+ * path without touching the story.
+ *
  * A story can also claim commands for itself by installing a responder through
  * `mocks/command-service-mock-channel.ts`, which is consulted FIRST and so wins over both
  * Send/Receive overrides below. That channel is how a story answers a PAPI command at all:

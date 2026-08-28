@@ -295,4 +295,30 @@ describe('a publish that lands while a probe is in flight', () => {
     await expect(refreshRegistrationValidity({ force: true })).resolves.toBe('invalid');
     expect(getRegistrationValidity()).toBe('invalid');
   });
+
+  it('does not make a forced re-check join the probe the publish disowned', async () => {
+    const staleProbe = deferred<RegistrationValidity>();
+    mockResolveReg.mockReturnValue(staleProbe.promise);
+    const stale = refreshRegistrationValidity();
+
+    // The gate publishes its suppressed answer while the toolbar's mount probe is still running.
+    publishRegistrationValidity('valid');
+
+    // Opening the profile popover forces a re-check before the disowned probe has settled. Joining
+    // that probe would hand back an answer the generation check then discards, so the re-check
+    // would publish nothing at all — silently doing nothing.
+    const freshProbe = deferred<RegistrationValidity>();
+    mockResolveReg.mockReturnValue(freshProbe.promise);
+    const fresh = refreshRegistrationValidity({ force: true });
+    expect(mockResolveReg).toHaveBeenCalledTimes(2);
+
+    freshProbe.resolve('invalid');
+    await expect(fresh).resolves.toBe('invalid');
+    expect(getRegistrationValidity()).toBe('invalid');
+
+    // The disowned probe settling late still must not publish over the re-check's answer.
+    staleProbe.resolve('valid');
+    await stale;
+    expect(getRegistrationValidity()).toBe('invalid');
+  });
 });
