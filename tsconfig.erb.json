@@ -27,6 +27,7 @@
     ".erb/scripts/startup-waterfall.util.ts",
     ".erb/scripts/generate-wire-surface.ts",
     ".erb/scripts/generate-wire-surface.util.ts",
+    ".erb/scripts/generate-wire-surface.csharp.util.ts",
     ".erb/scripts/notices-build-id.ts",
     ".erb/scripts/third-party-notices/*.ts",
     ".erb/configs/emit-shipped-modules-plugin.ts"

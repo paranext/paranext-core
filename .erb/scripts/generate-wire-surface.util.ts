@@ -16,8 +16,17 @@
 
 import * as path from 'path';
 import * as ts from 'typescript';
+import {
+  CSHARP_EXCLUDED_PATTERNS,
+  CSHARP_RECOGNIZED_PATTERNS,
+  scanCSharpFiles,
+  VirtualFile as CSharpVirtualFile,
+} from './generate-wire-surface.csharp.util';
 
 // #region Public types
+
+/** Which half of the codebase a registration was found in. */
+export type WireSurfaceLanguage = 'typescript' | 'csharp';
 
 /** One of the wire-visible registration shapes this scanner recognises. */
 export type RegistrationCategory =
@@ -43,14 +52,22 @@ export type RegisteredVia =
   | 'createNetworkEventEmitterAsync'
   | 'createBufferedNetworkEventEmitter';
 
-/** A registration whose name resolved to a literal string value. */
+/**
+ * A registration whose name resolved to a literal string value.
+ *
+ * `category` and `registeredVia` are typed as plain `string` here (rather than the narrower
+ * `RegistrationCategory`/`RegisteredVia` unions used internally by the TypeScript scan below) so
+ * that this single shape can also carry C#-origin entries, whose category/registeredVia vocabulary
+ * is defined in `generate-wire-surface.csharp.util.ts`. `language` is the field to filter or group
+ * on.
+ */
 export interface StaticRegistration {
-  category: RegistrationCategory;
+  category: string;
   /** The resolved registration name (e.g. a command name, or a serialized request type). */
   name: string;
   /** Repo-relative path of the file containing the registration call. */
   file: string;
-  registeredVia: RegisteredVia;
+  registeredVia: string;
   /** Whether a documentation argument was passed at all. */
   documented: boolean;
   /**
@@ -61,15 +78,18 @@ export interface StaticRegistration {
   docsStaticallyResolved: boolean;
   /** Whether `'x-experimental': true` was statically proven on the documentation. */
   experimental: boolean;
+  /** Which half of the codebase this entry came from — see `StaticRegistration`'s doc comment. */
+  language: WireSurfaceLanguage;
 }
 
 /** A recognised registration call whose name could not be resolved to a literal string. */
 export interface DynamicRegistration {
-  category: RegistrationCategory;
+  category: string;
   file: string;
-  registeredVia: RegisteredVia;
+  registeredVia: string;
   /** Source text of the name argument as written at the call site. */
   expression: string;
+  language: WireSurfaceLanguage;
 }
 
 export interface WireSurfaceHeader {
@@ -131,33 +151,50 @@ const EXCLUDED_PATTERNS: string[] = [
 function buildHeader(): WireSurfaceHeader {
   return {
     purpose:
-      "A snapshot of paranext-core's declared wire-visible registration surface (commands, " +
-      'request handlers, network objects, data provider engines, web view providers, PDP ' +
-      'factories, and network events), meant to be diffed across PRs the way papi.d.ts already ' +
-      "is. A wire-only 'x-experimental': true marker is invisible to every other check: omitting " +
-      'one regenerates a byte-identical papi.d.ts, so nothing else catches it. This file asserts ' +
-      'nothing about which entries *ought* to be experimental, or ought to exist at all — plenty ' +
-      'of wire registrations legitimately live off papi.d.ts without being experimental. It only ' +
-      'records what is declared; a human reviewing the PR diff decides whether a change here is ' +
-      'intended, and this generator never fails a build over a missing marker.',
+      "A snapshot of paranext-core's declared wire-visible registration surface — TypeScript " +
+      'commands, request handlers, network objects, data provider engines, web view providers, ' +
+      'PDP factories, and network events, plus their C# counterparts (network objects, data ' +
+      'providers, PDP factories, and standalone request-handler registrations) — meant to be ' +
+      'diffed across PRs the way papi.d.ts already is. Every C# registration reaches the same ' +
+      'wire registry as its TypeScript counterparts: PapiClient.RegisterRequestHandlerAsync ' +
+      "(c-sharp/PapiClient.cs) sends the literal 'network:registerMethod' request, the very " +
+      'request REGISTER_METHOD names in src/shared/data/rpc.model.ts. So a wire-only ' +
+      "'x-experimental': true marker on a C# registration is exactly as invisible to every other " +
+      'check as one on a TypeScript registration: omitting one regenerates a byte-identical ' +
+      'papi.d.ts, so nothing else catches it. This file asserts nothing about which entries ' +
+      '*ought* to be experimental, or ought to exist at all — plenty of wire registrations ' +
+      'legitimately live off papi.d.ts without being experimental. It only records what is ' +
+      'declared; a human reviewing the PR diff decides whether a change here is intended, and ' +
+      'this generator never fails a build over a missing marker.',
     scope:
-      'Scans core src/** and the bundled extensions/src/** (excluding __tests__ directories, ' +
-      '*.test.ts(x) files, node_modules, dist, and temp-build). Third-party extensions live ' +
-      'outside this repository and are excluded by construction, not by an explicit rule. The C# ' +
-      'data provider surface is not yet covered by this generator; a second pass for it is coming ' +
-      'separately.',
+      'TypeScript: core src/** and the bundled extensions/src/** (excluding __tests__ ' +
+      'directories, *.test.ts(x) files, node_modules, dist, and temp-build), walked with the ' +
+      'TypeScript compiler API and matched against a real AST. Third-party extensions live ' +
+      'outside this repository and are excluded by construction, not by an explicit rule. C#: ' +
+      'the data provider backend under c-sharp/** (excluding bin, obj, and the ' +
+      'Paranext.Analyzers/Paranext.Analyzers.Tests projects), matched with a pattern-based text ' +
+      'scan — there is no C# parser (e.g. Roslyn) in this toolchain, so the C# half recognises a ' +
+      'fixed set of call-site and declaration idioms (see recognizedPatterns) rather than a real ' +
+      'syntax tree. That is a real difference in rigour from the TypeScript half: an unusual ' +
+      'formatting choice, or a new C#-side registration idiom this generator has never seen, can ' +
+      'evade the C# scan more easily than it could evade the TypeScript AST scan. Every entry ' +
+      "carries a language field ('typescript' or 'csharp') so a reader can tell at a glance which " +
+      "half's guarantees apply to it.",
     granularity:
-      'Each entry records one declared registration call — the same granularity as the source ' +
-      'code — rather than the OpenRPC document derived from it, because reproducing that ' +
-      "document's per-method fan-out (e.g. a network object's individual methods, or a data " +
-      "provider's per-instance onDidUpdate event) statically is fragile, and several of the names " +
-      'involved are unsnapshottable: they exist only at runtime (a nonce-minted PDP id, a ' +
-      'per-window service shard name, a per-provider onDidUpdate event name). A separate ' +
-      "end-to-end assertion verifies this file's registrations against the live rpc.discover " +
-      'OpenRPC document served by a running app, which is where that fully-resolved, per-method ' +
-      'view is checked instead.',
-    recognizedPatterns: RECOGNIZED_PATTERNS,
-    excludedPatterns: EXCLUDED_PATTERNS,
+      'Each entry records one declared registration call (TypeScript) or declaration (C#) — the ' +
+      'same granularity as the source code — rather than the OpenRPC document derived from it, ' +
+      "because reproducing that document's per-method fan-out (e.g. a network object's " +
+      "individual methods, or a data provider's per-instance onDidUpdate event) statically is " +
+      'fragile, and several of the names involved are unsnapshottable: they exist only at ' +
+      'runtime (a nonce-minted PDP id, a per-window service shard name, a per-provider ' +
+      'onDidUpdate event name, a per-project C# data provider id). The C# half applies the same ' +
+      'policy: one entry per RegisterNetworkObjectAsync call or GetNetworkObjectDocumentation() ' +
+      'override, never one per method inside a NetworkObjectDocumentation.Methods dictionary. A ' +
+      "separate end-to-end assertion verifies this file's registrations against the live " +
+      'rpc.discover OpenRPC document served by a running app, which is where that fully-resolved, ' +
+      'per-method view is checked instead.',
+    recognizedPatterns: [...RECOGNIZED_PATTERNS, ...CSHARP_RECOGNIZED_PATTERNS],
+    excludedPatterns: [...EXCLUDED_PATTERNS, ...CSHARP_EXCLUDED_PATTERNS],
   };
 }
 
@@ -729,6 +766,7 @@ function processCall(
       file: entry.path,
       registeredVia,
       expression: nameArg.getText(entry.sourceFile),
+      language: 'typescript',
     });
     return;
   }
@@ -748,11 +786,13 @@ function processCall(
     documented: docsInfo.documented,
     docsStaticallyResolved: docsInfo.docsStaticallyResolved,
     experimental: docsInfo.experimental,
+    language: 'typescript',
   });
 }
 
 function compareStaticRegistrations(a: StaticRegistration, b: StaticRegistration): number {
   return (
+    a.language.localeCompare(b.language) ||
     a.category.localeCompare(b.category) ||
     a.name.localeCompare(b.name) ||
     a.file.localeCompare(b.file)
@@ -761,14 +801,23 @@ function compareStaticRegistrations(a: StaticRegistration, b: StaticRegistration
 
 function compareDynamicRegistrations(a: DynamicRegistration, b: DynamicRegistration): number {
   return (
+    a.language.localeCompare(b.language) ||
     a.category.localeCompare(b.category) ||
     a.file.localeCompare(b.file) ||
     a.expression.localeCompare(b.expression)
   );
 }
 
-/** Scans the given files and returns the full wire surface document, deterministically ordered. */
-export function generateWireSurfaceDocument(inputFiles: VirtualFile[]): WireSurfaceDocument {
+/**
+ * Scans the given TypeScript files (via the TypeScript compiler API's AST) and C# files (via a
+ * pattern-based text scan — see `generate-wire-surface.csharp.util.ts`), and returns the full wire
+ * surface document, deterministically ordered. `csharpFiles` defaults to empty so existing callers
+ * that only pass TypeScript files (including this module's own unit tests) are unaffected.
+ */
+export function generateWireSurfaceDocument(
+  inputFiles: VirtualFile[],
+  csharpFiles: CSharpVirtualFile[] = [],
+): WireSurfaceDocument {
   const files = buildFileMap(inputFiles);
   const staticRegistrations: StaticRegistration[] = [];
   const dynamicRegistrations: DynamicRegistration[] = [];
@@ -780,13 +829,20 @@ export function generateWireSurfaceDocument(inputFiles: VirtualFile[]): WireSurf
     );
   });
 
-  staticRegistrations.sort(compareStaticRegistrations);
-  dynamicRegistrations.sort(compareDynamicRegistrations);
+  const csharpResult = scanCSharpFiles(csharpFiles);
+
+  const allStaticRegistrations = [...staticRegistrations, ...csharpResult.registrations].sort(
+    compareStaticRegistrations,
+  );
+  const allDynamicRegistrations = [
+    ...dynamicRegistrations,
+    ...csharpResult.dynamicRegistrations,
+  ].sort(compareDynamicRegistrations);
 
   return {
     header: buildHeader(),
-    registrations: staticRegistrations,
-    dynamicRegistrations,
+    registrations: allStaticRegistrations,
+    dynamicRegistrations: allDynamicRegistrations,
   };
 }
 
