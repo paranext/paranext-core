@@ -155,6 +155,34 @@
       "message": "Reworded because the Spanish read \"Abrir como ventana flotante\" for an action that floats a panel inside the window rather than opening an operating system window. Use %tab_contextMenu_floatPanel% instead."
     }
   },
+  "%tab_contextMenu_moveTabToNewWindow_failed%": {
+    "fallbackKey": "%tab_contextMenu_moveTab_failed%",
+    "deprecationInfo": {
+      "date": "2026-08-28",
+      "message": "Renamed because moving a tab to an existing window can fail the same way as moving it to a new one, and this message now covers both. Use %tab_contextMenu_moveTab_failed% instead."
+    }
+  },
+  "%tab_contextMenu_moveTabToNewWindow_failedMayHaveClosed%": {
+    "fallbackKey": "%tab_contextMenu_moveTab_failedMayHaveClosed%",
+    "deprecationInfo": {
+      "date": "2026-08-28",
+      "message": "Renamed because moving a tab to an existing window can fail the same way as moving it to a new one, and this message now covers both. Use %tab_contextMenu_moveTab_failedMayHaveClosed% instead."
+    }
+  },
+  "%tab_contextMenu_moveTabToNewWindow_failedNotReopened%": {
+    "fallbackKey": "%tab_contextMenu_moveTab_failedNotReopened%",
+    "deprecationInfo": {
+      "date": "2026-08-28",
+      "message": "Renamed because moving a tab to an existing window can fail the same way as moving it to a new one, and this message now covers both. Use %tab_contextMenu_moveTab_failedNotReopened% instead."
+    }
+  },
+  "%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%": {
+    "fallbackKey": "%tab_contextMenu_moveTab_failedReopenedElsewhere%",
+    "deprecationInfo": {
+      "date": "2026-08-28",
+      "message": "Renamed because moving a tab to an existing window can fail the same way as moving it to a new one, and this message now covers both. Use %tab_contextMenu_moveTab_failedReopenedElsewhere% instead."
+    }
+  },
   "%test_deprecated_string%": {
     "deprecationInfo": {
       "date": "2025-04-21",
