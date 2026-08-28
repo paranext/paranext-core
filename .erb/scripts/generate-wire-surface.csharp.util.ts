@@ -850,11 +850,36 @@ const TRADITIONAL_DATA_PROVIDER_RE =
 const BASE_CALL_RE = /:\s*base\s*\(/;
 
 /**
+ * Fail loudly when a file holds more than one match of a pattern this scanner reads once.
+ *
+ * Silently taking the first match would drop the second registration from the snapshot with no diff
+ * and no error — the exact invisibility this artifact exists to remove.
+ */
+function assertAtMostOneMatch(
+  pattern: RegExp,
+  masked: string,
+  filePath: string,
+  what: string,
+): void {
+  const all = masked.match(new RegExp(pattern.source, `${pattern.flags.replace('g', '')}g`));
+  if (all && all.length > 1)
+    throw new Error(
+      `${filePath} holds ${all.length} ${what} declarations; this scanner reads one per file. ` +
+        `Split the file, or teach the scanner to enumerate them — taking the first would drop the rest silently.`,
+    );
+}
+
+/**
  * A class extending `DataProvider` directly, whose constructor passes its name to the base
  * constructor — either the primary-constructor form (`class X(...) : DataProvider(name, ...)`) or
- * the traditional form (`class X : DataProvider { X(...) : base(name, ...) {} }`). Relies on
- * PNX007's one-type-per-file rule (`Paranext.Analyzers`) to scan each file for at most one such
- * class.
+ * the traditional form (`class X : DataProvider { X(...) : base(name, ...) {} }`).
+ *
+ * Scans at most one such class per file. That matches the repo's one-type-per-file convention
+ * (`PNX004` in `Paranext.Analyzers`), but the convention is NOT enforced by the build here:
+ * `c-sharp/Directory.Build.props` only references the analyzer when `PARANEXT_AI_BRANCH` is set,
+ * which happens on `ai/*` branches — the props file describes itself as "effectively a no-op" on
+ * every other branch, main included. So a second such class in one file would be a silent
+ * misattribution rather than a compile error, and this throws instead of taking the first match.
  */
 function scanDataProviderSubclassConstructors(
   file: VirtualFile,
@@ -864,6 +889,7 @@ function scanDataProviderSubclassConstructors(
   registrations: CSharpStaticRegistration[],
   dynamicRegistrations: CSharpDynamicRegistration[],
 ): void {
+  assertAtMostOneMatch(PRIMARY_CTOR_DATA_PROVIDER_RE, masked, file.path, 'DataProvider subclass');
   const primaryMatch = PRIMARY_CTOR_DATA_PROVIDER_RE.exec(masked);
   let openIndex: number | undefined;
   if (primaryMatch) {
@@ -914,9 +940,9 @@ const GET_NETWORK_OBJECT_DOCUMENTATION_RE =
 /**
  * A `protected override NetworkObjectDocumentation GetNetworkObjectDocumentation()` override (the
  * idiom `ParatextProjectDataProvider` uses to mark only some of its projectInterfaces' methods
- * experimental). Recorded under the overriding class's own name (via PNX007's one-type-per-file
- * rule), since the provider this documents may itself be dynamically named (e.g. a per-project
- * PDP's runtime-generated id) — the point of this entry is to track the documentation, not the wire
+ * experimental). Recorded under the overriding class's own name (via the one-type-per-file rule),
+ * since the provider this documents may itself be dynamically named (e.g. a per-project PDP's
+ * runtime-generated id) — the point of this entry is to track the documentation, not the wire
  * name.
  */
 function scanGetNetworkObjectDocumentationOverrides(

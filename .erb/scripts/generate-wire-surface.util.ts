@@ -165,6 +165,12 @@ const RECOGNIZED_PATTERNS: string[] = [
 ];
 
 const EXCLUDED_PATTERNS: string[] = [
+  'A registration call reached through a renamed import (`import { registerCommand as rc }`) or a ' +
+    'destructured receiver (`const { set } = networkObjectService`). Call sites are matched on the ' +
+    "callee's literal identifier, so a renamed one is not recognised -- and it is not filed as " +
+    'dynamic either, since nothing matched to begin with. No such call site exists today; this is ' +
+    'stated so the limit is known rather than discovered. The live rpc.discover comparison is what ' +
+    'would surface one.',
   'createNetworkEventEmitter(eventType) — the deprecated synchronous event emitter. It does not ' +
     'participate in central registration and deliberately does not appear in the generated OpenRPC ' +
     'document, so it is excluded here for the same reason.',
@@ -852,11 +858,12 @@ function processCall(
  */
 const LIVENESS_ANNOTATIONS: ReadonlyMap<
   string,
-  { liveness: RegistrationLiveness; reason: string }
+  { liveness: RegistrationLiveness; file: string; reason: string }
 > = new Map([
   [
     'testMain',
     {
+      file: 'src/main/main.ts',
       liveness: 'transient',
       reason:
         'Self-disposed 20 seconds after registration ' +
@@ -867,6 +874,7 @@ const LIVENESS_ANNOTATIONS: ReadonlyMap<
   [
     'testExtensionHost',
     {
+      file: 'src/extension-host/extension-host.ts',
       liveness: 'transient',
       reason:
         'Self-disposed 10 seconds after registration (setTimeout(testEH.dispose, 10000) in ' +
@@ -877,6 +885,7 @@ const LIVENESS_ANNOTATIONS: ReadonlyMap<
   [
     'platform.placeholder',
     {
+      file: 'src/extension-host/extension-host.ts',
       liveness: 'transient',
       reason:
         'Self-disposed 3 seconds after registration (setTimeout(realDP.dispose, 3000) in ' +
@@ -887,6 +896,7 @@ const LIVENESS_ANNOTATIONS: ReadonlyMap<
   [
     'platformScriptureEditor.onWillSwitchProject',
     {
+      file: 'extensions/src/platform-scripture-editor/src/main.ts',
       liveness: 'lazy',
       reason:
         'Created lazily on first use, inside the project-switch overlay path in ' +
@@ -897,6 +907,7 @@ const LIVENESS_ANNOTATIONS: ReadonlyMap<
   [
     'platformScriptureEditor.onDidSwitchProject',
     {
+      file: 'extensions/src/platform-scripture-editor/src/main.ts',
       liveness: 'lazy',
       reason:
         'Created lazily on first use, inside the project-switch overlay path in ' +
@@ -915,7 +926,11 @@ const LIVENESS_ANNOTATIONS: ReadonlyMap<
 function applyLivenessAnnotations(registrations: StaticRegistration[]): StaticRegistration[] {
   return registrations.map((registration) => {
     const annotation = LIVENESS_ANNOTATIONS.get(registration.name);
-    if (!annotation) return registration;
+    // Matched on file as well as name. An annotation excludes its registration from the live
+    // comparison, so a different registration that later took an annotated name would inherit that
+    // exclusion silently -- and the staleness check below would stay quiet about it, because the
+    // name still matched something.
+    if (!annotation || annotation.file !== registration.file) return registration;
     return { ...registration, liveness: annotation.liveness, livenessReason: annotation.reason };
   });
 }
@@ -931,8 +946,12 @@ function applyLivenessAnnotations(registrations: StaticRegistration[]): StaticRe
 export function findStaleLivenessAnnotations(
   registrations: readonly StaticRegistration[],
 ): string[] {
-  const names = new Set(registrations.map((registration) => registration.name));
-  return [...LIVENESS_ANNOTATIONS.keys()].filter((name) => !names.has(name));
+  const sites = new Set(
+    registrations.map((registration) => `${registration.name}\u0000${registration.file}`),
+  );
+  return [...LIVENESS_ANNOTATIONS.entries()]
+    .filter(([name, annotation]) => !sites.has(`${name}\u0000${annotation.file}`))
+    .map(([name]) => name);
 }
 
 function compareStaticRegistrations(a: StaticRegistration, b: StaticRegistration): number {

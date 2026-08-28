@@ -677,14 +677,16 @@ describe('scanCSharpFiles: networkEvent shape', () => {
 
 describe('compareCodeUnits', () => {
   it('orders by code unit, which is where it differs from the host locale', () => {
-    // In a typical locale `localeCompare` sorts 'a' before 'B'; by code unit 'B' (66) precedes
-    // 'a' (97). Asserting the code-unit answer is what pins this comparator as locale-independent:
+    // A typical locale collates 'a' before 'B'; by code unit 'B' (66) precedes 'a' (97). Only the
+    // code-unit answer is asserted — asserting what `localeCompare` returns would put a
+    // host-dependent expectation inside the test that exists to keep host dependence out, and the
+    // unit suite runs unguarded on all three platforms. Pinning the code-unit answer is what makes
+    // this comparator locale-independent:
     // the generated snapshot is regenerated on three platforms and compared byte for byte, so an
     // ordering that consults the host's locale or ICU build makes the build fail on whichever
     // platform disagrees.
     expect(compareCodeUnits('a', 'B')).toBeGreaterThan(0);
     expect(compareCodeUnits('B', 'a')).toBeLessThan(0);
     expect(compareCodeUnits('a', 'a')).toBe(0);
-    expect('a'.localeCompare('B')).toBeLessThan(0);
   });
 });

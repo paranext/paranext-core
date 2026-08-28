@@ -43,7 +43,7 @@
   "scripts": {
     "assert:snap-metadata": "tsx ./.erb/scripts/assert-generated-snap-metadata.ts",
     "prebuild": "tsx ./.erb/scripts/notices-build-id.ts",
-    "build": "concurrently --kill-others-on-fail \"npm:build:main\" \"npm:build:extension-host\" \"npm:build:renderer\" \"npm:build:types\" \"npm:build:wire-surface\" \"npm:build:extensions\" \"npm:build:data-release\"",
+    "build": "concurrently --kill-others-on-fail \"npm:build:main\" \"npm:build:extension-host\" \"npm:build:renderer\" \"npm:build:types\" \"npm:build:extensions\" \"npm:build:data-release\" && npm run build:wire-surface",
     "build:data": "dotnet build c-sharp/ParanextDataProvider.sln",
     "build:data-release": "run-script-os",
     "build:data-release:linux": "dotnet publish c-sharp/ParanextDataProvider.csproj -r linux-x64 -o ./c-sharp/bin/Release/net8.0/publish/linux-x64/",
