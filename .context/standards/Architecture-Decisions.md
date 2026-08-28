@@ -2216,3 +2216,47 @@ step, no automation. Just a record.
   for a typed surface rather than a state key.
 - **Source:** PT-4346, global BCV control showing books from open resources.
 
+## ADR-runaway-data-hook-guard: `useData`'s runaway guard counts subscribes and deliveries, degrades rather than throws, and expires
+
+- **Date:** 2026-08-28
+- **Status:** Accepted
+- **Context:** `create-use-data-hook.util.ts` carries a circuit breaker (PT-1561) meant to stop a
+  `useData` consumer from spinning in a render loop. It counted **renders** in a dependency-less
+  effect, then took an early `return` that skipped every hook below it — changing the hook count
+  between renders. React threw mid-render, and because the app has no error boundary, the web view's
+  React root unmounted: the blank editor. The trip path had therefore never once degraded
+  gracefully. Fixing the hook order forced three policy questions about the platform's most-consumed
+  hook, since consumers now observe a tripped state instead of a crash.
+- **Decision:** (1) Count **deliveries and subscribe attempts**, never renders. (2) A trip degrades:
+  the subscription is dropped, `[PlatformError, undefined, true]` is returned, and the error carries
+  the `RESOURCE_EXHAUSTED` code. (3) A trip **expires** after a cooldown, then re-arms and
+  resubscribes.
+- **Alternatives:**
+  - *Keep counting renders* — rejected: a consumer can re-render rapidly for reasons unrelated to
+    this data (a busy parent, a cold-start storm, fast typing), and stopping a healthy subscription
+    over that is wrong. This was the false positive behind the original report.
+  - *Count deliveries only* — rejected once measured: an unstable selector rebuilds the subscription
+    every render, and each subscription is superseded before it resolves, so `useEventAsync` mutes
+    every emission and nothing is ever delivered. A probe produced 201 subscribe attempts in 200ms
+    with zero warnings — invisible to delivery counting, and it is precisely the loop the warning's
+    "memoize your parameters" advice describes.
+  - *Report `isLoading: false` while tripped* — rejected: it tells consumers that gate on loading
+    that this IS the answer, resolving a three-state interface-mode check to the wrong mode and
+    rendering raw localization keys as real strings. The value has not resolved and will be retried,
+    so `true` is the honest report.
+  - *Keep the trip permanent* (PT-1561's behavior) — rejected: a Send/Receive or bulk import fans
+    out real updates faster than any consumer can, so a legitimate burst left a pane degraded long
+    after the provider went quiet, recoverable only by closing the tab.
+  - *Re-arm on selector or data provider change* — rejected as actively harmful: an unstable
+    selector, the very mistake being reported, gets a new identity every render, so this would reset
+    the counter every render and disarm the guard entirely. Re-arming must be time-based.
+  - *Keep the setter live while tripped* — rejected as destructive: consumers substitute a default
+    value for a `PlatformError`, so a live setter lets the first keystroke overwrite real content
+    with that default.
+- **Consequences:** Consumers of `useData`/`useProjectData`/`useSetting` may now observe a
+  `RESOURCE_EXHAUSTED` error, a temporarily `undefined` setter, and a `true` `isLoading` that later
+  resolves. Hooks that assert a non-optional setter must supply their own fallback (`useSetting`
+  does). A genuine loop is bounded to one burst per cooldown rather than stopped outright, which is
+  a deliberate trade of absolute containment for self-healing. Revisit if the thresholds prove
+  wrong in the field — they remain arbitrary, inherited from PT-1561.
+- **Source:** PT-4421; resubscribe-storm and burst behavior measured during review of this change.
