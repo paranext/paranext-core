@@ -179,8 +179,13 @@ function mockCommands(
         return overrides.saveError
           ? Promise.reject(overrides.saveError)
           : Promise.resolve(undefined);
-      default:
+      case 'platform.restart':
         return Promise.resolve(undefined);
+      default:
+        // Every command IdentifyStep sends is named above, so an unlisted one means the component
+        // grew a dependency this helper does not model. Fail loudly rather than hand back a silent
+        // `undefined` that some later assertion misreads as a real answer.
+        return Promise.reject(new Error(`Unexpected command: ${command}`));
     }
   });
 }
@@ -315,7 +320,7 @@ describe('IdentifyStep', () => {
 
     await user.click(screen.getByRole('button', { name: /save and restart/i }));
 
-    // Without this the reminder dot would nag about the registration the user just fixed.
+    // Verify that the cached registration state was corrected so the reminder dot won't nag.
     await waitFor(() => expect(getRegistrationValidity()).toBe('valid'));
   });
 

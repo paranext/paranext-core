@@ -296,9 +296,10 @@ export function IdentifyStep({
       // non-fatal: the user just registered successfully, so 'invalid' on the next launch is almost
       // certainly a server fluke. The flag is consumed (cleared) on the next resolveInternal call.
       markJustRegistered();
-      // Correct THIS session too. The toolbar (mounted behind the wizard) has already cached a
-      // definitive 'invalid', and the restart below is best-effort — if it fails, the user stays in
-      // a session whose reminder dot nags about the registration they just fixed.
+      // Correct THIS session too, not just the next one. The toolbar mounted behind the wizard has
+      // already cached a definitive 'invalid', and the restart below is best-effort: if it fails,
+      // the user stays in this session. Without this publish, that stale 'invalid' would keep the
+      // reminder dot nagging about the registration they just fixed.
       publishRegistrationValidity('valid');
       // Restart immediately — the explicit "Save and restart" button already sets the expectation.
       await (onRestartAfterSave ?? (() => commandService.sendCommand('platform.restart')))();
