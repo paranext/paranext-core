@@ -2250,8 +2250,12 @@ step, no automation. Just a record.
   re-election is deliberately not implemented and a future need for it would mean this rule has
   been broken. The dialog's restore promise is user-visible and load-bearing, so the relaunch e2e
   that asserts every window comes back is what keeps that sentence honest. The mode-switch half
-  of PT-4286 (a live switch to Simple must close the secondaries) is out of this decision's scope
-  and waits on #2425. Linux behaviour of the native dialog is best-effort and unverified on real
+  of PT-4286 (a live switch to Simple must close the secondaries) is out of this decision's scope; PT-4286
+  carries it. Linux behaviour of the native dialog is best-effort and unverified on real
   hardware at the time of writing.
+  The renderer learns whether it is the primary window from a URL parameter fixed at window
+  creation (`isMainWindow`), and reads it for one purpose: whether to draw the top-level menu.
+  No lifecycle, routing or persistence decision consults it, and it cannot describe a window that
+  becomes primary later — PT-4278's window-manager service is the durable answer for that.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
