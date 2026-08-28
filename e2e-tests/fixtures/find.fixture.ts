@@ -245,20 +245,22 @@ export async function openScriptureEditor(projectId: string): Promise<void> {
  * box on mount (`find.web-view.tsx`), so a stale term reappears as a pre-filled query.
  *
  * Clearing through the data provider is the only reset available: the panel exposes no
- * clear-history control, and every mounted find WebView is subscribed, so the panel re-renders
- * against the cleared values.
+ * clear-history control, and every mounted find WebView is subscribed, so the panel re-renders with
+ * the empty history list. The last search term is different: the WebView restores it into the
+ * search box exactly once per mount, so clearing it takes effect on the NEXT launch rather than in
+ * a live panel — which is why resetting a panel in place still has to clear the input itself.
  *
  * `projectId` must be the project whose state the panel is showing (the find WebView keys both
  * values by the scroll group's source project); another project's state would be cleared without
  * changing anything the panel displays.
  */
-export async function clearFindHistory(projectId: string | undefined): Promise<void> {
+export async function clearFindPersistedState(projectId: string | undefined): Promise<void> {
   // The provider maps a falsy projectId to the project-less storage key, so an unset id would
   // clear a different project's state and report success. The resulting failure surfaces much
   // later as an unrelated timeout, so refuse it here where the cause is still visible.
   if (!projectId)
     throw new Error(
-      'clearFindHistory needs the id of the project the panel is showing; it was unset. The ' +
+      'clearFindPersistedState needs the id of the project the panel is showing; it was unset. ' +
         'suite assigns it in beforeAll, so check that beforeAll ran and found its project.',
     );
   await sendPapiRequestOnce(
