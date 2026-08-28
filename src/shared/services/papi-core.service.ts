@@ -137,4 +137,5 @@ export type {
   FocusSubject,
   SetFocusSubject,
   SetFocusSpecifier,
+  WindowSummary,
 } from '@shared/services/window.service-model';
