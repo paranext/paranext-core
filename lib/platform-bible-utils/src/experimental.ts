@@ -25,3 +25,7 @@ export {
   type ScriptureBounds,
 } from './scripture/scripture-navigation.util';
 export { resolveReferenceHistoryDirection } from './reference-history-direction.util';
+export {
+  isNavigableProjectIds,
+  NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
+} from './navigable-project-ids';

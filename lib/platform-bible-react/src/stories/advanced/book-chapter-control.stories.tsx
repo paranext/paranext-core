@@ -12,6 +12,7 @@ type BookChapterControlWrapperProps = {
   handleSubmit: (scrRef: SerializedVerseRef) => void;
   className?: string;
   getActiveBookIds?: () => string[];
+  getAdditionalBookIds?: () => string[];
   getEndVerse?: (bookId: string, chapterNum: number) => number;
   onOpenChange?: (open: boolean) => void;
   disabled?: boolean;
@@ -172,6 +173,56 @@ export const WithLimitedBooks: Story = {
         story: 'Shows the component with a limited set of available books.',
       },
     },
+  },
+};
+
+export const WithBooksFromOpenResources: Story = {
+  args: {
+    scrRef: defaultScrRef,
+    getActiveBookIds: () => ['GEN', 'EXO', 'MAT', 'JHN'],
+    // Books the active project lacks but an open resource has. They stay hidden until the user asks
+    // for them, then render greyed and selectable rather than disabled.
+    getAdditionalBookIds: () => ['PSA', 'ROM', 'REV', 'TOB'],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The active project has four books; four more are reachable through open resources. ' +
+          'The list shows only the project\'s books until "Show more books" is pressed, after ' +
+          'which the reachable books appear greyed — still selectable, with a tooltip and an ' +
+          'accessible name explaining why they are greyed.',
+      },
+    },
+  },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open the control', async () => {
+      await userEvent.click(canvas.getByRole(TRIGGER_ROLE));
+      await expectPopoverToBeOpenAndVisible();
+    });
+
+    await step("Only the project's books are listed", async () => {
+      const dropdown = within(getDropdown());
+      await expect(dropdown.queryByRole('option', { name: /Romans/ })).not.toBeInTheDocument();
+    });
+
+    await step('Reveal the books from open resources', async () => {
+      const dropdown = within(getDropdown());
+      await userEvent.click(dropdown.getByRole('button', { name: 'Show more books' }));
+
+      const romans = await dropdown.findByRole('option', { name: /Romans/ });
+      await expect(romans).toHaveAccessibleName(/not in this project/);
+      // Greyed, but never marked unavailable — the user can still navigate there
+      await expect(romans).not.toHaveAttribute('aria-disabled', 'true');
+    });
+
+    await step("Return to the project's own books", async () => {
+      const dropdown = within(getDropdown());
+      await userEvent.click(dropdown.getByRole('button', { name: 'Show project books only' }));
+      await waitFor(() =>
+        expect(dropdown.queryByRole('option', { name: /Romans/ })).not.toBeInTheDocument(),
+      );
+    });
   },
 };
 
