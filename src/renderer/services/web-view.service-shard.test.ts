@@ -33,13 +33,6 @@ const SUPPLEMENT_TAB_ID = 'supplement-tab';
 const SUPPLEMENT_FLAG_SETTING = 'test.isSupplementEnabled';
 
 const mocks = vi.hoisted(() => ({
-  settingsGet: vi.fn(),
-  settingsSubscribe: vi.fn<
-    (
-      key: string,
-      callback: (newSetting: unknown) => Promise<void>,
-    ) => Promise<() => Promise<boolean>>
-  >(async () => async () => true),
   networkRequest: vi.fn(),
   bufferedEmitters: new Map<string, { emit: ReturnType<typeof vi.fn> }>(),
 }));
@@ -424,25 +417,25 @@ function makeDockLayoutTrackingOneWebView(initialLayout: LayoutInfo, webViewId: 
 /** Wire up a web view provider and theme so `openWebView`'s dock-add path can run to completion */
 async function primeWebViewOpenPath() {
   const module = await import('@renderer/services/web-view.service-shard');
-  const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
   const { localThemeService } = await import('@renderer/services/theme.service');
-  // `webViewProviderService` and `localThemeService` are mocked as `{}` (file-level mocks above);
-  // attaching stub methods needs a type assertion because the plain-object mock type doesn't model
-  // them. Same reasoning as "a failed dock add rolls back what the open already did" below.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
-    async () => ({
-      getWebView: async (saved: { id: string; webViewType: string }) => ({
-        id: saved.id,
-        webViewType: saved.webViewType,
-        contentType: 'html',
-        content: '<p>Home</p>',
-        state: {},
-      }),
+  // Configure the provider through the hoisted mock the module-level `vi.mock` factory installed,
+  // rather than assigning over `webViewProviderService.getWebViewProvider`. `vi.resetModules()` does
+  // not re-run mock factories, so the mocked service object — and any property assigned onto it —
+  // outlives every test in this file: an assignment here would silently detach
+  // `getWebViewProviderMock` for the rest of the run, leaving later tests that configure or assert
+  // on it wired to nothing.
+  getWebViewProviderMock.mockImplementation(async () => ({
+    getWebView: async (saved: { id: string; webViewType: string }) => ({
+      id: saved.id,
+      webViewType: saved.webViewType,
+      contentType: 'html',
+      content: '<p>Home</p>',
+      state: {},
     }),
-  );
-  // `localThemeService` is mocked as `{}` too; same untyped-attach reasoning as the provider stub
-  // above requires the assertion here as well.
+  }));
+  // `localThemeService` is mocked as `{}`; attaching a stub method to it needs a type assertion
+  // because the plain-object mock type doesn't model it. Same reasoning as "a failed dock add rolls
+  // back what the open already did" below.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   (localThemeService as { getCurrentThemeSync?: unknown }).getCurrentThemeSync = vi.fn(() => ({
     cssVariables: {},
@@ -1635,7 +1628,7 @@ describe('loadLayout restores this window’s layout from the main process', () 
   });
 
   test('a window created for pending content skips the default-layout supplement even when its flag is enabled', async () => {
-    mocks.settingsGet.mockImplementation(async (key: string) =>
+    settingsGetMock.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? 'power' : true,
     );
     respondToGetLayout({ kind: 'pending-content' });
@@ -1646,7 +1639,7 @@ describe('loadLayout restores this window’s layout from the main process', () 
     // The empty base has no anchor panel for a supplement tab to attach to, so an empty result
     // alone says nothing about whether the supplement was considered. The pending-content path
     // leaves before the entries are fetched at all — which is exactly what the unread flag shows.
-    expect(mocks.settingsGet).not.toHaveBeenCalledWith(SUPPLEMENT_FLAG_SETTING);
+    expect(settingsGetMock).not.toHaveBeenCalledWith(SUPPLEMENT_FLAG_SETTING);
   });
 
   test('a window created for pending content is not held back from pushing its layout', async () => {
@@ -1681,7 +1674,7 @@ describe('loadLayout reports a dock that landed empty', () => {
 
   beforeEach(() => {
     // Power mode with the supplement flag off: `loadLayout` takes the direct-load (unmerged) branch
-    mocks.settingsGet.mockImplementation(async (key: string) =>
+    settingsGetMock.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? 'power' : false,
     );
   });
@@ -1707,7 +1700,7 @@ describe('loadLayout reports a dock that landed empty', () => {
     // Flag on, so `loadLayout` takes the supplemented branch instead of the direct-load one above —
     // but the base (empty) layout has no anchor panel for the supplement tab to attach to, so
     // merging still leaves the loaded layout with zero tabs
-    mocks.settingsGet.mockImplementation(async (key: string) =>
+    settingsGetMock.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? 'power' : true,
     );
     respondToGetLayoutAndEmptied({ kind: 'empty' }, { action: 'closing' });
@@ -2125,7 +2118,7 @@ describe('a window the main process has told is closing', () => {
    * refusal these tests are about, so the refusal has to happen before any of that to pass.
    */
   async function windowToldItIsClosing() {
-    mocks.settingsGet.mockImplementation(async (key: string) =>
+    settingsGetMock.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? 'power' : false,
     );
     // `closing` rather than the default `open-home`: these tests are about the latch that answer
@@ -2178,10 +2171,7 @@ describe('a window the main process has told is closing', () => {
     // `undefined` here rather than throw. `undefined` is the established "the provider chose not to
     // create it" answer, and the router acts on it by cleaning up as though the open had been
     // considered and turned down — which is not what happened.
-    const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
-    (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
-      async () => ({ getWebView: async () => undefined }),
-    );
+    getWebViewProviderMock.mockImplementation(async () => ({ getWebView: async () => undefined }));
 
     await expect(shard.openWebView('test.type')).rejects.toThrow();
   });
@@ -2189,7 +2179,7 @@ describe('a window the main process has told is closing', () => {
 
 describe('a dock emptied by removal while running on a fallback layout', () => {
   test('reports nothing — a fallback dock made empty is treated like one born empty', async () => {
-    mocks.settingsGet.mockImplementation(async (key: string) =>
+    settingsGetMock.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? 'power' : false,
     );
     mocks.networkRequest.mockImplementation(async (requestType: string) => {
@@ -2781,23 +2771,17 @@ describe('setDetachedScrRef', () => {
 describe('a failed dock add rolls back what the open already did', () => {
   test('emits the close event and evicts state when addWebViewToDock throws', async () => {
     const module = await import('@renderer/services/web-view.service-shard');
-    const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
     const { localThemeService } = await import('@renderer/services/theme.service');
     // Provider succeeds — the failure comes later, at the dock
-    // `webViewProviderService` is mocked as `{}` (see the file-level mock above); attaching a stub
-    // method to it needs a type assertion because the plain-object mock type doesn't model it.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
-      async () => ({
-        getWebView: async (saved: { id: string }) => ({
-          id: saved.id,
-          webViewType: 'test.type',
-          contentType: 'html',
-          content: '<p>content</p>',
-          state: { some: 'state' },
-        }),
+    getWebViewProviderMock.mockImplementation(async () => ({
+      getWebView: async (saved: { id: string }) => ({
+        id: saved.id,
+        webViewType: 'test.type',
+        contentType: 'html',
+        content: '<p>content</p>',
+        state: { some: 'state' },
       }),
-    );
+    }));
     // `openOrReloadWebView` builds the injected theme stylesheet from `theme.cssVariables` before
     // it ever reaches the dock add, so the stub needs that field even though nothing in this test
     // reads it back.
@@ -2852,11 +2836,11 @@ describe('captureAndCloseWebView', () => {
     // `withWindowScopedWebViewIds`) — `globalThis.windowId` is `'2'` for every test in this file.
     const SCOPED_TARGET_WEB_VIEW_ID = `${TARGET_WEB_VIEW_ID}-w2`;
     let interfaceMode = 'simple';
-    mocks.settingsGet.mockImplementation(async (key: string) =>
+    settingsGetMock.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? interfaceMode : false,
     );
     let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
-    mocks.settingsSubscribe.mockImplementation(
+    settingsSubscribeMock.mockImplementation(
       async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
         interfaceModeCallback = callback;
         return async () => true;
