@@ -199,6 +199,16 @@ test.beforeAll(async ({ electronApp }) => {
   await findScriptureEditorFrame(page);
 });
 
+// Top-level (not inside any describe below) so it covers every test in the file: the Electron app
+// is worker-scoped and shared across all of them, so a test that throws before its own trailing
+// closeFindPanel() leaves the panel open for whichever test runs next — a failure in one test
+// reading as an unrelated failure in another. Cannot just call closeFindPanel() again — it asserts
+// the tab is visible first and would itself throw on the (overwhelmingly common) case where the
+// test already closed it cleanly. isVisible() is a non-throwing snapshot, safe either way.
+test.afterEach(async ({ mainPage }) => {
+  if (await findTab(mainPage).isVisible()) await closeFindPanel(mainPage);
+});
+
 // ---------------------------------------------------------------------------
 // Tests: the Replace surface exists in Power mode
 // ---------------------------------------------------------------------------
