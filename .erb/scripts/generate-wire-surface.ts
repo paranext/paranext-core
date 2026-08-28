@@ -7,6 +7,7 @@
  * no files changed after build" step catches a stale snapshot.
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -118,6 +119,14 @@ const csharpDynamicCount = document.dynamicRegistrations.filter(
   (r) => r.language === 'csharp',
 ).length;
 
+// Scanned-file counts and a content digest, so a platform that regenerates this file differently
+// says what it saw rather than only that the bytes disagreed. A file-count difference points at the
+// scan input; equal counts with a different digest points at the content.
+const digest = crypto.createHash('sha256').update(serialized).digest('hex').slice(0, 16);
+
+console.log(
+  `Scanned ${files.length} TypeScript and ${csharpFiles.length} C# source files; digest ${digest}.`,
+);
 console.log(
   `Generated wire surface snapshot at ${OUTPUT_PATH}: ${document.registrations.length} declared ` +
     `registrations (${csharpRegistrationCount} C#), ${document.dynamicRegistrations.length} dynamic ` +

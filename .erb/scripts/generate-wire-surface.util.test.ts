@@ -642,7 +642,9 @@ describe('generateWireSurfaceDocument: liveness annotations', () => {
   it('stamps a transient annotation onto the matching registration by name, leaving an unannotated one untouched', () => {
     const files: VirtualFile[] = [
       {
-        path: 'src/fixture-liveness.ts',
+        // The annotation is keyed on name AND file, so the fixture has to sit where the real
+        // registration does.
+        path: 'src/main/main.ts',
         text: `
           networkObjectService.set('testMain', testMain);
           networkObjectService.set('NotAnnotated', obj);
@@ -660,10 +662,27 @@ describe('generateWireSurfaceDocument: liveness annotations', () => {
     expect(findRegistration(document.registrations, 'NotAnnotated')?.liveness).toBeUndefined();
   });
 
+  it('leaves an annotated name alone when it appears in a different file', () => {
+    // An annotation excludes its registration from the live comparison. Keying on name alone would
+    // let an unrelated registration that happens to reuse the name inherit that exclusion -- and
+    // the staleness check would stay silent, because the name still matched something.
+    const files: VirtualFile[] = [
+      {
+        path: 'src/somewhere-else.ts',
+        text: `
+          networkObjectService.set('testMain', testMain);
+        `,
+      },
+    ];
+    const document = generateWireSurfaceDocument(files);
+
+    expect(findRegistration(document.registrations, 'testMain')?.liveness).toBeUndefined();
+  });
+
   it('stamps a lazy annotation onto the matching registration', () => {
     const files: VirtualFile[] = [
       {
-        path: 'src/fixture-liveness-lazy.ts',
+        path: 'extensions/src/platform-scripture-editor/src/main.ts',
         text: `
           networkService.createNetworkEventEmitterAsync('platformScriptureEditor.onWillSwitchProject');
         `,
@@ -690,17 +709,25 @@ describe('generateWireSurfaceDocument: liveness annotations', () => {
   });
 
   it('reports nothing stale once every annotated name is present', () => {
-    const registrations: StaticRegistration[] = [
-      'testMain',
-      'testExtensionHost',
-      'platform.placeholder',
-      'platformScriptureEditor.onWillSwitchProject',
-      'platformScriptureEditor.onDidSwitchProject',
-      'someOtherLiveRegistration',
-    ].map((name) => ({
+    const registrations: StaticRegistration[] = (
+      [
+        ['testMain', 'src/main/main.ts'],
+        ['testExtensionHost', 'src/extension-host/extension-host.ts'],
+        ['platform.placeholder', 'src/extension-host/extension-host.ts'],
+        [
+          'platformScriptureEditor.onWillSwitchProject',
+          'extensions/src/platform-scripture-editor/src/main.ts',
+        ],
+        [
+          'platformScriptureEditor.onDidSwitchProject',
+          'extensions/src/platform-scripture-editor/src/main.ts',
+        ],
+        ['someOtherLiveRegistration', 'src/fixture.ts'],
+      ] as const
+    ).map(([name, file]) => ({
       category: 'networkObject',
       name,
-      file: 'src/fixture.ts',
+      file,
       registeredVia: 'networkObjectService.set',
       documented: false,
       docsStaticallyResolved: true,
