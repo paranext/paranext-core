@@ -4,7 +4,7 @@ description: Code review process, Reviewable workflow, code stewards, and PR app
 version: 1.3.0
 status: active
 created: 2026-03-04
-last_updated: 2026-08-27
+last_updated: 2026-08-28
 ---
 
 # Code Review Guide
@@ -55,7 +55,8 @@ Linux users can install the published `.deb` or `.rpm` instead. The upstream
 `curl -fsSL https://roborev.io/install.sh | bash` one-liner also works, but read the script
 first if you use it.
 
-**2. Configure and verify your agent, then optionally add the agent integration.**
+**2. Configure and verify your agent, then add the agent hook.** The hook is what makes roborev
+speak up; the skills install is genuinely optional.
 
 ```bash
 roborev config set --global default_agent claude-code   # pick your review agent
@@ -65,6 +66,11 @@ roborev check-agents                                    # confirm the agent is r
 roborev skills install                                  # optional: /roborev-fix, /roborev-refine, /roborev-snooze
 roborev agent-hook install --agent claude               # drives the reminders; roborev is inert without it
 ```
+
+`agent-hook install` writes to your **global** Claude Code configuration, not to anything in this
+repository — nothing here is or can be committed. So opting in is a per-machine decision, not a
+per-project one: once installed, the reminder fires in every project you open in Claude Code, not
+only in paranext-core. Uninstalling is the same command with `uninstall`.
 
 Per-commit review volume is high, so pin the review model to Sonnet; the interactive
 `/code-review` command is unaffected and keeps whatever model the current session already runs on.
@@ -83,7 +89,8 @@ see a job for that commit. An empty list means reviews are not being enqueued; c
 
 If you install the agent hook, keep roborev's default thresholds — they are tuned so the stack of
 unfixed findings stays small between reminders. One override is required, though: the shipped
-default instruction names Codex's `$roborev-fix`, which does nothing in Claude Code.
+default instruction names Codex's `$roborev-fix`, which does nothing in Claude Code. It goes in your
+per-machine `~/.roborev/config.toml`, never in the repository's committed `.roborev.toml`.
 
 ```toml
 [agent_hook]
@@ -212,4 +219,4 @@ Request code reviews in the `#reviews` channel on the [Platform.Bible Discord se
 | 1.0.0   | 2026-03-04 | Initial version                                                     |
 | 1.1.0   | 2026-06-15 | De-ported the AI-Assisted-Review (porting) section for the general profile |
 | 1.2.0   | 2026-08-13 | Added optional roborev per-commit review section with per-machine setup |
-| 1.3.0   | 2026-08-27 | Pinned roborev's review model to Sonnet per machine; noted that a rebase enqueues no reviews; advised against installing the agent hooks |
+| 1.3.0   | 2026-08-28 | Pinned roborev's review model to Sonnet per machine; noted that a rebase enqueues no reviews; documented the agent hook's machine-wide scope and when to decline its reminder |
