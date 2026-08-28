@@ -143,7 +143,7 @@ export function FootnoteItem({
   }
 
   const footnoteOpening = showMarkers ? (
-    <span className="marker">{`\\${footnote.marker} `}</span>
+    <span className="marker">{`\\${footnote.marker}`}</span>
   ) : undefined;
 
   const footnoteClosing = showMarkers ? (
@@ -154,7 +154,7 @@ export function FootnoteItem({
     // USFM does not specify a marker for caller, so instead of a usfm_* class, we use a
     // specific class name in case styling is needed.
     <span className={cn('note-caller tw:inline-block', { formatted: isCallerFormatted })}>
-      {caller}{' '}
+      {caller}
     </span>
   );
   // The category is the one part of a footnote that never appears in `content`: it rides in the
@@ -167,12 +167,21 @@ export function FootnoteItem({
     <span className="note-category tw:inline-block">
       {showMarkers && <span className="marker">{`\\cat `}</span>}
       {footnote.category}
-      {showMarkers && <span className="marker">{`\\cat*`}</span>}{' '}
+      {showMarkers && <span className="marker">{`\\cat*`}</span>}
     </span>
   );
   const footnoteTargetRef = targetRef && (
     <>{renderContent(footnote.marker, [targetRef], showMarkers, false)} </>
   );
+
+  // The spaces separating the header's parts belong BETWEEN them, not inside them: CSS removes a
+  // collapsible space at the end of an inline-block's last line, so a trailing space in the caller
+  // or category box is in the DOM and yet invisible, running the two together (`+People`). Keeping
+  // them out here also draws them at the header's own size rather than the 0.7em the `.marker`
+  // glyphs use, which is what makes `\f + \cat People\cat*` read as separated rather than `\f+`.
+  const hasOpening = !!footnoteOpening;
+  const hasCaller = !!footnoteCaller;
+  const hasCategory = !!footnoteCategory;
 
   const layoutClass = layout === 'horizontal' ? 'horizontal' : 'vertical';
   const markerClass = showMarkers ? 'marker-visible' : '';
@@ -184,7 +193,9 @@ export function FootnoteItem({
     <>
       <div className={cn('textual-note-header tw:col-span-1 tw:w-fit tw:text-nowrap', baseClasses)}>
         {footnoteOpening}
+        {hasOpening && (hasCaller || hasCategory) && ' '}
         {footnoteCaller}
+        {hasCaller && hasCategory && ' '}
         {footnoteCategory}
       </div>
       <div className={cn('textual-note-header tw:col-span-1 tw:w-fit tw:text-nowrap', baseClasses)}>
