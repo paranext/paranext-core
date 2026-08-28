@@ -2533,7 +2533,12 @@ step, no automation. Just a record.
   survives as the verification half instead. *Police the markers with a lint rule* — rejected
   explicitly; it would flag legitimate unmarked methods, which is the failure TJ named when asking
   for a snapshot rather than a rule.
-- **Consequences:** Every PR that changes the wire surface now shows it. The C# half is a
+- **Consequences:** A liveness annotation is a trapdoor: the generator throws when an annotated name
+  no longer matches any registration, which catches a **dangling** annotation, but nothing can
+  statically disprove a **wrong** one. A registration annotated transient or lazy that is in fact
+  durably live is excluded from the live comparison forever, silently. Treat additions to that map
+  as a deliberate narrowing of what gets verified, not as bookkeeping. Every PR that changes the
+  wire surface now shows it. The C# half is a
   pattern-based text scan rather than an AST one (no Roslyn in this toolchain), so it is the weaker
   half, and its limitation plus its one excluded idiom are stated in the artifact's own header. A
   new registration shape that neither scanner recognises is still invisible until the live
