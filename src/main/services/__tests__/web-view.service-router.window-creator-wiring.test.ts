@@ -104,7 +104,7 @@ describe('web-view window creator wiring', () => {
     // The window the creator will report as created, already announced as ready so the router does
     // not need to wait on anything but the creator wiring this test is exercising.
     withWindows({ 7: emptyWindowShard() });
-    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
 
     const freshWindowPromise = createFreshWindow('someType');
 
