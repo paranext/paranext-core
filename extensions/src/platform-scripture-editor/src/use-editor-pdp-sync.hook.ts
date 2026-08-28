@@ -30,10 +30,10 @@ export const NON_CONVERGENCE_WARN_THRESHOLD = 25;
  * differing incoming is almost always the editor's own USFM-normalized echo.
  *
  * Once the last local edit is OLDER than this window, focus alone no longer confers ownership: an
- * incoming update is applied exactly as if the editor were unfocused. Without this bound, a user
- * who left the caret parked in the editor deferred every external write indefinitely — a
- * Send/Receive merge or another app's concurrent edit was overwritten by the focused editor's
- * pre-merge content no matter how long ago they last typed.
+ * incoming update is applied exactly as if the editor were unfocused. The bound is what keeps a
+ * caret parked in the editor from deferring every external write indefinitely, which would let the
+ * focused editor's pre-merge content overwrite a Send/Receive merge or another app's concurrent
+ * edit no matter how long ago the user last typed.
  *
  * Sized far above the real echo round-trip (700ms save debounce + save + echo, low seconds) so a
  * typing pause never lets an echo clobber the caret, while still bounding how long a parked caret

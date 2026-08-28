@@ -18,12 +18,9 @@ namespace TestParanextDataProvider
     /// USFM 3.1 INVERTS the core inline-marker nesting rules. When the ParatextData package is
     /// upgraded to a 9.6+ version (adding <c>UsfmVersionOption.Version3_1</c>), this test fails
     /// until Platform.Bible honors the project's <c>&lt;UsfmVersion&gt;</c> setting wherever the
-    /// &lt;= 3.0 rules are currently hard-coded. The full design context lives in the
-    /// scripture-editors repo: docs/superpowers/specs/2026-07-24-nesting-alignment-design.md and,
-    /// for the closer/attribute deltas below, the 2026-07-30 attribute-display W2-D findings
-    /// (.superpowers/sdd/2026-07-30-attribute-display/w2d-pt9-findings.md). What must become
-    /// version-switched (Paratext 9 reference sites in parentheses, verified against
-    /// ~/source/repos/Paratext):
+    /// &lt;= 3.0 rules are currently hard-coded. The checklist below is the record of what that
+    /// entails — what must become version-switched, with the Paratext 9 reference sites in
+    /// parentheses, verified against ~/source/repos/Paratext:
     /// </para>
     ///
     /// <para>

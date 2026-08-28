@@ -5,11 +5,9 @@
  * Z-index for elements that need to appear above rc-dock floating tabs and potential modals (~200)
  * — the menubar, and every `PopoverContent`.
  *
- * This value was 250 originally, which put it below the overlay, modal, and tooltip layers where a
- * popover belongs. Raising it to 600 lifted popovers above ALL of them without moving anything that
- * was pinned relative to it, which is why content portalled out of a popover now needs
- * {@link Z_INDEX_ABOVE_POPOVER} to stay visible. Two consequences of that jump are still unresolved
- * and are deliberately not papered over here: a tooltip triggered from inside a popover
+ * At 600 this sits above the overlay, modal, and tooltip layers, which is why content portalled
+ * out of a popover needs {@link Z_INDEX_ABOVE_POPOVER} to stay visible. Two consequences are
+ * unresolved and deliberately not papered over here: a tooltip triggered from inside a popover
  * ({@link Z_INDEX_TOOLTIP}, 550) renders BEHIND it, and a popover renders OVER a modal dialog
  * ({@link Z_INDEX_MODAL}, 500). Both want the scale re-ordered rather than another constant raised.
  */

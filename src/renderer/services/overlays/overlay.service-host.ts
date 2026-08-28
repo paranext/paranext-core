@@ -788,10 +788,10 @@ async function showCommandPalette(
 
   // Leading-edge debounce: drop rapid re-triggers within 50ms — but only when this WebView has NO
   // palette open. A show that REPLACES an open palette is a legitimate rapid second request (the
-  // `\` commit key reopens the palette back-to-back), and rejecting it here left the OLD palette
-  // mounted while the owner's rejection cleanup cleared its session — keystrokes then fell through
-  // to the document under a visible palette. The debounce exists to absorb accidental
-  // double-opens, not replaces.
+  // `\` commit key reopens the palette back-to-back), and rejecting one leaves the OLD palette
+  // mounted while the owner's rejection cleanup clears its session, dropping keystrokes through to
+  // the document under a visible palette. The debounce absorbs accidental double-opens, not
+  // replaces.
   const hasExistingPalette = getOverlaysByWebView(webViewId).some(
     (o) => o.type === 'commandPalette',
   );

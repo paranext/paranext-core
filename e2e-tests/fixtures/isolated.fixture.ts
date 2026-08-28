@@ -49,9 +49,9 @@ export interface IsolatedFixtures {
    * Defaults to `'power'`: the isolated suite's specs are written against the power-mode layout —
    * simple mode always loads the static `simpleLayout` (simple-layout.data.ts), which has NO Home
    * tab, so power-layout patterns like `waitForHomeTab` and "close all non-Home tabs" sweeps can
-   * never succeed there. Before this option existed, these specs silently inherited whatever mode
-   * the developer's dev-appdata happened to hold (the app's own no-settings default is 'simple',
-   * under which they cannot pass); seeding makes the requirement explicit and deterministic.
+   * never succeed there. Seeding the value is what makes that requirement explicit: without it a
+   * run inherits whatever mode the developer's dev-appdata happens to hold, and the app's own
+   * no-settings default is 'simple', under which these specs cannot pass.
    *
    * The mode also changes editor DOM that specs assert on: in power mode the scripture editor
    * defaults to Standard view (inline, editable markers), while simple mode keeps the 'formatted'

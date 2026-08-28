@@ -1271,7 +1271,7 @@ describe('overlay.service-host', () => {
       expect(pendingItemLookups).toHaveLength(2);
 
       // A's localization resolves first, but B has already superseded it — A aborts itself
-      // without ever mounting its palette (previously it mounted briefly and B's sweep removed it)
+      // without ever mounting its palette, so no palette flashes on screen for B's sweep to remove.
       pendingItemLookups[0]();
       await flushMicrotasks();
       const abortError = await promiseAOutcome;

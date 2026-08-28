@@ -816,9 +816,9 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
       updateCommandPaletteState(overlay.id, {
         filterText,
         // A new filter produces a NEWLY RANKED list, so the old highlight index means nothing in
-        // it — same rule as the host's forwarded updateCommandPalette path. Carrying the index
-        // forward (the store only clamps) left the highlight on whatever now sat at the stale
-        // position, and Enter committed that item.
+        // it — same rule as the host's forwarded updateCommandPalette path. The index must reset
+        // rather than carry forward (the store only clamps it), or the highlight lands on whatever
+        // now sits at the stale position and Enter commits that item.
         selectedIndex: 0,
         itemCount: filterPaletteItems(
           overlay.items,

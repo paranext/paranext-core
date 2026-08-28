@@ -1,8 +1,8 @@
 /**
- * End-to-end verification for Standard view's USFM-attribute display (see
- * `2026-07-30-attribute-display-design.md` in the scripture-editors repo). Standard view now
- * renders a char span's `|…` attribute bytes as engine-owned editable text, and edits to that text
- * re-tokenize on caret departure (pend/settle) instead of freezing the span.
+ * End-to-end verification for Standard view's USFM-attribute display: Standard view renders a char
+ * span's `|…` attribute bytes as engine-owned editable text, and edits to that text re-tokenize on
+ * caret departure (pend/settle) instead of freezing the span. The contract those bytes answer to is
+ * in `docs/standard-view-invariants.md` in the scripture-editors repo.
  *
  * The bundled sample WEB project ships no `\w`/`\+w` word-list markers, so this spec CREATES both
  * shapes by typing literal USFM marker syntax into the live editor — Standard view's `\` keydown

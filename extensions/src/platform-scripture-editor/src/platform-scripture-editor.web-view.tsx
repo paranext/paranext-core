@@ -1168,6 +1168,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // repopulates.
             if (decision.showPane) setFootnotesPaneVisible(true);
             if (decision.sendPaneFocusRequest) {
+              // TODO(PT-4478): The editor's index and the pane's own index are computed from
+              // different snapshots, so they can disagree inside the save debounce window. Unify
+              // them on one source rather than recomputing here.
               const index = getNoteIndex();
               if (index !== undefined) setFootnotePaneFocusRequest({ index });
               else

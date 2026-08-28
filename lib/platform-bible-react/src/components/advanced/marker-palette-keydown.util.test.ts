@@ -177,9 +177,9 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
   it('Enter with zero matches is a no-op — claimed, no driver call, session stays open (P9 parity)', () => {
     // Paratext 9: Enter over a palette whose typed filter matches nothing does NOTHING and the
     // palette stays open (Backspace widens the filter, Space commits the typed marker, Escape
-    // closes). Previously the table returned 'ended' unconditionally on Enter while the overlay
-    // service dropped the zero-match commit and kept the palette open — orphaning the overlay
-    // over a dead session (subsequent typing landed in the document under a floating palette).
+    // closes). The table must not report 'ended' here: the overlay service drops a zero-match
+    // commit and keeps the palette open, so ending the session would orphan the overlay over a
+    // dead one and let subsequent typing land in the document under a floating palette.
     (['backslash', 'selection'] as const).forEach((kind) => {
       const driver = makeDriver();
       const state = session(kind, 'qqqq');
@@ -550,8 +550,8 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
   it('enter session: Enter commits during the focus race instead of reaching the document', () => {
     // Enter-Enter is the whole gesture — open the split menu, accept its preselected choice — and
     // the second Enter lands inside the palette's own focus retry window (up to twenty animation
-    // frames). Passing it through was not neutral: it reached Lexical, which performed the
-    // unmarked plain split this palette exists to prevent, and left the palette open with nothing
+    // frames). Passing it through is not neutral: it reaches Lexical, which performs the unmarked
+    // plain split this palette exists to prevent, and leaves the palette open with nothing
     // committed.
     const driver = makeDriver();
     const event = makeEvent('Enter');
@@ -562,7 +562,7 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
   });
 
   it('enter session: Escape dismisses during the focus race', () => {
-    // The counterpart: Escape means "no split", and passing it through left the palette open.
+    // The counterpart: Escape means "no split", and passing it through leaves the palette open.
     const driver = makeDriver();
     const event = makeEvent('Escape');
     expect(handleMarkerPaletteSessionKeyDown(event, session('enter', ''), driver)).toBe('ended');

@@ -123,8 +123,8 @@ export function debounce<TFunc extends (...args: any[]) => any>(
   // The promise and its settlers are captured AT ENTRY and the stored promise is detached
   // immediately, before the first await: this invocation's outcome must reach the callers who were
   // waiting on IT, and a call arriving while it settles is a DIFFERENT invocation that needs its
-  // own promise. Sharing one across both settled the newer caller with the older call's result and
-  // discarded the newer outcome — including a rejection — with nothing to observe it.
+  // own promise. One promise shared across both would settle the newer caller with the older
+  // call's result and discard the newer outcome — including a rejection — unobserved.
   const runInvocation = async (args: Parameters<TFunc>): Promise<void> => {
     const resolveInvocation = promiseResolve;
     const rejectInvocation = promiseReject;
