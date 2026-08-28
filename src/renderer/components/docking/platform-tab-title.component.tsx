@@ -4,7 +4,7 @@ import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hoo
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
 import {
   floatTab,
-  getAllOpenWebViewDefinitionsSync,
+  getOpenTabCountSync,
   updateTabPartialSync,
 } from '@renderer/services/web-view.service-shard';
 import {
@@ -284,9 +284,8 @@ export function PlatformTabTitle({
    * window titles.
    *
    * Read on open rather than during render because both halves are expensive to establish: the
-   * window list is a round trip to the main process, and counting this window's web views walks
-   * every open definition and touches their state. Neither belongs in the render of every tab title
-   * on every layout change.
+   * window list is a round trip to the main process, and counting this window's tabs walks the
+   * whole dock layout. Neither belongs in the render of every tab title on every layout change.
    *
    * Deliberately kept when the menu closes, so every open after the first renders the last known
    * targets straight away and refreshes them behind the menu. Only the first open of a given tab's
@@ -304,8 +303,23 @@ export function PlatformTabTitle({
     isOnlyTabInSecondaryWindow: boolean;
   }>({ otherWindows: [], isOnlyTabInSecondaryWindow: false });
 
+  /**
+   * Identifies the most recent call to {@link handleMenuOpenChange}, so a round trip that resolves
+   * after a newer call was already made does not overwrite what the newer call found. The same
+   * newest-wins shape `window-label.util.ts` keeps for its own async label resolution, adapted to a
+   * ref because this guard is per tab instance rather than module-wide.
+   */
+  const latestMenuOpenRequestRef = useRef<symbol | undefined>(undefined);
+
   const handleMenuOpenChange = async (isOpen: boolean) => {
     if (!isOpen) return;
+
+    // Every call here passes the same `true`, so there is no resolved value of its own to compare
+    // against later the way `window-label.util.ts` compares its resolved label — a token stands in
+    // for that, identifying this call so a round trip that lands after a newer one was already
+    // asked for can tell it is stale and not overwrite what the newer one found.
+    const thisMenuOpenRequest = Symbol('menu-open-request');
+    latestMenuOpenRequestRef.current = thisMenuOpenRequest;
 
     let windows: WindowSummary[];
     try {
@@ -314,7 +328,8 @@ export function PlatformTabTitle({
       // Leave the target list empty, which hides the submenu rather than offering an empty one. An
       // empty list would read as "there are no other windows", which is a different claim
       logger.warn(`Could not read the open windows for the tab menu: ${getErrorMessage(error)}`);
-      setMenuTargets({ otherWindows: [], isOnlyTabInSecondaryWindow: false });
+      if (latestMenuOpenRequestRef.current === thisMenuOpenRequest)
+        setMenuTargets({ otherWindows: [], isOnlyTabInSecondaryWindow: false });
       return;
     }
 
@@ -323,26 +338,27 @@ export function PlatformTabTitle({
       (window) => `${window.windowId}` === globalThis.windowId && window.isMain,
     );
 
-    // Counting this window's web views is guarded separately because it can fail for reasons that
-    // say nothing about the windows — it throws before the dock layout registers. Folding it into
-    // the read above would throw away a window list that arrived perfectly well, and report the
-    // failure as one the open windows could not be read.
+    // Counting this window's tabs is guarded separately because it can fail for reasons that say
+    // nothing about the windows — it throws before the dock layout registers. Folding it into the
+    // read above would throw away a window list that arrived perfectly well, and report the failure
+    // as one the open windows could not be read.
     //
-    // Moving the only web view out of a window that is not the primary one would build an identical
-    // window and empty this one, which is the no-op Paratext 9 hides its float item for.
+    // Moving the only web view out of a window that is not the primary one empties that window only
+    // when nothing else is left behind — a window still holding a dialog, an error tab, or any other
+    // non-web-view tab is not emptied by the move. Counting every tab, not just web views, is what
+    // tells the two cases apart; an actually-empty window would build an identical one and lose this
+    // one, which is the no-op Paratext 9 hides its float item for.
     let isOnlyTabInSecondaryWindow = false;
     try {
-      isOnlyTabInSecondaryWindow =
-        isThisWindowSecondary && getAllOpenWebViewDefinitionsSync().length <= 1;
+      isOnlyTabInSecondaryWindow = isThisWindowSecondary && getOpenTabCountSync() <= 1;
     } catch (error) {
       // Offering the action is the safe way to be wrong: at worst the user makes a window they did
       // not want, which they can close
-      logger.warn(
-        `Could not count this window's web views for the tab menu: ${getErrorMessage(error)}`,
-      );
+      logger.warn(`Could not count this window's tabs for the tab menu: ${getErrorMessage(error)}`);
     }
 
-    setMenuTargets({ otherWindows, isOnlyTabInSecondaryWindow });
+    if (latestMenuOpenRequestRef.current === thisMenuOpenRequest)
+      setMenuTargets({ otherWindows, isOnlyTabInSecondaryWindow });
   };
 
   // Handle applying and removing the CSS styles for flashing
