@@ -301,12 +301,8 @@ export async function launchElectronApp(
 
   // Only for a FRESH profile. A relaunch into a preserved profile is deliberately continuing the
   // state its own earlier launch wrote — including whatever reference that launch ended on — so
-  // re-pinning here would erase the very thing such a test exists to check.
-  //
-  // Remembered rather than re-derived below: the launch-failure paths must undo exactly what this
-  // decided. `preserveUserDataDir` is a different option and does not track it — a chain's FIRST
-  // launch passes `preserveUserDataDir: true` with no `userDataDir`, so it pins here while a guard
-  // on `preserveUserDataDir` would refuse to restore.
+  // re-pinning here would erase the very thing such a test exists to check. The launch-failure
+  // paths below restore unconditionally regardless of this — see their own comment for why.
   const pinnedAppGlobalState = !opts.userDataDir;
   if (pinnedAppGlobalState) pinAppGlobalState();
 
@@ -352,9 +348,11 @@ export async function launchElectronApp(
     // Clean up the temp directory created above — launch never succeeded. Preserved profiles are
     // kept even here so a failed relaunch does not destroy the state under investigation.
     if (!opts.preserveUserDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
-    // A launch that never came up starts no chain, so there is nothing left to continue and the
-    // developer's own state must go back.
-    if (pinnedAppGlobalState) restoreAppGlobalState();
+    // Unconditional, not gated on whether THIS call pinned: restoreAppGlobalState() is a safe
+    // no-op when nothing is pinned, and a relaunch chain's LATER launch failing must still restore
+    // the EARLIER launch's still-active pin — nothing else ever will, since that responsibility
+    // was riding on a successful teardown this failure just prevented.
+    restoreAppGlobalState();
     throw error;
   }
 
@@ -379,9 +377,8 @@ export async function launchElectronApp(
       }
     }
     if (!opts.preserveUserDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
-    // A launch that never came up starts no chain, so there is nothing left to continue and the
-    // developer's own state must go back.
-    if (pinnedAppGlobalState) restoreAppGlobalState();
+    // See the matching comment above: unconditional and safe either way.
+    restoreAppGlobalState();
     throw error;
   }
   console.log('WebSocket server is ready');
@@ -1062,6 +1059,7 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
  * of its fixture-setup budget the one time this was tried unbudgeted.
  */
 async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<void> {
+  const start = Date.now();
   const firstRunDialog = page.getByTestId('first-run-dialog');
   const escapeHatch = page.getByRole('button', {
     name: /continue without (finishing setup|registration)/i,
@@ -1083,7 +1081,8 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
       'first-run-store.ts, expected to be rare; if it recurs often, that race needs its own fix.',
   );
   await escapeHatch.click();
-  await expect(firstRunDialog).not.toBeVisible({ timeout: 10_000 });
+  const remainingForDismiss = Math.max(1000, timeout - (Date.now() - start));
+  await expect(firstRunDialog).not.toBeVisible({ timeout: remainingForDismiss });
 }
 
 /**
