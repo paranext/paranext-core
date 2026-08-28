@@ -7,6 +7,7 @@
  * no files changed after build" step catches a stale snapshot.
  */
 
+import * as childProcess from 'child_process';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -32,59 +33,76 @@ const CSHARP_EXCLUDED_DIR_NAMES = new Set([
   'Paranext.Analyzers.Tests',
 ]);
 
-function walkFiles(
-  absoluteRoot: string,
-  relativeRoot: string,
+/**
+ * Repo-relative paths of every file git tracks under the given roots, in git's own order.
+ *
+ * The wire surface is a property of committed source, so the scan reads the INDEX rather than the
+ * filesystem. Walking the filesystem instead made the generated snapshot depend on build state: a
+ * build writes files into these trees, so a machine that had built saw a different set from one
+ * that had not, and two platforms that had built saw different sets again. The artifact is
+ * regenerated on three platforms and compared byte for byte, so its input has to be the same set
+ * everywhere.
+ *
+ * One consequence to know: a newly created file is invisible here until it is staged. That suits
+ * the commit-time and CI paths, which are the ones that gate.
+ */
+function listTrackedFiles(roots: readonly string[]): string[] {
+  const result = childProcess.spawnSync('git', ['ls-files', '-z', '--', ...roots], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  // Fail loudly rather than fall back to a filesystem walk: a silent fallback would reintroduce the
+  // build-state dependence on exactly the machine where git is unavailable, and the snapshot would
+  // look healthy while being generated from a different input set.
+  if (result.error)
+    throw new Error(
+      `Could not run git to list tracked files (${result.error.message}). This generator reads the ` +
+        `git index deliberately; it has no filesystem fallback because that would make its output ` +
+        `depend on build state.`,
+    );
+  if (result.status !== 0)
+    throw new Error(
+      `git ls-files exited ${result.status}: ${result.stderr.trim()}. Run this from a git checkout.`,
+    );
+  // Sorted here rather than relying on git's index order: that order is byte-sorted today, but it
+  // is an assumption about another tool, and this file's output has to be identical on three
+  // platforms.
+  return result.stdout
+    .split('\u0000')
+    .filter((entry) => entry.length > 0)
+    .sort(compareCodeUnits);
+}
+
+function readTracked(
+  roots: readonly string[],
   excludedDirNames: ReadonlySet<string>,
   isMatch: (fileName: string) => boolean,
 ): VirtualFile[] {
-  const results: VirtualFile[] = [];
-
-  function walk(absoluteDir: string, relativeDir: string): void {
-    const entries = fs
-      .readdirSync(absoluteDir, { withFileTypes: true })
-      // The filesystem does not promise a stable enumeration order across platforms; sort so the
-      // scan itself never depends on it (the output is also sorted independently of this).
-      .sort((a, b) => compareCodeUnits(a.name, b.name));
-
-    entries.forEach((dirEntry) => {
-      if (excludedDirNames.has(dirEntry.name)) return;
-
-      const absolutePath = path.join(absoluteDir, dirEntry.name);
-      const relativePath = relativeDir ? `${relativeDir}/${dirEntry.name}` : dirEntry.name;
-
-      if (dirEntry.isDirectory()) {
-        walk(absolutePath, relativePath);
-        return;
-      }
-      if (!dirEntry.isFile()) return;
-      if (!isMatch(dirEntry.name)) return;
-
-      results.push({ path: relativePath, text: fs.readFileSync(absolutePath, 'utf8') });
-    });
-  }
-
-  walk(absoluteRoot, relativeRoot);
-  return results;
+  return listTrackedFiles(roots)
+    .filter((filePath) => {
+      const segments = filePath.split('/');
+      const fileName = segments[segments.length - 1] ?? '';
+      if (!isMatch(fileName)) return false;
+      return !segments.slice(0, -1).some((segment) => excludedDirNames.has(segment));
+    })
+    .map((filePath) => ({
+      path: filePath,
+      text: fs.readFileSync(path.join(REPO_ROOT, filePath), 'utf8'),
+    }));
 }
 
 function collectSourceFiles(): VirtualFile[] {
-  return SCAN_ROOTS.flatMap((root) =>
-    walkFiles(
-      path.join(REPO_ROOT, root),
-      root,
-      EXCLUDED_DIR_NAMES,
-      (fileName) => /\.tsx?$/.test(fileName) && !/\.test\.tsx?$/.test(fileName),
-    ),
+  return readTracked(
+    SCAN_ROOTS,
+    EXCLUDED_DIR_NAMES,
+    (fileName) => /\.tsx?$/.test(fileName) && !/\.test\.tsx?$/.test(fileName),
   );
 }
 
 function collectCSharpFiles(): VirtualFile[] {
-  return walkFiles(
-    path.join(REPO_ROOT, CSHARP_SCAN_ROOT),
-    CSHARP_SCAN_ROOT,
-    CSHARP_EXCLUDED_DIR_NAMES,
-    (fileName) => fileName.endsWith('.cs'),
+  return readTracked([CSHARP_SCAN_ROOT], CSHARP_EXCLUDED_DIR_NAMES, (fileName) =>
+    fileName.endsWith('.cs'),
   );
 }
 
