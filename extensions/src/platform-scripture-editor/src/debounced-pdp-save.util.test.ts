@@ -201,6 +201,23 @@ describe('resolveUsjToSaveToPdp', () => {
 // these two decision points identically to a typed one. If either the equality guard or the
 // fire-time branch ever grew a notion of "user edit" that an undo failed to satisfy, the editor-side
 // fix would be silently undone from this end.
+describe('resolveUsjToSaveToPdp — an authored non-breaking space is a change', () => {
+  it('saves when the user types `~` between two words', () => {
+    // `~` is USFM's non-breaking space, so the editor's USJ carries U+00A0 where the PDP has a
+    // plain space. Regularizing that away made the edit look like nothing had changed, so it sat
+    // unsaved until some unrelated edit happened to push the whole paragraph out.
+    const editor = usjWith('stuff \u00a0 things');
+
+    expect(resolveUsjToSaveToPdp(editor, usjWith('stuff things'))).toEqual(editor);
+  });
+
+  it('still skips a save when only ordinary space runs differ', () => {
+    expect(
+      resolveUsjToSaveToPdp(usjWith('stuff \u00a0 things'), usjWith('stuff  \u00a0   things')),
+    ).toBeUndefined();
+  });
+});
+
 describe('an undone document reaches the PDP the same way a typed one does', () => {
   const milestoneUsj = (marker: string): Usj => ({
     type: 'USJ',

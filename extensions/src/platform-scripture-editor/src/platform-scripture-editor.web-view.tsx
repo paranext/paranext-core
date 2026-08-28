@@ -2689,6 +2689,41 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // when its USJ is SET programmatically, so a save wired there would echo every applied update
     // straight back to the PDP. Until that is fixed, `saveUsjToPdpIfUpdated` (which compares
     // first) is used everywhere.
+    /**
+     * Tells the user a save failed, for the two backend rejections that are worth surfacing: a
+     * sync-edit-block (expected and transient — editing pauses during an automatic Send/Receive, so
+     * a warning) and a permissions failure (an error). Touches no editor content, so both the live
+     * rejection path and the zombie path can report through it.
+     *
+     * @returns Whether the rejection was one of those two.
+     */
+    async function notifyRecoverableSaveFailure(errorMessage: string): Promise<boolean> {
+      const isSyncEditBlocked = SYNC_EDIT_BLOCKED_REGEX.test(errorMessage);
+      const isPermissionsError = PERMISSIONS_EXCEPTION_REGEX.test(errorMessage);
+      if (!isSyncEditBlocked && !isPermissionsError) return false;
+
+      try {
+        if (isSyncEditBlocked) {
+          await notifySyncEditBlocked();
+        } else {
+          await papi.notifications.send({
+            severity: 'error',
+            message: formatReplacementString(
+              localizedStrings['%webView_platformScriptureEditor_error_permissions_format%'],
+              { projectName },
+            ),
+          });
+        }
+      } catch (innerError) {
+        logger.error(
+          `Error handling ${
+            isSyncEditBlocked ? 'sync-edit-block' : 'permissions'
+          } exception when saving USJ to PDP: ${getErrorMessage(innerError)}`,
+        );
+      }
+      return true;
+    }
+
     async function saveUsjToPdpInternal(newUsj: Usj): Promise<boolean> {
       const rawSave = saveUsjToPdpRawStableRef.current;
       if (!rawSave) return false;
@@ -2704,9 +2739,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           return rawSave(newUsj);
         });
         if (!outcome.ran) {
-          // A zombie write (settled only after the guard's timeout release) already warned at
-          // release time and its bytes did reach the PDP; nothing more to say here.
-          if (outcome.released) return false;
+          if (outcome.released) {
+            // A zombie write — one that settled only after the guard's 60s release. If it RESOLVED,
+            // its bytes reached the PDP and the release warning already said all there is to say.
+            // If it REJECTED, the user's edits did not save, so say so — but do NOT restore
+            // `usjFromPdp` the way the live rejection path below does: that snapshot is at least as
+            // old as the release, so restoring it would discard every edit made since.
+            if (outcome.error !== undefined) {
+              const zombieMessage = getErrorMessage(outcome.error);
+              logger.error(
+                `Error saving USJ to PDP (write rejected after the in-flight guard released, so the editor keeps its content): ${zombieMessage}`,
+              );
+              await notifyRecoverableSaveFailure(zombieMessage);
+            }
+            return false;
+          }
           // A save arriving while another write is in flight is DROPPED here, not queued: the
           // debouncer has already consumed its pending args, and the echo-driven push-back only
           // re-pushes while the editor still shows this document — so a chapter-switch flush
@@ -2758,39 +2805,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         return true;
       } catch (e) {
-        // The write rejected; the guard's `finally` already cleared the in-flight flag.
+        // The write rejected while it still owned the guard, so the guard's `finally` cleared
+        // the in-flight flag (a rejection AFTER the release comes back as `outcome.error` above).
         const errorMessage = getErrorMessage(e);
         logger.error(`Error saving USJ to PDP: ${errorMessage}`);
 
-        // Two recoverable backend rejections revert the editor to the last PDP state and notify;
-        // only the message differs. A sync-edit-block is expected/transient (editing paused during
-        // an automatic Send/Receive), so it is a warning; a permissions failure is an error.
-        const isSyncEditBlocked = SYNC_EDIT_BLOCKED_REGEX.test(errorMessage);
-        const isPermissionsError = PERMISSIONS_EXCEPTION_REGEX.test(errorMessage);
-        if (!isSyncEditBlocked && !isPermissionsError) return true;
-
-        try {
-          if (usjFromPdp && editorRef.current) {
-            usjSentToPdp.current = usjFromPdp;
-            setEditorUsj.current(usjFromPdp);
+        // The two recoverable backend rejections revert the editor to the last PDP state and
+        // notify. The revert is safe here and only here: this write still owns the guard, so
+        // `usjFromPdp` is the state the failed write started from rather than a stale snapshot.
+        if (
+          SYNC_EDIT_BLOCKED_REGEX.test(errorMessage) ||
+          PERMISSIONS_EXCEPTION_REGEX.test(errorMessage)
+        ) {
+          try {
+            if (usjFromPdp && editorRef.current) {
+              usjSentToPdp.current = usjFromPdp;
+              setEditorUsj.current(usjFromPdp);
+            }
+          } catch (innerError) {
+            logger.error(
+              `Error restoring the last PDP state after a failed save: ${getErrorMessage(innerError)}`,
+            );
           }
-          if (isSyncEditBlocked) {
-            await notifySyncEditBlocked();
-          } else {
-            await papi.notifications.send({
-              severity: 'error',
-              message: formatReplacementString(
-                localizedStrings['%webView_platformScriptureEditor_error_permissions_format%'],
-                { projectName },
-              ),
-            });
-          }
-        } catch (innerError) {
-          logger.error(
-            `Error handling ${
-              isSyncEditBlocked ? 'sync-edit-block' : 'permissions'
-            } exception when saving USJ to PDP: ${getErrorMessage(innerError)}`,
-          );
+          await notifyRecoverableSaveFailure(errorMessage);
         }
         // The write RAN (and rejected); only a guard-dropped save reports false, since that is
         // the one case where the content never left the editor at all.

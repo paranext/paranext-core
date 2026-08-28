@@ -27,14 +27,17 @@ export const WRITE_GUARD_RELEASE_AFTER_MS = 60_000;
  * `finally` deliberately does NOT clear the guard, so it can never unlatch a successor's in-flight
  * write — and its outcome reports `{ ran: false, released: true }` rather than a completed run,
  * because by then a successor may own the guard against newer editor content, and reporting success
- * made the caller run its whole post-save pipeline against a `releaseAfterMs`-stale baseline. For
- * writes that settle normally the timer is cleared in the same `finally` and this path never runs.
+ * made the caller run its whole post-save pipeline against a `releaseAfterMs`-stale baseline. A
+ * zombie that REJECTS is reported the same way, with the rejection attached as `error` rather than
+ * thrown: the caller keeps its chance to tell the user the save failed, but cannot mistake the
+ * rejection for this write's live outcome and act on a stale baseline. For writes that settle
+ * normally the timer is cleared in the same `finally` and neither path runs.
  */
 export async function withWriteInFlightGuard<T>(
   isWritingRef: MutableRefObject<boolean>,
   write: () => Promise<T>,
   releaseAfterMs: number = WRITE_GUARD_RELEASE_AFTER_MS,
-): Promise<{ ran: true; result: T } | { ran: false; released?: true }> {
+): Promise<{ ran: true; result: T } | { ran: false; released?: true; error?: unknown }> {
   if (isWritingRef.current) return { ran: false };
   isWritingRef.current = true;
   // Local ownership token: once the release below fires, THIS write no longer owns the guard, so
@@ -53,6 +56,13 @@ export async function withWriteInFlightGuard<T>(
     // report a completed run (see the doc comment above).
     if (released) return { ran: false, released: true };
     return { ran: true, result };
+  } catch (error) {
+    // Same ownership rule as the resolve path, and it matters more here: a caller that handles a
+    // rejection by restoring its own last-known-good copy would be restoring one captured at least
+    // `releaseAfterMs` ago, discarding everything typed since. Hand the rejection back as DATA so
+    // the caller can still report it without treating it as this write's live outcome.
+    if (released) return { ran: false, released: true, error };
+    throw error;
   } finally {
     clearTimeout(releaseTimer);
     if (!released) isWritingRef.current = false;

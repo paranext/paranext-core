@@ -490,11 +490,11 @@ export default function FootnoteEditor({
 
   /**
    * Writes a new caller into the note the popover is editing, exactly as
-   * {@link handleNoteTypeChange} writes a new style: mutate the embed and replace it in the
-   * editor. The editor is what the caller is DISPLAYED from in editable marker mode (` + ` is
-   * text the user can see), so this is what makes the dropdown's effect visible — and the
-   * resulting editor change drives the save through `handleUsjChange`, so there is exactly one
-   * save per change and it reads the caller back out of the editor rather than from React state.
+   * {@link handleNoteTypeChange} writes a new style: mutate the embed and replace it in the editor.
+   * The editor is what the caller is DISPLAYED from in editable marker mode (`+` is text the user
+   * can see), so this is what makes the dropdown's effect visible — and the resulting editor change
+   * drives the save through `handleUsjChange`, so there is exactly one save per change and it reads
+   * the caller back out of the editor rather than from React state.
    */
   const applyCallerToEditor = useCallback(
     (resolvedCallerType: FootnoteCallerType, resolvedCustomCaller: string) => {
@@ -559,26 +559,22 @@ export default function FootnoteEditor({
     }
   };
 
-  const handleCallerTypeChange = useCallback(
-    (newCallerType: FootnoteCallerType) => {
+  const handleCallerChange = useCallback(
+    (newCallerType: FootnoteCallerType, newCustomCaller: string) => {
       // Stamped on the INTERACTION, not on the resulting save: this refreshes the host's
       // note-session staleness clock, and a user who opens the dropdown and re-picks what was
       // already selected has still just told us they are alive. The save that follows a real
       // change stamps it again, which is a no-op.
       onNoteEdit?.();
       setCallerType(newCallerType);
-      applyCallerToEditor(newCallerType, customCaller);
-    },
-    [applyCallerToEditor, customCaller, onNoteEdit],
-  );
-
-  const handleCustomCallerChange = useCallback(
-    (newCustomCaller: string) => {
-      onNoteEdit?.();
       setCustomCaller(newCustomCaller);
-      applyCallerToEditor(callerType, newCustomCaller);
+      // Applied from the REPORTED values, never from the state set just above: those setters are
+      // asynchronous, so a read of `callerType`/`customCaller` here still holds what the user
+      // replaced. One call carrying both halves is also what keeps a single choice to a single
+      // save — the note is replaced in the editor on the way through.
+      applyCallerToEditor(newCallerType, newCustomCaller);
     },
-    [applyCallerToEditor, callerType, onNoteEdit],
+    [applyCallerToEditor, onNoteEdit],
   );
 
   const handleNoteTypeChange = (value: string) => {
@@ -729,7 +725,12 @@ export default function FootnoteEditor({
         // captured once, at show time, while the session it drives is replaced on every reopen.
         runSessionKey: (event) => runPaletteSessionKeyRef.current(event),
         show: (keyForwarding) =>
-          markerPalette.show(items.map(markerMenuItemToPaletteItem), anchorRect, passive, keyForwarding),
+          markerPalette.show(
+            items.map(markerMenuItemToPaletteItem),
+            anchorRect,
+            passive,
+            keyForwarding,
+          ),
         restoreSelectionIfLost: () => {
           // A nulled selection would send focus() to the document END — here the note's closing
           // marker, where the apply lands the marker as an invalid trailing span while the typed
@@ -1067,9 +1068,8 @@ export default function FootnoteEditor({
             />
             <FootnoteCallerDropdown
               callerType={callerType}
-              updateCallerType={handleCallerTypeChange}
               customCaller={customCaller}
-              updateCustomCaller={handleCustomCallerChange}
+              updateCaller={handleCallerChange}
               localizedStrings={localizedStrings}
             />
           </div>
