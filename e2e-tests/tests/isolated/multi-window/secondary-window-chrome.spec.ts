@@ -1,9 +1,9 @@
 /**
- * Secondary-window chrome e2e test (PT-4279).
+ * Secondary-window chrome e2e test.
  *
  * A secondary window is meant to be indistinguishable from the main window except for one thing: it
- * does not draw the top-level menu. Investigation brief §6 — "Secondary windows keep the full
- * toolbar and remove **only** the top-level menu."
+ * does not draw the top-level menu. Secondary windows keep the full toolbar and remove **only** the
+ * top-level menu.
  *
  * The removal is a withheld `menuData` prop in `platform-bible-toolbar.tsx`, driven by
  * `globalThis.isMainWindow`, which the main process sets as a URL search parameter on the first
@@ -90,10 +90,12 @@ test.describe('secondary window chrome', () => {
     const page2 = await createSecondWindow(electronApp);
     const window2Id = getWindowIdOfPage(page2);
     await expect(page2.locator(TOOLBAR)).toBeAttached({ timeout: 60_000 });
-    await expect(page2.locator(APP_LOGO)).toBeAttached({ timeout: 60_000 });
+    await expect(page2.locator(APP_LOGO)).toBeVisible({ timeout: 60_000 });
     // The spec's third claim — "removed only the menu" — needs a real control, not just the
-    // toolbar's own root, which renders whether or not anything inside it survived.
-    await expect(page2.locator(BCV_CONTROL).first()).toBeAttached({ timeout: 60_000 });
+    // toolbar's own root, which renders whether or not anything inside it survived. `toBeVisible`
+    // rather than `toBeAttached`: a `display:none` or zero-size survivor would satisfy attachment
+    // without actually being "kept", which is what this assertion is meant to prove.
+    await expect(page2.locator(BCV_CONTROL).first()).toBeVisible({ timeout: 60_000 });
     logStep(`window ${window2Id} has the toolbar, the logo and its navigation control`);
 
     await new Promise<void>((resolve) => {

@@ -233,6 +233,11 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 // Sync-button block last set would leak into every describe that follows.
 beforeEach(() => {
   vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
+  // vitest has no URL search params for the renderer to read this from, so without a file-wide
+  // default it is `undefined` (a secondary window) in every describe that doesn't say otherwise —
+  // the opposite of what a main-window user actually sees. Describes that care about the secondary
+  // case still set `false` explicitly as a deliberate override.
+  globalThis.isMainWindow = true;
 });
 
 const mockSendCommand = (
@@ -799,8 +804,8 @@ describe('PlatformBibleToolbar — main menu data stays live', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSendCommand(true);
-    // The renderer sets this from a URL search parameter, which vitest has no equivalent of, so it
-    // is `undefined` here unless a test says otherwise. These tests are about the MAIN window.
+    // Already the file-wide default; stated explicitly because these tests are about the MAIN
+    // window specifically, and `vi.clearAllMocks()` above doesn't touch globals.
     globalThis.isMainWindow = true;
   });
 

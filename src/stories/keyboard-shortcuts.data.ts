@@ -372,50 +372,60 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'menubar-close',
     purpose: 'Close the open application menu',
     category: 'Menus',
-    context: 'Application menu bar (main window only — secondary windows have no menu bar)',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
     keys: { macOS: '⌥', windows: 'Alt', linux: 'Alt' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
     ],
   },
   {
     id: 'menubar-project',
     purpose: 'Open the Project menu',
     category: 'Menus',
-    context: 'Application menu bar (main window only — secondary windows have no menu bar)',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
     keys: { macOS: '⌥P', windows: 'Alt+P', linux: 'Alt+P' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
     ],
   },
   {
     id: 'menubar-window',
     purpose: 'Open the Window menu',
     category: 'Menus',
-    context: 'Application menu bar (main window only — secondary windows have no menu bar)',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
     keys: { macOS: '⌥L', windows: 'Alt+L', linux: 'Alt+L' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
     ],
   },
   {
     id: 'menubar-layout',
     purpose: 'Open the Layout menu',
     category: 'Menus',
-    context: 'Application menu bar (main window only — secondary windows have no menu bar)',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
     keys: { macOS: '⌥N', windows: 'Alt+N', linux: 'Alt+N' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
     ],
   },
   {
     id: 'menubar-help',
     purpose: 'Open the Help menu',
     category: 'Menus',
-    context: 'Application menu bar (main window only — secondary windows have no menu bar)',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
     keys: { macOS: '⌥H', windows: 'Alt+H', linux: 'Alt+H' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
     ],
   },
 ];

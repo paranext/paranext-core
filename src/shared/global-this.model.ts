@@ -85,8 +85,11 @@ declare global {
    */
   var windowId: string | undefined;
   /**
-   * Whether this renderer is the main window — the one that draws the top-level menu. Secondary
-   * windows get identical chrome minus that menu.
+   * Whether this renderer is the main window — the one that draws the top-level menu. On Windows
+   * and Linux, secondary windows get identical chrome minus that menu; on macOS the top-level menu
+   * lives in the OS-level menu bar rather than in-window, so this flag does not remove it there —
+   * every window can still reach it through the system menu bar, which is process-global and cannot
+   * differ per window.
    *
    * Set from the URL search params in the renderer process, and `undefined` everywhere else: the
    * main process and the extension host never assign it, and neither does the web view prelude, so

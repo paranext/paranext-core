@@ -1071,6 +1071,24 @@ declare module 'shared/global-this.model' {
      * @experimental
      */
     var windowId: string | undefined;
+    /**
+     * Whether this renderer is the main window — the one that draws the top-level menu. On Windows
+     * and Linux, secondary windows get identical chrome minus that menu; on macOS the top-level menu
+     * lives in the OS-level menu bar rather than in-window, so this flag does not remove it there —
+     * every window can still reach it through the system menu bar, which is process-global and cannot
+     * differ per window.
+     *
+     * Set from the URL search params in the renderer process, and `undefined` everywhere else: the
+     * main process and the extension host never assign it, and neither does the web view prelude, so
+     * code outside a renderer must not read this as a reliable `false`.
+     *
+     * Fixed at window creation and never updated, so it cannot describe a window becoming the main
+     * one later (for instance after the main window closes). PT-4278's window-manager service is the
+     * durable answer; replace this when it lands.
+     *
+     * @experimental
+     */
+    var isMainWindow: boolean | undefined;
   }
   /** Type of Platform.Bible process */
   export enum ProcessType {
@@ -8655,6 +8673,20 @@ declare module 'shared/data/platform.data' {
   export const WINDOW_ID = 'windowId';
   /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
   export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
+  /**
+   * Query parameter passed to the renderer. Present only on the main window, absent on every
+   * secondary window, so the renderer can tell which chrome to draw — on Windows and Linux the main
+   * window keeps the top-level menu and secondary windows do not. On macOS the top-level menu lives in
+   * the OS-level menu bar, which is process-global and reachable from every window regardless of this
+   * flag.
+   *
+   * Fixed at window creation, which is a deliberate limitation: it cannot describe a window becoming
+   * the main one later. PT-4278's window-manager service is the durable answer; replace this when it
+   * lands.
+   *
+   * @experimental
+   */
+  export const IS_MAIN_WINDOW_QUERY_PARAMETER = 'isMainWindow';
   /**
    * Query parameter key used to pass the serialized scroll group state main holds at the moment a
    * window is created, so that window's synchronous readers are right on its first render instead of
