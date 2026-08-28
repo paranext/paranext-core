@@ -453,7 +453,6 @@
   "%onboardingTour_step_resources_description%": "Sus recursos y herramientas se encuentran aquí. A diferencia de Paratext 9, no se pueden cerrar ni mover.",
   "%onboardingTour_step_resources_title%": "Sus recursos y herramientas",
   "%onboardingTour_step_sendReceive_description%": "Así comparte su trabajo con su equipo y recibe sus últimos cambios: Sincronizar.",
-  "%onboardingTour_step_sendReceive_title%": "Sincronizar",
   "%overlay_aria_commandPaletteHighlightedItem%": "{label}, {index} de {count}",
   "%overlay_aria_commandPaletteList%": "Resultados de la paleta de comandos",
   "%overlay_aria_commandPaletteNoResults%": "Sin resultados",
