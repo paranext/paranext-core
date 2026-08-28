@@ -2565,9 +2565,13 @@ describe('claimScrollGroupSourceProject', () => {
     expect(mockSetScrRef).toHaveBeenCalledWith(0, convertedRef, 'proj-incoming');
   });
 
-  it('resolves without throwing when getScrRefForProject rejects', async () => {
+  it('resolves without throwing when the papi.scrollGroups round trip is unreachable', async () => {
+    // getScrRefForProject's own conversion failures already resolve with a raw-reference
+    // fallback (see scroll-group.service-host.ts) rather than rejecting, so the only realistic
+    // rejection here is the network object itself being unreachable (e.g. mid re-arm) — not a
+    // bad conversion.
     const { papi, mockGetScrRefForProject } = createScrollGroupMockPapi();
-    mockGetScrRefForProject.mockRejectedValue(new Error('conversion failed'));
+    mockGetScrRefForProject.mockRejectedValue(new Error('scroll group service unreachable'));
 
     await expect(claimScrollGroupSourceProject(papi, 'proj-incoming')).resolves.toBeUndefined();
   });
@@ -2580,9 +2584,9 @@ describe('claimScrollGroupSourceProject', () => {
     await expect(claimScrollGroupSourceProject(papi, 'proj-incoming')).resolves.toBeUndefined();
   });
 
-  it('logs a warning naming the incoming project when getScrRefForProject fails', async () => {
+  it('logs a warning naming the incoming project when the papi.scrollGroups round trip fails', async () => {
     const { papi, mockGetScrRefForProject, mockWarn } = createScrollGroupMockPapi();
-    mockGetScrRefForProject.mockRejectedValue(new Error('conversion failed'));
+    mockGetScrRefForProject.mockRejectedValue(new Error('scroll group service unreachable'));
 
     await claimScrollGroupSourceProject(papi, 'proj-incoming');
 

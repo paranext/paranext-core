@@ -1145,6 +1145,11 @@ export async function openOrUpdateRelatedPanels(
  * Converts through `getScrRefForProject` rather than reading the raw stored ref: the outgoing and
  * incoming projects' versifications can disagree on this exact book/chapter, so the numbers must be
  * re-expressed in `projectId`'s frame before being stamped with `projectId` as source.
+ * `getScrRefForProject` already falls back to the raw reference on a conversion failure rather than
+ * rejecting (see `scroll-group.service-host.ts`), so the only realistic rejection this function's
+ * `catch` handles is the `papi.scrollGroups` round trip itself failing — there is no cheaper
+ * fallback reference to substitute in that case, since obtaining one would require the same
+ * unreachable call.
  *
  * Fire-and-forget, like {@link syncOnProjectSwitch}: `papi.scrollGroups` is a network object that
  * can take up to 30s to resolve while re-arming, and this must never delay the switch or its
