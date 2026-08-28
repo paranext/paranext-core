@@ -56,7 +56,7 @@ import { Frame, FrameLocator, Locator, Page } from '@playwright/test';
 import {
   test,
   expect,
-  clearFindHistory,
+  clearFindPersistedState,
   getAvailableProjects,
   openScriptureEditor,
   WEB_COPY_PROJECT_ID,
@@ -240,8 +240,8 @@ async function invokeFindFromHamburger(mainPage: Page): Promise<void> {
  *
  * The panel is a permanent tab that never unmounts, so the search term, the filters, and the scope
  * all survive from one test to the next, and the history survives even longer (see the note on
- * {@link clearFindHistory}). Without this, a test's result depends on which tests ran before it —
- * and, for the history, on what earlier RUNS of the suite left behind.
+ * {@link clearFindPersistedState}). Without this, a test's result depends on which tests ran before
+ * it — and, for the history, on what earlier RUNS of the suite left behind.
  *
  * Must run while the tab is ACTIVE: an inactive rc-dock pane is `display: none`, and clicks into a
  * hidden subtree do nothing.
@@ -298,7 +298,7 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   // Empty the search history LAST, once the search term is already blank. Clearing the term above
   // cancels the pending 5 s history debounce (the effect re-runs with an empty term and clears its
   // timer), so nothing left over from the previous test can push an entry back in after this point.
-  await clearFindHistory(openedProjectId);
+  await clearFindPersistedState(openedProjectId);
   // The panel is subscribed to the history data provider, so waiting for its button to disappear
   // confirms the empty list actually reached the panel rather than just landing in storage.
   await expect(recentSearchesButton(frame)).toHaveCount(0, { timeout: 15_000 });
