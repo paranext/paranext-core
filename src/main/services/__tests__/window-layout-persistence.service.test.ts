@@ -695,11 +695,10 @@ describe('window layout persistence service', () => {
   });
 
   test('the debounced path and an immediate flush write the same structure', async () => {
-    // Same session state as the test above, written by BOTH paths. They each used to decide for
-    // themselves which windows a write covered, so which one landed last could change what the file
-    // held — a departed main window's `isMain` among it. Neither decides anything now: a write is
-    // the entry list as it stands. Which is what makes the test above hold whichever path gets there
-    // first, so it is pinned rather than left to be true by luck.
+    // Same session state as the test above, written by BOTH paths. Neither path decides which
+    // windows a write covers: a write is the entry list as it stands. That is what makes the test
+    // above hold whichever path reaches the file first, so it is pinned here rather than left to be
+    // true by luck.
     vi.useFakeTimers();
     const service = await startService();
     await loadAndAssignAll(
