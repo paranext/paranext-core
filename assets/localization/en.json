@@ -336,7 +336,6 @@
   "%onboardingTour_step_resources_description%": "Your resources and tools live here. Unlike Paratext 9, these can't be closed or moved.",
   "%onboardingTour_step_resources_title%": "Your resources and tools",
   "%onboardingTour_step_sendReceive_description%": "This is how you share your work with your team and get their latest changes — Sync.",
-  "%onboardingTour_step_sendReceive_title%": "Sync",
   "%overlay_aria_commandPaletteOpened%": "Command palette opened",
   "%overlay_aria_contextMenuOpened%": "Context menu opened",
   "%overlay_aria_dialogOpened%": "{title} dialog opened",

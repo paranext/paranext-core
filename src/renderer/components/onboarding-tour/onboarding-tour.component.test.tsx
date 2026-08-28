@@ -49,6 +49,11 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 // vi.mock() calls are hoisted before const declarations, so a top-level MockTour const would
 // be uninitialized when the factory runs.
 vi.mock('./tour.component', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./tour.component')>();
+  // Report only the keys Tour itself declares. Selecting them by identity rather than by name
+  // prefix keeps the assertion honest now that one step key (`%toolbar_sync%`) is borrowed from
+  // another feature and so shares no prefix with the rest.
+  const chromeKeys = new Set<string>(original.TOUR_LOCALIZE_KEYS);
   // Function declaration required by react/function-component-definition; defined inside the
   // factory to avoid the vi.mock hoisting TDZ issue (top-level const would be uninitialized).
   function MockTourComponent({ open, steps, onDone, onSkip, localizedStrings }: TourProps) {
@@ -62,7 +67,7 @@ vi.mock('./tour.component', async (importOriginal) => {
         </span>
         <span data-testid="chrome-strings">
           {Object.keys(localizedStrings ?? {})
-            .filter((k) => !k.startsWith('%onboardingTour_step_'))
+            .filter((k) => chromeKeys.has(k))
             .sort()
             .join(',')}
         </span>
@@ -76,7 +81,7 @@ vi.mock('./tour.component', async (importOriginal) => {
     );
   }
   return {
-    ...(await importOriginal<typeof import('./tour.component')>()),
+    ...original,
     Tour: MockTourComponent,
   };
 });
