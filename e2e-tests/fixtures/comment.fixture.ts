@@ -70,6 +70,14 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
   // Worker-scoped: one Electron process per owning spec (see commentAppOwner).
   commentAppContext: [
     async ({ commentAppOwner }, use) => {
+      // Enforced, not merely documented: two specs sharing the default would share one worker and
+      // one app, so the second would inherit the first's layout changes — the leak this option
+      // exists to prevent, and one that shows up as an unrelated assertion failure much later.
+      if (!commentAppOwner)
+        throw new Error(
+          'e2e precondition: a spec using comment.fixture must declare its own app owner, e.g. ' +
+            "test.use({ commentAppOwner: 'my-spec' }). Any string unique to the spec will do.",
+        );
       console.log(`[setup] Launching comment app for "${commentAppOwner}"`);
       // Pin what these suites depend on before launching, rather than inheriting it. Anything left
       // unpinned comes from the shared, gitignored dev-appdata settings file — see "State that leaks
@@ -87,15 +95,22 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
         // (its Radix handlers all preventDefault) and aria-hides the rest of the app.
         'platform.firstRunComplete': true,
       });
-      const ctx = await launchElectronApp({ envOverrides: { DEV_NOISY: 'false' } });
-      await use(ctx);
-
-      console.log('[teardown] Comment worker-scoped app teardown starting...');
-      await teardownElectronApp(ctx);
-      // Restore the developer's settings file only after the app has fully closed so the app's
-      // own shutdown writes cannot clobber the restored contents.
-      restoreSettings();
-      console.log('[teardown] Comment worker-scoped app teardown complete');
+      // Inside try/finally: a launch that throws — a bound port, a crash on start — gets no
+      // teardown from Playwright, so without this the pin above stays in the developer's real
+      // settings file. The next run's global setup does recover it, but restoring here means their
+      // own next app start is already correct rather than one run later.
+      let ctx;
+      try {
+        ctx = await launchElectronApp({ envOverrides: { DEV_NOISY: 'false' } });
+        await use(ctx);
+      } finally {
+        console.log('[teardown] Comment worker-scoped app teardown starting...');
+        if (ctx) await teardownElectronApp(ctx);
+        // Restore the developer's settings file only after the app has fully closed so the app's
+        // own shutdown writes cannot clobber the restored contents.
+        restoreSettings();
+        console.log('[teardown] Comment worker-scoped app teardown complete');
+      }
     },
     { scope: 'worker' },
   ],

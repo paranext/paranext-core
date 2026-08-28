@@ -36,7 +36,8 @@ A third, `manage-books-commands.spec.ts`, drives the same book-mutating commands
 projects, but only down paths that cannot mutate anything: a bogus project id that fails before
 touching disk, a permission-denied gate, or a book that is already present and gets filtered out.
 
-Until this branch, `npm run test:e2e-cdp` collected all of them, so a bare CDP run against a live
-app could have overwritten real project data on the developer's machine.
+`npm run test:e2e-cdp` excludes this directory (`testIgnore` in `playwright-cdp.config.ts`).
+Without that exclusion a bare CDP run against a live app can overwrite real project data on the
+developer's machine, so do not remove it without giving these specs a disposable project fixture.
 
 **Size:** 4 spec files — 68 `test(...)` declarations and 6 `test.fixme(...)`.

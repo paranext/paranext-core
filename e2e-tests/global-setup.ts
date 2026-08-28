@@ -126,6 +126,17 @@ const DEV_BUNDLES = [
 export default async function globalSetup(_config: FullConfig): Promise<void> {
   const rootDir = path.resolve(__dirname, '..');
 
+  // Fail fast if Platform.Bible is already running (single-instance lock will
+  // cause Playwright's Electron instance to exit immediately)
+  if (await isPortInUse(WEBSOCKET_PORT)) {
+    throw new Error(
+      `Port ${WEBSOCKET_PORT} is already in use. ` +
+        'Stop the running Platform.Bible instance (npm run stop) before running E2E tests.',
+    );
+  }
+  // AFTER the port check, deliberately. Both restores overwrite files a running app owns, so
+  // recovering a stale backup while the developer's own app is up would revert their live
+  // settings and scroll position — and then abort the run telling them to close that app.
   // Undo a settings pin left behind by a run that died before its teardown. Done first, so the
   // developer's real settings are back in place before anything reads them — and so a suite that
   // pins nothing does not silently inherit another suite's mode from a run that crashed days ago.
@@ -145,15 +156,6 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     console.log(
       'Recovered app-global main-process storage from a previous run that was killed before it ' +
         `could restore it. Keys restored: ${recoveredKeys.join(', ')}`,
-    );
-  }
-
-  // Fail fast if Platform.Bible is already running (single-instance lock will
-  // cause Playwright's Electron instance to exit immediately)
-  if (await isPortInUse(WEBSOCKET_PORT)) {
-    throw new Error(
-      `Port ${WEBSOCKET_PORT} is already in use. ` +
-        'Stop the running Platform.Bible instance (npm run stop) before running E2E tests.',
     );
   }
 

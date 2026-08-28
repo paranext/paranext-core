@@ -302,7 +302,13 @@ export async function launchElectronApp(
   // Only for a FRESH profile. A relaunch into a preserved profile is deliberately continuing the
   // state its own earlier launch wrote — including whatever reference that launch ended on — so
   // re-pinning here would erase the very thing such a test exists to check.
-  if (!opts.userDataDir) pinAppGlobalState();
+  //
+  // Remembered rather than re-derived below: the launch-failure paths must undo exactly what this
+  // decided. `preserveUserDataDir` is a different option and does not track it — a chain's FIRST
+  // launch passes `preserveUserDataDir: true` with no `userDataDir`, so it pins here while a guard
+  // on `preserveUserDataDir` would refuse to restore.
+  const pinnedAppGlobalState = !opts.userDataDir;
+  if (pinnedAppGlobalState) pinAppGlobalState();
 
   // VSCode/Claude Code set ELECTRON_RUN_AS_NODE=1 which forces the Electron
   // binary to run as plain Node.js. We must omit it (do not set it to undefined:
@@ -345,10 +351,10 @@ export async function launchElectronApp(
     console.error('Failed to launch Electron:', error);
     // Clean up the temp directory created above — launch never succeeded. Preserved profiles are
     // kept even here so a failed relaunch does not destroy the state under investigation.
-    if (!opts.preserveUserDataDir) {
-      fs.rmSync(userDataDir, { recursive: true, force: true });
-      restoreAppGlobalState();
-    }
+    if (!opts.preserveUserDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
+    // A launch that never came up starts no chain, so there is nothing left to continue and the
+    // developer's own state must go back.
+    if (pinnedAppGlobalState) restoreAppGlobalState();
     throw error;
   }
 
@@ -372,10 +378,10 @@ export async function launchElectronApp(
         }
       }
     }
-    if (!opts.preserveUserDataDir) {
-      fs.rmSync(userDataDir, { recursive: true, force: true });
-      restoreAppGlobalState();
-    }
+    if (!opts.preserveUserDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
+    // A launch that never came up starts no chain, so there is nothing left to continue and the
+    // developer's own state must go back.
+    if (pinnedAppGlobalState) restoreAppGlobalState();
     throw error;
   }
   console.log('WebSocket server is ready');
@@ -956,11 +962,28 @@ export function preConfigureSettings(overrides: Record<string, unknown>): () => 
  * @param projectDir Absolute path to the project directory
  * @param users Usernames to add as project team members
  */
+/**
+ * Escape a value for use inside an XML attribute.
+ *
+ * Needed because one caller feeds in the machine's registered Paratext display name, which is free
+ * text a person chose. ParatextData parses the result with `XmlSerializer`, which throws on
+ * malformed XML rather than degrading — so an unescaped quote or ampersand in a real name would
+ * fail every comment spec on that machine with a corrupt-XML error naming nothing relevant.
+ */
+function xmlEscapeAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 export function addUsersToProject(projectDir: string, users: string[]): void {
   const userEntries = users
     .map(
       (name) =>
-        `  <User UserName="${name}" FirstUser="false" UnregisteredUser="false">
+        `  <User UserName="${xmlEscapeAttribute(name)}" FirstUser="false" UnregisteredUser="false">
     <Role>TeamMember</Role>
     <AllBooks>true</AllBooks>
     <Books/>

@@ -27,6 +27,8 @@ function parseChapterVerse(label: string): { chapterNum: number; verseNum: numbe
   return { chapterNum: Number(match[1]), verseNum: Number(match[2]) };
 }
 
+test.use({ commentAppOwner: 'verse-navigation' });
+
 test.describe('verse navigation keyboard shortcuts', () => {
   let project: CommentTestProject;
 
