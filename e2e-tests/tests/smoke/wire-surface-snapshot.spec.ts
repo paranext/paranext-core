@@ -57,6 +57,31 @@ interface RpcDiscoverResult {
   methods?: LiveMethod[];
 }
 
+/**
+ * Source directories of the extensions the extension host skips when noisy dev mode is off, and the
+ * two registrations the .NET provider makes only in that mode.
+ *
+ * Kept as source locations rather than wire names because the gate is per extension, not per
+ * registration: `TEST_EXTENSION_NAMES` in `src/extension-host/services/extension.service.ts`
+ * decides which extensions load at all, so every name one of them registers disappears together.
+ * The .NET side gates its two in `c-sharp/Program.cs`. Two of these directories declare nothing
+ * today; they are listed anyway so the exclusion stays correct if they ever do.
+ */
+const DEV_NOISY_GATED_FILE_PREFIXES = [
+  'extensions/src/hello-rock3/',
+  'extensions/src/hello-someone/',
+  'extensions/src/quick-verse/',
+  'extensions/src/evil/',
+  'extensions/src/c-sharp-provider-test/',
+  'c-sharp/NetworkObjects/TimeDataProvider.cs',
+];
+
+/** Whether a registration exists only when noisy dev mode is on */
+function isDevNoisyGated(registration: WireSurfaceRegistration): boolean {
+  if (registration.name === 'command:test.addOne') return true;
+  return DEV_NOISY_GATED_FILE_PREFIXES.some((prefix) => registration.file.startsWith(prefix));
+}
+
 function describeRegistration(reg: WireSurfaceRegistration): string {
   return `${reg.category} '${reg.name}' (${reg.language}, ${reg.file})`;
 }
@@ -120,8 +145,27 @@ test.describe('Wire surface snapshot', () => {
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const snapshot = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, 'utf8')) as WireSurfaceDocument;
 
+    // `DEV_NOISY` gates the sample extensions and two C# test registrations at runtime, and a
+    // static scan cannot see a runtime env gate — so they are always in the snapshot. Waiting for
+    // them when they were never going to load would burn the whole budget on a fixture choice.
+    //
+    // This reads the same expression the launcher defaults from (`helpers.ts`), so it covers the
+    // env-var route. It does NOT cover a caller passing `envOverrides: { DEV_NOISY: 'false' }`,
+    // because those overrides never reach this process's environment: add the entries to this list
+    // if that ever becomes how the smoke fixture launches.
+    const devNoisyEnabled = (process.env.DEV_NOISY ?? 'true') === 'true';
+    const registrationsToExpect = devNoisyEnabled
+      ? snapshot.registrations
+      : snapshot.registrations.filter((reg) => !isDevNoisyGated(reg));
+    if (!devNoisyEnabled) {
+      console.log(
+        `DEV_NOISY is off; excluding ${snapshot.registrations.length - registrationsToExpect.length} ` +
+          `gated registration(s) from the live comparison.`,
+      );
+    }
+
     const { liveMethods, missing, lastError } = await pollUntilSnapshotIsLive(
-      snapshot.registrations,
+      registrationsToExpect,
       READINESS_TIMEOUT_MS,
     );
 
@@ -138,7 +182,7 @@ test.describe('Wire surface snapshot', () => {
       );
     }
 
-    const expected = buildExpectedLiveIdentifiers(snapshot.registrations);
+    const expected = buildExpectedLiveIdentifiers(registrationsToExpect);
 
     // Direction 2 (the important one — see the module header): every live method reduces to a
     // snapshot entry, a documented dynamic pattern, or a known infrastructure method. Without this
@@ -147,7 +191,7 @@ test.describe('Wire surface snapshot', () => {
       .map((method) => method.name)
       .filter((name) => classifyLiveMethod(name, expected).kind === 'unknown');
 
-    const markerDisagreements = checkMarkerAgreement(snapshot.registrations, liveMethods);
+    const markerDisagreements = checkMarkerAgreement(registrationsToExpect, liveMethods);
 
     const failureSections: string[] = [];
 
