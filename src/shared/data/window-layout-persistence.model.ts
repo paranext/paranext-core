@@ -63,10 +63,10 @@ export type WindowBoundsState = {
 
 /**
  * One window's saved state in the persisted structure. Identity across sessions is the entry's own
- * persisted `windowId` below, not its position in the list. At most one entry carries
- * `isMain` (the window with the top-level menu and close-quits behavior). The flag belongs to the
- * entry, so a structure written after the main entry left with its window carries none at all;
- * loading resolves that back to exactly one by taking the first entry.
+ * persisted `windowId` below, not its position in the list. At most one entry carries `isMain` (the
+ * window with the top-level menu and close-quits behavior). The flag belongs to the entry, so a
+ * structure written after the main entry left with its window carries none at all; loading resolves
+ * that back to exactly one by taking the first entry.
  */
 export type WindowLayoutEntry = WindowBoundsState & {
   /**
