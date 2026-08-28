@@ -44,12 +44,23 @@ test.describe('UI Interaction', () => {
       undefined,
       SETTINGS_REGISTRATION_TIMEOUT_MS,
     );
-    await sendPapiRequestOnce(
-      SETTINGS_SET_METHOD,
-      ['platform.interfaceLanguage', ['en']],
-      undefined,
-      SLOW_CI_PAPI_TIMEOUT_MS,
-    );
+    try {
+      await sendPapiRequestOnce(
+        SETTINGS_SET_METHOD,
+        ['platform.interfaceLanguage', ['en']],
+        undefined,
+        SLOW_CI_PAPI_TIMEOUT_MS,
+      );
+    } catch (e) {
+      // Best-effort, not fatal: the settings `set` handler awaits `waitForResyncContributions()`,
+      // which blocks until `extensionService.initialize()` finishes in the extension host, and
+      // that can occasionally exceed even this generous timeout on a slow CI runner. Letting it
+      // throw here would fail every test in this file over one slow write whose actual purpose —
+      // deterministic English menu text — CI's own default locale already satisfies; this call
+      // exists for a developer running locally with a non-English interfaceLanguage saved in their
+      // own dev-appdata.
+      console.warn(`Could not force interfaceLanguage to English (continuing anyway): ${e}`);
+    }
   });
 
   test('should open the About dialog from the Help menu', async ({ mainPage }) => {
