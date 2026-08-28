@@ -33,11 +33,16 @@ const SUPPLEMENT_TAB_ID = 'supplement-tab';
 const SUPPLEMENT_FLAG_SETTING = 'test.isSupplementEnabled';
 
 const mocks = vi.hoisted(() => ({
+  settingsGet: vi.fn(),
+  settingsSubscribe: vi.fn<
+    (
+      key: string,
+      callback: (newSetting: unknown) => Promise<void>,
+    ) => Promise<() => Promise<boolean>>
+  >(async () => async () => true),
   networkRequest: vi.fn(),
   bufferedEmitters: new Map<string, { emit: ReturnType<typeof vi.fn> }>(),
 }));
-
-const SUPPLEMENT_FLAG_SETTING = 'test.supplementEnabled';
 
 // The supplement is product-specific data; supply our own so these tests describe the merge
 // behavior rather than whichever tabs the shipped file happens to contain. Gated behind
