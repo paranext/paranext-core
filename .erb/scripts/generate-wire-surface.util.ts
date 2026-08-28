@@ -54,6 +54,13 @@ export type RegisteredVia =
   | 'createCoreMultiSourceEventEmitter';
 
 /**
+ * Marks a registration that is declared surface but cannot be durably observed by a live poll (see
+ * `LIVENESS_ANNOTATIONS`'s doc comment for the two known reasons). Absent (`undefined`) is the
+ * ordinary case: a registration that stays live for the app's ordinary running lifetime.
+ */
+export type RegistrationLiveness = 'transient' | 'lazy';
+
+/**
  * A registration whose name resolved to a literal string value.
  *
  * `category` and `registeredVia` are typed as plain `string` here (rather than the narrower
@@ -81,6 +88,15 @@ export interface StaticRegistration {
   experimental: boolean;
   /** Which half of the codebase this entry came from — see `StaticRegistration`'s doc comment. */
   language: WireSurfaceLanguage;
+  /**
+   * Present only for the small, hand-annotated set of registrations `LIVENESS_ANNOTATIONS` names —
+   * see its doc comment. A consumer comparing this snapshot against a live document (e.g.
+   * `wire-surface-snapshot.spec.ts`) should treat a registration carrying this field as declared
+   * surface that is not expected to answer a live poll, rather than as a discrepancy to chase.
+   */
+  liveness?: RegistrationLiveness;
+  /** Present iff `liveness` is present: why this registration cannot be durably observed live. */
+  livenessReason?: string;
 }
 
 /** A recognised registration call whose name could not be resolved to a literal string. */
@@ -197,7 +213,14 @@ function buildHeader(): WireSurfaceHeader {
       'override, never one per method inside a NetworkObjectDocumentation.Methods dictionary. A ' +
       "separate end-to-end assertion verifies this file's registrations against the live " +
       'rpc.discover OpenRPC document served by a running app, which is where that fully-resolved, ' +
-      'per-method view is checked instead.',
+      'per-method view is checked instead. That live comparison is a POLL, though, not an instant ' +
+      'snapshot, and a declared registration is not always durably pollable: a handful carry a ' +
+      "liveness field ('transient' or 'lazy', with a livenessReason explaining which) marking them " +
+      'as real declared surface that the live comparison should not expect to find — a transient one ' +
+      'self-disposes on a startup timer well before any poll budget would catch it consistently, and ' +
+      'a lazy one is only created inside a runtime path (e.g. a project switch) that a smoke run ' +
+      "never exercises. See generate-wire-surface.util.ts's LIVENESS_ANNOTATIONS for the full list " +
+      'and reasoning; absence of the field is the ordinary case.',
     recognizedPatterns: [...RECOGNIZED_PATTERNS, ...CSHARP_RECOGNIZED_PATTERNS],
     excludedPatterns: [...EXCLUDED_PATTERNS, ...CSHARP_EXCLUDED_PATTERNS],
   };
@@ -802,6 +825,115 @@ function processCall(
   });
 }
 
+/**
+ * Registrations that are declared surface but cannot be durably observed by
+ * `wire-surface-snapshot.spec.ts`'s live poll, keyed by wire name, with why. Two distinct reasons
+ * show up today:
+ *
+ * - **Transient**: the registration is torn down again a fixed delay after startup (a `setTimeout`
+ *   disposing it), so waiting LONGER only makes it LESS likely a poll catches it live, not more.
+ * - **Lazy**: the registration is created on first use, inside a conditional runtime path a smoke run
+ *   never exercises (e.g. a project switch), so it is simply never created during that run.
+ *
+ * Kept here as an explicit, hand-maintained table rather than detected by static analysis: a
+ * `setTimeout` near a registration is fragile to pattern-match reliably, and "created lazily inside
+ * a conditional handler" has no reliable structural signal at all — a scanner that guessed wrong
+ * here would silently drop real surface from the live comparison, which is worse than this table
+ * going briefly stale. `findStaleLivenessAnnotations` catches an entry that ever stops matching a
+ * real registration — the CLI entry point (`generate-wire-surface.ts`, which scans the real, whole
+ * codebase) fails the build loudly on a non-empty result, so a rename or removal can never let an
+ * annotation here rot unnoticed.
+ *
+ * A NEW registration that is itself transient or lazily-created hits the same wall this table
+ * documents — recognise the category (self-disposed on a timer, or created only inside a runtime
+ * path a smoke run doesn't exercise) and add an entry here, rather than assuming the live
+ * comparison has gone stale.
+ */
+const LIVENESS_ANNOTATIONS: ReadonlyMap<
+  string,
+  { liveness: RegistrationLiveness; reason: string }
+> = new Map([
+  [
+    'testMain',
+    {
+      liveness: 'transient',
+      reason:
+        'Self-disposed 20 seconds after registration ' +
+        '(setTimeout(testMainDisposer.dispose, 20000) in src/main/main.ts) -- waiting longer only ' +
+        'makes it less likely to still be live.',
+    },
+  ],
+  [
+    'testExtensionHost',
+    {
+      liveness: 'transient',
+      reason:
+        'Self-disposed 10 seconds after registration (setTimeout(testEH.dispose, 10000) in ' +
+        'src/extension-host/extension-host.ts) -- waiting longer only makes it less likely to still ' +
+        'be live.',
+    },
+  ],
+  [
+    'platform.placeholder',
+    {
+      liveness: 'transient',
+      reason:
+        'Self-disposed 3 seconds after registration (setTimeout(realDP.dispose, 3000) in ' +
+        'src/extension-host/extension-host.ts) -- waiting longer only makes it less likely to still ' +
+        'be live.',
+    },
+  ],
+  [
+    'platformScriptureEditor.onWillSwitchProject',
+    {
+      liveness: 'lazy',
+      reason:
+        'Created lazily on first use, inside the project-switch overlay path in ' +
+        'extensions/src/platform-scripture-editor/src/main.ts, after full activation -- a smoke run ' +
+        'never triggers a project switch, so this event is never created.',
+    },
+  ],
+  [
+    'platformScriptureEditor.onDidSwitchProject',
+    {
+      liveness: 'lazy',
+      reason:
+        'Created lazily on first use, inside the project-switch overlay path in ' +
+        'extensions/src/platform-scripture-editor/src/main.ts, after full activation -- a smoke run ' +
+        'never triggers a project switch, so this event is never created.',
+    },
+  ],
+]);
+
+/**
+ * Stamps `LIVENESS_ANNOTATIONS` onto the matching registrations by name. Never throws or drops an
+ * annotation that doesn't match — see `findStaleLivenessAnnotations` for that check — so this stays
+ * safe to run against the partial, synthetic file sets this module's own unit tests scan (none of
+ * which include the real src/main/main.ts and friends the annotated names live in).
+ */
+function applyLivenessAnnotations(registrations: StaticRegistration[]): StaticRegistration[] {
+  return registrations.map((registration) => {
+    const annotation = LIVENESS_ANNOTATIONS.get(registration.name);
+    if (!annotation) return registration;
+    return { ...registration, liveness: annotation.liveness, livenessReason: annotation.reason };
+  });
+}
+
+/**
+ * Names in `LIVENESS_ANNOTATIONS` that match no registration in `registrations` — the registration
+ * was renamed or removed and the annotation was not updated to follow. Deliberately separate from
+ * `applyLivenessAnnotations` (which only stamps and never throws): this check is only meaningful
+ * against a full, real scan, so only the CLI entry point (`generate-wire-surface.ts`) calls it and
+ * fails the build loudly on a non-empty result — a unit test scanning a small fixture file set
+ * would otherwise trip it on every one of the five annotated names it never included.
+ */
+export function findStaleLivenessAnnotations(
+  registrations: readonly StaticRegistration[],
+): string[] {
+  const names = new Set(registrations.map((registration) => registration.name));
+  return [...LIVENESS_ANNOTATIONS.keys()].filter((name) => !names.has(name));
+}
+
 function compareStaticRegistrations(a: StaticRegistration, b: StaticRegistration): number {
   return (
     a.language.localeCompare(b.language) ||
@@ -843,8 +975,8 @@ export function generateWireSurfaceDocument(
 
   const csharpResult = scanCSharpFiles(csharpFiles);
 
-  const allStaticRegistrations = [...staticRegistrations, ...csharpResult.registrations].sort(
-    compareStaticRegistrations,
+  const allStaticRegistrations = applyLivenessAnnotations(
+    [...staticRegistrations, ...csharpResult.registrations].sort(compareStaticRegistrations),
   );
   const allDynamicRegistrations = [
     ...dynamicRegistrations,

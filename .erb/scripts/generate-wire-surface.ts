@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  findStaleLivenessAnnotations,
   generateWireSurfaceDocument,
   serializeWireSurfaceDocument,
   VirtualFile,
@@ -90,6 +91,20 @@ const OUTPUT_PATH = path.resolve(REPO_ROOT, 'lib/papi-dts/wire-surface.json');
 const files = collectSourceFiles();
 const csharpFiles = collectCSharpFiles();
 const document = generateWireSurfaceDocument(files, csharpFiles);
+
+// This scan is the real, whole codebase (unlike this module's unit tests, which scan small fixture
+// file sets and would trip this check on every annotated name they don't happen to include) -- so a
+// name in LIVENESS_ANNOTATIONS that matches nothing here means the registration was renamed or
+// removed and the annotation was not updated to follow. Fail loudly rather than let it rot unnoticed.
+const staleLivenessAnnotations = findStaleLivenessAnnotations(document.registrations);
+if (staleLivenessAnnotations.length > 0) {
+  throw new Error(
+    `LIVENESS_ANNOTATIONS (generate-wire-surface.util.ts) names a registration that no longer ` +
+      `exists -- fix or remove the stale entry before regenerating: ` +
+      `${staleLivenessAnnotations.join(', ')}`,
+  );
+}
+
 const serialized = serializeWireSurfaceDocument(document);
 
 fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });

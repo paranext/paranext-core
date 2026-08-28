@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DynamicRegistration,
+  findStaleLivenessAnnotations,
   generateWireSurfaceDocument,
   serializeWireSurfaceDocument,
   StaticRegistration,
@@ -604,11 +605,12 @@ describe('generateWireSurfaceDocument: header content', () => {
       'createCoreMultiSourceEventEmitter',
       'RegisterNetworkObjectAsync',
       'RegisterRequestHandlerAsync',
+      'network:registerEvent',
     ].forEach((pattern) => expect(patterns).toContain(pattern));
 
     const excluded = document.header.excludedPatterns.join('\n');
     expect(excluded).toContain('createNetworkEventEmitter');
-    expect(excluded).toContain('network:registerEvent');
+    expect(excluded).not.toContain('network:registerEvent');
   });
 
   it('states that C# is now covered and that the C# scan is pattern-based, not AST-based', () => {
@@ -627,5 +629,84 @@ describe('generateWireSurfaceDocument: header content', () => {
     const document = generateWireSurfaceDocument([]);
     expect(document.header.granularity).toContain('rpc.discover');
     expect(document.header.granularity.toLowerCase()).toContain('unsnapshottable');
+  });
+
+  it('documents the liveness field', () => {
+    const document = generateWireSurfaceDocument([]);
+    expect(document.header.granularity).toContain('liveness');
+    expect(document.header.granularity).toContain('livenessReason');
+  });
+});
+
+describe('generateWireSurfaceDocument: liveness annotations', () => {
+  it('stamps a transient annotation onto the matching registration by name, leaving an unannotated one untouched', () => {
+    const files: VirtualFile[] = [
+      {
+        path: 'src/fixture-liveness.ts',
+        text: `
+          networkObjectService.set('testMain', testMain);
+          networkObjectService.set('NotAnnotated', obj);
+        `,
+      },
+    ];
+    const document = generateWireSurfaceDocument(files);
+
+    expect(findRegistration(document.registrations, 'testMain')).toMatchObject({
+      liveness: 'transient',
+    });
+    const annotated = findRegistration(document.registrations, 'testMain');
+    expect(annotated?.livenessReason).toContain('src/main/main.ts');
+
+    expect(findRegistration(document.registrations, 'NotAnnotated')?.liveness).toBeUndefined();
+  });
+
+  it('stamps a lazy annotation onto the matching registration', () => {
+    const files: VirtualFile[] = [
+      {
+        path: 'src/fixture-liveness-lazy.ts',
+        text: `
+          networkService.createNetworkEventEmitterAsync('platformScriptureEditor.onWillSwitchProject');
+        `,
+      },
+    ];
+    const document = generateWireSurfaceDocument(files);
+    expect(
+      findRegistration(document.registrations, 'platformScriptureEditor.onWillSwitchProject'),
+    ).toMatchObject({ liveness: 'lazy' });
+  });
+
+  it('reports every annotated name as stale when none of them appear in the scanned registrations', () => {
+    const stale = findStaleLivenessAnnotations([]);
+    expect(stale).toEqual(
+      expect.arrayContaining([
+        'testMain',
+        'testExtensionHost',
+        'platform.placeholder',
+        'platformScriptureEditor.onWillSwitchProject',
+        'platformScriptureEditor.onDidSwitchProject',
+      ]),
+    );
+    expect(stale).toHaveLength(5);
+  });
+
+  it('reports nothing stale once every annotated name is present', () => {
+    const registrations: StaticRegistration[] = [
+      'testMain',
+      'testExtensionHost',
+      'platform.placeholder',
+      'platformScriptureEditor.onWillSwitchProject',
+      'platformScriptureEditor.onDidSwitchProject',
+      'someOtherLiveRegistration',
+    ].map((name) => ({
+      category: 'networkObject',
+      name,
+      file: 'src/fixture.ts',
+      registeredVia: 'networkObjectService.set',
+      documented: false,
+      docsStaticallyResolved: true,
+      experimental: false,
+      language: 'typescript',
+    }));
+    expect(findStaleLivenessAnnotations(registrations)).toEqual([]);
   });
 });

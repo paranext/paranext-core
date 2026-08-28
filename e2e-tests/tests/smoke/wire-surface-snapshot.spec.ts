@@ -16,6 +16,13 @@
 // side: poll `rpc.discover` until the comparison itself is satisfied or a bounded budget expires,
 // then run every comparison against the final result.
 //
+// Some declared registrations are excluded from the "must be live" half of that comparison
+// entirely: dev-noisy-gated ones (below), and any registration the snapshot itself marks with a
+// `liveness` field (`isComparableLive` in the reduction util) — declared surface a poll can never
+// rely on catching (self-disposed on a startup timer, or created only inside a runtime path a smoke
+// run doesn't exercise). Both stay in the set checked for direction 2 and marker agreement, so one
+// that DOES happen to show up live is still recognized rather than flagged as unexplained.
+//
 // Deliberately does NOT use `papi-live.fixture` — its `canConnectToPapi` guard is built to skip
 // gracefully when no app is running, which would make this test report success without ever
 // comparing anything. If the live document can never be fetched at all, this test fails loudly
@@ -29,6 +36,7 @@ import {
   checkMarkerAgreement,
   classifyLiveMethod,
   findMissingFromLive,
+  isComparableLive,
   type LiveMethod,
   type MissingLiveEntry,
   type WireSurfaceDocument,
@@ -87,13 +95,17 @@ function describeRegistration(reg: WireSurfaceRegistration): string {
 }
 
 /**
- * Poll `rpc.discover` until every snapshot entry that should be live IS live (direction 1 finds
- * nothing missing), or `budgetMs` elapses. Always returns the last fetched live methods (empty if
- * every attempt failed) and the last-computed missing list, so the caller can report a specific
- * failure either way — this never lets the test report success without having actually compared.
+ * Poll `rpc.discover` until every entry in `comparableRegistrations` that should be live IS live
+ * (direction 1 finds nothing missing), or `budgetMs` elapses. `comparableRegistrations` must
+ * already exclude anything the live comparison cannot require — dev-noisy-gated entries and
+ * anything carrying a `liveness` annotation (`isComparableLive`) — so the early exit fires as soon
+ * as everything that CAN be live IS live, rather than waiting out the full budget on a registration
+ * a poll can never catch. Always returns the last fetched live methods (empty if every attempt
+ * failed) and the last-computed missing list, so the caller can report a specific failure either
+ * way — this never lets the test report success without having actually compared.
  */
 async function pollUntilSnapshotIsLive(
-  registrations: readonly WireSurfaceRegistration[],
+  comparableRegistrations: readonly WireSurfaceRegistration[],
   budgetMs: number,
 ): Promise<{ liveMethods: LiveMethod[]; missing: MissingLiveEntry[]; lastError: unknown }> {
   let liveMethods: LiveMethod[] = [];
@@ -115,7 +127,10 @@ async function pollUntilSnapshotIsLive(
       );
       liveMethods = discoverResult.methods ?? [];
       lastError = undefined;
-      missing = findMissingFromLive(registrations, new Set(liveMethods.map((m) => m.name)));
+      missing = findMissingFromLive(
+        comparableRegistrations,
+        new Set(liveMethods.map((m) => m.name)),
+      );
       if (missing.length === 0) return { liveMethods, missing, lastError };
     } catch (error) {
       lastError = error;
@@ -164,8 +179,22 @@ test.describe('Wire surface snapshot', () => {
       );
     }
 
+    // A registration carrying a `liveness` annotation (transient/lazy — see the module header and
+    // `isComparableLive`'s doc comment) is real declared surface, but a poll can never rely on
+    // catching it live, so it must not be waited on or reported missing. It stays in
+    // `registrationsToExpect` (used below for direction 2 and marker agreement) in case it happens
+    // to show up anyway.
+    const comparableRegistrations = registrationsToExpect.filter(isComparableLive);
+    const excludedForLiveness = registrationsToExpect.length - comparableRegistrations.length;
+    if (excludedForLiveness > 0) {
+      console.log(
+        `Excluding ${excludedForLiveness} registration(s) marked not durably live (transient/lazy) ` +
+          `from the "must be live" comparison.`,
+      );
+    }
+
     const { liveMethods, missing, lastError } = await pollUntilSnapshotIsLive(
-      registrationsToExpect,
+      comparableRegistrations,
       READINESS_TIMEOUT_MS,
     );
 
