@@ -65,6 +65,7 @@ import {
   quitAppAndWaitForExit,
   waitForAppPages,
   waitForRendererRegistered,
+  withPlatformWindow,
 } from './multi-window.util';
 
 const BASE_LAUNCH_OPTIONS: LaunchElectronAppOptions = {
@@ -133,18 +134,7 @@ async function readMessageBoxCalls(
 
 /** Ask a window to close the way its ✕ does — through Electron's `close`, not `app.quit()` */
 async function clickCloseOn(electronApp: ElectronApplication, windowId: string): Promise<void> {
-  await electronApp.evaluate(({ BrowserWindow }, id) => {
-    const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) => {
-      try {
-        return new URL(someWindow.webContents.getURL()).searchParams.get('windowId') ?? undefined;
-      } catch {
-        return undefined;
-      }
-    };
-    const win = BrowserWindow.getAllWindows().find((someWindow) => platformIdOf(someWindow) === id);
-    if (!win) throw new Error(`No BrowserWindow with platform id ${id}`);
-    win.close();
-  }, windowId);
+  await withPlatformWindow(electronApp, windowId, (win) => win.close());
 }
 
 /** Platform ids of the windows still alive in the main process, sorted for stable comparison */
