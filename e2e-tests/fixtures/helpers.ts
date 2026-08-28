@@ -202,6 +202,31 @@ export async function assertDeclaredWindowSize(
   }
 }
 
+/**
+ * Resize the first window of a freshly launched Electron app and confirm the OS honoured it.
+ *
+ * Retried: `BrowserWindow.setSize` returns before the renderer's `outerWidth`/`outerHeight` reflect
+ * the new size, so a single read after it can race the resize and report a size that has not
+ * settled yet.
+ */
+export async function applyDeclaredWindowSize(
+  electronApp: ElectronApplication,
+  page: Page,
+  size: WindowSize,
+  howToFix: string,
+): Promise<void> {
+  await electronApp.evaluate(({ BrowserWindow }, declared) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win) {
+      if (win.isMaximized()) win.unmaximize();
+      win.setSize(declared.width, declared.height);
+    }
+  }, size);
+  await expect(async () => {
+    await assertDeclaredWindowSize(page, size, howToFix);
+  }).toPass({ timeout: 15_000 });
+}
+
 /** The two interface modes a spec can require. Mirrors `SettingTypes['platform.interfaceMode']`. */
 export type RequiredInterfaceMode = 'simple' | 'power';
 
@@ -209,12 +234,12 @@ export type RequiredInterfaceMode = 'simple' | 'power';
  * Fail loudly when the running app is not in the interface mode the spec was written for.
  *
  * A launch-mode spec pins the mode before starting its own app. An attach-mode spec cannot: it
- * drives an app someone else started, whose mode is whatever the shared `dev-appdata/settings.json`
- * last held — and that file keeps a pin from any run that was killed before its teardown restored
- * it. The two modes render genuinely different layouts (Simple has no Home tab and locks three
- * columns; Power tabs everything), so a spec run in the wrong one does not fail at the assertion it
- * cares about. It fails much later, waiting for an element the mode never renders, and reads as a
- * timeout rather than as a setup problem.
+ * drives an app someone else started, whose mode is whatever the shared
+ * `dev-appdata/data/settings.json` last held — and that file keeps a pin from any run that was
+ * killed before its teardown restored it. The two modes render genuinely different layouts (Simple
+ * has no Home tab and locks three columns; Power tabs everything), so a spec run in the wrong one
+ * does not fail at the assertion it cares about. It fails much later, waiting for an element the
+ * mode never renders, and reads as a timeout rather than as a setup problem.
  *
  * Read from `document.body[data-interface-mode]`, which the app sets from the live setting
  * (`app.component.tsx`) rather than from the settings file, so it reflects a mode changed at
@@ -242,14 +267,17 @@ export async function assertInterfaceMode(
         { timeout: timeoutMs },
       )
       .toBe(required);
-  } catch {
+  } catch (err) {
     // Rethrown rather than left as the poll's own assertion error, which reports the mismatch but
-    // none of the context that makes it actionable.
+    // none of the context that makes it actionable. `cause` keeps whatever the poll actually threw
+    // (e.g. the page's execution context being destroyed) attached, rather than replacing it wholesale
+    // with a mismatch message that may not be what happened.
     throw new Error(
       `e2e precondition: this spec requires '${required}' interface mode, but the running app is in ` +
         `'${actual ?? 'unknown (the attribute is missing — the renderer may not have finished mounting)'}'. ` +
         `${howToFix} If you did not choose this mode, a killed e2e run probably left it behind: ` +
         `preConfigureSettings merges into the shared settings file and only restores in teardown.`,
+      { cause: err },
     );
   }
 }
