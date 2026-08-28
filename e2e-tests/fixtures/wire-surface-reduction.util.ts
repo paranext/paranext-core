@@ -81,6 +81,22 @@
  * only confirm that the command dispatch mechanism itself is still the documented one. Every other
  * family above is checked structurally instead.
  *
+ * ## Declared but not durably live
+ *
+ * A third category, distinct from both of the above: a registration that IS declared surface (it
+ * belongs in wire-surface.json, and should still be checked against a live document if it happens
+ * to show up) but that a poll — no matter how long or how quickly it runs — cannot rely on
+ * catching, for one of two reasons the generator's `LIVENESS_ANNOTATIONS` table names explicitly
+ * per entry: **transient** (self-disposed on a startup timer, so waiting LONGER only makes it LESS
+ * likely to still be live) and **lazy** (created only inside a runtime path, e.g. a project switch,
+ * that a smoke run never exercises, so it may simply never come into existence during the run).
+ * Marked with a `liveness` field on the registration itself — see
+ * {@link WireSurfaceRegistration.liveness} and {@link isComparableLive}, the one function that reads
+ * it. The spec filters these out of the "must be live" comparison (both the poll's early-exit
+ * condition and the final missing-entries report) but keeps them in the set checked for direction 2
+ * (live-but-unrecognized) and marker agreement, so one showing up live regardless is still
+ * recognized rather than flagged as an unexplained regression.
+ *
  * ## Experimental-marker agreement
  *
  * `networkObjectService.set` (TypeScript) and `NetworkObject.RegisterNetworkObjectAsync` (C#) both
@@ -101,6 +117,13 @@
 
 // #region Snapshot document shape (subset of lib/papi-dts/wire-surface.json used here)
 
+/**
+ * `wire-surface.json`'s `liveness` values — see `WireSurfaceRegistration.liveness`'s doc comment
+ * and `generate-wire-surface.util.ts`'s `LIVENESS_ANNOTATIONS`, which is what actually stamps this
+ * field (this module only reads it back).
+ */
+export type RegistrationLiveness = 'transient' | 'lazy';
+
 /** One entry in wire-surface.json's `registrations` array. */
 export interface WireSurfaceRegistration {
   category: string;
@@ -118,6 +141,29 @@ export interface WireSurfaceRegistration {
   language: string;
   file: string;
   registeredVia: string;
+  /**
+   * Present only for a registration the generator's `LIVENESS_ANNOTATIONS` table has hand-annotated
+   * as not durably observable by a live poll — a transient one self-disposes on a startup timer, a
+   * lazy one is only created inside a runtime path (e.g. a project switch) a smoke run never
+   * exercises. Absence is the ordinary case: a registration expected to answer the live poll like
+   * any other. {@link isComparableLive} is the single place that reads this field to decide whether
+   * a registration belongs in the "must be live" comparison.
+   */
+  liveness?: RegistrationLiveness;
+  /** Present iff `liveness` is present: why this registration cannot be durably observed live. */
+  livenessReason?: string;
+}
+
+/**
+ * Whether `reg` is expected to answer the live poll at all — i.e. it carries no `liveness`
+ * annotation. A registration this returns `false` for is real declared surface (it still appears in
+ * `wire-surface.json` and is still checked against a live document IF it happens to show up — see
+ * `classifyLiveMethod`/`checkMarkerAgreement`, which are given the full, unfiltered registration
+ * list for exactly that reason) but must never be waited on or reported missing: see
+ * `WireSurfaceRegistration.liveness`'s doc comment for why a poll cannot help either kind.
+ */
+export function isComparableLive(reg: WireSurfaceRegistration): boolean {
+  return reg.liveness === undefined;
 }
 
 /**

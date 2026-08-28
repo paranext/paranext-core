@@ -5,6 +5,7 @@ import {
   classifyLiveMethod,
   findMissingFromLive,
   getExpectedLiveCheck,
+  isComparableLive,
   matchDynamicObjectId,
   resolveNetworkObjectMethod,
   type LiveMethod,
@@ -102,6 +103,38 @@ describe('getExpectedLiveCheck', () => {
     expect(getExpectedLiveCheck(reg({ category: 'somethingNew', name: 'x' })).kind).toBe(
       'unresolvable',
     );
+  });
+});
+
+describe('isComparableLive', () => {
+  it('treats a registration with no liveness field as comparable', () => {
+    expect(isComparableLive(reg({ category: 'networkObject', name: 'AppService' }))).toBe(true);
+  });
+
+  it('treats a transient registration as not comparable', () => {
+    expect(
+      isComparableLive(
+        reg({
+          category: 'networkObject',
+          name: 'testMain',
+          liveness: 'transient',
+          livenessReason: 'self-disposes 20s after startup',
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('treats a lazy registration as not comparable', () => {
+    expect(
+      isComparableLive(
+        reg({
+          category: 'networkEvent',
+          name: 'platformScriptureEditor.onWillSwitchProject',
+          liveness: 'lazy',
+          livenessReason: 'created only on first project switch',
+        }),
+      ),
+    ).toBe(false);
   });
 });
 
