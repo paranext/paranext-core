@@ -432,6 +432,16 @@ npm run test --workspace=lib/platform-bible-react
 npm run test:core -- --coverage
 ```
 
+**`npm test` needs Playwright's browsers installed.** `lib/platform-bible-react`'s vitest config
+includes a `storybook (chromium)` project that runs stories in a real browser, so a checkout that
+has never run `npx playwright install` fails there rather than in any `.test.ts` file. CI installs
+them before running tests; locally, run it once.
+
+That project is also the repo's main source of flaky test runs: its story files are timing-sensitive
+under parallel load, and a full `npm test` can fail a different handful of them each time while every
+one passes in isolation. Before chasing a story failure, re-run that project on its own with
+`--no-file-parallelism` — if it goes green, the failure was contention, not a regression.
+
 ---
 
 ## C# Testing
@@ -1147,6 +1157,12 @@ E2E tests that verify user flows MUST interact through visible UI only:
 - NEVER import `sendPapiCommand` from helpers in per-feature tests.
 
 Note: `app.fixture` is retained for CI smoke tests only (launches standalone Electron).
+
+**Isolated-suite setup exception:** specs under `e2e-tests/tests/isolated/` run against a fresh
+temp profile with no projects and no project-open UI, so their *setup* necessarily goes through
+PAPI (`sendPapiCommandWhenRegistered` to open an editor, flip `platform.isEditable`, etc.). The
+rule still governs the behavior under test: once setup completes, the asserted user flow itself
+must be driven and observed through visible UI only.
 
 ### Opening a Project and Its Tool Menus (PT10 Navigation Pattern)
 

@@ -358,7 +358,7 @@ export const SmartParsingDemo: Story = {
       await userEvent.type(searchInput, 'John 3:16');
 
       // Look for the top match suggestion in the dropdown
-      const topMatch = await within(dropdownContent).findByText('JHN 3:16');
+      const topMatch = await within(dropdownContent).findByText('John 3:16');
       await expect(topMatch).toBeInTheDocument();
 
       // Click the top match
@@ -383,7 +383,7 @@ export const SmartParsingDemo: Story = {
       await userEvent.type(searchInput, 'Roma 8');
 
       // Look for the top match in dropdown
-      const topMatch = await within(dropdownContent).findByText('ROM 8:1');
+      const topMatch = await within(dropdownContent).findByText('Romans 8:1');
       await expect(topMatch).toBeInTheDocument();
 
       // Click the top match
@@ -408,7 +408,7 @@ export const SmartParsingDemo: Story = {
       await userEvent.type(searchInput, '1 co 13:4');
 
       // Look for the top match in dropdown
-      const topMatch = await within(dropdownContent).findByText('1CO 13:4');
+      const topMatch = await within(dropdownContent).findByText('1 Corinthians 13:4');
       await expect(topMatch).toBeInTheDocument();
 
       // Click the top match
@@ -430,7 +430,7 @@ export const SmartParsingDemo: Story = {
 
 This test verifies:
 1. Opens the component and activates the search input
-2. Tests complete reference parsing by typing "John 3:16" and verifying "JHN 3:16" appears as top match
+2. Tests complete reference parsing by typing "John 3:16" and verifying "John 3:16" appears as top match
 3. Confirms selection submits correct reference (JHN 3:16)
 4. Tests partial book name parsing by typing "Roma 8" and verifying "ROM 8:1" appears as top match
 5. Confirms selection submits correct reference (ROM 8:1)
@@ -596,13 +596,13 @@ export const SingleChapterBookDemo: Story = {
 
     await step('Verify Odes smart parsing result appears', async () => {
       const dropdownContent = getDropdown();
-      const odesItem = await within(dropdownContent).findByText('ODA 1:1');
+      const odesItem = await within(dropdownContent).findByText('Odes 1:1');
       await expect(odesItem).toBeInTheDocument();
     });
 
     await step('Click Odes result to submit', async () => {
       const dropdownContent = getDropdown();
-      const odesItem = within(dropdownContent).getByText('ODA 1:1');
+      const odesItem = within(dropdownContent).getByText('Odes 1:1');
       await userEvent.click(odesItem);
     });
 
@@ -796,7 +796,7 @@ export const ComprehensiveInteractionTest: Story = {
 
     await step('Click Obadiah smart parsing result', async () => {
       const dropdownContent = getDropdown();
-      const obadiahItem = await within(dropdownContent).findByText('OBA 1:1');
+      const obadiahItem = await within(dropdownContent).findByText('Obadiah 1:1');
       await userEvent.click(obadiahItem);
     });
 
@@ -824,7 +824,7 @@ export const ComprehensiveInteractionTest: Story = {
 
     await step('Click Revelation smart parsing result', async () => {
       const dropdownContent = getDropdown();
-      const revMatch = await within(dropdownContent).findByText('REV 22:21');
+      const revMatch = await within(dropdownContent).findByText('Revelation 22:21');
       await userEvent.click(revMatch);
     });
 

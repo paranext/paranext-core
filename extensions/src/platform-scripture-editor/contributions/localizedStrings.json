@@ -1,21 +1,4 @@
 {
-  "metadata": {
-    "%webView_footnoteList_header%": {
-      "fallbackKey": "%Paratext.ProjectMenu.ProjectPropertiesForm.showInFootnotes.HeaderText%"
-    },
-    "%webView_platformScriptureEditor_openChecks%": {
-      "fallbackKey": "%webView_platformScriptureEditor_openChecksSidePanel%"
-    },
-    "%webView_platformScriptureEditor_insert%": {
-      "fallbackKey": "%Paratext.EditMenu.ListForm.insertToolStripMenuItem.Text%"
-    },
-    "%webView_platformScriptureEditor_switchScriptureView%": {
-      "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
-    },
-    "%webView_platformScriptureEditor_error_bookNotFoundProject%": {
-      "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%"
-    }
-  },
   "localizedStrings": {
     "en": {
       "%mainMenu_openPlatformResourceViewer%": "Open Resource Viewer",
@@ -60,7 +43,9 @@
       "%settings_platformScriptureEditor_enableScriptureTextGrid_label%": "Enable scripture text grid",
       "%settings_platformScriptureEditor_group_description%": "Settings for the Scripture Editor and Resource Viewer.",
       "%settings_platformScriptureEditor_group_label%": "Scripture Editor",
-      "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Change Footnote Pane Location",
+      "%settings_platformScriptureEditor_markerSettleDelayMs_description%": "Experimental: how many milliseconds of typing inactivity before the editor finishes (settles) pending marker edits in place, in editable marker views. Default 1000, the editor's own idle delay. 0 settles immediately after each edit; -1 turns the idle timer off so edits settle only when the cursor moves away.",
+      "%settings_platformScriptureEditor_markerSettleDelayMs_label%": "Marker settle delay (ms)",
+      "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Change footnote pane location",
       "%versionHistoryCommit_beforeInsertCrossReference%": "Before inserting cross reference",
       "%versionHistoryCommit_beforeInsertFootnote%": "Before inserting footnote",
       "%versionHistoryCommit_beforeRemoveCharacterMarker%": "Before removing character marker",
@@ -127,7 +112,7 @@
       "%webView_platformScriptureEditor_repeatedWordsInventory%": "Inventory: Repeated Words...",
       "%webView_platformScriptureEditor_shareLayout_ariaLabel%": "Share layout with team",
       "%webView_platformScriptureEditor_showCheckResults%": "Show Check Results...",
-      "%webView_platformScriptureEditor_showFootnotes%": "Show Footnotes",
+      "%webView_platformScriptureEditor_showFootnotes%": "Show footnotes",
       "%webView_platformScriptureEditor_structureProtection_ariaLabel%": "Toggle structure protection",
       "%webView_platformScriptureEditor_structureProtection_errorLoading%": "Structure protection state unavailable",
       "%webView_platformScriptureEditor_structureProtection_lockStructure%": "Lock structure",
@@ -145,6 +130,7 @@
       "%webView_platformScriptureEditor_title_format%": "{projectId} {editable}",
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(Read-only)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Resource Viewer",
+      "%webView_platformScriptureEditor_toggleFootnotesAutoShow%": "Auto-show footnote pane",
       "%webView_platformScriptureEditor_tools%": "Tools",
       "%webView_platformScriptureEditor_twoStepDelete_deleteSelection%": "Press {key} again to delete selection",
       "%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%": "Press {key} again to remove verse marker",
@@ -247,6 +233,8 @@
       "%settings_platformScriptureEditor_enableScriptureTextGrid_label%": "Habilitar la cuadrícula de textos bíblicos",
       "%settings_platformScriptureEditor_group_description%": "Configuración del editor de Escrituras y del visor de recursos.",
       "%settings_platformScriptureEditor_group_label%": "Editor de Escrituras",
+      "%settings_platformScriptureEditor_markerSettleDelayMs_description%": "Experimental: cuántos milisegundos de inactividad de escritura antes de que el editor complete (asiente) las ediciones de marcadores pendientes en su lugar, en las vistas de marcadores editables. Valor predeterminado: 1000, el retraso de inactividad propio del editor. 0 asienta inmediatamente después de cada edición; -1 desactiva el temporizador de inactividad, de modo que las ediciones se asientan solo cuando el cursor se aleja.",
+      "%settings_platformScriptureEditor_markerSettleDelayMs_label%": "Retraso de asentamiento de marcadores (ms)",
       "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Cambiar la ubicación del panel de notas al pie",
       "%webView_footnoteList_header%": "Notas al pie",
       "%webView_modelTextPanel_bookNotAvailable%": "Este libro no existe en este texto modelo. Elija otro texto modelo o vaya a un libro que este texto sí contenga.",
@@ -326,6 +314,7 @@
       "%webView_platformScriptureEditor_title_format%": "{projectId} {editable}",
       "%webView_platformScriptureEditor_title_readonly_indicator%": "(solo lectura)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Visor de recursos",
+      "%webView_platformScriptureEditor_toggleFootnotesAutoShow%": "Mostrar nota al pie automáticamente",
       "%webView_platformScriptureEditor_tools%": "Herramientas",
       "%webView_platformScriptureEditor_twoStepDelete_deleteSelection%": "Presione {key} de nuevo para eliminar lo seleccionado",
       "%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%": "Presione {key} de nuevo para borrar este número de versículo",
@@ -384,6 +373,23 @@
       "%webView_scriptureTextGrid_viewOptions_verse%": "Versículo",
       "%webView_scriptureTextGrid_viewOptions_viewHeader%": "Vista",
       "%webView_selectDblResource_installFailed%": "No se pudo instalar el recurso. Vuelva a intentarlo."
+    }
+  },
+  "metadata": {
+    "%webView_footnoteList_header%": {
+      "fallbackKey": "%Paratext.ProjectMenu.ProjectPropertiesForm.showInFootnotes.HeaderText%"
+    },
+    "%webView_platformScriptureEditor_error_bookNotFoundProject%": {
+      "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%"
+    },
+    "%webView_platformScriptureEditor_insert%": {
+      "fallbackKey": "%Paratext.EditMenu.ListForm.insertToolStripMenuItem.Text%"
+    },
+    "%webView_platformScriptureEditor_openChecks%": {
+      "fallbackKey": "%webView_platformScriptureEditor_openChecksSidePanel%"
+    },
+    "%webView_platformScriptureEditor_switchScriptureView%": {
+      "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
     }
   }
 }

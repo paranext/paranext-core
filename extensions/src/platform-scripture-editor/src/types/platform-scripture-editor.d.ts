@@ -55,6 +55,15 @@ declare module 'platform-scripture-editor' {
     method: 'toggleFootnotesPaneVisibility';
   };
 
+  /**
+   * Tell the editor to toggle the footnotes-pane auto-show/hide setting (which diverges from PT9)
+   * in standard view (default off; when on, the pane auto-shows/hides based on whether the current
+   * chapter has notes, unless the user has manually overridden it for that chapter)
+   */
+  export type EditorMessageToggleFootnotesAutoShow = {
+    method: 'toggleFootnotesAutoShow';
+  };
+
   /** Tell the editor to change (toggle between bottom and side) footnotes pane location */
   export type EditorMessageChangeFootnotesPaneLocation = {
     method: 'changeFootnotesPaneLocation';
@@ -133,12 +142,17 @@ declare module 'platform-scripture-editor' {
     action: AnnotationAction;
   };
 
-  /** Messages sent to the editor web view */
+  /**
+   * Messages sent to the editor web view
+   *
+   * @experimental The set of editor messages may expand.
+   */
   export type EditorWebViewMessage =
     | EditorMessageSelectRange
     | EditorMessageUpdateDecorations
     | EditorMessageChangeScriptureView
     | EditorMessageToggleFootnotesPaneVisibility
+    | EditorMessageToggleFootnotesAutoShow
     | EditorMessageChangeFootnotesPaneLocation
     | EditorMessageInsertTextualNoteAtSelection
     | EditorMessageInsertCommentAtSelection
@@ -279,7 +293,12 @@ declare module 'platform-scripture-editor' {
 
   // #region editor WebView types
 
-  export type ScriptureEditorViewType = 'formatted' | 'markers';
+  /**
+   * Ways Scripture project text can be viewed in the editor.
+   *
+   * @experimental The set of view types is expected to grow.
+   */
+  export type ScriptureEditorViewType = 'formatted' | 'markers' | 'standard';
 
   /** Options for configuring the editor you are opening */
   export type OpenEditorOptions = {
@@ -289,6 +308,8 @@ declare module 'platform-scripture-editor' {
      * Ways Scripture project text can be viewed in the editor
      *
      * Defaults to 'formatted'.
+     *
+     * @experimental
      */
     viewType?: ScriptureEditorViewType;
     /**
@@ -344,6 +365,11 @@ declare module 'platform-scripture-editor' {
     changeScriptureView(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     toggleFootnotesPaneVisibility(): Promise<void>;
+    /**
+     * Toggle the footnotes-pane auto-show/hide setting (which diverges from PT9) in standard view
+     * (default off)
+     */
+    toggleFootnotesAutoShow(): Promise<void>;
     /** Toggle the visibility of the footnotes pane in the editor */
     changeFootnotesPaneLocation(): Promise<'bottom' | 'trailing'>;
     /**
@@ -720,6 +746,21 @@ declare module 'papi-shared-types' {
      * web view is not registered and cannot be opened or restored.
      */
     'platformScriptureEditor.enableScriptureTextGrid': boolean;
+    /**
+     * Delay in milliseconds before the editor settles pending marker edits in place while the user
+     * is idle, in editable marker modes. The default (`1000`) matches the editor's own built-in
+     * idle delay, so an unset setting behaves identically to no setting at all. `0` settles
+     * immediately after each edit; `-1` disables the editor's idle settle clock entirely, so
+     * pending edits settle only on caret departure, Enter, blur, or when the document is read.
+     *
+     * Deliberately typed `number`, never `number | undefined`: an undefined-able member widens the
+     * whole `SettingTypes` union, silently disabling the compile-time guards that catch a settings
+     * mock's implicit-undefined fallthrough for every OTHER setting.
+     *
+     * @experimental A tuning knob for the Standard view marker-settle cadence; the setting name
+     *   and value semantics are not yet a settled contract and may change.
+     */
+    'platformScriptureEditor.markerSettleDelayMs': number;
   }
 
   export interface CommandHandlers {
@@ -775,6 +816,17 @@ declare module 'papi-shared-types' {
      * @param webViewId The WebView ID of the scripture editor or resource viewer.
      */
     'platformScriptureEditor.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
+
+    /**
+     * Toggles the footnotes-pane auto-show/hide setting (which diverges from PT9; default off) for
+     * the given the WebView ID. When on, the footnotes pane automatically shows/hides in standard
+     * view based on whether the current chapter has notes, unless manually overridden.
+     *
+     * @param webViewId The WebView ID of the scripture editor or resource viewer.
+     */
+    'platformScriptureEditor.toggleFootnotesAutoShow': (
+      webViewId: string | undefined,
+    ) => Promise<void>;
 
     /**
      * Changes the location of the footnotes pane (if visible) for the given the WebView ID,

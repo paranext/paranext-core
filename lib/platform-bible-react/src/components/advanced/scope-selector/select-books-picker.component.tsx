@@ -243,6 +243,9 @@ export function SelectBooksPicker({
             placeholder={searchBooksText}
             value={inputValue}
             onValueChange={setInputValue}
+            // Picker semantics: with nothing typed, Space picks the highlighted book (the Enter
+            // UX) — the book list is the whole point here and a leading space is meaningless.
+            spaceSelectsHighlightedItem
           />
           <div className="tw:flex tw:shrink-0 tw:justify-between tw:border-b tw:p-2">
             {/* Selecting all of nothing would commit an empty selection, wiping whatever the user

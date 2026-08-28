@@ -4,16 +4,18 @@ import type PapiBackend from '@papi/backend';
 import { newPlatformError, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
-import { EditorRef } from '@eten-tech-foundation/platform-editor';
+import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   convertScriptureRangeToEditorRange,
+  decideNoteCallerClickAction,
   finalizeProjectSwitch,
   formatEditorTitle,
   generateParagraphMenuListItems,
-  generateInlineMarkerMenuListItems,
+  getNextViewTypeInCycle,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
+  resolveViewTypeForInterfaceMode,
   syncOnProjectSwitch,
   type OpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -2594,61 +2596,33 @@ describe('generateParagraphMenuListItems', () => {
       expect(item.subtitle).toBeUndefined();
     });
   });
-});
 
-describe('generateInlineMarkerMenuListItems', () => {
-  // The 'p' parent's children include block markers (e.g. 'q' poetry, 's1' section heading) and
-  // inline markers (e.g. 'f' footnote, 'x' cross-reference) against the real usfmMarkers data.
-  const PARENT = 'p';
-  const noop = () => {};
+  it('restores the caret before formatting, so a pick made after the menu took focus still lands', () => {
+    const { ref, formatPara } = makeMockEditorRef();
+    const restoreSelection = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), restoreSelection);
 
-  it('when protected: block-marker item is disallowed and its action notifies without inserting', () => {
-    const { ref, insertMarker } = makeMockEditorRef();
-    const notify = vi.fn();
-    const close = vi.fn();
-    const items = generateInlineMarkerMenuListItems(ref, close, {}, true, notify, PARENT);
+    const item = items[0];
+    item.action?.();
 
-    const blockItem = items.find((i) => i.marker === 'q');
-    expect(blockItem?.isDisallowed).toBe(true);
-
-    blockItem?.action?.();
-    expect(notify).toHaveBeenCalledTimes(1);
-    expect(close).toHaveBeenCalledTimes(1);
-    expect(insertMarker).not.toHaveBeenCalled();
+    expect(restoreSelection).toHaveBeenCalledTimes(1);
+    expect(formatPara).toHaveBeenCalledWith(item.marker);
+    // Order is the whole point: opening the menu can leave the editor with no selection, and
+    // `formatPara` has nothing to retag then — restoring after the apply would be too late.
+    expect(restoreSelection.mock.invocationCallOrder[0]).toBeLessThan(
+      formatPara.mock.invocationCallOrder[0],
+    );
   });
 
-  it('when protected: inline-marker item is allowed and its action inserts', () => {
-    const { ref, insertMarker } = makeMockEditorRef();
-    const notify = vi.fn();
-    const close = vi.fn();
-    const items = generateInlineMarkerMenuListItems(ref, close, {}, true, notify, PARENT);
-
-    const inlineItem = items.find((i) => i.marker === 'f');
-    expect(inlineItem?.isDisallowed).toBeFalsy();
-
-    inlineItem?.action?.();
-    expect(insertMarker).toHaveBeenCalledWith('f');
-    expect(notify).not.toHaveBeenCalled();
-    expect(close).toHaveBeenCalledTimes(1);
-  });
-
-  it('when not protected: no item is disallowed and all actions insert', () => {
-    const { ref, insertMarker } = makeMockEditorRef();
-    const notify = vi.fn();
-    const close = vi.fn();
-    const items = generateInlineMarkerMenuListItems(ref, close, {}, false, notify, PARENT);
-
-    expect(items.length).toBeGreaterThan(0);
-    expect(items.every((i) => !i.isDisallowed)).toBe(true);
+  it('when protected: does not restore the caret either (nothing is applied)', () => {
+    const { ref, formatPara } = makeMockEditorRef();
+    const restoreSelection = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, true, vi.fn(), restoreSelection);
 
     items[0].action?.();
-    expect(insertMarker).toHaveBeenCalledWith(items[0].marker);
-    expect(notify).not.toHaveBeenCalled();
-  });
 
-  it('returns [] when there is no parent marker', () => {
-    const { ref } = makeMockEditorRef();
-    expect(generateInlineMarkerMenuListItems(ref, noop, {}, false, vi.fn())).toEqual([]);
+    expect(restoreSelection).not.toHaveBeenCalled();
+    expect(formatPara).not.toHaveBeenCalled();
   });
 });
 
@@ -2780,6 +2754,167 @@ describe('resolveAddChapterNumberClick', () => {
 
   it('returns "insert" when not in flight and lastVerse is positive', () => {
     expect(resolveAddChapterNumberClick(false, 3)).toBe('insert');
+  });
+});
+
+describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
+  const base = {
+    isCollapsed: true,
+    editingNoteKey: undefined,
+    popoverShown: false,
+    paneVisible: false,
+    paneRendered: false,
+    isAutoShowEnabled: false,
+  };
+
+  it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
+    expect(decideNoteCallerClickAction(base)).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-popover',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
+  });
+
+  it('ignores clicks on expanded notes', () => {
+    expect(decideNoteCallerClickAction({ ...base, isCollapsed: false })).toEqual({
+      clearStaleEditingSession: false,
+      action: 'ignore-expanded',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
+  });
+
+  it('ignores clicks while a popover session is really shown (one at a time)', () => {
+    expect(
+      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: true }),
+    ).toEqual({
+      clearStaleEditingSession: false,
+      action: 'ignore-popover-open',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
+  });
+
+  it('self-heals a stale session key (no popover shown) instead of dead-ending the click', () => {
+    // Pre-fix, a leftover editingNoteKey silently swallowed every future caller click.
+    expect(
+      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: false }),
+    ).toEqual({
+      clearStaleEditingSession: true,
+      action: 'open-popover',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
+  });
+
+  it('still opens the popover when the pane is rendered — the pane highlight rides alongside', () => {
+    // The popover is the only surface that can EDIT a note today, so a routed click always opens
+    // it; the rendered pane additionally highlights the clicked note (PT9 navigate-to-note).
+    expect(decideNoteCallerClickAction({ ...base, paneVisible: true, paneRendered: true })).toEqual(
+      {
+        clearStaleEditingSession: false,
+        action: 'open-popover',
+        sendPaneFocusRequest: true,
+        showPane: false,
+      },
+    );
+  });
+
+  it('shows a closed pane when auto-show is on, and highlights the note once it mounts', () => {
+    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: true })).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-popover',
+      sendPaneFocusRequest: true,
+      showPane: true,
+    });
+  });
+
+  it('leaves a closed pane closed when auto-show is off', () => {
+    expect(decideNoteCallerClickAction({ ...base, isAutoShowEnabled: false })).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-popover',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
+  });
+
+  it('does not re-show a pane that is already toggled visible but still mounting its data', () => {
+    // paneVisible without paneRendered: the toggle is on but the data has not loaded — nothing to
+    // show and nothing to highlight yet.
+    expect(
+      decideNoteCallerClickAction({ ...base, paneVisible: true, isAutoShowEnabled: true }),
+    ).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-popover',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    });
+  });
+
+  it('clears a stale session while still doing the pane work', () => {
+    expect(
+      decideNoteCallerClickAction({
+        ...base,
+        editingNoteKey: 'note-1',
+        paneVisible: true,
+        paneRendered: true,
+      }),
+    ).toEqual({
+      clearStaleEditingSession: true,
+      action: 'open-popover',
+      sendPaneFocusRequest: true,
+      showPane: false,
+    });
+  });
+});
+
+describe('resolveViewTypeForInterfaceMode (standard view is power-mode-only)', () => {
+  it('coerces standard to formatted in simple mode', () => {
+    expect(resolveViewTypeForInterfaceMode('standard', false)).toBe('formatted');
+  });
+
+  it('keeps standard in power mode', () => {
+    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
+  });
+
+  it('leaves formatted unchanged in simple mode', () => {
+    expect(resolveViewTypeForInterfaceMode('formatted', false)).toBe('formatted');
+  });
+
+  it('leaves markers unchanged in simple mode', () => {
+    expect(resolveViewTypeForInterfaceMode('markers', false)).toBe('markers');
+  });
+
+  it('leaves formatted and markers unchanged in power mode', () => {
+    expect(resolveViewTypeForInterfaceMode('formatted', true)).toBe('formatted');
+    expect(resolveViewTypeForInterfaceMode('markers', true)).toBe('markers');
+  });
+});
+
+describe('getNextViewTypeInCycle', () => {
+  it('cycles formatted -> standard -> markers -> formatted in power mode', () => {
+    expect(getNextViewTypeInCycle('formatted', true)).toBe('standard');
+    expect(getNextViewTypeInCycle('standard', true)).toBe('markers');
+    expect(getNextViewTypeInCycle('markers', true)).toBe('formatted');
+  });
+
+  it('skips standard in simple mode: formatted -> markers -> formatted', () => {
+    expect(getNextViewTypeInCycle('formatted', false)).toBe('markers');
+    expect(getNextViewTypeInCycle('markers', false)).toBe('formatted');
+  });
+
+  it('moves a lingering standard view forward to markers in simple mode', () => {
+    // A persisted 'standard' can still be the current state for a moment before the web view's
+    // coercion effect runs; cycling from it must behave as if it were already coerced.
+    expect(getNextViewTypeInCycle('standard', false)).toBe('markers');
+  });
+
+  it('never yields standard in simple mode for any current view type', () => {
+    const allViewTypes = ['formatted', 'markers', 'standard'] as const;
+    allViewTypes.forEach((current) => {
+      expect(getNextViewTypeInCycle(current, false)).not.toBe('standard');
+    });
   });
 });
 

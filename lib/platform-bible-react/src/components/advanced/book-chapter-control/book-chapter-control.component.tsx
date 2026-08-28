@@ -1110,6 +1110,14 @@ export function BookChapterControl({
                   onKeyDown={handleInputKeyDown}
                   onFocus={() => setIsCommandListHidden(false)}
                   className={recentSearches && recentSearches.length > 0 ? 'tw:!pr-10' : ''}
+                  // Picker semantics: with nothing typed, Space picks the highlighted book (the
+                  // Enter UX). Neither of this control's own Space handlers covers that state —
+                  // `handleInputKeyDown` claims a key only for a FULLY-qualified `submitKeys`
+                  // match (an empty input has no top match at all), and the `data-selected` grid
+                  // pick in `handleCommandKeyDown` is gated on the chapters and verses views,
+                  // while this input exists only in the books view. Space is still an ordinary
+                  // character once anything is typed, so "1 Samuel" stays searchable.
+                  spaceSelectsHighlightedItem
                 />
                 {recentSearches && recentSearches.length > 0 && (
                   <RecentSearches
@@ -1250,9 +1258,14 @@ export function BookChapterControl({
                             chapterNum: topMatch.chapterNum ?? 1,
                             verseNum: topMatch.verseNum ?? 1,
                           },
+                          // 'English', matching the trigger formatter's fallback above: with no
+                          // localizedBookNames prop (no app code passes one today), `undefined`
+                          // made formatScrRef render the raw book CODE ("OBA 1:1") here while the
+                          // trigger showed "Obadiah 1:1" — the same reference in two spellings in
+                          // one control.
                           localizedBookNames
                             ? getLocalizedBookId(topMatch.book, localizedBookNames)
-                            : undefined,
+                            : 'English',
                         )}
                       </CommandItem>
                     </CommandGroup>

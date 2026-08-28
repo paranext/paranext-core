@@ -77,7 +77,11 @@ export type {
 export {
   default as FootnoteEditor,
   type FootnoteEditorProps,
+  type FootnoteEditorMarkerPalette,
+  markerMenuItemToPaletteItem,
 } from './components/advanced/footnote-editor/footnote-editor.component';
+// The marker-palette session/keydown/filter utilities are exported from `./experimental.ts` —
+// they are new, still-moving API surface.
 export {
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteEditorLocalizedStrings,
@@ -344,7 +348,7 @@ export { ShrinkStepContext, useShrinkStepValue, SHRINK_STEP } from './context/sh
 export {
   Z_INDEX_ABOVE_DOCK,
   Z_INDEX_FIRST_RUN,
-  Z_INDEX_FOOTNOTE_EDITOR,
+  Z_INDEX_ABOVE_POPOVER,
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,

@@ -129,6 +129,8 @@ export type {
   ThemeDataDataTypes,
 } from '@shared/services/theme-data.service-model';
 export type {
+  AppWindowInputEvent,
+  AppWindowInputKind,
   FocusSubject,
   SetFocusSubject,
   SetFocusSpecifier,

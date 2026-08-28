@@ -492,6 +492,40 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
     expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(true);
   });
 
+  it('should return false when one side has an authored non-breaking space', () => {
+    // Typing `~` beside a space is a real edit: Paratext regularizes spaces while the `~` is still
+    // an ordinary byte, so the resulting NBSP has to survive the comparison or the edit never saves.
+    const before: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['stuff things'] }],
+    };
+    const after: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['stuff \u00a0 things'] }],
+    };
+
+    expect(areUsjContentsEqualExceptWhitespace(before, after)).toBe(false);
+    expect(areUsjContentsEqualExceptWhitespace(after, before)).toBe(false);
+  });
+
+  it('should still collapse ordinary space runs around a non-breaking space', () => {
+    // The NBSP is content; the plain spaces on either side of it are not.
+    const oneSpaceEachSide: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['stuff \u00a0 things'] }],
+    };
+    const manySpacesEachSide: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['stuff   \u00a0\t  things'] }],
+    };
+
+    expect(areUsjContentsEqualExceptWhitespace(oneSpaceEachSide, manySpacesEachSide)).toBe(true);
+  });
+
   it('should return true for one not having space at the end of block marker', () => {
     const usj1: Usj = {
       type: 'USJ',

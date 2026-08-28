@@ -1798,6 +1798,56 @@ step, no automation. Just a record.
   relied on the normalization holding.
 - **Source:** PT-3408, review of PR #2715.
 
+## adr-app-window-input-kind-only: App-window input announcements carry the input KIND only, never key identity
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** Transient overlays (command palettes, popovers, context menus) must dismiss on a
+  mouse-down or Escape ANYWHERE in the app window, including inside sandboxed WebView iframes whose
+  events never reach the parent document. The main process's `before-input-event` hooks see every
+  frame, so the standard-view work added a PAPI-published network event
+  (`platform.onDidAppWindowInput`, `src/main/app-window-input.util.ts`, declared JSON schema,
+  `x-experimental: true`) that broadcasts these inputs to the renderer.
+- **Decision:** The event payload is `{ kind }` only (`mousedown` / `escape`). Broadcasting global
+  input to arbitrary subscribers is a keylogging-shaped surface, so key identity is deliberately
+  excluded; the one consumer that needs identity — a palette returning claimed keys to the session
+  that opened it — gets it through the scoped `PaletteKeyForwarding` channel instead
+  (`CommandPaletteRequest.keyForwarding`, overlay service model), which returns keystrokes only to
+  the requester that declared them.
+- **Alternatives:** carrying the key in the broadcast — rejected as an information-exposure
+  boundary violation; per-overlay iframe listeners — rejected because a WebView's events cannot be
+  observed from the parent document at all.
+- **Consequences:** any future consumer needing key identity must justify its own scoped channel.
+  KNOWN GAP (review finding, open): the payload carries no WINDOW identity while the hooks are
+  registered per window and the app creates several — a click in window B reaches window A's
+  subscribers, which can dismiss A's overlays or resolve A's topmost-overlay promise. Adding a
+  window id is cheap while the event is still `x-experimental`; do it before the event hardens.
+- **Source:** PT-4187 standard-view branch (core #2565); review comment on
+  `app-window-input.util.ts`.
+
+## adr-styleinfo-over-css: Project stylesheets cross the wire as structured StyleInfo, not generated CSS
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** Standard view must render and validate against the PROJECT's merged stylesheet
+  (usfm.sty + custom.sty), not the bundled defaults: custom.sty markers must be offered, styled,
+  and validated like built-ins.
+- **Decision:** The ParatextProjectDataProvider serializes the merged stylesheet as structured
+  data (`getStyleInfo` → `PlatformStyleInfo`/`PlatformMarkerStyleInfo`, `c-sharp/JsonUtils/`),
+  matching the editor package's `StyleInfo` TS shape; the CLIENT derives CSS (`generateUsjCss`)
+  and marker classification (`createMarkerLookup`) from it. PT9's server-side CSSCreator approach
+  (emit CSS strings) was not ported: structured data serves ALL consumers — CSS generation, the
+  marker palette's item source, and marker validation — from one wire call, and keeps styling
+  decisions (theming, zoom, RTL) client-side where the rendering context lives.
+- **Alternatives:** port CSSCreator and ship CSS strings — rejected: opaque to the palette and
+  validator, and bakes render-context decisions into the provider.
+- **Consequences:** the TS `StyleInfo` shape is a cross-language contract (C# serializer ↔ editor
+  package types); absent-vs-explicit-zero fidelity on numeric properties is preserved via
+  ScrTag's `Raw*` reads (an authored `\FirstLineIndent 0` serializes as 0, distinct from absent),
+  which matters because project CSS is layered over a base sheet.
+- **Source:** PT-4187 standard-view branch (core #2565 ∥ scripture-editors #545).
+
+
 ## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
 
 - **Date:** 2026-08-25
@@ -2165,3 +2215,4 @@ step, no automation. Just a record.
   **Revisit** if a reader ever needs more than project ids from a declaring view, which would call
   for a typed surface rather than a state key.
 - **Source:** PT-4346, global BCV control showing books from open resources.
+

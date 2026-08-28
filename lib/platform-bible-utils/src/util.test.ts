@@ -1,7 +1,21 @@
 import { afterEach, vi } from 'vitest';
 import { debounce, DEBOUNCE_CANCELED_ERROR_MESSAGE, retryUntil } from './util';
 
+/** A promise plus its settlers, so a test can hold an invocation open at a chosen point. */
+function makeDeferred<T>() {
+  let capturedResolve!: (value: T) => void;
+  let capturedReject!: (reason?: unknown) => void;
+  // The executor runs synchronously, so both settlers are captured before this returns.
+  const promise = new Promise<T>((resolve, reject) => {
+    capturedResolve = resolve;
+    capturedReject = reject;
+  });
+  return { promise, resolve: capturedResolve, reject: capturedReject };
+}
+
 describe('debounce', () => {
+  afterEach(() => vi.useRealTimers());
+
   it('should return a promise, not the synchronously returned value, when called synchronously', () => {
     const returnValue = 3;
     const debounceFn = debounce(() => {
@@ -76,6 +90,177 @@ describe('debounce', () => {
     const debounceFn = debounce(mockFunction, 1);
 
     expect(() => debounceFn.cancel()).not.toThrow();
+  });
+
+  it('should run the pending invocation synchronously on flush, with the latest args, and not fire the timer again', async () => {
+    vi.useFakeTimers();
+    const mockFunction = vi.fn();
+    const debounceFn = debounce(mockFunction, 1000);
+
+    const pending = debounceFn('a');
+    debounceFn('b');
+    expect(mockFunction).not.toHaveBeenCalled();
+
+    const flushed = debounceFn.flush();
+
+    // Synchronous: no timer advance, no microtask turn needed for the invocation itself
+    expect(mockFunction).toHaveBeenCalledTimes(1);
+    expect(mockFunction).toHaveBeenCalledWith('b');
+    // Every pending call's promise settles with the flushed invocation's outcome
+    await expect(pending).resolves.toBeUndefined();
+    await expect(flushed).resolves.toBeUndefined();
+
+    // The original timer must not fire the invocation a second time
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(mockFunction).toHaveBeenCalledTimes(1);
+  });
+
+  it('should resolve the flushed promise with the invocation result', async () => {
+    const mockFunction = vi.fn().mockReturnValue(42);
+    const debounceFn = debounce(mockFunction, 1000);
+
+    debounceFn();
+    await expect(debounceFn.flush()).resolves.toBe(42);
+  });
+
+  it('should return undefined from flush (and run nothing) when no invocation is pending', () => {
+    const mockFunction = vi.fn();
+    const debounceFn = debounce(mockFunction, 1);
+
+    expect(debounceFn.flush()).toBeUndefined();
+    expect(mockFunction).not.toHaveBeenCalled();
+  });
+
+  it('should not flush an invocation that was already canceled', () => {
+    const mockFunction = vi.fn();
+    const debounceFn = debounce(mockFunction, 1000);
+
+    debounceFn().catch(() => undefined);
+    debounceFn.cancel();
+
+    expect(debounceFn.flush()).toBeUndefined();
+    expect(mockFunction).not.toHaveBeenCalled();
+  });
+
+  it('should mint a fresh promise for a call made right after flush — each caller gets its own outcome', async () => {
+    // While the flushed invocation settles (an async window), the stored promise must already be
+    // detached: a call in that window that reused it received the flushed call's result and had
+    // its own outcome — including this rejection — silently discarded.
+    vi.useFakeTimers();
+    const debounceFn = debounce(async (shouldReject: boolean) => {
+      if (shouldReject) throw new Error('second invocation failed');
+      return 'first result';
+    }, 1000);
+
+    const first = debounceFn(false);
+    const flushed = debounceFn.flush();
+    // Scheduled inside the flushed invocation's settling window; the rejection handler is
+    // attached immediately so the rejection is never momentarily unhandled
+    const secondOutcome = debounceFn(true).then(
+      () => 'resolved unexpectedly',
+      (error: unknown) => error,
+    );
+
+    await expect(flushed).resolves.toBe('first result');
+    await expect(first).resolves.toBe('first result');
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(secondOutcome).resolves.toEqual(new Error('second invocation failed'));
+  });
+
+  it('should give a call made while an invocation settles its own promise and outcome', async () => {
+    // The trailing-edge timer starts an invocation and then awaits it. A call arriving inside that
+    // window is a NEW invocation, so it must get its own promise rather than be handed (and
+    // settled by) the one already running.
+    vi.useFakeTimers();
+    const gates = [makeDeferred<string>(), makeDeferred<string>()];
+    const calls: string[] = [];
+    // Each invocation gets its own gate, so the test decides exactly when each one settles.
+    const debounceFn = debounce((value: string) => {
+      calls.push(value);
+      return gates[calls.length - 1].promise;
+    }, 1000);
+
+    const first = debounceFn('first');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toEqual(['first']);
+
+    // Called while the first invocation is still awaiting its result
+    const second = debounceFn('second');
+    expect(second).not.toBe(first);
+
+    gates[0].resolve('first result');
+    await expect(first).resolves.toBe('first result');
+
+    await vi.advanceTimersByTimeAsync(1000);
+    gates[1].resolve('second result');
+    await expect(second).resolves.toBe('second result');
+  });
+
+  it('should return a settling promise from flush whenever an invocation actually runs', async () => {
+    // A call made while the previous invocation was still settling leaves args pending after that
+    // invocation detaches its promise. Flushing then RUNS those args, so it must hand back a
+    // promise carrying their outcome rather than the `nothing was pending` sentinel.
+    vi.useFakeTimers();
+    const gates = [makeDeferred<string>(), makeDeferred<string>()];
+    const calls: string[] = [];
+    // Each invocation gets its own gate, so the test decides exactly when each one settles.
+    const debounceFn = debounce((value: string) => {
+      calls.push(value);
+      return gates[calls.length - 1].promise;
+    }, 1000);
+
+    debounceFn('first');
+    await vi.advanceTimersByTimeAsync(1000);
+    debounceFn('second');
+    gates[0].resolve('first result');
+    await vi.advanceTimersByTimeAsync(0);
+
+    const flushed = debounceFn.flush();
+    expect(flushed).toBeDefined();
+    expect(calls).toEqual(['first', 'second']);
+
+    gates[1].resolve('second result');
+    await expect(flushed).resolves.toBe('second result');
+  });
+
+  it('should surface the outcome of a flush that runs after an earlier invocation settled', async () => {
+    vi.useFakeTimers();
+    const gates = [makeDeferred<string>(), makeDeferred<string>()];
+    const calls: string[] = [];
+    // Each invocation gets its own gate, so the test decides exactly when each one settles.
+    const debounceFn = debounce((value: string) => {
+      calls.push(value);
+      return gates[calls.length - 1].promise;
+    }, 1000);
+
+    debounceFn('first');
+    await vi.advanceTimersByTimeAsync(1000);
+    debounceFn('second');
+    gates[0].resolve('first result');
+    await vi.advanceTimersByTimeAsync(0);
+
+    const flushed = debounceFn.flush();
+    // Rejected before the assertion attaches, but `flushed` only rejects a microtask later (the
+    // invocation has to observe its own await first), so nothing is ever momentarily unhandled.
+    gates[1].reject(new Error('flushed invocation failed'));
+    await expect(flushed).rejects.toThrow('flushed invocation failed');
+  });
+
+  it('should preserve a re-schedule made from inside the flushed invocation', async () => {
+    vi.useFakeTimers();
+    const runs: string[] = [];
+    const debounceFn = debounce((value: string) => {
+      runs.push(value);
+      if (value === 'first') debounceFn('second').catch(() => undefined);
+    }, 1000);
+
+    debounceFn('first').catch(() => undefined);
+    debounceFn.flush();
+    expect(runs).toEqual(['first']);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(runs).toEqual(['first', 'second']);
   });
 });
 

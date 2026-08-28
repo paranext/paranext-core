@@ -21,6 +21,7 @@ import { isString } from '../util';
 const BLOCK_MARKER_TYPES = ['chapter', 'book', 'para', 'row', 'sidebar', USJ_TYPE];
 
 const ZWSP = '\u200B';
+const NBSP = '\u00A0';
 
 const scrBookData: BookInfo[] = [
   { shortName: 'ERR', fullNames: ['ERROR'], chapters: -1 },
@@ -814,6 +815,25 @@ function isAtEndOfBlockMarker(
 }
 
 /**
+ * {@link normalizeScriptureSpaces}, except a non-breaking space counts as content rather than as
+ * spacing.
+ *
+ * Paratext regularizes spaces while TOKENIZING USFM, where a non-breaking space is still the escape
+ * `~` — an ordinary, non-whitespace byte — so a `~` beside a space always survives into the tokens.
+ * By the time the text is USJ that escape has already become U+00A0, so running the tokenizer's
+ * rule a second time would fold it into the neighbouring space. Comparing USJ that way reports "no
+ * difference" for an edit that added a `~`, which is why this variant exists: normalize each
+ * NBSP-delimited segment on its own and put the NBSPs back, which is exactly what Paratext's own
+ * pass does when it walks over a `~`.
+ *
+ * @param str String to normalize
+ * @returns The normalized string
+ */
+function normalizeScriptureSpacesTreatingNbspAsContent(str: string): string {
+  return str.split(NBSP).map(normalizeScriptureSpaces).join(NBSP);
+}
+
+/**
  * Determines if the USJ documents or markers (and all contents) are equivalent after regularizing
  * spaces according to the way `ParatextData.dll` does.
  *
@@ -838,8 +858,8 @@ function areUsjContentsEqualExceptWhitespaceInternal(
   const aIsString = isString(a);
   const bIsString = isString(b);
   if (aIsString && bIsString) {
-    const aNormalized = normalizeScriptureSpaces(a);
-    const bNormalized = normalizeScriptureSpaces(b);
+    const aNormalized = normalizeScriptureSpacesTreatingNbspAsContent(a);
+    const bNormalized = normalizeScriptureSpacesTreatingNbspAsContent(b);
     // Check to see if their regularized forms are equal. If so, they're equal. If not, they may still
     // be equal if they are at the end of a block-level marker and the only difference is space at the end.
     // If at the end of a block-level marker with space at the end, take off the final space and compare again
