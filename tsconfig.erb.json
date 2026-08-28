@@ -20,7 +20,8 @@
     ".erb/scripts/startup-waterfall.ts",
     ".erb/scripts/startup-waterfall.util.ts",
     ".erb/scripts/generate-wire-surface.ts",
-    ".erb/scripts/generate-wire-surface.util.ts"
+    ".erb/scripts/generate-wire-surface.util.ts",
+    ".erb/scripts/generate-wire-surface.csharp.util.ts"
   ],
   "exclude": ["node_modules"]
 }
