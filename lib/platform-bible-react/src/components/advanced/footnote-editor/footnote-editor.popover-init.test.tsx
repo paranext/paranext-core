@@ -131,10 +131,9 @@ describe('FootnoteEditor popover init (wrapper-para marker prefix suppressed)', 
       const findNote = (node: LexicalNode): LexicalNode | undefined => {
         if (node.getType() === 'note') return node;
         if (!$isElementNode(node)) return undefined;
-        return node.getChildren().reduce<LexicalNode | undefined>(
-          (found, child) => found ?? findNote(child),
-          undefined,
-        );
+        return node
+          .getChildren()
+          .reduce<LexicalNode | undefined>((found, child) => found ?? findNote(child), undefined);
       };
       const note = findNote($getRoot());
       if (!note || !$isElementNode(note)) return undefined;

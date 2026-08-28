@@ -101,3 +101,52 @@ test('renders nothing extra for a footnote with no category', () => {
 
   expect(container.querySelector('.note-category')).toBeNull();
 });
+
+function headerOf(container: HTMLElement): Element {
+  const header = container.querySelector('.textual-note-header');
+  if (!header) throw new Error('The footnote item rendered no header');
+  return header;
+}
+
+/**
+ * Reads a note header the way layout draws it rather than the way `textContent` concatenates it.
+ * CSS removes a collapsible space at the end of an inline-block's last line, so a separator space
+ * parked inside the caller or category box is present in the DOM and yet invisible on screen — the
+ * pane runs the two together (`+People`). Trimming each box's own trailing space here is what makes
+ * that difference visible to a test.
+ */
+function renderedHeaderText(header: Element): string {
+  return Array.from(header.childNodes)
+    .map((node) => {
+      const text = node.textContent ?? '';
+      return node instanceof Element && node.classList.contains('tw:inline-block')
+        ? text.replace(/\s+$/, '')
+        : text;
+    })
+    .join('');
+}
+
+test('separates the caller from the category when markers are hidden', () => {
+  const { container } = render(
+    <FootnoteItem footnote={footnoteWithCategory} showMarkers={false} />,
+  );
+
+  expect(renderedHeaderText(headerOf(container))).toBe('+ People');
+});
+
+test('separates the caller from the category when markers are shown', () => {
+  const { container } = render(<FootnoteItem footnote={footnoteWithCategory} />);
+
+  expect(renderedHeaderText(headerOf(container))).toBe('\\f + \\cat People\\cat*');
+});
+
+test('sets the opening marker off from the caller with a header-sized space', () => {
+  // The `\f` glyph is drawn at 0.7em (`.marker-visible .marker`), so a space kept inside that span
+  // is drawn at 0.7em too and reads as `\f+`. The separator belongs outside the glyph, where it
+  // takes the header's own size.
+  const { container } = render(<FootnoteItem footnote={footnoteWithCategory} />);
+  const openingMarker = headerOf(container).querySelector('.marker');
+
+  expect(openingMarker?.textContent).toBe('\\f');
+  expect(openingMarker?.nextSibling?.textContent).toBe(' ');
+});
