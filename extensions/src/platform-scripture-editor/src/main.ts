@@ -34,6 +34,7 @@ import resourceTextPanelWebView from './resource-text-panel.web-view?inline';
 import scriptureTextGridWebView from './scripture-text-grid.web-view?inline';
 import scriptureTextGridWebViewStyles from './scripture-text-grid.web-view.scss?inline';
 import {
+  claimScrollGroupSourceProject,
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
   formatEditorTitle,
@@ -394,6 +395,11 @@ async function open(
     // here.
     if (interfaceMode === 'simple' && projectForWebView.projectId) {
       await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
+      // Fire-and-forget: must not block the switch/overlay on a papi.scrollGroups round trip (can
+      // hang up to 30s mid re-arm). Views injected via the default-layout supplement rather than
+      // pinned into simple-layout.data.ts (e.g., Text Collection) update via onDidUpdateScrRef
+      // whenever this resolves.
+      claimScrollGroupSourceProject(papi, projectForWebView.projectId);
       await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
     }
 

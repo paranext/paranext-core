@@ -1132,6 +1132,43 @@ export async function openOrUpdateRelatedPanels(
 }
 
 /**
+ * Re-stamps scroll group 0's source project as `projectId` after a Simple-mode project switch,
+ * without moving the displayed verse. The panels {@link openOrUpdateRelatedPanels} re-points are
+ * pinned to an explicit project id; a view injected via the default-layout supplement instead of
+ * `simple-layout.data.ts` (e.g., Text Collection — see `scriptureTextGridWebViewProvider`) has no
+ * such pin and instead follows scroll group 0's _source_ project, which only advances when
+ * something calls `setScrRef`. A switch that lands on the same book/chapter/verse in the new
+ * project involves no navigation, so this is the one explicit call that claims scroll group 0 for
+ * the incoming project right away, rather than leaving supplemental views to pick it up only on the
+ * user's next reference navigation.
+ *
+ * Converts through `getScrRefForProject` rather than reading the raw stored ref: the outgoing and
+ * incoming projects' versifications can disagree on this exact book/chapter, so the numbers must be
+ * re-expressed in `projectId`'s frame before being stamped with `projectId` as source.
+ *
+ * Fire-and-forget, like {@link syncOnProjectSwitch}: `papi.scrollGroups` is a network object that
+ * can take up to 30s to resolve while re-arming, and this must never delay the switch or its
+ * transition overlay. A failure here is logged and swallowed; supplemental views still catch up on
+ * the user's next reference navigation.
+ *
+ * @param papi The instance of papi to read/write the scroll group with
+ * @param projectId The incoming project to claim scroll group 0's source as
+ */
+export async function claimScrollGroupSourceProject(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<void> {
+  try {
+    const scrRef = await papi.scrollGroups.getScrRefForProject(0, projectId);
+    await papi.scrollGroups.setScrRef(0, scrRef, projectId);
+  } catch (e) {
+    papi.logger.warn(
+      `Error claiming scroll group 0's source project as ${projectId}: ${getErrorMessage(e)}`,
+    );
+  }
+}
+
+/**
  * Re-points the Find panel at `projectId`, the way {@link openOrUpdateRelatedPanels} re-points the
  * rest of Column 3. Kept separate, and called after the editor's own web view exists, because Find
  * needs `editorWebViewId`: it caches that id and uses it to select and highlight a clicked result

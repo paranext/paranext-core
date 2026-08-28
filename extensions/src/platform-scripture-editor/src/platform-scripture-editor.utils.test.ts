@@ -7,6 +7,7 @@ import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
+  claimScrollGroupSourceProject,
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
   formatEditorTitle,
@@ -2535,6 +2536,61 @@ describe('finalizeProjectSwitch', () => {
 });
 
 // #endregion finalizeProjectSwitch
+
+// #region claimScrollGroupSourceProject
+
+function createScrollGroupMockPapi() {
+  const mockGetScrRefForProject = vi.fn();
+  const mockSetScrRef = vi.fn().mockResolvedValue(true);
+  const mockWarn = vi.fn();
+  // Must cast since the mock only includes the papi properties used by
+  // claimScrollGroupSourceProject.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const papi = {
+    scrollGroups: { getScrRefForProject: mockGetScrRefForProject, setScrRef: mockSetScrRef },
+    logger: { warn: mockWarn },
+  } as unknown as typeof PapiBackend;
+  return { papi, mockGetScrRefForProject, mockSetScrRef, mockWarn };
+}
+
+describe('claimScrollGroupSourceProject', () => {
+  it("converts the current ref into the incoming project's versification, then writes it back with the incoming project as source", async () => {
+    const { papi, mockGetScrRefForProject, mockSetScrRef } = createScrollGroupMockPapi();
+    const convertedRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
+    mockGetScrRefForProject.mockResolvedValue(convertedRef);
+
+    await claimScrollGroupSourceProject(papi, 'proj-incoming');
+
+    expect(mockGetScrRefForProject).toHaveBeenCalledWith(0, 'proj-incoming');
+    expect(mockSetScrRef).toHaveBeenCalledWith(0, convertedRef, 'proj-incoming');
+  });
+
+  it('resolves without throwing when getScrRefForProject rejects', async () => {
+    const { papi, mockGetScrRefForProject } = createScrollGroupMockPapi();
+    mockGetScrRefForProject.mockRejectedValue(new Error('conversion failed'));
+
+    await expect(claimScrollGroupSourceProject(papi, 'proj-incoming')).resolves.toBeUndefined();
+  });
+
+  it('resolves without throwing when setScrRef rejects', async () => {
+    const { papi, mockGetScrRefForProject, mockSetScrRef } = createScrollGroupMockPapi();
+    mockGetScrRefForProject.mockResolvedValue({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    mockSetScrRef.mockRejectedValue(new Error('write failed'));
+
+    await expect(claimScrollGroupSourceProject(papi, 'proj-incoming')).resolves.toBeUndefined();
+  });
+
+  it('logs a warning naming the incoming project when getScrRefForProject fails', async () => {
+    const { papi, mockGetScrRefForProject, mockWarn } = createScrollGroupMockPapi();
+    mockGetScrRefForProject.mockRejectedValue(new Error('conversion failed'));
+
+    await claimScrollGroupSourceProject(papi, 'proj-incoming');
+
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-incoming'));
+  });
+});
+
+// #endregion claimScrollGroupSourceProject
 
 // isBlockMarker moved to platform-bible-utils (src/markers/usfm-markers.ts); its tests live in
 // lib/platform-bible-utils/src/markers/usfm-markers.test.ts.
