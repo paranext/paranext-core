@@ -8676,9 +8676,9 @@ declare module 'shared/data/platform.data' {
   /**
    * Query parameter passed to the renderer. Present only on the main window, absent on every
    * secondary window, so the renderer can tell which chrome to draw — on Windows and Linux the main
-   * window keeps the top-level menu and secondary windows do not. On macOS the top-level menu lives in
-   * the OS-level menu bar, which is process-global and reachable from every window regardless of this
-   * flag.
+   * window keeps the top-level menu and secondary windows do not. On macOS the top-level menu lives
+   * in the OS-level menu bar, which is process-global and reachable from every window regardless of
+   * this flag.
    *
    * Fixed at window creation, which is a deliberate limitation: it cannot describe a window becoming
    * the main one later. PT-4278's window-manager service is the durable answer; replace this when it
