@@ -751,9 +751,9 @@ export function PlatformTabTitle({
     </TooltipProvider>
   );
 
-  // Simple mode: skip the context menu entirely. Its only item is "Float Tab", which is already a
-  // no-op because the group config has floatable: false. Removing the menu prevents a dead option
-  // from being shown.
+  // Simple mode: skip the tab menu entirely. Every item it offers is either a no-op here (floating
+  // is off, since the group config has floatable: false) or reaches a second window, which Simple
+  // mode does not have. Removing the menu prevents dead options from being shown.
   if (!isPowerMode) return titleWithTooltip;
 
   const menuContext: TabMenuContext = {

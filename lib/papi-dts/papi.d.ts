@@ -11718,6 +11718,7 @@ declare module '@papi/core' {
     FocusSubject,
     SetFocusSubject,
     SetFocusSpecifier,
+    WindowSummary,
   } from 'shared/services/window.service-model';
 }
 declare module 'shared/services/menu-data.service-model' {
