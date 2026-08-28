@@ -1451,8 +1451,11 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
     definitionIds.add(move.capturedDefinition.id);
     foldedInDefinitions.push(move.capturedDefinition);
   });
+  // `debug`, not `warn`: a move overlapping a whole-app read is an expected, handled condition, and
+  // this read backs `getAllOpenWebViewDefinitions`, which any caller can invoke at any time — so an
+  // ordinary tab drag would otherwise raise an operator-facing warning about nothing.
   if (foldedInDefinitions.length > 0)
-    logger.warn(
+    logger.debug(
       `Web view(s) ${foldedInDefinitions.map((definition) => definition.id).join(', ')} are between windows on a move, so no window reported them; folding in their captured definitions rather than leaving them out of this read.`,
     );
 

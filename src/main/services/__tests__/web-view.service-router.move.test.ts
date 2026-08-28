@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => {
     clearWindowPendingContent: vi.fn(),
     loggerWarn: vi.fn(),
     loggerError: vi.fn(),
+    loggerDebug: vi.fn(),
     shardAnnouncementListeners,
     onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
       shardAnnouncementListeners.create.push(listener);
@@ -102,7 +103,12 @@ vi.mock('@main/services/window-layout-persistence.service', () => ({
   clearWindowPendingContent: mocks.clearWindowPendingContent,
 }));
 vi.mock('@shared/services/logger.service', () => ({
-  logger: { warn: mocks.loggerWarn, error: mocks.loggerError, info: vi.fn(), debug: vi.fn() },
+  logger: {
+    warn: mocks.loggerWarn,
+    error: mocks.loggerError,
+    info: vi.fn(),
+    debug: mocks.loggerDebug,
+  },
 }));
 
 const { moveWebView } = testingWebViewServiceRouter;
@@ -762,6 +768,12 @@ describe('a web view that is between windows on a move', () => {
         state: { isReadOnly: false },
       }),
     );
+    // The fold-in is invisible in the result — a folded-in definition looks exactly like one a
+    // window reported — so the log line is the only way anyone reading a log can tell this read
+    // covered a gap rather than finding nothing to cover.
+    expect(mocks.loggerDebug).toHaveBeenCalledWith(
+      expect.stringContaining('view-1 are between windows on a move'),
+    );
 
     releaseAdopt('view-1');
     await moving;
@@ -796,6 +808,12 @@ describe('a web view that is between windows on a move', () => {
     const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
 
     expect(definitions.filter((definition) => definition.id === 'view-1')).toHaveLength(1);
+    // Nothing was folded in, so nothing says it was. The sibling test above shows this same call
+    // does log when a fold-in really happens, so silence here is the dedupe working rather than the
+    // assertion having nothing to catch.
+    expect(mocks.loggerDebug).not.toHaveBeenCalledWith(
+      expect.stringContaining('are between windows on a move'),
+    );
 
     releaseAdopt('view-1');
     await moving;

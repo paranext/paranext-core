@@ -477,10 +477,11 @@ async function loadLayoutInWindow(simpleLayout: LayoutInfo) {
  * the end of the test that started it.
  *
  * `open-home` is what the main process actually answers for the windows these tests stand up — a
- * window that is born empty, or is the last one standing, or holds the primary role. `closing` is
- * reached only for a non-primary window emptied by removal while others remain, so a test that
- * wants it must say so: answering it here would latch every window as closing and make each later
- * dock operation throw.
+ * window that reports itself born empty, or is the last one standing when its report is decided.
+ * `closing` is reached by a window emptied by removal while other windows remain, whichever window
+ * that is: windows are equal siblings and no window is exempt by being the first or the one whose
+ * layout is persisted as main. So a test that wants `closing` has to ask for it — answering it here
+ * would latch every window as closing and make each later dock operation throw.
  */
 function respondToGetLayout(response: unknown) {
   mocks.networkRequest.mockImplementation(async (requestType: string) => {
