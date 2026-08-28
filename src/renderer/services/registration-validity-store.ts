@@ -138,6 +138,11 @@ export function publishRegistrationValidity(next: RegistrationValidity): void {
   // to see — a registration that was just saved, or a suppression the gate decided — so letting an
   // older probe settle over the top would silently undo the decision.
   generation += 1;
+  // Free the slot as well as disowning the answer, exactly as a reset does. A disowned probe
+  // publishes nothing, so leaving it in `inFlight` would make the next forced re-check join a probe
+  // whose result is already destined to be thrown away — turning that re-check into a silent no-op.
+  // The probe's own cleanup is keyed on `inFlightId`, so it cannot clear a slot a later probe took.
+  inFlight = undefined;
   setValidity(next);
 }
 

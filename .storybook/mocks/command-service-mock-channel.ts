@@ -19,8 +19,8 @@ let responder: CommandResponder | undefined;
 
 /**
  * Route `sendCommand` calls to `next` for the duration of a story. Call with `undefined` (or use
- * {@link resetCommandServiceMock}) to restore the default, which resolves to `undefined` rather than
- * throwing, so stories that never opt in behave as they did before this mock existed.
+ * {@link resetCommandServiceMock}) to restore the default, which rejects the way an unanswerable
+ * request does in Storybook.
  */
 export function setCommandServiceMock(next: CommandResponder | undefined): void {
   responder = next;
