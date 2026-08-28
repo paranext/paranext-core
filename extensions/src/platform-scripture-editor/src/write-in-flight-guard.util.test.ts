@@ -122,6 +122,42 @@ describe('withWriteInFlightGuard', () => {
       expect(successorOutcome).toBeInstanceOf(Promise);
     });
 
+    it('reports { ran: false, released: true, error } when a released write eventually rejects', async () => {
+      const isWritingRef = { current: false };
+      let rejectWrite: (reason: unknown) => void = () => {};
+      const zombieOutcome = withWriteInFlightGuard(
+        isWritingRef,
+        () =>
+          new Promise<boolean>((_resolve, reject) => {
+            rejectWrite = reject;
+          }),
+      );
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(isWritingRef.current).toBe(false);
+
+      // Thrown, the caller's own catch would treat this as the live write's outcome and restore a
+      // baseline captured at least 60 seconds ago, discarding everything typed since. It has to
+      // come back as data instead, so the caller can report the failure without acting on it.
+      const failure = new Error('(SR_EDIT_BLOCKED) project is syncing');
+      rejectWrite(failure);
+
+      await expect(zombieOutcome).resolves.toEqual({
+        ran: false,
+        released: true,
+        error: failure,
+      });
+    });
+
+    it('still throws a rejection from a write that never lost the guard', async () => {
+      const isWritingRef = { current: false };
+      const failure = new Error('permissions');
+
+      await expect(
+        withWriteInFlightGuard(isWritingRef, () => Promise.reject(failure)),
+      ).rejects.toBe(failure);
+      expect(isWritingRef.current).toBe(false);
+    });
+
     it('honors a non-default releaseAfterMs: still held 1 ms before it, released exactly at it', async () => {
       const isWritingRef = { current: false };
       const customReleaseAfterMs = 5_000;
