@@ -39,7 +39,7 @@ import {
 } from '@shared/models/web-view-move.model';
 import { Layout } from '@shared/models/docking-framework.model';
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage, wait } from 'platform-bible-utils';
+import { AsyncVariable, getErrorMessage, wait } from 'platform-bible-utils';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
 import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
@@ -166,11 +166,40 @@ export type WebViewWindowCreator = {
   closeWindow: (windowId: number) => void;
 };
 
+/**
+ * Time in ms {@link createFreshWindow} waits for {@link setWebViewWindowCreator} to be called before
+ * giving up. This router starts serving `openWebView` (see `startWebViewServiceRouter`) well before
+ * `main.ts` wires the creator, so a caller — an extension calling `openWebView({ type: 'window' })`
+ * from `activate()`, in particular — can arrive first; sized to match
+ * `REGISTER_DATA_PROVIDER_TIMEOUT_MS` elsewhere on the boot path (30 seconds), generous enough for
+ * a slow cold boot.
+ */
+const WINDOW_CREATOR_WIRING_TIMEOUT_MS = 30000;
+
 let windowCreator: WebViewWindowCreator | undefined;
 
-/** Wire the window facilities the window-layout rung uses. See {@link WebViewWindowCreator} */
+/**
+ * Resolves once {@link setWebViewWindowCreator} wires the creator, so a caller that reaches
+ * {@link createFreshWindow} before wiring exists can wait for it instead of failing outright. See
+ * {@link setWebViewWindowCreator} for the boot-ordering constraint this depends on.
+ */
+let windowCreatorWired = new AsyncVariable<void>(
+  'WebViewWindowCreator wiring',
+  WINDOW_CREATOR_WIRING_TIMEOUT_MS,
+);
+
+/**
+ * Wire the window facilities the window-layout rung uses. See {@link WebViewWindowCreator}
+ *
+ * Must be called without first waiting for extension-host readiness: extensions can call
+ * `openWebView({ type: 'window' })` from `activate()`, and {@link createFreshWindow} blocks
+ * (bounded) on this being called when that happens before wiring exists — if `main.ts` ever starts
+ * waiting for an extension-host ready signal before making this call, that wait deadlocks against
+ * this one.
+ */
 export function setWebViewWindowCreator(creator: WebViewWindowCreator): void {
   windowCreator = creator;
+  windowCreatorWired.resolveToValue(undefined);
 }
 
 /** A window a search settled on, and the shard an operation runs in it through */
@@ -491,11 +520,20 @@ type FreshWindow = {
  * @param webViewDescription What the window is being created for, for the errors this raises
  */
 async function createFreshWindow(webViewDescription: string): Promise<FreshWindow> {
-  if (!windowCreator)
+  if (!windowCreator) {
+    try {
+      await windowCreatorWired.promise;
+    } catch {
+      throw new Error(
+        `Cannot open ${webViewDescription} in a new window: the window creator was never wired up within ${WINDOW_CREATOR_WIRING_TIMEOUT_MS} ms`,
+      );
+    }
+  }
+  const creator = windowCreator;
+  if (!creator)
     throw new Error(
       `Cannot open ${webViewDescription} in a new window: window creation is not wired up`,
     );
-  const creator = windowCreator;
   const windowId = await creator.createPendingContentWindow();
 
   // Closes the window this call created, and never lets a failure to close replace the reason the
@@ -1151,7 +1189,25 @@ async function moveWebViewToWindow(
  * through any router method: every caller of one awaits each close before the next, which is the
  * sequential case the promise is not about.
  */
-export const testingWebViewServiceRouter = { moveWebView, createFreshWindow };
+/**
+ * Puts the window creator back to its unwired startup state — a fresh latch nothing has resolved —
+ * so a test can exercise {@link createFreshWindow}'s before-wiring wait more than once. Testing
+ * only.
+ */
+function resetWindowCreatorForTesting(): void {
+  windowCreator = undefined;
+  windowCreatorWired = new AsyncVariable<void>(
+    'WebViewWindowCreator wiring',
+    WINDOW_CREATOR_WIRING_TIMEOUT_MS,
+  );
+}
+
+export const testingWebViewServiceRouter = {
+  moveWebView,
+  createFreshWindow,
+  WINDOW_CREATOR_WIRING_TIMEOUT_MS,
+  resetWindowCreatorForTesting,
+};
 
 // Router methods that route to the focused window's WebView service shard
 
