@@ -9,8 +9,14 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import WebSocket from 'ws';
+import { WINDOW_ID_SHAPE_SOURCE } from './window-id-shape';
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
+
+// Re-exported so the matchers below and the specs that build their own read one shape from one
+// place. It is defined in its own import-free module so the drift guard can read it without pulling
+// Playwright into the unit suite.
+export { WINDOW_ID_SHAPE_SOURCE } from './window-id-shape';
 
 /**
  * The window-scoped shard methods a renderer registers, one per service the main process's routers
@@ -20,17 +26,18 @@ const DEFAULT_WEBSOCKET_PORT = 8876;
  * `command:platform.openBookChapterControl`: the main process registers those before it creates any
  * window, so they appear in `rpc.discover` while no renderer exists to serve them. A scoped shard
  * method can only come from a live renderer that finished registering its services. The window id
- * is an Electron BrowserWindow id, so it is matched as a pattern rather than a fixed string.
+ * is a durable GUID minted per window, so it is matched as a pattern rather than a fixed string.
+ * The `i` flag tolerates either case in the GUID's hex digits.
  *
  * All of them, not just one: a renderer starts its shards together, so any one of them proves only
  * that the batch is under way. A spec that drives a command right after the gate — Ctrl+B, a
  * feedback form, a settings tab — needs the shard behind THAT command to have registered.
  */
 const SCOPED_SHARD_METHODS = [
-  /^object:DialogService-\d+\.showDialog$/,
-  /^object:UsersnapService-\d+\.submitIdea$/,
-  /^object:BookChapterControlService-\d+\.open$/,
-  /^object:WebViewService-\d+\.openSettingsTab$/,
+  new RegExp(`^object:DialogService-${WINDOW_ID_SHAPE_SOURCE}\\.showDialog$`, 'i'),
+  new RegExp(`^object:UsersnapService-${WINDOW_ID_SHAPE_SOURCE}\\.submitIdea$`, 'i'),
+  new RegExp(`^object:BookChapterControlService-${WINDOW_ID_SHAPE_SOURCE}\\.open$`, 'i'),
+  new RegExp(`^object:WebViewService-${WINDOW_ID_SHAPE_SOURCE}\\.openSettingsTab$`, 'i'),
 ];
 
 const RPC_DISCOVER_POLL_INTERVAL_MS = 250;

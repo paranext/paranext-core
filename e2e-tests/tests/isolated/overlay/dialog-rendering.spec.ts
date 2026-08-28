@@ -15,6 +15,7 @@ import {
   waitForAppReady,
   waitForAtLeastOneProjectMetadata,
   waitForPapiMethodRegistered,
+  WINDOW_ID_SHAPE_SOURCE,
 } from '../../../fixtures/helpers';
 
 // ---------------------------------------------------------------------------
@@ -162,7 +163,9 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
   // renderer exists, so waiting on it does not prove a real dialog service is ready. Wait for a
   // window's dialog service shard instead, which only appears once a renderer's own dialog service
   // has wired up, avoiding forwarding to a closed renderer socket.
-  await waitForPapiMethodRegistered(/^object:DialogService-\d+\.showDialog$/);
+  await waitForPapiMethodRegistered(
+    new RegExp(`^object:DialogService-${WINDOW_ID_SHAPE_SOURCE}\\.showDialog$`, 'i'),
+  );
 
   // =========================================================================
   // Alert Dialog
