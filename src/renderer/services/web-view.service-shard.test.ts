@@ -1116,7 +1116,7 @@ describe('handleSwitchToSimpleMode', () => {
   });
 });
 
-describe('getWebView derives security-relevant WebViewDefinition keys instead of passing them through', () => {
+describe('openOrReloadWebView derives security-relevant WebViewDefinition keys instead of passing them through', () => {
   beforeEach(() => {
     vi.resetModules();
   });
@@ -1153,6 +1153,40 @@ describe('getWebView derives security-relevant WebViewDefinition keys instead of
     expect(finalWebView?.allowPopups).toBe(false);
     // Filtered, not the raw array with the disallowed scheme still present.
     expect(finalWebView?.allowedFrameSources).toEqual(['https://good.example.com']);
+  });
+
+  it("keeps a provider's explicit values for allowScripts, allowSameOrigin, and allowPopups rather than forcing the defaults", async () => {
+    // The test above pins the defaults, which on its own cannot tell a derived value from a
+    // hardcoded one: replacing any of these three with the constant it defaults to would still
+    // satisfy it. This pins the other half, so the pair fails for either mistake. It is not
+    // hypothetical for allowPopups - paratext-registration and platform-scripture-editor both open
+    // WebViews with `allowPopups: true` and would silently lose popups if it became a constant.
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+
+    const WEB_VIEW_ID = 'explicit-security-values-webview';
+    getWebViewProviderMock.mockResolvedValue({
+      getWebView: vi.fn(async () => ({
+        id: WEB_VIEW_ID,
+        webViewType: 'test.explicitSecurityValues',
+        content: '',
+        // Each one is the opposite of what this key defaults to, so a default that overrode the
+        // provider would be visible in every assertion below rather than in none of them.
+        allowScripts: false,
+        allowSameOrigin: false,
+        allowPopups: true,
+      })),
+    });
+
+    await host.openOrReloadWebView({ id: WEB_VIEW_ID, webViewType: 'test.explicitSecurityValues' });
+
+    const { lastCall } = vi.mocked(fakeDockLayout.addWebViewToDock).mock;
+    const [finalWebView] = lastCall ?? [];
+
+    expect(finalWebView?.allowScripts).toBe(false);
+    expect(finalWebView?.allowSameOrigin).toBe(false);
+    expect(finalWebView?.allowPopups).toBe(true);
   });
 });
 

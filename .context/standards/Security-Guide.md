@@ -123,11 +123,15 @@ the platform never treats a value that merely passed through as trustworthy on i
 - **Derived on read.** `openOrReloadWebView` (`web-view.service-shard.ts`) recomputes each of the
   four from the provider's freshly-returned `WebViewDefinition` and assigns them into the resulting
   `WebViewTabProps` after the initial object spread — never copying them straight through from the
-  provider's raw object. `allowScripts` and `allowSameOrigin` get an explicit default when unset;
-  `allowedFrameSources` is filtered down to `https:`, `papi-extension:`, and `http://localhost:`
-  schemes (HTML and React WebViews) or matched against the WebView's own patterns (URL WebViews);
-  `allowPopups` defaults to `false` when unset. The WebView component reads only these derived
-  values — never the provider's raw object — when building the iframe's `sandbox` attribute and CSP.
+  provider's raw object. `allowSameOrigin` gets an explicit default when unset, as does
+  `allowScripts` for every content type except URL WebViews, where the provider's value is left as
+  it came; `allowedFrameSources` is filtered down to `https:`, `papi-extension:`, and
+  `http://localhost:` schemes (HTML and React WebViews) or matched against the WebView's own
+  patterns (URL WebViews); `allowPopups` defaults to `false` when unset. The derived values are what
+  reach the iframe, never the provider's raw object — `allowScripts`, `allowSameOrigin` and
+  `allowPopups` through the `sandbox` attribute the WebView component builds, and
+  `allowedFrameSources` through the `frame-src` directive of the CSP, which is built into the
+  WebView's content by `openOrReloadWebView` itself before the component ever sees it.
 
 Any key added to `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS` for the same reason (a provider-supplied
 value that must not reach the iframe unmediated) should get the same treatment: an explicit default
