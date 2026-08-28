@@ -1116,13 +1116,24 @@ describe('handleSwitchToSimpleMode', () => {
     await vi.waitFor(() => expect(fakeDockLayout.loadLayout).toHaveBeenCalled());
     mocks.networkRequest.mockClear();
 
-    // `globalThis.windowId` is `'2'` (file-wide beforeEach), matching the `-w2` suffix
-    // `withWindowScopedWebViewIds` would have appended to this id had it come through a real scoped
-    // load.
+    // `globalThis.windowId` is set to a window id of the shape the platform mints, matching the
+    // suffix `withWindowScopedWebViewIds` would have appended to this id had it come through a
+    // real scoped load.
+    globalThis.windowId = '22222222-2222-4222-8222-222222222222';
     const contaminatedLayout = {
       dockbox: {
         mode: 'horizontal',
-        children: [{ tabs: [{ id: 'simple-fixed-tab-1-w2', tabType: 'webView', data: {} }] }],
+        children: [
+          {
+            tabs: [
+              {
+                id: 'simple-fixed-tab-1-w22222222-2222-4222-8222-222222222222',
+                tabType: 'webView',
+                data: {},
+              },
+            ],
+          },
+        ],
       },
     };
     // onLayoutChangeRef.current's real type (OnLayoutChange) is rc-dock's own LayoutInfo-shaped
@@ -1488,7 +1499,7 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
 
     emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
       webView: {
-        id: `${FIXED_SIMPLE_EDITOR_TAB_ID}-w2`,
+        id: `${FIXED_SIMPLE_EDITOR_TAB_ID}-w22222222-2222-4222-8222-222222222222`,
         webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
         projectId: 'proj-scoped-opened',
       },
@@ -1506,7 +1517,7 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
     const host = await importHost();
     host.registerDockLayout(createFakeDockLayout());
     const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    const SCOPED_EDITOR_TAB_ID = `${FIXED_SIMPLE_EDITOR_TAB_ID}-w2`;
+    const SCOPED_EDITOR_TAB_ID = `${FIXED_SIMPLE_EDITOR_TAB_ID}-w22222222-2222-4222-8222-222222222222`;
 
     emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
       webView: {
