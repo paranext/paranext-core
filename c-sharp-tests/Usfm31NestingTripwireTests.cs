@@ -56,11 +56,22 @@ namespace TestParanextDataProvider
     ///    The two agree for an explicit "\marker*" closer but diverge on the implicit cases that
     ///    decide closed="false".
     /// 6. Export omits closed="false" in 3.1: the sink writes the attribute only when
-    ///    <c>forExport &amp;&amp; !RequiresPlusOnNestedStyles</c> is false — i.e. a 3.1 EXPORT drops
-    ///    closed="false", while the editor USX (<c>forExport=false</c>) still includes it
-    ///    (UsxUsfmParserSink.cs:82,241,287). The Standard-view editor keys closer DISPLAY and its
-    ///    honesty rule on this closed="false" flag, so a 3.1 project must keep receiving it on the
-    ///    editor (non-export) path even though a 3.1 file export would not carry it.
+    ///    <c>!closed &amp;&amp; (!forExport || RequiresPlusOnNestedStyles())</c>
+    ///    (UsxUsfmParserSink.cs:82,241,287). Under &lt;= 3.0 the right-hand side is always true,
+    ///    so every genuinely-unclosed span carries the flag on every path — but under 3.1 a
+    ///    <c>forExport</c> conversion drops it entirely, and Platform.Bible's editor USX itself
+    ///    takes the export path: <c>ParatextProjectDataProvider.ConvertUsfmToUsx</c> passes
+    ///    <c>forExport: true</c> deliberately (link-href chars stay normal, figure src becomes
+    ///    file). The Standard-view editor keys closer DISPLAY and its honesty rule on
+    ///    closed="false", so on a 3.1 project every note-content span would arrive
+    ///    attribute-less: the editor would render phantom <c>\ft*</c> closers that editable mode
+    ///    saves as real bytes, and an explicitly-closed <c>\xt …\xt*</c> is indistinguishable
+    ///    per span from an unclosed one (a span-level marker-family default was tried in the
+    ///    editor and reverted — it strips the <c>\xt*</c> and attribute run off explicitly-closed
+    ///    spans in &lt;= 3.0 corpus data). On upgrade, either editor reads must stop using the
+    ///    export path (re-solving the link-href / figure-src reasons it was chosen), or the
+    ///    project's UsfmVersion must reach the editor's load options so the note-content
+    ///    families default to unclosed for 3.1 input only.
     /// 7. Stylesheet: the <c>notesub</c> TextProperty (<c>scNoteSubMarker</c>, ScrTag.cs:217,278)
     ///    that marks the whole footnote/cross-ref content-marker family exists ONLY in
     ///    usfm3_1.sty, and NEST / "\+" are removed from those markers' OccursUnder there. 3.1

@@ -249,7 +249,12 @@ describe('command palette: the committed item is the highlighted item', () => {
   });
 
   describe('active mode (the app’s host palette — the palette’s own input takes the keystrokes)', () => {
+    // Containment matching: commit-through-the-store parity is the CONTAINMENT regime's contract.
+    // A default (fuzzy) palette lets cmdk own filtering/highlight, and its commits go through the
+    // palette UI (click/Enter/Space on the highlighted item), never through
+    // commitCommandPaletteSelection's store resolution.
     const commandRequest: CommandPaletteRequest = {
+      disableFuzzyMatching: true,
       items: [
         { id: 'open', label: 'Open File', description: 'Open an existing file' },
         { id: 'save', label: 'Save File', description: 'Write the file to disk' },

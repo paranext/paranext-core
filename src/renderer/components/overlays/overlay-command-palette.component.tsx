@@ -120,6 +120,13 @@ export type OverlayCommandPalettePresentationalProps = {
    * on which fields match.
    */
   searchFields?: readonly PaletteSearchField[];
+  /**
+   * Turns off cmdk's per-character fuzzy matching — see
+   * {@link CommandPaletteRequest.disableFuzzyMatching}. Forced on (containment-only) whenever
+   * `passive` or `keyForwarding` is set, since those palettes' filtered list is resolved by the
+   * host and must agree exactly with what is on screen.
+   */
+  disableFuzzyMatching?: boolean;
 };
 
 // ── Constants ──
@@ -176,20 +183,46 @@ function PaletteItemContent({ item }: { item: CommandPaletteItem }) {
   );
 }
 
+/** The fields the filter may search, in display order — the default when a request names none. */
+const ALL_SEARCH_FIELDS: readonly PaletteSearchField[] = ['label', 'description', 'badge'];
+
+/**
+ * The text cmdk's own fuzzy scorer matches an item against: the item's searched fields joined (per
+ * the request's `searchFields`, defaulting to all of them). Selection identity does NOT ride on
+ * this value — `onSelect` closes over `item.id` — so items with colliding text still commit
+ * correctly; only their highlight would visually pair up.
+ */
+function fuzzySearchText(
+  item: CommandPaletteItem,
+  searchFields: readonly PaletteSearchField[] | undefined,
+): string {
+  const fields = searchFields && searchFields.length > 0 ? searchFields : ALL_SEARCH_FIELDS;
+  const text = fields
+    .map((field) => item[field])
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .join(' ');
+  // cmdk needs a non-empty value per item; an all-empty-fields item falls back to its id.
+  return text || item.id;
+}
+
 /** Renders a single command palette item with label, description, icon, and badge */
 function PaletteItem({
   item,
   onSelect,
+  searchValue,
 }: {
   item: CommandPaletteItem;
   onSelect: (id: string) => void;
+  /**
+   * Cmdk match text for the item ({@link fuzzySearchText}) when cmdk owns filtering; omitted in
+   * containment modes, where filtering is done outside cmdk (shouldFilter=false on the root) and
+   * cmdk only needs a unique identity value to drive its highlight/selection.
+   */
+  searchValue?: string;
 }) {
   return (
     <CommandItem
-      // Identity value, not search text: filtering is done OUTSIDE cmdk (shouldFilter=false on the
-      // root) with the same filterPaletteItems the host commit uses, so cmdk only needs a unique
-      // value per item to drive its highlight/selection.
-      value={item.id}
+      value={searchValue ?? item.id}
       disabled={item.disabled}
       onSelect={() => onSelect(item.id)}
       // Toolbar-button discipline: pressing the mouse button must not move focus (from the
@@ -319,7 +352,15 @@ export function OverlayCommandPalettePresentational({
   onSelectedIndexChange,
   keyForwarding,
   searchFields,
+  disableFuzzyMatching = false,
 }: OverlayCommandPalettePresentationalProps) {
+  // Fuzzy matching runs INSIDE cmdk, which owns filtering and highlight for the palettes where
+  // that is safe: an ordinary focused palette, whose commits go through cmdk's own selection
+  // (click/Enter/Space on the highlighted DOM item), so nothing host-side ever needs to agree
+  // with the rendered list. Passive and key-forwarded palettes resolve commits and forwarded
+  // keys from the HOST's filterPaletteItems list, so they always use containment — cmdk's
+  // scorer is not reimplemented host-side, and the two lists must not disagree.
+  const cmdkFuzzyEnabled = !passive && !keyForwarding && !disableFuzzyMatching;
   // React's useRef requires null as the initial value for DOM refs
   // eslint-disable-next-line no-null/no-null
   const inputRef = useRef<HTMLInputElement>(null);
@@ -409,19 +450,22 @@ export function OverlayCommandPalettePresentational({
     [keyForwarding, onDismiss],
   );
 
-  // BOTH modes bypass cmdk's own fuzzy filtering: the filtered list is computed with the same
+  // Containment modes bypass cmdk's own filtering: the filtered list is computed with the same
   // filterPaletteItems function (and mode) the host uses to resolve a commit — keeping what's on
   // screen and what the host would select in agreement. Passive filters by the externally-driven
-  // filterText; active by the input mirror (which external filterText updates overwrite).
+  // filterText; active by the input mirror (which external filterText updates overwrite). With
+  // cmdk fuzzy matching enabled, cmdk filters internally instead and the full list is registered.
   const filteredItems = useMemo(
     () =>
-      filterPaletteItems(
-        items,
-        passive ? filterText : inputValue,
-        passive ? 'passive' : 'active',
-        searchFields,
-      ),
-    [items, passive, filterText, inputValue, searchFields],
+      cmdkFuzzyEnabled
+        ? items
+        : filterPaletteItems(
+            items,
+            passive ? filterText : inputValue,
+            passive ? 'passive' : 'active',
+            searchFields,
+          ),
+    [items, cmdkFuzzyEnabled, passive, filterText, inputValue, searchFields],
   );
   // Highlight resolution, identical in both modes: clamp the driving index to the (possibly
   // just-narrowed) filtered list, exactly as the store clamps on every update, so neither mode can
@@ -542,19 +586,28 @@ export function OverlayCommandPalettePresentational({
       data-overlay-command-palette
       className="tw:rounded-lg tw:border"
       onKeyDown={handleKeyDown}
-      // Filtering happens OUTSIDE cmdk (filteredItems above) so display and host commit share one
-      // algorithm; cmdk only drives the highlight, two-way-synced with the store via the
-      // controlled value below.
-      shouldFilter={false}
-      value={highlightedItem?.id ?? ''}
-      onValueChange={handleCmdkValueChange}
+      // With cmdk fuzzy matching enabled, cmdk owns filtering (its scorer over each item's
+      // fuzzySearchText) AND the highlight, uncontrolled — nothing host-side resolves against the
+      // rendered list for these palettes. In containment mode, filtering happens OUTSIDE cmdk
+      // (filteredItems above) so display and host commit share one algorithm; cmdk only drives
+      // the highlight, two-way-synced with the store via the controlled value below.
+      shouldFilter={cmdkFuzzyEnabled}
+      value={cmdkFuzzyEnabled ? undefined : (highlightedItem?.id ?? '')}
+      onValueChange={cmdkFuzzyEnabled ? undefined : handleCmdkValueChange}
     >
       {searchInput}
       <CommandList style={{ maxHeight: maxHeight - SEARCH_INPUT_RESERVED_HEIGHT }}>
         <CommandEmpty>{noResultsText}</CommandEmpty>
         <GroupedItems
           items={filteredItems}
-          renderItem={(item) => <PaletteItem key={item.id} item={item} onSelect={onSelect} />}
+          renderItem={(item) => (
+            <PaletteItem
+              key={item.id}
+              item={item}
+              onSelect={onSelect}
+              searchValue={cmdkFuzzyEnabled ? fuzzySearchText(item, searchFields) : undefined}
+            />
+          )}
         />
       </CommandList>
     </Command>
@@ -753,6 +806,9 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
   // always picks exactly what the palette displays — the store is the single source of truth
   // for selection, regardless of where the keystrokes landed. The filter mode comes from the
   // request so these item counts match the host's own filterPaletteItems calls exactly.
+  // (For a cmdk-fuzzy palette the containment count here can undercount what cmdk displays;
+  // that is fine — nothing resolves against the store for those palettes, the count only clamps
+  // a selectedIndex that stays 0 there, and announcements run off the forwarded path only.)
   const filterMode = overlay.request.passive ? 'passive' : 'active';
 
   const handleFilterTextChange = useCallback(
@@ -813,6 +869,7 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
       onSelectedIndexChange={handleSelectedIndexChange}
       keyForwarding={overlay.request.keyForwarding}
       searchFields={overlay.request.searchFields}
+      disableFuzzyMatching={overlay.request.disableFuzzyMatching}
     />
   );
 }

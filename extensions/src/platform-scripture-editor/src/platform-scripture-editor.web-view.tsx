@@ -2022,6 +2022,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               // field.
               placeholder: '%markerMenu_searchPlaceholder%',
               keyForwarding,
+              // Exact containment only: typing a marker and pressing Space must agree
+              // byte-for-byte with the rendered list (keyForwarding already forces this;
+              // stated so the semantic survives if the forwarding wiring ever changes).
+              disableFuzzyMatching: true,
             },
             webViewId,
           ),
@@ -2187,6 +2191,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // The same placeholder the main editor's marker palettes use, so the popover's palette
             // does not fall back to the generic "Search...".
             placeholder: '%markerMenu_searchPlaceholder%',
+            // Exact containment only, same as the main editor's marker palettes: the rendered
+            // list participates in commit semantics.
+            disableFuzzyMatching: true,
           },
           webViewId,
         ),

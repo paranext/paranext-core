@@ -225,6 +225,60 @@ describe('OverlayCommandPalettePresentational', () => {
 
       expect(screen.getByText('Nothing found')).toBeInTheDocument();
     });
+
+    it('fuzzy-matches subsequences by default (an ordinary focused palette)', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      // 'sf' is not CONTAINED in any label, but cmdk's scorer matches it as a subsequence of
+      // "Save File" ('S'ave 'F'ile) — the forgiving lookup general command palettes want.
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sf' } });
+
+      expect(screen.getByText('Save File')).toBeInTheDocument();
+      expect(screen.queryByText('Open File')).not.toBeInTheDocument();
+      expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
+    });
+
+    it('matches by containment only when disableFuzzyMatching is set', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          disableFuzzyMatching
+          noResultsText="Nothing found"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sf' } });
+      expect(screen.getByText('Nothing found')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Save' } });
+      expect(screen.getByText('Save File')).toBeInTheDocument();
+      expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
+    });
+
+    it('forces containment matching for a key-forwarded palette regardless of the option', () => {
+      // A forwarded palette's filtered list is resolved by the HOST (commits and forwarded keys
+      // are answered from it), so cmdk's scorer must never widen what is displayed past it.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          keyForwarding={{ keys: ['Enter'], onKey: vi.fn() }}
+          noResultsText="Nothing found"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sf' } });
+      expect(screen.getByText('Nothing found')).toBeInTheDocument();
+    });
   });
 
   describe('keyboard navigation', () => {
@@ -312,9 +366,12 @@ describe('OverlayCommandPalettePresentational', () => {
 
   describe('active mode — store-driven selection and filter parity (single source of truth)', () => {
     // The host's commitCommandPaletteSelection resolves filterPaletteItems(items, store.filterText)
-    // [store.selectedIndex]. These tests pin that the ACTIVE palette displays exactly that state:
-    // forwarded updates move the visible selection, local input mirrors back out via callbacks,
-    // and the visible list uses the same startsWith filter — so commit and display always agree.
+    // [store.selectedIndex]. These tests pin that a CONTAINMENT-mode active palette (fuzzy
+    // matching disabled — the marker palettes' regime, also forced by keyForwarding/passive)
+    // displays exactly that state: forwarded updates move the visible selection, local input
+    // mirrors back out via callbacks, and the visible list uses the same containment filter — so
+    // commit and display always agree. A default (fuzzy) palette opts out of this store-driven
+    // contract: cmdk owns its filtering and highlight, and commits go through the palette UI.
 
     it('highlights the item at selectedIndex (a forwarded moveSelection moves the visible selection)', () => {
       const onSelect = vi.fn();
@@ -323,6 +380,7 @@ describe('OverlayCommandPalettePresentational', () => {
         <OverlayCommandPalettePresentational
           items={sampleItems}
           selectedIndex={1}
+          disableFuzzyMatching
           onSelect={onSelect}
           onDismiss={vi.fn()}
         />,
@@ -338,6 +396,7 @@ describe('OverlayCommandPalettePresentational', () => {
       render(
         <OverlayCommandPalettePresentational
           items={sampleItems}
+          disableFuzzyMatching
           onSelect={vi.fn()}
           onDismiss={vi.fn()}
         />,
@@ -442,6 +501,7 @@ describe('OverlayCommandPalettePresentational', () => {
         <OverlayCommandPalettePresentational
           items={sampleItems}
           onSelectedIndexChange={onSelectedIndexChange}
+          disableFuzzyMatching
           onSelect={vi.fn()}
           onDismiss={vi.fn()}
         />,
@@ -977,13 +1037,19 @@ describe('OverlayCommandPalette (store-connected)', () => {
 
   type CommandPaletteEntry = Extract<OverlayEntry, { type: 'commandPalette' }>;
 
-  /** Builds a centered (no position) active-mode command palette entry backed by mock callbacks */
+  /**
+   * Builds a centered (no position) active-mode command palette entry backed by mock callbacks.
+   * Containment matching: this suite pins the STORE-mirroring contract (filter text, highlight
+   * index, clamping) that forwarded commits resolve against, and that contract belongs to the
+   * containment regime — a default (fuzzy) palette lets cmdk own filtering/highlight and never
+   * commits through the store.
+   */
   function createPaletteEntry(overrides?: Partial<CommandPaletteEntry>): CommandPaletteEntry {
     return {
       type: 'commandPalette',
       id: 'palette-1',
       webViewId: 'webview-1',
-      request: { items: paletteItems },
+      request: { items: paletteItems, disableFuzzyMatching: true },
       items: paletteItems,
       selectedIndex: 0,
       resolve: vi.fn(),

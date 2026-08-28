@@ -9986,6 +9986,20 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      */
     searchFields?: readonly PaletteSearchField[];
     /**
+     * When `true`, the palette matches by plain CONTAINMENT only (whole-phrase, then all-words),
+     * never by cmdk's per-character fuzzy scoring. Defaults to `false`: an ordinary focused palette
+     * fuzzy-matches, so `gcb` finds "Git: Create Branch".
+     *
+     * Set this when an exact, predictable match list matters more than forgiving lookup — marker
+     * palettes do, because the rendered list participates in commit semantics (typing a marker and
+     * pressing Space must agree byte-for-byte with what is displayed). Palettes with
+     * {@link CommandPaletteRequest.keyForwarding} and passive palettes always match by containment
+     * regardless of this option: their filtered list is resolved by the HOST (commits and forwarded
+     * keys are answered from it), and the host's filter must agree exactly with what is on screen —
+     * cmdk's scorer is not reimplemented host-side.
+     */
+    disableFuzzyMatching?: boolean;
+    /**
      * Anchor position in pixels relative to the requesting WebView's iframe origin. The palette is
      * positioned adjacent to this point. If omitted, centers in the viewport.
      */
@@ -12257,9 +12271,9 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
    *   label match, then prefix matches, then containment matches, ties keeping their original context
    *   order); items matching only on the other searched fields follow in their original order, so an
    *   exact label match can never be buried under description/badge hits. A MULTI-WORD query
-   *   additionally matches items where every whitespace-separated token is contained in SOME
-   *   searched field ("insert foot" finds an "Insert footnote" whose phrase appears in no single
-   *   field); those token matches follow the whole-phrase matches in their original order.
+   *   additionally matches items where every whitespace-separated token is contained in SOME searched
+   *   field ("insert foot" finds an "Insert footnote" whose phrase appears in no single field); those
+   *   token matches follow the whole-phrase matches in their original order.
    *
    * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input should
    * never be case-picky), and every leg strips the `+` marker-nesting prefix from the filter before
