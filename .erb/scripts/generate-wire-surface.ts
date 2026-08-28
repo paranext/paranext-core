@@ -15,6 +15,7 @@ import {
   serializeWireSurfaceDocument,
   VirtualFile,
 } from './generate-wire-surface.util';
+import { compareCodeUnits } from './generate-wire-surface.csharp.util';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const SCAN_ROOTS = ['src', 'extensions/src'];
@@ -43,7 +44,7 @@ function walkFiles(
       .readdirSync(absoluteDir, { withFileTypes: true })
       // The filesystem does not promise a stable enumeration order across platforms; sort so the
       // scan itself never depends on it (the output is also sorted independently of this).
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => compareCodeUnits(a.name, b.name));
 
     entries.forEach((dirEntry) => {
       if (excludedDirNames.has(dirEntry.name)) return;
