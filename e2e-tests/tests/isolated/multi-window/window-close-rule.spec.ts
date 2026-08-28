@@ -23,6 +23,11 @@
  * once had — the quit's own close is ignored while asking, and a prevented close cancels the quit,
  * so nothing but the decision giving way can end it.
  *
+ * TEST 5 — a second close arriving while the question is still open asks nothing more. With the
+ * question up and unanswered, the primary's ✕ is clicked again. The stub records every call it gets
+ * whether or not it ever answers, so nothing but the guard around `isAskingAboutClose` stops a
+ * second click from putting up a second question — this is the guard's own test, not the dialog's.
+ *
  * The native dialog is stubbed in the main process through `electronApp.evaluate`, which records
  * each call and answers as the test directs, or holds the question open for test 4. `app.quit()` is
  * deliberately NOT how test 2 brings the app down: that path sets the quit latch first and never
@@ -155,10 +160,10 @@ function countSavedWindowEntries(userDataDir: string): number {
 }
 
 test.use({
-  // The fixture launches with no special options unless a suite says otherwise, and the two tests
-  // that take `mainPage` from it need the same app the two that launch explicitly get. DEV_NOISY
-  // =false is the load-bearing half: it gives the first window the single-Home-tab fallback layout
-  // whose fixed web view id the emptied-primary test moves out.
+  // The fixture launches with no special options unless a suite says otherwise, and the three
+  // tests that take `mainPage` from it need the same app the two that launch explicitly get.
+  // DEV_NOISY=false is the load-bearing half: it gives the first window the single-Home-tab
+  // fallback layout whose fixed web view id the emptied-primary test moves out.
   electronLaunchOptions: BASE_LAUNCH_OPTIONS,
 });
 
@@ -247,10 +252,16 @@ test.describe('window close rule', () => {
       await stubMessageBox(ctx.electronApp, CLOSE_ALL_BUTTON);
 
       // Every window goes down and the process exits cleanly — a real quit, not a hang and not a
-      // crash. Asked exactly once: the secondary's own close must not ask again. The ✕ is the
-      // trigger rather than `app.quit()`, which would set the quit latch and never ask.
-      const exit = await quitAppAndWaitForExit(ctx.electronApp, output, () =>
-        clickCloseOn(ctx.electronApp, primaryId),
+      // crash. The ✕ is the trigger rather than `app.quit()`, which would set the quit latch and
+      // never ask. That a secondary's own close asks nothing further is pinned in
+      // `decideWindowClose`'s tests instead of here: the stub's recorded calls live in the main
+      // process this test is waiting to see exit, so the only moment this test could read them is
+      // one where a later second question has not been asked yet — a count taken there would
+      // agree with itself whether or not the rule holds.
+      // Bound once because a closure does not keep `ctx`'s narrowing to a launched app
+      const { electronApp } = ctx;
+      const exit = await quitAppAndWaitForExit(electronApp, output, () =>
+        clickCloseOn(electronApp, primaryId),
       );
       logStep(`phase 1: exited with code ${exit.code} signal ${exit.signal}`);
       expect(exit.signal).toBeUndefined();
@@ -397,5 +408,42 @@ test.describe('window close rule', () => {
     } finally {
       if (ctx) await teardownElectronApp(ctx);
     }
+  });
+
+  test('a second close while the question is still open asks nothing new', async ({
+    electronApp,
+    mainPage,
+  }) => {
+    const logStep = createStepLogger('window-close-rule');
+    await waitForAppReady(mainPage, 180_000);
+    const primaryId = getWindowIdOfPage(mainPage);
+
+    const page2 = await createSecondWindow(electronApp);
+    const secondId = getWindowIdOfPage(page2);
+    await waitForRendererRegistered(secondId, 120_000);
+    logStep(`windows ${primaryId} (primary) and ${secondId} up`);
+
+    // The question is asked and left hanging, as test 4's does, so it is still open for the
+    // second close below to arrive underneath.
+    await stubMessageBox(electronApp, CANCEL_BUTTON, true);
+    await clickCloseOn(electronApp, primaryId);
+    await pollUntil(
+      () => readMessageBoxCalls(electronApp),
+      (calls) => calls.length === 1,
+      30_000,
+      'the close-all question to be showing',
+    );
+    logStep('question showing; closing the primary again underneath it');
+
+    // The guard, not the dialog, is what has to stop this: the stub above records every call it
+    // gets whether or not it ever answers, so a second question would be recorded the same way
+    // the first was. The wait is what makes the count mean something — read the moment the click
+    // returns and a second question that was on its way would simply not have landed yet, so the
+    // assertion would hold whether or not the guard did.
+    await clickCloseOn(electronApp, primaryId);
+    await mainPage.waitForTimeout(2_000);
+    expect(await readMessageBoxCalls(electronApp)).toHaveLength(1);
+    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort((a, b) => a - b));
+    logStep('still asked only once; both windows still open');
   });
 });
