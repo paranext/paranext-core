@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY } from 'platform-bible-utils/experimental';
-import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-host';
+import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-shard';
 import {
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
@@ -39,7 +39,7 @@ vi.mock('@shared/services/logger.service', () => ({
 
 // The hook consumes the ready-made events this module exports rather than building its own, so the
 // doubles live here rather than behind a `getNetworkEvent` mock.
-vi.mock('@renderer/services/web-view.service-host', () => ({
+vi.mock('@renderer/services/web-view.service-shard', () => ({
   getAllOpenWebViewDefinitionsSync: vi.fn(() => []),
   // The event name is read when the subscriber runs, not when this factory is evaluated: vi.mock is
   // hoisted above the imports, so the constants do not exist yet at factory time.

@@ -3,7 +3,7 @@ import {
   onDidCloseWebView,
   onDidOpenWebView,
   onDidUpdateWebView,
-} from '@renderer/services/web-view.service-host';
+} from '@renderer/services/web-view.service-shard';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { logger } from '@shared/services/logger.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';

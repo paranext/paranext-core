@@ -225,7 +225,7 @@ export type BookChapterControlBookLists = {
  *
  * @param bookIds Book ids to group, in the order they should appear within their section
  */
-export function groupBooksBySection(bookIds: string[]): Record<Section, string[]> {
+export function groupBooksBySection(bookIds: readonly string[]): Record<Section, string[]> {
   return {
     [Section.OT]: bookIds.filter((bookId) => Canon.isBookOT(bookId)),
     [Section.NT]: bookIds.filter((bookId) => Canon.isBookNT(bookId)),
@@ -246,8 +246,8 @@ export function groupBooksBySection(bookIds: string[]): Record<Section, string[]
  *   project already has are ignored — this arrives from a public callback that may include them.
  */
 export function deriveBookChapterControlBookLists(
-  projectBookIds: string[],
-  additionalBookIds: string[],
+  projectBookIds: readonly string[],
+  additionalBookIds: readonly string[],
 ): BookChapterControlBookLists {
   const projectBookIdSet = new Set(projectBookIds);
   const extraBookIds = additionalBookIds.filter((bookId) => !projectBookIdSet.has(bookId));
