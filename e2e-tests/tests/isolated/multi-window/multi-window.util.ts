@@ -284,8 +284,8 @@ export type PlatformWindowActionContext = {
  *
  * Every window is matched on the `windowId` query parameter the main process puts in its renderer
  * URL — the id `getWindowIdOfPage` reads — rather than looked up with `BrowserWindow.fromId`.
- * `fromId` takes Electron's ids, and the platform's ids stop coinciding with Electron's the moment
- * the app is relaunched: the platform's counter keeps counting while Electron's restarts at 1, so
+ * `fromId` takes Electron's ids, and the platform's id is a durable GUID with no relationship to
+ * Electron's numeric `BrowserWindow.id` at all — it does not merely diverge after a relaunch, so
  * `fromId` would answer `undefined` or, worse, a different window. A window whose URL is not yet
  * parseable (one still loading, with an empty URL) is skipped rather than aborting the lookup with
  * an opaque `TypeError`.
@@ -349,27 +349,26 @@ export function getWindowIdOfPage(page: Page): string {
 }
 
 /**
- * The app's renderer pages (windows), sorted by their BrowserWindow id. Filters out any non-app
- * page (e.g. a detached devtools window) by requiring the renderer URL's `windowId` query
- * parameter. BrowserWindow ids increase in creation order within one app session, so the sort puts
- * the earliest-created window first — at startup that is the main window, which the app creates
- * before any secondary window.
+ * The app's renderer pages (windows), in creation order. Filters out any non-app page (e.g. a
+ * detached devtools window) by requiring the renderer URL's `windowId` query parameter.
+ *
+ * Creation order falls out of Playwright's own bookkeeping rather than anything sorted here:
+ * `ElectronApplication` keeps its windows in a `Set`, appending each as its `window` event fires,
+ * and `windows()` returns them spread from that `Set` — `[...this._windows]` — so the array comes
+ * back in insertion (i.e. creation) order already (see
+ * `node_modules/playwright-core/lib/client/electron.js`). That is also why `firstWindow()` can take
+ * `values().next()`. Platform window ids are durable GUIDs with no ordering relationship to
+ * creation, so there is nothing to sort by even if a sort were wanted.
  */
 export function getAppPages(electronApp: ElectronApplication): Page[] {
-  return (
-    electronApp
-      .windows()
-      .filter((page) => !page.isClosed() && page.url().includes('windowId='))
-      // Ids are still minted from a numeric counter (stringified) in this slice, so a numeric
-      // comparison recovers creation order; a later slice that mints non-numeric ids will need a
-      // different tie-break here.
-      .sort((a, b) => Number(getWindowIdOfPage(a)) - Number(getWindowIdOfPage(b)))
-  );
+  return electronApp
+    .windows()
+    .filter((page) => !page.isClosed() && page.url().includes('windowId='));
 }
 
 /**
- * Wait until the app has at least `count` open windows (renderer pages), then return them sorted by
- * BrowserWindow id (see {@link getAppPages}), each with its React root attached. For asserting
+ * Wait until the app has at least `count` open windows (renderer pages), then return them in
+ * creation order (see {@link getAppPages}), each with its React root attached. For asserting
  * "exactly N windows", follow this with a settle period and a {@link getAppPages} length check —
  * this only waits for the count to be reached.
  */
