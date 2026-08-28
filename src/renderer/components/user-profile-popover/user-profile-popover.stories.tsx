@@ -32,9 +32,21 @@ function withRegistration(
 ) {
   return () => {
     resetRegistrationValidityStore();
-    setCommandServiceMock((commandName) =>
-      commandName === 'paratextRegistration.doesUserHaveValidRegistration' ? isValid : profile,
-    );
+    setCommandServiceMock((commandName) => {
+      switch (commandName) {
+        case 'paratextRegistration.doesUserHaveValidRegistration':
+          return isValid;
+        case 'paratextRegistration.getParatextRegistrationData':
+          return profile;
+        // The popover's two menu actions open real dialogs that Storybook has no backend for.
+        // Answer them so clicking around a story stays inert instead of throwing.
+        case 'paratextRegistration.showParatextRegistration':
+        case 'paratextRegistration.showInternetSettings':
+          return undefined;
+        default:
+          throw new Error(`Unexpected command: ${commandName}`);
+      }
+    });
     return () => {
       resetCommandServiceMock();
       resetRegistrationValidityStore();
