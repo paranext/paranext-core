@@ -123,8 +123,11 @@
     "*.{cjs,mjs,js,jsx,cts,mts,ts,tsx}": ["prettier --write --ignore-path .prettierignorerun"],
     "!(cspell).json": ["prettier --parser json --write --ignore-path .prettierignorerun"],
     "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
-    "*.{html,md,yml}": ["prettier --single-quote --write --ignore-path .prettierignorerun"],
-    "*.md": ["npm run verify:md-fences --"],
+    "*.{html,yml}": ["prettier --single-quote --write --ignore-path .prettierignorerun"],
+    "*.md": [
+      "prettier --single-quote --write --ignore-path .prettierignorerun",
+      "npm run verify:md-fences --"
+    ],
     ".context/standards/Testing-Guide.md": ["npm run verify:testing-guide --"]
   },
   "browserslist": ["extends browserslist-config-detect-electron"],

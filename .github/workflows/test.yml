@@ -218,6 +218,9 @@ jobs:
         if: ${{ matrix.os == env.OS_LINUX }}
         run: npm run lint
 
+      # Deliberately unguarded, unlike the formatting and linting steps above: `verify:testing-guide`
+      # drives tsc, eslint and vitest over an example whose breakages have been platform-specific, so
+      # running it only on Linux is how one went unnoticed for weeks.
       - name: verify Testing-Guide example and Markdown code fences
         run: |
           npm run verify:testing-guide
