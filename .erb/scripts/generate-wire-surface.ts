@@ -119,13 +119,27 @@ const csharpDynamicCount = document.dynamicRegistrations.filter(
   (r) => r.language === 'csharp',
 ).length;
 
-// Scanned-file counts and a content digest, so a platform that regenerates this file differently
-// says what it saw rather than only that the bytes disagreed. A file-count difference points at the
-// scan input; equal counts with a different digest points at the content.
-const digest = crypto.createHash('sha256').update(serialized).digest('hex').slice(0, 16);
+// Two digests, because they answer different questions when a platform regenerates this file
+// differently. The INPUT digest covers exactly the bytes the scan read; the OUTPUT digest covers
+// what it produced. Together they partition the failure:
+//
+// - input digests equal, output digests differ -> the generator itself is not deterministic.
+// - input digests differ -> the scan read a different tree, which is what a generator racing a
+//   task that writes into the trees it scans looks like.
+//
+// An output digest alone cannot tell those apart: it only restates what the staleness gate already
+// reported. The input array's order is fixed by the sorted directory walk, so this is stable by
+// construction rather than by luck.
+const inputDigest = crypto
+  .createHash('sha256')
+  .update([...files, ...csharpFiles].map((file) => `${file.path}\u0000${file.text}`).join('\u0000'))
+  .digest('hex')
+  .slice(0, 16);
+const outputDigest = crypto.createHash('sha256').update(serialized).digest('hex').slice(0, 16);
 
 console.log(
-  `Scanned ${files.length} TypeScript and ${csharpFiles.length} C# source files; digest ${digest}.`,
+  `Scanned ${files.length} TypeScript and ${csharpFiles.length} C# source files; ` +
+    `input digest ${inputDigest}, output digest ${outputDigest}.`,
 );
 console.log(
   `Generated wire surface snapshot at ${OUTPUT_PATH}: ${document.registrations.length} declared ` +
