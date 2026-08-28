@@ -764,7 +764,7 @@ describe('a web view that is between windows on a move', () => {
     );
     withWindows({ 2: owner, 3: target });
 
-    const moving = moveWebView('view-1', 3);
+    const moving = moveWebView('view-1', { kind: 'window', windowId: '3' });
     await settle();
 
     const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
@@ -803,7 +803,7 @@ describe('a web view that is between windows on a move', () => {
     );
     withWindows({ 2: owner, 3: target });
 
-    const moving = moveWebView('view-1', 3);
+    const moving = moveWebView('view-1', { kind: 'window', windowId: '3' });
     await settle();
 
     const alreadyAdoptedDefinition: SavedWebViewDefinition = {
