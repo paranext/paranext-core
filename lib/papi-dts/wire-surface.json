@@ -206,10 +206,9 @@
   ],
   "header": {
     "excludedPatterns": [
-      "createNetworkEventEmitter(eventType) — the deprecated synchronous event emitter. It does not participate in central registration and deliberately does not appear in the generated OpenRPC document, so it is excluded here for the same reason.",
-      "C# — PapiClient.SendRequestAsync(\"network:registerEvent\", [eventType, documentation]): a network event registered directly via the generic request method (used once today, by SendReceiveBlockNotifierService) rather than through a dedicated wrapper like RegisterRequestHandlerAsync. The event type and its documentation are packed inside a request-contents array-literal argument rather than passed as separate positional parameters, which this scanner does not unpack. Excluded rather than force-fit; add a dedicated pattern here if this idiom is repeated elsewhere."
+      "createNetworkEventEmitter(eventType) — the deprecated synchronous event emitter. It does not participate in central registration and deliberately does not appear in the generated OpenRPC document, so it is excluded here for the same reason."
     ],
-    "granularity": "Each entry records one declared registration call (TypeScript) or declaration (C#) — the same granularity as the source code — rather than the OpenRPC document derived from it, because reproducing that document's per-method fan-out (e.g. a network object's individual methods, or a data provider's per-instance onDidUpdate event) statically is fragile, and several of the names involved are unsnapshottable: they exist only at runtime (a nonce-minted PDP id, a per-window service shard name, a per-provider onDidUpdate event name, a per-project C# data provider id). The C# half applies the same policy: one entry per RegisterNetworkObjectAsync call or GetNetworkObjectDocumentation() override, never one per method inside a NetworkObjectDocumentation.Methods dictionary. A separate end-to-end assertion verifies this file's registrations against the live rpc.discover OpenRPC document served by a running app, which is where that fully-resolved, per-method view is checked instead.",
+    "granularity": "Each entry records one declared registration call (TypeScript) or declaration (C#) — the same granularity as the source code — rather than the OpenRPC document derived from it, because reproducing that document's per-method fan-out (e.g. a network object's individual methods, or a data provider's per-instance onDidUpdate event) statically is fragile, and several of the names involved are unsnapshottable: they exist only at runtime (a nonce-minted PDP id, a per-window service shard name, a per-provider onDidUpdate event name, a per-project C# data provider id). The C# half applies the same policy: one entry per RegisterNetworkObjectAsync call or GetNetworkObjectDocumentation() override, never one per method inside a NetworkObjectDocumentation.Methods dictionary. A separate end-to-end assertion verifies this file's registrations against the live rpc.discover OpenRPC document served by a running app, which is where that fully-resolved, per-method view is checked instead. That live comparison is a POLL, though, not an instant snapshot, and a declared registration is not always durably pollable: a handful carry a liveness field ('transient' or 'lazy', with a livenessReason explaining which) marking them as real declared surface that the live comparison should not expect to find — a transient one self-disposes on a startup timer well before any poll budget would catch it consistently, and a lazy one is only created inside a runtime path (e.g. a project switch) that a smoke run never exercises. See generate-wire-surface.util.ts's LIVENESS_ANNOTATIONS for the full list and reasoning; absence of the field is the ordinary case.",
     "purpose": "A snapshot of paranext-core's declared wire-visible registration surface — TypeScript commands, request handlers, network objects, data provider engines, web view providers, PDP factories, and network events, plus their C# counterparts (network objects, data providers, PDP factories, and standalone request-handler registrations) — meant to be diffed across PRs the way papi.d.ts already is. Every C# registration reaches the same wire registry as its TypeScript counterparts: PapiClient.RegisterRequestHandlerAsync (c-sharp/PapiClient.cs) sends the literal 'network:registerMethod' request, the very request REGISTER_METHOD names in src/shared/data/rpc.model.ts. So a wire-only 'x-experimental': true marker on a C# registration is exactly as invisible to every other check as one on a TypeScript registration: omitting one regenerates a byte-identical papi.d.ts, so nothing else catches it. This file asserts nothing about which entries *ought* to be experimental, or ought to exist at all — plenty of wire registrations legitimately live off papi.d.ts without being experimental. It only records what is declared; a human reviewing the PR diff decides whether a change here is intended, and this generator never fails a build over a missing marker.",
     "recognizedPatterns": [
       "registerCommand(name, handler, docs?, options?) -> category \"command\"",
@@ -224,7 +223,8 @@
       "C# — ProjectDataProviderFactory.InitializeAsync's own RegisterNetworkObjectAsync call, whose name is always $\"platform.{pdpfName}-pdpf\" built from a constructor parameter rather than a literal at the call site -> category \"pdpFactory\", always recorded under dynamicRegistrations",
       "C# — a class extending DataProvider directly (either the primary-constructor form class X(...) : DataProvider(name, ...) or the traditional class X : DataProvider { X(...) : base(name, ...) {} } form); DataProvider.RegisterDataProviderAsync's own RegisterNetworkObjectAsync(DataProviderName, ...) call site (DataProviderName is a computed property, never a literal, so this is always dynamic); and a DataProvider.GetNetworkObjectDocumentation() override, recorded under the overriding class's name since the override supplies documentation independently of whatever name the provider is ultimately registered under (e.g. a per-project PDP's runtime-generated id) -> category \"dataProvider\"",
       "C# — PapiClient.RegisterRequestHandlerAsync(requestType, handler, timeout?, documentation?) called from anywhere other than NetworkObject's own per-function/per-existence-check fan-out -> category \"standaloneMethod\"",
-      "C# — ExperimentalMethodDocumentation.Create/.Marker/.ExistenceMarker (bare or qualified with a `using static` import) are recognised as an always-x-experimental idiom by call shape alone, without inspecting their arguments, since every documentation object that helper builds hardcodes Experimental = true"
+      "C# — ExperimentalMethodDocumentation.Create/.Marker/.ExistenceMarker (bare or qualified with a `using static` import) are recognised as an always-x-experimental idiom by call shape alone, without inspecting their arguments, since every documentation object that helper builds hardcodes Experimental = true",
+      "C# — PapiClient.SendRequestAsync(requestType, requestContents), generic-typed or not, where requestType resolves to the literal \"network:registerEvent\": a network event registered directly via the generic request method rather than through a dedicated wrapper like RegisterRequestHandlerAsync (PapiClient has none for this method). The event name and its documentation are packed inside the second argument's array literal ([eventType, documentation]) rather than passed as separate positional parameters, so this scanner parses that array literal's own top-level segments to recover them -> category \"networkEvent\""
     ],
     "scope": "TypeScript: core src/** and the bundled extensions/src/** (excluding __tests__ directories, *.test.ts(x) files, node_modules, dist, and temp-build), walked with the TypeScript compiler API and matched against a real AST. Third-party extensions live outside this repository and are excluded by construction, not by an explicit rule. C#: the data provider backend under c-sharp/** (excluding bin, obj, and the Paranext.Analyzers/Paranext.Analyzers.Tests projects), matched with a pattern-based text scan — there is no C# parser (e.g. Roslyn) in this toolchain, so the C# half recognises a fixed set of call-site and declaration idioms (see recognizedPatterns) rather than a real syntax tree. That is a real difference in rigour from the TypeScript half: an unusual formatting choice, or a new C#-side registration idiom this generator has never seen, can evade the C# scan more easily than it could evade the TypeScript AST scan. Every entry carries a language field ('typescript' or 'csharp') so a reader can tell at a glance which half's guarantees apply to it."
   },
@@ -288,6 +288,16 @@
       "language": "csharp",
       "name": "platformScripture.inventoryDataProvider",
       "registeredVia": "DataProvider(name, papiClient) constructor"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "c-sharp/Projects/SendReceive/SendReceiveBlockNotifierService.cs",
+      "language": "csharp",
+      "name": "paratextBibleSendReceive.onSyncWriteLockChanged",
+      "registeredVia": "PapiClient.SendRequestAsync(\"network:registerEvent\")"
     },
     {
       "category": "networkObject",
@@ -1176,6 +1186,8 @@
       "experimental": false,
       "file": "src/extension-host/extension-host.ts",
       "language": "typescript",
+      "liveness": "transient",
+      "livenessReason": "Self-disposed 3 seconds after registration (setTimeout(realDP.dispose, 3000) in src/extension-host/extension-host.ts) -- waiting longer only makes it less likely to still be live.",
       "name": "platform.placeholder",
       "registeredVia": "registerEngine"
     },
@@ -1436,6 +1448,8 @@
       "experimental": true,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
       "language": "typescript",
+      "liveness": "lazy",
+      "livenessReason": "Created lazily on first use, inside the project-switch overlay path in extensions/src/platform-scripture-editor/src/main.ts, after full activation -- a smoke run never triggers a project switch, so this event is never created.",
       "name": "platformScriptureEditor.onDidSwitchProject",
       "registeredVia": "createNetworkEventEmitterAsync"
     },
@@ -1456,6 +1470,8 @@
       "experimental": true,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
       "language": "typescript",
+      "liveness": "lazy",
+      "livenessReason": "Created lazily on first use, inside the project-switch overlay path in extensions/src/platform-scripture-editor/src/main.ts, after full activation -- a smoke run never triggers a project switch, so this event is never created.",
       "name": "platformScriptureEditor.onWillSwitchProject",
       "registeredVia": "createNetworkEventEmitterAsync"
     },
@@ -1626,6 +1642,8 @@
       "experimental": false,
       "file": "src/extension-host/extension-host.ts",
       "language": "typescript",
+      "liveness": "transient",
+      "livenessReason": "Self-disposed 10 seconds after registration (setTimeout(testEH.dispose, 10000) in src/extension-host/extension-host.ts) -- waiting longer only makes it less likely to still be live.",
       "name": "testExtensionHost",
       "registeredVia": "networkObjectService.set"
     },
@@ -1636,6 +1654,8 @@
       "experimental": false,
       "file": "src/main/main.ts",
       "language": "typescript",
+      "liveness": "transient",
+      "livenessReason": "Self-disposed 20 seconds after registration (setTimeout(testMainDisposer.dispose, 20000) in src/main/main.ts) -- waiting longer only makes it less likely to still be live.",
       "name": "testMain",
       "registeredVia": "networkObjectService.set"
     },
