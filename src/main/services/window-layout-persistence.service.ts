@@ -182,11 +182,7 @@ function parseEntry(value: unknown): ParsedEntry | undefined {
   const record = asRecord(value);
   if (!record) return undefined;
   const layout = asRecord(record.layout);
-  // `slotId` is the field this same field was called before it became the window's own durable id.
-  // Reading it as a fallback spares a tester on this stack a second avoidable state reset — an
-  // interim build already wrote entries under that name before the rename.
-  const windowIdOnDisk =
-    nonEmptyStringField(record, 'windowId') ?? nonEmptyStringField(record, 'slotId');
+  const windowIdOnDisk = nonEmptyStringField(record, 'windowId');
   return {
     entry: {
       ...parseBoundsState(record, record.bounds),
