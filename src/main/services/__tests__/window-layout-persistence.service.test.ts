@@ -145,9 +145,9 @@ describe('window layout persistence service', () => {
 
   test('mints a window id for every entry of a structure written before any had one', async () => {
     // A structure file from a build that keyed nothing by window id carries entries with no
-    // `windowId` (see the legacy-`slotId`-fallback test below for the other case). Each gets one on
-    // load — minted, not derived from its position, so it never changes once the file is
-    // rewritten — and the ids are distinct, or two entries' storage would collide.
+    // `windowId`. Each gets one on load — minted, not derived from its position, so it never
+    // changes once the file is rewritten — and the ids are distinct, or two entries' storage
+    // would collide.
     vi.useFakeTimers();
     const service = await startService();
     seedFiles({
@@ -170,22 +170,6 @@ describe('window layout persistence service', () => {
     expect(mocks.writeFile).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(2000);
     expect(writtenStructure().windows.map((entry) => entry.windowId)).toEqual(windowIds);
-  });
-
-  test('an entry written under the legacy `slotId` key keeps that id, read as a fallback', async () => {
-    // Builds on this stack before the rename wrote `slotId`; reading it as a fallback for
-    // `windowId` spares a tester on this stack a second avoidable state reset.
-    const service = await startService();
-    seedFiles({
-      structure: {
-        windows: [{ slotId: 'kept-from-an-interim-build', layout: layoutWithTab('one') }],
-      },
-    });
-
-    const plan = await service.loadWindowLayouts();
-
-    if (plan.kind !== 'restore') throw new Error('expected a restore plan');
-    expect(plan.entries[0].windowId).toBe('kept-from-an-interim-build');
   });
 
   test('a load that minted nothing writes nothing', async () => {
