@@ -78,6 +78,7 @@ import {
   preConfigureSettings,
   sendPapiRequestOnce,
   waitForAppReady,
+  WINDOW_ID_SHAPE_SOURCE,
 } from '../../../fixtures/helpers';
 import {
   DUPLICATE_REGISTRATION_PATTERN,
@@ -126,9 +127,10 @@ async function moveWebViewToWindow(webViewId: string, targetWindowId: string): P
  * The window-scope suffix a window appends to the web view ids of any layout it loads. Keep in sync
  * with `WINDOW_SUFFIX_PATTERN` in
  * `src/renderer/components/docking/window-scoped-web-view-ids.util.ts` (not imported here — the e2e
- * project cannot resolve the app's path aliases).
+ * project cannot resolve the app's path aliases). Built from the shared
+ * {@link WINDOW_ID_SHAPE_SOURCE} mirror, since the suffix is a window id.
  */
-const WINDOW_SCOPE_SUFFIX_PATTERN = /-w\d+$/;
+const WINDOW_SCOPE_SUFFIX_PATTERN = new RegExp(`-w${WINDOW_ID_SHAPE_SOURCE}$`, 'i');
 
 /**
  * Every id a moved web view may legitimately answer to in its new window, per the move commands'
