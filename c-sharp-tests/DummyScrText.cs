@@ -212,7 +212,30 @@ namespace TestParanextDataProvider
                 string? relDirPath = null
             )
             {
-                return Enumerable.Empty<string>();
+                // Derive directories from the stored file keys, mirroring ProjectFiles' glob
+                // handling, so code that scans directories and then their files works against the
+                // in-memory store.
+                var regex = new Regex(
+                    "^"
+                        + Regex.Escape(searchPattern).Replace("\\*", ".*").Replace("\\?", ".")
+                        + "$",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+                );
+                string dir = relDirPath ?? "";
+                return _fileSystem
+                    .Keys.ToList()
+                    .Select(key => Path.GetDirectoryName(key) ?? "")
+                    .Where(parent =>
+                        parent != ""
+                        && string.Equals(
+                            Path.GetDirectoryName(parent) ?? "",
+                            dir,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                        && regex.IsMatch(Path.GetFileName(parent))
+                    )
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
             }
 
             public override void WriteFileCreatingBackup(

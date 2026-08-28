@@ -4,7 +4,7 @@ import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
 import { useExtraValidMarkers } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { deriveCellState } from './resource-cell.utils';
 import {
@@ -111,8 +111,13 @@ export function ResourceCell({
     () =>
       resourceRef.projectId === undefined
         ? 'unavailable'
-        : deriveCellState({ usjPossiblyError, isLoading }),
-    [resourceRef.projectId, usjPossiblyError, isLoading],
+        : deriveCellState({
+            usjPossiblyError,
+            isLoading,
+            currentBookNum: Canon.bookIdToNumber(scrRef.book),
+            projectId: resourceRef.projectId,
+          }),
+    [resourceRef.projectId, usjPossiblyError, isLoading, scrRef.book],
   );
 
   // #region Zoom — computed here so the callbacks and bound-state are available for the view's

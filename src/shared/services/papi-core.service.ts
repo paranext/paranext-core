@@ -119,6 +119,15 @@ export type {
   ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
 export type { SettingValidator } from '@shared/services/settings.service-model';
+// Exported so the `DataProviders` augmentation for `platform.themeDataServiceDataProvider`, which
+// lives in this model, keeps reaching `papi.d.ts`. It used to arrive there only because the
+// renderer's theme service host imported the theme data service, which stopped being true when that
+// host moved to main — an import graph is not a contract, so the type extensions consume is named
+// here instead.
+export type {
+  IThemeDataService,
+  ThemeDataDataTypes,
+} from '@shared/services/theme-data.service-model';
 export type {
   AppWindowInputEvent,
   AppWindowInputKind,

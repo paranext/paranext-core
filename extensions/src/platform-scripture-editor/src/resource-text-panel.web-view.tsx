@@ -22,6 +22,7 @@ import {
   useExtraValidMarkers,
   useTabIconSelection,
   type TabIconUrls,
+  Spinner,
 } from 'platform-bible-react';
 import {
   DblResourceData,
@@ -31,6 +32,7 @@ import {
   LocalizeKey,
   ResourceType,
 } from 'platform-bible-utils';
+import { Canon } from '@sillsdev/scripture';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -40,7 +42,10 @@ import type {
 } from 'platform-scripture';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
-import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
+import {
+  canPublishResourcePanelProjectIds,
+  getResourcePanelReadiness,
+} from './resource-panel-readiness.utils';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
@@ -53,12 +58,34 @@ import {
   getRefLabel,
 } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
+import { ResourceBookNotAvailable } from './resource-book-not-available.component';
+import { ResourceBlankChapter } from './resource-blank-chapter.component';
+import { ResourceTextUnavailable } from './resource-text-unavailable.component';
+import {
+  isBlankChapterOnScreen,
+  isMissingBookError,
+  resolveResourceContentState,
+} from './platform-scripture-editor.utils';
+import {
+  RESOURCE_PANEL_TYPED_STRING_KEYS,
+  resolveResourcePanelStringKeys,
+} from './resource-panel-strings.utils';
 import { RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
+import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
+// The per-resource-type keys come from `RESOURCE_PANEL_TYPED_STRING_KEYS` rather than being listed
+// again here. `useLocalizedStrings` seeds key-to-key defaults only for the keys in the array it is
+// given, so a hand-maintained second list is a silent hole: add a field to `ResourcePanelStringKeys`,
+// forget the array, and the render site reads `undefined` and announces an empty message.
 const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
+  // Shared with the model text panel's blank-chapter branch. Distinct from the editable
+  // `..._emptyChapter_message%`, which sits beside an "Add chapter number" action these read-only
+  // panels must not offer. The missing-book wording is per resource type and comes from
+  // `RESOURCE_PANEL_TYPED_STRING_KEYS` below; a blank chapter reads the same either way.
+  '%webView_platformScriptureEditor_emptyChapter_messageResource%',
   '%webView_resourcePanel_noProject%',
   '%webView_resourcePanel_installing%',
   '%webView_resourcePanel_selecting%',
@@ -69,14 +96,8 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_loading%',
   '%webView_resourcePanel_catalogUnavailable%',
   '%webView_resourcePanel_downloadResources%',
-  '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
-  '%webView_resourcePanel_bibleTexts_pick%',
-  '%webView_resourcePanel_bibleTexts_title%',
-  '%webView_resourcePanel_bibleTexts_title_withResource%',
-  '%webView_resourcePanel_commentaries_emptyState_prompt%',
-  '%webView_resourcePanel_commentaries_pick%',
-  '%webView_resourcePanel_commentaries_title%',
-  '%webView_resourcePanel_commentaries_title_withResource%',
+  '%webView_resourcePanel_textUnavailable%',
+  ...RESOURCE_PANEL_TYPED_STRING_KEYS,
 ];
 
 const BIBLE_TEXTS_ICON_URLS: TabIconUrls = {
@@ -355,6 +376,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // Ctrl+F opens Find for the displayed resource.
   useOpenFindShortcut(webViewId, resourceProjectId);
 
+  // This web view's definition `projectId` is the container project whose reference list is shown,
+  // so the displayed resource is invisible to global navigation UI unless declared here.
+  usePublishNavigableProjectIds(
+    useWebViewState,
+    resourceProjectId ? [resourceProjectId] : [],
+    canPublishResourcePanelProjectIds(effectiveResourcesState, isCatalogReady),
+  );
+
   // #endregion
 
   // #region Dynamic title
@@ -366,14 +395,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
     resourceShortName = selectedRef?.name;
   }
 
-  const titleKey =
-    resourceType === 'ScriptureResource'
-      ? '%webView_resourcePanel_bibleTexts_title%'
-      : '%webView_resourcePanel_commentaries_title%';
-  const titleWithResourceKey =
-    resourceType === 'ScriptureResource'
-      ? '%webView_resourcePanel_bibleTexts_title_withResource%'
-      : '%webView_resourcePanel_commentaries_title_withResource%';
+  // One resource type, one matched set of strings. See `resolveResourcePanelStringKeys`.
+  const {
+    titleKey,
+    titleWithResourceKey,
+    emptyStatePromptKey,
+    bookNotAvailableKey,
+    pickButtonKey,
+  } = resolveResourcePanelStringKeys(resourceType);
 
   useEffect(() => {
     const baseTitle = localizedStrings[titleKey];
@@ -407,7 +436,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // matter (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve
   // verse 0 to verse 1; whole-chapter surfaces like this one must not (see
   // `adr-single-verse-surfaces-resolve-verse-zero-to-one`).
-  const [usjPossiblyError] = useProjectData(
+  const [usjPossiblyError, , isUsjLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
     resourceProjectId,
   ).ChapterUSJ(
@@ -424,6 +453,48 @@ globalThis.webViewComponent = function ResourceTextPanel({
   );
 
   const usjFromPdp = !isPlatformError(usjPossiblyError) ? usjPossiblyError : undefined;
+
+  // A chapter the resource HAS but with nothing in it. Gated on the load having finished because
+  // `useProjectData`'s underlying `useData` hook doesn't reset to its default when the selector
+  // (here, `scrRef`) changes — it keeps the previous chapter's USJ until the new subscription's
+  // first update lands, and its default is `EMPTY_USJ`, which is itself blank. Without the gate the
+  // panel would claim "empty" over a chapter that is still arriving, and again on first mount.
+  //
+  // Chapter 0 is front matter rather than a chapter; `isBlankChapterOnScreen` has that rationale.
+  const isBlankChapter = useMemo(
+    () => !isUsjLoading && isBlankChapterOnScreen(usjFromPdp, scrRef.chapterNum),
+    [usjFromPdp, isUsjLoading, scrRef.chapterNum],
+  );
+
+  // The book-not-available message is withheld unless the failure names the book AND project on
+  // screen right now, so a result still describing the reference the user just left cannot be
+  // misattributed to this one. See `resolveResourceContentState`. Derived here rather than in the
+  // render body below so the editor-feeding effect can depend on it.
+  const contentState = useMemo(
+    () =>
+      resolveResourceContentState({
+        resourceProjectId,
+        usjPossiblyError,
+        currentBookNum: Canon.bookIdToNumber(scrRef.book),
+      }),
+    [resourceProjectId, usjPossiblyError, scrRef.book],
+  );
+
+  // A chapter read that fails is otherwise invisible outside the UI, and the state it produces — a
+  // named, terminal message — looks the same whatever went wrong, so the log is the only place the
+  // cause survives. Keyed on the error alone so paging through books on a sticky failure does not
+  // re-emit it once per book.
+  //
+  // A missing book is ordinary navigation rather than a fault and is already explained on screen, so
+  // it goes to `debug`, which packaged builds drop. If detection ever broke, the same failure would
+  // fall to `error` below and be loud in production rather than silent.
+  useEffect(() => {
+    if (!isPlatformError(usjPossiblyError)) return;
+    const message = getErrorMessage(usjPossiblyError);
+    if (isMissingBookError(usjPossiblyError))
+      logger.debug(`Book not found in resource text: ${message}`);
+    else logger.error(`Error getting resource chapter USJ: ${message}`);
+  }, [usjPossiblyError]);
 
   // #endregion
 
@@ -528,23 +599,18 @@ globalThis.webViewComponent = function ResourceTextPanel({
     [textDirection, extraValidMarkers],
   );
 
+  // `contentState` and `isBlankChapter` are deps because the branches below UNMOUNT `Editorial`
+  // rather than hiding it. A remounted editor holds nothing, and this effect is its only feed — so
+  // without re-running when the panel comes back to the editor, the reader gets Lexical's "Enter
+  // some Scripture…" placeholder (an edit invitation in a text they cannot edit) until the next USJ
+  // happens to arrive.
   useEffect(() => {
     if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
-  }, [usjFromPdp]);
+  }, [usjFromPdp, contentState, isBlankChapter]);
 
   // #endregion
 
   // #region Render
-
-  const emptyStatePromptKey =
-    resourceType === 'ScriptureResource'
-      ? '%webView_resourcePanel_bibleTexts_emptyState_prompt%'
-      : '%webView_resourcePanel_commentaries_emptyState_prompt%';
-
-  const pickButtonKey =
-    resourceType === 'ScriptureResource'
-      ? '%webView_resourcePanel_bibleTexts_pick%'
-      : '%webView_resourcePanel_commentaries_pick%';
 
   if (!projectId) {
     return (
@@ -609,10 +675,87 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Loading state: USJ not yet available
-  if (!resourceProjectId || usjPossiblyError === undefined) {
-    return <LoadingView label={localizedStrings['%webView_resourcePanel_loading%']} />;
-  }
+  // Scripture content, or the reason there is none: nothing has arrived yet, the resource has no
+  // such book, or it has the book but the chapter is blank. A blank chapter arrives as a successful,
+  // empty USJ rather than as an error, so it is invisible to `contentState` and needs its own check;
+  // the missing book is tested first because it is the more specific claim. Every branch beats
+  // letting `Editorial` render with no scripture set, which shows its "enter some Scripture" prompt
+  // — an edit invitation in a text the reader cannot edit.
+  //
+  // These are the panel's CONTENT area only. The selector header stays mounted above all of them,
+  // including the spinner: a resource missing a book has no remedy inside this panel, so the only
+  // thing the user can do about it is switch to a text that has the book, and taking the selector
+  // away while a chapter loads would remove that between every navigation.
+  //
+  // Only the editor gets `dir`. That is the RESOURCE's text direction, and the messages are app
+  // chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the
+  // resource is RTL.
+  const renderContent = () => {
+    if (contentState === 'loading')
+      return (
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+          <Spinner />
+        </div>
+      );
+
+    if (contentState === 'bookNotAvailable')
+      return (
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceBookNotAvailable
+            message={localizedStrings[bookNotAvailableKey]}
+            announcementKey={`${resourceProjectId}:${scrRef.book}`}
+          />
+        </div>
+      );
+
+    if (isBlankChapter)
+      return (
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceBlankChapter
+            message={
+              localizedStrings['%webView_platformScriptureEditor_emptyChapter_messageResource%']
+            }
+            announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+          />
+        </div>
+      );
+
+    // A failure that is not a missing book in the text on screen. Terminal, because the value in
+    // hand is an error rather than USJ and nothing re-emits until the data provider does — so a
+    // spinner here would claim progress that never arrives.
+    if (contentState === 'failed')
+      return (
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceTextUnavailable
+            message={localizedStrings['%webView_resourcePanel_textUnavailable%']}
+            announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+          />
+        </div>
+      );
+
+    // No USJ in hand for the reference on screen, and no failure to name: the chapter is still on
+    // its way. Keep waiting rather than mounting `Editorial` with nothing set, which paints
+    // Lexical's "Enter some Scripture…" placeholder — an edit invitation in a text the reader
+    // cannot edit.
+    if (!usjFromPdp)
+      return (
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+          <Spinner />
+        </div>
+      );
+
+    return (
+      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
+        <Editorial
+          ref={editorRef}
+          scrRef={scrRef}
+          onScrRefChange={setScrRef}
+          options={options}
+          logger={logger}
+        />
+      </div>
+    );
+  };
 
   // Active state: resource is installed and USJ is available
   // This panel (Bible Texts / Commentaries) is Simple-mode-only, so `editor-container-simple`
@@ -629,16 +772,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
         downloadResourcesLabel={localizedStrings['%webView_resourcePanel_downloadResources%']}
       />
 
-      {/* Scripture content */}
-      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={setScrRef}
-          options={options}
-          logger={logger}
-        />
-      </div>
+      {renderContent()}
     </div>
   );
 

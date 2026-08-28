@@ -25,6 +25,7 @@ import {
   PlatformEvent,
   PlatformEventEmitter,
   stringLength,
+  Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
 import {
@@ -34,7 +35,7 @@ import {
 } from '@shared/services/shared-store.service';
 import { deserializeRequestType, SerializedRequestType } from '@shared/utils/util';
 import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitter.model';
-import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
+import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from '@shared/models/rpc.interface';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -73,13 +74,43 @@ const eventEmittersByEventType = new Map<
 >();
 
 /**
+ * Event types this process has already reported dropping because it has no emitter for them. See
+ * {@link handleEventFromNetwork}.
+ */
+const eventTypesDroppedWithNoEmitter = new Set<string>();
+
+/**
  * Emits the appropriate network event on this process according to the event type
  *
  * @param eventType Type of event to handle
  * @param event The event data to emit
  */
 const handleEventFromNetwork: EventHandler = <T>(eventType: string, event: T) => {
-  eventEmittersByEventType.get(eventType)?.emitter.emitLocal(event);
+  const emitterRecord = eventEmittersByEventType.get(eventType);
+  if (!emitterRecord) {
+    // Nothing in this process has asked for this event, so there is nobody to deliver it to. Network
+    // events are one-shot notifications with no replay, so say so rather than dropping it in
+    // silence: an event that mattered here and arrived before something subscribed looks exactly
+    // like this. Every process receives every network event, so most of what lands here is simply
+    // an event this process was never interested in — deduped by type so those cannot flood the
+    // log, since the first drop of a type is the one worth seeing anyway.
+    if (!eventTypesDroppedWithNoEmitter.has(eventType)) {
+      eventTypesDroppedWithNoEmitter.add(eventType);
+      logger.debug(
+        `Discarding network events of type "${eventType}": nothing in this process emits that type`,
+      );
+    }
+    return;
+  }
+  // Isolated, because this hop is the only delivery an event raised in another process ever gets in
+  // this one. There is no replay, and nothing above this frame could act on a throw — the RPC layer
+  // is what called it. Left unisolated, one subscriber throwing costs every subscriber registered
+  // after it an event that will never be sent again.
+  emitterRecord.emitter.emitLocalIsolated(event, (error, subscriberIndex) => {
+    logger.error(
+      `Subscriber ${subscriberIndex} threw while handling a network event of type "${eventType}"; the rest were still told: ${getErrorMessage(error)}`,
+    );
+  });
 };
 
 // #endregion
@@ -88,6 +119,29 @@ const handleEventFromNetwork: EventHandler = <T>(eventType: string, event: T) =>
 
 const connectionMutex = new Mutex();
 let jsonRpc: IRpcMethodRegistrar | undefined;
+const clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
+/** Stops relaying the RPC handler's client disconnects, once there is a handler to stop relaying */
+let unsubscribeFromClientDisconnects: Unsubscriber | undefined;
+
+/**
+ * Event that fires when a process disconnects from the network, carrying the names of the methods
+ * its departure removed from the central registry.
+ *
+ * This is platform-internal core plumbing between the process that owns the websocket server and
+ * the services that know how their own registered names are formed, not part of the `@papi/*`
+ * surface.
+ *
+ * A process that goes away abruptly — most commonly a window the user closed — announces nothing on
+ * its way out, so this is derived from the connection teardown itself: it is emitted only once the
+ * departed process's methods are out of the registry, and therefore cannot report a death that has
+ * not finished happening. Only the process holding the websocket server can observe a connection
+ * being lost, so this only ever fires there; elsewhere it is a real event that never fires, which
+ * lets shared code subscribe without knowing which process it is running in.
+ *
+ * @experimental
+ */
+export const onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent> =
+  clientDisconnectEmitter.event;
 // Set once {@link shutdown} has begun so {@link initialize} refuses to re-open a torn-down
 // connection. `jsonRpc` alone can't distinguish "not initialized yet" from "already shut down" —
 // both leave it `undefined` — so a late request after shutdown would otherwise re-connect.
@@ -112,6 +166,22 @@ export async function initialize(): Promise<void> {
       throw new Error(`ConnectionService: Failed to create NetworkConnector object: ${e}`);
     }
 
+    // Relayed through this service's own emitter so subscribers can subscribe before there is an
+    // RPC handler to subscribe to
+    unsubscribeFromClientDisconnects = jsonRpc.onDidDisconnectClient((clientDisconnect) => {
+      // Every socket closes at quit, and the emitters a subscriber would act through are already
+      // being torn down by `shutdown`. Relaying then would report routine teardown as processes
+      // dying, through emitters that throw 'Emitter is disposed' as they go.
+      if (hasShutDown) return;
+      // One subscriber that throws must not cost the others the news: this is the only time they are
+      // told, and what they do with it is drop registrations that are already unreachable.
+      clientDisconnectEmitter.emitIsolated(clientDisconnect, (error) => {
+        logger.error(
+          `A subscriber threw while being told a process disconnected, taking ${clientDisconnect.removedMethodNames.length} methods with it; the rest were still told: ${getErrorMessage(error)}`,
+        );
+      });
+    });
+
     const connected = await jsonRpc.connect(handleEventFromNetwork);
     if (!connected) throw new Error(`Unable to connect protocol handler`);
   });
@@ -126,6 +196,11 @@ export const shutdown = async () => {
   await connectionMutex.runExclusive(async () => {
     if (!jsonRpc) return;
 
+    // Stop relaying client disconnects before closing the connection, since closing it is what
+    // disconnects every client: relaying those would announce the whole app's teardown as processes
+    // dying while the emitters that carry the news are themselves being disposed.
+    unsubscribeFromClientDisconnects?.();
+    unsubscribeFromClientDisconnects = undefined;
     await jsonRpc.disconnect();
     // Tear down the handler reference before disposing emitters so their disposers skip the
     // now-pointless per-event unregister call — the whole connection is already going away.
@@ -338,8 +413,8 @@ export async function registerRequestHandler(
   if (!jsonRpc) throw new Error('RPC handler not set');
   const success = await jsonRpc.registerMethod(requestType, requestHandler, requestDocs);
   if (!success) throw new Error(`Could not register request handler for ${requestType}`);
-  if (requestHandlerOptions?.timeoutMilliseconds !== undefined)
-    setTimeoutMsForRequestType(requestType, requestHandlerOptions.timeoutMilliseconds);
+  const customTimeoutMs = requestHandlerOptions?.timeoutMilliseconds;
+  if (customTimeoutMs !== undefined) setTimeoutMsForRequestType(requestType, customTimeoutMs);
   return async () => {
     if (!jsonRpc) {
       // Expected on graceful shutdown: shutdown() clears jsonRpc before disposing emitters so their
@@ -351,7 +426,12 @@ export async function registerRequestHandler(
       );
       return false;
     }
-    removeTimeoutMsForRequestType(requestType);
+    // Only what this registration set. A custom timeout is a shared store entry owned by the
+    // process that wrote it, so another process may well own the one on this request type — a
+    // window's dialog methods have theirs set by main, which outlives the window. Removing
+    // unconditionally makes every one of those teardowns an ownership violation the shared store
+    // reports as an error, on a path where nothing is wrong.
+    if (customTimeoutMs !== undefined) removeTimeoutMsForRequestType(requestType);
     const unregistered = await jsonRpc.unregisterMethod(requestType);
     if (!unregistered) logger.warn(`Failed to unregister request handler for "${requestType}"`);
     return unregistered;
@@ -438,7 +518,25 @@ const createNetworkEventEmitterInternal = <T>(
       // Match the collection type
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       emitter: new PapiNetworkEventEmitter<T>(
-        (event) => emitEventOnNetwork(eventType, event),
+        (event) => {
+          // The emitter discards what this returns — it is the local emit that a caller of `emit`
+          // is waiting on — so an event that never left this process would otherwise surface only
+          // as a bare unhandled rejection that cannot name the event it lost. Local subscribers
+          // still get it either way; the processes that needed it do not.
+          emitEventOnNetwork(eventType, event).catch((e) => {
+            // Once the app is quitting the network is going away by design and there is nobody left
+            // waiting on the news, so that is not the failure this is here to report.
+            if (hasShutDown) {
+              logger.debug(
+                `Network event "${eventType}" was not sent: the network service has shut down`,
+              );
+              return;
+            }
+            logger.error(
+              `Network event "${eventType}" was emitted locally but never reached the network, so no other process was told: ${getErrorMessage(e)}`,
+            );
+          });
+        },
         () => disposeNetworkEventEmitter(eventType),
       ) as PapiNetworkEventEmitter<unknown>,
       isRegistered: false,

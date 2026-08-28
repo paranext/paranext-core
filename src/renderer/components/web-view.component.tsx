@@ -13,19 +13,21 @@ import {
   isWebViewNonceCorrect,
   reloadWebView,
   updateTabPartialSync,
-} from '@renderer/services/web-view.service-host';
+} from '@renderer/services/web-view.service-shard';
 import { logger } from '@shared/services/logger.service';
 import {
   PromiseChainingMap,
   UnsubscriberAsync,
   formatReplacementString,
   isLocalizeKey,
+  type LocalizeKey,
   serialize,
   getLocalizeKeysForScrollGroupIds,
   isPlatformError,
   getErrorMessage,
 } from 'platform-bible-utils';
 import {
+  BOOK_CHAPTER_CONTROL_STRING_KEYS,
   BookChapterControl,
   BookChapterControlHandle,
   SelectMenuItemHandler,
@@ -42,7 +44,7 @@ import {
   useRecentScriptureRefs,
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
-import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
 import { registerBookChapterControlHandle } from '@renderer/services/book-chapter-control.registry';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import {
@@ -64,6 +66,8 @@ const WEB_VIEW_MENU_DEFAULT = {
 };
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
+
+const bookChapterControlLocalizedStringKeys: LocalizeKey[] = [...BOOK_CHAPTER_CONTROL_STRING_KEYS];
 
 const registrationPromises = new PromiseChainingMap<string>(logger);
 
@@ -465,6 +469,10 @@ export function WebView({
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
+  const [bookChapterControlLocalizedStrings] = useLocalizedStrings(
+    bookChapterControlLocalizedStringKeys,
+  );
+
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
   const [booksPresentPossiblyError] = useProjectSetting(
@@ -544,6 +552,7 @@ export function WebView({
                 getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
                 recentSearches={recentScriptureRefs}
                 onAddRecentSearch={addRecentScriptureRef}
+                localizedStrings={bookChapterControlLocalizedStrings}
               />
             ) : undefined
           }

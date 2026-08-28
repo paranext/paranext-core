@@ -2,8 +2,9 @@
 
 > Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
 
-A lightweight, append-only log of **significant architecture decisions** and the reasoning behind
-them. It holds the one thing the prescriptive standards (`Architecture.md`,
+A lightweight, append-only log — with one narrow carve-out, described under "Don't rewrite history"
+below — of **significant architecture decisions** and the reasoning behind them. It holds the one
+thing the prescriptive standards (`Architecture.md`,
 `Paranext-Core-Patterns.md`, `.claude/rules/`) can't: the **why**, the **alternatives we rejected**,
 and the **history** (including superseded decisions).
 
@@ -21,7 +22,12 @@ step, no automation. Just a record.
   `.claude/rules/` file — that is what the agents read and enforce on the next feature. This log
   keeps the rationale and history; the standards keep the current rule.
 - **Don't rewrite history.** Mark a superseded decision `Superseded by adr-<slug>` instead of
-  deleting it; add the new decision as a new entry.
+  deleting it; add the new decision as a new entry. **The one carve-out:** delete a superseded entry
+  outright when leaving it would keep a dead approach readable as available prior art. This log is
+  surveyed for precedent by people and by agents (`.claude/agents/pt10-reuse-scout.md` reads it
+  during `/investigate-prd`), and an entry that reads as a considered option is one they can propose
+  again. When you take the carve-out, leave a stub in its place so the gap is explained, and never
+  reuse the slug; git history keeps the text.
 - **Append at the end**, newest last. Identify entries by an `adr-`-prefixed kebab-case **slug**,
   not a number: `## adr-per-window-service-scoping: {short title}`. Choose a slug that reads as the
   decision itself, short enough to type in a code comment, and cross-reference it in backticks.
@@ -260,76 +266,80 @@ step, no automation. Just a record.
 - **Decision:** Each window's renderer registers its own copy of these services under its own
   `globalThis.windowId` suffix (e.g. `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${windowId}`,
   `${NotificationServiceNetworkObjectName}-${windowId}`, per-window dialog request names, per-window
-  command names). The pre-existing generic name is kept working via a routing proxy
+  command names). The pre-existing generic name is kept working via a service router
   (`adr-generic-name-routing-proxies`).
 - **Alternatives:** One shared instance for all windows — rejected: state (open web views, toasts,
   dialogs) is inherently per-window. A single object internally keyed by window id under the old
   generic name only — rejected: reinvents what `networkObjectService`'s per-name registration and
   `rpc.discover` already give for free.
-- **Consequences:** every window-scoped service now has a scoped identity and (via the proxy) a
-  generic one; new window-scoped services must follow the same convention and get a routing proxy if
-  generic-name callers exist. **Do not rely on a window disposing its own registrations as it
+- **Consequences:** every window-scoped service now has a scoped identity and (via the router) a
+  generic one; new window-scoped services must follow the same convention and get a service router
+  if generic-name callers exist. **Do not rely on a window disposing its own registrations as it
   closes** — it cannot: a closing window drops its RPC connection without disposing anything it
   hosted, and `destroy()` does not run `beforeunload` at all. Scoped registrations are instead
-  cleaned up by the surviving processes: main announces the close on
-  `EVENT_NAME_ON_DID_CLOSE_WINDOW`, and every process sweeps the registrations that announcement
-  makes unreachable (`sweepUnreachableRemoteObjectsAfterWindowClose` in `network-object.service.ts`,
-  with one retry for the sweep that runs before the connection teardown lands). A window-scoped
-  service therefore has to tolerate its own registrations outliving its window for a moment, and
-  consumers have to tolerate resolving one that is already gone.
+  cleaned up by the process that owns the websocket connections, which derives the death from the
+  connection teardown and announces the departed window's network objects as disposed once their
+  methods are out of the central registry (`onDidDisconnectClient` handling in
+  `network-object.service.ts`; see `adr-singleton-services-elect-host-window`). A window-scoped service therefore has to tolerate its
+  own registrations outliving its window for a moment, and consumers have to tolerate resolving one
+  that is already gone. The scoped ids remain the registration name (`object:{id}.{method}` derives
+  from them) but are no longer how anything FINDS a window's implementation — see
+  `adr-shard-discovery-by-type`.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
-## adr-generic-name-routing-proxies: Generic-name routing proxies in main forward to the focused/owning window's scoped service
+## adr-generic-name-routing-proxies: Generic-name service routers in main forward to the focused/owning window's scoped service
 
 - **Formerly:** ADR-0008
 - **Date:** 2026-08-05
 - **Status:** Accepted
 - **Context:** Existing PAPI consumers call services by their historical generic name
   (`platform.webViewService`, `dialog:showDialog`, `platform.about`, ...) with no window argument.
-  After `adr-per-window-service-scoping` scoped each window's copy under its own name, nothing
-  answers the generic name.
-- **Decision:** Main registers one routing proxy per generic name (`command-routing.service.ts` —
-  which also registers the dialog-request proxies, `notification-routing.service.ts`,
-  `web-view-routing.service.ts`, `window-routing.service.ts`) that forwards to the scoped service of
-  the window that should handle it: the owning window when ownership is determinable (e.g. a command
-  whose first argument names a web view routes to the window that owns that web view), otherwise the
-  routing target (`adr-window-readiness-in-main`). A few read-only queries fan out and merge across
-  all windows instead, where a merged view is the meaningful answer.
+  After `adr-per-window-service-scoping` scoped each window's copy under its own name, nothing answers the generic name.
+- **Decision:** Main registers one service router per generic name (`notification.service-router.ts`,
+  `web-view.service-router.ts`, `window.service-router.ts`, `dialog.service-router.ts`,
+  `usersnap.service-router.ts`, `book-chapter-control.service-router.ts`) that forwards to the
+  scoped service of the window that should handle it: the owning window when ownership is
+  determinable (e.g. a command that names a web view routes to the window that owns that web view),
+  otherwise the routing target (`adr-window-readiness-in-main`). A few read-only queries fan out and merge across all
+  windows instead, where a merged view is the meaningful answer.
+- **Amended 2026-08-07 (`adr-renderer-registers-no-names`):** the original decision also included
+  `command.service-router.ts`, a transitional router that forwarded a list of generic COMMAND names
+  to per-window scoped command names (`platform.about` → `platform.about-1`). That module is gone.
+  Commands are no longer forwarded name-to-name at all: each is registered by the router for its own
+  service and calls a method on a window's shard. What remains of this ADR is the routers for
+  network-object services, which is what it was always about — the command list was the part that
+  needed a name-keeping mechanism, and that is what `adr-renderer-registers-no-names` removes.
 - **Alternatives:** Push a window-id argument onto every external caller — rejected: breaks every
   existing extension/PAPI consumer and the documented `papi.d.ts` signatures. Always fan out to every
   window — rejected as the general answer: most of these calls are single-target actions where
   fanning out isn't meaningful, and forwarding to a not-yet-ready window is measurably costly.
 - **Consequences:** external callers of the generic name are unaffected by multi-window; the
-  owner/target-selection logic in each proxy is now load-bearing, and two rules fell out of getting
+  owner/target-selection logic in each router is now load-bearing, and two rules fell out of getting
   it wrong first. Fan-outs ask only the windows that can answer (`getReadyWindowIds`), because
   forwarding to a window whose renderer has not registered costs that call the network service's
-  whole registration retry. And an owner probe that could not reach a window fails the call rather
-  than falling back to the routing target: "could not ask" is not "answered no", and the window that
-  did not answer may be the one that owns the web view.
+  whole registration retry. Whether an owner probe that could not reach a window fails the call,
+  answers not-found, or degrades to the routing target is a decision each caller makes by weighing
+  what guessing wrong costs there: an `existingId` search that would create refuses to guess, since
+  a wrong guess mints a duplicate of a view meant to be unique app-wide; a probe that creates
+  nothing answers not-found, since "could not ask" costs it nothing there; and a layout target
+  degrades to the routing target with a warning, since a wrong guess there costs only placement.
+  The main-side piece is a **service router**
+  (`*.service-router.ts`) and the per-window implementation it forwards to is a **service shard**
+  (`*.service-shard.ts`); both are documented in `Architecture.md` § "Service router and service
+  shard".
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
 ## adr-singleton-services-elect-host-window: App-global singleton services elect a host window first-come, with takeover on host-window close
 
 - **Formerly:** ADR-0009
-- **Date:** 2026-08-05
-- **Status:** Accepted
-- **Context:** Some services are conceptually app-global, not per-window (the theme engine, the
-  scroll group service) — exactly one instance for the whole app — but every window's renderer runs
-  the same startup code, so no window is distinguished as host in advance.
-- **Decision:** Every window's renderer races to register the same singleton network-object name at
-  startup; the winner becomes the host, and every other window attaches to (proxies through) it
-  instead of registering its own. If the host window closes, surviving windows sweep for the
-  now-unreachable registration and re-run the same election so a new host takes over.
-- **Alternatives:** Always host the singleton in main — rejected: these services' state and
-  registration machinery already live in renderer-side service-host modules built around
-  `dataProviderService`/`networkObjectService`; moving them to main is a larger rewrite for the same
-  effect. A fixed "primary" window as host — rejected: any window, including the first, can be
-  closed by the user, so a fixed designation would still need a takeover path.
-- **Consequences:** the app has exactly one theme engine and one scroll group service at all times,
-  transparent to consumers. The election/sweep/re-host machinery is implemented twice today (theme,
-  scroll group) and has already drifted between the two copies, so the duplication is worth
-  extracting into a shared helper.
-- **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
+- **Status:** Withdrawn. The slug is retired with the entry and will not be reused.
+- **Why the entry is not here:** the approach it recorded is not available in this repo, and an
+  entry describing a considered approach is exactly what a survey of this log — by a person or by
+  `.claude/agents/pt10-reuse-scout.md` — surfaces as reusable prior art. Deleting it rather than
+  marking it superseded is the carve-out described under "Don't rewrite history" above. Git history
+  keeps the text.
+- **What covers this ground instead:** `adr-scroll-group-hosted-in-main` and
+  `adr-theme-hosted-in-main`.
 
 ## adr-window-readiness-in-main: Window readiness is tracked in main via window-service registration, used to pick routing targets
 
@@ -338,7 +348,7 @@ step, no automation. Just a record.
 - **Status:** Accepted
 - **Context:** A window's `BrowserWindow` exists (and is enumerable) well before its renderer has
   registered any window-scoped service, because window creation and renderer service startup are
-  asynchronous. Routing proxies (`adr-generic-name-routing-proxies`) need to avoid picking a window
+  asynchronous. Service routers (`adr-generic-name-routing-proxies`) need to avoid picking a window
   that can't yet answer.
 - **Decision:** Main tracks a `readyWindowIds` set (`window-state.service.ts`); a window is marked
   ready when its `platform.windowServiceDataProvider-{id}-data` registration appears (observed via
@@ -354,7 +364,7 @@ step, no automation. Just a record.
   through this target, and the window holding focus during a quit is often one the user opened
   moments earlier whose renderer never finished starting. A
   dedicated `onDidChangeRoutingTarget` event fires whenever this computed target actually changes —
-  either the target window id, or the same window flipping ready/not-ready — so routing proxies and
+  either the target window id, or the same window flipping ready/not-ready — so service routers and
   other consumers can react without polling.
 - **Alternatives:** Wait for every window-scoped service to individually confirm registration before
   considering a window ready — more correct but heavier; the window service starts reliably early and
@@ -362,7 +372,7 @@ step, no automation. Just a record.
   can be ready while its other services are still registering). No readiness tracking, always try the
   target and eat the retry cost — rejected: this is exactly where the ~9s registration-race retries in
   `network.service.ts` come from.
-- **Consequences:** routing proxies get a cheap way to skip an unready window in the common case, at
+- **Consequences:** service routers get a cheap way to skip an unready window in the common case, at
   the cost of the signal being an approximation (one service standing in for all of them) rather than
   a true invariant.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
@@ -698,7 +708,7 @@ step, no automation. Just a record.
   `reloadWebView` when the value is present. Point (4) works because `reloadWebView` **remounts** the
   web view: it re-runs the provider's `getWebView`, and `srcNonce = newNonce()` is regenerated on every
   call and interpolated into the generated `content`
-  (`src/renderer/services/web-view.service-host.ts`), so `content` differs each time and the `srcDoc`
+  (`src/renderer/services/web-view.service-shard.ts`), so `content` differs each time and the `srcDoc`
   bound in `web-view.component.tsx` changes, reloading the iframe and recreating the React root. The
   mount-time initializers therefore see the new values with no re-apply machinery at all. Note the
   trap: `getWebViewNonce(id)` IS stable per id, but it is not the nonce that reaches `content`. Contextual inputs that can be derived — `projectId`, the
@@ -1546,6 +1556,201 @@ step, no automation. Just a record.
   move together; the test cannot import the Electron-side value, so its comment says to change both.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
 
+## adr-layout-persistence-guard-retirement: Two layout-persistence guards kept side by side pending deliberate retirement of the older one
+
+- **Formerly:** ADR-0024
+- **Date:** 2026-08-20
+- **Status:** Accepted (interim — retirement of the superseded guard is deferred, not decided against)
+- **Context:** Two PRs independently added a guard to `saveLayout` in
+  `src/renderer/services/web-view.service-host.ts` to stop a stale/wrong layout from being persisted
+  during a Power↔Simple interface-mode switch. PR #2425 ("Improve performance when switching to
+  Simple") added a **content-based** guard: refuse to persist any layout that still contains one of
+  the fixed `SIMPLE_LAYOUT_TAB_IDS`. PR #2681 ("Hold layout pushes while a layout load is in flight",
+  merged 2026-08-19) added a **structural** guard: track which `loadLayout` generation's layout the
+  dock actually holds (`layoutLoadGenerationInDock` vs `layoutLoadGeneration`) and hold pushes until
+  they match. The two guards were discussed directly in the #2681 PR thread
+  (https://github.com/paranext/paranext-core/pull/2681#issuecomment-5297967135) before either branch
+  merged: the structural guard is a strict superset of the content-based one (it also catches the
+  empty-initial-dock case and a scoped-id case the content check's `.has(id)` misses), so the
+  content-based guard is a reasonable one to retire — but as a **deliberate follow-up step with
+  #2425's tests still green**, not silently as part of the branches' eventual merge conflict, since a
+  content guard failing open looks identical to a structural guard working and the two could
+  otherwise be lost together without anyone noticing.
+- **Decision:** When merging main (carrying #2681) into `improve_simple-power_switching` (carrying
+  #2425), keep **both** guards in `saveLayout`, structural check first (cheap, and a strict superset
+  makes it the more useful early-exit), content-based check second with a `TODO` marking it for
+  retirement. Neither branch's guard, or its tests, was dropped by the merge itself.
+- **Alternatives:** (a) Drop the content-based guard during the merge, keeping only the structural
+  one — rejected per the PR-thread agreement: correct in the end state, but conflict-resolution time
+  is exactly the moment a silent, unverified drop is easiest to miss. (b) Keep only the content-based
+  guard and skip integrating the structural one — rejected: the structural guard fixes two real gaps
+  (initial-load and scoped-id cases) the content-based guard cannot reach.
+- **Consequences:** `saveLayout` currently runs a redundant check on every save while both guards are
+  live. Retiring the content-based guard (`SIMPLE_LAYOUT_TAB_IDS`/`collectWebViewIdsFromLayoutInfo`
+  branch, marked with a `TODO` at the call site) is tracked as explicit follow-up work: verify the
+  structural guard's test suite already covers every case `web-view.service-host.test.ts`'s
+  content-based-guard test exercises, then delete the content-based branch and that guard's
+  now-redundant test in one deliberate commit.
+- **Source:** PR #2425
+
+## adr-resource-missing-book-message: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
+
+- **Date:** 2026-08-20
+- **Status:** Accepted
+- **Context:** PT-4132 needed the "book not in this text" state for the Model text and Bible
+  texts/Commentaries panels, and the ticket asked to "compare expected behavior for PT-4111", which
+  had just built `BookNotAvailableView` with a deliberate Simple/Power split. The obvious reading was
+  to reuse that view, or to mirror its shape with a second interface-mode branch.
+- **Decision:** Resource panels get ONE message for both interface modes, with no action button, via
+  a separate `ResourceBookNotAvailable` component. The Simple/Power split in `BookNotAvailableView`
+  exists solely because a *project* missing a book is **actionable** in Power (Manage Books can
+  create it). A published resource cannot gain a book in either mode, so both arms would say the same
+  thing. PT-4111's own `isResource` branch already ignores interface mode for exactly this reason.
+  The panels swap only their content area, leaving the header mounted — the resource panel's selector
+  is the user's real remedy (switch to a text that has the book), and the model panel's label at
+  least attributes the message to a named text.
+
+  **Scope limit, known and deliberate.** "Published resource" is not the whole of what these panels
+  display. The Bible texts tab also lists real Paratext projects (`isProjectReference` in
+  `resource-text-panel.web-view.tsx`, whose `resourceProjectId` is then the project's own id), and
+  that panel is available in Power mode. Such a project CAN gain a book, so for it the premise above
+  does not hold and the action-free message is a weaker answer than the main editor's one-click
+  **Manage books**. This is accepted for now rather than unnoticed: giving a side panel a
+  project-data-mutating action is a product decision, and it reopens exactly the Simple/Power split
+  this ADR avoids for the resource case. Tracked as PT-4416.
+
+  Detection is centralized in `platform-scripture-editor.utils.ts`, which replaced a
+  `bookNotFoundRegex` local to `platform-scripture-editor.web-view.tsx`. All FOUR surfaces — the main
+  editor, the Bible texts/Commentaries panel, the Model text panel, and the Scripture Text Grid's
+  cells — answer "is the book on screen missing from the text on screen" through one function,
+  `isMissingBookOnScreen`, regardless of whether they read the error from a subscription hook or from
+  an awaited call.
+
+  **What is NOT yet shared is the decision that leaf predicate feeds.** Each surface still spells out
+  its own ordering — `resolveResourceContentState`, `deriveCellState`, the model panel's
+  `renderContent` chain, and the main editor's `bookExists`. The two that disagreed have since been
+  brought into line: `resolveResourceContentState` now reads a missing-book failure naming some other
+  book or resource as `'loading'` and any other failure as `'failed'`, which is the ordering
+  `deriveCellState` already used, so a grid cell and a panel can no longer give opposite answers about
+  one error. The model panel derives the same three answers from its own local fetch state. Converging
+  all of them on one resolver returning a discriminated union — so the disagreement is unrepresentable
+  rather than merely absent today — is tracked as PT-4416.
+
+  The message itself is `EmptyState`, per `adr-empty-is-zero-state-primitive`'s reservation of that component for the
+  bare-sentence case; `ResourceBookNotAvailable` contributes only panel-sized centring and the focus
+  target, and does not repeat the `role="status"` that `EmptyState` already sets. Every surface that
+  shows this sentence renders it through that one component — the two resource panels and the main
+  editor's `isResource` branch — so the wording, styling, live-region announcement, and focus repair
+  cannot drift apart between them.
+
+  The message is shown only when the failure names BOTH the book and the project the view is
+  displaying right now, compared in the RENDER BODY rather than latched when the failure arrived.
+  `parseMissingBookError` returns the `bookNum` and `projectId` the C# `MissingBookException` message
+  carries, and `isMissingBookOnScreen` compares them against what is on screen. Every surface that
+  can report a missing book goes through it — the main editor, both resource panels, and the
+  Scripture Text Grid's cells, which re-key their chapter subscription on the grid's shared
+  reference and so navigate exactly as the full-panel surfaces do. A data hook keeps serving the
+  previous selector's result until the new subscription's first update lands, so an error in hand may
+  describe a book the user has navigated away from or a resource they have switched off.
+  Project ids are compared case-insensitively via `normalizeProjectId`: C# canonicalizes them to
+  uppercase and reports that form, while a view's own id arrives verbatim from a resource reference,
+  and the PDP lookup folds case — so a casing mismatch would be invisible everywhere except here.
+  Non-`PlatformError` values are rejected structurally inside the shared helpers before any message is
+  read, because `getErrorMessage` falls back to `JSON.stringify` for an object with no string
+  `message`: letting a success value through would serialize the whole chapter USJ on every render and
+  match the regex against the scripture text itself.
+- **Alternatives considered:** **Reuse `BookNotAvailableView` with `isPowerMode`** — rejected: it
+  would drag in the `isLoading` gating hazard that view documents at length (a setting's default is
+  indistinguishable from an answer, so branching on it requires a spinner gate) to decide between two
+  identical messages. The model text panel reads `platform.interfaceMode` zero times today, so this
+  would also mean threading mode through a presentational component boundary. **One generic
+  "…in this resource" string** — rejected: the resource panel already keeps four `bibleTexts_` /
+  `commentaries_` key pairs selected by a `resourceType` ternary, including the sibling
+  `emptyState_prompt`; a shared string would be the deviation. **Promote the stale-data window to
+  `'loading'`** — rejected: it returns `'loading'` on every reference change, remounting the editor
+  on every chapter navigation. **Gate the message on the data hook's `isLoading`** — implemented
+  first, then withdrawn during `/review-paratext`. `isLoading` is raised by an effect keyed on the
+  data provider and selector (`create-use-data-hook.util.ts`), and effects run after the commit, so
+  the render that first pairs a new selector with the previous result still sees `isLoading` false and
+  would assert "this book does not exist in this Bible text" about a book that does. **A boolean
+  latched per fetch in the imperative panel** — rejected for the same reason in a different disguise:
+  clearing a flag at fetch start happens in an effect, one render after the navigation it is meant to
+  cover. Only deriving the answer from the failure's own identities makes the wrong frame
+  unrepresentable.
+- **Consequences:** Two book-not-available views coexist, and the distinction between them is
+  "can this thing gain a book", NOT "is this editable" and NOT "which mode are we in" — the same
+  project-kind-vs-permission distinction `adr-empty-is-zero-state-primitive`'s feature draws via `platform.isPublished`. Because
+  the Bible texts tab can display a project, that distinction is currently drawn by *surface* rather
+  than by what is on screen; PT-4416 covers closing the gap.
+
+  A resource panel now has FOUR content states, not three, because deciding that a missing book earns
+  a dedicated message forced the question of what the other failures earn. Once the panel stops
+  mounting an editor it has no scripture for, "no USJ" can no longer stand for both "still arriving"
+  and "this read failed" — the first is a spinner and the second is terminal, and a spinner shown for
+  a terminal failure claims progress that never comes. So an unreadable project or a permissions
+  failure gets its own named message (`%webView_resourcePanel_textUnavailable%`, shared by both
+  panels) and a `logger.error`, which is the only place the cause survives, since every terminal
+  failure looks the same on screen. This is a change of behaviour from before the feature, where such
+  a failure fell through to an editor with nothing in it.
+
+  Detection still rests on matching a C# exception message, now in one place: reword
+  `MissingBookException` and every consumer silently reports "book present". `MissingBookExceptionTests`
+  pins the exact wording on the C# side so that rewording fails a test rather than a user. Reordering
+  or renaming its two interpolated values is also breaking, since the identity regex reads them
+  positionally. Detection and identity use two different patterns on purpose: the identity pattern
+  captures the two values and so can fail on an unexpected message shape, while detection matches only
+  the invariant part of the sentence and so still succeeds there. What a caller does with that gap
+  depends on whether it has a neutral outcome. The resource panels do: an identity failure falls to
+  `'failed'`, which names the failure on screen and logs it — not silently correct, but diagnosable,
+  and terminal rather than a spinner that never resolves. The main editor does NOT —
+  its gate is the identity comparison, and a miss means `bookExists` stays true while no USJ ever
+  arrives, i.e. an indefinite spinner rather than the pre-feature book-not-available view. It
+  therefore falls back to detection alone when the identities cannot be parsed, which is sound
+  because a *stale* failure always parses (it names some other book or project), so an unparseable
+  message cannot be a stale one. The stale-content flash on navigation is untouched and remains
+  PT-4139's scope.
+
+  The focus repair both book-not-available views perform lives in `useFocusReplacedContent`
+  (`extensions/src/platform-scripture-editor/src/use-focus-replaced-content.hook.ts`). It requires
+  focus to have fallen to the document body, not merely `document.hasFocus()`: a panel that keeps a
+  header mounted beside the swapped content has focusable siblings in the SAME document, so the
+  looser guard stole focus off the resource selector — the one control that can remedy a missing
+  book. The cost is that the repair no-ops when focus rests on a control elsewhere in the same
+  document, including the main editor's own reference control; that is the intended trade, since
+  taking focus from a control the user is operating is the worse failure.
+- **Source:** PT-4132 (Empty state needs to be improved for the Model and Bible texts). Premise
+  scope, the shared-decision correction, and the `isLoading` mechanism correction from PR #2704
+  review.
+
+## adr-blank-chapter-simple-mode-only: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** PT-4403 (#2710), squash-merged into PT-4132's branch, dropped the `!isPowerMode` gate
+  on `EmptyChapterView` in `platform-scripture-editor.web-view.tsx` so that a Power user would also
+  get the honest "this chapter is empty" message and the "Add chapter number" scaffold action.
+- **Decision:** Keep the gate. `EmptyChapterView` does not sit BESIDE the editor — it applies
+  `tw:hidden` to the editor subtree, and `display: none` removes it from the accessibility tree and
+  the tab order. The scaffold button is then the only way back to typing, and `showButton` withholds
+  it in three reachable cases: a read-only project, `chapterNum: 0` front matter (which
+  `calculateTopMatch('GEN 0')` produces and `handleTopMatchSelect` passes through), and the window
+  while versification is still loading (`usePromise(..., { preserveValue: false })`). In Power mode
+  — where typing straight into a blank chapter IS the workflow — each of those becomes a dead end
+  with no editor and no button. Simple mode accepts that trade because the scaffold, not free
+  typing, is its model for creating chapter content.
+- **Alternatives considered:** **Keep the unification and fix `showButton`'s three gaps** — the
+  better end state, but it is a Power-mode *editing* behaviour change that belongs in its own ticket
+  with a test pinning the new invariant, not folded into a PR about resource panels. **Show the
+  message without hiding the editor** — plausible, and it would make the mode question moot; it
+  changes the Simple-mode layout that PT-4403 shipped and reviewed, so it is not a drive-by either.
+  Both are PT-4416.
+- **Consequences:** A Power user sees an ordinary empty editor for a blank chapter, exactly as
+  before PT-4403 — no message, and no scaffold shortcut. `EmptyChapterView`'s docstring saying
+  "Simple mode only" stays true. The main editor's `isResource` case now passes `isResource` into
+  `EmptyChapterView` so a published resource gets
+  `%webView_platformScriptureEditor_emptyChapter_messageResource%` rather than the project-oriented
+  wording, matching the side panels.
+- **Source:** PT-4132, PR #2704 round-6 review (blocking finding 1).
 ## adr-find-tolerance-as-engine-options: Find expresses whitespace and diacritic tolerance as engine options, never by rewriting the query
 
 - **Date:** 2026-08-26
@@ -1641,3 +1846,373 @@ step, no automation. Just a record.
   ScrTag's `Raw*` reads (an authored `\FirstLineIndent 0` serializes as 0, distinct from absent),
   which matters because project CSS is layered over a base sheet.
 - **Source:** PT-4187 standard-view branch (core #2565 ∥ scripture-editors #545).
+
+
+## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** Importing Paratext 9 interlinear data into a Platform.Bible extension requires core
+  to expose project-folder files extensions cannot otherwise reach (extensions have no filesystem
+  access, and `ExtensionData` is confined to its own store). PT9 keeps this data in per-language
+  interlinear book files plus `Lexicon.xml`, `WordAnalyses.xml`, and `InterlinearSetup.xml`. This
+  is the first projectInterface serving PT9-legacy per-project file data, and the next PT9 import
+  (hyphenation, renderings, and spelling are all existing PT9 `ProjectFileType` categories) will
+  follow whatever precedent it sets. Decided on PR #2707.
+- **Decision:** Four coupled choices. (1) **Parsed models, not raw file text:**
+  `platformScripture.Pt9Interlinear` serves typed records deserialized through ParatextData's own
+  XML classes, read via each project's live `FileManager`, with PT9's own read semantics and never
+  stricter ones - duplicate keys keep the last occurrence, a missing range defaults, and a
+  malformed boolean or unknown enum name fails the file exactly as it would fail in Paratext 9.
+  Core owns the payload schema; consumers never re-derive PT9's file formats from bytes. (2)
+  **Change detection is a polled manifest, not events:** the interface emits no file-change
+  events; a manifest getter serves an opaque SHA-256 change token per covered file (the
+  interlinear book files, the lexicon, and the stored word analyses; the setups file rides the
+  payload without change detection). Content hashes rather than mtimes, because Send/Receive
+  rewrites timestamps without changing content.
+  (3) **Advertisement by project class:** the interface joins the unpublished-only list beside
+  `legacyCommentManager.comments` - published projects are distributed archives that do not carry
+  interlinear authoring data - and wire-method registration is gated on the advertised list, so
+  the wire surface always matches the advertisement. (4) **Namespace:** the interface lives under
+  `platformScripture.*` like the other Paratext-project interfaces; the project is the subject,
+  and the legacy on-disk format is an implementation detail of what the getters read.
+- **Alternatives:** (a) **Raw file text keyed by path** (the PR's original shape) - rejected after
+  building both and comparing: every consumer re-implements PT9's parsers and inherits their
+  divergences, raw text inflates ~1.65x when escaped into JSON, and path-keyed payloads leak
+  storage layout into the contract. (b) **File-watcher change events** - deferred to the planned
+  sync work; poll-on-open serves the importer today, and the manifest keeps the poll honest. (c)
+  **Advertising by editability** - rejected: `platform.isEditable` is a separate per-project
+  setting, and an unpublished project with `Editable=F` still carries importable interlinear
+  data. (d) **A command instead of a projectInterface** - rejected: per-project capability
+  advertisement is what projectInterfaces exist for, and "interface unsupported" doubling as "no
+  PT9 data channel" is load-bearing for consumer UX.
+- **Consequences:** The transport shapes the contract: a single WebSocket message past its limit
+  tears down the whole C# connection (an unaddressed platform-level issue), so the response is
+  bounded by an aggregate size cap and fails with a documented error whose machine-readable
+  contract is the RESOURCE_EXHAUSTED platform error code (exception types do not cross the RPC
+  boundary, but Exception.Data does); the documented message prefix remains the fallback for
+  consumers that see only the message. Schema evolution now moves at platform speed: a field the
+  payload drops costs a core release to recover, which is why the setup records deliberately
+  carry the model text's identity even though nothing consumes it yet. A future PT9-legacy import
+  should follow this shape - parsed models with PT9-parity semantics, a hashed manifest for
+  change detection, unpublished-only advertisement - rather than re-litigating it.
+- **Source:** PR #2707 review of the PT9 interlinear projectInterface - finding that the PR's
+  architecture decisions had no recorded precedent for the next PT9-legacy import to follow.
+
+## adr-shard-discovery-by-type: Service routers discover shards by network-object type, not by rebuilding the scoped name
+
+- **Date:** 2026-08-06
+- **Status:** Accepted
+- **Context:** `adr-per-window-service-scoping` gave every per-window service a `${name}-${windowId}` registration name, and
+  main's routers found a window's implementation by building that string again. So did window
+  readiness (`adr-window-readiness-in-main`), which parsed a window id back out of a network object id. That made the
+  name shape a contract between two processes that no type could check, spread across a dozen sites,
+  and it needed `as` assertions to defeat the typed provider-name system. It also meant a router
+  asked the network object service for a name that might not exist, paying its registration retry to
+  learn nothing.
+- **Decision:** A shard registers with a distinct `objectType` per service (`'webViewServiceShard'`,
+  `'notificationServiceShard'`, `'windowServiceShard'`) and a `windowId` attribute
+  (`src/shared/models/service-shard.model.ts`). Each router keeps an index built from the
+  `onDidCreateNetworkObject` / `onDidDisposeNetworkObject` announcements, filtered on that type
+  (`createServiceShardIndex`), and resolves a window's shard through it. Window readiness listens to
+  the same index rather than parsing ids. The scoped names stay exactly as they were — this changes
+  discovery only.
+- **Alternatives:** One generic `'windowScopedService'` type for every shard — rejected: filtering
+  for exactly the thing you want beats filtering everything and re-filtering on an attribute, and
+  `'webViewService'` already means something else here. Scanning
+  `getAllNetworkObjectDetails` per call — rejected: an index is O(1) and gets window close right for
+  free. Converting the network object shards to data providers to reuse `getByType` — unnecessary:
+  `registerEngine` passes `dataProviderType`/`dataProviderAttributes` straight to
+  `networkObjectService.set`, so transport is orthogonal to discovery.
+- **Consequences:** a router asking about a window that has not registered gets `undefined`
+  immediately instead of after a retry; a shard leaves its router's view the moment its network
+  object is announced as disposed, which is what happens when its window closes. The index is built
+  from announcements, so a router MUST start before any window is created — the same assumption
+  `network-object-status.service-host.ts` already makes. This does not yet apply to
+  `command.service-router.ts`, which forwards request names rather than resolving a network object
+  and still builds `${name}-${targetWindowId}` strings; it keeps no index. That module is
+  transitional — each of its commands moves into the router for its own service — so it is expected
+  to go away rather than to be converted.
+- **Amended 2026-08-07 (`adr-renderer-registers-no-names`):** `command.service-router.ts` is gone, so the exception above is
+  spent — every ROUTER now discovers its shards through an index. The index also answers with the id
+  a shard ANNOUNCED (`getShardNetworkObjectId`), which is what lets a router name one of a shard's
+  methods — `object:{id}.{method}`, for a request timeout — without that being a second rebuild of
+  the same name. It reports a shard's departure as well as its arrival, so a router that did
+  something outside itself on arrival can undo it.
+- **Carve-out — `src/shared/services/window.service.ts`:** one module outside the routers still
+  builds a window-scoped name, spelling `${windowServiceProviderName}-${windowId}` to reach a
+  window's window-service DATA PROVIDER — for its own window, and (after a
+  `platform.getFocusedWindowId` round trip) for the focused one. Deliberate, and stated in the file
+  itself: a data provider is not a network object shard, and this module runs in every process
+  including the extension host, where there is no window of its own to ask. Main does publish a
+  generic `windowServiceProviderName` backed by an engine that forwards to the routing target, so
+  the carve-out could be retired by resolving that name instead — but the two do not answer
+  identically. `platform.getFocusedWindowId` is raw Electron focus, while the router's target is
+  focus PLUS readiness PLUS not-closing, so swapping them changes what `papi.window` answers during
+  startup, teardown and quit. That is its own change with its own tests, not a rename.
+- **Source:** PT-4275 epic (multi-window architecture plan step 2).
+
+## adr-scroll-group-hosted-in-main: The scroll group service is hosted in main, and each renderer keeps a predicting cache
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** A scroll group is app-global — group 1 is on one reference for the whole app — but a
+  renderer was holding it, and any window can be closed. The scroll group service's whole job is
+  holding app-global state, so the state had a home problem, not a routing problem: `adr-generic-name-routing-proxies`'s
+  routers forward to a window, and there is no per-window answer to forward to.
+- **Decision:** Main owns the scroll group state — each group's Scripture reference and source
+  project (persisted through main's file-backed `localStorage` polyfill, under the keys the renderer
+  used) and its session-only reference history — and registers the `ScrollGroupService` network
+  object before any window is created. Each renderer's `scroll-group.service.ts` becomes what the
+  Service/Service Host pattern already calls it: a local representation. It seeds a copy of the
+  host's state at startup, keeps it current from the host's events, serves the `*Sync` readers from
+  it, and predicts the host's answer for a `*Sync` write — returning the prediction immediately,
+  sending the write on, and resyncing the group from the host if the host declines it or the write
+  never lands. Two operations exist for that cache-keeping alone (a whole-state snapshot, and a
+  one-time handover of state persisted where main cannot read it); they are on the network object but
+  off `IScrollGroupService`, so `papi.scrollGroups` does not offer them. Three things follow from the
+  cache being a cache rather than the authority: (1) main hands each window the state it holds on the
+  window's URL — the channel `WINDOW_ID` already travels on — so the cache is right on the first
+  render instead of after a round trip; (2) `papi.scrollGroups` in the renderer resolves to that same
+  cache rather than to the shared network proxy, so everything in one window gives one answer about
+  where a scroll group is; and (3) main's store is written on a short debounce with a flush at
+  shutdown, because each write is a synchronous fsync on the event loop the whole app's JSON-RPC
+  traffic shares.
+- **Alternatives:** (a) Leave the state in a renderer and give the app a way to move it to another
+  window when that one closes — rejected: it makes losing the host cheaper to recover from without
+  making it impossible, and the state still sits behind a window the user can close at any moment.
+  (b) A service router for scroll groups — rejected: a router picks one window to answer, and no
+  window has the right answer for state that belongs to all of them. (c) Route every read through
+  main and drop the sync API — rejected: the UI
+  reads a group's reference during render and inside keystroke handlers, where there is no room to
+  await. (d) Keep versification conversion with the state in main — rejected: the hot-path consumer
+  is in the renderer, so converting in main would add a hop per navigation AND leave the renderer
+  needing its own cache anyway for the synchronous reader; main keeps an uncached pass-through for
+  remote callers, which cannot go stale, at the price of a round trip per remote conversion —
+  acceptable while remote conversion requests are occasional, and worth revisiting if a consumer
+  outside the renderer starts converting per navigation. (e) Let the renderer's cache fill from the
+  host's snapshot alone and accept the default reference on the first render — rejected: the sync
+  readers run during that render, so the toolbar, the keyboard navigation commands, and every
+  scroll-group-following web view would start on Genesis 1:1 and jump, which for a restored Scripture
+  editor is a whole extra chapter load on the startup path this epic is trying to shorten. (f) Await
+  the cache's startup before rendering React — rejected: it puts a round trip on the critical startup
+  path to fix a problem the window's own URL already solves.
+- **Consequences:** the app-global invariant of `Architecture.md` §2 now holds for the scroll group
+  service outright — no window registers its name, so no window can lose it. Two `*Sync` booleans
+  (`setScrRefSync`, `navigateReferenceHistorySync`) become predictions rather than confirmations;
+  they can differ from the host only while a change from another window is in flight, which is the
+  same instant-race the single host has always resolved by arrival order, and the loser converges on
+  the host's next event. Reads from OTHER processes (`papi.scrollGroups` in the extension host) can
+  briefly sit behind what a window's own UI is showing, for the length of a predicted write; the
+  host's event is what everything converges on. Reference history is deliberately app-global and
+  single-authority: windows sharing a group are on the same reference by definition, so per-window
+  trails could only diverge through a mirroring race or pre-join state. Serialization semantics for
+  concurrent navigation from several windows are PT-4270's. Persistence lags memory by the debounce
+  interval, so a crash — not a quit, which flushes — loses at most one navigation's worth of scroll
+  position. The one-time handover of pre-host state is adopt-then-flag and answers the offering
+  window, which stops offering on either answer — by writing a renderer-local marker key rather than
+  by deleting the pre-host keys, so an older build downgraded onto the profile still finds the
+  reference the user left off at. What a downgrade still cannot do is round-trip: a profile that
+  downgrades, navigates on the old build, and upgrades again loses that navigation, because the host
+  refuses an offer once it has state of its own. Because the window's URL is a SEED rather than a one-off argument, the renderer
+  rewrites its own query parameter (`history.replaceState`) whenever the cache changes: a RELOAD
+  replays that URL, and the pre-host store a reloaded document would otherwise fall back to has been
+  handed over by then, so a URL left as old as the window would put a reloaded window
+  back on the reference it opened on — which for a restored Scripture editor is the extra chapter
+  load the seed exists to avoid. The theme service is hosted the same way in `adr-theme-hosted-in-main`.
+- **Source:** PT-4275 epic (multi-window architecture plan §6).
+
+
+## adr-theme-hosted-in-main: The theme service is hosted in main, and each window caches the current theme
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** The theme is app-global — one current theme, one should-match-system setting, one set
+  of user-defined themes — but the engine that owned it was hosted in a renderer, and any window can
+  be closed. A window that did not hold the engine also answered `getCurrentThemeSync` from its
+  module-load snapshot, which is what baked a stale theme into a new web view's `srcdoc` (the
+  staleness noted in §9.2 of the plan).
+- **Decision:** Main owns the three persisted values and registers the theme data provider under its
+  existing name before any window is created. Each renderer's `theme.service.ts` becomes a local
+  representation: it seeds a copy of the current theme synchronously at module load, keeps it current
+  from the host's `subscribeCurrentTheme`, and serves `getCurrentThemeSync` from it — so the sync
+  answer is fed by the update event rather than being a module-load snapshot, and the §9.2 staleness
+  is gone by construction. Everything else on the service is a plain pass-through: unlike the scroll
+  group there is no synchronous WRITER, so nothing is predicted. The OS dark-mode preference is read
+  in main from Electron's `nativeTheme` (`shouldUseDarkColors` plus `on('updated')`) instead of a
+  `matchMedia` listener per window. One `migrateStoredThemeState` method, off `IThemeService` and
+  marked experimental on both surfaces, adopts state persisted in a renderer's store before this
+  change — adopt-then-flag, first offer wins, and the offering window drops its keys on either
+  answer. Main's own consumer (the Windows title-bar overlay colours) reads and subscribes locally
+  rather than through the provider its own process registers.
+- **Alternatives:** (a) Leave the engine in a renderer and give the app a way to move it to another
+  window when that one closes — rejected for the same reason as in `adr-scroll-group-hosted-in-main`, and the theme would
+  have been the second service to need that machinery, which is what made hosting both in main
+  better than building it once. (b) Fix the §9.2 staleness in place and leave the engine in a
+  renderer — rejected: it treats the symptom of state living somewhere closable. (c) Keep the OS
+  preference in the renderer and send it to main — rejected: it is one fact about the machine, so N
+  windows watching it is N chances to disagree, and `nativeTheme` is strictly better placed. (d) Put
+  the migration on a command instead of the provider — rejected: it is one caller reaching one host,
+  which is what the provider already is; a command would add a globally-unique name for it. (e) Seed
+  the renderer's cache from the host's snapshot alone and accept the default theme on the first frame
+  — rejected: that frame is the flash of unstyled content `index.tsx` reads `getCurrentThemeSync`
+  before React renders specifically to beat, and every web view bakes the same value into its
+  `srcdoc`.
+- **Consequences:** the app-global invariant of `Architecture.md` §2 now holds for every platform
+  service — no renderer registers a globally-unique name, so no window's close can take one down or
+  leave it for another window to claim. A window that is RELOADED replays the URL main built when the
+  window was created, whose theme would otherwise be as old as the window, so the renderer rewrites
+  its own query parameter on every change — the same
+  mechanism the scroll group uses (`adr-scroll-group-hosted-in-main`), rather than a second seed source and a navigation-type
+  sniff to choose between them. `shouldMatchSystem` is computed in main only; a renderer that starts
+  applying its own `matchMedia` would double-apply it. `hasOwnThemeState` — what makes the host
+  refuse a migration offer — is seeded from a DEDICATED marker key that only the three public
+  setters and an adoption write, deliberately not from the presence of the three value keys, because
+  the engine also writes those on its own while extension themes load (matching the theme type to
+  the machine's dark-mode preference does it on the first start of a dark-mode machine) and those
+  writes say nothing about what the user chose; reading them back as a user choice would refuse a
+  handover that had not happened yet, and a refusal is what makes the offering window delete its
+  copy. The offering renderer records that it has finished offering with a marker key of its own
+  rather than by deleting the three pre-host value keys, so an older build downgraded onto the
+  profile still paints the theme the user chose; a downgrade cannot round-trip a theme changed on
+  the old build, which was true before the marker existed too. "Do I have a theme worth handing a
+  new window?" is deliberately a DIFFERENT question,
+  answered by "is this still the compile-time default?", so a theme derived from the OS preference
+  still travels on the URL. The theme list comes from a provider the extension host registers, which
+  does not exist when this host starts and which `platform.restartExtensionHost` replaces, so the
+  subscription is taken whenever that provider is announced rather than once — and the deadline for
+  "the current theme no longer exists, reset it" runs from that list's first payload rather than
+  from this process's age, which is not a bound on when the extension host publishes. `nativeTheme`
+  cannot be touched before Electron's `ready` event, so the host awaits `app.whenReady()` before
+  building its engine, which makes it the one app-global registration that is not purely synchronous
+  in startup order — and everything main awaits after that batch, including the .NET and
+  extension-host spawns, is behind `ready` too. Measured rather than assumed (`PT_STARTUP_MARKS`,
+  dev build, Linux): the wait ends at +152 ms from process start, and `extension-host-forked`
+  lands at +188 ms against +175 ms without the theme host at all — inside run-to-run noise,
+  because `ready` fires while main is still doing work it would have done anyway. The mark
+  `theme-host-electron-ready` is emitted where the wait ends so this stays checkable. What is NOT
+  free is resolving the theme data provider: an unregistered data provider is only answered after
+  the whole RPC retry budget (~10 s), so the host's first subscribe attempt is deliberately not
+  awaited — awaiting it put ten seconds in front of both process spawns.
+- **Source:** PT-4275 epic (multi-window architecture plan §6, theme half; §9.2 for the staleness it
+  closes).
+
+## adr-renderer-registers-no-names: Renderer platform code registers no command or request names; routers call shard methods
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** `adr-per-window-service-scoping` scoped each window's copy of the renderer-hosted commands and dialog requests
+  under a `${name}-${windowId}` suffix, and `adr-generic-name-routing-proxies`'s `command.service-router.ts` forwarded the
+  generic name to the right window's scoped name. That worked, but it made the set of per-window
+  commands a **list** — `RENDERER_HOSTED_COMMAND_NAMES`, `RENDERER_HOSTED_COMMAND_DOCS`,
+  `RENDERER_HOSTED_DIALOG_REQUEST_NAMES` — that a renderer had to register against and that nothing
+  could check across module boundaries. Two startup coverage checks and two registry modules existed
+  only to catch a name on the list that no module had registered, and a command whose handler had a
+  web view id as its first documented parameter had to be sorted into owner-routed rather than
+  focus-routed by reading its own OpenRPC docs.
+- **Decision:** Move every one of those commands into the router for its own service, where the
+  router registers the generic name in main and calls a **method on the window's service shard**
+  instead of forwarding to a scoped command name. The dialog service, the Usersnap feedback widget,
+  and the BookChapterControl each got a shard and a router; the settings commands joined the WebView
+  router, which already knew how to find a web view's owning window; the scripture navigation
+  commands moved into main outright, asking the window one question (`getNavigationContext`) and then
+  computing and writing in main. Renderer platform code now registers no command or request name,
+  scoped or otherwise.
+- **Alternatives:** Keep the transitional router and its name lists — rejected: the lists are the
+  cost, not the routing. Give the platform a per-window command facility so a renderer could keep
+  registering — rejected: it would make the shape this ADR removes into supported API, and the shard
+  interface already expresses "one window's implementation of a service" with compile-time checking
+  that a name list cannot have. Put the new methods on the existing public services
+  (`WebViewServiceType`, `IWindowService`) — rejected: both are emitted into `papi.d.ts`, so a UI
+  affordance would become permanent extension-facing API; the shards extend those types privately
+  instead, and the router objects stay typed as the public service so the public surface is
+  byte-identical.
+- **Consequences:** `papi.d.ts` **shrinks** by three `@experimental` exports
+  (`RENDERER_HOSTED_COMMAND_NAMES`, `RENDERER_HOSTED_COMMAND_DOCS`,
+  `RENDERER_HOSTED_DIALOG_REQUEST_NAMES`) and grows by one, also `@experimental`
+  (`getNetworkObjectMethodRequestType`, which is how a router names one of a shard's methods to give
+  that one method a request timeout). Removing the three is a breaking change for anyone who
+  imported them, which is why they were experimental — and all three were introduced within this
+  same epic, never on a release. `command.service-router.ts`,
+  `renderer-hosted-command-registry.ts`, `renderer-hosted-dialog-registry.ts`, and both startup
+  coverage checks are deleted; what replaces their guarantee is that each router's registration list
+  is asserted by its own test, and each shard's methods are checked by its interface. Owner-vs-focus
+  routing is no longer derived from OpenRPC parameter names as a routing INPUT — it is written per
+  command in the router, so `platform.openSettings` naming a web view routes by ownership while
+  `platform.openUserSettings` follows focus, and each is pinned by a test; the parameter names are
+  kept as a startup assertion instead, so a command that documents `webViewId` first and is not
+  owner-routed is reported rather than silently following focus. All twenty moved names report an
+  unreachable window the same way — by throwing at call time, as the transitional router did — which
+  the eight navigation commands need stating explicitly because they resolve a value: a go-to
+  resolves `undefined` and a history command resolves a boolean, so `false` means "nothing to move
+  to" and never "this could not run". Two behavior changes. The go-to commands are serialized by two
+  locks, not one; the two history commands take neither. The per-renderer mutex became app-global,
+  since the handler runs in main: two windows driving one scroll group are serialized against each
+  other, which a per-renderer lock could not do. That lock holds main's own read-compute-write plus
+  the versification-bounds fetch and the `availableBooks` await, so everything the write depends on
+  is decided inside it. Outside it, a second mutex keyed per WINDOW
+  (`navigationCommandMutexesByWindowId`) wraps the whole handler, including the round trip that asks
+  a window what to navigate. That ask has to be inside a lock because for a detached target it IS
+  the read: overlapping runs that each ask before taking the inner lock all compute from the same
+  reference, so a held key — one fire-and-forget command per OS auto-repeat — advanced one verse N
+  times instead of N verses. It is keyed by window rather than app-global because the ask is a
+  request to another process, and a window that has stopped answering takes the whole request
+  timeout to say so; behind one shared lock that wait would stall every other window's navigation
+  for its duration. And a go-to now steps from the reference main holds rather than from the asking
+  window's predicting cache, which is what keeps a held key advancing one step per repeat; a
+  navigation the window itself just made reaches main one hop later. Cross-window navigation
+  ordering beyond this is PT-4270. Registering three routers plus the navigation commands adds four
+  entries to main's awaited startup batch; they are in-process registrations against main's own RPC
+  server.
+- **Marking pre-existing names experimental:** this epic republishes names that already existed, and
+  it treats them two ways on purpose, so the rule is written down here rather than re-argued at each
+  router move. **Mark the OBJECT when the contract behind its name changed** — `WebViewService`,
+  `NotificationService` and `platform.windowServiceDataProvider` are all old names whose whole method
+  surface is now `x-experimental`, because several of their methods fan out over windows or route by
+  ownership and can fail in ways a single-window caller never had to handle. **Leave an individual
+  legacy COMMAND's flag alone** — `platform.about`, the three settings commands and the four Usersnap
+  commands stay unmarked, and tests pin that they do not drift, because moving where a command's
+  handler runs is not a change to what a caller of that command may rely on. New names, of course,
+  are marked on both surfaces regardless.
+- **Source:** PT-4275 (multi-window epic), multi-window architecture plan §7 and §9.1; branch
+  `pt-4275-commands-to-main`.
+
+## adr-navigable-project-ids: A web view declares the extra projects it displays in its own web view state
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** The global book/chapter/verse control offers only the active project's books, so a
+  book present in an open resource but not the project is unreachable. Collecting "books in open
+  resources" from the renderer works for views that are one tab per project, but the Scripture Text
+  Grid is a single web view hosting many projects: its members are React components inside one
+  iframe, resolved from three extension-owned settings plus a DBL-to-installed-project lookup plus a
+  latch that lives in that view's React state. Nothing reading open web view definitions can see
+  them, and core cannot re-derive them correctly.
+- **Decision:** A web view that displays scripture from projects beyond its own `projectId` declares
+  those project ids in its own web view state under `NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY`
+  (`platform-bible-utils/experimental` — both core and extension web views can import runtime values
+  from the stable entry point too; the key lives under `experimental` because the convention itself
+  is not yet stable). Readers union `definition.projectId` with the declared list across open
+  definitions and react to the existing web view open/update/close events. The declaring view owns
+  its own resolution and publishes installed project ids; readers guard the value with
+  `isNavigableProjectIds` rather than trusting it, since web view state is written by whoever owns
+  the view and persists into saved layouts.
+- **Alternatives:** **A PAPI command on the owning extension** — rejected: the extension's `main.ts`
+  cannot see ids that live in a web view's React state, so the view would have to push them to
+  `main.ts` anyway, giving a registry *and* a command, for a strictly larger surface. It also gives
+  core a hard dependency on one specific extension's command existing. **Core reads the underlying
+  settings and re-derives membership** — rejected as not merely duplicative but incorrect, since the
+  displayed-project latch is unobservable from outside the view. **A renderer-side registry** —
+  rejected: it cannot cross the iframe boundary, which is exactly the boundary in question.
+- **Consequences:** Any future multi-project view becomes visible to global navigation UI by writing
+  one state key, with no core change. The cost is an informal convention that only holds if writers
+  publish installed project ids, so readers must guard. The key persists into the saved layout, so a
+  stale list can survive a restart until the view remounts and republishes. A publisher must also
+  wait for its own data to load before publishing: derived membership is transiently empty during
+  mount, which is indistinguishable from "everything was removed" and would otherwise wipe a correct
+  persisted list. And membership should be compared as a set before writing, since every write is a
+  web view definition update that lands in layout persistence.
+  **Revisit** if a reader ever needs more than project ids from a declaring view, which would call
+  for a typed surface rather than a state key.
+- **Source:** PT-4346, global BCV control showing books from open resources.
+

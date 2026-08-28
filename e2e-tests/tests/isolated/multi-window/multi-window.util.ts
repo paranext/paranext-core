@@ -42,13 +42,50 @@ export const FAULT_MARKERS = [
 ];
 
 /**
- * A warn/error-severity line reporting a name collision in the central registry. The same phrases
- * appear at debug severity on the EXPECTED step-aside paths (a second window losing the app-global
- * hosting race logs "… already registered" as debug), so severity is part of the pattern: only
- * warn/error occurrences indicate a window failing to scope its per-window services.
+ * A warn/error-severity line reporting a name collision in the central registry: a window failing
+ * to scope its per-window services.
+ *
+ * Severity is part of the pattern because these phrases reach the captured output two different
+ * ways. They are LOGGED, at warn, by `rpc-client.ts` (`registerMethod`, when a client already has
+ * the method) and by `rpc-websocket-listener.ts` (a method and a network event colliding on one
+ * name) — a logger line is the registry reporting a collision, which is the fault this hunts. They
+ * are also THROWN, inside error messages built by `network-object.service.ts`,
+ * `data-provider.service.ts`, `web-view-provider.service.ts` and `network.service.ts`, and thrown
+ * text reaches this capture at whatever severity its catcher chooses to print it, or untagged
+ * inside a stack trace. Bounding the match to warn/error keeps it on the lines that REPORT a
+ * collision rather than on the same words quoted in passing.
  */
 export const DUPLICATE_REGISTRATION_PATTERN =
   /\[(warn|error)\][^\n]*(already registered|rejected by the central registry)/;
+
+/**
+ * Logged by `main.ts` on the way down — the positive control for a collision sweep that runs after
+ * a quit.
+ *
+ * `expect(log).not.toMatch(...)` passes just as happily against output that never arrived, so each
+ * sweep asserts something present first, to prove it examined a real corpus.
+ *
+ * A control must be emitted AFTER {@link captureAppOutput} attaches, not merely be certain to
+ * happen. The capture hooks `electronApp.process().stdout` once the app is already running, so
+ * every main-process startup line — service registrations included — is emitted before it and is
+ * never in the corpus at all. This line is not: {@link quitAndExpectCleanExit} performs the quit
+ * that produces it, so it always lands mid-capture.
+ */
+export const APP_QUITTING_LOG = 'Main process is quitting';
+
+/**
+ * The first thing any renderer logs (`src/renderer/index.tsx`) — the positive control for any sweep
+ * whose corpus begins before a window is created during the test, whether that corpus is a slice
+ * taken from a mark or the whole log of a test that has not quit.
+ *
+ * {@link APP_QUITTING_LOG} controls sweeps taken after a quit; this one controls the sweeps where
+ * the quit has not happened yet. A mark taken a moment too late would otherwise yield an empty
+ * slice and a passing assertion.
+ *
+ * Note the window this refers to is created DURING the test, so its renderer's first line lands
+ * well after the capture attached — which is what makes it usable as a control at all.
+ */
+export const RENDERER_STARTING_LOG = 'Starting renderer';
 
 // #endregion
 
@@ -100,8 +137,8 @@ export function countOccurrences(haystack: string, needle: string): number {
 
 /**
  * Per-test elapsed-time step logger, so the runner output records how long each phase actually took
- * — the evidence for judging whether a pass exercised the intended waits (e.g. a hosting takeover
- * that includes an unreachability probe) or short-circuited.
+ * — the evidence for judging whether a pass exercised the intended waits (e.g. a second window's
+ * services genuinely coming up) or short-circuited.
  */
 export function createStepLogger(prefix: string): (label: string) => void {
   const start = Date.now();
@@ -301,24 +338,34 @@ export async function createSecondWindow(electronApp: ElectronApplication): Prom
 }
 
 /**
- * Wait until a window's renderer has registered its window-scoped services with the main process:
- * its scoped `platform.about-{windowId}` command (the last of the renderer's command registrations)
- * and its scoped window service (what the routing proxies forward to). Only then can generic-name
- * calls be routed to this window.
+ * The window-scoped shard methods a renderer registers, as patterns taking the window id.
+ *
+ * One per service the main process's routers forward a command or request to. A renderer starts
+ * them together, so any one of them proves only that the batch is under way — a spec that drives a
+ * command at this window right after the gate needs the shard behind THAT command to have arrived.
+ */
+const SCOPED_SHARD_METHOD_PATTERNS = [
+  (windowId: number) => `^object:DialogService-${windowId}\\.showDialog$`,
+  (windowId: number) => `^object:UsersnapService-${windowId}\\.submitIdea$`,
+  (windowId: number) => `^object:BookChapterControlService-${windowId}\\.open$`,
+  (windowId: number) => `^object:WebViewService-${windowId}\\.openSettingsTab$`,
+  (windowId: number) => `^object:platform\\.windowServiceDataProvider-${windowId}-data\\.`,
+];
+
+/**
+ * Wait until a window's renderer has registered every window-scoped service the main process's
+ * routers forward to. Only then can generic-name calls be routed to this window.
  */
 export async function waitForRendererRegistered(
   windowId: number,
   timeoutMs: number,
 ): Promise<void> {
-  await waitForPapiMethodRegistered(
-    new RegExp(`^command:platform\\.about-${windowId}$`),
-    WEBSOCKET_PORT,
-    timeoutMs,
-  );
-  await waitForPapiMethodRegistered(
-    new RegExp(`^object:platform\\.windowServiceDataProvider-${windowId}-data\\.`),
-    WEBSOCKET_PORT,
-    timeoutMs,
+  // Waited on together: the renderer starts them together too, so they arrive within a poll of one
+  // another and waiting one after another would spend the timeout budget several times over
+  await Promise.all(
+    SCOPED_SHARD_METHOD_PATTERNS.map((buildPattern) =>
+      waitForPapiMethodRegistered(new RegExp(buildPattern(windowId)), WEBSOCKET_PORT, timeoutMs),
+    ),
   );
 }
 
@@ -443,8 +490,10 @@ export async function quitAppAndWaitForExit(
 /**
  * The graceful-quit epilogue shared by the multi-window suites: trigger a real quit and wait for
  * the OS process to exit (see {@link quitAppAndWaitForExit}), assert the exit was clean (code 0, no
- * signal), then sweep everything the given capture recorded for {@link FAULT_MARKERS} and for
- * warn/error-severity duplicate registrations ({@link DUPLICATE_REGISTRATION_PATTERN}).
+ * signal), assert the capture actually saw the quit ({@link APP_QUITTING_LOG}, so the sweeps that
+ * follow cannot pass vacuously against an empty corpus), then sweep everything the given capture
+ * recorded for {@link FAULT_MARKERS} and for warn/error-severity duplicate registrations
+ * ({@link DUPLICATE_REGISTRATION_PATTERN}).
  *
  * @param label Prefix for the step-log line recording the exit (e.g. `'phase 1'`).
  */
@@ -460,6 +509,11 @@ export async function quitAndExpectCleanExit(
   expect(exitResult.code).toBe(0);
 
   const log = output.text();
+  // Positive control before BOTH negative sweeps: the quit above produces this line, so its
+  // absence means the capture holds nothing and everything below would pass without examining
+  // anything. It has to precede the fault sweep too — that sweep is a negative assertion this
+  // control backs, not an exception to it.
+  expect(log).toContain(APP_QUITTING_LOG);
   FAULT_MARKERS.forEach((marker) => expect(log).not.toContain(marker));
   expect(log).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
 }

@@ -9,6 +9,7 @@
 // as separate, independent API surfaces with different support levels.
 
 export {
+  ALL_BOOK_IDS,
   BOOKS_PRESENT_DEFAULT,
   DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
   getBookIdsFromBooksPresent,
@@ -32,3 +33,7 @@ export type {
   PaletteDriver,
   PaletteKeyForwarding,
 } from './palette.types';
+export {
+  isNavigableProjectIds,
+  NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
+} from './navigable-project-ids';

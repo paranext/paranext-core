@@ -65,8 +65,12 @@ export declare const BOOK_CHAPTER_CONTROL_STRING_KEYS: readonly [
 	"%scripture_section_extra_long%",
 	"%history_recent%",
 	"%history_recentSearches_ariaLabel%",
+	"%webView_bookChapterControl_bookNotInProject%",
+	"%webView_bookChapterControl_bookNotInProjectDescription%",
 	"%webView_bookChapterControl_selectChapter%",
-	"%webView_bookChapterControl_selectVerse%"
+	"%webView_bookChapterControl_selectVerse%",
+	"%webView_bookChapterControl_showMoreBooks%",
+	"%webView_bookChapterControl_showProjectBooksOnly%"
 ];
 /** Type definition for the localized strings used in the BookChapterControl component */
 export type BookChapterControlLocalizedStrings = {
@@ -94,6 +98,19 @@ export type BookChapterControlProps = {
 	className?: string;
 	/** Callback to retrieve book IDs that are available in the current context */
 	getActiveBookIds?: () => string[];
+	/**
+	 * Optional callback returning book ids that exist outside the active project — e.g. books present
+	 * in an open resource. They are hidden from the default list, revealed by the "show more books"
+	 * control, and always searchable; those not also returned by `getActiveBookIds` render dimmed but
+	 * remain selectable.
+	 *
+	 * Ignored unless `getActiveBookIds` is also passed: without a project list the control already
+	 * offers the whole canon, so there is nothing left for this to add.
+	 *
+	 * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+	 * updated every render
+	 */
+	getAdditionalBookIds?: () => string[];
 	/**
 	 * Optional map of localized book IDs/short names and full names. The key is the standard book ID
 	 * (e.g., "2CH"), the value contains a localized version of the ID and related book name (e.g. {
@@ -214,7 +231,7 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  */
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, showTriggerChevron, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, shrinkStep: shrinkStepOverride, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, getAdditionalBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, showTriggerChevron, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, shrinkStep: shrinkStepOverride, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -3991,11 +4008,9 @@ export declare function useShrinkStepValue(): number;
  * Z-index for elements that need to appear above rc-dock floating tabs and potential modals (~200)
  * — the menubar, and every `PopoverContent`.
  *
- * This value was 250 originally, which put it below the overlay, modal, and tooltip layers where a
- * popover belongs. Raising it to 600 lifted popovers above ALL of them without moving anything that
- * was pinned relative to it, which is why content portalled out of a popover now needs
- * {@link Z_INDEX_ABOVE_POPOVER} to stay visible. Two consequences of that jump are still unresolved
- * and are deliberately not papered over here: a tooltip triggered from inside a popover
+ * At 600 this sits above the overlay, modal, and tooltip layers, which is why content portalled
+ * out of a popover needs {@link Z_INDEX_ABOVE_POPOVER} to stay visible. Two consequences are
+ * unresolved and deliberately not papered over here: a tooltip triggered from inside a popover
  * ({@link Z_INDEX_TOOLTIP}, 550) renders BEHIND it, and a popover renders OVER a modal dialog
  * ({@link Z_INDEX_MODAL}, 500). Both want the scale re-ordered rather than another constant raised.
  */

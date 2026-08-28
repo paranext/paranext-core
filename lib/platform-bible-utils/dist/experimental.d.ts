@@ -10,6 +10,18 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
  */
 export declare const BOOKS_PRESENT_DEFAULT = "";
 /**
+ * Book ids for all books that are not considered obsolete in the SIL Canon library, in canonical
+ * order.
+ *
+ * The list to fall back on when a project cannot say which books it has (see
+ * {@link getBookIdsFromBooksPresent}). It lives here rather than beside the book-picking UI because
+ * the navigation commands that share it run in the main process, which cannot import a React
+ * library.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const ALL_BOOK_IDS: readonly string[];
+/**
  * Converts a `platformScripture.booksPresent` flag string ('1' per present book, indexed by
  * canonical book number) into the list of present book ids
  *
@@ -145,7 +157,7 @@ export type ScriptureBounds = {
  * @returns The closest present book id in that direction, or `undefined` if none exists
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function findAdjacentPresentBook(book: string, availableBooks: string[], direction: "next" | "previous"): string | undefined;
+export declare function findAdjacentPresentBook(book: string, availableBooks: readonly string[], direction: "next" | "previous"): string | undefined;
 /**
  * Previous chapter (verse 1), rolling across book boundaries. Steps back one chapter within the
  * current book when it is present and not at chapter 1; otherwise — at chapter 1, or when the
@@ -163,7 +175,7 @@ export declare function findAdjacentPresentBook(book: string, availableBooks: st
  * @returns The previous-chapter reference, or `undefined` if there is nowhere before it to go
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getPreviousChapterRef(scrRef: SerializedVerseRef, availableBooks: string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
+export declare function getPreviousChapterRef(scrRef: SerializedVerseRef, availableBooks: readonly string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
 /**
  * Next chapter (verse 1), rolling across book boundaries. Steps forward one chapter within the
  * current book when it is present and not at its last chapter; otherwise — at the last chapter, or
@@ -181,7 +193,7 @@ export declare function getPreviousChapterRef(scrRef: SerializedVerseRef, availa
  * @returns The next-chapter reference, or `undefined` if there is nowhere after it to go
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getNextChapterRef(scrRef: SerializedVerseRef, availableBooks: string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
+export declare function getNextChapterRef(scrRef: SerializedVerseRef, availableBooks: readonly string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
 /**
  * Previous book (chapter 1 verse 1): the closest previous present book, skipping absent books.
  * `scrRef.book` need not be present. Returns `undefined` when there is no present book before it.
@@ -194,7 +206,7 @@ export declare function getNextChapterRef(scrRef: SerializedVerseRef, availableB
  * @returns Chapter 1 verse 1 of the closest previous present book, or `undefined` if none
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getPreviousBookRef(scrRef: SerializedVerseRef, availableBooks: string[]): SerializedVerseRef | undefined;
+export declare function getPreviousBookRef(scrRef: SerializedVerseRef, availableBooks: readonly string[]): SerializedVerseRef | undefined;
 /**
  * Next book (chapter 1 verse 1): the closest next present book, skipping absent books.
  * `scrRef.book` need not be present. Returns `undefined` when there is no present book after it.
@@ -204,7 +216,7 @@ export declare function getPreviousBookRef(scrRef: SerializedVerseRef, available
  * @returns Chapter 1 verse 1 of the closest next present book, or `undefined` if none
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getNextBookRef(scrRef: SerializedVerseRef, availableBooks: string[]): SerializedVerseRef | undefined;
+export declare function getNextBookRef(scrRef: SerializedVerseRef, availableBooks: readonly string[]): SerializedVerseRef | undefined;
 /**
  * Previous verse, matching Paratext 9 (`SIL.Scripture.VerseRef.PreviousVerse`) with books-present
  * awareness. Decrements within the chapter; from chapter 1 verse 1 goes to verse 0 (P9 assumes
@@ -228,7 +240,7 @@ export declare function getNextBookRef(scrRef: SerializedVerseRef, availableBook
  * @returns The previous-verse reference, or `undefined` if there is nowhere before it to go
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getPreviousVerseRef(scrRef: SerializedVerseRef, availableBooks?: string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
+export declare function getPreviousVerseRef(scrRef: SerializedVerseRef, availableBooks?: readonly string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
 /**
  * Next verse, matching Paratext 9 (`SIL.Scripture.VerseRef.NextVerse`) with books-present
  * awareness. Increments within the chapter until the last verse, then rolls to the next chapter's
@@ -250,7 +262,7 @@ export declare function getPreviousVerseRef(scrRef: SerializedVerseRef, availabl
  * @returns The next-verse reference, or `undefined` if there is nowhere after it to go
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getNextVerseRef(scrRef: SerializedVerseRef, availableBooks?: string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
+export declare function getNextVerseRef(scrRef: SerializedVerseRef, availableBooks?: readonly string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
 /**
  * Resolve a physical arrow/bracket navigation direction to the logical reference-history direction
  * for the current UI layout direction. In LTR the left key goes back and the right key goes
@@ -266,5 +278,38 @@ export declare function getNextVerseRef(scrRef: SerializedVerseRef, availableBoo
  * @returns `'back'` or `'forward'` — the logical history direction the key should navigate
  */
 export declare function resolveReferenceHistoryDirection(physicalDirection: "left" | "right", interfaceDirection: "ltr" | "rtl"): "back" | "forward";
+/**
+ * Web view state key under which a web view declares the project ids whose scripture it displays
+ * beyond its own `projectId`.
+ *
+ * A web view that shows text from several projects at once — the Scripture Text Grid is the
+ * motivating case — is a single web view in the dock layout, so its members are invisible to
+ * anything reading open web view definitions. Declaring them here lets global navigation UI (the
+ * toolbar's book/chapter/verse control) offer those projects' books without knowing what the view
+ * is or how it chose them. The declaring view owns the resolution; readers just union the lists.
+ *
+ * Values written here MUST pass {@link isNavigableProjectIds}: installed project ids, not resource
+ * reference ids or DBL entry UIDs, since readers use them to open project data providers.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY = "navigableProjectIds";
+/**
+ * Narrows a value read from web view state to the shape
+ * {@link NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY} promises.
+ *
+ * Web view state is `Record<string, unknown>` written by whichever view owns it and persisted into
+ * saved layouts, so a reader can encounter a value from an older build or a buggy writer. Guard, do
+ * not assume.
+ *
+ * Checks SHAPE ONLY. A string that passes is not thereby a usable project id — an empty string, or
+ * an id whose project has since been removed, both pass. Readers open project data providers from
+ * these values, so validating individual ids stays the reader's job.
+ *
+ * @param value The raw value read from a web view's state
+ * @returns Whether `value` is an array of strings
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function isNavigableProjectIds(value: unknown): value is string[];
 
 export {};

@@ -111,7 +111,8 @@
     "typecheck:platform-bible-utils": "cd lib/platform-bible-utils && npm run typecheck",
     "unlink-dev-packages": "ts-node .erb/scripts/unlink-dev-packages.ts",
     "utils:link": "yalc link @eten-tech-foundation/scripture-utilities --no-pure",
-    "utils:unlink": "yalc remove @eten-tech-foundation/scripture-utilities && npm i --ignore-scripts"
+    "utils:unlink": "yalc remove @eten-tech-foundation/scripture-utilities && npm i --ignore-scripts",
+    "verify:testing-guide": "node .claude/scripts/verify-testing-guide-example.mjs"
   },
   "lint-staged": {
     "cspell.json": [
@@ -121,7 +122,8 @@
     "*.{cjs,mjs,js,jsx,cts,mts,ts,tsx}": ["prettier --write --ignore-path .prettierignorerun"],
     "!(cspell).json": ["prettier --parser json --write --ignore-path .prettierignorerun"],
     "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
-    "*.{html,md,yml}": ["prettier --single-quote --write --ignore-path .prettierignorerun"]
+    "*.{html,md,yml}": ["prettier --single-quote --write --ignore-path .prettierignorerun"],
+    ".context/standards/Testing-Guide.md": ["npm run verify:testing-guide --"]
   },
   "browserslist": ["extends browserslist-config-detect-electron"],
   "dependencies": {

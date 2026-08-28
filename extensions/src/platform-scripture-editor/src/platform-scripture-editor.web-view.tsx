@@ -45,6 +45,7 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
+  BOOK_CHAPTER_CONTROL_STRING_KEYS,
   BookChapterControl,
   Button,
   COMMENT_EDITOR_STRING_KEYS,
@@ -124,6 +125,7 @@ import {
   BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
   type ManageBooksDisabledReason,
 } from './book-not-available-view.component';
+import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import {
   ShareLayoutButton,
   SHARE_LAYOUT_BUTTON_STRING_KEYS,
@@ -155,7 +157,11 @@ import {
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
   isChapterBlank,
+  isMissingBookError,
+  isMissingBookInfoOnScreen,
+  isOverrunProjectIdParse,
   openCommentListAndSelectThreadSafe,
+  parseMissingBookError,
   resolveAddChapterNumberClick,
   resolveViewTypeForInterfaceMode,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -310,6 +316,10 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // Consumed by the character-marker bar's removal action, which this file does not
   // call directly.
   ...REMOVE_CHARACTER_MARKER_STRING_KEYS,
+  // Read only by the BookChapterControl this web view mounts in Power mode — its section headings,
+  // recent-searches labels, and the show-more-books/not-in-project strings that appear once a
+  // book outside this project is reachable.
+  ...BOOK_CHAPTER_CONTROL_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
@@ -440,9 +450,6 @@ const getViewOptionsForType = (
   if (viewType === 'markers') return { ...paragraphStructure, noteMode: 'expanded' };
   return paragraphStructure;
 };
-
-// This regex is connected directly to the exception message within MissingBookException.cs
-const bookNotFoundRegex = /Book number \d+ not found in project/;
 
 // This regex is connected directly to the exception message within PermissionsException.cs
 const PERMISSIONS_EXCEPTION_REGEX = /Permissions exception for projectId/;
@@ -2505,14 +2512,87 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // are not deeply equal so we can tell when the PDP finished processing our latest changes sent
     useMemo(() => ({ whichUpdates: '*' }), []),
   );
-  // Handle a PlatformError if one comes in instead of project text
+  // What the failure in hand IS, independent of what is on screen. Parsed once per failure, and
+  // deliberately not keyed on the reference: the same held error is re-read on every navigation, and
+  // re-parsing (and re-logging) it each time is pure waste.
+  const usjFromPdpError = useMemo(() => {
+    if (!isPlatformError(usjFromPdpPossiblyError)) return undefined;
+    return {
+      message: getErrorMessage(usjFromPdpPossiblyError),
+      isMissingBook: isMissingBookError(usjFromPdpPossiblyError),
+      identities: parseMissingBookError(usjFromPdpPossiblyError),
+    };
+  }, [usjFromPdpPossiblyError]);
+
+  // Handle a PlatformError if one comes in instead of project text.
+  //
+  // "Book not in this project" is decided by comparing what the failure NAMES against the book and
+  // project on screen, not by the failure's mere presence. The hook keeps serving the previous
+  // selector's result until the new subscription's first update lands, so a bare predicate would
+  // report a missing book for one committed render after the user navigates to a book the project
+  // does have.
+  //
+  // Pure: the diagnostics this decision would otherwise emit live in the effect below, so that a
+  // render pass — or React's double-invocation of memos in development — cannot write to the log.
   const [usjFromPdp, bookExists] = useMemo(() => {
     if (!isPlatformError(usjFromPdpPossiblyError)) return [usjFromPdpPossiblyError, true];
+    // Unreachable while `usjFromPdpError` is derived from this same value; keeps the narrowing
+    // above and the memo below reading from one source rather than re-testing the error shape.
+    if (!usjFromPdpError) return [defaultUsj, true];
 
-    const errorMessage = getErrorMessage(usjFromPdpPossiblyError);
-    logger.error(`Error getting USJ from PDP: ${errorMessage}`);
-    return [defaultUsj, !bookNotFoundRegex.test(errorMessage)];
-  }, [usjFromPdpPossiblyError]);
+    // The comparison needs both identities parsed out of the message. If that wording ever drifts
+    // so they cannot be, fall back to detection alone rather than to `bookExists`: a STALE failure
+    // always parses — it names some other book or project — so an unparseable one cannot be stale.
+    // This gate has no neutral outcome, and the alternative is the worse one; `bookExists` true
+    // with USJ that never arrives leaves this editor on an indefinite spinner.
+    const isBookMissingHere =
+      isMissingBookInfoOnScreen({
+        missingBook: usjFromPdpError.identities,
+        currentBookNum,
+        projectId,
+      }) ||
+      (usjFromPdpError.isMissingBook && !usjFromPdpError.identities);
+
+    return [defaultUsj, !isBookMissingHere];
+  }, [usjFromPdpError, usjFromPdpPossiblyError, currentBookNum, projectId]);
+
+  // A book the project simply lacks is ordinary navigation rather than a fault, so it is logged at
+  // `debug`, which packaged builds drop (`global-this.model.ts` runs at `info` when packaged). That
+  // is deliberate: it fires on every navigation into a missing book, and the quiet path is the
+  // CORRECT one — if detection ever broke, the same failure would fall to `error` and stay loud in
+  // production. Keyed on the failure alone so that paging through books while one sticky failure is
+  // held (a permissions error, an offline PDP) writes one line rather than one per book.
+  useEffect(() => {
+    if (!usjFromPdpError) return;
+    if (usjFromPdpError.isMissingBook)
+      logger.debug(`Book not found in project: ${usjFromPdpError.message}`);
+    else logger.error(`Error getting USJ from PDP: ${usjFromPdpError.message}`);
+  }, [usjFromPdpError]);
+
+  // A message that parses into the WRONG project is the one shape neither branch of `bookExists`
+  // covers: the fallback needs the parse to FAIL, so a mis-parse leaves `bookExists` true with USJ
+  // that never arrives — an indefinite spinner rather than the missing-book message. The known
+  // trigger is a trailing sentence on the same line, because the identity capture runs greedily to
+  // the terminal period so that project ids containing `.` survive; narrowing it only trades one
+  // break for the other, so this warns rather than changing the parse.
+  //
+  // `isOverrunProjectIdParse` is what keeps this off the common paths. Both ordinary staleness
+  // (which names the book the user just left) and switching projects at the same reference (which
+  // names a genuinely different project) are quiet, because only an over-run capture starts with the
+  // id actually on screen.
+  // TODO(PT-4416): Replace message matching with a structured error carrying the book and project.
+  useEffect(() => {
+    const identities = usjFromPdpError?.identities;
+    if (
+      !identities ||
+      identities.bookNum !== currentBookNum ||
+      !isOverrunProjectIdParse(identities.projectId, projectId)
+    )
+      return;
+    logger.warn(
+      `Book-not-found error names project "${identities.projectId}" but this editor is showing "${projectId}", so the message cannot be trusted to describe the book on screen. If the editor never finishes loading, suspect the exception's wording: ${usjFromPdpError.message}`,
+    );
+  }, [usjFromPdpError, currentBookNum, projectId]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
   // Monotonic count of PDP deliveries observed — the failed-save retry gate's other half.
@@ -2629,20 +2709,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // `verseNum > 1` would land scrolled to the top instead of at that verse. Gated on
   // `pendingScaffoldInsertRef` so ordinary chapter navigation away from a blank chapter, a
   // remote/collaborative update landing content, or a Send/Receive sync completing (all of which can
-  // also flip `isBlankChapter` to `false`) do not steal focus or scroll. Also gated on
-  // `!isPowerMode`: the empty-chapter-view feature (and this button) is Simple-mode only, so the
-  // button can't render in Power mode today — the guard is currently redundant but documents that
-  // invariant and protects against a future refactor.
+  // also flip `isBlankChapter` to `false`) do not steal focus or scroll.
   useEffect(() => {
     if (isBlankChapter) return;
     // The round trip the in-flight guard above was waiting for has completed, regardless of what
     // caused this transition.
-    if (!isPowerMode && pendingScaffoldInsertRef.current) {
+    if (pendingScaffoldInsertRef.current) {
       scrollToVerse(scrRef);
       editorRef.current?.focus();
     }
     pendingScaffoldInsertRef.current = false;
-  }, [isBlankChapter, isPowerMode, scrRef]);
+  }, [isBlankChapter, scrRef]);
 
   /**
    * Creates a click handler for a comment annotation that opens the comment list and scrolls to the
@@ -3557,9 +3634,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       //     is wrong for someone: a resource reader would briefly get an add-this-book button, or a
       //     project owner would briefly be told their project is a resource.
       // Both hooks serve their default until the real value arrives, which makes the default
-      // indistinguishable from an answer — `isLoading` is the only thing that separates them. The code
-      // this replaced rendered one string for all of these cases, which is why the hazard is new here.
-      // Same class of problem this file guards `CharacterMarkerBarOverlay` against further down.
+      // indistinguishable from an answer — `isLoading` is the only thing that separates them. The
+      // hazard is specific to branching on a setting: a surface that renders one string for every
+      // case has nothing to get wrong while the settings load. Same class of problem this file guards
+      // `CharacterMarkerBarOverlay` against further down.
       if (isInterfaceModeLoading || isIsPublishedLoading) {
         return (
           <div className="tw:flex tw:items-center tw:justify-center tw:h-full">
@@ -3575,11 +3653,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // zero-state, with the Manage books button disabled and a tooltip saying the project is
       // read-only.
       if (isResource) {
+        // Same component the Bible texts, Commentaries, and Model text panels use, so one sentence is
+        // worded, styled, announced, and focus-repaired identically on every surface that can show it.
         return (
-          <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
+          <>
             {workaround}
-            {localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']}
-          </div>
+            <ResourceBookNotAvailable
+              message={
+                localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']
+              }
+              announcementKey={`${projectId}:${scrRef.book}`}
+            />
+          </>
         );
       }
       return (
@@ -3588,6 +3673,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           <BookNotAvailableView
             localizedStrings={localizedStrings}
             isPowerMode={isPowerMode}
+            announcementKey={`${projectId}:${scrRef.book}`}
             manageBooksDisabledReason={manageBooksDisabledReason}
             onOpenManageBooks={() => {
               papi.commands
@@ -3630,7 +3716,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       </TwoStepDeleteTooltipOverlay>
     );
 
-    const showEmptyChapterView = !isPowerMode && isBlankChapter;
+    // Simple mode only. This view REPLACES the editing surface (the subtree below is
+    // `display: none`, which takes it out of both the accessibility tree and the tab order), and the
+    // scaffold button is the only way back in — but `showButton` withholds it for read-only
+    // projects, for `chapterNum: 0` front matter, and transiently while versification loads. In
+    // Power mode, where typing directly into a blank chapter is the expected workflow, that would
+    // turn those cases into dead ends. A Power user sees the ordinary empty editor instead.
+    const showEmptyChapterView = isBlankChapter && !isPowerMode;
 
     return (
       <>
@@ -3639,6 +3731,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           <EmptyChapterView
             localizedStrings={localizedStrings}
             isStructureProtected={isStructureProtected}
+            isResource={isResource}
             showButton={
               !isReadOnlyEffective &&
               lastVersesInCurrentBook !== undefined &&
@@ -3714,6 +3807,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       getEndVerse={getEndVerse}
       recentSearches={recentScriptureRefs}
       onAddRecentSearch={addRecentScriptureRef}
+      localizedStrings={localizedStrings}
     />
   ) : undefined;
 

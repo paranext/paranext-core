@@ -1,0 +1,169 @@
+/**
+ * Helpers shared by the service router suites (`command.`, `notification.`, `web-view.` and
+ * `window.service-router.test.ts`). Each of those mocks `window-state.service` and the network
+ * object service the same way, so the window wiring and the router capture live here rather than
+ * being copied four times and drifting apart.
+ *
+ * The mocks themselves stay in each suite: `vi.mock` factories are hoisted above every import, so
+ * they cannot reach anything this module exports.
+ */
+
+import type { NetworkObjectDetails } from '@shared/models/network-object.model';
+import type { Mock } from 'vitest';
+
+/**
+ * The network object announcements a router's shard index learns windows from.
+ *
+ * An index subscribes once, at module load, so the listeners it registered outlive any one test and
+ * have to be kept somewhere `vi.clearAllMocks()` does not reach — hence plain arrays rather than
+ * the subscribe mocks' recorded calls.
+ */
+export interface ShardAnnouncementListeners {
+  /** Listeners registered against `onDidCreateNetworkObject` */
+  create: ((networkObjectDetails: NetworkObjectDetails) => void)[];
+  /** Listeners registered against `onDidDisposeNetworkObject` */
+  dispose: ((networkObjectId: string) => void)[];
+}
+
+/** The mocked `window-state.service` and network object lookups a service router fans out through */
+export interface RoutingWindowMocks {
+  /** Mock of `getReadyWindowIds`, which reports only the windows a fan-out can get an answer from */
+  getReadyWindowIds: Mock;
+  /**
+   * Mock of `getUnreachableWindowIds`, which reports the tracked windows that were serving requests
+   * and stopped — the ones a fan-out cannot ask but must still account for
+   */
+  getUnreachableWindowIds: Mock;
+  /**
+   * Mock of `getAbandonedWindowIds`, which reports the tracked windows nothing will ever run in
+   * again — the ones a fan-out cannot ask and must stop waiting for
+   */
+  getAbandonedWindowIds: Mock;
+  /** Mock of `networkObjectService.get`, which resolves a window's shard by network object id */
+  networkObjectGet: Mock;
+  /** Where the router's shard index parked its subscriptions, so tests can announce to it */
+  shardAnnouncementListeners: ShardAnnouncementListeners;
+}
+
+/**
+ * Shard ids the last {@link withWindows} announced, so the next call can retract them. A router's
+ * shard index is module state that outlives one test.
+ */
+let announcedShardIds: string[] = [];
+
+/**
+ * The network object id a window's shard is announced under.
+ *
+ * Deliberately unrelated to the generic service name: a router that rebuilt a scoped name from a
+ * window id instead of using what the shard announced would find nothing here.
+ */
+function getShardNetworkObjectId(windowId: number): string {
+  return `shard-of-window-${windowId}`;
+}
+
+/**
+ * Wire the given windows, each serving the shard given for it, and announce each shard the way its
+ * window's renderer does when it registers.
+ *
+ * Neither kind of window listed in `options` can be asked, and their shards are still resolvable
+ * here on purpose: a fan-out that asks one anyway should be visible as a call that was made, not
+ * hidden behind an unresolvable name. What separates them is what the app owes them — see each
+ * option.
+ *
+ * @param mocks The suite's mocked window state and network object lookups
+ * @param shardObjectType Network object type this suite's shards register under
+ * @param shardsByWindowId Shard each window serves, keyed by window ID
+ * @param options.startingWindowIds Windows tracked whose renderer has not registered anything yet —
+ *   the state every window is in from the moment it is shown until its renderer finishes starting.
+ *   Not asked, and NOT unreachable: nothing has ever been opened in them.
+ * @param options.unreachableWindowIds Windows that were serving requests and stopped — a crashed
+ *   renderer, a page being replaced, a window on its way out. Not asked, and unreachable: what they
+ *   had open is still there, and only they could have listed it.
+ * @param options.abandonedWindowIds Windows whose renderer died and will not be reloaded again. Not
+ *   asked, and deliberately NOT unreachable — the real `getUnreachableWindowIds` excludes them,
+ *   because a window nothing is coming back from would otherwise make every fan-out refuse to
+ *   answer for the rest of the session. What was lost with them is reported separately.
+ */
+export function withWindows(
+  mocks: RoutingWindowMocks,
+  shardObjectType: string,
+  shardsByWindowId: Record<number, unknown>,
+  options?: {
+    startingWindowIds?: number[];
+    unreachableWindowIds?: number[];
+    abandonedWindowIds?: number[];
+  },
+): void {
+  const windowIds = Object.keys(shardsByWindowId).map(Number);
+  const startingWindowIds = options?.startingWindowIds ?? [];
+  const unreachableWindowIds = options?.unreachableWindowIds ?? [];
+  const abandonedWindowIds = options?.abandonedWindowIds ?? [];
+  mocks.getReadyWindowIds.mockReturnValue(
+    windowIds.filter(
+      (id) =>
+        !startingWindowIds.includes(id) &&
+        !unreachableWindowIds.includes(id) &&
+        !abandonedWindowIds.includes(id),
+    ),
+  );
+  mocks.getUnreachableWindowIds.mockReturnValue(
+    windowIds.filter((id) => unreachableWindowIds.includes(id)),
+  );
+  mocks.getAbandonedWindowIds.mockReturnValue(
+    windowIds.filter((id) => abandonedWindowIds.includes(id)),
+  );
+  mocks.networkObjectGet.mockImplementation(async (networkObjectId: string) => {
+    const windowId = Number(networkObjectId.split('-').pop());
+    return shardsByWindowId[windowId];
+  });
+
+  const { create, dispose } = mocks.shardAnnouncementListeners;
+  announcedShardIds.forEach((shardId) => dispose.forEach((listener) => listener(shardId)));
+  announcedShardIds = windowIds.map(getShardNetworkObjectId);
+  windowIds.forEach((windowId) => {
+    create.forEach((listener) =>
+      listener({
+        id: getShardNetworkObjectId(windowId),
+        objectType: shardObjectType,
+        functionNames: [],
+        attributes: { windowId },
+      }),
+    );
+  });
+}
+
+/**
+ * Announce that a window's shard went away, the way the platform does when the window hosting it
+ * closes.
+ *
+ * @param mocks The suite's mocked window state and network object lookups
+ * @param windowId Window whose shard is gone
+ */
+export function withoutWindowShard(mocks: RoutingWindowMocks, windowId: number): void {
+  const shardId = getShardNetworkObjectId(windowId);
+  announcedShardIds = announcedShardIds.filter((id) => id !== shardId);
+  mocks.shardAnnouncementListeners.dispose.forEach((listener) => listener(shardId));
+}
+
+/**
+ * Start a service router and hand back the router object it registered under the generic network
+ * object name — the object every consumer of that name actually calls.
+ *
+ * @param networkObjectSet The suite's mock of `networkObjectService.set`
+ * @param startServiceRouter The router's start function
+ */
+export async function getRegisteredRouter<T>(
+  networkObjectSet: Mock,
+  startServiceRouter: () => Promise<void>,
+): Promise<T> {
+  networkObjectSet.mockResolvedValue(undefined);
+  await startServiceRouter();
+  return networkObjectSet.mock.calls[0][1];
+}
+
+/** Let queued work settle — serialized async work lands a microtask or two later */
+export async function settle(): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
