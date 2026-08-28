@@ -11186,6 +11186,9 @@ declare module '@papi/core' {
   export type {
     DirectionFromTab,
     DirectionFromTabAdjacent,
+    FloatLayout,
+    Layout,
+    WindowLayout,
   } from 'shared/models/docking-framework.model';
   export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
   export type {
