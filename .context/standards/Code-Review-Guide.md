@@ -64,9 +64,11 @@ skipped it passed a defect the next stage caught.
 - **Run the control before attributing.** Before a symptom is blamed on a change, check the same
   signal on the base and on unrelated branches. Two occurrences inside one population are not a
   pattern until the population without that change has been looked at, and a wrong attribution
-  sends someone after a defect they did not write.
+  sends someone after a defect they did not write. A control only controls if it reproduces the
+  conditions of the run it is controlling: state what differs between the control and the failing
+  run, and let a matched pair vary the commit or the invocation, never both at once.
 
-- **Verify a premise in code, citing the line, before it reaches a rationale, an ADR or a report.**
+- **Verify a premise in code, citing the file and symbol, before it reaches a rationale, an ADR or a report.**
   Grep the type definitions before accepting "cannot be done" as the reason for a workaround. A
   false premise costs far more to remove once it has been repeated across a design note, a decision
   log and a commit message than it costs to check once.
