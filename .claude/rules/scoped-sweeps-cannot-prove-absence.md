@@ -26,14 +26,11 @@ claims and should not be written the same way.
 
 ## A related trap: a generated artifact cannot show what it is not generated from
 
-`lib/papi-dts/papi.d.ts` is generated from the **type** surface. A regenerated-types diff therefore
-cannot reveal a missing wire marker: a command, network object, data provider or network event
-registered without `'x-experimental': true` produces a byte-identical `papi.d.ts`. Verify the wire
-marker by reading the registration's documentation object, or the live OpenRPC document at
-`rpc.discover` — never by inferring it from the type surface. See
+A generated artifact reflects only the surface it was generated from, so a clean diff of it cannot
+prove the absence of something that surface doesn't encode. See
 [Paranext-Core-Patterns.md § Experimental APIs](../../.context/standards/Paranext-Core-Patterns.md#experimental-apis).
 
 ## Tooling note
 
-`grep` on the team's development machines is **ugrep**, not GNU grep. Do not assume flag semantics
-match GNU's; check when a flag matters to the result.
+As of 2026-08, `grep` on the team's development machines is **ugrep**, not GNU grep. Do not assume
+flag semantics match GNU's; check when a flag matters to the result.
