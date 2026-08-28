@@ -25,6 +25,19 @@
 // #region Public types
 
 /** One of the wire-visible C# registration shapes this scanner recognises. */
+/**
+ * Order two strings by UTF-16 code unit.
+ *
+ * Deliberately not `localeCompare`: without an explicit locale that consults the host's locale and
+ * ICU build, so the same input sorts differently on different platforms. This artifact is
+ * regenerated on Linux, macOS and Windows and compared byte for byte, so the ordering has to come
+ * from the strings alone.
+ */
+export function compareCodeUnits(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
 export type CSharpRegistrationCategory =
   | 'networkObject'
   | 'dataProvider'
@@ -1101,17 +1114,17 @@ function scanNetworkEventRegistrationCalls(
 
 function compareCSharpStatic(a: CSharpStaticRegistration, b: CSharpStaticRegistration): number {
   return (
-    a.category.localeCompare(b.category) ||
-    a.name.localeCompare(b.name) ||
-    a.file.localeCompare(b.file)
+    compareCodeUnits(a.category, b.category) ||
+    compareCodeUnits(a.name, b.name) ||
+    compareCodeUnits(a.file, b.file)
   );
 }
 
 function compareCSharpDynamic(a: CSharpDynamicRegistration, b: CSharpDynamicRegistration): number {
   return (
-    a.category.localeCompare(b.category) ||
-    a.file.localeCompare(b.file) ||
-    a.expression.localeCompare(b.expression)
+    compareCodeUnits(a.category, b.category) ||
+    compareCodeUnits(a.file, b.file) ||
+    compareCodeUnits(a.expression, b.expression)
   );
 }
 

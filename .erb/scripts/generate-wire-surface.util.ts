@@ -17,6 +17,7 @@
 import * as path from 'path';
 import * as ts from 'typescript';
 import {
+  compareCodeUnits,
   CSHARP_EXCLUDED_PATTERNS,
   CSHARP_RECOGNIZED_PATTERNS,
   scanCSharpFiles,
@@ -936,19 +937,19 @@ export function findStaleLivenessAnnotations(
 
 function compareStaticRegistrations(a: StaticRegistration, b: StaticRegistration): number {
   return (
-    a.language.localeCompare(b.language) ||
-    a.category.localeCompare(b.category) ||
-    a.name.localeCompare(b.name) ||
-    a.file.localeCompare(b.file)
+    compareCodeUnits(a.language, b.language) ||
+    compareCodeUnits(a.category, b.category) ||
+    compareCodeUnits(a.name, b.name) ||
+    compareCodeUnits(a.file, b.file)
   );
 }
 
 function compareDynamicRegistrations(a: DynamicRegistration, b: DynamicRegistration): number {
   return (
-    a.language.localeCompare(b.language) ||
-    a.category.localeCompare(b.category) ||
-    a.file.localeCompare(b.file) ||
-    a.expression.localeCompare(b.expression)
+    compareCodeUnits(a.language, b.language) ||
+    compareCodeUnits(a.category, b.category) ||
+    compareCodeUnits(a.file, b.file) ||
+    compareCodeUnits(a.expression, b.expression)
   );
 }
 
@@ -1004,7 +1005,7 @@ function sortKeysDeep(value: unknown): unknown {
   ) {
     const sorted: Record<string, unknown> = {};
     Object.entries(value)
-      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+      .sort(([keyA], [keyB]) => compareCodeUnits(keyA, keyB))
       .forEach(([key, propertyValue]) => {
         sorted[key] = sortKeysDeep(propertyValue);
       });

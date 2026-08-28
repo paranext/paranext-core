@@ -232,6 +232,16 @@
     {
       "category": "dataProvider",
       "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "c-sharp/Projects/ParatextProjectDataProvider.cs",
+      "language": "csharp",
+      "name": "ParatextProjectDataProvider",
+      "registeredVia": "DataProvider.GetNetworkObjectDocumentation override"
+    },
+    {
+      "category": "dataProvider",
+      "docsStaticallyResolved": true,
       "documented": false,
       "experimental": false,
       "file": "c-sharp/NetworkObjects/TimeDataProvider.cs",
@@ -248,16 +258,6 @@
       "language": "csharp",
       "name": "dotNetCheckRunner",
       "registeredVia": "DataProvider(name, papiClient) constructor"
-    },
-    {
-      "category": "dataProvider",
-      "docsStaticallyResolved": true,
-      "documented": true,
-      "experimental": false,
-      "file": "c-sharp/Projects/ParatextProjectDataProvider.cs",
-      "language": "csharp",
-      "name": "ParatextProjectDataProvider",
-      "registeredVia": "DataProvider.GetNetworkObjectDocumentation override"
     },
     {
       "category": "dataProvider",
@@ -1570,9 +1570,9 @@
       "docsStaticallyResolved": true,
       "documented": false,
       "experimental": false,
-      "file": "src/extension-host/services/database.service-host.ts",
+      "file": "src/main/services/data-protection.service-host.ts",
       "language": "typescript",
-      "name": "DatabaseService",
+      "name": "DataProtectionService",
       "registeredVia": "networkObjectService.set"
     },
     {
@@ -1580,9 +1580,9 @@
       "docsStaticallyResolved": true,
       "documented": false,
       "experimental": false,
-      "file": "src/main/services/data-protection.service-host.ts",
+      "file": "src/extension-host/services/database.service-host.ts",
       "language": "typescript",
-      "name": "DataProtectionService",
+      "name": "DatabaseService",
       "registeredVia": "networkObjectService.set"
     },
     {
@@ -1638,6 +1638,16 @@
     {
       "category": "networkObject",
       "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/web-view.service-router.ts",
+      "language": "typescript",
+      "name": "WebViewService",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
       "documented": false,
       "experimental": false,
       "file": "src/extension-host/extension-host.ts",
@@ -1657,16 +1667,6 @@
       "liveness": "transient",
       "livenessReason": "Self-disposed 20 seconds after registration (setTimeout(testMainDisposer.dispose, 20000) in src/main/main.ts) -- waiting longer only makes it less likely to still be live.",
       "name": "testMain",
-      "registeredVia": "networkObjectService.set"
-    },
-    {
-      "category": "networkObject",
-      "docsStaticallyResolved": true,
-      "documented": true,
-      "experimental": true,
-      "file": "src/main/services/web-view.service-router.ts",
-      "language": "typescript",
-      "name": "WebViewService",
       "registeredVia": "networkObjectService.set"
     },
     {
