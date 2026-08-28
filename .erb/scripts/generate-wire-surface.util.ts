@@ -50,7 +50,8 @@ export type RegisteredVia =
   | 'webViewProviders.register (deprecated alias)'
   | 'registerProjectDataProviderEngineFactory'
   | 'createNetworkEventEmitterAsync'
-  | 'createBufferedNetworkEventEmitter';
+  | 'createBufferedNetworkEventEmitter'
+  | 'createCoreMultiSourceEventEmitter';
 
 /**
  * A registration whose name resolved to a literal string value.
@@ -140,6 +141,10 @@ const RECOGNIZED_PATTERNS: string[] = [
     '-> category "pdpFactory"',
   'createNetworkEventEmitterAsync(eventType, documentation?) and ' +
     'createBufferedNetworkEventEmitter(eventType, documentation?, options?) -> category "networkEvent"',
+  'createCoreMultiSourceEventEmitter(eventType, documentation?) -> category "networkEvent"; a core-' +
+    'internal pre-approved multi-source emitter (src/shared/services/network.service.ts) that is not ' +
+    'exposed on papiNetworkService, so it is matched by its own call name rather than folded into the ' +
+    'createNetworkEventEmitterAsync family above',
 ];
 
 const EXCLUDED_PATTERNS: string[] = [
@@ -697,6 +702,13 @@ function matchCall(call: ts.CallExpression): CallMatch | undefined {
         nameArgIndex: 0,
         docsArgIndex: 1,
         registeredVia: 'createBufferedNetworkEventEmitter',
+      };
+    case 'createCoreMultiSourceEventEmitter':
+      return {
+        category: 'networkEvent',
+        nameArgIndex: 0,
+        docsArgIndex: 1,
+        registeredVia: 'createCoreMultiSourceEventEmitter',
       };
     case 'set':
       if (objectName === 'networkObjectService') {

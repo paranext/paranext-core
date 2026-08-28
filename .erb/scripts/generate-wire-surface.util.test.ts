@@ -52,6 +52,7 @@ describe('generateWireSurfaceDocument: recognised shapes', () => {
 
         networkService.createNetworkEventEmitterAsync('test.testEvent');
         networkService.createBufferedNetworkEventEmitter('test.testBufferedEvent');
+        networkService.createCoreMultiSourceEventEmitter('test.testMultiSourceEvent');
 
         // Deprecated sync emitter: must never produce an entry.
         networkService.createNetworkEventEmitter('test.syncEventNeverRecorded');
@@ -123,6 +124,13 @@ describe('generateWireSurfaceDocument: recognised shapes', () => {
     expect(findRegistration(document.registrations, 'test.testBufferedEvent')).toMatchObject({
       category: 'networkEvent',
       registeredVia: 'createBufferedNetworkEventEmitter',
+    });
+  });
+
+  it('finds createCoreMultiSourceEventEmitter, the core-internal pre-approved multi-source emitter', () => {
+    expect(findRegistration(document.registrations, 'test.testMultiSourceEvent')).toMatchObject({
+      category: 'networkEvent',
+      registeredVia: 'createCoreMultiSourceEventEmitter',
     });
   });
 
@@ -274,6 +282,34 @@ describe('generateWireSurfaceDocument: documentation and the x-experimental flag
       documented: true,
       docsStaticallyResolved: false,
       experimental: false,
+    });
+  });
+
+  it('captures notification.x-experimental for a createCoreMultiSourceEventEmitter call (the shared-store:change shape)', () => {
+    const files: VirtualFile[] = [
+      {
+        path: 'src/fixture-docs-multi-source-event.ts',
+        text: `
+          const STORE_CHANGE_EVENT_DOCS = {
+            notification: {
+              'x-experimental': true,
+              summary: 'Emitted when a value in the shared store changes.',
+              params: [
+                { name: 'change', required: true, summary: 'The changed key and new value.', schema: { type: 'object' } },
+              ],
+            },
+          };
+          networkService.createCoreMultiSourceEventEmitter('shared-store:change', STORE_CHANGE_EVENT_DOCS);
+        `,
+      },
+    ];
+    const document = generateWireSurfaceDocument(files);
+    expect(findRegistration(document.registrations, 'shared-store:change')).toMatchObject({
+      category: 'networkEvent',
+      registeredVia: 'createCoreMultiSourceEventEmitter',
+      documented: true,
+      docsStaticallyResolved: true,
+      experimental: true,
     });
   });
 
@@ -565,6 +601,7 @@ describe('generateWireSurfaceDocument: header content', () => {
       'registerProjectDataProviderEngineFactory',
       'createNetworkEventEmitterAsync',
       'createBufferedNetworkEventEmitter',
+      'createCoreMultiSourceEventEmitter',
       'RegisterNetworkObjectAsync',
       'RegisterRequestHandlerAsync',
     ].forEach((pattern) => expect(patterns).toContain(pattern));
