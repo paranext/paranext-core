@@ -102,7 +102,7 @@ function sortLanguageEntries<T>(entries: [string, T][]): [string, T][] {
  * fixing those Badge variants) is worth its own change, since it touches every consumer. Until
  * then, prefer extending this rather than copying the class string.
  *
- * TODO(PT-XXXX): promote a themed, exported indicator into `platform-bible-react` and fix the
+ * TODO(PT-4493): promote a themed, exported indicator into `platform-bible-react` and fix the
  * `Badge` `blueIndicator`/`mutedIndicator` variants, then delete this local copy.
  */
 function ReminderDot({ testId, className }: { testId: string; className?: string }) {
