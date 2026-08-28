@@ -475,18 +475,24 @@ async function loadLayoutInWindow(simpleLayout: LayoutInfo) {
 }
 
 /**
- * Answer `windowLayout:get` with the given response and `windowLayout:emptied` with `closing`;
+ * Answer `windowLayout:get` with the given response and `windowLayout:emptied` with `open-home`;
  * every other request resolves undefined.
  *
  * The emptied answer matters even for tests that are not about emptiness: several of them load a
  * layout with no tabs in it, and a report the shard cannot read an action out of is a failed
  * attempt — which puts the report into a retry loop that runs for seconds, fire-and-forget, past
  * the end of the test that started it.
+ *
+ * `open-home` is what the main process actually answers for the windows these tests stand up — a
+ * window that is born empty, or is the last one standing, or holds the primary role. `closing` is
+ * reached only for a non-primary window emptied by removal while others remain, so a test that
+ * wants it must say so: answering it here would latch every window as closing and make each later
+ * dock operation throw.
  */
 function respondToGetLayout(response: unknown) {
   mocks.networkRequest.mockImplementation(async (requestType: string) => {
     if (requestType === 'windowLayout:get') return response;
-    if (requestType === 'windowLayout:emptied') return { action: 'closing' };
+    if (requestType === 'windowLayout:emptied') return { action: 'open-home' };
     return undefined;
   });
 }
@@ -2122,7 +2128,13 @@ describe('a window the main process has told is closing', () => {
     mocks.settingsGet.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? 'power' : false,
     );
-    respondToGetLayout({ kind: 'empty' });
+    // `closing` rather than the default `open-home`: these tests are about the latch that answer
+    // sets, so this is the one place that has to ask for it.
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') return { kind: 'empty' };
+      if (requestType === 'windowLayout:emptied') return { action: 'closing' };
+      return undefined;
+    });
     const module = await import('@renderer/services/web-view.service-shard');
     await module.startWebViewServiceShard();
     const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
