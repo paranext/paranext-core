@@ -225,8 +225,22 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
       expect(css).toMatch(/counter\(crossref,\s*cross-ref-callers\)/);
       // The footnote half must stay pinned too — a re-sync dropping the scoped footnote rules
       // while keeping the crossref ones would leave nothing incrementing `caller`.
-      expect(css).toMatch(/\.note\.usfm_f\s+\.immutable-note-caller\[data-caller='\+'\]/);
+      expect(css).toMatch(
+        /\.note\[data-note-kind='footnote'\]\s+\.immutable-note-caller\[data-caller='\+'\]/,
+      );
       expect(css).toMatch(/counter\(caller,\s*note-callers\)/);
+      // Which sequence a note uses follows the editor's stamp, not an enumeration of marker
+      // classes here: the classification is a PREFIX rule (`f*`/`ef*` are footnotes, everything
+      // else is a cross-reference), so an enumeration left every other note marker — a custom
+      // `\zfn`, say — matching neither arm and showing no caller at all.
+      expect(css).toMatch(
+        /\.note\[data-note-kind='crossref'\]\s+\.immutable-note-caller\[data-caller='\+'\]/,
+      );
+      expect(declarations).not.toMatch(/^\.note\.usfm_f\s/m);
+      // An editor build that predates the stamping still shows its callers.
+      expect(css).toMatch(
+        /\.note:not\(\[data-note-kind\]\)\s+\.immutable-note-caller\[data-caller='\+'\]/,
+      );
       // The generic rules the scoped versions replaced must not return — a copy that re-adds them
       // alongside the scoped ones would double-increment the footnote counter.
       expect(declarations).not.toMatch(/^\.immutable-note-caller\[data-caller='\+'\]\s*\{/m);
