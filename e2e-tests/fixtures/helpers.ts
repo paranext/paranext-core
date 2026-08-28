@@ -1015,12 +1015,84 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
 }
 
 /**
+ * WORKAROUND for an app-level race, not a fix for it. Click past the first-run gate (PT-4175) if it
+ * is still showing despite `platform.firstRunComplete` being pinned before launch.
+ *
+ * The pin is a file write that lands before Electron starts, but the renderer's own read of it at
+ * boot — `src/renderer/services/first-run-store.ts`'s `resolveInternal()` — is a separate, later
+ * async round-trip, and on a slow/cold CI runner (observed on Windows, occasionally macOS) that
+ * round-trip can resolve to `undefined` rather than `true` if it lands before the settings service
+ * has finished loading the file. When that happens, the app falls back to treating first-run as
+ * incomplete, probes local registration validity (which reads as invalid on a CI machine with no
+ * real Paratext registration), and renders the gate — a full-screen modal that aria-hides the rest
+ * of the app and intercepts pointer events. A test proceeding past it then fails on whatever it
+ * clicks next with a generic timeout that gives no hint the gate is why: the locator it clicked can
+ * even resolve to a real, visible, enabled element (the app underneath is still there) while
+ * Playwright's actionability check keeps failing because the gate's overlay is covering the click
+ * point.
+ *
+ * The gate — `data-testid="first-run-dialog"` — mounts in the SAME initial React commit as
+ * `dock-layout` (both are siblings rendered by `Main()`), showing a `'loading'` spinner until
+ * resolution settles, so waiting for it to become not-visible is meaningful from the very first
+ * paint, not a check that can spuriously pass before React has rendered anything. `dock-layout`
+ * being merely _attached_ is NOT that signal: it mounts regardless of the gate's status (confirmed
+ * from a CI trace where dock-layout attached successfully while the gate was still blocking
+ * clicks), which is why this checks the gate directly rather than piggy-backing on the earlier
+ * dock-layout wait above.
+ *
+ * This races the gate becoming not-visible (the normal path — resolution succeeds quickly, the
+ * gate's brief `'loading'` flash clears) against its own "continue without finishing setup" button
+ * appearing (which the app itself reveals once its startup probe runs long —
+ * `REGISTRATION_SLOW_REVEAL_MS` in `first-run-overlay.component.tsx`) and clicks that button if the
+ * gate wins. That is the app's own intended remedy for a slow/stuck resolve, so using it here is
+ * low-risk — but it treats the SYMPTOM. The real fix is closing the read race in
+ * `resolveInternal()` itself, which is app onboarding code used by real users on slow machines, not
+ * just CI, and belongs in its own reviewed change, not a tooling branch. If the warning below
+ * starts firing often, that is the signal to do that work.
+ *
+ * Deliberately loud when it fires, with a stable, greppable tag: this is called from
+ * `waitForAppReady`, which is about POST-first-run behaviour, never first-run itself (that is
+ * `first-run-wizard.spec.ts`, which documents why it cannot call `waitForAppReady` at all), so
+ * recovering silently here would hide a real, if rare, product-level race behind a passing test.
+ *
+ * Takes and respects a caller-supplied budget rather than its own fixed timeout, matching every
+ * other step in `waitForAppReady`: a stuck gate that never resolves must not be allowed to run out
+ * the clock on its own, independent 120 s wait on top of whatever the overall readiness budget
+ * already spent getting here — that starved `app-launch.spec.ts`'s first (deliberately fast) test
+ * of its fixture-setup budget the one time this was tried unbudgeted.
+ */
+async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<void> {
+  const firstRunDialog = page.getByTestId('first-run-dialog');
+  const escapeHatch = page.getByRole('button', {
+    name: /continue without (finishing setup|registration)/i,
+  });
+  const gateStuck = await Promise.race([
+    expect(firstRunDialog)
+      .not.toBeVisible({ timeout })
+      .then(() => false),
+    escapeHatch.waitFor({ state: 'visible', timeout }).then(() => true),
+  ]);
+  if (!gateStuck) return;
+
+  // Stable "[e2e-first-run-gate-race]" tag: grep CI logs for it to count how often this actually
+  // fires, independent of which test happened to hit it.
+  console.warn(
+    '[e2e-first-run-gate-race] The first-run gate was still showing despite ' +
+      'platform.firstRunComplete being pinned before launch — clicking its "continue without ' +
+      'finishing setup" escape hatch. This is a workaround for a slow-CI read race in ' +
+      'first-run-store.ts, expected to be rare; if it recurs often, that race needs its own fix.',
+  );
+  await escapeHatch.click();
+  await expect(firstRunDialog).not.toBeVisible({ timeout: 10_000 });
+}
+
+/**
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
  * platform-dock layout to appear, then for a renderer to finish registering every window-scoped
  * shard the main process routes a command to (the dock can render before that async work
- * completes), and finally for the full-screen initialization overlay to clear. The overlay lingers
- * while async services (settings, theme) finish initializing — it must be gone before tests
- * interact with the UI.
+ * completes), then for the rare first-run-gate race to clear if it happened, and finally for the
+ * full-screen initialization overlay to clear. The overlay lingers while async services (settings,
+ * theme) finish initializing — it must be gone before tests interact with the UI.
  */
 export async function waitForAppReady(page: Page, timeout = 90_000): Promise<void> {
   const start = Date.now();
@@ -1036,6 +1108,8 @@ export async function waitForAppReady(page: Page, timeout = 90_000): Promise<voi
       waitForPapiMethodRegistered(scopedShardMethod, DEFAULT_WEBSOCKET_PORT, remainingForShards),
     ),
   );
+  const remainingForFirstRunGate = Math.max(1000, timeout - (Date.now() - start));
+  await dismissStuckFirstRunGate(page, remainingForFirstRunGate);
   const remainingForOverlay = Math.max(1000, timeout - (Date.now() - start));
   // Services like settings and theme finish async work after the dock layout mounts and the shards
   // register, so the overlay can outlast both earlier signals.

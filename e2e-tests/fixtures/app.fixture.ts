@@ -15,63 +15,6 @@ import {
 
 export { expect } from '@playwright/test';
 
-/**
- * WORKAROUND for an app-level race, not a fix for it. Click past the first-run gate (PT-4175) if it
- * is still showing despite `platform.firstRunComplete` being pinned before launch.
- *
- * The pin is a file write that lands before Electron starts, but the renderer's own read of it at
- * boot — `src/renderer/services/first-run-store.ts`'s `resolveInternal()` — is a separate, later
- * async round-trip, and on a slow/cold CI runner (observed on Windows, occasionally macOS) that
- * round-trip can resolve to `undefined` rather than `true` if it lands before the settings service
- * has finished loading the file. When that happens, the app falls back to treating first-run as
- * incomplete, probes local registration validity (which reads as invalid on a CI machine with no
- * real Paratext registration), and renders the gate — a full-screen modal that aria-hides the rest
- * of the app and intercepts pointer events. A test proceeding past it then fails on whatever it
- * clicks next with a generic timeout that gives no hint the gate is why: the locator it clicked can
- * even resolve to a real, visible, enabled element (the app underneath is still there) while
- * Playwright's actionability check keeps failing because the gate's overlay is covering the click
- * point.
- *
- * This races the gate's own "continue without finishing setup" button — which the app itself
- * reveals once its startup probe runs long (`REGISTRATION_SLOW_REVEAL_MS` in
- * `first-run-overlay.component.tsx`) — against the normal dock-layout attaching, and clicks it if
- * the gate wins. That is the app's own intended remedy for a slow/stuck resolve, so using it here
- * is low-risk — but it treats the SYMPTOM. The real fix is closing the read race in
- * `resolveInternal()` itself, which is app onboarding code used by real users on slow machines, not
- * just CI, and belongs in its own reviewed change, not a tooling branch. If the warning below
- * starts firing often, that is the signal to do that work.
- *
- * Deliberately loud when it fires, with a stable, greppable tag: this smoke/find/replace path is
- * about POST-first-run behaviour, never first-run itself (that is `first-run-wizard.spec.ts`, which
- * uses a different fixture and documents why it cannot call `waitForAppReady`), so recovering
- * silently would hide a real, if rare, product-level race behind a passing test. If dock-layout
- * wins the race (the overwhelmingly common case), this whole function is a no-op.
- */
-async function dismissStuckFirstRunGate(page: Page): Promise<void> {
-  const escapeHatch = page.getByRole('button', {
-    name: /continue without (finishing setup|registration)/i,
-  });
-  const gateStuck = await Promise.race([
-    page
-      .locator('div[class*="dock-layout"]')
-      .waitFor({ state: 'attached', timeout: PROCESS_READY_TIMEOUT })
-      .then(() => false),
-    escapeHatch.waitFor({ state: 'visible', timeout: PROCESS_READY_TIMEOUT }).then(() => true),
-  ]);
-  if (!gateStuck) return;
-
-  // Stable "[e2e-first-run-gate-race]" tag: grep CI logs for it to count how often this actually
-  // fires, independent of which test happened to hit it.
-  console.warn(
-    '[e2e-first-run-gate-race] The first-run gate was still showing despite ' +
-      'platform.firstRunComplete being pinned before launch — clicking its "continue without ' +
-      'finishing setup" escape hatch. This is a workaround for a slow-CI read race in ' +
-      'first-run-store.ts, expected to be rare; if it recurs often, that race needs its own fix.',
-  );
-  await escapeHatch.click();
-  await page.getByTestId('first-run-dialog').waitFor({ state: 'hidden', timeout: 10_000 });
-}
-
 /** Worker-scoped fixtures — one instance shared across all tests in a worker. */
 export interface WorkerAppFixtures {
   electronApp: ElectronApplication;
@@ -131,8 +74,6 @@ export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
 
     // Wait for React to mount
     await page.waitForSelector('#root', { state: 'attached', timeout: PROCESS_READY_TIMEOUT });
-
-    await dismissStuckFirstRunGate(page);
 
     await use(page);
 
