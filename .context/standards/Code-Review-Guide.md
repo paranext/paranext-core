@@ -63,7 +63,6 @@ roborev config set --global review_model sonnet         # per-commit reviews on 
 roborev daemon restart
 roborev check-agents                                    # confirm the agent is reachable
 roborev skills install                                  # optional: /roborev-fix, /roborev-refine, /roborev-snooze
-roborev agent-hook install --agent claude               # optional: mid-session fix reminders
 ```
 
 Per-commit review volume is high, so pin the review model to Sonnet; the interactive
@@ -71,6 +70,14 @@ Per-commit review volume is high, so pin the review model to Sonnet; the interac
 A rebase re-mints commit SHAs but enqueues no reviews (a 130-commit restack queued zero jobs; only
 the real commit made afterwards was reviewed), so there is no reason to pause roborev while
 rebasing — fix-round commits made during a rebase are exactly the ones a review should catch.
+
+**Do not install the agent hooks** (`roborev agent-hook install`). They wire roborev into the
+agent's tool-use and stop hooks, which inject "invoke the /roborev-fix skill now" into whatever
+session happens to be running — including a reviewer agent roborev spawned itself. A diverted
+reviewer edits the working tree and can launch an e2e run outside any coordination, which is how
+one session lost a run on 2026-08-28. Read open findings with `roborev list` instead, and close
+them with `roborev close` — `roborev comment` leaves a finding open, and the open count is what
+the hooks act on.
 
 Do not skip `roborev check-agents`. A configured-but-unreachable agent makes every review fail,
 and that failure is genuinely invisible from the outside: the daemon rejects the enqueue with a
