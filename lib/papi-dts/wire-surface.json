@@ -1074,6 +1074,16 @@
       "category": "command",
       "docsStaticallyResolved": true,
       "documented": true,
+      "experimental": true,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
+      "name": "platformScriptureEditor.finalizeProjectSwitch",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
       "experimental": false,
       "file": "extensions/src/platform-scripture-editor/src/main.ts",
       "language": "typescript",
