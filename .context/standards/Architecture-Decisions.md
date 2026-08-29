@@ -2216,3 +2216,61 @@ step, no automation. Just a record.
   for a typed surface rather than a state key.
 - **Source:** PT-4346, global BCV control showing books from open resources.
 
+## adr-papi-websocket-hostname-bind: The PAPI websocket binds by hostname, and readiness is awaited rather than assumed
+
+- **Date:** 2026-08-29
+- **Status:** Accepted
+- **Context:** `adr`-worthy because the two halves pull against each other and the losing half is
+  invisible. #2624 (2026-08-03) scoped the PAPI websocket to loopback, changing
+  `new WebSocketServer({ port })` to `new WebSocketServer({ host: 'localhost', port })` in
+  `rpc-websocket-listener.ts` `connect()` — connections are unauthenticated and every registered
+  method is callable over them, so the server must never accept off-machine traffic. But
+  `net.Server.listen(port, host)` performs an **async DNS lookup** when `host` is not an IP literal,
+  deferring the bind, where the previous hostless `listen(port)` bound the wildcard address on the
+  next tick. Meanwhile `connect()` set `ConnectionStatus.Connected` and returned `true`
+  synchronously, never awaiting the server's `listening` event — so `await
+  networkService.initialize()` in main resolved while the socket could still be unbound, and main
+  went on to spawn the extension host and open windows into that gap. The apparent ordering
+  guarantee in `main.ts` (network service, then extension host) did not hold. First launch of the
+  0.4.0-alpha.0 snap after installing: the extension host's single connect was refused at +549 ms
+  and it died 9.98 s later, so **no** settings, localization, or theme provider was ever registered;
+  the renderer rendered raw `%localizeKey%` text and the .NET provider crashed on a missing settings
+  method. Warm restarts bind long before the extension host boots (~500 ms) and were unaffected,
+  which is why it presented as intermittent while being the norm on a cold install. Not
+  load-dependent: with the port free on an idle machine, a client still cannot connect at the
+  instant the pre-fix `connect()` resolves (`rpc-websocket-listener.real-socket.test.ts`).
+- **Decision:** Keep the hostname bind, and make readiness explicit instead of assumed: `connect()`
+  awaits `listening` before reporting success, and reports failure when the server emits `error`
+  (e.g. `EADDRINUSE`) instead of binding.
+- **Alternatives:** **Bind the `127.0.0.1` literal and point clients at it.** This does satisfy the
+  actual requirement — Matt Lyons confirmed the goal is "unreachable off-machine", which the literal
+  meets — and it would remove the resolver from the startup path entirely, restoring a synchronous
+  bind. Rejected because the hostname is there for an *independent* reason: it avoids IPv4-vs-IPv6
+  mismatches between the server's bind and a client's connect, which Matt has actually observed over
+  the years. Three call sites connect by name across two resolver stacks (`rpc-client.ts` for the
+  renderer and extension host, `PapiClient.cs` for .NET, plus the OpenRPC playground URL in
+  `main.ts`), external debugging tools such as `websocat` resolve on their own, and the hostname
+  leaves room for IPv6-centric network configurations. Note the security requirement and the
+  address-family robustness are separate concerns; only the first is about loopback scoping.
+  **Client-side retry with backoff** (implemented first, then dropped) — absorbs the window instead
+  of removing it, and retrying safely needs its own wall-clock budget: an attempt whose socket is
+  accepted but never upgraded can only end by timing out, so an attempt count bounded against
+  `AsyncVariable`'s 10 s default permitted a ~73 s stall of main's startup, worse than the single
+  10 s failure it replaced. **Gate the extension-host spawn on readiness** in
+  `extension-host.service.ts` — unnecessary once `connect()` is honest, since main already awaits
+  `networkService.initialize()` before spawning.
+- **Consequences:** The race is closed at its source, so a client's connect no longer depends on
+  winning a timing window and `RpcClient` carries no retry. The catch: `main.ts`'s ordering is only
+  real *because* `connect()` awaits binding — any future change that makes the listener report ready
+  optimistically silently reopens this, with the symptom appearing three processes away as missing
+  providers. A bind failure is now reported rather than being indistinguishable from success.
+  `RpcWebSocketListener` gained an optional `port` constructor argument so a test can bind a real
+  socket without colliding with a dev app on 8876. The real-socket tests deliberately do not mock
+  `ws` and run on all three CI OSes, because whether "`connect()` resolved" implies "a client can
+  connect now" depends on platform bind/listen semantics and on how `localhost` resolves. Revisit if
+  the app ever needs to be reachable from another machine — that is a different security decision —
+  or if resolver latency on some platform proves material. The loopback rationale now lives here and
+  in the code comment; `Security-Guide.md` has no entry for it.
+- **Source:** Diagnosed from a packaged 0.4.0-alpha.0 snap first-run failure on WSL2 Ubuntu,
+  2026-08-27. Hostname-vs-literal and the `listening` await confirmed with Matt Lyons (#2624's
+  author) on Discord, 2026-08-28.

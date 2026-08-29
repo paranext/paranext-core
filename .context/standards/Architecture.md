@@ -44,6 +44,29 @@ Platform.Bible uses **JSON-RPC 2.0 over WebSocket** for inter-process communicat
 | Events | Broadcast notifications | Data provider updates |
 | Subscriptions | Continuous data streaming | `useData()` hook subscriptions |
 
+### WebSocket Invariants
+
+Two rules govern the PAPI websocket. Both have been broken in practice, and neither failure was
+diagnosable from where it surfaced.
+
+**Bind to loopback only.** Connections to the PAPI websocket are unauthenticated, and every
+registered method is callable over them. The server must never accept traffic arriving on a
+non-loopback interface. Bind by the name `localhost` rather than a literal address: clients connect
+to `localhost` too, so both ends resolve through the same resolver and agree on the IP version,
+whichever the host prefers. IPv4-vs-IPv6 mismatches between the two ends have been hit in practice.
+
+**Never report ready before the endpoint accepts.** `IRpcHandler.connect` must not resolve `true`
+until the socket is actually accepting connections. `new WebSocketServer(...)` starts binding but
+does not finish synchronously — and binding by hostname defers it further, behind a DNS lookup.
+Main spawns the extension host and opens windows as soon as `connect()` resolves; those clients get
+one attempt with no retry, so reporting ready optimistically refuses them. The symptom appears
+three processes away as missing settings/localization/theme providers and raw `%localizeKey%` text,
+with nothing in the log tying it back to the socket. Any new `IRpcHandler` implementation inherits
+this requirement.
+
+See `adr-papi-websocket-hostname-bind` in [Architecture-Decisions.md](Architecture-Decisions.md)
+for the incident and the alternatives that were rejected.
+
 ### Key Files
 
 - `src/shared/services/network.service.ts` - Core network communication

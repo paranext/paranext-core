@@ -104,6 +104,9 @@ export class RpcServer implements IRpcHandler {
   }
 
   async connect(): Promise<boolean> {
+    // TODO(PT-4495): `false` here means "already connected", while `RpcClient` returns `true` for
+    // the same condition. The `true` below carries no readiness meaning either — this connect binds
+    // nothing, it attaches listeners to a socket the listener already accepted.
     if (this.connectionStatus === ConnectionStatus.Connected) return false;
     this.addEventListenersToWebSocket();
     this.connectionStatus = ConnectionStatus.Connected;
@@ -257,6 +260,8 @@ export class RpcServer implements IRpcHandler {
   }
 
   private onWebSocketError(ev: Event): void {
+    // `describeWebSocketError` in `rpc-client.ts` unwraps the same event shape for the client end
+    // of this socket, and carries the rationale for why the two stay separate.
     // The ws `ErrorEvent` carries the real reason on `.error` / `.message`; `JSON.stringify(ev)`
     // collapses to "{}" because those properties are non-enumerable. Surface them explicitly so
     // the actual transport failure (invalid UTF-8 frame, max-payload, ECONNRESET, ...) is logged.

@@ -1862,9 +1862,21 @@ declare module 'shared/models/rpc.interface' {
      * - On clients: connecting to the server
      * - On servers: opening an endpoint for clients to connect
      *
+     * An implementation that opens an endpoint MUST NOT resolve `true` until that endpoint is
+     * actually accepting connections. Callers treat this resolving as permission to start processes
+     * that immediately connect, and those clients may get a single attempt with no retry — so
+     * reporting ready optimistically surfaces as a client that was refused, whose symptoms appear in
+     * a different process entirely. See `adr-papi-websocket-hostname-bind`.
+     *
      * @param localEventHandler Function that handles events from the server by accepting an eventType
      *   and an event and emitting the event locally. Used when receiving an event over the network.
-     * @returns Promise that resolves when finished connecting
+     * @returns `true` once the connection is established and usable — for a server, once its endpoint
+     *   is accepting connections. `false` if the connection could not be established.
+     *
+     *   TODO(PT-4495): implementations disagree on what they return when this handler was already
+     *   connected or connecting, so a caller can neither rely on that case nor tell a benign
+     *   double-connect from a real failure. PT-4495 replaces the boolean with a result type that
+     *   distinguishes the three outcomes; until then, only the two states above are contractual.
      */
     connect: (localEventHandler: EventHandler) => Promise<boolean>;
     /**
@@ -2074,11 +2086,15 @@ declare module 'client/services/rpc-client' {
     private readonly jsonRpcClientServer;
     private readonly connectionMutex;
     private readonly registrationMutexMap;
-    private readonly connectionComplete;
+    /**
+     * Tracks the connection attempt currently in flight, so the socket's `open`/`error`/`close`
+     * events can settle it. Recreated per attempt since an {@link AsyncVariable} is single-use, and
+     * `undefined` whenever no attempt is in flight.
+     */
+    private connectionComplete;
     private readonly clientDisconnectEmitter;
     constructor();
     private static handleError;
-    private static onError;
     connect(localEventHandler: EventHandler): Promise<boolean>;
     disconnect(): Promise<void>;
     request(
@@ -2100,6 +2116,14 @@ declare module 'client/services/rpc-client' {
     private createNextRequestId;
     private addEventListenersToWebSocket;
     private removeEventListenersFromWebSocket;
+    /**
+     * Settles the in-flight connection attempt as failed so {@link RpcClient.connect} stops waiting
+     * immediately rather than running out the {@link AsyncVariable} timeout. Without this, a
+     * connection refused because main is not yet accepting would stall the process for the full
+     * timeout before reporting the failure.
+     */
+    private failConnectionAttempt;
+    private onError;
     private onWebSocketOpen;
     private onWebSocketClose;
     private onMessageReceivedByWebSocket;
@@ -2274,6 +2298,7 @@ declare module 'main/services/rpc-websocket-listener' {
    * Created by the main process on start up when the network service initializes
    */
   export class RpcWebSocketListener implements IRpcMethodRegistrar {
+    private readonly port;
     connectionStatus: ConnectionStatus;
     /**
      * Event that fires when a connected process goes away, carrying the method names its departure
@@ -2304,7 +2329,12 @@ declare module 'main/services/rpc-websocket-listener' {
      */
     private readonly warnedForeignAnnouncements;
     private readonly clientDisconnectEmitter;
-    constructor();
+    /**
+     * @param port Port to listen on. Defaults to {@link WEBSOCKET_PORT}, which the whole app uses;
+     *   overridden only by tests that need to bind a real socket without colliding with a running
+     *   app.
+     */
+    constructor(port?: number);
     get nextSocketId(): string;
     connect(localEventHandler: EventHandler): Promise<boolean>;
     disconnect(): Promise<void>;

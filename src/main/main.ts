@@ -303,7 +303,19 @@ async function main() {
   markStartup(STARTUP_MARK_PROCESS_START);
 
   // The network service has to start first, and it uses the shared store after initialization
-  await networkService.initialize();
+  try {
+    await networkService.initialize();
+  } catch (error) {
+    // Everything below — including the `app.whenReady()` that creates windows and the quit
+    // handlers — is registered further down in this function, so letting this reject would leave a
+    // live process with no window, no way to quit, and the single-instance lock still held, which
+    // blocks every later launch too. Exit instead, so the failure is visible and relaunch works.
+    logger.error(
+      `Could not start the PAPI network service, so the app cannot run: ${getErrorMessage(error)}`,
+    );
+    app.exit(1);
+    return;
+  }
   markStartup('network-service-up');
   await initializeSharedStoreService(networkService);
 
