@@ -139,6 +139,8 @@ export class RpcClient implements IRpcMethodRegistrar {
 
   async connect(localEventHandler: EventHandler): Promise<boolean> {
     return this.connectionMutex.runExclusive(async () => {
+      // TODO(PT-4495): `true` here means "already connected", the opposite answer the other two
+      // IRpcHandler implementations give for the same condition.
       if (this.connectionStatus === ConnectionStatus.Connected) return true;
       if (this.ws) {
         logger.warn('Client connect() called when websocket exists but not connected');
@@ -168,8 +170,17 @@ export class RpcClient implements IRpcMethodRegistrar {
         // `this.ws.url` — reported by the catch as a connection error that never happened.
         const { url } = this.ws;
 
-        // Wait for the socket to finish connecting before continuing (0 means connecting)
-        if (this.ws.readyState !== 0) this.connectionComplete.resolveToValue();
+        // Wait for the socket to finish connecting before continuing. 0 is CONNECTING, and the
+        // listeners just attached will settle the attempt. Only 1 (OPEN) is already connected:
+        // CLOSING and CLOSED have no further event left to settle this, so resolving on them
+        // reports Connected on a dead socket, and every later send is dropped until the caller's
+        // own request timeout expires. Throw instead, so the catch below reports the failure and
+        // tears the attempt down the same way every other failure does.
+        if (this.ws.readyState === 1) this.connectionComplete.resolveToValue();
+        else if (this.ws.readyState !== 0)
+          throw new Error(
+            `The websocket was already closing or closed (readyState ${this.ws.readyState})`,
+          );
         await this.connectionComplete.promise;
 
         // The socket can die while this await is parked: onWebSocketClose then runs to completion,
@@ -190,7 +201,9 @@ export class RpcClient implements IRpcMethodRegistrar {
         // properties worth serializing.
         RpcClient.handleError(
           `RPC client connection error for ${this.peerName}`,
-          getErrorMessage(error),
+          // An AsyncVariable rejects with a plain string reason; passing that through
+          // `getErrorMessage` would JSON-quote and escape the diagnostic rather than print it.
+          typeof error === 'string' ? error : getErrorMessage(error),
         );
         // TODO(PT-4435): The socket itself is never closed here, only forgotten — leaving a live,
         // listener-less socket and a server-side RpcServer whose registered methods are never
@@ -355,10 +368,25 @@ export class RpcClient implements IRpcMethodRegistrar {
    * An instance method (bound by `bindClassMethods`) rather than a static one for that reason.
    */
   private onError(ev: Event): void {
-    RpcClient.handleError(
-      `Client websocket error event occurred for ${this.peerName}`,
-      describeWebSocketErrorEvent(ev),
-    );
+    const detail = describeWebSocketErrorEvent(ev);
+    RpcClient.handleError(`Client websocket error event occurred for ${this.peerName}`, detail);
+    // An error before the socket opens is the whole answer for the attempt in flight. Without this
+    // nothing settles it on a refused connection, so `connect()` waits out the AsyncVariable's full
+    // timeout before reporting a failure that was already known — long enough that a client given
+    // one attempt and no retry is dead before it hears back. See
+    // `adr-papi-websocket-hostname-bind`.
+    this.failConnectionAttempt(`Websocket reported an error event: ${detail}`);
+  }
+
+  /**
+   * Reports a failure to whichever connection attempt is still waiting, if any.
+   *
+   * An `AsyncVariable` is single-use and freezes once settled, so this is a no-op after the attempt
+   * has already succeeded or failed. That is what makes it safe to call from both the `error` and
+   * the `close` handler, since a refused socket fires both.
+   */
+  private failConnectionAttempt(reason: string): void {
+    if (!this.connectionComplete.hasSettled) this.connectionComplete.rejectWithReason(reason);
   }
 
   private onWebSocketOpen(): void {
@@ -376,6 +404,10 @@ export class RpcClient implements IRpcMethodRegistrar {
     // disconnect is still reported honestly if the socket actually died.
     if (isCleanCloseEvent(ev)) logger.info(summary);
     else logger.warn(summary);
+    // A close with no preceding error still has to settle the attempt in flight: it is the only
+    // event a peer that accepts the TCP connection and then drops it before the websocket upgrade
+    // ever produces, so nothing else would.
+    this.failConnectionAttempt(`Websocket closed before it opened (${detail})`);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
   }
