@@ -2027,9 +2027,21 @@ declare module 'shared/models/rpc.interface' {
      * - On clients: connecting to the server
      * - On servers: opening an endpoint for clients to connect
      *
+     * An implementation that opens an endpoint MUST NOT resolve `true` until that endpoint is
+     * actually accepting connections. Callers treat this resolving as permission to start processes
+     * that immediately connect, and those clients may get a single attempt with no retry — so
+     * reporting ready optimistically surfaces as a client that was refused, whose symptoms appear in
+     * a different process entirely. See `adr-papi-websocket-hostname-bind`.
+     *
      * @param localEventHandler Function that handles events from the server by accepting an eventType
      *   and an event and emitting the event locally. Used when receiving an event over the network.
-     * @returns Promise that resolves when finished connecting
+     * @returns `true` once the connection is established and usable — for a server, once its endpoint
+     *   is accepting connections. `false` if the connection could not be established.
+     *
+     *   TODO(PT-4495): implementations disagree on what they return when this handler was already
+     *   connected or connecting, so a caller can neither rely on that case nor tell a benign
+     *   double-connect from a real failure. PT-4495 replaces the boolean with a result type that
+     *   distinguishes the three outcomes; until then, only the two states above are contractual.
      */
     connect: (localEventHandler: EventHandler) => Promise<boolean>;
     /**
@@ -2313,6 +2325,14 @@ declare module 'client/services/rpc-client' {
      * An instance method (bound by `bindClassMethods`) rather than a static one for that reason.
      */
     private onError;
+    /**
+     * Reports a failure to whichever connection attempt is still waiting, if any.
+     *
+     * An `AsyncVariable` is single-use and freezes once settled, so this is a no-op after the attempt
+     * has already succeeded or failed. That is what makes it safe to call from both the `error` and
+     * the `close` handler, since a refused socket fires both.
+     */
+    private failConnectionAttempt;
     private onWebSocketOpen;
     private onWebSocketClose;
     private onMessageReceivedByWebSocket;
@@ -2532,6 +2552,7 @@ declare module 'main/services/rpc-websocket-listener' {
    * Created by the main process on start up when the network service initializes
    */
   export class RpcWebSocketListener implements IRpcMethodRegistrar {
+    private readonly port;
     connectionStatus: ConnectionStatus;
     /**
      * Event that fires when a connected process goes away, carrying the method names its departure
@@ -2562,7 +2583,12 @@ declare module 'main/services/rpc-websocket-listener' {
      */
     private readonly warnedForeignAnnouncements;
     private readonly clientDisconnectEmitter;
-    constructor();
+    /**
+     * @param port Port to listen on. Defaults to `WEBSOCKET_PORT`, which the whole app uses;
+     *   overridden only by tests that need to bind a real socket without colliding with a running
+     *   app.
+     */
+    constructor(port?: number);
     get nextSocketId(): string;
     connect(localEventHandler: EventHandler): Promise<boolean>;
     disconnect(): Promise<void>;
