@@ -48,9 +48,21 @@ export interface IRpcHandler {
    * - On clients: connecting to the server
    * - On servers: opening an endpoint for clients to connect
    *
+   * An implementation that opens an endpoint MUST NOT resolve `true` until that endpoint is
+   * actually accepting connections. Callers treat this resolving as permission to start processes
+   * that immediately connect, and those clients may get a single attempt with no retry — so
+   * reporting ready optimistically surfaces as a client that was refused, whose symptoms appear in
+   * a different process entirely. See `adr-papi-websocket-hostname-bind`.
+   *
    * @param localEventHandler Function that handles events from the server by accepting an eventType
    *   and an event and emitting the event locally. Used when receiving an event over the network.
-   * @returns Promise that resolves when finished connecting
+   * @returns `true` once the connection is established and usable — for a server, once its endpoint
+   *   is accepting connections. `false` if the connection could not be established.
+   *
+   *   TODO(PT-4495): implementations disagree on what they return when this handler was already
+   *   connected or connecting, so a caller can neither rely on that case nor tell a benign
+   *   double-connect from a real failure. PT-4495 replaces the boolean with a result type that
+   *   distinguishes the three outcomes; until then, only the two states above are contractual.
    */
   connect: (localEventHandler: EventHandler) => Promise<boolean>;
   /**
