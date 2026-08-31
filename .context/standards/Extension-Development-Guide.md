@@ -100,6 +100,39 @@ export async function deactivate(): Promise<boolean> {
 
 Extensions cannot use static imports—code must be bundled with webpack.
 
+### Keep React-bundling value imports out of the main bundle
+
+A **value** import (as opposed to `import type`) from a library that bundles React — e.g.
+`@eten-tech-foundation/platform-editor`, `platform-bible-react` — must never be reachable from
+`main.ts`, even transitively through a shared utils module. Webpack drags the library's whole
+React-bundled output into the extension-host bundle, and `activate()` throws at load time because
+`react/jsx-runtime` is unreachable in the extension-host sandbox. The failure is silent until cold
+start: hot-reload QA sessions never re-run `activate()`, so a broken activation can survive many
+test passes unnoticed.
+
+The rules:
+
+- In any module `main.ts` can reach, use `import type` only for such libraries.
+- Put value imports (functions, constants) in a web-view-only module that no backend code imports
+  (see `platform-scripture-editor.web-view.utils.ts` for the pattern and its header comment).
+- After any change to the import graph of a module `main.ts` reaches, run a **cold-start
+  activation smoke test** (fully restart the app and confirm the extension activates) before
+  calling the change verified.
+
+### Register each command once, globally
+
+Register a command **once, for the whole app** — in `activate`, not per web view instance. A command
+name is global: the second registration of the same name fails, so registering from a web view's
+code means the first instance wins and every later one errors. Nothing about multi-window changes
+this; `papi.commands.registerCommand` works exactly as it always has, and the platform adds no
+per-window command facility.
+
+If a command genuinely needs to act on ONE web view, take the web view id as its first argument
+rather than registering a copy per instance. For richer per-instance interaction, use a **web view
+controller** (see [WebViews](#webviews)), which already exists for that need: it is a network object
+per web view, so its methods are addressed to a specific instance without any global name per
+instance.
+
 ---
 
 ## PAPI (Platform API)

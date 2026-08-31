@@ -6,22 +6,22 @@ import '@renderer/global-this.model';
 import { App } from '@renderer/app.component';
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
-import { startDialogService } from '@renderer/services/dialog.service-host';
-import { startNotificationService } from '@renderer/services/notification.service-host';
+import { startBookChapterControlServiceShard } from '@renderer/services/book-chapter-control.service-shard';
+import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
+import { startNotificationServiceShard } from '@renderer/services/notification.service-shard';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
-import { assertAllRendererHostedCommandsRegistered } from '@renderer/services/renderer-hosted-command-registry';
-import { assertAllRendererHostedDialogRequestsRegistered } from '@renderer/services/renderer-hosted-dialog-registry';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
-import { startScrollGroupNavigationCommands } from '@renderer/services/scroll-group-navigation.commands';
-import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
+import { startScrollGroupService } from '@renderer/services/scroll-group.service';
 import {
-  initialize as initializeThemeService,
-  localThemeService,
-} from '@renderer/services/theme.service-host';
+  getCurrentThemeSync,
+  onDidChangeCurrentTheme,
+  startThemeService,
+} from '@renderer/services/theme.service';
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
+import { startUsersnapServiceShard } from '@renderer/services/usersnap.service-shard';
 import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
-import { startWebViewService } from '@renderer/services/web-view.service-host';
-import { initialize as initializeWindowService } from '@renderer/services/window.service-host';
+import { startWebViewServiceShard } from '@renderer/services/web-view.service-shard';
+import { initialize as initializeWindowService } from '@renderer/services/window.service-shard';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { logger } from '@shared/services/logger.service';
@@ -32,7 +32,6 @@ import { markStartup } from '@shared/utils/startup-timing.util';
 import {
   applyThemeStylesheet,
   getErrorMessage,
-  isPlatformError,
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 import { createRoot } from 'react-dom/client';
@@ -104,19 +103,20 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     // This needs to run before web views start running and after the network service is running
     blockWebSocketsToPapiNetwork();
 
-    // This needs to run before the web view service host starts running and blocks us from creating
+    // This needs to run before the web view service shard starts running and blocks us from creating
     // an iframe for the Usersnap feedback forms
     await initializeUsersnapApi();
 
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),
-      startWebViewService(),
-      startDialogService(),
+      startWebViewServiceShard(),
+      startDialogServiceShard(),
       startScrollGroupService(),
-      startScrollGroupNavigationCommands(),
-      startNotificationService(),
+      startNotificationServiceShard(),
+      startUsersnapServiceShard(),
+      startBookChapterControlServiceShard(),
       startOverlayService(),
-      initializeThemeService(),
+      startThemeService(),
       initializeWindowService(),
     );
 
@@ -128,39 +128,6 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     // reload during an in-flight sync seeds the store instead of assuming unblocked.
     initAutoSyncBlockingService();
     initAutoSyncEditBlockDriver();
-
-    // Every name in RENDERER_HOSTED_COMMAND_NAMES and RENDERER_HOSTED_DIALOG_REQUEST_NAMES must
-    // have been registered by one of the services started above (startWebViewService,
-    // startDialogService, startScrollGroupNavigationCommands) — otherwise the main process's
-    // routing proxy for it has nothing to forward to.
-    //
-    // Placed directly after those registrations and before anything else that can fail: run from
-    // the shared catch below, a registration gap would be reported as the same generic message as
-    // every other startup failure, and anything that threw between the registrations and this point
-    // would skip the check entirely. What the app ends up with is the same in dev and packaged
-    // builds; only how loudly it says so differs.
-    //
-    // A catch each, rather than one around both: in dev these throw, so a single catch would let a
-    // missing command hide a missing dialog request and report only half of what is broken.
-    try {
-      assertAllRendererHostedCommandsRegistered();
-    } catch (e) {
-      logger.error(`Renderer-hosted command coverage check failed: ${getErrorMessage(e)}`);
-    }
-    try {
-      assertAllRendererHostedDialogRequestsRegistered();
-    } catch (e) {
-      logger.error(`Renderer-hosted dialog request coverage check failed: ${getErrorMessage(e)}`);
-    }
-
-    // Subscribe to updates to the current theme
-    await localThemeService.subscribeCurrentTheme(undefined, (newTheme) => {
-      if (isPlatformError(newTheme)) {
-        logger.warn(`Failed to get new current theme: ${getErrorMessage(newTheme)}`);
-        return;
-      }
-      applyThemeSafe(newTheme, 'subscribe');
-    });
   } catch (e) {
     logger.error(`Service(s) failed to initialize! Error: ${e}`);
   }
@@ -191,9 +158,14 @@ const scrollbarStyleSheet = document.createElement('style');
 scrollbarStyleSheet.textContent = SCROLLBAR_STYLES_RAW;
 document.head.appendChild(scrollbarStyleSheet);
 
+// Subscribed here, at module evaluation, rather than alongside the services above: the theme
+// service's cache is what `getCurrentThemeSync` below and every web view's baked-in stylesheet read,
+// and this local event fires after that cache has been updated. Registering it before the awaits in
+// the service startup above resolve means no change can slip through the gap.
+onDidChangeCurrentTheme((newTheme) => applyThemeSafe(newTheme, 'theme change'));
+
 // Apply theme on first load since it applies the theme a lot faster than the subscribe application does
-const currentTheme = localThemeService.getCurrentThemeSync();
-applyThemeSafe(currentTheme, 'first load');
+applyThemeSafe(getCurrentThemeSync(), 'first load');
 
 // #endregion
 

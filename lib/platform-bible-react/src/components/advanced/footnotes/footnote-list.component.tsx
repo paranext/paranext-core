@@ -14,6 +14,7 @@ export function FootnoteList({
   layout = 'horizontal',
   listId,
   selectedFootnote,
+  selectionRequest,
   showMarkers = true,
   suppressFormatting = false,
   formatCaller,
@@ -76,6 +77,26 @@ export function FootnoteList({
     }
   }, [focusedIndex]);
 
+  const selectedIndex = selectedFootnote
+    ? footnotes.findIndex((footnote) => footnote === selectedFootnote)
+    : -1;
+
+  // Bring the selected row into view when the selection changes. The host drives selection from
+  // OUTSIDE this list — clicking a note caller in the editor (PT9 navigate-to-note) — so the
+  // selected row is frequently outside the scrollport, where it would highlight invisibly.
+  // `block: 'nearest'` scrolls only far enough to reveal it, leaving an already-visible row put.
+  //
+  // Deliberately does NOT call `focus()` (unlike the arrow-key path above): the gesture that drives
+  // this happens in the EDITOR, and pulling keyboard focus into the pane would interrupt editing.
+  //
+  // `selectionRequest` is a dependency-only identity key: a REPEAT selection of the same footnote
+  // derives the same index, so keying on the index alone would never re-reveal a row the user has
+  // since scrolled away from (see `FootnoteListProps.selectionRequest`).
+  useEffect(() => {
+    if (selectedIndex < 0 || selectedIndex >= rowRefs.current.length) return;
+    rowRefs.current[selectedIndex]?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex, selectionRequest]);
+
   /*
    * TODO(PT-3743): After upgrading to Tailwind v4, move to using @container and @sm/@lg css
    * styling to replace the use of the `layout` variable to distinguish between
@@ -103,14 +124,15 @@ export function FootnoteList({
           const isSelected = footnote === selectedFootnote;
           const key = `${listId}-${idx}`;
           return (
-            <>
+            // The key belongs on the outermost node returned from the map — the Fragment — not on
+            // the `<li>` nested inside it, which leaves the Fragment itself unkeyed.
+            <React.Fragment key={key}>
               <li
                 ref={(el) => {
                   rowRefs.current[idx] = el;
                 }}
                 role="option"
                 aria-selected={isSelected}
-                key={key}
                 data-marker={footnote.marker}
                 data-state={isSelected ? 'selected' : undefined}
                 tabIndex={idx === focusedIndex ? 0 : -1}
@@ -143,7 +165,7 @@ export function FootnoteList({
               {idx < footnotes.length - 1 && layout === 'vertical' && (
                 <Separator tabIndex={-1} className="tw:col-span-2" />
               )}
-            </>
+            </React.Fragment>
           );
         })}
       </ul>

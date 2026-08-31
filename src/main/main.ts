@@ -22,6 +22,7 @@ import path from 'path';
 /* import { autoUpdater } from 'electron-updater'; */
 import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
+import { announceAppWindowInput, startAppWindowInputEvent } from '@main/app-window-input.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
 import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
@@ -32,7 +33,10 @@ import {
   APP_VERSION,
   startAppService,
 } from '@main/services/app.service-host';
-import { startCommandRoutingService } from '@main/services/command-routing.service';
+import { startDialogServiceRouter } from '@main/services/dialog.service-router';
+import { startUsersnapServiceRouter } from '@main/services/usersnap.service-router';
+import { startBookChapterControlServiceRouter } from '@main/services/book-chapter-control.service-router';
+import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
@@ -43,8 +47,25 @@ import { registerPowerMonitorListeners } from '@main/services/power-monitor-logg
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
 import { performStartupTasks } from '@main/startup-tasks';
-import { startNotificationRoutingService } from '@main/services/notification-routing.service';
-import { startWindowRoutingService } from '@main/services/window-routing.service';
+import { startNotificationServiceRouter } from '@main/services/notification.service-router';
+import {
+  flushPersistedScrollGroupState,
+  getScrollGroupStateForNewWindow,
+  startScrollGroupServiceHost,
+} from '@main/services/scroll-group.service-host';
+import {
+  flushPersistedThemeState,
+  getCurrentThemeForNewWindow,
+  getCurrentThemeSync,
+  onDidChangeCurrentTheme,
+  startThemeServiceHost,
+} from '@main/services/theme.service-host';
+import {
+  getWindowIdsWithServiceShard,
+  getWindowServiceShard,
+  onDidRegisterWindowServiceShard,
+  startWindowServiceRouter,
+} from '@main/services/window.service-router';
 import {
   isAppQuitRequested,
   isAppShuttingDown,
@@ -52,13 +73,15 @@ import {
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
 } from '@main/services/shutdown-latch.service';
-import { startWebViewRoutingService } from '@main/services/web-view-routing.service';
+import { startWebViewServiceRouter } from '@main/services/web-view.service-router';
 import {
   addWindow,
   doesNavigationReplaceRendererRegistrations,
   getFocusedWindowId,
   getTargetWindowId,
   getWindows,
+  isWindowClosing,
+  markWindowAbandoned,
   markWindowClosing,
   markWindowNotReady,
   markWindowReady,
@@ -81,6 +104,11 @@ import {
   DEFAULT_WINDOW_WIDTH,
   ensureBoundsVisibleOnSomeDisplay,
 } from '@main/window-bounds.util';
+import {
+  decideRendererCrashReload,
+  MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS,
+  NO_RENDERER_CRASH_RELOADS_YET,
+} from '@main/renderer-crash-reload-budget.util';
 import type {
   WindowBoundsState,
   WindowLayoutEntry,
@@ -98,57 +126,36 @@ import {
   LOG_LEVEL_QUERY_PARAMETER,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
+  SCROLL_GROUP_STATE_QUERY_PARAMETER,
   STARTUP_MARK_PROCESS_START,
   STARTUP_MARKS_QUERY_PARAMETER,
+  THEME_STATE_QUERY_PARAMETER,
   WINDOW_ID,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
-import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
-import {
-  networkObjectService,
-  onDidCreateNetworkObject,
-} from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
-import { CommandNames, NetworkEventTypes, SettingTypes } from 'papi-shared-types';
+import { CommandNames, SettingTypes } from 'papi-shared-types';
 import {
   getErrorMessage,
   isPlatformError,
-  PlatformEventEmitter,
   serialize,
+  ThemeDefinitionExpanded,
   UnsubscriberAsyncList,
   wait,
   waitForDuration,
 } from 'platform-bible-utils';
-import { getByType as getDataProviderByType } from '@shared/services/data-provider.service';
-import { themeService } from '@shared/services/theme.service';
-import { IWindowService, windowServiceProviderName } from '@shared/services/window.service-model';
 
 // #region Helper functions
-
-/**
- * Pull the window ID out of a scoped window service's network object id, e.g.
- * "platform.windowServiceDataProvider-2-data" gives 2. Returns undefined for anything else,
- * including the generic name the main-process routing proxy publishes, whose remainder does not
- * start with a number.
- *
- * @param networkObjectId Id of a network object that was just created
- * @returns Window whose renderer registered it, or undefined if this is not a scoped window service
- */
-function getWindowIdFromScopedWindowServiceId(networkObjectId: string): number | undefined {
-  const scopedPrefix = `${windowServiceProviderName}-`;
-  if (!networkObjectId.startsWith(scopedPrefix)) return undefined;
-  const windowId = Number.parseInt(networkObjectId.slice(scopedPrefix.length), 10);
-  return Number.isNaN(windowId) ? undefined : windowId;
-}
 
 /**
  * Get the zoom factor from settings or return the default value
@@ -259,21 +266,6 @@ const TITLE_BAR_BUTTON_BACKGROUND_COLOR = 'hsla(0, 0%, 100%, 0)'; // transparent
  */
 let willRestart = false;
 
-/**
- * Get the window service data provider for a specific window by its ID. Each renderer registers its
- * own scoped data provider (e.g. "platform.windowServiceDataProvider-1").
- *
- * Deliberately a plain lookup rather than a caching layer, even though the input handlers below
- * call it on every keystroke and mouse press: the network object service already keeps what it
- * resolves, serializes concurrent lookups of the same ID behind one lock, and drops what it holds
- * when the object is disposed or its window closes. A second cache here could only go stale — and
- * because Electron reuses `BrowserWindow.id`, a stale entry would be handed to the next window
- * opened with that ID rather than merely being useless.
- */
-async function getWindowServiceForWindow(windowId: number): Promise<IWindowService | undefined> {
-  return getDataProviderByType<IWindowService>(`${windowServiceProviderName}-${windowId}`);
-}
-
 // Add unhandled exception and rejection handlers
 process.on('uncaughtException', (error) => {
   logger.error(`Unhandled exception in main process: ${getErrorMessage(error)}`);
@@ -317,46 +309,56 @@ async function main() {
   markStartup('network-service-up');
   await initializeSharedStoreService(networkService);
 
+  // Register the app-window input event so the window's mouse/keyboard hooks below can announce
+  // the gestures that dismiss transient overlays
+  await startAppWindowInputEvent();
+
   // The network object status service relies on seeing everything else start up later
   await startNetworkObjectStatusService();
 
   // The project lookup service relies on the network object status service
   await startProjectLookupService();
 
-  // Register multi-window routing proxies before any windows are created. These claim generic names
-  // (e.g. "WebViewService", "platform.openSettings") so renderers register under scoped names
-  // (e.g. "WebViewService-1", "platform.openSettings-1") and the proxies route to the focused window.
+  // Claim every app-global network name before any window is created, so a renderer never has to
+  // race for one. The service routers claim generic names (e.g. "WebViewService",
+  // "platform.openSettings") that renderers answer for behind window-scoped shards; the scroll group
+  // and theme service hosts claim names they answer for themselves, since a scroll group and the
+  // theme are app-global rather than per window.
   // Started together rather than one after another: each claims its own set of names and none reads
   // anything another one registers, so serializing them only adds their round trips together on the
   // startup path every window is waiting behind.
   // Settled rather than raced to the first rejection: they run together, so `Promise.all` would
   // report whichever failed first and discard what the others went on to say. Startup still stops
-  // here — a routing proxy that never registered leaves a name nothing answers for the rest of the
-  // session — it just stops naming everything that went wrong instead of one thing.
-  const routingServiceStarts = [
-    { name: 'WebView routing service', started: startWebViewRoutingService() },
-    { name: 'command routing service', started: startCommandRoutingService() },
-    { name: 'notification routing service', started: startNotificationRoutingService() },
-    // Reuses the same per-window lookup the input handlers use
+  // here — a name that never registered is one nothing answers for the rest of the session — it just
+  // stops naming everything that went wrong instead of one thing.
+  const globalServiceStarts = [
+    { name: 'WebView service router', started: startWebViewServiceRouter() },
+    { name: 'dialog service router', started: startDialogServiceRouter() },
+    { name: 'Usersnap service router', started: startUsersnapServiceRouter() },
     {
-      name: 'window routing service',
-      started: startWindowRoutingService(getWindowServiceForWindow),
+      name: 'BookChapterControl service router',
+      started: startBookChapterControlServiceRouter(),
     },
+    { name: 'scripture navigation commands', started: startScrollGroupNavigationCommands() },
+    { name: 'notification service router', started: startNotificationServiceRouter() },
+    { name: 'window service router', started: startWindowServiceRouter() },
+    { name: 'scroll group service host', started: startScrollGroupServiceHost() },
+    { name: 'theme service host', started: startThemeServiceHost() },
   ];
-  const routingServiceOutcomes = await Promise.allSettled(
-    routingServiceStarts.map(({ started }) => started),
+  const globalServiceOutcomes = await Promise.allSettled(
+    globalServiceStarts.map(({ started }) => started),
   );
-  const failedRoutingServiceNames = routingServiceOutcomes
+  const failedGlobalServiceNames = globalServiceOutcomes
     .map((outcome, index) => {
       if (outcome.status === 'fulfilled') return undefined;
-      const { name } = routingServiceStarts[index];
+      const { name } = globalServiceStarts[index];
       logger.error(`Failed to start the ${name}: ${getErrorMessage(outcome.reason)}`);
       return name;
     })
     .filter((name) => name !== undefined);
-  if (failedRoutingServiceNames.length > 0)
+  if (failedGlobalServiceNames.length > 0)
     throw new Error(
-      `Could not start the multi-window routing proxies: ${failedRoutingServiceNames.join(', ')}. Each failure is logged above.`,
+      `Could not start the app-global services in main: ${failedGlobalServiceNames.join(', ')}. Each failure is logged above.`,
     );
 
   // Window layout persistence must register its request handlers before any window exists so a
@@ -364,12 +366,14 @@ async function main() {
   await initializeWindowLayoutPersistence();
 
   // A window is tracked and takes OS focus the moment it is shown, but it cannot serve a routed
-  // call until its renderer has registered. Its scoped window service appearing is that signal, and
+  // call until its renderer has registered. Its window service shard appearing is that signal, and
   // routing waits for it rather than following focus alone — see `getTargetWindowId`.
-  onDidCreateNetworkObject(({ id }) => {
-    const readyWindowId = getWindowIdFromScopedWindowServiceId(id);
-    if (readyWindowId !== undefined) markWindowReady(readyWindowId);
-  });
+  onDidRegisterWindowServiceShard((readyWindowId) => markWindowReady(readyWindowId));
+  // The index has been listening since its module was evaluated, which is well before this line,
+  // and the announcement it heard is never repeated. Reconciling here is what makes the two
+  // orderings equivalent, so a window that registered in the meantime is not left unroutable for
+  // the rest of the session.
+  getWindowIdsWithServiceShard().forEach((readyWindowId) => markWindowReady(readyWindowId));
 
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
@@ -428,38 +432,6 @@ async function main() {
       logger.warn(`performStartupTasks threw unexpectedly: ${getErrorMessage(e)}`);
     }
   })();
-
-  // Announces a closed window to the whole app. Created once here rather than per window because an
-  // event type may only be claimed by one emitter, and the main process is the single source for it
-  // — it is the only process that knows when a window goes away. Services that a single window
-  // hosts on the whole app's behalf listen for this to hand hosting over to a surviving window.
-  //
-  // The name is intentionally NOT declared in the public `NetworkEvents` type — it is core plumbing
-  // between the main process and the renderer service hosts, not part of the `@papi/*` surface — so
-  // `EventType extends NetworkEventTypes` rejects the literal name. Cast the name past that
-  // constraint and recover the payload type on the result, the same escape hatch
-  // `scroll-group.service-host.ts` uses for its host-internal versification event. Registering
-  // centrally (rather than reaching for the deprecated sync factory, which does not) is what keeps
-  // the event out of the "announced but never registered" deprecation path.
-  /* eslint-disable no-type-assertion/no-type-assertion */
-  const onDidCloseWindowEmitter = (await networkService.createNetworkEventEmitterAsync(
-    EVENT_NAME_ON_DID_CLOSE_WINDOW as NetworkEventTypes,
-    {
-      notification: {
-        'x-experimental': true,
-        summary: 'Emitted when a window closes.',
-        params: [
-          {
-            name: 'windowId',
-            required: true,
-            summary: "The closed window's id.",
-            schema: { type: 'number' },
-          },
-        ],
-      },
-    },
-  )) as unknown as PlatformEventEmitter<number>;
-  /* eslint-enable no-type-assertion/no-type-assertion */
 
   // `before-quit` fires ahead of every window's `close`, so recording it here is what lets a
   // window's close handler tell a whole-app quit from a single window closing. Both this and the
@@ -750,13 +722,64 @@ async function main() {
     // Add several listeners to the window to log events
     newWindow.webContents.on('unresponsive', () => logger.warn(`Window ${windowId} unresponsive`));
     newWindow.webContents.on('responsive', () => logger.warn(`Window ${windowId} responsive`));
+    // What this window has spent of its crash-reload budget. Per window, because a crash loop is
+    // one window's page failing rather than the app's.
+    let crashReloadBudget = NO_RENDERER_CRASH_RELOADS_YET;
     newWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) => {
       logger.warn(`Window ${windowId} render process gone: ${JSON.stringify(details)}`);
       // Everything this window registered died with its renderer, so routing has to move to a window
       // that can answer rather than spending the network service's registration retry on handlers
-      // that no longer exist. The `onDidCreateNetworkObject` hook above marks it ready again when
-      // its window service reappears.
+      // that no longer exist.
       markWindowNotReady(windowId);
+
+      // Nothing else brings a dead renderer back: Electron leaves the window there with no page in
+      // it, and the `onDidRegisterWindowServiceShard` subscription that would mark this window ready
+      // again only ever hears from a page that is running. Without the reload below the window stays
+      // out of the routable set for the rest of the session — a window still on screen, still
+      // holding its tabs' worth of the user's work, that every fan-out reports as unreachable and
+      // every routed call refuses to go to.
+      //
+      // A clean exit is the renderer going away on purpose, which is what a window being taken down
+      // looks like from here, so it gets no reload — and neither does a window whose close has
+      // already begun, which is on its way out with its shutdown work in flight.
+      if (
+        details.reason === 'clean-exit' ||
+        newWindow.isDestroyed() ||
+        isWindowClosing(windowId) ||
+        isAppShuttingDown()
+      )
+        return;
+
+      // A renderer that came back and ran for a while recovered, so its next crash starts the budget
+      // over; one that dies again straight away is looping, and stops after the cap.
+      const reloadDecision = decideRendererCrashReload(crashReloadBudget, Date.now());
+      if (!reloadDecision.shouldReload) {
+        logger.error(
+          `Window ${windowId} renderer died ${reloadDecision.reloadsAlreadySpent} times in a row despite being reloaded each time, so it is being left down. Close the window and open a new one.`,
+        );
+        // The reload was the only thing that would ever have put this window back in the app, so
+        // the window has to stop being treated as one that is coming back. `markWindowNotReady`
+        // above leaves it looking like a window that is mid-recovery, and every fan-out in the app
+        // refuses to answer while one of those exists — for a window that is never recovering, that
+        // is the rest of the session.
+        //
+        // Marked whatever the window had managed to do before it died. A renderer that never got as
+        // far as registering leaves nothing behind for the fan-outs to refuse over, but it is the
+        // same window in the same state, and one flag recorded on both paths is what keeps this
+        // from needing a second mechanism for the case that is harder to see.
+        //
+        // The window is deliberately left open and tracked. It is still on screen with the user's
+        // tabs' worth of layout behind it, and closing it here would rewrite the persisted window
+        // layout without it — taking away the one recovery they have left, which is to quit and
+        // relaunch.
+        markWindowAbandoned(windowId);
+        return;
+      }
+      crashReloadBudget = reloadDecision.budget;
+      logger.warn(
+        `Reloading window ${windowId} after its renderer died (attempt ${reloadDecision.attempt} of ${MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS}); it becomes routable again when its window service shard reappears`,
+      );
+      newWindow.webContents.reload();
     });
     // A reload replaces the page and everything it registered, the same as a crash does. This also
     // fires for the very first load, before the window was ever ready, which changes nothing.
@@ -788,7 +811,7 @@ async function main() {
     const setWindowFocus = async (
       specifier: import('@shared/services/window.service-model').SetFocusSpecifier,
     ) => {
-      const windowService = await getWindowServiceForWindow(windowId);
+      const windowService = await getWindowServiceShard(windowId);
       if (windowService) await windowService.setFocus(specifier);
       else logger.debug(`Window service for window ${windowId} not available yet`);
     };
@@ -796,6 +819,12 @@ async function main() {
     newWindow.webContents.on('before-input-event', async (_, event) => {
       // Key up seems not to change focus in Windows, so we will only change on keyDown
       if (event.type !== 'keyDown') return;
+
+      // Announce Escape so overlays rendered in the parent document dismiss no matter which frame
+      // has focus. Deliberately no preventDefault — the focused frame still gets the key and may
+      // act on it too (e.g. the scripture editor closes its marker palette), and dismissing an
+      // already-dismissed overlay is a no-op.
+      announceAppWindowInput(event);
 
       // Announce a possible focus change
       try {
@@ -810,6 +839,10 @@ async function main() {
     newWindow.webContents.on('before-mouse-event', async (_, event) => {
       // Mouse up and other events seem not to change focus in Windows, so we will only change on mouseDown
       if (event.type !== 'mouseDown') return;
+
+      // Announce the click so overlays rendered in the parent document dismiss even when it lands
+      // inside a WebView iframe, whose events never reach the parent document
+      announceAppWindowInput(event);
 
       // Announce a possible focus change
       try {
@@ -855,61 +888,59 @@ async function main() {
       // Adjust the Window button colors based on the current theme
       // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
       if (process.platform !== 'darwin' && process.platform !== 'linux') {
+        const paintTitleBarForTheme = (newTheme: ThemeDefinitionExpanded) => {
+          if (!newTheme.cssVariables.primary) {
+            logger.warn(
+              `Failed to set title bar window button colors: New theme primary color is falsy!`,
+            );
+            return;
+          }
+
+          // Convert oklch color to hex format for Electron compatibility
+          let symbolColorHex: string;
+          try {
+            symbolColorHex = chroma(newTheme.cssVariables.primary).hex();
+          } catch (e) {
+            logger.warn(
+              `Failed to set title bar window button colors: Could not convert primary color '${newTheme.cssVariables.primary}' to hex: ${getErrorMessage(e)}`,
+            );
+            return;
+          }
+
+          // A destroyed window has no title bar left to color. The unsubscribe that runs when
+          // this window closes normally gets here first, but a theme change in flight at that
+          // moment can still arrive afterwards — and painting it would otherwise be reported as
+          // a color conversion problem, which is the one thing it is not.
+          if (newWindow.isDestroyed()) return;
+
+          try {
+            newWindow.setTitleBarOverlay({
+              color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
+              symbolColor: symbolColorHex,
+              height: TITLE_BAR_BUTTON_HEIGHT,
+            });
+          } catch (e) {
+            logger.warn(
+              `Failed to set title bar window button colors on window ${windowId}: ${getErrorMessage(e)}`,
+            );
+          }
+        };
+
+        // Read and subscribed locally, not through the theme data provider: the provider is
+        // registered by this very process, so going through it would put a JSON-RPC round trip
+        // between the theme changing and the object in the next module that already knows.
+        //
+        // Guarded because this runs inside an `async` handler, where a throw is an unhandled
+        // rejection at window creation rather than a caught error. Colouring caption buttons is not
+        // worth that, and the subscription below is isolated for the same reason.
         try {
-          windowCloseUnsubscribers.add(
-            await themeService.subscribeCurrentTheme(undefined, (newTheme) => {
-              if (isPlatformError(newTheme)) {
-                logger.warn(
-                  `Failed to set title bar window button colors: Failed to get new current theme: ${getErrorMessage(
-                    newTheme,
-                  )}`,
-                );
-                return;
-              }
-              if (!newTheme.cssVariables.primary) {
-                logger.warn(
-                  `Failed to set title bar window button colors: New theme primary color is falsy!`,
-                );
-                return;
-              }
-
-              // Convert oklch color to hex format for Electron compatibility
-              let symbolColorHex: string;
-              try {
-                symbolColorHex = chroma(newTheme.cssVariables.primary).hex();
-              } catch (e) {
-                logger.warn(
-                  `Failed to set title bar window button colors: Could not convert primary color '${newTheme.cssVariables.primary}' to hex: ${getErrorMessage(e)}`,
-                );
-                return;
-              }
-
-              // A destroyed window has no title bar left to color. The unsubscribe that runs when
-              // this window closes normally gets here first, but a theme change in flight at that
-              // moment can still arrive afterwards — and painting it would otherwise be reported as
-              // a color conversion problem, which is the one thing it is not.
-              if (newWindow.isDestroyed()) return;
-
-              try {
-                newWindow.setTitleBarOverlay({
-                  color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
-                  symbolColor: symbolColorHex,
-                  height: TITLE_BAR_BUTTON_HEIGHT,
-                });
-              } catch (e) {
-                logger.warn(
-                  `Failed to set title bar window button colors on window ${windowId}: ${getErrorMessage(e)}`,
-                );
-              }
-            }),
-          );
+          paintTitleBarForTheme(getCurrentThemeSync());
         } catch (e) {
           logger.warn(
-            `Failed to subscribe to current theme to adjust window button colors: ${getErrorMessage(
-              e,
-            )}`,
+            `Failed to set title bar window button colors on window ${windowId}: ${getErrorMessage(e)}`,
           );
         }
+        windowCloseUnsubscribers.add(onDidChangeCurrentTheme(paintTitleBarForTheme));
       }
     });
 
@@ -926,7 +957,7 @@ async function main() {
     // when you click on the close button for the main window, it immediately fires the `close`
     // event, superseding the app:`before-quit` event and this process needs to be able to hang
     // the window until the sync completes.
-    let isWindowClosing = false;
+    let isCloseInProgress = false;
     /**
      * Whether this window's close is the app going down, decided on the first pass through the
      * close handler below.
@@ -945,16 +976,16 @@ async function main() {
       // and this fall-through is the user's only escape hatch until a real feedback/cancel UX
       // exists (PT-4001 tracks the missing shutdown-sync feedback). It abandons the in-flight sync
       // mid-flight — same risk profile as force-quitting the app.
-      if (isWindowClosing) return;
+      if (isCloseInProgress) return;
 
       // Prevents the window from initially closing. First, and ahead of every decision this handler
       // makes: Electron reads `defaultPrevented` when this synchronous stretch returns, so anything
       // that throws above this line lets the window close with none of the shutdown work below ever
       // running — and an async listener's throw becomes a rejected promise Electron never sees.
-      // Below the `isWindowClosing` guard, though: the second close click has to reach Electron's
+      // Below the `isCloseInProgress` guard, though: the second close click has to reach Electron's
       // default close, which is the user's only escape from the wait this handler is about to start.
       event.preventDefault();
-      isWindowClosing = true;
+      isCloseInProgress = true;
 
       // Everything from here down is inside the guard: the window is now prevented from closing and
       // latched as closing, so a throw that escaped would strand it exactly there — visible, inert,
@@ -1031,7 +1062,7 @@ async function main() {
           // Closed rather than destroyed, because the app is staying up and the page still has
           // teardown of its own to run — `destroy()` skips `beforeunload`, which is what prunes
           // this window's stored web view state. The second pass through this handler stops at
-          // the `isWindowClosing` guard above, leaving Electron's default close to run.
+          // the `isCloseInProgress` guard above, leaving Electron's default close to run.
           newWindow.close();
           // A renderer that never finishes that teardown would otherwise leave the window on screen
           // and in limbo for the rest of the session: it is out of the routable set and recorded as
@@ -1055,23 +1086,6 @@ async function main() {
       // is destroyed by now, and reading a property off it can throw — which would abandon the rest
       // of this teardown, leaving the window tracked forever and the app never told it closed.
       removeWindow(newWindow, windowId);
-
-      // Tell the rest of the app the window is gone. A closing renderer drops its RPC connection
-      // without disposing the network objects it hosted, so this is the only signal the surviving
-      // windows get that an app-global service they were consuming — the theme engine, the scroll
-      // group service — needs a new host. Announced as soon as the window is out of the tracked
-      // state the listeners read, and ahead of the unsubscribers below: those are RPC to a renderer
-      // that is already gone, so they take the network service's whole registration retry to fail,
-      // and no surviving window would start taking over until they did.
-      // `PlatformEventEmitter` runs its subscribers synchronously and does not isolate them, so one
-      // that throws would take the rest of the announcement — and everything below — with it.
-      try {
-        onDidCloseWindowEmitter.emit(windowId);
-      } catch (e) {
-        logger.error(
-          `A subscriber threw while being told window ${windowId} closed, so the rest of them were not told: ${getErrorMessage(e)}`,
-        );
-      }
 
       // Stop persisting this window. When the close was deliberate — the app stays up — rewrite the
       // structure without it so the window does not come back next session. During a quit the
@@ -1098,7 +1112,7 @@ async function main() {
 
     // Open urls in the user's browser
     // Note that webviews can get to this handler with window.open and anchor tags with
-    // target="_blank". Please revise web-view.service-host.ts as necessary if you make changes here
+    // target="_blank". Please revise web-view.service-shard.ts as necessary if you make changes here
     newWindow.webContents.setWindowOpenHandler((handlerDetails) => {
       // Only allow https urls
       (async () => {
@@ -1122,6 +1136,22 @@ async function main() {
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
     if (globalThis.startupMarks) searchParamsObject[STARTUP_MARKS_QUERY_PARAMETER] = '';
+
+    // The scroll group state travels with the window rather than being asked for after it loads, so
+    // the toolbar and every scroll-group-following web view render the reference the app is actually
+    // on instead of the default reference followed by a jump. Omitted when this process has none
+    // yet, which is the case the renderer's own fallback covers.
+    const scrollGroupStateForWindow = getScrollGroupStateForNewWindow();
+    if (scrollGroupStateForWindow)
+      searchParamsObject[SCROLL_GROUP_STATE_QUERY_PARAMETER] = serialize(scrollGroupStateForWindow);
+
+    // The current theme travels with the window for the same reason, and matters even earlier: the
+    // window's own stylesheet and the one baked into every web view it restores are read during the
+    // first render, so a window that had to ask for the theme would paint the default and flash.
+    // Omitted when this process has none yet, which is the case the renderer's own fallback covers.
+    const currentThemeForWindow = getCurrentThemeForNewWindow();
+    if (currentThemeForWindow)
+      searchParamsObject[THEME_STATE_QUERY_PARAMETER] = serialize(currentThemeForWindow);
 
     // If the URL doesn't load, we might need to show something to the user
     const urlToLoad = `${resolveHtmlPath('index.html')}?${new URLSearchParams(searchParamsObject)}`;
@@ -1380,6 +1410,13 @@ async function main() {
   app.on('will-quit', async (e) => {
     if (!isAppQuitting) {
       logger.info('Main process is quitting');
+      // Before anything that can fail or wait: the scroll group and theme hosts let their stores lag
+      // memory so a held-down navigation key does not fsync per verse and a dragged colour picker
+      // does not fsync per frame, and this is the last moment that lag can be closed. Synchronous
+      // and unconditional, so quitting right after navigating or changing the theme still opens on
+      // the right reference, in the right theme, next time.
+      flushPersistedScrollGroupState();
+      flushPersistedThemeState();
       // Stop the startup boot-race retry loop before networkService.shutdown() tears down the
       // connection, so a late retry can't resurrect it (a no-op if the window close already aborted).
       startupTasksAbort.abort();

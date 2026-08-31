@@ -117,6 +117,44 @@
         "isHidden": true,
         "default": "",
         "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.chapterVerseSeparator": {
+        "label": "%project_settings_platformScripture_chapterVerseSeparator_label%",
+        "description": "%project_settings_platformScripture_chapterVerseSeparator_description%",
+        "default": ".",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.verseRangeSeparator": {
+        "label": "%project_settings_platformScripture_verseRangeSeparator_label%",
+        "description": "%project_settings_platformScripture_verseRangeSeparator_description%",
+        "default": "-",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.defaultFootnoteCaller": {
+        "label": "%project_settings_platformScripture_defaultFootnoteCaller_label%",
+        "description": "%project_settings_platformScripture_defaultFootnoteCaller_description%",
+        "default": "+",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.defaultCrossRefCaller": {
+        "label": "%project_settings_platformScripture_defaultCrossRefCaller_label%",
+        "description": "%project_settings_platformScripture_defaultCrossRefCaller_description%",
+        "default": "-",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.footnoteCallers": {
+        "label": "%project_settings_platformScripture_footnoteCallers_label%",
+        "description": "%project_settings_platformScripture_footnoteCallers_description%",
+        "default": "",
+        "isHidden": true,
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.crossRefCallers": {
+        "label": "%project_settings_platformScripture_crossRefCallers_label%",
+        "description": "%project_settings_platformScripture_crossRefCallers_description%",
+        "default": "",
+        "isHidden": true,
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
       }
     }
   }

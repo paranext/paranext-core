@@ -38,7 +38,7 @@ vi.mock('@renderer/hooks/use-last-focused-tab-id.hook', () => ({
 
 // Mock heavy transitive deps that run side-effects at module init in jsdom.
 vi.mock('../../../shared/services/logger.service');
-vi.mock('@renderer/services/theme.service-host', () => ({
+vi.mock('@renderer/services/theme.service', () => ({
   __esModule: true,
   localThemeService: {},
 }));
@@ -49,7 +49,7 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
   useIsPowerMode: vi.fn(() => true),
 }));
 
-vi.mock('@renderer/services/web-view.service-host', () => ({
+vi.mock('@renderer/services/web-view.service-shard', () => ({
   floatTab: vi.fn(),
   updateTabPartialSync: vi.fn(),
 }));

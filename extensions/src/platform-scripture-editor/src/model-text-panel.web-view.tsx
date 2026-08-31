@@ -21,6 +21,8 @@ import { isDblResourceReference } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
+import { canPublishResourcePanelProjectIds } from './resource-panel-readiness.utils';
+import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -48,6 +50,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   projectId,
   scrollGroupScrRef,
   updateWebViewDefinition,
+  useWebViewState,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => ALL_STRING_KEYS, []));
 
@@ -118,6 +121,14 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   // Ctrl+F opens Find for the displayed model resource.
   useOpenFindShortcut(webViewId, modelResourceProjectId);
+
+  // This web view's definition `projectId` is the editable project whose model-text setting is
+  // read, so the displayed resource is invisible to global navigation UI unless declared here.
+  usePublishNavigableProjectIds(
+    useWebViewState,
+    modelResourceProjectId ? [modelResourceProjectId] : [],
+    canPublishResourcePanelProjectIds(effectiveModelTextsState, isCatalogReady),
+  );
 
   // --- Operation callbacks ---
 

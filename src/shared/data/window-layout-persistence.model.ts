@@ -2,7 +2,7 @@
  * Request types and data shapes for persisting window layouts and bounds.
  *
  * INTERNAL PLUMBING between the main process (which owns the persisted structure on disk) and the
- * renderer's web view service host (which loads and pushes this window's dock layout). This module
+ * renderer's web view service shard (which loads and pushes this window's dock layout). This module
  * must only be imported by those two places — nothing here is part of the public `@papi/*` surface,
  * and importing it from anything that feeds `papi.d.ts` would leak it there.
  */

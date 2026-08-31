@@ -202,6 +202,7 @@ export type {
   Localized,
 } from './extension-contributions/menus.model';
 export { menuDocumentSchema } from './extension-contributions/menus.model';
+export type { PaletteItem } from './palette.types';
 export type { DblResourceData, ResourceType } from './resources.model';
 export type {
   ExtensionControlledProjectSetting,

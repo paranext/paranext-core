@@ -58,7 +58,14 @@ function makeFakeSocket() {
 }
 
 function makeServer(socket: WebSocket) {
-  return new RpcServer('7', socket, () => {}, new Map(), new RpcEventRegistry());
+  return new RpcServer(
+    '7',
+    socket,
+    () => {},
+    new Map(),
+    new RpcEventRegistry(),
+    () => {},
+  );
 }
 
 describe('RpcServer error logging', () => {
@@ -109,6 +116,17 @@ describe('RpcServer error logging', () => {
   });
 });
 
+/**
+ * The close-summary lines a mock logger recorded. A close logs twice — the summary carrying the
+ * event detail, then the count of methods the socket actually took with it — so a raw call count
+ * says nothing about the severity the summary was reported at.
+ */
+function closeSummaries(mockLogger: { mock: { calls: unknown[][] } }): string[] {
+  return mockLogger.mock.calls
+    .map((call) => String(call[0]))
+    .filter((line) => line.includes('closed (code='));
+}
+
 describe('RpcServer close logging', () => {
   beforeEach(() => {
     mockLoggerWarn.mockClear();
@@ -127,7 +145,7 @@ describe('RpcServer close logging', () => {
 
       dispatch('close', new CloseEvent('close', { code, wasClean: true }));
 
-      expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
+      expect(closeSummaries(mockLoggerInfo)).toHaveLength(1);
       expect(mockLoggerWarn).not.toHaveBeenCalled();
     },
   );
@@ -139,8 +157,8 @@ describe('RpcServer close logging', () => {
 
     dispatch('close', new CloseEvent('close', { code }));
 
-    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
-    expect(mockLoggerInfo).not.toHaveBeenCalled();
+    expect(closeSummaries(mockLoggerWarn)).toHaveLength(1);
+    expect(closeSummaries(mockLoggerInfo)).toHaveLength(0);
   });
 
   test('logs an unexpected close at warn, with the close code', async () => {
@@ -150,9 +168,9 @@ describe('RpcServer close logging', () => {
 
     dispatch('close', new CloseEvent('close', { code: 1006, reason: '', wasClean: false }));
 
-    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
-    expect(mockLoggerWarn.mock.calls[0][0]).toContain('code=1006');
-    expect(mockLoggerInfo).not.toHaveBeenCalled();
+    expect(closeSummaries(mockLoggerWarn)).toHaveLength(1);
+    expect(closeSummaries(mockLoggerWarn)[0]).toContain('code=1006');
+    expect(closeSummaries(mockLoggerInfo)).toHaveLength(0);
   });
 
   test('logs an intentional close at info, not warn', async () => {
@@ -184,13 +202,20 @@ describe('RpcServer close logging', () => {
     closeHandler?.(ev);
 
     // Two scary lines for one disconnect is the noise regression this ticket must not ship.
-    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    expect(closeSummaries(mockLoggerWarn)).toHaveLength(1);
   });
 
   test('removes only its own registered methods on close', async () => {
     const { socket, dispatch } = makeFakeSocket();
     const methods = new Map();
-    const server = new RpcServer('7', socket, () => {}, methods, new RpcEventRegistry());
+    const server = new RpcServer(
+      '7',
+      socket,
+      () => {},
+      methods,
+      new RpcEventRegistry(),
+      () => {},
+    );
     await server.connect();
     server.registerRemoteMethod('command:mine');
     methods.set('command:someone-elses', { handler: {}, methodDocs: undefined });
@@ -207,7 +232,14 @@ describe('RpcServer close logging', () => {
     // peer that had registered a handful.
     const { socket, dispatch } = makeFakeSocket();
     const methods = new Map();
-    const server = new RpcServer('7', socket, () => {}, methods, new RpcEventRegistry());
+    const server = new RpcServer(
+      '7',
+      socket,
+      () => {},
+      methods,
+      new RpcEventRegistry(),
+      () => {},
+    );
     await server.connect();
     server.registerRemoteMethod('command:mine');
     server.registerRemoteMethod('command:mine-too');
@@ -216,7 +248,11 @@ describe('RpcServer close logging', () => {
 
     dispatch('close', new CloseEvent('close', { code: 1006, wasClean: false }));
 
-    expect(mockLoggerWarn.mock.calls[0][0]).toContain('Removing 2 methods');
+    // The count belongs to what the socket actually took with it, so it is logged after the removal
+    // loop; the close line itself carries no count at all, rather than a shared-registry number.
+    expect(closeSummaries(mockLoggerWarn)[0]).not.toMatch(/\d+ methods/);
+    const counted = mockLoggerInfo.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(counted).toContain('Removed 2 methods');
   });
 
   test('reports a peer that died on the way down at info, not warn', async () => {
@@ -231,10 +267,10 @@ describe('RpcServer close logging', () => {
     dispatch('close', new CloseEvent('close', { code: 1006, wasClean: false }));
 
     expect(mockLoggerWarn).not.toHaveBeenCalled();
-    expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
+    expect(closeSummaries(mockLoggerInfo)).toHaveLength(1);
     // Still says what happened — the point is the severity, not hiding the abnormal close.
-    expect(mockLoggerInfo.mock.calls[0][0]).toContain('code=1006 abnormal=true');
-    expect(mockLoggerInfo.mock.calls[0][0]).toContain('expected during app shutdown');
+    expect(closeSummaries(mockLoggerInfo)[0]).toContain('code=1006 abnormal=true');
+    expect(closeSummaries(mockLoggerInfo)[0]).toContain('expected during app shutdown');
   });
 
   test('still reports a peer that died while the app is running at warn', async () => {
@@ -247,8 +283,8 @@ describe('RpcServer close logging', () => {
 
     dispatch('close', new CloseEvent('close', { code: 1006, wasClean: false }));
 
-    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
-    expect(mockLoggerWarn.mock.calls[0][0]).not.toContain('expected during app shutdown');
+    expect(closeSummaries(mockLoggerWarn)).toHaveLength(1);
+    expect(closeSummaries(mockLoggerWarn)[0]).not.toContain('expected during app shutdown');
   });
 });
 
@@ -270,8 +306,7 @@ describe('RpcServer peer identity', () => {
 
     dispatch('close', new CloseEvent('close', { code: 1006, wasClean: false }));
 
-    const logged = mockLoggerWarn.mock.calls[0][0];
-    expect(logged).toContain('Websocket 7 (renderer#3) closed');
+    expect(closeSummaries(mockLoggerWarn)[0]).toContain('Websocket 7 (renderer#3) closed');
   });
 
   test('names the announced peer in the error line too', async () => {
@@ -293,7 +328,7 @@ describe('RpcServer peer identity', () => {
 
     dispatch('close', new CloseEvent('close', { code: 1006, wasClean: false }));
 
-    expect(mockLoggerWarn.mock.calls[0][0]).toContain('Websocket 7 closed');
+    expect(closeSummaries(mockLoggerWarn)[0]).toContain('Websocket 7 closed');
   });
 
   test.each([

@@ -42,7 +42,10 @@ import type {
 } from 'platform-scripture';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
-import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
+import {
+  canPublishResourcePanelProjectIds,
+  getResourcePanelReadiness,
+} from './resource-panel-readiness.utils';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
@@ -69,6 +72,7 @@ import {
 } from './resource-panel-strings.utils';
 import { RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
+import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -371,6 +375,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // Ctrl+F opens Find for the displayed resource.
   useOpenFindShortcut(webViewId, resourceProjectId);
+
+  // This web view's definition `projectId` is the container project whose reference list is shown,
+  // so the displayed resource is invisible to global navigation UI unless declared here.
+  usePublishNavigableProjectIds(
+    useWebViewState,
+    resourceProjectId ? [resourceProjectId] : [],
+    canPublishResourcePanelProjectIds(effectiveResourcesState, isCatalogReady),
+  );
 
   // #endregion
 

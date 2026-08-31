@@ -331,7 +331,7 @@ async function openManageBooksUnserialized(
   //
   // Open as a floating panel rather than a docked tab so the user gets a
   // properly-sized window from the start. Mirrors the Settings pattern at
-  // src/renderer/services/web-view.service-host.ts:1805. We keep the
+  // src/renderer/services/web-view.service-shard.ts:1805. We keep the
   // existing-tab reuse path so an already-floating Manage Books window is
   // brought to the front instead of opening a new one.
   const floatingLayout = {
@@ -350,7 +350,7 @@ async function openManageBooksUnserialized(
     // Reloading DOES remount the dialog, which is what makes the launch parameters take effect
     // without any re-apply machinery: `reloadWebView` re-runs the provider's `getWebView`, and the
     // per-call `srcNonce = newNonce()` that gets interpolated into the generated `content`
-    // (`web-view.service-host.ts`) makes `content` differ every time, so the `srcDoc` bound in
+    // (`web-view.service-shard.ts`) makes `content` differ every time, so the `srcDoc` bound in
     // `web-view.component.tsx` changes and the iframe reloads. The dialog therefore reads the new
     // values in its ordinary mount-time initializers. There is a standing TODO on that nonce asking
     // whether it should be stable per web view; if it ever becomes stable, this path stops working

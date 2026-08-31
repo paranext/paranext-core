@@ -45,6 +45,9 @@ import { getErrorMessage } from 'platform-bible-utils';
 
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
 
+/** Called by an RpcServer with the method names its client's departure removed from the registry */
+type AnnounceClientDisconnectMethod = (removedMethodNames: string[]) => void;
+
 /**
  * Manages the JSON-RPC protocol on the server end of a websocket owned by main. This class is not
  * intended to be instantiated by anything other than RpcWebSocketListener.
@@ -83,6 +86,8 @@ export class RpcServer implements IRpcHandler {
   private readonly rpcEventDetailsByEventName: IRpcEventRegistry;
   /** Called by an RpcServer when all other RpcServers should emit an event over the network */
   private readonly propagateEventMethod: PropagateEventMethod;
+  /** Called by an RpcServer once its client's methods have been removed from the registry */
+  private readonly announceClientDisconnectMethod: AnnounceClientDisconnectMethod;
 
   constructor(
     name: string,
@@ -90,11 +95,13 @@ export class RpcServer implements IRpcHandler {
     propagateEventMethod: PropagateEventMethod,
     rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
     rpcEventDetailsByEventName: IRpcEventRegistry,
+    announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
   ) {
     bindClassMethods.call(this);
     this.name = name;
     this.ws = webSocket;
     this.propagateEventMethod = propagateEventMethod;
+    this.announceClientDisconnectMethod = announceClientDisconnectMethod;
 
     // Uncomment the following to log every message sent
     /*
@@ -259,20 +266,6 @@ export class RpcServer implements IRpcHandler {
     return this.peerName ? `${this.name} (${this.peerName})` : this.name;
   }
 
-  /**
-   * How many network methods this peer registered. The method map is shared by reference across
-   * every `RpcServer` on the network, so its `size` is the whole network's method count — an
-   * alarming number to attach to one socket's departure, and not the number of methods actually
-   * about to be removed.
-   */
-  private countOwnRegisteredMethods(): number {
-    let count = 0;
-    this.rpcMethodDetailsByMethodName.forEach(({ handler }) => {
-      if (handler === this) count += 1;
-    });
-    return count;
-  }
-
   private addEventListenersToWebSocket() {
     if (this.ws) {
       this.ws.addEventListener('close', this.onWebSocketClose);
@@ -304,18 +297,43 @@ export class RpcServer implements IRpcHandler {
     // fire on every shutdown and bury the signal under the routine.
     const diedDuringShutdown = !isClean && isAppShuttingDown();
     const shutdownNote = diedDuringShutdown ? ', expected during app shutdown' : '';
-    const summary = `Websocket ${this.describePeer()} closed (${detail}${shutdownNote}). Removing ${this.countOwnRegisteredMethods()} methods`;
+    // No method count here on purpose: the number that belongs on a close line is what this socket
+    // actually took with it, and that is only known once the removal loop below has run — which
+    // logs it.
+    const summary = `Websocket ${this.describePeer()} closed (${detail}${shutdownNote})`;
     if (isClean || diedDuringShutdown) logger.info(summary);
     else logger.warn(summary);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
+    const removedMethodNames: string[] = [];
     this.rpcMethodDetailsByMethodName.forEach(({ handler }, methodName) => {
       if (handler !== this) return;
 
       logger.debug(`Method '${methodName}' removed since websocket ${this.name} closed`);
       this.rpcMethodDetailsByMethodName.delete(methodName);
+      removedMethodNames.push(methodName);
     });
+    // The registry is shared by every connected process, so count what this socket actually took
+    // with it rather than what is in the registry
+    logger.info(
+      `Websocket ${this.describePeer()} closed. Removed ${removedMethodNames.length} methods`,
+    );
     this.rpcEventDetailsByEventName.unregisterAll(this);
+    // Announced only after the registry no longer holds any of this client's methods, so a
+    // subscriber acting on the news can never be told about a death that has not happened yet. That
+    // ordering is why the announcement exists here at all: it is derived from the teardown rather
+    // than from a message the departing process sent before it, which can outrun its own socket.
+    //
+    // A second ordering makes the announcement safe to act on blindly, and it is load-bearing: the
+    // disposal names an object by id, and whoever receives it drops whatever it holds under that id
+    // without checking whether that is still the registration the announcement was about. What rules
+    // out dropping a NEWER registration is that this announcement's `ws.send` reaches every surviving
+    // socket before any registration request that arrives after this teardown can be answered on the
+    // same socket — the announcement path from here to the send awaits nothing real (an
+    // already-resolved initialize at most), and a process only records a local registration once its
+    // register request has been answered. Introduce a genuine `await` anywhere between here and the
+    // send and a re-registration can slip in front of the disposal, which will then revoke it.
+    this.announceClientDisconnectMethod(removedMethodNames);
   }
 
   private onWebSocketError(ev: Event): void {

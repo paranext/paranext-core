@@ -25,27 +25,18 @@
  * `role="dialog"` element.
  */
 import { test, expect } from '../../fixtures/isolated.fixture';
-import { preConfigureSettings } from '../../fixtures/helpers';
 
 test.describe('First-run wizard overlay', () => {
-  let restoreSettings: (() => void) | undefined;
-
-  test.beforeAll(() => {
-    // Write settings to the shared dev-appdata settings file BEFORE launchElectronApp runs (the
-    // isolated fixture's electronApp fixture calls launchElectronApp). Playwright runs beforeAll
-    // before test-scoped fixture setup, so this write precedes the Electron launch.
-    // firstRunComplete: false is explicit — a developer who has completed the wizard locally may
-    // have firstRunComplete: true in dev-appdata, which would let resolveInternal dismiss the
-    // overlay immediately even though the loading state briefly appeared. Being explicit ensures
-    // the overlay gate stays active for the full test on any developer machine.
-    restoreSettings = preConfigureSettings({
-      'platform.interfaceMode': 'simple',
-      'platform.firstRunComplete': false,
-    });
-  });
-
-  test.afterAll(() => {
-    restoreSettings?.();
+  // Seeded THROUGH the fixture's own options, never with a local preConfigureSettings in
+  // beforeAll: hooks run before test-scoped fixture setup, so a hand-rolled seed here was
+  // overridden by the fixture's `interfaceMode` default ('power' — which lets resolveInternal
+  // bypass the gate) and then leaked back into shared dev-appdata by the fixture's later
+  // restore. firstRunComplete: false is explicit — a developer who has completed the wizard
+  // locally may have firstRunComplete: true in dev-appdata, which would let resolveInternal
+  // dismiss the overlay immediately even though the loading state briefly appeared.
+  test.use({
+    interfaceMode: 'simple',
+    seedSettings: { 'platform.firstRunComplete': false },
   });
 
   test('renders the first-run overlay for a fresh profile', async ({ mainPage }) => {

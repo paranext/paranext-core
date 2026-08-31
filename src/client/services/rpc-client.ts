@@ -8,7 +8,7 @@ import {
   JSONRPCServerMiddlewareNext,
 } from 'json-rpc-2.0';
 import { logger } from '@shared/services/logger.service';
-import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
+import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from '@shared/models/rpc.interface';
 import {
   ANNOUNCE_PEER,
   ConnectionStatus,
@@ -30,7 +30,14 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { createWebSocket } from '@client/services/web-socket.factory';
-import { AsyncVariable, getErrorMessage, Mutex, MutexMap } from 'platform-bible-utils';
+import {
+  AsyncVariable,
+  getErrorMessage,
+  Mutex,
+  MutexMap,
+  PlatformEvent,
+  PlatformEventEmitter,
+} from 'platform-bible-utils';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
 import {
   SingleMethodDocumentation,
@@ -44,6 +51,14 @@ import {
  */
 export class RpcClient implements IRpcMethodRegistrar {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
+  /**
+   * Never fires here. Only the process that owns the websocket server sees a connection being lost;
+   * this end of the seam exists so shared code can subscribe in any process without asking which
+   * one it is running in.
+   *
+   * @experimental
+   */
+  readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
   /**
    * Whether {@link onWebSocketClose} has already run for the current socket.
    *
@@ -75,6 +90,7 @@ export class RpcClient implements IRpcMethodRegistrar {
   // `PapiRendererWebSocket`'s constructor and never reaches the `AsyncVariable` problems above.
   // Reconnect needs an unblocked path to the PAPI port for this client.
   private readonly connectionComplete = new AsyncVariable<void>('websocket connected');
+  private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
   /**
    * Label identifying this process in connection log lines, so multi-window logs stay readable.
    *
@@ -87,6 +103,7 @@ export class RpcClient implements IRpcMethodRegistrar {
 
   constructor(peerName: string = 'client') {
     bindClassMethods.call(this);
+    this.onDidDisconnectClient = this.clientDisconnectEmitter.event;
     this.peerName = `${peerName}#${RpcClient.getPeerDiscriminator()}`;
     this.jsonRpcServer = new JSONRPCServer();
     this.jsonRpcClient = new JSONRPCClient(

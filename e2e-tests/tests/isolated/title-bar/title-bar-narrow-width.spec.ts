@@ -13,7 +13,7 @@
  */
 import { ElectronApplication, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { preConfigureSettings, waitForAppReady } from '../../../fixtures/helpers';
+import { waitForAppReady } from '../../../fixtures/helpers';
 
 /**
  * A width no window can honor, so Electron clamps to the `minWidth` enforced in `main.ts`. Asking
@@ -25,20 +25,12 @@ const IMPOSSIBLY_NARROW_PX = 1;
 /** Sub-pixel layout rounding shows up as a 1px scrollWidth excess that is not a real overflow. */
 const ROUNDING_TOLERANCE_PX = 1;
 
-let restoreSettings: (() => void) | undefined;
-
-test.beforeEach(() => {
-  // Simple mode is the reported case, and it is the denser of the two bars: it carries the project
-  // selector that Power mode does not. firstRunComplete keeps the wizard from covering the bar.
-  restoreSettings = preConfigureSettings({
-    'platform.interfaceMode': 'simple',
-    'platform.firstRunComplete': true,
-  });
-});
-
-test.afterEach(() => {
-  restoreSettings?.();
-});
+// Simple mode is the reported case, and it is the denser of the two bars: it carries the project
+// selector that Power mode does not. firstRunComplete keeps the wizard from covering the bar.
+// Seeded through the fixture's own options — a hand-rolled preConfigureSettings in a beforeEach
+// would be silently overwritten by the fixture's later seeding pass (Playwright resolves a test's
+// fixtures AFTER its beforeEach hooks run), flipping the spec to the fixture's Power-mode default.
+test.use({ interfaceMode: 'simple', seedSettings: { 'platform.firstRunComplete': true } });
 
 /**
  * Closes the docked DevTools the dev-mode launch opens.

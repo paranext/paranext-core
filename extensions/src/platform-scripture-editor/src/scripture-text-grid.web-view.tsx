@@ -42,6 +42,7 @@ import { useTextCollectionSources } from './use-text-collection-sources.hook';
 import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { resolveTextCollectionProjectId } from './scripture-text-grid-project.utils';
+import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 import {
   ResourceCollectionOptions,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
@@ -268,6 +269,16 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   );
   const caretResourceProjectId = useFocusedResourceProjectId(displayedProjectIds);
   useOpenFindShortcut(webViewId, caretResourceProjectId);
+
+  // The grid is one web view hosting many projects, so its members are invisible to global
+  // navigation UI unless declared here.
+  // `resources` — and so `displayedProjectIds` — is transiently empty until the sources and the
+  // cached DBL list have both loaded, which is indistinguishable from "every project was removed".
+  usePublishNavigableProjectIds(
+    useWebViewState,
+    displayedProjectIds,
+    sources !== undefined && !isLoadingCachedResources,
+  );
 
   // Latch the displayed project. Each grid resource cell is itself a Scripture editor, so focusing
   // one (e.g. clicking a verse in Chapter view) makes that resource the active editor. Never switch
