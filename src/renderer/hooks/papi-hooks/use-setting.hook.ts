@@ -60,9 +60,13 @@ export const useSetting = <SettingName extends SettingNames>(
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
         setting: SettingTypes[SettingName] | PlatformError,
-        setSetting: (
-          newData: SettingTypes[SettingName],
-        ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
+        // `useData` drops its setter while its runaway guard is throttled, so this really can be
+        // `undefined` — asserting otherwise would make the guard below look like dead code
+        setSetting:
+          | ((
+              newData: SettingTypes[SettingName],
+            ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>)
+          | undefined,
         boolean,
       ];
     }
@@ -79,7 +83,7 @@ export const useSetting = <SettingName extends SettingNames>(
   const safeSetSetting = useCallback(
     async (newData: SettingTypes[SettingName]) => {
       if (setSetting) return setSetting(newData);
-      const message = `Cannot set setting ${key}: its data subscription was stopped. Reopen this view to retry.`;
+      const message = `Cannot set setting ${key}: its data subscription is temporarily throttled. It will retry on its own shortly.`;
       logger.warn(message);
       throw new Error(message);
     },

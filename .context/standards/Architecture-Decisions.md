@@ -2297,9 +2297,32 @@ step, no automation. Just a record.
     that this IS the answer, resolving a three-state interface-mode check to the wrong mode and
     rendering raw localization keys as real strings. The value has not resolved and will be retried,
     so `true` is the honest report.
-  - *Keep the trip permanent* (PT-1561's behavior) — rejected: a Send/Receive or bulk import fans
-    out real updates faster than any consumer can, so a legitimate burst left a pane degraded long
-    after the provider went quiet, recoverable only by closing the tab.
+  - *Keep the trip permanent* (PT-1561's behavior) — rejected. Both designs stop the loop; the
+    subscription is dropped the moment the guard trips either way. The only question is whether the
+    stop expires. Priced out: the guard trips at 100 events in a 1s window and then sits tripped for
+    5s with fresh counters, so a genuinely stuck consumer costs ~100 events per ~5.1s ≈ 20/s against
+    a measured free-running ~1000/s — re-arming already removes ~98% of the damage, and latching
+    buys only the remaining ~20 events/s in a state that is already broken and already logging.
+    Against that, latching makes the false-positive case unbounded in time: the guard fires on a
+    *rate* signal, which cannot distinguish a bug from a Send/Receive burst, and a wrong guess under
+    a latch is recoverable only by closing the tab. A large open-ended harm traded for a small
+    closed one. Latching also has an unpaid bill — permanently stopping a pane is a state the user
+    must be told about and given a way out of, and neither PT-1561 nor this change builds that UI,
+    so "permanent" would mean silently unrecoverable. Finally, re-arming's repeated warning is the
+    diagnostic, not the defect: a latched trip warns once and goes quiet, which in the logs is
+    indistinguishable from a burst that resolved on its own, whereas a warning every 5s for as long
+    as the consumer is broken is what actually separates "someone ran an S/R" from "this component
+    has an unstable selector". PT-1561's trip path crashed the web view from the day it shipped and
+    nobody caught it, which is what a once-and-done signal buys.
+  - *Return the last delivered value instead of the error while tripped* — rejected: it removes the
+    only signal consumers have that anything is wrong, and a pane that looks normal while silently
+    refusing writes is more deceptive than one that reports an unresolved state. Note the accepted
+    design does mean a consumer substituting a fallback for a `PlatformError` will visibly swap
+    content for the cooldown's duration.
+  - *Escalating backoff* (5s, 10s, 20s…) — deferred, not rejected. It converges on permanent for a
+    truly stuck consumer while staying cheap for a burst, and is the natural answer to "can we have
+    both?". Not done here because the fixed cooldown already captures the ~50x reduction and backoff
+    adds state that has to be reasoned about and tested. A reasonable follow-up.
   - *Re-arm on selector or data provider change* — rejected as actively harmful: an unstable
     selector, the very mistake being reported, gets a new identity every render, so this would reset
     the counter every render and disarm the guard entirely. Re-arming must be time-based.
@@ -2310,6 +2333,11 @@ step, no automation. Just a record.
   `RESOURCE_EXHAUSTED` error, a temporarily `undefined` setter, and a `true` `isLoading` that later
   resolves. Hooks that assert a non-optional setter must supply their own fallback (`useSetting`
   does). A genuine loop is bounded to one burst per cooldown rather than stopped outright, which is
-  a deliberate trade of absolute containment for self-healing. Revisit if the thresholds prove
-  wrong in the field — they remain arbitrary, inherited from PT-1561.
+  a deliberate trade of absolute containment for self-healing. The known limit: re-arming bounds
+  *rate*, not *total*. If a stuck consumer accumulates something a trip does not release — memory,
+  subscriptions, IPC backlog — throttling to ~2% moves the wall out rather than removing it. The
+  bet is that a warning appearing in the console every 5s gets the consumer fixed in the session it
+  appears in; a named accumulation that survives a trip would be a real argument for latching (or
+  for the deferred backoff). Revisit if the thresholds prove wrong in the field — they remain
+  arbitrary, inherited from PT-1561.
 - **Source:** PT-4421; resubscribe-storm and burst behavior measured during review of this change.
