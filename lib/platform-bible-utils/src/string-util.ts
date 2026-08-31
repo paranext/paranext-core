@@ -8,6 +8,11 @@ import { GraphemeString, toUint32 } from './grapheme-string';
  * out-of-range arguments — but counts and indexes by Unicode grapheme cluster (what a reader would
  * call a character) rather than by UTF-16 code unit.
  *
+ * "Grapheme cluster" here means what `stringz` produces, which is emoji-aware but not UAX #29
+ * conformant: it splits `\r\n`, Indic conjuncts, Thai spacing marks, and decomposed Hangul Jamo
+ * where a conformant segmenter would not. See {@link GraphemeString} for the full list and for why
+ * the faster, less correct segmenter is the deliberate choice.
+ *
  * Each one segments its input on every call, because a bare string is all it is given. Doing more
  * than one operation on the same string? Construct a single `GraphemeString` and call its methods:
  * segmentation then happens once instead of once per call, and derived values (`slice`, `substring`,
@@ -138,6 +143,9 @@ export function lastIndexOf(string: string, searchString: string, position?: num
  * This function mirrors the `length` property from the JavaScript Standard String object. It counts
  * grapheme clusters instead of UTF-16 code units. Since `length` appears to be a reserved keyword,
  * the function was renamed to `stringLength`.
+ *
+ * Counts as a reader would for Latin and emoji. Overcounts for `\r\n`, Indic conjuncts, Thai
+ * spacing marks, and decomposed Hangul Jamo — see the module note above.
  *
  * @param string String to return the length for
  * @returns Number of grapheme clusters in the string
@@ -321,7 +329,8 @@ export function substring(string: string, begin: number, end?: number): string {
 
 /**
  * Converts a string to an array of its grapheme clusters. Mirrors spreading a native string, except
- * that native yields code points rather than grapheme clusters.
+ * that native yields code points rather than grapheme clusters. See the module note above for where
+ * these clusters differ from UAX #29.
  *
  * @param string String to convert to an array
  * @returns An array of the string's grapheme clusters

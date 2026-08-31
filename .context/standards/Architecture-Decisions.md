@@ -2442,3 +2442,39 @@ step, no automation. Just a record.
   benchmark harness and the full result write-ups were scratch work on the author's machine and were
   deliberately not checked in — the numbers above are the durable part, and the parity suite in
   `grapheme-string.test.ts` is what guards the behavior.
+
+## adr-grapheme-segmenter-stringz: Grapheme segmentation uses `stringz`, which is emoji-aware but not UAX #29 conformant
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** `GraphemeString` and the `string-util` wrappers describe their unit as the "grapheme
+  cluster" — what a reader would call a character. The segmenter behind that is `stringz`, and it is
+  not a UAX #29 implementation. Measured against `Intl.Segmenter`, which is conformant: `stringz`
+  correctly keeps ZWJ emoji sequences, skin-tone modifiers, regional-indicator flags, precomposed
+  Hangul syllables, and combining marks on Latin together as one cluster, but it splits four things
+  a conformant segmenter keeps whole — `\r\n` (rule GB3), Indic conjuncts formed with a virama
+  (Devanagari `क्षि` → 4, Tamil `நி` → 2, Bengali `ক্ত` → 3, all should be 1), Thai and other
+  spacing combining marks (`กำ` → 2), and Hangul written as decomposed Jamo (→ 3). Those are live
+  translation targets, and CRLF is every Windows-authored USFM file, so the divergence is not
+  theoretical.
+- **Decision:** Keep `stringz` and say plainly what it does. The class doc and the `string-util`
+  module note now name the four divergences rather than claiming conformance, and `stringLength`'s
+  doc says it overcounts for those scripts. The code is unchanged.
+- **Alternatives:** **Swap to `Intl.Segmenter`** — rejected for now on two grounds, one of which is
+  not about speed. It is ~10x slower on Latin text and 7.5x on emoji-heavy text (though only 2.1x on
+  Devanagari, where `stringz` does the most extra work), which alone would undo a large part of what
+  this module exists for. More decisively, a conformant segmenter makes `\r\n` a single cluster, and
+  this class only reports a search hit that begins and ends on a cluster boundary — so `'\n'` would
+  stop being a boundary-aligned separator and `split(text, '\n')` would return Windows-authored
+  input unsplit. `src/shared/utils/logger.utils.ts` does exactly that. The swap is a behavior change
+  to line splitting, not a drop-in correctness upgrade. **Ship a hybrid** — `Intl.Segmenter` with a
+  CRLF carve-out — rejected as premature: it reintroduces a hand-maintained deviation from the
+  standard, which is the thing the swap was supposed to fix.
+- **Consequences:** Any feature that must count or index characters correctly in Devanagari, Tamil,
+  Bengali, Thai, or decomposed Hangul cannot rely on this module today, and the docs now say so at
+  the three places a caller would look. Revisit if a translation feature needs conformant counts:
+  the work is a segmenter swap plus a decision about what `split` on `'\n'` should mean when `\r\n`
+  is one cluster, and it wants its own measurement pass rather than being folded into unrelated
+  work.
+- **Source:** PT-2626 review; divergences and timings measured directly against `Intl.Segmenter` on
+  2026-08-31.
