@@ -534,18 +534,23 @@ export function PlatformTabTitle({
     };
   }, [focusSubject, id, lastSelectedScriptureNavigableWebViewId, lastFocusedTabId, isPowerMode]);
 
-  // Give this menu a keyboard path. rc-tabs renders every tab as a focusable `role="tab"` element
-  // with the title inside it, and the context-menu trigger sets no tabIndex — so pressing Shift+F10
-  // or the Menu key on a focused tab fires `contextmenu` at the tab and it bubbles UP, past the
-  // trigger, opening nothing. Forwarding that event to an element INSIDE the trigger sends it back
-  // through the trigger on its way up, which is what opens the menu.
+  // Give this menu a keyboard path. rc-tabs renders the focusable tab as `.dock-tab-btn`, and the
+  // context-menu trigger inside it sets no tabIndex — so pressing Shift+F10 or the Menu key on a
+  // focused tab fires `contextmenu` at `.dock-tab-btn` and it bubbles UP, past the trigger, opening
+  // nothing. Forwarding that event to an element INSIDE the trigger sends it back through the
+  // trigger on its way up, which is what opens the menu.
+  //
+  // Matched by class rather than by `role="tab"`, which appears TWICE in the real tab: rc-tabs sets
+  // it on the focusable `.dock-tab-btn`, and rc-dock sets it again on the DragDropDiv holding the
+  // label inside it. Walking to the nearest `[role="tab"]` therefore lands on that inner element —
+  // a descendant of the one the keypress reaches — where the event never arrives.
   //
   // This is the whole keyboard story for the tab menu: every item in it becomes reachable at once,
   // including ones an extension contributes, rather than only the ones given their own shortcut.
   useEffect(() => {
     if (!isPowerMode) return undefined;
     const containerElement = containerRef.current;
-    const tabElement = containerElement?.closest('[role="tab"]');
+    const tabElement = containerElement?.closest('.dock-tab-btn');
     if (!containerElement || !tabElement) return undefined;
 
     const forwardToTrigger = (event: Event) => {
