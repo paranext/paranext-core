@@ -163,13 +163,17 @@ export class RpcClient implements IRpcMethodRegistrar {
         this.hasCompletedTeardown = false;
         this.ws = await createWebSocket(`ws://localhost:${WEBSOCKET_PORT}`);
         this.addEventListenersToWebSocket();
+        // Captured before the await: a close interleaving with the resolution below runs
+        // onWebSocketClose, which nulls `this.ws`, and the resumed continuation would then throw on
+        // `this.ws.url` — reported by the catch as a connection error that never happened.
+        const { url } = this.ws;
 
         // Wait for the socket to finish connecting before continuing (0 means connecting)
         if (this.ws.readyState !== 0) this.connectionComplete.resolveToValue();
         await this.connectionComplete.promise;
 
         this.connectionStatus = ConnectionStatus.Connected;
-        logger.info(`Websocket connected to ${this.ws.url}`);
+        logger.info(`Websocket connected to ${url}`);
         this.announcePeerToServer();
       } catch (error) {
         // Log the peer and the failure text; the socket object itself carries no own
@@ -178,6 +182,10 @@ export class RpcClient implements IRpcMethodRegistrar {
           `RPC client connection error for ${this.peerName}`,
           getErrorMessage(error),
         );
+        // TODO(PT-4435): The socket itself is never closed here, only forgotten — leaving a live,
+        // listener-less socket and a server-side RpcServer whose registered methods are never
+        // reaped. That is the startup-race shape recorded in the ADR. Closing it changes what a
+        // failed connect does to a live socket, so it belongs with the reconnect work.
         this.removeEventListenersFromWebSocket();
         this.connectionStatus = ConnectionStatus.Disconnected;
         this.ws = undefined;

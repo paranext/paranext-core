@@ -13,9 +13,13 @@ vi.mock('@shared/services/logger.service', () => ({
 
 /**
  * Find a port nothing is listening on: bind an ephemeral server, read the port it was assigned,
- * then close it immediately. Deterministic (the OS won't hand out that port to anything else in the
- * tiny window before the test dials it) without hard-coding a port number that could collide with
- * something else running on the machine.
+ * then close it immediately.
+ *
+ * A time-of-check/time-of-use race, not a guarantee: nothing stops another process on a loaded
+ * runner from taking the freed port before the test dials it, in which case the connect succeeds
+ * and the test fails on its timeout rather than on its assertion. Accepted over hard-coding a port
+ * that could collide outright, and over retry logic in a test whose whole value is that it uses
+ * real sockets.
  */
 async function getUnusedPort(): Promise<number> {
   const probe = new WebSocketServer({ host: '127.0.0.1', port: 0 });
@@ -34,6 +38,8 @@ async function getUnusedPort(): Promise<number> {
 /** Open a server on an ephemeral port, connect, kill the connection, return the close event. */
 async function captureCloseEvent(kill: (serverSocket: WebSocket) => void): Promise<unknown> {
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+  // Declared out here so the finally can close it however the try exits.
+  let client: WebSocket | undefined;
   try {
     await new Promise<void>((resolve) => {
       server.once('listening', resolve);
@@ -44,17 +50,20 @@ async function captureCloseEvent(kill: (serverSocket: WebSocket) => void): Promi
     const serverSocketPromise = new Promise<WebSocket>((resolve) => {
       server.once('connection', resolve);
     });
-    const client = new WebSocket(`ws://127.0.0.1:${address.port}`);
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}`);
+    client = socket;
     const closeEvent = new Promise<unknown>((resolve) => {
-      client.addEventListener('close', resolve);
+      socket.addEventListener('close', resolve);
     });
 
     await new Promise<void>((resolve) => {
-      client.addEventListener('open', () => resolve());
+      socket.addEventListener('open', () => resolve());
     });
     kill(await serverSocketPromise);
     return await closeEvent;
   } finally {
+    // Both handles, so a hang or a thrown assertion above cannot leak them and hold the worker open.
+    client?.terminate();
     server.close();
   }
 }
