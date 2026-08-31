@@ -2453,3 +2453,47 @@ step, no automation. Just a record.
   hardening if such layouts recur.
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
+
+## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it
+
+- **Date:** 2026-08-31
+- **Status:** Accepted — capability deferred to PT-4465
+- **Context:** A window created while the user is working in another application should appear
+  without stealing the foreground, and a window the user asked for must come to the front. The
+  obvious source for that distinction is focus state, and it has been reached for multiple times
+  in this PR's review rounds. Both attempts failed on the same case. Reading `getFocusedWindowId()`
+  does not survive `removeWindow` clearing it, so on macOS — where the app stays resident with no
+  windows — closing the focused window reset the answer to the startup one and a backgrounded
+  creation took the foreground anyway. Replacing that with a never-cleared "has this app ever been
+  focused" latch cannot tell "the user is in another application" from "no window holds focus
+  because the user closed them all and is now clicking the dock icon" — and the dock-click path
+  creates a window through `app.on('activate')` → `restoreWindows()`, so it would have shown the
+  window the user just asked for unfocused and flashing.
+- **Decision:** The question is *"did a person in this app ask for this window?"*, which is the
+  caller's knowledge and nothing else's, so it is declared by the caller rather than inferred. No
+  window-creation path reads focus state to decide activation. The mechanism is PT-4465's to build:
+  an explicit user-intent flag on `createWindow`, passed by each call site (menu and
+  `platform.createWindow`, dock-click and startup restore: yes; a `{ type: 'window' }` web-view
+  open or `moveWebViewToNewWindow` arriving from an extension: no). **None of that is wired yet** —
+  `createWindow` takes `restoreInfo` and `{ pendingContent }` and nothing else, and no
+  intent flag exists in the tree — so a reader looking for it will find it on the ticket, not in
+  the code. This entry exists so the inference is not re-attempted in the meantime.
+- **Scope — this is about activating a NEW window, not about raising an existing one.** Focus state
+  remains the right input for a raise, and is used deliberately today: `isApplicationFocused()`
+  gates the cross-window open raise (`web-view.service-router.ts`) and the move raise, so an in-app
+  action never pulls the app in front of whatever the user is working in. `handleUri` in `main.ts`
+  is just as deliberately *not* gated on it, and its comment states this entry's principle for the
+  case that was already shipped: the raise runs precisely when the app does not own the foreground,
+  because the user asked by following the link. Those guards answer "is this app in front?", which
+  focus state does know. Nothing here argues against them.
+- **Alternatives:** Infer from `getFocusedWindowId()` — rejected, cleared by `removeWindow`. Infer
+  from an app-ever-focused latch — rejected, indistinguishable from the dock-click restore. Ship
+  the third variation of a focus heuristic — rejected: every variation answers a question about the
+  foreground, and the question being asked is about a person's intent.
+- **Consequences:** Until PT-4465 lands, every new window activates, including one an extension
+  creates while the user is elsewhere. That is the known cost of not guessing. When it does land,
+  withholding the constructor's `show` must stay scoped to the not-asked-for case: `did-fail-load`
+  only logs, so a window that never reaches `ready-to-show` would otherwise stay invisible, which is
+  worse than a badly-timed foreground.
+- **Source:** PR #2670 review item 6 (2026-08-25) and the review rounds that followed; PT-4465,
+  which carries the design, the call-site table and the `show` hazard in full.
