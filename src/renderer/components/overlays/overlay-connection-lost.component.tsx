@@ -1,7 +1,7 @@
 import { Button, Z_INDEX_CONNECTION_LOST } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
 import { AlertTriangle } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
@@ -25,6 +25,29 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   CONNECTION_LOST_TITLE_KEY,
 ];
 
+/**
+ * English text shown when a key has no resolved translation, matching the `en.json` entries. This
+ * component is the one place in the app where an unresolved string cannot simply be waited out:
+ * `useLocalizedStrings` fetches over PAPI and returns the raw key both while loading and on any
+ * error, and PAPI is unreachable exactly when this component matters — so a socket that dies before
+ * localization has resolved would otherwise show the user a literal `%overlay_connectionLost%`.
+ */
+const ENGLISH_FALLBACKS: { [key: string]: string } = {
+  [CONNECTION_LOST_TITLE_KEY]: 'Connection lost.',
+  [CONNECTION_LOST_MESSAGE_KEY]:
+    "Platform.Bible can't reach its background services. Anything you changed just now may not be saved.",
+  [CONNECTION_LOST_RELOAD_KEY]: 'Reload',
+};
+
+/**
+ * The localization service returns the key itself when a string is unresolved, and every key is
+ * `%`-wrapped, so a value that still looks like its own key has not resolved.
+ */
+function localizedOrEnglish(key: LocalizeKey, value: string | undefined) {
+  if (!value || value === key) return ENGLISH_FALLBACKS[key];
+  return value;
+}
+
 /** Toolbar heights the banner sits below — `tw:h-12` in Power mode, `tw:h-14` in Simple. */
 const POWER_MODE_TOOLBAR_HEIGHT = 48;
 const SIMPLE_MODE_TOOLBAR_HEIGHT = 56;
@@ -46,6 +69,11 @@ type Props = {
  * so leaving them clickable would let the user go on pressing controls that silently do nothing,
  * which is the failure this state exists to end. Content behind the scrim stays readable but is not
  * selectable; that is the accepted cost of blocking interaction with a single layer.
+ *
+ * The scrim stops pointers, not keyboards, so the fixed layer is also a modal (`alertdialog` +
+ * `aria-modal`) that keeps Tab and Shift+Tab on Reload. Without it, tabbing off Reload would walk
+ * into the toolbar and dock, where every control is still focusable and Enter-activatable — the
+ * same silent failure, reached by keyboard instead of by mouse.
  */
 export function ConnectionLostOverlayPresentational({
   title,
@@ -57,6 +85,8 @@ export function ConnectionLostOverlayPresentational({
   // React refs passed to DOM elements must be initialized with null, not undefined.
   // eslint-disable-next-line no-null/no-null
   const reloadRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+  const messageId = useId();
 
   // Reload is the only control that still works, so it is where focus belongs. This component
   // mounts at the moment the connection drops, so focusing on mount is focusing on appearance.
@@ -64,9 +94,31 @@ export function ConnectionLostOverlayPresentational({
     reloadRef.current?.focus();
   }, []);
 
+  // The scrim stops pointers, not Tab, so keyboard reach has to be closed separately: Reload must be
+  // the only control the keyboard can land on too. Listening on the document rather than on this layer keeps the
+  // cycle closed no matter where focus currently sits — the app behind the scrim is full of
+  // focusable controls, and this is a modal over all of them. One focusable element means the cycle
+  // is a single stop, so both directions land back on Reload.
+  useEffect(() => {
+    const containFocus = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      event.preventDefault();
+      reloadRef.current?.focus();
+    };
+    document.addEventListener('keydown', containFocus, true);
+    return () => document.removeEventListener('keydown', containFocus, true);
+  }, []);
+
   return (
     <div className="pr-twp">
-      <div className="tw:fixed tw:inset-0" style={{ zIndex: Z_INDEX_CONNECTION_LOST }}>
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={messageId}
+        className="tw:fixed tw:inset-0"
+        style={{ zIndex: Z_INDEX_CONNECTION_LOST }}
+      >
         <div
           aria-hidden="true"
           data-testid="connection-lost-scrim"
@@ -84,8 +136,12 @@ export function ConnectionLostOverlayPresentational({
         >
           <div className="tw:flex tw:items-center tw:gap-3 tw:border-y tw:border-destructive/40 tw:bg-destructive/10 tw:px-3 tw:py-2 tw:text-sm tw:text-destructive">
             <AlertTriangle aria-hidden="true" className="tw:shrink-0" />
-            <span className="tw:font-medium">{title}</span>
-            <span className="tw:min-w-0">{message}</span>
+            <span id={titleId} className="tw:font-medium">
+              {title}
+            </span>
+            <span id={messageId} className="tw:min-w-0">
+              {message}
+            </span>
             <div className="tw:grow" />
             <Button ref={reloadRef} variant="outline" size="sm" onClick={onReload}>
               {reloadLabel}
@@ -105,7 +161,8 @@ export function ConnectionLostOverlayPresentational({
  * and PAPI is exactly what has broken by the time this state is needed. Mounted from startup, both
  * resolve while the connection is alive and their values persist afterwards. Mounted on the
  * disconnect, both would fail — showing the user a raw `%overlay_connectionLost%`, positioned for
- * the wrong toolbar height.
+ * the wrong toolbar height. {@link localizedOrEnglish} backs that up for the case where the socket
+ * dies before localization has answered at all.
  */
 export function ConnectionLostOverlay() {
   const [isConnectionLost, setIsConnectionLost] = useState(getIsConnectionLost);
@@ -135,9 +192,18 @@ export function ConnectionLostOverlay() {
   // whole window rather than take its place in the overlay stack.
   return createPortal(
     <ConnectionLostOverlayPresentational
-      title={localizedStrings[CONNECTION_LOST_TITLE_KEY]}
-      message={localizedStrings[CONNECTION_LOST_MESSAGE_KEY]}
-      reloadLabel={localizedStrings[CONNECTION_LOST_RELOAD_KEY]}
+      title={localizedOrEnglish(
+        CONNECTION_LOST_TITLE_KEY,
+        localizedStrings[CONNECTION_LOST_TITLE_KEY],
+      )}
+      message={localizedOrEnglish(
+        CONNECTION_LOST_MESSAGE_KEY,
+        localizedStrings[CONNECTION_LOST_MESSAGE_KEY],
+      )}
+      reloadLabel={localizedOrEnglish(
+        CONNECTION_LOST_RELOAD_KEY,
+        localizedStrings[CONNECTION_LOST_RELOAD_KEY],
+      )}
       isPowerMode={isPowerMode}
       onReload={handleReload}
     />,

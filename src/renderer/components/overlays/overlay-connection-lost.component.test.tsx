@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { onDidLoseConnection } from '@shared/services/network.service';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import {
   initConnectionLostStore,
   resetConnectionLost,
@@ -12,14 +13,25 @@ import {
   ConnectionLostOverlayPresentational,
 } from './overlay-connection-lost.component';
 
+/** What the localization service returns once it has answered over a live connection. */
+const RESOLVED_STRINGS = {
+  '%overlay_connectionLostTitle%': 'Connection lost.',
+  '%overlay_connectionLost%': "Platform.Bible can't reach its background services.",
+  '%overlay_connectionLostReload%': 'Reload',
+};
+
+/**
+ * What `useLocalizedStrings` returns while loading and on any error: `defaultState`, whose values
+ * are the raw keys themselves.
+ */
+const UNRESOLVED_STRINGS = {
+  '%overlay_connectionLostTitle%': '%overlay_connectionLostTitle%',
+  '%overlay_connectionLost%': '%overlay_connectionLost%',
+  '%overlay_connectionLostReload%': '%overlay_connectionLostReload%',
+};
+
 vi.mock('@renderer/hooks/papi-hooks', () => ({
-  useLocalizedStrings: vi.fn(() => [
-    {
-      '%overlay_connectionLostTitle%': 'Connection lost.',
-      '%overlay_connectionLost%': "Platform.Bible can't reach its background services.",
-      '%overlay_connectionLostReload%': 'Reload',
-    },
-  ]),
+  useLocalizedStrings: vi.fn(),
 }));
 
 vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
@@ -98,6 +110,7 @@ describe('ConnectionLostOverlayPresentational', () => {
 describe('ConnectionLostOverlay', () => {
   beforeEach(() => {
     resetConnectionLost();
+    vi.mocked(useLocalizedStrings).mockReturnValue([RESOLVED_STRINGS, false]);
   });
 
   it('renders nothing while the connection is alive', () => {
@@ -133,6 +146,53 @@ describe('ConnectionLostOverlay', () => {
     const alert = screen.getByRole('alert');
     expect(alert).not.toHaveTextContent('%overlay_');
     expect(alert).toHaveTextContent("Platform.Bible can't reach its background services.");
+  });
+
+  // A socket that dies before localization has answered leaves `useLocalizedStrings` returning its
+  // `defaultState`, whose values are the raw keys — and PAPI is unreachable by then, so waiting for
+  // a resolved value is not an option. The English fallback is what stands between the user and a
+  // literal `%overlay_connectionLost%`.
+  it('renders English text when localization has not resolved', () => {
+    vi.mocked(useLocalizedStrings).mockReturnValue([UNRESOLVED_STRINGS, true]);
+    render(<ConnectionLostOverlay />);
+
+    act(() => {
+      loseConnection();
+    });
+
+    const alert = screen.getByRole('alert');
+    expect(alert).not.toHaveTextContent('%');
+    expect(alert).toHaveTextContent('Connection lost.');
+    expect(alert).toHaveTextContent("Platform.Bible can't reach its background services.");
+    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+  });
+
+  // The scrim blocks pointers, not keyboards. Without a focus trap, Tab off Reload walks into the
+  // toolbar and dock, where every control is still focusable and Enter-activatable over the socket
+  // that just died — the silent failure this state exists to end, reached by keyboard.
+  it('keeps Tab and Shift+Tab on reload instead of letting focus reach the app behind it', async () => {
+    render(
+      <button type="button" data-testid="behind-the-overlay">
+        Behind the overlay
+      </button>,
+    );
+
+    act(() => {
+      loseConnection();
+    });
+    // Rendered second so the overlay's portal lands after the background control in the document
+    // order Tab follows.
+    render(<ConnectionLostOverlay />);
+
+    const reload = screen.getByRole('button', { name: 'Reload' });
+    expect(reload).toHaveFocus();
+
+    await userEvent.tab();
+    expect(reload).toHaveFocus();
+
+    await userEvent.tab({ shift: true });
+    expect(reload).toHaveFocus();
+    expect(screen.getByTestId('behind-the-overlay')).not.toHaveFocus();
   });
 
   it('reloads the window when reload is clicked', async () => {
