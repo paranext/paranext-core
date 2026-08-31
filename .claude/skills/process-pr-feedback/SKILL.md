@@ -242,26 +242,32 @@ reopens others, re-present the remainder rather than reading silence as assent.
 
 ## 5. Implement
 
-**Invoke the Superpowers flow before anything else in this step** — `superpowers:brainstorming` →
-`superpowers:writing-plans` → `superpowers:test-driven-development`, scaled to the ruling; a
-one-line correction needs the TDD skill and nothing above it. This is step 5's first action, ahead
-of every read below, because the step's own momentum is what skips it: the ruling you just received
-describes work, the next instruction here is a git command, and by the time that has run you are
-already implementing. Point their specs and plans at the notes directory: they default to
-`docs/superpowers/` inside the working tree, which is the one place this flow works to keep clean.
+**Before any code is written here, two things happen in this order — a check, then a handoff — and
+neither is optional.**
 
-**Step 4 ruled what and whether; this flow rules how**, and it is the first step here that has read
+**First, confirm the branch has not moved.** Read `rulings.md`, then `git fetch origin` and re-query
+`headRefOid` for every row. The gate may have taken days. On a branch we own, a value that differs
+from the row is step 0's remote-only stop, and it goes to the user before anything is built on the
+branch; on someone else's branch it is a warning, noted below the table. It comes first because a
+design reasoned against a tree that has since moved is as wasted as an implementation built on one.
+
+**Finishing that read is not permission to start implementing** — it is the single place this step
+goes wrong. The ruling you just received describes work, the instruction above this one is a git
+command, and running it feels like the work has begun. It has not.
+
+**The first thing that acts is the Superpowers flow** — `superpowers:brainstorming` →
+`superpowers:writing-plans` → `superpowers:test-driven-development`, scaled to the ruling; a
+one-line correction needs the TDD skill and nothing above it. Point their specs and plans at the
+notes directory: they default to `docs/superpowers/` inside the working tree, which is the one place
+this flow works to keep clean.
+
+**Step 4 ruled what and whether; this flow rules how**, and it is the first thing here that has read
 the code the change touches. The rulings are fixed constraints on it, not inputs to it —
 brainstorming widens a solution space, and step 4 closed a different one. Its approval gate is its
 own and is **not** covered by step 4's: a ruling to fix an item is not a ruling on the design that
 fixes it, so present the design and stop, however small it is. If the design work surfaces a reason
 a ruling is wrong — a second consumer, a cheaper seam, a cost the estimate missed — stop, put it
 back to the user as a new decision, and append the exchange to `rulings.md`.
-
-Then read `rulings.md`, `git fetch origin`, and re-query `headRefOid` for every row. The gate
-may have taken days. On a branch we own, a value that differs from the row is step 0's remote-only
-stop, and it goes to the user before anything is built on the branch; on someone else's branch it
-is a warning, noted below the table.
 
 Implement only what was ruled. A ruled rebase goes onto the branch's **own** base, using the
 block under **Finish the stack** with `origin/<baseRefName>` as `<base>` — a plain
