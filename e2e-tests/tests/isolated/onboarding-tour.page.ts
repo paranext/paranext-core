@@ -26,11 +26,6 @@ export async function clearTourDone(page: Page): Promise<void> {
   }, ONBOARDING_TOUR_DONE_KEY);
 }
 
-/** Reads the raw onboarding-tour completion flag from localStorage (`'true'` or null). */
-export async function getTourDoneFlag(page: Page): Promise<string | null> {
-  return page.evaluate((key) => localStorage.getItem(key), ONBOARDING_TOUR_DONE_KEY);
-}
-
 /**
  * Returns a Locator for the tour dialog element. The Tour component renders its outermost div with
  * `data-testid="tour-dialog"` — a tour-specific hook, so this can never match another modal
