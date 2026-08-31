@@ -1,4 +1,4 @@
-var ut=Object.defineProperty;var ht=(e,t,n)=>t in e?ut(e,t,{enumerable:!0,configurable:!0,writable:!0,value:n}):e[t]=n;var S=(e,t,n)=>ht(e,typeof t!="symbol"?t+"":t,n);import{_ as vt}from"./assets/preload-helper-CTOgD26E.js";class st{constructor(){S(this,"registryByUrl",new Map);S(this,"registryById",new Map)}clear(){this.registryByUrl.clear(),this.registryById.clear()}keys(){return this.registryByUrl.keys()}add(t){this.registryByUrl.set(t.url,t),this.registryById.set(t.id,t)}register(t,n,r,a,i){const c=typeof t=="object"?t.type:t;if(typeof t=="object"){const o=t;if(o instanceof F||o instanceof $||o instanceof D||o instanceof B)throw new TypeError(`[vitest] Cannot register a mock that is already defined. Expected a JSON representation from \`MockedModule.toJSON\`, instead got "${o.type}". Use "registry.add()" to update a mock instead.`);if(o.type==="automock"){const l=F.fromJSON(o);return this.add(l),l}else if(o.type==="autospy"){const l=$.fromJSON(o);return this.add(l),l}else if(o.type==="redirect"){const l=B.fromJSON(o);return this.add(l),l}else throw o.type==="manual"?new Error("Cannot set serialized manual mock. Define a factory function manually with `ManualMockedModule.fromJSON()`."):new Error(`Unknown mock type: ${o.type}`)}if(typeof n!="string")throw new TypeError("[vitest] Mocks require a raw string.");if(typeof a!="string")throw new TypeError("[vitest] Mocks require a url string.");if(typeof r!="string")throw new TypeError("[vitest] Mocks require an id string.");if(c==="manual"){if(typeof i!="function")throw new TypeError("[vitest] Manual mocks require a factory function.");const o=new D(n,r,a,i);return this.add(o),o}else if(c==="automock"||c==="autospy"){const o=c==="automock"?new F(n,r,a):new $(n,r,a);return this.add(o),o}else if(c==="redirect"){if(typeof i!="string")throw new TypeError("[vitest] Redirect mocks require a redirect string.");const o=new B(n,r,a,i);return this.add(o),o}else throw new Error(`[vitest] Unknown mock type: ${c}`)}delete(t){this.registryByUrl.delete(t)}get(t){return this.registryByUrl.get(t)}getById(t){return this.registryById.get(t)}has(t){return this.registryByUrl.has(t)}}class F{constructor(t,n,r){S(this,"type","automock");this.raw=t,this.id=n,this.url=r}static fromJSON(t){return new $(t.raw,t.id,t.url)}toJSON(){return{type:this.type,url:this.url,raw:this.raw,id:this.id}}}class ${constructor(t,n,r){S(this,"type","autospy");this.raw=t,this.id=n,this.url=r}static fromJSON(t){return new $(t.raw,t.id,t.url)}toJSON(){return{type:this.type,url:this.url,id:this.id,raw:this.raw}}}class B{constructor(t,n,r,a){S(this,"type","redirect");this.raw=t,this.id=n,this.url=r,this.redirect=a}static fromJSON(t){return new B(t.raw,t.id,t.url,t.redirect)}toJSON(){return{type:this.type,url:this.url,raw:this.raw,id:this.id,redirect:this.redirect}}}class D{constructor(t,n,r,a){S(this,"cache");S(this,"type","manual");this.raw=t,this.id=n,this.url=r,this.factory=a}async resolve(){if(this.cache)return this.cache;let t;try{t=await this.factory()}catch(n){const r=new Error('[vitest] There was an error when mocking a module. If you are using "vi.mock" factory, make sure there are no top level variables inside, since this call is hoisted to top of the file. Read more: https://vitest.dev/api/vi.html#vi-mock');throw r.cause=n,r}if(t===null||typeof t!="object"||Array.isArray(t))throw new TypeError(`[vitest] vi.mock("${this.raw}", factory?: () => unknown) is not returning an object. Did you mean to return an object with a "default" key?`);return this.cache=t}static fromJSON(t,n){return new D(t.raw,t.id,t.url,n)}toJSON(){return{type:this.type,url:this.url,id:this.id,raw:this.raw}}}function bt(e,t,n={}){const r=new Array,a=new xt,i=(l,w,g)=>{try{return l[w]=g,!0}catch{return!1}},c=(l,w)=>{const g=j(l),h=g==="Module"||!!l.__esModule;for(const{key:b,descriptor:z}of G(l,h,e.globalConstructors)){if(!h&&z.get){try{Object.defineProperty(w,b,z)}catch{}continue}if(kt(b,g))continue;const u=l[b],s=a.getId(u);if(s!==void 0){r.push(()=>i(w,b,a.getMockedValue(s)));continue}const d=j(u);if(Array.isArray(u)){i(w,b,[]);continue}const C=d.includes("Function")&&typeof u=="function";if((!C||u._isMockFunction)&&d!=="Object"&&d!=="Module"){i(w,b,u);continue}if(i(w,b,C?u:{})){if(C){let y=function(){if(this instanceof w[b])for(const{key:q,descriptor:N}of G(this,!1,e.globalConstructors)){if(N.get)continue;const A=this[q];if(j(A).includes("Function")&&typeof A=="function"){const R=this[q],p=T(this,q).mockImplementation(R),E=p.mockReset;p.mockRestore=p.mockReset=()=>(E.call(p),p.mockImplementation(R),p)}}};if(!e.spyOn)throw new Error("[@vitest/mocker] `spyOn` is not defined. This is a Vitest error. Please open a new issue with reproduction.");const T=e.spyOn,P=T(w,b);if(e.type==="automock"){P.mockImplementation(y);const q=P.mockReset;P.mockRestore=P.mockReset=()=>(q.call(P),P.mockImplementation(y),P)}Object.defineProperty(w[b],"length",{value:0})}a.track(u,w[b]),c(u,w[b])}}},o=n;c(t,o);for(const l of r)l();return o}class xt{constructor(){S(this,"idMap",new Map);S(this,"mockedValueMap",new Map)}getId(t){return this.idMap.get(t)}getMockedValue(t){return this.mockedValueMap.get(t)}track(t,n){const r=this.idMap.size;return this.idMap.set(t,r),this.mockedValueMap.set(r,n),r}}function j(e){return Object.prototype.toString.apply(e).slice(8,-1)}function kt(e,t){return t.includes("Function")&&typeof e=="string"&&["arguments","callee","caller","length","name"].includes(e)}function G(e,t,n){const{Map:r,Object:a,Function:i,RegExp:c,Array:o}=n,l=new r;let w=e;do{if(w===a.prototype||w===i.prototype||w===c.prototype)break;yt(w,g=>{const h=a.getOwnPropertyDescriptor(w,g);h&&l.set(g,{key:g,descriptor:h})})}while(w=a.getPrototypeOf(w));if(t&&!l.has("default")&&"default"in e){const g=a.getOwnPropertyDescriptor(e,"default");g&&l.set("default",{key:"default",descriptor:g})}return o.from(l.values())}function yt(e,t){const n=typeof t=="function"?t:r=>t.add(r);Object.getOwnPropertyNames(e).forEach(n),Object.getOwnPropertySymbols(e).forEach(n)}const _t=/^[A-Za-z]:\//;function ct(e=""){return e&&e.replace(/\\/g,"/").replace(_t,t=>t.toUpperCase())}const zt=/^[/\\]{2}/,qt=/^[/\\](?![/\\])|^[/\\]{2}(?!\.)|^[A-Za-z]:[/\\]/,St=/^[A-Za-z]:$/,Ct=/.(\.[^./]+|\.)$/,It=function(e){if(e.length===0)return".";e=ct(e);const t=e.match(zt),n=K(e),r=e[e.length-1]==="/";return e=Pt(e,!n),e.length===0?n?"/":r?"./":".":(r&&(e+="/"),St.test(e)&&(e+="/"),t?n?`//${e}`:`//./${e}`:n&&!K(e)?`/${e}`:e)},Et=function(...e){let t="";for(const n of e)if(n)if(t.length>0){const r=t[t.length-1]==="/",a=n[0]==="/";r&&a?t+=n.slice(1):t+=r||a?n:`/${n}`}else t+=n;return It(t)};function Pt(e,t){let n="",r=0,a=-1,i=0,c=null;for(let o=0;o<=e.length;++o){if(o<e.length)c=e[o];else{if(c==="/")break;c="/"}if(c==="/"){if(!(a===o-1||i===1))if(i===2){if(n.length<2||r!==2||n[n.length-1]!=="."||n[n.length-2]!=="."){if(n.length>2){const l=n.lastIndexOf("/");l===-1?(n="",r=0):(n=n.slice(0,l),r=n.length-1-n.lastIndexOf("/")),a=o,i=0;continue}else if(n.length>0){n="",r=0,a=o,i=0;continue}}t&&(n+=n.length>0?"/..":"..",r=2)}else n.length>0?n+=`/${e.slice(a+1,o)}`:n=e.slice(a+1,o),r=o-a-1;a=o,i=0}else c==="."&&i!==-1?++i:i=-1}return n}const K=function(e){return qt.test(e)},Tt=function(e){if(e==="..")return"";const t=Ct.exec(ct(e));return t&&t[1]||""};var Nt={reset:[0,0],bold:[1,22,"\x1B[22m\x1B[1m"],dim:[2,22,"\x1B[22m\x1B[2m"],italic:[3,23],underline:[4,24],inverse:[7,27],hidden:[8,28],strikethrough:[9,29],black:[30,39],red:[31,39],green:[32,39],yellow:[33,39],blue:[34,39],magenta:[35,39],cyan:[36,39],white:[37,39],gray:[90,39],bgBlack:[40,49],bgRed:[41,49],bgGreen:[42,49],bgYellow:[43,49],bgBlue:[44,49],bgMagenta:[45,49],bgCyan:[46,49],bgWhite:[47,49],blackBright:[90,39],redBright:[91,39],greenBright:[92,39],yellowBright:[93,39],blueBright:[94,39],magentaBright:[95,39],cyanBright:[96,39],whiteBright:[97,39],bgBlackBright:[100,49],bgRedBright:[101,49],bgGreenBright:[102,49],bgYellowBright:[103,49],bgBlueBright:[104,49],bgMagentaBright:[105,49],bgCyanBright:[106,49],bgWhiteBright:[107,49]},Mt=Object.entries(Nt);function Y(e){return String(e)}Y.open="";Y.close="";function $t(e=!1){let t=typeof process<"u"?process:void 0,n=(t==null?void 0:t.env)||{},r=(t==null?void 0:t.argv)||[];return!("NO_COLOR"in n||r.includes("--no-color"))&&("FORCE_COLOR"in n||r.includes("--color")||(t==null?void 0:t.platform)==="win32"||e&&n.TERM!=="dumb"||"CI"in n)||typeof window<"u"&&!!window.chrome}function Bt(e=!1){let t=$t(e),n=(c,o,l,w)=>{let g="",h=0;do g+=c.substring(h,w)+l,h=w+o.length,w=c.indexOf(o,h);while(~w);return g+c.substring(h)},r=(c,o,l=c)=>{let w=g=>{let h=String(g),b=h.indexOf(o,c.length);return~b?c+n(h,o,l,b)+o:c+h+o};return w.open=c,w.close=o,w},a={isColorSupported:t},i=c=>`\x1B[${c}m`;for(let[c,o]of Mt)a[c]=t?r(i(o[0]),i(o[1]),o[2]):Y;return a}Bt();function lt(e,t){return t.forEach(function(n){n&&typeof n!="string"&&!Array.isArray(n)&&Object.keys(n).forEach(function(r){if(r!=="default"&&!(r in e)){var a=Object.getOwnPropertyDescriptor(n,r);Object.defineProperty(e,r,a.get?a:{enumerable:!0,get:function(){return n[r]}})}})}),Object.freeze(e)}function dt(e){return e&&e.__esModule&&Object.prototype.hasOwnProperty.call(e,"default")?e.default:e}var J={exports:{}},x={};/**
+var ut=Object.defineProperty;var ht=(n,t,e)=>t in n?ut(n,t,{enumerable:!0,configurable:!0,writable:!0,value:e}):n[t]=e;var T=(n,t,e)=>ht(n,typeof t!="symbol"?t+"":t,e);import{_ as vt}from"./assets/preload-helper-CTOgD26E.js";class st{constructor(){T(this,"registryByUrl",new Map);T(this,"registryById",new Map)}clear(){this.registryByUrl.clear(),this.registryById.clear()}keys(){return this.registryByUrl.keys()}add(t){this.registryByUrl.set(t.url,t),this.registryById.set(t.id,t)}register(t,e,r,a,i){const c=typeof t=="object"?t.type:t;if(typeof t=="object"){const o=t;if(o instanceof F||o instanceof M||o instanceof D||o instanceof L)throw new TypeError(`[vitest] Cannot register a mock that is already defined. Expected a JSON representation from \`MockedModule.toJSON\`, instead got "${o.type}". Use "registry.add()" to update a mock instead.`);if(o.type==="automock"){const l=F.fromJSON(o);return this.add(l),l}else if(o.type==="autospy"){const l=M.fromJSON(o);return this.add(l),l}else if(o.type==="redirect"){const l=L.fromJSON(o);return this.add(l),l}else throw o.type==="manual"?new Error("Cannot set serialized manual mock. Define a factory function manually with `ManualMockedModule.fromJSON()`."):new Error(`Unknown mock type: ${o.type}`)}if(typeof e!="string")throw new TypeError("[vitest] Mocks require a raw string.");if(typeof a!="string")throw new TypeError("[vitest] Mocks require a url string.");if(typeof r!="string")throw new TypeError("[vitest] Mocks require an id string.");if(c==="manual"){if(typeof i!="function")throw new TypeError("[vitest] Manual mocks require a factory function.");const o=new D(e,r,a,i);return this.add(o),o}else if(c==="automock"||c==="autospy"){const o=c==="automock"?new F(e,r,a):new M(e,r,a);return this.add(o),o}else if(c==="redirect"){if(typeof i!="string")throw new TypeError("[vitest] Redirect mocks require a redirect string.");const o=new L(e,r,a,i);return this.add(o),o}else throw new Error(`[vitest] Unknown mock type: ${c}`)}delete(t){this.registryByUrl.delete(t)}get(t){return this.registryByUrl.get(t)}getById(t){return this.registryById.get(t)}has(t){return this.registryByUrl.has(t)}}class F{constructor(t,e,r){T(this,"type","automock");this.raw=t,this.id=e,this.url=r}static fromJSON(t){return new M(t.raw,t.id,t.url)}toJSON(){return{type:this.type,url:this.url,raw:this.raw,id:this.id}}}class M{constructor(t,e,r){T(this,"type","autospy");this.raw=t,this.id=e,this.url=r}static fromJSON(t){return new M(t.raw,t.id,t.url)}toJSON(){return{type:this.type,url:this.url,id:this.id,raw:this.raw}}}class L{constructor(t,e,r,a){T(this,"type","redirect");this.raw=t,this.id=e,this.url=r,this.redirect=a}static fromJSON(t){return new L(t.raw,t.id,t.url,t.redirect)}toJSON(){return{type:this.type,url:this.url,raw:this.raw,id:this.id,redirect:this.redirect}}}class D{constructor(t,e,r,a){T(this,"cache");T(this,"type","manual");this.raw=t,this.id=e,this.url=r,this.factory=a}async resolve(){if(this.cache)return this.cache;let t;try{t=await this.factory()}catch(e){const r=new Error('[vitest] There was an error when mocking a module. If you are using "vi.mock" factory, make sure there are no top level variables inside, since this call is hoisted to top of the file. Read more: https://vitest.dev/api/vi.html#vi-mock');throw r.cause=e,r}if(t===null||typeof t!="object"||Array.isArray(t))throw new TypeError(`[vitest] vi.mock("${this.raw}", factory?: () => unknown) is not returning an object. Did you mean to return an object with a "default" key?`);return this.cache=t}static fromJSON(t,e){return new D(t.raw,t.id,t.url,e)}toJSON(){return{type:this.type,url:this.url,id:this.id,raw:this.raw}}}function bt(n,t,e={}){const r=new Array,a=new xt,i=(l,w,m)=>{try{return l[w]=m,!0}catch{return!1}},c=(l,w)=>{const m=j(l),h=m==="Module"||!!l.__esModule;for(const{key:b,descriptor:z}of G(l,h,n.globalConstructors)){if(!h&&z.get){try{Object.defineProperty(w,b,z)}catch{}continue}if(kt(b,m))continue;const u=l[b],s=a.getId(u);if(s!==void 0){r.push(()=>i(w,b,a.getMockedValue(s)));continue}const d=j(u);if(Array.isArray(u)){i(w,b,[]);continue}const q=d.includes("Function")&&typeof u=="function";if((!q||u._isMockFunction)&&d!=="Object"&&d!=="Module"){i(w,b,u);continue}if(i(w,b,q?u:{})){if(q){let y=function(){if(this instanceof w[b])for(const{key:S,descriptor:E}of G(this,!1,n.globalConstructors)){if(E.get)continue;const A=this[S];if(j(A).includes("Function")&&typeof A=="function"){const O=this[S],p=P(this,S).mockImplementation(O),C=p.mockReset;p.mockRestore=p.mockReset=()=>(C.call(p),p.mockImplementation(O),p)}}};if(!n.spyOn)throw new Error("[@vitest/mocker] `spyOn` is not defined. This is a Vitest error. Please open a new issue with reproduction.");const P=n.spyOn,N=P(w,b);if(n.type==="automock"){N.mockImplementation(y);const S=N.mockReset;N.mockRestore=N.mockReset=()=>(S.call(N),N.mockImplementation(y),N)}Object.defineProperty(w[b],"length",{value:0})}a.track(u,w[b]),c(u,w[b])}}},o=e;c(t,o);for(const l of r)l();return o}class xt{constructor(){T(this,"idMap",new Map);T(this,"mockedValueMap",new Map)}getId(t){return this.idMap.get(t)}getMockedValue(t){return this.mockedValueMap.get(t)}track(t,e){const r=this.idMap.size;return this.idMap.set(t,r),this.mockedValueMap.set(r,e),r}}function j(n){return Object.prototype.toString.apply(n).slice(8,-1)}function kt(n,t){return t.includes("Function")&&typeof n=="string"&&["arguments","callee","caller","length","name"].includes(n)}function G(n,t,e){const{Map:r,Object:a,Function:i,RegExp:c,Array:o}=e,l=new r;let w=n;do{if(w===a.prototype||w===i.prototype||w===c.prototype)break;yt(w,m=>{const h=a.getOwnPropertyDescriptor(w,m);h&&l.set(m,{key:m,descriptor:h})})}while(w=a.getPrototypeOf(w));if(t&&!l.has("default")&&"default"in n){const m=a.getOwnPropertyDescriptor(n,"default");m&&l.set("default",{key:"default",descriptor:m})}return o.from(l.values())}function yt(n,t){const e=typeof t=="function"?t:r=>t.add(r);Object.getOwnPropertyNames(n).forEach(e),Object.getOwnPropertySymbols(n).forEach(e)}const _t=/^[A-Za-z]:\//;function ct(n=""){return n&&n.replace(/\\/g,"/").replace(_t,t=>t.toUpperCase())}const zt=/^[/\\]{2}/,St=/^[/\\](?![/\\])|^[/\\]{2}(?!\.)|^[A-Za-z]:[/\\]/,Tt=/^[A-Za-z]:$/,qt=/.(\.[^./]+|\.)$/,It=function(n){if(n.length===0)return".";n=ct(n);const t=n.match(zt),e=K(n),r=n[n.length-1]==="/";return n=Nt(n,!e),n.length===0?e?"/":r?"./":".":(r&&(n+="/"),Tt.test(n)&&(n+="/"),t?e?`//${n}`:`//./${n}`:e&&!K(n)?`/${n}`:n)},Ct=function(...n){let t="";for(const e of n)if(e)if(t.length>0){const r=t[t.length-1]==="/",a=e[0]==="/";r&&a?t+=e.slice(1):t+=r||a?e:`/${e}`}else t+=e;return It(t)};function Nt(n,t){let e="",r=0,a=-1,i=0,c=null;for(let o=0;o<=n.length;++o){if(o<n.length)c=n[o];else{if(c==="/")break;c="/"}if(c==="/"){if(!(a===o-1||i===1))if(i===2){if(e.length<2||r!==2||e[e.length-1]!=="."||e[e.length-2]!=="."){if(e.length>2){const l=e.lastIndexOf("/");l===-1?(e="",r=0):(e=e.slice(0,l),r=e.length-1-e.lastIndexOf("/")),a=o,i=0;continue}else if(e.length>0){e="",r=0,a=o,i=0;continue}}t&&(e+=e.length>0?"/..":"..",r=2)}else e.length>0?e+=`/${n.slice(a+1,o)}`:e=n.slice(a+1,o),r=o-a-1;a=o,i=0}else c==="."&&i!==-1?++i:i=-1}return e}const K=function(n){return St.test(n)},Pt=function(n){if(n==="..")return"";const t=qt.exec(ct(n));return t&&t[1]||""};var Et={reset:[0,0],bold:[1,22,"\x1B[22m\x1B[1m"],dim:[2,22,"\x1B[22m\x1B[2m"],italic:[3,23],underline:[4,24],inverse:[7,27],hidden:[8,28],strikethrough:[9,29],black:[30,39],red:[31,39],green:[32,39],yellow:[33,39],blue:[34,39],magenta:[35,39],cyan:[36,39],white:[37,39],gray:[90,39],bgBlack:[40,49],bgRed:[41,49],bgGreen:[42,49],bgYellow:[43,49],bgBlue:[44,49],bgMagenta:[45,49],bgCyan:[46,49],bgWhite:[47,49],blackBright:[90,39],redBright:[91,39],greenBright:[92,39],yellowBright:[93,39],blueBright:[94,39],magentaBright:[95,39],cyanBright:[96,39],whiteBright:[97,39],bgBlackBright:[100,49],bgRedBright:[101,49],bgGreenBright:[102,49],bgYellowBright:[103,49],bgBlueBright:[104,49],bgMagentaBright:[105,49],bgCyanBright:[106,49],bgWhiteBright:[107,49]},Rt=Object.entries(Et);function H(n){return String(n)}H.open="";H.close="";function Mt(n=!1){let t=typeof process<"u"?process:void 0,e=(t==null?void 0:t.env)||{},r=(t==null?void 0:t.argv)||[];return!("NO_COLOR"in e||r.includes("--no-color"))&&("FORCE_COLOR"in e||r.includes("--color")||(t==null?void 0:t.platform)==="win32"||n&&e.TERM!=="dumb"||"CI"in e)||typeof window<"u"&&!!window.chrome}function Lt(n=!1){let t=Mt(n),e=(c,o,l,w)=>{let m="",h=0;do m+=c.substring(h,w)+l,h=w+o.length,w=c.indexOf(o,h);while(~w);return m+c.substring(h)},r=(c,o,l=c)=>{let w=m=>{let h=String(m),b=h.indexOf(o,c.length);return~b?c+e(h,o,l,b)+o:c+h+o};return w.open=c,w.close=o,w},a={isColorSupported:t},i=c=>`\x1B[${c}m`;for(let[c,o]of Rt)a[c]=t?r(i(o[0]),i(o[1]),o[2]):H;return a}Lt();function lt(n,t){return t.forEach(function(e){e&&typeof e!="string"&&!Array.isArray(e)&&Object.keys(e).forEach(function(r){if(r!=="default"&&!(r in n)){var a=Object.getOwnPropertyDescriptor(e,r);Object.defineProperty(n,r,a.get?a:{enumerable:!0,get:function(){return e[r]}})}})}),Object.freeze(n)}function dt(n){return n&&n.__esModule&&Object.prototype.hasOwnProperty.call(n,"default")?n.default:n}var V={exports:{}},x={};/**
 * @license React
 * react-is.production.js
 *
@@ -6,7 +6,7 @@ var ut=Object.defineProperty;var ht=(e,t,n)=>t in e?ut(e,t,{enumerable:!0,config
 *
 * This source code is licensed under the MIT license found in the
 * LICENSE file in the root directory of this source tree.
-*/var Z;function At(){if(Z)return x;Z=1;var e=Symbol.for("react.transitional.element"),t=Symbol.for("react.portal"),n=Symbol.for("react.fragment"),r=Symbol.for("react.strict_mode"),a=Symbol.for("react.profiler"),i=Symbol.for("react.consumer"),c=Symbol.for("react.context"),o=Symbol.for("react.forward_ref"),l=Symbol.for("react.suspense"),w=Symbol.for("react.suspense_list"),g=Symbol.for("react.memo"),h=Symbol.for("react.lazy"),b=Symbol.for("react.view_transition"),z=Symbol.for("react.client.reference");function u(s){if(typeof s=="object"&&s!==null){var d=s.$$typeof;switch(d){case e:switch(s=s.type,s){case n:case a:case r:case l:case w:case b:return s;default:switch(s=s&&s.$$typeof,s){case c:case o:case h:case g:return s;case i:return s;default:return d}}case t:return d}}}return x.ContextConsumer=i,x.ContextProvider=c,x.Element=e,x.ForwardRef=o,x.Fragment=n,x.Lazy=h,x.Memo=g,x.Portal=t,x.Profiler=a,x.StrictMode=r,x.Suspense=l,x.SuspenseList=w,x.isContextConsumer=function(s){return u(s)===i},x.isContextProvider=function(s){return u(s)===c},x.isElement=function(s){return typeof s=="object"&&s!==null&&s.$$typeof===e},x.isForwardRef=function(s){return u(s)===o},x.isFragment=function(s){return u(s)===n},x.isLazy=function(s){return u(s)===h},x.isMemo=function(s){return u(s)===g},x.isPortal=function(s){return u(s)===t},x.isProfiler=function(s){return u(s)===a},x.isStrictMode=function(s){return u(s)===r},x.isSuspense=function(s){return u(s)===l},x.isSuspenseList=function(s){return u(s)===w},x.isValidElementType=function(s){return typeof s=="string"||typeof s=="function"||s===n||s===a||s===r||s===l||s===w||typeof s=="object"&&s!==null&&(s.$$typeof===h||s.$$typeof===g||s.$$typeof===c||s.$$typeof===i||s.$$typeof===o||s.$$typeof===z||s.getModuleId!==void 0)},x.typeOf=u,x}var Q;function Rt(){return Q||(Q=1,J.exports=At()),J.exports}var pt=Rt(),Lt=dt(pt),Ut=lt({__proto__:null,default:Lt},[pt]),V={exports:{}},v={};/**
+*/var Z;function At(){if(Z)return x;Z=1;var n=Symbol.for("react.transitional.element"),t=Symbol.for("react.portal"),e=Symbol.for("react.fragment"),r=Symbol.for("react.strict_mode"),a=Symbol.for("react.profiler"),i=Symbol.for("react.consumer"),c=Symbol.for("react.context"),o=Symbol.for("react.forward_ref"),l=Symbol.for("react.suspense"),w=Symbol.for("react.suspense_list"),m=Symbol.for("react.memo"),h=Symbol.for("react.lazy"),b=Symbol.for("react.view_transition"),z=Symbol.for("react.client.reference");function u(s){if(typeof s=="object"&&s!==null){var d=s.$$typeof;switch(d){case n:switch(s=s.type,s){case e:case a:case r:case l:case w:case b:return s;default:switch(s=s&&s.$$typeof,s){case c:case o:case h:case m:return s;case i:return s;default:return d}}case t:return d}}}return x.ContextConsumer=i,x.ContextProvider=c,x.Element=n,x.ForwardRef=o,x.Fragment=e,x.Lazy=h,x.Memo=m,x.Portal=t,x.Profiler=a,x.StrictMode=r,x.Suspense=l,x.SuspenseList=w,x.isContextConsumer=function(s){return u(s)===i},x.isContextProvider=function(s){return u(s)===c},x.isElement=function(s){return typeof s=="object"&&s!==null&&s.$$typeof===n},x.isForwardRef=function(s){return u(s)===o},x.isFragment=function(s){return u(s)===e},x.isLazy=function(s){return u(s)===h},x.isMemo=function(s){return u(s)===m},x.isPortal=function(s){return u(s)===t},x.isProfiler=function(s){return u(s)===a},x.isStrictMode=function(s){return u(s)===r},x.isSuspense=function(s){return u(s)===l},x.isSuspenseList=function(s){return u(s)===w},x.isValidElementType=function(s){return typeof s=="string"||typeof s=="function"||s===e||s===a||s===r||s===l||s===w||typeof s=="object"&&s!==null&&(s.$$typeof===h||s.$$typeof===m||s.$$typeof===c||s.$$typeof===i||s.$$typeof===o||s.$$typeof===z||s.getModuleId!==void 0)},x.typeOf=u,x}var Q;function Ot(){return Q||(Q=1,V.exports=At()),V.exports}var pt=Ot(),Bt=dt(pt),Ut=lt({__proto__:null,default:Bt},[pt]),J={exports:{}},v={};/**
 * @license React
 * react-is.production.min.js
 *
@@ -14,8 +14,8 @@ var ut=Object.defineProperty;var ht=(e,t,n)=>t in e?ut(e,t,{enumerable:!0,config
 *
 * This source code is licensed under the MIT license found in the
 * LICENSE file in the root directory of this source tree.
-*/var tt;function Ot(){if(tt)return v;tt=1;var e=Symbol.for("react.element"),t=Symbol.for("react.portal"),n=Symbol.for("react.fragment"),r=Symbol.for("react.strict_mode"),a=Symbol.for("react.profiler"),i=Symbol.for("react.provider"),c=Symbol.for("react.context"),o=Symbol.for("react.server_context"),l=Symbol.for("react.forward_ref"),w=Symbol.for("react.suspense"),g=Symbol.for("react.suspense_list"),h=Symbol.for("react.memo"),b=Symbol.for("react.lazy"),z=Symbol.for("react.offscreen"),u;u=Symbol.for("react.module.reference");function s(d){if(typeof d=="object"&&d!==null){var C=d.$$typeof;switch(C){case e:switch(d=d.type,d){case n:case a:case r:case w:case g:return d;default:switch(d=d&&d.$$typeof,d){case o:case c:case l:case b:case h:case i:return d;default:return C}}case t:return C}}}return v.ContextConsumer=c,v.ContextProvider=i,v.Element=e,v.ForwardRef=l,v.Fragment=n,v.Lazy=b,v.Memo=h,v.Portal=t,v.Profiler=a,v.StrictMode=r,v.Suspense=w,v.SuspenseList=g,v.isAsyncMode=function(){return!1},v.isConcurrentMode=function(){return!1},v.isContextConsumer=function(d){return s(d)===c},v.isContextProvider=function(d){return s(d)===i},v.isElement=function(d){return typeof d=="object"&&d!==null&&d.$$typeof===e},v.isForwardRef=function(d){return s(d)===l},v.isFragment=function(d){return s(d)===n},v.isLazy=function(d){return s(d)===b},v.isMemo=function(d){return s(d)===h},v.isPortal=function(d){return s(d)===t},v.isProfiler=function(d){return s(d)===a},v.isStrictMode=function(d){return s(d)===r},v.isSuspense=function(d){return s(d)===w},v.isSuspenseList=function(d){return s(d)===g},v.isValidElementType=function(d){return typeof d=="string"||typeof d=="function"||d===n||d===a||d===r||d===w||d===g||d===z||typeof d=="object"&&d!==null&&(d.$$typeof===b||d.$$typeof===h||d.$$typeof===i||d.$$typeof===c||d.$$typeof===l||d.$$typeof===u||d.getModuleId!==void 0)},v.typeOf=s,v}var nt;function Ft(){return nt||(nt=1,V.exports=Ot()),V.exports}var wt=Ft(),Dt=dt(wt),jt=lt({__proto__:null,default:Dt},[wt]);const Jt=["isAsyncMode","isConcurrentMode","isContextConsumer","isContextProvider","isElement","isForwardRef","isFragment","isLazy","isMemo","isPortal","isProfiler","isStrictMode","isSuspense","isSuspenseList","isValidElementType"];Object.fromEntries(Jt.map(e=>[e,t=>jt[e](t)||Ut[e](t)]));let Vt=()=>"Promise{…}";try{const{getPromiseDetails:e,kPending:t,kRejected:n}=process.binding("util");Array.isArray(e(Promise.resolve()))&&(Vt=(r,a)=>{const[i,c]=e(r);return i===t?"Promise{<pending>}":`Promise${i===n?"!":""}{${a.inspect(c,a)}}`})}catch{}function Xt(e){const{message:t="$$stack trace error",stackTraceLimit:n=1}=e||{},r=Error.stackTraceLimit,a=Error.prepareStackTrace;Error.stackTraceLimit=n,Error.prepareStackTrace=o=>o.stack;const c=new Error(t).stack||"";return Error.prepareStackTrace=a,Error.stackTraceLimit=r,c}var X,et;function Wt(){if(et)return X;et=1;var e,t,n,r,a,i,c,o,l,w,g,h,b,z,u,s,d,C,T;return b=/\/(?![*\/])(?:\[(?:(?![\]\\]).|\\.)*\]|(?![\/\\]).|\\.)*(\/[$_\u200C\u200D\p{ID_Continue}]*|\\)?/uy,h=/--|\+\+|=>|\.{3}|\??\.(?!\d)|(?:&&|\|\||\?\?|[+\-%&|^]|\*{1,2}|<{1,2}|>{1,3}|!=?|={1,2}|\/(?![\/*]))=?|[?~,:;[\](){}]/y,e=/(\x23?)(?=[$_\p{ID_Start}\\])(?:[$_\u200C\u200D\p{ID_Continue}]|\\u[\da-fA-F]{4}|\\u\{[\da-fA-F]+\})+/uy,u=/(['"])(?:(?!\1)[^\\\n\r]|\\(?:\r\n|[^]))*(\1)?/y,g=/(?:0[xX][\da-fA-F](?:_?[\da-fA-F])*|0[oO][0-7](?:_?[0-7])*|0[bB][01](?:_?[01])*)n?|0n|[1-9](?:_?\d)*n|(?:(?:0(?!\d)|0\d*[89]\d*|[1-9](?:_?\d)*)(?:\.(?:\d(?:_?\d)*)?)?|\.\d(?:_?\d)*)(?:[eE][+-]?\d(?:_?\d)*)?|0[0-7]+/y,s=/[`}](?:[^`\\$]|\\[^]|\$(?!\{))*(`|\$\{)?/y,T=/[\t\v\f\ufeff\p{Zs}]+/uy,o=/\r?\n|[\r\u2028\u2029]/y,l=/\/\*(?:[^*]|\*(?!\/))*(\*\/)?/y,z=/\/\/.*/y,n=/[<>.:={}]|\/(?![\/*])/y,t=/[$_\p{ID_Start}][$_\u200C\u200D\p{ID_Continue}-]*/uy,r=/(['"])(?:(?!\1)[^])*(\1)?/y,a=/[^<>{}]+/y,C=/^(?:[\/+-]|\.{3}|\?(?:InterpolationIn(?:JSX|Template)|NoLineTerminatorHere|NonExpressionParenEnd|UnaryIncDec))?$|[{}([,;<>=*%&|^!~?:]$/,d=/^(?:=>|[;\]){}]|else|\?(?:NoLineTerminatorHere|NonExpressionParenEnd))?$/,i=/^(?:await|case|default|delete|do|else|instanceof|new|return|throw|typeof|void|yield)$/,c=/^(?:return|throw|yield)$/,w=RegExp(o.source),X=function*(y,{jsx:P=!1}={}){var q,N,A,f,m,R,p,E,H,I,L,k,U,_;for({length:R}=y,f=0,m="",_=[{tag:"JS"}],q=[],L=0,k=!1;f<R;){switch(E=_[_.length-1],E.tag){case"JS":case"JSNonExpressionParen":case"InterpolationInTemplate":case"InterpolationInJSX":if(y[f]==="/"&&(C.test(m)||i.test(m))&&(b.lastIndex=f,p=b.exec(y))){f=b.lastIndex,m=p[0],k=!0,yield{type:"RegularExpressionLiteral",value:p[0],closed:p[1]!==void 0&&p[1]!=="\\"};continue}if(h.lastIndex=f,p=h.exec(y)){switch(U=p[0],H=h.lastIndex,I=U,U){case"(":m==="?NonExpressionParenKeyword"&&_.push({tag:"JSNonExpressionParen",nesting:L}),L++,k=!1;break;case")":L--,k=!0,E.tag==="JSNonExpressionParen"&&L===E.nesting&&(_.pop(),I="?NonExpressionParenEnd",k=!1);break;case"{":h.lastIndex=0,A=!d.test(m)&&(C.test(m)||i.test(m)),q.push(A),k=!1;break;case"}":switch(E.tag){case"InterpolationInTemplate":if(q.length===E.nesting){s.lastIndex=f,p=s.exec(y),f=s.lastIndex,m=p[0],p[1]==="${"?(m="?InterpolationInTemplate",k=!1,yield{type:"TemplateMiddle",value:p[0]}):(_.pop(),k=!0,yield{type:"TemplateTail",value:p[0],closed:p[1]==="`"});continue}break;case"InterpolationInJSX":if(q.length===E.nesting){_.pop(),f+=1,m="}",yield{type:"JSXPunctuator",value:"}"};continue}}k=q.pop(),I=k?"?ExpressionBraceEnd":"}";break;case"]":k=!0;break;case"++":case"--":I=k?"?PostfixIncDec":"?UnaryIncDec";break;case"<":if(P&&(C.test(m)||i.test(m))){_.push({tag:"JSXTag"}),f+=1,m="<",yield{type:"JSXPunctuator",value:U};continue}k=!1;break;default:k=!1}f=H,m=I,yield{type:"Punctuator",value:U};continue}if(e.lastIndex=f,p=e.exec(y)){switch(f=e.lastIndex,I=p[0],p[0]){case"for":case"if":case"while":case"with":m!=="."&&m!=="?."&&(I="?NonExpressionParenKeyword")}m=I,k=!i.test(p[0]),yield{type:p[1]==="#"?"PrivateIdentifier":"IdentifierName",value:p[0]};continue}if(u.lastIndex=f,p=u.exec(y)){f=u.lastIndex,m=p[0],k=!0,yield{type:"StringLiteral",value:p[0],closed:p[2]!==void 0};continue}if(g.lastIndex=f,p=g.exec(y)){f=g.lastIndex,m=p[0],k=!0,yield{type:"NumericLiteral",value:p[0]};continue}if(s.lastIndex=f,p=s.exec(y)){f=s.lastIndex,m=p[0],p[1]==="${"?(m="?InterpolationInTemplate",_.push({tag:"InterpolationInTemplate",nesting:q.length}),k=!1,yield{type:"TemplateHead",value:p[0]}):(k=!0,yield{type:"NoSubstitutionTemplate",value:p[0],closed:p[1]==="`"});continue}break;case"JSXTag":case"JSXTagEnd":if(n.lastIndex=f,p=n.exec(y)){switch(f=n.lastIndex,I=p[0],p[0]){case"<":_.push({tag:"JSXTag"});break;case">":_.pop(),m==="/"||E.tag==="JSXTagEnd"?(I="?JSX",k=!0):_.push({tag:"JSXChildren"});break;case"{":_.push({tag:"InterpolationInJSX",nesting:q.length}),I="?InterpolationInJSX",k=!1;break;case"/":m==="<"&&(_.pop(),_[_.length-1].tag==="JSXChildren"&&_.pop(),_.push({tag:"JSXTagEnd"}))}m=I,yield{type:"JSXPunctuator",value:p[0]};continue}if(t.lastIndex=f,p=t.exec(y)){f=t.lastIndex,m=p[0],yield{type:"JSXIdentifier",value:p[0]};continue}if(r.lastIndex=f,p=r.exec(y)){f=r.lastIndex,m=p[0],yield{type:"JSXString",value:p[0],closed:p[2]!==void 0};continue}break;case"JSXChildren":if(a.lastIndex=f,p=a.exec(y)){f=a.lastIndex,m=p[0],yield{type:"JSXText",value:p[0]};continue}switch(y[f]){case"<":_.push({tag:"JSXTag"}),f++,m="<",yield{type:"JSXPunctuator",value:"<"};continue;case"{":_.push({tag:"InterpolationInJSX",nesting:q.length}),f++,m="?InterpolationInJSX",k=!1,yield{type:"JSXPunctuator",value:"{"};continue}}if(T.lastIndex=f,p=T.exec(y)){f=T.lastIndex,yield{type:"WhiteSpace",value:p[0]};continue}if(o.lastIndex=f,p=o.exec(y)){f=o.lastIndex,k=!1,c.test(m)&&(m="?NoLineTerminatorHere"),yield{type:"LineTerminatorSequence",value:p[0]};continue}if(l.lastIndex=f,p=l.exec(y)){f=l.lastIndex,w.test(p[0])&&(k=!1,c.test(m)&&(m="?NoLineTerminatorHere")),yield{type:"MultiLineComment",value:p[0],closed:p[1]!==void 0};continue}if(z.lastIndex=f,p=z.exec(y)){f=z.lastIndex,k=!1,yield{type:"SingleLineComment",value:p[0]};continue}N=String.fromCodePoint(y.codePointAt(f)),f+=N.length,m=N,k=!1,yield{type:E.tag.startsWith("JSX")?"JSXInvalid":"Invalid",value:N}}},X}Wt();var ft={keyword:["break","case","catch","continue","debugger","default","do","else","finally","for","function","if","return","switch","throw","try","var","const","while","with","new","this","super","class","extends","export","import","null","true","false","in","instanceof","typeof","void","delete"],strict:["implements","interface","let","package","private","protected","public","static","yield"]};new Set(ft.keyword);new Set(ft.strict);const rt="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",Yt=new Uint8Array(64),Ht=new Uint8Array(128);for(let e=0;e<rt.length;e++){const t=rt.charCodeAt(e);Yt[e]=t,Ht[t]=e}var at;(function(e){e[e.Empty=1]="Empty",e[e.Hash=2]="Hash",e[e.Query=3]="Query",e[e.RelativePath=4]="RelativePath",e[e.AbsolutePath=5]="AbsolutePath",e[e.SchemeRelative=6]="SchemeRelative",e[e.Absolute=7]="Absolute"})(at||(at={}));const Gt=/^[A-Za-z]:\//;function Kt(e=""){return e&&e.replace(/\\/g,"/").replace(Gt,t=>t.toUpperCase())}const Zt=/^[/\\](?![/\\])|^[/\\]{2}(?!\.)|^[A-Za-z]:[/\\]/;function Qt(){return typeof process<"u"&&typeof process.cwd=="function"?process.cwd().replace(/\\/g,"/"):"/"}const tn=function(...e){e=e.map(r=>Kt(r));let t="",n=!1;for(let r=e.length-1;r>=-1&&!n;r--){const a=r>=0?e[r]:Qt();!a||a.length===0||(t=`${a}/${t}`,n=ot(a))}return t=nn(t,!n),n&&!ot(t)?`/${t}`:t.length>0?t:"."};function nn(e,t){let n="",r=0,a=-1,i=0,c=null;for(let o=0;o<=e.length;++o){if(o<e.length)c=e[o];else{if(c==="/")break;c="/"}if(c==="/"){if(!(a===o-1||i===1))if(i===2){if(n.length<2||r!==2||n[n.length-1]!=="."||n[n.length-2]!=="."){if(n.length>2){const l=n.lastIndexOf("/");l===-1?(n="",r=0):(n=n.slice(0,l),r=n.length-1-n.lastIndexOf("/")),a=o,i=0;continue}else if(n.length>0){n="",r=0,a=o,i=0;continue}}t&&(n+=n.length>0?"/..":"..",r=2)}else n.length>0?n+=`/${e.slice(a+1,o)}`:n=e.slice(a+1,o),r=o-a-1;a=o,i=0}else c==="."&&i!==-1?++i:i=-1}return n}const ot=function(e){return Zt.test(e)},gt=/^\s*at .*(?:\S:\d+|\(native\))/m,en=/^(?:eval@)?(?:\[native code\])?$/;function mt(e){if(!e.includes(":"))return[e];const n=/(.+?)(?::(\d+))?(?::(\d+))?$/.exec(e.replace(/^\(|\)$/g,""));if(!n)return[e];let r=n[1];if(r.startsWith("async ")&&(r=r.slice(6)),r.startsWith("http:")||r.startsWith("https:")){const a=new URL(r);a.searchParams.delete("import"),a.searchParams.delete("browserv"),r=a.pathname+a.hash+a.search}if(r.startsWith("/@fs/")){const a=/^\/@fs\/[a-zA-Z]:\//.test(r);r=r.slice(a?5:4)}return[r,n[2]||void 0,n[3]||void 0]}function rn(e){let t=e.trim();if(en.test(t)||(t.includes(" > eval")&&(t=t.replace(/ line (\d+)(?: > eval line \d+)* > eval:\d+:\d+/g,":$1")),!t.includes("@")&&!t.includes(":")))return null;const n=/((.*".+"[^@]*)?[^@]*)(@)/,r=t.match(n),a=r&&r[1]?r[1]:void 0,[i,c,o]=mt(t.replace(n,""));return!i||!c||!o?null:{file:i,method:a||"",line:Number.parseInt(c),column:Number.parseInt(o)}}function an(e){const t=e.trim();return gt.test(t)?on(t):rn(t)}function on(e){let t=e.trim();if(!gt.test(t))return null;t.includes("(eval ")&&(t=t.replace(/eval code/g,"eval").replace(/(\(eval at [^()]*)|(,.*$)/g,""));let n=t.replace(/^\s+/,"").replace(/\(eval code/g,"(").replace(/^.*?\s+/,"");const r=n.match(/ (\(.+\)$)/);n=r?n.replace(r[0],""):n;const[a,i,c]=mt(r?r[1]:n);let o=r&&n||"",l=a&&["eval","<anonymous>"].includes(a)?void 0:a;return!l||!i||!c?null:(o.startsWith("async ")&&(o=o.slice(6)),l.startsWith("file://")&&(l=l.slice(7)),l=l.startsWith("node:")||l.startsWith("internal:")?l:tn(l),o&&(o=o.replace(/__vite_ssr_import_\d+__\./g,"")),{method:o,file:l,line:Number.parseInt(i),column:Number.parseInt(c)})}function sn(e){const t=(e==null?void 0:e.globalThisKey)||"__vitest_mocker__";function n(){return typeof globalThis[t]<"u"?globalThis[t]:new Proxy({},{get(r,a){throw new Error(`Vitest mocker was not initialized in this environment. vi.${String(a)}() is forbidden.`)}})}return{hoisted(r){if(typeof r!="function")throw new TypeError(`vi.hoisted() expects a function, but received a ${typeof r}`);return r()},mock(r,a){if(typeof r!="string")throw new TypeError(`vi.mock() expects a string path, but received a ${typeof r}`);const i=M("mock");n().queueMock(r,i,typeof a=="function"?()=>a(()=>n().importActual(r,i)):a)},unmock(r){if(typeof r!="string")throw new TypeError(`vi.unmock() expects a string path, but received a ${typeof r}`);n().queueUnmock(r,M("unmock"))},doMock(r,a){if(typeof r!="string")throw new TypeError(`vi.doMock() expects a string path, but received a ${typeof r}`);const i=M("doMock");n().queueMock(r,i,typeof a=="function"?()=>a(()=>n().importActual(r,i)):a)},doUnmock(r){if(typeof r!="string")throw new TypeError(`vi.doUnmock() expects a string path, but received a ${typeof r}`);n().queueUnmock(r,M("doUnmock"))},async importActual(r){return n().importActual(r,M("importActual"))},async importMock(r){return n().importMock(r,M("importMock"))}}}function M(e){const n=Xt({stackTraceLimit:5}).split(`
-`),r=n.findIndex(i=>i.includes(` at Object.${e}`)||i.includes(`${e}@`)),a=an(n[r+1]);return(a==null?void 0:a.file)||""}const{now:it}=Date;class cn{constructor(t,n,r,a){S(this,"registry",new st);S(this,"queue",new Set);S(this,"mockedIds",new Set);this.interceptor=t,this.rpc=n,this.spyOn=r,this.config=a}async prepare(){this.queue.size&&await Promise.all([...this.queue.values()])}async resolveFactoryModule(t){const n=this.registry.get(t);if(!n||n.type!=="manual")throw new Error(`Mock ${t} wasn't registered. This is probably a Vitest error. Please, open a new issue with reproduction.`);return await n.resolve()}getFactoryModule(t){const n=this.registry.get(t);if(!n||n.type!=="manual")throw new Error(`Mock ${t} wasn't registered. This is probably a Vitest error. Please, open a new issue with reproduction.`);if(!n.cache)throw new Error(`Mock ${t} wasn't resolved. This is probably a Vitest error. Please, open a new issue with reproduction.`);return n.cache}async invalidate(){const t=Array.from(this.mockedIds);t.length&&(await this.rpc.invalidate(t),await this.interceptor.invalidate(),this.registry.clear())}async importActual(t,n){const r=await this.rpc.resolveId(t,n);if(r==null)throw new Error(`[vitest] Cannot resolve "${t}" imported from "${n}"`);const a=Tt(r.id),i=new URL(r.url,location.href),c=`_vitest_original&ext${a}`,o=`${i.pathname}${i.search?`${i.search}&${c}`:`?${c}`}${i.hash}`;return this.wrapDynamicImport(()=>import(o)).then(l=>{if(!r.optimized||typeof l.default>"u")return l;const w=l.default;return w!=null&&w.__esModule?w:{...typeof w=="object"&&!Array.isArray(w)||typeof w=="function"?w:{},default:w}})}async importMock(t,n){await this.prepare();const{resolvedId:r,resolvedUrl:a,redirectUrl:i}=await this.rpc.resolveMock(t,n,{mock:"auto"}),c=this.resolveMockPath(O(a));let o=this.registry.get(c);if(!o)if(i){const l=new URL(this.resolveMockPath(O(i)),location.href).toString();o=new B(t,r,c,l)}else o=new F(t,r,c);if(o.type==="manual")return await o.resolve();if(o.type==="automock"||o.type==="autospy"){const l=new URL(`/@id/${r}`,location.href),w=l.search?`${l.search}&t=${it()}`:`?t=${it()}`,g=await vt(()=>import(`${l.pathname}${w}&mock=${o.type}${l.hash}`),[],import.meta.url);return this.mockObject(g,o.type)}return import(o.redirect)}mockObject(t,n="automock"){return bt({globalConstructors:{Object,Function,Array,Map,RegExp},spyOn:this.spyOn,type:n},t)}queueMock(t,n,r){const a=this.rpc.resolveMock(t,n,{mock:typeof r=="function"?"factory":r!=null&&r.spy?"spy":"auto"}).then(async({redirectUrl:i,resolvedId:c,resolvedUrl:o,needsInterop:l,mockType:w})=>{const g=this.resolveMockPath(O(o));this.mockedIds.add(c);const h=typeof r=="function"?async()=>{const u=await r();return l?{default:u}:u}:void 0,b=typeof i=="string"?new URL(this.resolveMockPath(O(i)),location.href).toString():null;let z;w==="manual"?z=this.registry.register("manual",t,c,g,h):w==="autospy"?z=this.registry.register("autospy",t,c,g):w==="redirect"?z=this.registry.register("redirect",t,c,g,b):z=this.registry.register("automock",t,c,g),await this.interceptor.register(z)}).finally(()=>{this.queue.delete(a)});this.queue.add(a)}queueUnmock(t,n){const r=this.rpc.resolveId(t,n).then(async a=>{if(!a)return;const i=this.resolveMockPath(O(a.url));this.mockedIds.add(a.id),this.registry.delete(i),await this.interceptor.delete(i)}).finally(()=>{this.queue.delete(r)});this.queue.add(r)}wrapDynamicImport(t){return typeof t=="function"?new Promise((r,a)=>{this.prepare().finally(()=>{t().then(r,a)})}):t}resolveMockPath(t){const n=this.config,r=Et("/@fs/",n.root);return t.startsWith(n.root)?t.slice(n.root.length):t.startsWith(r)?t.slice(r.length):t}}const ln=/(\?|&)v=\w{8}/;function O(e){return e.replace(ln,"")}class dn{constructor(){S(this,"mocks",new st)}async register(t){this.mocks.add(t)}async delete(t){this.mocks.delete(t)}async invalidate(){this.mocks.clear()}}const W=e=>{switch(e){case"resolveId":return Promise.resolve({id:"",url:"",optimized:!1});case"resolveMock":return Promise.resolve({mockType:"dummy",resolvedId:"",resolvedUrl:"",redirectUrl:"",needsInterop:!1});case"invalidate":return Promise.resolve()}};class pn extends cn{queueMock(){}}function wn(e){const t=new pn(e("__vitest_mocker__"),{resolveId(n,r){return W("resolveId")},resolveMock(n,r,a){return W("resolveMock")},async invalidate(n){return W("invalidate")}},(...n)=>globalThis.__STORYBOOK_MODULE_TEST__.spyOn(...n),{root:""});return globalThis.__vitest_mocker__=t,sn({globalThisKey:"__vitest_mocker__"})}globalThis.__STORYBOOK_MOCKER__=wn(()=>new dn);function fn(e,t="top"){if(!e||typeof document>"u")return;const n=document.head||document.querySelector("head"),r=n.querySelector(":first-child"),a=document.createElement("style");a.appendChild(document.createTextNode(e)),t==="top"&&r?n.insertBefore(a,r):n.appendChild(a)}fn(`
+*/var tt;function $t(){if(tt)return v;tt=1;var n=Symbol.for("react.element"),t=Symbol.for("react.portal"),e=Symbol.for("react.fragment"),r=Symbol.for("react.strict_mode"),a=Symbol.for("react.profiler"),i=Symbol.for("react.provider"),c=Symbol.for("react.context"),o=Symbol.for("react.server_context"),l=Symbol.for("react.forward_ref"),w=Symbol.for("react.suspense"),m=Symbol.for("react.suspense_list"),h=Symbol.for("react.memo"),b=Symbol.for("react.lazy"),z=Symbol.for("react.offscreen"),u;u=Symbol.for("react.module.reference");function s(d){if(typeof d=="object"&&d!==null){var q=d.$$typeof;switch(q){case n:switch(d=d.type,d){case e:case a:case r:case w:case m:return d;default:switch(d=d&&d.$$typeof,d){case o:case c:case l:case b:case h:case i:return d;default:return q}}case t:return q}}}return v.ContextConsumer=c,v.ContextProvider=i,v.Element=n,v.ForwardRef=l,v.Fragment=e,v.Lazy=b,v.Memo=h,v.Portal=t,v.Profiler=a,v.StrictMode=r,v.Suspense=w,v.SuspenseList=m,v.isAsyncMode=function(){return!1},v.isConcurrentMode=function(){return!1},v.isContextConsumer=function(d){return s(d)===c},v.isContextProvider=function(d){return s(d)===i},v.isElement=function(d){return typeof d=="object"&&d!==null&&d.$$typeof===n},v.isForwardRef=function(d){return s(d)===l},v.isFragment=function(d){return s(d)===e},v.isLazy=function(d){return s(d)===b},v.isMemo=function(d){return s(d)===h},v.isPortal=function(d){return s(d)===t},v.isProfiler=function(d){return s(d)===a},v.isStrictMode=function(d){return s(d)===r},v.isSuspense=function(d){return s(d)===w},v.isSuspenseList=function(d){return s(d)===m},v.isValidElementType=function(d){return typeof d=="string"||typeof d=="function"||d===e||d===a||d===r||d===w||d===m||d===z||typeof d=="object"&&d!==null&&(d.$$typeof===b||d.$$typeof===h||d.$$typeof===i||d.$$typeof===c||d.$$typeof===l||d.$$typeof===u||d.getModuleId!==void 0)},v.typeOf=s,v}var et;function Ft(){return et||(et=1,J.exports=$t()),J.exports}var wt=Ft(),Dt=dt(wt),jt=lt({__proto__:null,default:Dt},[wt]);const Vt=["isAsyncMode","isConcurrentMode","isContextConsumer","isContextProvider","isElement","isForwardRef","isFragment","isLazy","isMemo","isPortal","isProfiler","isStrictMode","isSuspense","isSuspenseList","isValidElementType"];Object.fromEntries(Vt.map(n=>[n,t=>jt[n](t)||Ut[n](t)]));let Jt=()=>"Promise{…}";try{const{getPromiseDetails:n,kPending:t,kRejected:e}=process.binding("util");Array.isArray(n(Promise.resolve()))&&(Jt=(r,a)=>{const[i,c]=n(r);return i===t?"Promise{<pending>}":`Promise${i===e?"!":""}{${a.inspect(c,a)}}`})}catch{}function Wt(n){const{message:t="$$stack trace error",stackTraceLimit:e=1}=n||{},r=Error.stackTraceLimit,a=Error.prepareStackTrace;Error.stackTraceLimit=e,Error.prepareStackTrace=o=>o.stack;const c=new Error(t).stack||"";return Error.prepareStackTrace=a,Error.stackTraceLimit=r,c}var W,nt;function Xt(){if(nt)return W;nt=1;var n,t,e,r,a,i,c,o,l,w,m,h,b,z,u,s,d,q,P;return b=/\/(?![*\/])(?:\[(?:(?![\]\\]).|\\.)*\]|(?![\/\\]).|\\.)*(\/[$_\u200C\u200D\p{ID_Continue}]*|\\)?/uy,h=/--|\+\+|=>|\.{3}|\??\.(?!\d)|(?:&&|\|\||\?\?|[+\-%&|^]|\*{1,2}|<{1,2}|>{1,3}|!=?|={1,2}|\/(?![\/*]))=?|[?~,:;[\](){}]/y,n=/(\x23?)(?=[$_\p{ID_Start}\\])(?:[$_\u200C\u200D\p{ID_Continue}]|\\u[\da-fA-F]{4}|\\u\{[\da-fA-F]+\})+/uy,u=/(['"])(?:(?!\1)[^\\\n\r]|\\(?:\r\n|[^]))*(\1)?/y,m=/(?:0[xX][\da-fA-F](?:_?[\da-fA-F])*|0[oO][0-7](?:_?[0-7])*|0[bB][01](?:_?[01])*)n?|0n|[1-9](?:_?\d)*n|(?:(?:0(?!\d)|0\d*[89]\d*|[1-9](?:_?\d)*)(?:\.(?:\d(?:_?\d)*)?)?|\.\d(?:_?\d)*)(?:[eE][+-]?\d(?:_?\d)*)?|0[0-7]+/y,s=/[`}](?:[^`\\$]|\\[^]|\$(?!\{))*(`|\$\{)?/y,P=/[\t\v\f\ufeff\p{Zs}]+/uy,o=/\r?\n|[\r\u2028\u2029]/y,l=/\/\*(?:[^*]|\*(?!\/))*(\*\/)?/y,z=/\/\/.*/y,e=/[<>.:={}]|\/(?![\/*])/y,t=/[$_\p{ID_Start}][$_\u200C\u200D\p{ID_Continue}-]*/uy,r=/(['"])(?:(?!\1)[^])*(\1)?/y,a=/[^<>{}]+/y,q=/^(?:[\/+-]|\.{3}|\?(?:InterpolationIn(?:JSX|Template)|NoLineTerminatorHere|NonExpressionParenEnd|UnaryIncDec))?$|[{}([,;<>=*%&|^!~?:]$/,d=/^(?:=>|[;\]){}]|else|\?(?:NoLineTerminatorHere|NonExpressionParenEnd))?$/,i=/^(?:await|case|default|delete|do|else|instanceof|new|return|throw|typeof|void|yield)$/,c=/^(?:return|throw|yield)$/,w=RegExp(o.source),W=function*(y,{jsx:N=!1}={}){var S,E,A,f,g,O,p,C,Y,I,B,k,U,_;for({length:O}=y,f=0,g="",_=[{tag:"JS"}],S=[],B=0,k=!1;f<O;){switch(C=_[_.length-1],C.tag){case"JS":case"JSNonExpressionParen":case"InterpolationInTemplate":case"InterpolationInJSX":if(y[f]==="/"&&(q.test(g)||i.test(g))&&(b.lastIndex=f,p=b.exec(y))){f=b.lastIndex,g=p[0],k=!0,yield{type:"RegularExpressionLiteral",value:p[0],closed:p[1]!==void 0&&p[1]!=="\\"};continue}if(h.lastIndex=f,p=h.exec(y)){switch(U=p[0],Y=h.lastIndex,I=U,U){case"(":g==="?NonExpressionParenKeyword"&&_.push({tag:"JSNonExpressionParen",nesting:B}),B++,k=!1;break;case")":B--,k=!0,C.tag==="JSNonExpressionParen"&&B===C.nesting&&(_.pop(),I="?NonExpressionParenEnd",k=!1);break;case"{":h.lastIndex=0,A=!d.test(g)&&(q.test(g)||i.test(g)),S.push(A),k=!1;break;case"}":switch(C.tag){case"InterpolationInTemplate":if(S.length===C.nesting){s.lastIndex=f,p=s.exec(y),f=s.lastIndex,g=p[0],p[1]==="${"?(g="?InterpolationInTemplate",k=!1,yield{type:"TemplateMiddle",value:p[0]}):(_.pop(),k=!0,yield{type:"TemplateTail",value:p[0],closed:p[1]==="`"});continue}break;case"InterpolationInJSX":if(S.length===C.nesting){_.pop(),f+=1,g="}",yield{type:"JSXPunctuator",value:"}"};continue}}k=S.pop(),I=k?"?ExpressionBraceEnd":"}";break;case"]":k=!0;break;case"++":case"--":I=k?"?PostfixIncDec":"?UnaryIncDec";break;case"<":if(N&&(q.test(g)||i.test(g))){_.push({tag:"JSXTag"}),f+=1,g="<",yield{type:"JSXPunctuator",value:U};continue}k=!1;break;default:k=!1}f=Y,g=I,yield{type:"Punctuator",value:U};continue}if(n.lastIndex=f,p=n.exec(y)){switch(f=n.lastIndex,I=p[0],p[0]){case"for":case"if":case"while":case"with":g!=="."&&g!=="?."&&(I="?NonExpressionParenKeyword")}g=I,k=!i.test(p[0]),yield{type:p[1]==="#"?"PrivateIdentifier":"IdentifierName",value:p[0]};continue}if(u.lastIndex=f,p=u.exec(y)){f=u.lastIndex,g=p[0],k=!0,yield{type:"StringLiteral",value:p[0],closed:p[2]!==void 0};continue}if(m.lastIndex=f,p=m.exec(y)){f=m.lastIndex,g=p[0],k=!0,yield{type:"NumericLiteral",value:p[0]};continue}if(s.lastIndex=f,p=s.exec(y)){f=s.lastIndex,g=p[0],p[1]==="${"?(g="?InterpolationInTemplate",_.push({tag:"InterpolationInTemplate",nesting:S.length}),k=!1,yield{type:"TemplateHead",value:p[0]}):(k=!0,yield{type:"NoSubstitutionTemplate",value:p[0],closed:p[1]==="`"});continue}break;case"JSXTag":case"JSXTagEnd":if(e.lastIndex=f,p=e.exec(y)){switch(f=e.lastIndex,I=p[0],p[0]){case"<":_.push({tag:"JSXTag"});break;case">":_.pop(),g==="/"||C.tag==="JSXTagEnd"?(I="?JSX",k=!0):_.push({tag:"JSXChildren"});break;case"{":_.push({tag:"InterpolationInJSX",nesting:S.length}),I="?InterpolationInJSX",k=!1;break;case"/":g==="<"&&(_.pop(),_[_.length-1].tag==="JSXChildren"&&_.pop(),_.push({tag:"JSXTagEnd"}))}g=I,yield{type:"JSXPunctuator",value:p[0]};continue}if(t.lastIndex=f,p=t.exec(y)){f=t.lastIndex,g=p[0],yield{type:"JSXIdentifier",value:p[0]};continue}if(r.lastIndex=f,p=r.exec(y)){f=r.lastIndex,g=p[0],yield{type:"JSXString",value:p[0],closed:p[2]!==void 0};continue}break;case"JSXChildren":if(a.lastIndex=f,p=a.exec(y)){f=a.lastIndex,g=p[0],yield{type:"JSXText",value:p[0]};continue}switch(y[f]){case"<":_.push({tag:"JSXTag"}),f++,g="<",yield{type:"JSXPunctuator",value:"<"};continue;case"{":_.push({tag:"InterpolationInJSX",nesting:S.length}),f++,g="?InterpolationInJSX",k=!1,yield{type:"JSXPunctuator",value:"{"};continue}}if(P.lastIndex=f,p=P.exec(y)){f=P.lastIndex,yield{type:"WhiteSpace",value:p[0]};continue}if(o.lastIndex=f,p=o.exec(y)){f=o.lastIndex,k=!1,c.test(g)&&(g="?NoLineTerminatorHere"),yield{type:"LineTerminatorSequence",value:p[0]};continue}if(l.lastIndex=f,p=l.exec(y)){f=l.lastIndex,w.test(p[0])&&(k=!1,c.test(g)&&(g="?NoLineTerminatorHere")),yield{type:"MultiLineComment",value:p[0],closed:p[1]!==void 0};continue}if(z.lastIndex=f,p=z.exec(y)){f=z.lastIndex,k=!1,yield{type:"SingleLineComment",value:p[0]};continue}E=String.fromCodePoint(y.codePointAt(f)),f+=E.length,g=E,k=!1,yield{type:C.tag.startsWith("JSX")?"JSXInvalid":"Invalid",value:E}}},W}Xt();var ft={keyword:["break","case","catch","continue","debugger","default","do","else","finally","for","function","if","return","switch","throw","try","var","const","while","with","new","this","super","class","extends","export","import","null","true","false","in","instanceof","typeof","void","delete"],strict:["implements","interface","let","package","private","protected","public","static","yield"]};new Set(ft.keyword);new Set(ft.strict);const rt="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",Ht=new Uint8Array(64),Yt=new Uint8Array(128);for(let n=0;n<rt.length;n++){const t=rt.charCodeAt(n);Ht[n]=t,Yt[t]=n}var at;(function(n){n[n.Empty=1]="Empty",n[n.Hash=2]="Hash",n[n.Query=3]="Query",n[n.RelativePath=4]="RelativePath",n[n.AbsolutePath=5]="AbsolutePath",n[n.SchemeRelative=6]="SchemeRelative",n[n.Absolute=7]="Absolute"})(at||(at={}));const Gt=/^[A-Za-z]:\//;function Kt(n=""){return n&&n.replace(/\\/g,"/").replace(Gt,t=>t.toUpperCase())}const Zt=/^[/\\](?![/\\])|^[/\\]{2}(?!\.)|^[A-Za-z]:[/\\]/;function Qt(){return typeof process<"u"&&typeof process.cwd=="function"?process.cwd().replace(/\\/g,"/"):"/"}const te=function(...n){n=n.map(r=>Kt(r));let t="",e=!1;for(let r=n.length-1;r>=-1&&!e;r--){const a=r>=0?n[r]:Qt();!a||a.length===0||(t=`${a}/${t}`,e=ot(a))}return t=ee(t,!e),e&&!ot(t)?`/${t}`:t.length>0?t:"."};function ee(n,t){let e="",r=0,a=-1,i=0,c=null;for(let o=0;o<=n.length;++o){if(o<n.length)c=n[o];else{if(c==="/")break;c="/"}if(c==="/"){if(!(a===o-1||i===1))if(i===2){if(e.length<2||r!==2||e[e.length-1]!=="."||e[e.length-2]!=="."){if(e.length>2){const l=e.lastIndexOf("/");l===-1?(e="",r=0):(e=e.slice(0,l),r=e.length-1-e.lastIndexOf("/")),a=o,i=0;continue}else if(e.length>0){e="",r=0,a=o,i=0;continue}}t&&(e+=e.length>0?"/..":"..",r=2)}else e.length>0?e+=`/${n.slice(a+1,o)}`:e=n.slice(a+1,o),r=o-a-1;a=o,i=0}else c==="."&&i!==-1?++i:i=-1}return e}const ot=function(n){return Zt.test(n)},mt=/^\s*at .*(?:\S:\d+|\(native\))/m,ne=/^(?:eval@)?(?:\[native code\])?$/;function gt(n){if(!n.includes(":"))return[n];const e=/(.+?)(?::(\d+))?(?::(\d+))?$/.exec(n.replace(/^\(|\)$/g,""));if(!e)return[n];let r=e[1];if(r.startsWith("async ")&&(r=r.slice(6)),r.startsWith("http:")||r.startsWith("https:")){const a=new URL(r);a.searchParams.delete("import"),a.searchParams.delete("browserv"),r=a.pathname+a.hash+a.search}if(r.startsWith("/@fs/")){const a=/^\/@fs\/[a-zA-Z]:\//.test(r);r=r.slice(a?5:4)}return[r,e[2]||void 0,e[3]||void 0]}function re(n){let t=n.trim();if(ne.test(t)||(t.includes(" > eval")&&(t=t.replace(/ line (\d+)(?: > eval line \d+)* > eval:\d+:\d+/g,":$1")),!t.includes("@")&&!t.includes(":")))return null;const e=/((.*".+"[^@]*)?[^@]*)(@)/,r=t.match(e),a=r&&r[1]?r[1]:void 0,[i,c,o]=gt(t.replace(e,""));return!i||!c||!o?null:{file:i,method:a||"",line:Number.parseInt(c),column:Number.parseInt(o)}}function ae(n){const t=n.trim();return mt.test(t)?oe(t):re(t)}function oe(n){let t=n.trim();if(!mt.test(t))return null;t.includes("(eval ")&&(t=t.replace(/eval code/g,"eval").replace(/(\(eval at [^()]*)|(,.*$)/g,""));let e=t.replace(/^\s+/,"").replace(/\(eval code/g,"(").replace(/^.*?\s+/,"");const r=e.match(/ (\(.+\)$)/);e=r?e.replace(r[0],""):e;const[a,i,c]=gt(r?r[1]:e);let o=r&&e||"",l=a&&["eval","<anonymous>"].includes(a)?void 0:a;return!l||!i||!c?null:(o.startsWith("async ")&&(o=o.slice(6)),l.startsWith("file://")&&(l=l.slice(7)),l=l.startsWith("node:")||l.startsWith("internal:")?l:te(l),o&&(o=o.replace(/__vite_ssr_import_\d+__\./g,"")),{method:o,file:l,line:Number.parseInt(i),column:Number.parseInt(c)})}function ie(n){const t=(n==null?void 0:n.globalThisKey)||"__vitest_mocker__";function e(){return typeof globalThis[t]<"u"?globalThis[t]:new Proxy({},{get(r,a){throw new Error(`Vitest mocker was not initialized in this environment. vi.${String(a)}() is forbidden.`)}})}return{hoisted(r){if(typeof r!="function")throw new TypeError(`vi.hoisted() expects a function, but received a ${typeof r}`);return r()},mock(r,a){if(typeof r!="string")throw new TypeError(`vi.mock() expects a string path, but received a ${typeof r}`);const i=R("mock");e().queueMock(r,i,typeof a=="function"?()=>a(()=>e().importActual(r,i)):a)},unmock(r){if(typeof r!="string")throw new TypeError(`vi.unmock() expects a string path, but received a ${typeof r}`);e().queueUnmock(r,R("unmock"))},doMock(r,a){if(typeof r!="string")throw new TypeError(`vi.doMock() expects a string path, but received a ${typeof r}`);const i=R("doMock");e().queueMock(r,i,typeof a=="function"?()=>a(()=>e().importActual(r,i)):a)},doUnmock(r){if(typeof r!="string")throw new TypeError(`vi.doUnmock() expects a string path, but received a ${typeof r}`);e().queueUnmock(r,R("doUnmock"))},async importActual(r){return e().importActual(r,R("importActual"))},async importMock(r){return e().importMock(r,R("importMock"))}}}function R(n){const e=Wt({stackTraceLimit:5}).split(`
+`),r=e.findIndex(i=>i.includes(` at Object.${n}`)||i.includes(`${n}@`)),a=ae(e[r+1]);return(a==null?void 0:a.file)||""}const{now:it}=Date;class se{constructor(t,e,r,a){T(this,"registry",new st);T(this,"queue",new Set);T(this,"mockedIds",new Set);this.interceptor=t,this.rpc=e,this.spyOn=r,this.config=a}async prepare(){this.queue.size&&await Promise.all([...this.queue.values()])}async resolveFactoryModule(t){const e=this.registry.get(t);if(!e||e.type!=="manual")throw new Error(`Mock ${t} wasn't registered. This is probably a Vitest error. Please, open a new issue with reproduction.`);return await e.resolve()}getFactoryModule(t){const e=this.registry.get(t);if(!e||e.type!=="manual")throw new Error(`Mock ${t} wasn't registered. This is probably a Vitest error. Please, open a new issue with reproduction.`);if(!e.cache)throw new Error(`Mock ${t} wasn't resolved. This is probably a Vitest error. Please, open a new issue with reproduction.`);return e.cache}async invalidate(){const t=Array.from(this.mockedIds);t.length&&(await this.rpc.invalidate(t),await this.interceptor.invalidate(),this.registry.clear())}async importActual(t,e){const r=await this.rpc.resolveId(t,e);if(r==null)throw new Error(`[vitest] Cannot resolve "${t}" imported from "${e}"`);const a=Pt(r.id),i=new URL(r.url,location.href),c=`_vitest_original&ext${a}`,o=`${i.pathname}${i.search?`${i.search}&${c}`:`?${c}`}${i.hash}`;return this.wrapDynamicImport(()=>import(o)).then(l=>{if(!r.optimized||typeof l.default>"u")return l;const w=l.default;return w!=null&&w.__esModule?w:{...typeof w=="object"&&!Array.isArray(w)||typeof w=="function"?w:{},default:w}})}async importMock(t,e){await this.prepare();const{resolvedId:r,resolvedUrl:a,redirectUrl:i}=await this.rpc.resolveMock(t,e,{mock:"auto"}),c=this.resolveMockPath($(a));let o=this.registry.get(c);if(!o)if(i){const l=new URL(this.resolveMockPath($(i)),location.href).toString();o=new L(t,r,c,l)}else o=new F(t,r,c);if(o.type==="manual")return await o.resolve();if(o.type==="automock"||o.type==="autospy"){const l=new URL(`/@id/${r}`,location.href),w=l.search?`${l.search}&t=${it()}`:`?t=${it()}`,m=await vt(()=>import(`${l.pathname}${w}&mock=${o.type}${l.hash}`),[],import.meta.url);return this.mockObject(m,o.type)}return import(o.redirect)}mockObject(t,e="automock"){return bt({globalConstructors:{Object,Function,Array,Map,RegExp},spyOn:this.spyOn,type:e},t)}queueMock(t,e,r){const a=this.rpc.resolveMock(t,e,{mock:typeof r=="function"?"factory":r!=null&&r.spy?"spy":"auto"}).then(async({redirectUrl:i,resolvedId:c,resolvedUrl:o,needsInterop:l,mockType:w})=>{const m=this.resolveMockPath($(o));this.mockedIds.add(c);const h=typeof r=="function"?async()=>{const u=await r();return l?{default:u}:u}:void 0,b=typeof i=="string"?new URL(this.resolveMockPath($(i)),location.href).toString():null;let z;w==="manual"?z=this.registry.register("manual",t,c,m,h):w==="autospy"?z=this.registry.register("autospy",t,c,m):w==="redirect"?z=this.registry.register("redirect",t,c,m,b):z=this.registry.register("automock",t,c,m),await this.interceptor.register(z)}).finally(()=>{this.queue.delete(a)});this.queue.add(a)}queueUnmock(t,e){const r=this.rpc.resolveId(t,e).then(async a=>{if(!a)return;const i=this.resolveMockPath($(a.url));this.mockedIds.add(a.id),this.registry.delete(i),await this.interceptor.delete(i)}).finally(()=>{this.queue.delete(r)});this.queue.add(r)}wrapDynamicImport(t){return typeof t=="function"?new Promise((r,a)=>{this.prepare().finally(()=>{t().then(r,a)})}):t}resolveMockPath(t){const e=this.config,r=Ct("/@fs/",e.root);return t.startsWith(e.root)?t.slice(e.root.length):t.startsWith(r)?t.slice(r.length):t}}const ce=/(\?|&)v=\w{8}/;function $(n){return n.replace(ce,"")}class le{constructor(){T(this,"mocks",new st)}async register(t){this.mocks.add(t)}async delete(t){this.mocks.delete(t)}async invalidate(){this.mocks.clear()}}const X=n=>{switch(n){case"resolveId":return Promise.resolve({id:"",url:"",optimized:!1});case"resolveMock":return Promise.resolve({mockType:"dummy",resolvedId:"",resolvedUrl:"",redirectUrl:"",needsInterop:!1});case"invalidate":return Promise.resolve()}};class de extends se{queueMock(){}}function pe(n){const t=new de(n("__vitest_mocker__"),{resolveId(e,r){return X("resolveId")},resolveMock(e,r,a){return X("resolveMock")},async invalidate(e){return X("invalidate")}},(...e)=>globalThis.__STORYBOOK_MODULE_TEST__.spyOn(...e),{root:""});return globalThis.__vitest_mocker__=t,ie({globalThisKey:"__vitest_mocker__"})}globalThis.__STORYBOOK_MOCKER__=pe(()=>new le);function we(n,t="top"){if(!n||typeof document>"u")return;const e=document.head||document.querySelector("head"),r=e.querySelector(":first-child"),a=document.createElement("style");a.appendChild(document.createTextNode(n)),t==="top"&&r?e.insertBefore(a,r):e.appendChild(a)}we(`
       @font-face {
         font-family: 'Nunito Sans';
         font-style: normal;
@@ -185,7 +185,18 @@ body {
   --sidebar-border: hsl(0 0% 100% / 0.1);
   --sidebar-ring: hsl(0 0% 45.2%);
 }
-/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/ba0e846b3f11bea5720c4aa1a3486b69feb6b7e0/packages/platform/src/usj-nodes.css */
+/* Based on scripture-editors' packages/platform/src/usj-nodes.css:
+   https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
+   (synced from the \`standard-view\` branch at commit
+   d95907eed30395f0b551c7ce402b9e4fbc265bea).
+   Deliberate divergences from the source, each explained at its rule below:
+   - The subdued grays for \`.unknown-block\`/\`.unknown-inline\` and the empty-verse ellipsis are
+     written with literal \`rgba()\` / a plain \`var(--muted-foreground, <hex>)\` instead of the
+     source's \`hsl(var(--muted-foreground, 215 16% 65%) / alpha)\`.
+   - \`.verse-selected\` and the armed-verse blink bind to this repo's \`--destructive\` theme token
+     instead of the editor library's literal reds.
+   - The table-cell box border binds to \`var(--foreground, #000000)\` instead of the source's
+     literal black, so it stays visible against a dark app theme. */
 
 /* stylelint-disable */
 
@@ -256,10 +267,17 @@ body {
   margin-top: 8pt;
 }
 
+/* \`\\ca\` renders identically in BOTH of its states — a first-class \`char ca\` span at root and the
+   chapter's attribute-run form (AttributeRunNode carries \`usfm_ca\` for runKind "ca", the same
+   wrapper-class mechanism \`usfm_va\`/\`usfm_vp\` use): non-bold green italic, never the chapter's own
+   bold. \`font-weight: normal\` is explicit — a no-op for the standalone span (nothing bold above
+   it) but load-bearing for the run, which sits INSIDE the chapter element and would otherwise
+   inherit \`.usfm_c\`'s bold. */
 .formatted-font .usfm_ca {
   color: #007306;
   font-size: 133%;
   font-style: italic;
+  font-weight: normal;
 }
 
 .formatted-font .usfm_cp {
@@ -270,6 +288,46 @@ body {
 .text-spacing .usfm_cp {
   margin-bottom: 4pt;
   margin-top: 8pt;
+}
+
+/* The chapter's OWN \`\\ca\`/\`\\cp\` attribute runs, nested inside the chapter element.
+
+   PT9's Standard view emits both runs as SIBLINGS after the chapter's block, never inside it
+   (\`ParatextInternalShared/ScriptureViews/Standard.xslt\`, the \`chapter\` template: a \`<div
+   class="usfm_c">\`, then \`<span class="usfm_ca">\` and \`<div class="usfm_cp">\`), so their
+   stylesheet sizes resolve against the body text and every marker ends up sized against the BASE
+   — \`\\c\` 150%, \`\\ca\` 133%, \`\\cp\` 150% of it, with the \`.marker\` glyphs at 0.7em of whichever run
+   they sit in. Measured live in PT9 against a 16px base: 24 / 21.28 / 24px of text and
+   16.8 / 14.896 / 16.8px of glyph.
+
+   Here the runs are the chapter node's own attribute display, so they are CHILDREN of the chapter
+   element and their percentages resolve against IT — 133%/150% would compound with \`.usfm_c\`'s
+   150% to ≈200%/225% of body and dwarf their standalone twins. Dividing by that same 1.5 is what
+   reproduces PT9's base-relative result: each run lands at exactly the size its standalone form
+   renders at. If \`.usfm_c\`'s font-size changes, change the divisor with it. Glyph sizing needs no
+   \`usfm_va\`-style reset: \`.opening\`/\`.closing\` render at 0.7em of the span in BOTH states, which
+   is both what keeps the two states identical and what PT9's \`.marker\` does.
+
+   \`display: block\` gives each run the line PT9's structure gives it for free — the \`\\ca\` span
+   follows a closed block, and \`\\cp\` is a block itself — so a chapter carrying only a published
+   number puts it on its own line rather than gluing it to the chapter number. Purely
+   presentational: the runs' bytes, document positions, and caret order are untouched (display
+   bytes are excluded from positions by node state, not by layout).
+
+   The class is DOUBLED for specificity (0,4,0): in the app the generated project stylesheet emits
+   \`.editor-input.usfm .usfm_ca\` at (0,3,0), injected later — a tie the generator resolves in the
+   project's favor by design ("project styles win where defined"), which is right for the
+   STANDALONE span but would re-apply the stylesheet's relative size inside the chapter and
+   re-compound. This demo injects no generated sheet, so the doubling is inert here; it is carried
+   anyway so the demo's Standard view stays byte-comparable with the app's. */
+.formatted-font .usfm_c .usfm_ca.usfm_ca {
+  display: block;
+  font-size: calc(133% / 1.5);
+}
+
+.formatted-font .usfm_c .usfm_cp.usfm_cp {
+  display: block;
+  font-size: calc(150% / 1.5);
 }
 
 /* VerseNode, ImmutableVerseNode */
@@ -293,6 +351,25 @@ body {
   color: #003380;
   font-size: 66%;
   vertical-align: text-top;
+}
+
+/* A verse's \\va/\\vp opening/closing glyphs ride INSIDE the AttributeRunNode wrapper now (they were
+   loose paragraph siblings before the flip), so their own \`font-size: 0.7em\`
+   (\`.formatted-font.marker-editable .opening\`/\`.closing\`/\`.selfClosing\` below) would otherwise
+   compound with the wrapper's OWN \`font-size: 66%\` above (0.7 × 0.66 ≈ 46% of the paragraph's
+   size — noticeably smaller than the pre-flip 70%, since \`em\` is always relative to the immediate
+   parent's computed size, not the paragraph). Reset to 100% of the wrapper's own already-reduced
+   size, matching the value's size exactly, so the glyphs and the value read as one uniformly-sized
+   green/blue-superscript run instead of two visibly different sizes glued together. Selector
+   specificity (four classes) beats the general glyph rule's three, so this wins regardless of
+   declaration order. */
+.formatted-font.marker-editable .usfm_va .opening,
+.formatted-font.marker-editable .usfm_va .closing,
+.formatted-font.marker-editable .usfm_va .selfClosing,
+.formatted-font.marker-editable .usfm_vp .opening,
+.formatted-font.marker-editable .usfm_vp .closing,
+.formatted-font.marker-editable .usfm_vp .selfClosing {
+  font-size: 100%;
 }
 
 /* ParaNode */
@@ -1925,6 +2002,13 @@ body {
 .text-spacing[dir='rtl'] .usfm_tr {
   margin-right: 10vw;
 }
+/* Cells inherit the hanging-indent \`text-indent\` from the .usfm_tr rule above,
+   which drags their content left and clips a narrow first column. Reset it.
+   The ROW's own reset is an inline style set in \`ImmutableTableRowNode.createDOM\`, not a rule
+   here — see the comment there for why a stylesheet rule cannot win that one. */
+.table-cell {
+  text-indent: 0;
+}
 
 .formatted-font .usfm_th1 {
   font-size: 100%;
@@ -2253,6 +2337,114 @@ body {
   font-size: 0.7em;
 }
 
+/* Standard view: editable markers within formatted text get the PT9 marker look.
+   MarkerNode carries its marker-syntax class (opening/closing/selfClosing), not
+   \`marker\` (dropped in #359); ImmutableTypedTextNode (book id) carries \`marker\`.
+   Verse/chapter tokens are deliberately excluded: PT9 styles them via their own
+   usfm_v/usfm_c stylesheet classes, not the grey marker look.
+   Scoped to .formatted-font so the Unformatted view keeps full-size plain markers. */
+.formatted-font.marker-editable .opening,
+.formatted-font.marker-editable .closing,
+.formatted-font.marker-editable .selfClosing,
+.formatted-font.marker-editable .marker {
+  color: rgba(140, 140, 140, 1);
+}
+
+.formatted-font.marker-editable .opening,
+.formatted-font.marker-editable .closing,
+.formatted-font.marker-editable .selfClosing,
+.formatted-font.marker-editable .marker:not(.chapter) {
+  font-size: 0.7em;
+}
+
+.formatted-font.marker-editable .verse {
+  white-space: nowrap;
+  unicode-bidi: embed;
+  /* PT9 Standard view has no background badge on verse tokens; the formatted
+     (non-editable) view keeps its badge. */
+  background-color: transparent;
+}
+
+/* \`.text-spacing .verse\` (below) gives the verse token 2px of margin and 1px of padding on
+   each side. That is the separation the NON-editable views need: there a verse is a
+   decorator rendering a bare number, with no space of its own on either side of it.
+
+   In editable-marker mode the verse is a VerseNode — a TextNode whose text is literally
+   \`\\v 9 \`, so the USFM separator space is real, selectable, caret-addressable content. The
+   box spacing then lands on top of a space the user can already see, and the view reads as
+   TWO spaces after the verse number. Only one of them is a character: the box space has no
+   caret position of its own and no selection highlight. The marker's own text does all the
+   separating in this mode, so the box adds none. */
+.text-spacing.marker-editable .verse {
+  margin: 0;
+  padding: 0;
+}
+
+/* Marker validation states (PT9 ScriptureBase.css .status_unknown/.status_invalid):
+   flag markers the project stylesheet reports as unknown or invalid. Applied to
+   marker GLYPH spans only — body text stays normal (PT9 Standard.xslt stamps status
+   on the marker span, not the element). Same error red as the unmatched-closer
+   \`.invalid\` rule below. */
+.marker-editable .status_unknown,
+.formatted-font.marker-editable .status_unknown {
+  color: rgba(204, 30, 20, 1);
+  font-weight: bold;
+}
+
+.marker-editable .status_invalid,
+.formatted-font.marker-editable .status_invalid {
+  color: rgba(204, 30, 20, 1);
+  border-bottom: 1px solid rgba(204, 30, 20, 1);
+}
+
+/* UnknownNode: lossless carrier for content this editor doesn't model directly — tables,
+   figures, sidebars (\\esb), \\periph, \\ref, \\optbreak, etc. Hidden by default in every view
+   (preserves today's behavior for formatted/markers views); standard view (.marker-editable)
+   reveals it as a subdued read-only container. Its own USFM bytes (opening marker, attribute
+   run, closing marker — unknownUsfm.utils.ts) render as ordinary \`.marker\`/\`.attribute\`
+   ImmutableTypedTextNode children flanking its content (usj-editor.adaptor.ts's
+   \`createUnknown\`), already styled by the \`.formatted-font.marker-editable .marker\`/\`.attribute\`
+   rules below — so no CSS-generated label is needed here (a generated label would duplicate
+   that real text). Two corpus-proven mid-paragraph constructs get the inline treatment instead
+   of a block box that would break the sentence (a line-level box in the middle of a sentence
+   would be visibly wrong; see UnknownNode.ts's INLINE_UNKNOWN_TAGS — createDOM picks the class
+   per construct): \\optbreak (PT9's literal \`//\` token, now real text) and \\ref (a generated
+   cross-reference wrapper with real child text and no marker bytes of its own).
+   The source colors this via hsl(var(--muted-foreground, 215 16% 65%) / alpha), but this repo
+   uses --muted-foreground with a DIFFERENT contract (a COMPLETE color value — an oklch() — not
+   the raw HSL components hsl(var()) wrapping assumes), so the subdued grays are written as
+   literal rgba(140, 140, 140, ...) here — matching this repo's own subdued-marker convention
+   (see \`.marker-editable .book .marker\` above) and avoiding the invalid hsl(var()) that the
+   contract mismatch would produce. */
+.unknown-block,
+.unknown-inline {
+  display: none;
+}
+
+.marker-editable .unknown-block {
+  display: block;
+  margin: 0.25em 0;
+  padding: 0.25em 0.5em;
+  /* An EMPTY opaque block (e.g. the bare "table" container, which contributes no bytes of its
+     own) must stay visible/selectable: without content the box collapses to 0 height. One
+     line-height of room keeps the dashed frame renderable. */
+  min-height: 1.5em;
+  border: 1px dashed rgba(140, 140, 140, 0.5);
+  background-color: rgba(140, 140, 140, 0.08);
+  color: rgba(140, 140, 140, 0.85);
+  /* Whole-block selection/deletion: the containment (a selection stays within the box rather
+     than merging with surrounding text) is provided by the opaque/inert UnknownNode, not CSS.
+     \`user-select: contain\` is not implemented in Blink/Chromium (only auto | text | none | all),
+     so it was a no-op and is intentionally omitted. */
+}
+
+.marker-editable .unknown-inline {
+  display: inline;
+  color: rgba(140, 140, 140, 0.85);
+  /* Same as the block variant: containment comes from the inert UnknownNode, not CSS
+     (\`user-select: contain\` is a Blink no-op), so no user-select is set here. */
+}
+
 .notetext {
   unicode-bidi: embed;
 }
@@ -2261,8 +2453,28 @@ body {
   color: rgba(170, 170, 170, 1);
 }
 
+/* Hovering an attribute run lifts it out of its dim resting color to the host's ordinary text
+   color. The literal is only the fallback for a host that defines no \`--foreground\`: a fixed
+   near-black would be all but invisible against a dark theme. */
 .attribute:hover {
-  color: rgba(25, 25, 25, 1);
+  color: var(--foreground, rgba(25, 25, 25, 1));
+}
+
+/* AttributeRunNode: the ONE wrapper span holding a verse's \\va/\\vp display triplet, a chapter's
+   \\ca/\\cp triplet, or a milestone's attribute run (AttributeRunNode.ts) — dim like a char span's
+   \`.attribute\` run by default, since \`color\` inherits down to the glyphs and value riding inside
+   it. A verse's or chapter's wrapper additionally carries its \`usfm_<runKind>\` class (va/vp/ca/cp
+   only), whose higher-specificity \`.formatted-font .usfm_*\` rules above override this dim color
+   with the marker's own stylesheet look — the same styling the standalone \`char\` form of the same
+   marker already gets. A milestone's or note-\\cat wrapper carries no such class, so it keeps the
+   dim styling as its own. */
+.attribute-run {
+  color: rgba(170, 170, 170, 1);
+}
+
+/* Same hover treatment as \`.attribute\` above, and for the same reason. */
+.attribute-run:hover {
+  color: var(--foreground, rgba(25, 25, 25, 1));
 }
 
 .invalid {
@@ -2307,6 +2519,20 @@ body {
   border-radius: 10px;
 }
 
+/* \\fp (footnote paragraph) displays like a paragraph start — a line break before its span —
+   while the note stays one inline run in the data (no newline ever enters USJ or USFM; the
+   noteEnterFp suite pins the serialization). A ::before generated line break is used instead of
+   \`display: block\` because it keeps the span inline (the trailing \\f* closer glyph stays on the
+   last content line instead of dropping to its own line, and the expanded-note pill background
+   doesn't fragment around a block box) and the pseudo-element is not in the DOM, so the caret
+   can never land in it and Lexical's selection/serialization are untouched. Scoped to
+   .note.expanded so it applies wherever an expanded note's content is visible and never affects
+   collapsed notes, whose content is hidden. */
+.note.expanded .usfm_fp::before {
+  content: '\\A';
+  white-space: pre;
+}
+
 /* NoteNode > ImmutableNoteCallerNode */
 
 .immutable-note-caller > button,
@@ -2347,19 +2573,60 @@ body {
     'w' 'x' 'y' 'z';
 }
 
+/* Cross-reference (x, ex) auto-generated callers use their own sequence, so they don't also
+   increment the footnote counter above. */
+@counter-style cross-ref-callers {
+  system: cyclic;
+  /* These symbols are updated in TS by the \`NoteNodePlugin\`. */
+  symbols: '0o2020';
+  suffix: '';
+}
+
 .editor-input {
-  counter-reset: caller;
+  counter-reset: caller crossref;
 }
 
 .editor-input.reset-counters {
   counter-reset: none;
 }
 
-.immutable-note-caller[data-caller='+'] {
+/* Which caller sequence a note uses is decided by the EDITOR, which stamps
+   \`data-note-kind="footnote"\` or \`data-note-kind="crossref"\` on every \`.note\` element following
+   PT9's Standard view classification (Paratext repo,
+   ParatextInternalShared/ScriptureViews/Standard.xslt lines 446-449): a note style whose marker
+   starts with \`f\` or \`ef\` is a footnote; EVERY other note style — x, ex, and any custom note
+   marker — uses the cross-reference sequence. That is a PREFIX rule, so enumerating marker classes
+   here cannot express it: a note marker outside the enumerated set matched neither arm and got no
+   counter at all, leaving its auto-caller blank. */
+.note[data-note-kind='footnote'] .immutable-note-caller[data-caller='+'] {
   counter-increment: caller;
 }
 
-.note.collapsed .immutable-note-caller[data-caller='+'] > button::before {
+.note.collapsed[data-note-kind='footnote']
+  .immutable-note-caller[data-caller='+']
+  > button::before {
+  content: counter(caller, note-callers);
+}
+
+.note[data-note-kind='crossref'] .immutable-note-caller[data-caller='+'] {
+  counter-increment: crossref;
+}
+
+.note.collapsed[data-note-kind='crossref']
+  .immutable-note-caller[data-caller='+']
+  > button::before {
+  content: counter(crossref, cross-ref-callers);
+}
+
+/* TRANSITIONAL fallback for editor builds that predate the \`data-note-kind\` stamping: an
+   unstamped \`.note\` falls back to the footnote sequence, so callers stay visible (a counter and a
+   non-empty ::before) rather than disappearing. Remove once the pinned editor package always
+   stamps the attribute. */
+.note:not([data-note-kind]) .immutable-note-caller[data-caller='+'] {
+  counter-increment: caller;
+}
+
+.note.collapsed:not([data-note-kind]) .immutable-note-caller[data-caller='+'] > button::before {
   content: counter(caller, note-callers);
 }
 
@@ -2401,31 +2668,38 @@ body {
   border-collapse: collapse;
 }
 
-.usfm td {
-  border: 1px solid #000000;
+/* PT9 emits EVERY cell as a \`<td>\`, header cells included (\`<td class="usfm_th1">\`), so its own
+   rule needs only the one selector. \`ImmutableTableCellNode\` renders a real \`<th>\` for \`th*\`
+   markers, which is better markup but matches no \`td\` selector — so header cells got neither the
+   border nor the padding until \`th\` was named here too. */
+.usfm td,
+.usfm th {
+  /* Theme-aware where PT9's literal black is not: the shipping sheet renders inside the themed
+     app, where a hard #000000 border disappears against a dark background. The literal is the
+     fallback for hosts (like this demo) that define no --foreground. */
+  border: 1px solid var(--foreground, #000000);
   page-break-inside: avoid;
   /* FB27281 adding padding based on font size*/
   padding-right: 0.28em;
   padding-left: 0.28em;
 }
 
+/* Unreachable today, and kept deliberately: PT9 wraps a row's own \`\\tr\` glyph in a real
+   \`<td class="markercell">\`, which needs its border removed because \`td\` above gives it one. Our
+   glyph rides instead in the ANONYMOUS table cell the browser generates around the only non-cell
+   content of a \`<tr>\` — not a \`td\` element, so it matches neither rule and has no border to reset.
+   It does miss \`td\`'s horizontal padding, which the rule below restores directly on the glyph. */
 .usfm td.markercell {
   border-style: none;
 }
 
+.usfm .table-row > .opening,
+.usfm .table-row > .marker {
+  padding-inline-start: 0.28em;
+}
+
 .usfm rt {
   cursor: pointer;
-}
-
-/* Style statues */
-.status_unknown {
-  color: rgba(204, 30, 20, 1);
-  font-weight: bold;
-}
-
-.status_invalid {
-  border-bottom: 1px solid rgba(204, 30, 20, 1);
-  color: rgba(204, 30, 20, 1);
 }
 
 .caption {
@@ -2459,12 +2733,13 @@ body {
 
 /* Verse marker armed for the two-step intentional delete (first Backspace/Delete selects it).
    Destructive styling — light-destructive background, destructive text, roomier padding, and a
-   caret-like glow-underline blink — signals "press again to delete". Bound to the live theme
-   token (\`--destructive\`) so it adapts to light/dark. The blink is gated on the
-   \`verse-delete-armed\` root class so a verse merely inside an ordinary range selection shows the
-   tint but does not blink. \`verse-selected\` is on the inner VerseDecorator span (the element that
-   paints the red), NOT the outer \`.verse\`/\`.usfm_v\` element — so padding lives here, with an equal
-   negative margin so neighbors don't shift when it arms. */
+   caret-like glow-underline blink — signals "press again to delete". The editor library ships
+   the same rules with literal reds; this copy binds them to the live theme token
+   (\`--destructive\`) so they adapt to light/dark alongside the rest of the app. The blink is
+   gated on the \`verse-delete-armed\` root class so a verse merely inside an ordinary range
+   selection shows the tint but does not blink. \`verse-selected\` is on the inner VerseDecorator
+   span (the element that paints the red), NOT the outer \`.verse\`/\`.usfm_v\` element — so padding
+   lives here, with an equal negative margin so neighbors don't shift when it arms. */
 .verse-selected {
   background-color: color-mix(in srgb, var(--destructive) 15%, transparent);
   color: var(--destructive);
@@ -2623,7 +2898,7 @@ span.read img {
   --scripture-accent: #c4956a;
   --scripture-accent-chapter: rgba(196, 149, 106, 0.55);
   --scripture-accent-marker: rgba(196, 149, 106, 0.45);
-  /* Gutter width. The marker left offset uses calc(-(--psc-gutter-width) + 0.5em),
+  /* Gutter width. The marker inline-start offset uses calc(-(--psc-gutter-width) + 0.5em),
      so both values must be updated together if the gutter size changes. */
   --psc-gutter-width: 4em;
 }
@@ -2637,7 +2912,7 @@ span.read img {
   position: relative;
   top: -1px;
   background: none;
-  padding-right: 6px;
+  padding-inline-end: 6px;
 }
 
 /* Chapter number: hide raw text (\\c 1 in visible mode, or just 1 in hidden mode)
@@ -2660,10 +2935,26 @@ span.read img {
   color: var(--scripture-accent-chapter);
 }
 
-.psc-gutter-markers .psc-empty-text::after {
+/* Ellipsis placeholder rendered after the verse number whenever a verse has no body text
+   between its marker and the next verse (or end of paragraph). The class is set per-verse by
+   ActiveTextPlugin so the placeholder shows up for every empty verse, not just verses that
+   stand alone in their paragraph. (The \`.marker\` class is only present in markerMode "visible";
+   in paragraph-structure view the verse number is rendered by ImmutableVerseNode.decorate, so
+   we attach the ellipsis to \`.verse\` directly.) */
+.psc-gutter-markers .verse.psc-empty-text::after {
   content: '…';
+  cursor: text;
+  /* Padding instead of margin so the I-beam cursor extends across the spacing on either
+     side of the ellipsis, not just the glyph itself. Inline-logical so the gap follows
+     writing direction (flips in RTL) without per-direction overrides. */
+  padding-inline-start: 0.25em;
+  padding-inline-end: 0.25em;
+  /* Same --muted-foreground contract mismatch as the UnknownNode rules above: this repo's token
+     holds a complete color value, so it is used directly instead of being wrapped in hsl(). The
+     hex fallback covers a host that defines no --muted-foreground. */
   color: var(--muted-foreground, #6b7280);
   font-style: italic;
+  font-weight: normal;
 }
 
 .psc-gutter-markers .usfm_s,
@@ -2671,25 +2962,21 @@ span.read img {
 .psc-gutter-markers .usfm_s2,
 .psc-gutter-markers .usfm_s3 {
   text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 0.8rem;
-  font-weight: 400;
-  color: var(--muted-foreground, #6b7280);
   border-top: none;
   margin-top: 1rem;
 }
 
-/* The .editor-input left padding creates the gutter space; each .para > .marker
+/* The .editor-input inline-start padding creates the gutter space; each .para > .marker
    span is pulled into it with absolute positioning. */
 .usfm.psc-gutter-markers {
-  padding-left: var(--psc-gutter-width);
+  padding-inline-start: var(--psc-gutter-width);
 }
 
 /* position: relative gives absolutely-positioned gutter markers the right
    containing block. --para-indent and --verse-text-start default to 0;
    paragraph-specific overrides follow below. */
-.psc-gutter-markers .para {
+.psc-gutter-markers .para,
+.psc-gutter-markers .book {
   position: relative;
   --para-indent: 0px;
   --verse-text-start: 0px;
@@ -2711,18 +2998,40 @@ span.read img {
    Milestone and character markers that appear later in the paragraph are NOT shown in the
    gutter — they are already hidden by the .marker:not(.verse):not(.chapter) rule above.
    :not(.verse) excludes ImmutableVerseNode; :not(.chapter) excludes ImmutableChapterNode. */
-.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child {
+/* direction: ltr + unicode-bidi: isolate keep USFM marker text (e.g. \\q1) readable as
+   LTR even in RTL documents. Physical left/right are used for positioning (instead of
+   inset-inline-*) because forcing direction: ltr on the element makes logical property
+   resolution unreliable across browsers. */
+.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child,
+.psc-gutter-markers .book > .marker:first-child {
   display: block;
   position: absolute;
   /* left = -(gutter-width) + 0.5em-gap + para-indent-compensation */
   left: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
   top: 0;
   width: 3em;
+  direction: ltr;
+  unicode-bidi: isolate;
   text-align: right;
   white-space: nowrap;
   color: var(--scripture-accent-marker);
   font-size: 0.75em;
   font-family: monospace;
+}
+
+/* RTL: gutter moves to the right. Physical right is used for the same reason as left above.
+   var(--para-indent) is inherited from the paragraph element (same variable the LTR left
+   calc uses), so indented para types automatically get the correct gutter column without
+   needing per-type overrides.
+   text-align is intentionally NOT overridden here: the base rule's \`text-align: right\` is
+   what keeps the (forced-ltr) marker text painting inside its 3em box. Setting
+   \`text-align: left\` here in an RTL containing block triggers a Chrome/Firefox bidi quirk
+   where the text glyphs are painted ~57px outside the box to the left (only manifests when
+   the box width matches the CSS width — auto-widened boxes like \\mt1, \\ms1 escape it). */
+.psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child,
+.psc-gutter-markers[dir='rtl'] .book > .marker:first-child {
+  left: auto;
+  right: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
 }
 
 /* When markerMode is "visible" the verse span includes "\\v N" as a single text
@@ -2744,13 +3053,47 @@ span.read img {
   background: none;
 }
 
-/* Indent compensation — mirrors the margin-left values above.
-   Only active when .text-spacing is present (same condition as the source rules). */
+/* In RTL the verse span sits at the inline-start (right side) of the line.
+   Forcing direction: ltr on the span keeps ::after at the span's right edge
+   (the same side the number appeared at in LTR), so the numeral reads next to
+   the verse text rather than floating away from it. */
+.psc-gutter-markers[dir='rtl'] .verse.marker {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Without isolation, an inline verse number (a weak EN-type character) bidi-merges with
+   adjacent Latin text into a single LTR run, which makes the verse number render before its
+   text in left-to-right visual order instead of at the start of the verse in RTL reading
+   order.
+
+   \`unicode-bidi: isolate\` alone is not enough though: an isolated element with no explicit
+   \`direction\` becomes a *neutral* character in the parent's bidi flow. Bidi rule N1 then
+   promotes any neutrals sandwiched between two strong LTR runs (e.g. the verses sitting
+   between two English text fragments) up to the LTR level, merging them all back into one
+   big LTR run. Forcing \`direction: rtl\` on the verse makes the isolated unit a *strong* RTL
+   atom in the parent's bidi flow, so each verse keeps its RTL level regardless of neighbors
+   and the bidi algorithm places verse + following text in reading order. The digit inside
+   still renders LTR because EN flips to level 2 within the verse's RTL isolation.
+
+   The .verse.marker rule above is preserved (it forces direction: ltr because the visible-
+   marker mode's "\\\\v N" content needs to stay readable LTR) and wins via higher specificity. */
+.psc-gutter-markers[dir='rtl'] .verse {
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+
+/* Indent compensation — mirrors the inline-start margin values above.
+   Only active when .text-spacing is present (same condition as the source rules).
+   pi2 and pi3 use the same primary-indent value in both LTR and RTL (10vw and 15vw
+   respectively), so no direction restriction is needed here. */
 .psc-gutter-markers.text-spacing .usfm_io,
 .psc-gutter-markers.text-spacing .usfm_io1,
 .psc-gutter-markers.text-spacing .usfm_ili,
 .psc-gutter-markers.text-spacing .usfm_ili1,
-.psc-gutter-markers.text-spacing[dir='ltr'] .usfm_pi2 {
+.psc-gutter-markers.text-spacing .usfm_li,
+.psc-gutter-markers.text-spacing .usfm_li1,
+.psc-gutter-markers.text-spacing .usfm_pi2 {
   --para-indent: 10vw;
 }
 .psc-gutter-markers.text-spacing .usfm_q,
@@ -2760,16 +3103,26 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_q4,
 .psc-gutter-markers.text-spacing .usfm_io2,
 .psc-gutter-markers.text-spacing .usfm_ili2,
-.psc-gutter-markers.text-spacing[dir='ltr'] .usfm_pi3 {
+.psc-gutter-markers.text-spacing .usfm_li2,
+.psc-gutter-markers.text-spacing .usfm_lim,
+.psc-gutter-markers.text-spacing .usfm_lim1,
+.psc-gutter-markers.text-spacing .usfm_pi3 {
   --para-indent: 15vw;
 }
 .psc-gutter-markers.text-spacing .usfm_qm,
 .psc-gutter-markers.text-spacing .usfm_qm1,
-.psc-gutter-markers.text-spacing .usfm_io3 {
+.psc-gutter-markers.text-spacing .usfm_io3,
+.psc-gutter-markers.text-spacing .usfm_li3,
+.psc-gutter-markers.text-spacing .usfm_lim2 {
   --para-indent: 20vw;
 }
-.psc-gutter-markers.text-spacing .usfm_io4 {
+.psc-gutter-markers.text-spacing .usfm_io4,
+.psc-gutter-markers.text-spacing .usfm_li4,
+.psc-gutter-markers.text-spacing .usfm_lim3 {
   --para-indent: 25vw;
+}
+.psc-gutter-markers.text-spacing .usfm_lim4 {
+  --para-indent: 30vw;
 }
 .psc-gutter-markers.text-spacing .usfm_ipi,
 .psc-gutter-markers.text-spacing .usfm_imi,
@@ -2785,7 +3138,7 @@ span.read img {
 
 /* --verse-text-start mirrors the text-indent values for paragraphs with a
    negative text-indent (hanging indent). These paragraphs render their first
-   line to the LEFT of the element's border edge, so the active focus box
+   line to the inline-start of the element's border edge, so the active focus box
    ::before must start at text-indent to align with the text. */
 .psc-gutter-markers.text-spacing .usfm_q,
 .psc-gutter-markers.text-spacing .usfm_q1 {
@@ -2812,7 +3165,17 @@ span.read img {
 }
 .psc-gutter-markers.text-spacing .usfm_ili,
 .psc-gutter-markers.text-spacing .usfm_ili1,
-.psc-gutter-markers.text-spacing .usfm_ili2 {
+.psc-gutter-markers.text-spacing .usfm_ili2,
+.psc-gutter-markers.text-spacing .usfm_li,
+.psc-gutter-markers.text-spacing .usfm_li1,
+.psc-gutter-markers.text-spacing .usfm_li2,
+.psc-gutter-markers.text-spacing .usfm_li3,
+.psc-gutter-markers.text-spacing .usfm_li4,
+.psc-gutter-markers.text-spacing .usfm_lim,
+.psc-gutter-markers.text-spacing .usfm_lim1,
+.psc-gutter-markers.text-spacing .usfm_lim2,
+.psc-gutter-markers.text-spacing .usfm_lim3,
+.psc-gutter-markers.text-spacing .usfm_lim4 {
   --verse-text-start: -7.5vw;
 }
 .psc-gutter-markers.text-spacing .usfm_iq,
@@ -2826,50 +3189,47 @@ span.read img {
   --verse-text-start: -5vw;
 }
 
-/* RTL: move gutter to the right */
-.usfm.psc-gutter-markers[dir='rtl'] {
-  padding-right: 4em;
-  padding-left: 10px; /* restore base value */
-}
-
-.psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child {
-  left: auto;
-  right: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
-  text-align: left;
-}
-
 /* ── Active text focus box ────────────────────────────────────────────────────
    Applied via .psc-active-focus when viewOptions.hasActiveTextFocusBox is true.
-   Shows an outline box around the verse range under the cursor. When used
-   alongside .psc-gutter-markers, the --verse-text-start variable aligns the box
-   with the hanging-indent text start of poetry paragraphs. Without the gutter
-   class that variable defaults to 0px, so poetry alignment is approximate. */
+   Outlines the entire paragraph under the cursor. When used alongside
+   .psc-gutter-markers, the --verse-text-start variable aligns the box with the
+   hanging-indent text start of poetry paragraphs. Without the gutter class that
+   variable defaults to 0px, so poetry alignment is approximate. */
 
 .psc-active-focus {
   --scripture-accent: #c4956a;
 }
 
-/* position: relative on the active paragraph is the containing block for ::before. */
+/* position: relative on the active paragraph is the containing block for the outline pseudo.
+   We use ::after instead of ::before because BookNode paragraphs already use ::before to render
+   the book code via attr(data-code) (see .marker-hidden .book[data-code]::before above), and that
+   rule has higher specificity than the outline's — sharing ::before would let "HAB" bleed into the
+   outline's absolutely-positioned box. */
 .psc-active-focus .psc-active-text {
   position: relative;
 }
 
-.psc-active-focus .psc-active-text::before {
+.psc-active-focus .psc-active-text::after {
   content: '';
   position: absolute;
-  left: var(--verse-text-start, 0px);
-  right: 0;
-  top: var(--active-verse-top, -2px);
-  bottom: var(--active-verse-bottom, -2px);
+  inset-inline-start: var(--verse-text-start, 0px);
+  inset-inline-end: 0;
+  top: -2px;
+  bottom: -2px;
   border: 2.5px solid var(--scripture-accent);
   border-radius: 4px;
   pointer-events: none;
 }
 
-/* RTL: active text box mirrors the hanging indent to the right side */
-.psc-active-focus[dir='rtl'] .psc-active-text::before {
-  left: 0;
-  right: var(--verse-text-start, 0px);
+/* In gutter-marker mode, the paragraph marker (\\p, \\q1, etc.) is absolutely positioned in the
+   gutter to the inline-start side of the paragraph's content box. Extend the outline's
+   inline-start so the box surrounds the marker too — using min() picks whichever is further
+   into the gutter, the hanging-indent text start (for poetry) or the marker's own column. */
+.psc-active-focus.psc-gutter-markers .psc-active-text::after {
+  inset-inline-start: min(
+    var(--verse-text-start, 0px),
+    calc(-1 * var(--psc-gutter-width) - var(--para-indent))
+  );
 }
 .banded-row:hover {
   cursor: pointer;
@@ -2890,7 +3250,18 @@ span.read img {
  * Copied from paranext-core/extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.scss
  */
 
-/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/ba0e846b3f11bea5720c4aa1a3486b69feb6b7e0/packages/platform/src/usj-nodes.css */
+/* Based on scripture-editors' packages/platform/src/usj-nodes.css:
+   https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
+   (synced from the \`standard-view\` branch at commit
+   d95907eed30395f0b551c7ce402b9e4fbc265bea).
+   Deliberate divergences from the source, each explained at its rule below:
+   - The subdued grays for \`.unknown-block\`/\`.unknown-inline\` and the empty-verse ellipsis are
+     written with literal \`rgba()\` / a plain \`var(--muted-foreground, <hex>)\` instead of the
+     source's \`hsl(var(--muted-foreground, 215 16% 65%) / alpha)\`.
+   - \`.verse-selected\` and the armed-verse blink bind to this repo's \`--destructive\` theme token
+     instead of the editor library's literal reds.
+   - The table-cell box border binds to \`var(--foreground, #000000)\` instead of the source's
+     literal black, so it stays visible against a dark app theme. */
 
 /* stylelint-disable */
 
@@ -2971,10 +3342,18 @@ span.read img {
   margin-top: 8pt;
 }
 
+/* \`\\ca\` renders identically in BOTH of its states — a first-class \`char ca\` span at root and the
+   chapter's attribute-run form (AttributeRunNode carries \`usfm_ca\` for runKind "ca", the same
+   wrapper-class mechanism \`usfm_va\`/\`usfm_vp\` use): non-bold green italic, never the chapter's own
+   bold. \`font-weight: normal\` is explicit — a no-op for the standalone span (nothing bold above
+   it) but load-bearing for the run, which sits INSIDE the chapter element and would otherwise
+   inherit \`.usfm_c\`'s bold. */
+
 .formatted-font .usfm_ca {
   color: #007306;
   font-size: 133%;
   font-style: italic;
+  font-weight: normal;
 }
 
 .formatted-font .usfm_cp {
@@ -2986,6 +3365,47 @@ span.read img {
 .text-spacing .usfm_cp {
   margin-bottom: 4pt;
   margin-top: 8pt;
+}
+
+/* The chapter's OWN \`\\ca\`/\`\\cp\` attribute runs, nested inside the chapter element.
+
+   PT9's Standard view emits both runs as SIBLINGS after the chapter's block, never inside it
+   (\`ParatextInternalShared/ScriptureViews/Standard.xslt\`, the \`chapter\` template: a \`<div
+   class="usfm_c">\`, then \`<span class="usfm_ca">\` and \`<div class="usfm_cp">\`), so their
+   stylesheet sizes resolve against the body text and every marker ends up sized against the BASE
+   — \`\\c\` 150%, \`\\ca\` 133%, \`\\cp\` 150% of it, with the \`.marker\` glyphs at 0.7em of whichever run
+   they sit in. Measured live in PT9 against a 16px base: 24 / 21.28 / 24px of text and
+   16.8 / 14.896 / 16.8px of glyph.
+
+   Here the runs are the chapter node's own attribute display, so they are CHILDREN of the chapter
+   element and their percentages resolve against IT — 133%/150% would compound with \`.usfm_c\`'s
+   150% to ≈200%/225% of body and dwarf their standalone twins. Dividing by that same 1.5 is what
+   reproduces PT9's base-relative result: each run lands at exactly the size its standalone form
+   renders at. If \`.usfm_c\`'s font-size changes, change the divisor with it. Glyph sizing needs no
+   \`usfm_va\`-style reset: \`.opening\`/\`.closing\` render at 0.7em of the span in BOTH states, which
+   is both what keeps the two states identical and what PT9's \`.marker\` does.
+
+   \`display: block\` gives each run the line PT9's structure gives it for free — the \`\\ca\` span
+   follows a closed block, and \`\\cp\` is a block itself — so a chapter carrying only a published
+   number puts it on its own line rather than gluing it to the chapter number. Purely
+   presentational: the runs' bytes, document positions, and caret order are untouched (display
+   bytes are excluded from positions by node state, not by layout).
+
+   The class is DOUBLED for specificity (0,4,0): in the app the generated project stylesheet emits
+   \`.editor-input.usfm .usfm_ca\` at (0,3,0), injected later — a tie the generator resolves in the
+   project's favor by design ("project styles win where defined"), which is right for the
+   STANDALONE span but would re-apply the stylesheet's relative size inside the chapter and
+   re-compound. This demo injects no generated sheet, so the doubling is inert here; it is carried
+   anyway so the demo's Standard view stays byte-comparable with the app's. */
+
+.formatted-font .usfm_c .usfm_ca.usfm_ca {
+  display: block;
+  font-size: calc(133% / 1.5);
+}
+
+.formatted-font .usfm_c .usfm_cp.usfm_cp {
+  display: block;
+  font-size: calc(150% / 1.5);
 }
 
 /* VerseNode, ImmutableVerseNode */
@@ -3010,6 +3430,26 @@ span.read img {
   color: #003380;
   font-size: 66%;
   vertical-align: text-top;
+}
+
+/* A verse's \\va/\\vp opening/closing glyphs ride INSIDE the AttributeRunNode wrapper now (they were
+   loose paragraph siblings before the flip), so their own \`font-size: 0.7em\`
+   (\`.formatted-font.marker-editable .opening\`/\`.closing\`/\`.selfClosing\` below) would otherwise
+   compound with the wrapper's OWN \`font-size: 66%\` above (0.7 × 0.66 ≈ 46% of the paragraph's
+   size — noticeably smaller than the pre-flip 70%, since \`em\` is always relative to the immediate
+   parent's computed size, not the paragraph). Reset to 100% of the wrapper's own already-reduced
+   size, matching the value's size exactly, so the glyphs and the value read as one uniformly-sized
+   green/blue-superscript run instead of two visibly different sizes glued together. Selector
+   specificity (four classes) beats the general glyph rule's three, so this wins regardless of
+   declaration order. */
+
+.formatted-font.marker-editable .usfm_va .opening,
+.formatted-font.marker-editable .usfm_va .closing,
+.formatted-font.marker-editable .usfm_va .selfClosing,
+.formatted-font.marker-editable .usfm_vp .opening,
+.formatted-font.marker-editable .usfm_vp .closing,
+.formatted-font.marker-editable .usfm_vp .selfClosing {
+  font-size: 100%;
 }
 
 /* ParaNode */
@@ -4838,6 +5278,15 @@ span.read img {
   margin-right: 10vw;
 }
 
+/* Cells inherit the hanging-indent \`text-indent\` from the .usfm_tr rule above,
+   which drags their content left and clips a narrow first column. Reset it.
+   The ROW's own reset is an inline style set in \`ImmutableTableRowNode.createDOM\`, not a rule
+   here — see the comment there for why a stylesheet rule cannot win that one. */
+
+.table-cell {
+  text-indent: 0;
+}
+
 .formatted-font .usfm_th1 {
   font-size: 100%;
   font-style: italic;
@@ -5193,6 +5642,118 @@ span.read img {
   font-size: 0.7em;
 }
 
+/* Standard view: editable markers within formatted text get the PT9 marker look.
+   MarkerNode carries its marker-syntax class (opening/closing/selfClosing), not
+   \`marker\` (dropped in #359); ImmutableTypedTextNode (book id) carries \`marker\`.
+   Verse/chapter tokens are deliberately excluded: PT9 styles them via their own
+   usfm_v/usfm_c stylesheet classes, not the grey marker look.
+   Scoped to .formatted-font so the Unformatted view keeps full-size plain markers. */
+
+.formatted-font.marker-editable .opening,
+.formatted-font.marker-editable .closing,
+.formatted-font.marker-editable .selfClosing,
+.formatted-font.marker-editable .marker {
+  color: rgba(140, 140, 140, 1);
+}
+
+.formatted-font.marker-editable .opening,
+.formatted-font.marker-editable .closing,
+.formatted-font.marker-editable .selfClosing,
+.formatted-font.marker-editable .marker:not(.chapter) {
+  font-size: 0.7em;
+}
+
+.formatted-font.marker-editable .verse {
+  white-space: nowrap;
+  unicode-bidi: embed;
+  /* PT9 Standard view has no background badge on verse tokens; the formatted
+     (non-editable) view keeps its badge. */
+  background-color: transparent;
+}
+
+/* \`.text-spacing .verse\` (below) gives the verse token 2px of margin and 1px of padding on
+   each side. That is the separation the NON-editable views need: there a verse is a
+   decorator rendering a bare number, with no space of its own on either side of it.
+
+   In editable-marker mode the verse is a VerseNode — a TextNode whose text is literally
+   \`\\v 9 \`, so the USFM separator space is real, selectable, caret-addressable content. The
+   box spacing then lands on top of a space the user can already see, and the view reads as
+   TWO spaces after the verse number. Only one of them is a character: the box space has no
+   caret position of its own and no selection highlight. The marker's own text does all the
+   separating in this mode, so the box adds none. */
+
+.text-spacing.marker-editable .verse {
+  margin: 0;
+  padding: 0;
+}
+
+/* Marker validation states (PT9 ScriptureBase.css .status_unknown/.status_invalid):
+   flag markers the project stylesheet reports as unknown or invalid. Applied to
+   marker GLYPH spans only — body text stays normal (PT9 Standard.xslt stamps status
+   on the marker span, not the element). Same error red as the unmatched-closer
+   \`.invalid\` rule below. */
+
+.marker-editable .status_unknown,
+.formatted-font.marker-editable .status_unknown {
+  color: rgba(204, 30, 20, 1);
+  font-weight: bold;
+}
+
+.marker-editable .status_invalid,
+.formatted-font.marker-editable .status_invalid {
+  color: rgba(204, 30, 20, 1);
+  border-bottom: 1px solid rgba(204, 30, 20, 1);
+}
+
+/* UnknownNode: lossless carrier for content this editor doesn't model directly — tables,
+   figures, sidebars (\\esb), \\periph, \\ref, \\optbreak, etc. Hidden by default in every view
+   (preserves today's behavior for formatted/markers views); standard view (.marker-editable)
+   reveals it as a subdued read-only container. Its own USFM bytes (opening marker, attribute
+   run, closing marker — unknownUsfm.utils.ts) render as ordinary \`.marker\`/\`.attribute\`
+   ImmutableTypedTextNode children flanking its content (usj-editor.adaptor.ts's
+   \`createUnknown\`), already styled by the \`.formatted-font.marker-editable .marker\`/\`.attribute\`
+   rules below — so no CSS-generated label is needed here (a generated label would duplicate
+   that real text). Two corpus-proven mid-paragraph constructs get the inline treatment instead
+   of a block box that would break the sentence (a line-level box in the middle of a sentence
+   would be visibly wrong; see UnknownNode.ts's INLINE_UNKNOWN_TAGS — createDOM picks the class
+   per construct): \\optbreak (PT9's literal \`//\` token, now real text) and \\ref (a generated
+   cross-reference wrapper with real child text and no marker bytes of its own).
+   The source colors this via hsl(var(--muted-foreground, 215 16% 65%) / alpha), but this repo
+   uses --muted-foreground with a DIFFERENT contract (a COMPLETE color value — an oklch() — not
+   the raw HSL components hsl(var()) wrapping assumes), so the subdued grays are written as
+   literal rgba(140, 140, 140, ...) here — matching this repo's own subdued-marker convention
+   (see \`.marker-editable .book .marker\` above) and avoiding the invalid hsl(var()) that the
+   contract mismatch would produce. */
+
+.unknown-block,
+.unknown-inline {
+  display: none;
+}
+
+.marker-editable .unknown-block {
+  display: block;
+  margin: 0.25em 0;
+  padding: 0.25em 0.5em;
+  /* An EMPTY opaque block (e.g. the bare "table" container, which contributes no bytes of its
+     own) must stay visible/selectable: without content the box collapses to 0 height. One
+     line-height of room keeps the dashed frame renderable. */
+  min-height: 1.5em;
+  border: 1px dashed rgba(140, 140, 140, 0.5);
+  background-color: rgba(140, 140, 140, 0.08);
+  color: rgba(140, 140, 140, 0.85);
+  /* Whole-block selection/deletion: the containment (a selection stays within the box rather
+     than merging with surrounding text) is provided by the opaque/inert UnknownNode, not CSS.
+     \`user-select: contain\` is not implemented in Blink/Chromium (only auto | text | none | all),
+     so it was a no-op and is intentionally omitted. */
+}
+
+.marker-editable .unknown-inline {
+  display: inline;
+  color: rgba(140, 140, 140, 0.85);
+  /* Same as the block variant: containment comes from the inert UnknownNode, not CSS
+     (\`user-select: contain\` is a Blink no-op), so no user-select is set here. */
+}
+
 .notetext {
   unicode-bidi: embed;
 }
@@ -5201,8 +5762,31 @@ span.read img {
   color: rgba(170, 170, 170, 1);
 }
 
+/* Hovering an attribute run lifts it out of its dim resting color to the host's ordinary text
+   color. The literal is only the fallback for a host that defines no \`--foreground\`: a fixed
+   near-black would be all but invisible against a dark theme. */
+
 .attribute:hover {
-  color: rgba(25, 25, 25, 1);
+  color: var(--foreground, rgba(25, 25, 25, 1));
+}
+
+/* AttributeRunNode: the ONE wrapper span holding a verse's \\va/\\vp display triplet, a chapter's
+   \\ca/\\cp triplet, or a milestone's attribute run (AttributeRunNode.ts) — dim like a char span's
+   \`.attribute\` run by default, since \`color\` inherits down to the glyphs and value riding inside
+   it. A verse's or chapter's wrapper additionally carries its \`usfm_<runKind>\` class (va/vp/ca/cp
+   only), whose higher-specificity \`.formatted-font .usfm_*\` rules above override this dim color
+   with the marker's own stylesheet look — the same styling the standalone \`char\` form of the same
+   marker already gets. A milestone's or note-\\cat wrapper carries no such class, so it keeps the
+   dim styling as its own. */
+
+.attribute-run {
+  color: rgba(170, 170, 170, 1);
+}
+
+/* Same hover treatment as \`.attribute\` above, and for the same reason. */
+
+.attribute-run:hover {
+  color: var(--foreground, rgba(25, 25, 25, 1));
 }
 
 .invalid {
@@ -5250,6 +5834,21 @@ span.read img {
   border-radius: 10px;
 }
 
+/* \\fp (footnote paragraph) displays like a paragraph start — a line break before its span —
+   while the note stays one inline run in the data (no newline ever enters USJ or USFM; the
+   noteEnterFp suite pins the serialization). A ::before generated line break is used instead of
+   \`display: block\` because it keeps the span inline (the trailing \\f* closer glyph stays on the
+   last content line instead of dropping to its own line, and the expanded-note pill background
+   doesn't fragment around a block box) and the pseudo-element is not in the DOM, so the caret
+   can never land in it and Lexical's selection/serialization are untouched. Scoped to
+   .note.expanded so it applies wherever an expanded note's content is visible and never affects
+   collapsed notes, whose content is hidden. */
+
+.note.expanded .usfm_fp::before {
+  content: '\\A';
+  white-space: pre;
+}
+
 /* NoteNode > ImmutableNoteCallerNode */
 
 .immutable-note-caller > button,
@@ -5290,19 +5889,63 @@ span.read img {
     'w' 'x' 'y' 'z';
 }
 
+/* Cross-reference (x, ex) auto-generated callers use their own sequence, so they don't also
+   increment the footnote counter above. */
+
+@counter-style cross-ref-callers {
+  system: cyclic;
+  /* These symbols are updated in TS by the \`NoteNodePlugin\`. */
+  symbols: '0o2020';
+  suffix: '';
+}
+
 .editor-input {
-  counter-reset: caller;
+  counter-reset: caller crossref;
 }
 
 .editor-input.reset-counters {
   counter-reset: none;
 }
 
-.immutable-note-caller[data-caller='+'] {
+/* Which caller sequence a note uses is decided by the EDITOR, which stamps
+   \`data-note-kind="footnote"\` or \`data-note-kind="crossref"\` on every \`.note\` element following
+   PT9's Standard view classification (Paratext repo,
+   ParatextInternalShared/ScriptureViews/Standard.xslt lines 446-449): a note style whose marker
+   starts with \`f\` or \`ef\` is a footnote; EVERY other note style — x, ex, and any custom note
+   marker — uses the cross-reference sequence. That is a PREFIX rule, so enumerating marker classes
+   here cannot express it: a note marker outside the enumerated set matched neither arm and got no
+   counter at all, leaving its auto-caller blank. */
+
+.note[data-note-kind='footnote'] .immutable-note-caller[data-caller='+'] {
   counter-increment: caller;
 }
 
-.note.collapsed .immutable-note-caller[data-caller='+'] > button::before {
+.note.collapsed[data-note-kind='footnote']
+  .immutable-note-caller[data-caller='+']
+  > button::before {
+  content: counter(caller, note-callers);
+}
+
+.note[data-note-kind='crossref'] .immutable-note-caller[data-caller='+'] {
+  counter-increment: crossref;
+}
+
+.note.collapsed[data-note-kind='crossref']
+  .immutable-note-caller[data-caller='+']
+  > button::before {
+  content: counter(crossref, cross-ref-callers);
+}
+
+/* TRANSITIONAL fallback for editor builds that predate the \`data-note-kind\` stamping: an
+   unstamped \`.note\` falls back to the footnote sequence, so callers stay visible (a counter and a
+   non-empty ::before) rather than disappearing. Remove once the pinned editor package always
+   stamps the attribute. */
+
+.note:not([data-note-kind]) .immutable-note-caller[data-caller='+'] {
+  counter-increment: caller;
+}
+
+.note.collapsed:not([data-note-kind]) .immutable-note-caller[data-caller='+'] > button::before {
   content: counter(caller, note-callers);
 }
 
@@ -5344,32 +5987,40 @@ span.read img {
   border-collapse: collapse;
 }
 
-.usfm td {
-  border: 1px solid #000000;
+/* PT9 emits EVERY cell as a \`<td>\`, header cells included (\`<td class="usfm_th1">\`), so its own
+   rule needs only the one selector. \`ImmutableTableCellNode\` renders a real \`<th>\` for \`th*\`
+   markers, which is better markup but matches no \`td\` selector — so header cells got neither the
+   border nor the padding until \`th\` was named here too. */
+
+.usfm td,
+.usfm th {
+  /* Theme-aware where PT9's literal black is not: the shipping sheet renders inside the themed
+     app, where a hard #000000 border disappears against a dark background. The literal is the
+     fallback for hosts (like this demo) that define no --foreground. */
+  border: 1px solid var(--foreground, #000000);
   page-break-inside: avoid;
   /* FB27281 adding padding based on font size*/
   padding-right: 0.28em;
   padding-left: 0.28em;
 }
 
+/* Unreachable today, and kept deliberately: PT9 wraps a row's own \`\\tr\` glyph in a real
+   \`<td class="markercell">\`, which needs its border removed because \`td\` above gives it one. Our
+   glyph rides instead in the ANONYMOUS table cell the browser generates around the only non-cell
+   content of a \`<tr>\` — not a \`td\` element, so it matches neither rule and has no border to reset.
+   It does miss \`td\`'s horizontal padding, which the rule below restores directly on the glyph. */
+
 .usfm td.markercell {
   border-style: none;
 }
 
+.usfm .table-row > .opening,
+.usfm .table-row > .marker {
+  padding-inline-start: 0.28em;
+}
+
 .usfm rt {
   cursor: pointer;
-}
-
-/* Style statues */
-
-.status_unknown {
-  color: rgba(204, 30, 20, 1);
-  font-weight: bold;
-}
-
-.status_invalid {
-  border-bottom: 1px solid rgba(204, 30, 20, 1);
-  color: rgba(204, 30, 20, 1);
 }
 
 .caption {
@@ -5404,12 +6055,13 @@ span.read img {
 
 /* Verse marker armed for the two-step intentional delete (first Backspace/Delete selects it).
    Destructive styling — light-destructive background, destructive text, roomier padding, and a
-   caret-like glow-underline blink — signals "press again to delete". Bound to the live theme
-   token (\`--destructive\`) so it adapts to light/dark. The blink is gated on the
-   \`verse-delete-armed\` root class so a verse merely inside an ordinary range selection shows the
-   tint but does not blink. \`verse-selected\` is on the inner VerseDecorator span (the element that
-   paints the red), NOT the outer \`.verse\`/\`.usfm_v\` element — so padding lives here, with an equal
-   negative margin so neighbors don't shift when it arms. */
+   caret-like glow-underline blink — signals "press again to delete". The editor library ships
+   the same rules with literal reds; this copy binds them to the live theme token
+   (\`--destructive\`) so they adapt to light/dark alongside the rest of the app. The blink is
+   gated on the \`verse-delete-armed\` root class so a verse merely inside an ordinary range
+   selection shows the tint but does not blink. \`verse-selected\` is on the inner VerseDecorator
+   span (the element that paints the red), NOT the outer \`.verse\`/\`.usfm_v\` element — so padding
+   lives here, with an equal negative margin so neighbors don't shift when it arms. */
 
 .verse-selected {
   background-color: color-mix(in srgb, var(--destructive) 15%, transparent);
@@ -5584,7 +6236,7 @@ span.read img {
   --scripture-accent: #c4956a;
   --scripture-accent-chapter: rgba(196, 149, 106, 0.55);
   --scripture-accent-marker: rgba(196, 149, 106, 0.45);
-  /* Gutter width. The marker left offset uses calc(-(--psc-gutter-width) + 0.5em),
+  /* Gutter width. The marker inline-start offset uses calc(-(--psc-gutter-width) + 0.5em),
      so both values must be updated together if the gutter size changes. */
   --psc-gutter-width: 4em;
 }
@@ -5598,7 +6250,7 @@ span.read img {
   position: relative;
   top: -1px;
   background: none;
-  padding-right: 6px;
+  padding-inline-end: 6px;
 }
 
 /* Chapter number: hide raw text (\\c 1 in visible mode, or just 1 in hidden mode)
@@ -5622,10 +6274,27 @@ span.read img {
   color: var(--scripture-accent-chapter);
 }
 
-.psc-gutter-markers .psc-empty-text::after {
+/* Ellipsis placeholder rendered after the verse number whenever a verse has no body text
+   between its marker and the next verse (or end of paragraph). The class is set per-verse by
+   ActiveTextPlugin so the placeholder shows up for every empty verse, not just verses that
+   stand alone in their paragraph. (The \`.marker\` class is only present in markerMode "visible";
+   in paragraph-structure view the verse number is rendered by ImmutableVerseNode.decorate, so
+   we attach the ellipsis to \`.verse\` directly.) */
+
+.psc-gutter-markers .verse.psc-empty-text::after {
   content: '…';
+  cursor: text;
+  /* Padding instead of margin so the I-beam cursor extends across the spacing on either
+     side of the ellipsis, not just the glyph itself. Inline-logical so the gap follows
+     writing direction (flips in RTL) without per-direction overrides. */
+  padding-inline-start: 0.25em;
+  padding-inline-end: 0.25em;
+  /* Same --muted-foreground contract mismatch as the UnknownNode rules above: this repo's token
+     holds a complete color value, so it is used directly instead of being wrapped in hsl(). The
+     hex fallback covers a host that defines no --muted-foreground. */
   color: var(--muted-foreground, #6b7280);
   font-style: italic;
+  font-weight: normal;
 }
 
 .psc-gutter-markers .usfm_s,
@@ -5633,27 +6302,23 @@ span.read img {
 .psc-gutter-markers .usfm_s2,
 .psc-gutter-markers .usfm_s3 {
   text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 0.8rem;
-  font-weight: 400;
-  color: var(--muted-foreground, #6b7280);
   border-top: none;
   margin-top: 1rem;
 }
 
-/* The .editor-input left padding creates the gutter space; each .para > .marker
+/* The .editor-input inline-start padding creates the gutter space; each .para > .marker
    span is pulled into it with absolute positioning. */
 
 .usfm.psc-gutter-markers {
-  padding-left: var(--psc-gutter-width);
+  padding-inline-start: var(--psc-gutter-width);
 }
 
 /* position: relative gives absolutely-positioned gutter markers the right
    containing block. --para-indent and --verse-text-start default to 0;
    paragraph-specific overrides follow below. */
 
-.psc-gutter-markers .para {
+.psc-gutter-markers .para,
+.psc-gutter-markers .book {
   position: relative;
   --para-indent: 0px;
   --verse-text-start: 0px;
@@ -5677,18 +6342,42 @@ span.read img {
    gutter — they are already hidden by the .marker:not(.verse):not(.chapter) rule above.
    :not(.verse) excludes ImmutableVerseNode; :not(.chapter) excludes ImmutableChapterNode. */
 
-.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child {
+/* direction: ltr + unicode-bidi: isolate keep USFM marker text (e.g. \\q1) readable as
+   LTR even in RTL documents. Physical left/right are used for positioning (instead of
+   inset-inline-*) because forcing direction: ltr on the element makes logical property
+   resolution unreliable across browsers. */
+
+.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child,
+.psc-gutter-markers .book > .marker:first-child {
   display: block;
   position: absolute;
   /* left = -(gutter-width) + 0.5em-gap + para-indent-compensation */
   left: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
   top: 0;
   width: 3em;
+  direction: ltr;
+  unicode-bidi: isolate;
   text-align: right;
   white-space: nowrap;
   color: var(--scripture-accent-marker);
   font-size: 0.75em;
   font-family: monospace;
+}
+
+/* RTL: gutter moves to the right. Physical right is used for the same reason as left above.
+   var(--para-indent) is inherited from the paragraph element (same variable the LTR left
+   calc uses), so indented para types automatically get the correct gutter column without
+   needing per-type overrides.
+   text-align is intentionally NOT overridden here: the base rule's \`text-align: right\` is
+   what keeps the (forced-ltr) marker text painting inside its 3em box. Setting
+   \`text-align: left\` here in an RTL containing block triggers a Chrome/Firefox bidi quirk
+   where the text glyphs are painted ~57px outside the box to the left (only manifests when
+   the box width matches the CSS width — auto-widened boxes like \\mt1, \\ms1 escape it). */
+
+.psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child,
+.psc-gutter-markers[dir='rtl'] .book > .marker:first-child {
+  left: auto;
+  right: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
 }
 
 /* When markerMode is "visible" the verse span includes "\\v N" as a single text
@@ -5712,14 +6401,50 @@ span.read img {
   background: none;
 }
 
-/* Indent compensation — mirrors the margin-left values above.
-   Only active when .text-spacing is present (same condition as the source rules). */
+/* In RTL the verse span sits at the inline-start (right side) of the line.
+   Forcing direction: ltr on the span keeps ::after at the span's right edge
+   (the same side the number appeared at in LTR), so the numeral reads next to
+   the verse text rather than floating away from it. */
+
+.psc-gutter-markers[dir='rtl'] .verse.marker {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Without isolation, an inline verse number (a weak EN-type character) bidi-merges with
+   adjacent Latin text into a single LTR run, which makes the verse number render before its
+   text in left-to-right visual order instead of at the start of the verse in RTL reading
+   order.
+
+   \`unicode-bidi: isolate\` alone is not enough though: an isolated element with no explicit
+   \`direction\` becomes a *neutral* character in the parent's bidi flow. Bidi rule N1 then
+   promotes any neutrals sandwiched between two strong LTR runs (e.g. the verses sitting
+   between two English text fragments) up to the LTR level, merging them all back into one
+   big LTR run. Forcing \`direction: rtl\` on the verse makes the isolated unit a *strong* RTL
+   atom in the parent's bidi flow, so each verse keeps its RTL level regardless of neighbors
+   and the bidi algorithm places verse + following text in reading order. The digit inside
+   still renders LTR because EN flips to level 2 within the verse's RTL isolation.
+
+   The .verse.marker rule above is preserved (it forces direction: ltr because the visible-
+   marker mode's "\\\\v N" content needs to stay readable LTR) and wins via higher specificity. */
+
+.psc-gutter-markers[dir='rtl'] .verse {
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+
+/* Indent compensation — mirrors the inline-start margin values above.
+   Only active when .text-spacing is present (same condition as the source rules).
+   pi2 and pi3 use the same primary-indent value in both LTR and RTL (10vw and 15vw
+   respectively), so no direction restriction is needed here. */
 
 .psc-gutter-markers.text-spacing .usfm_io,
 .psc-gutter-markers.text-spacing .usfm_io1,
 .psc-gutter-markers.text-spacing .usfm_ili,
 .psc-gutter-markers.text-spacing .usfm_ili1,
-.psc-gutter-markers.text-spacing[dir='ltr'] .usfm_pi2 {
+.psc-gutter-markers.text-spacing .usfm_li,
+.psc-gutter-markers.text-spacing .usfm_li1,
+.psc-gutter-markers.text-spacing .usfm_pi2 {
   --para-indent: 10vw;
 }
 
@@ -5730,18 +6455,29 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_q4,
 .psc-gutter-markers.text-spacing .usfm_io2,
 .psc-gutter-markers.text-spacing .usfm_ili2,
-.psc-gutter-markers.text-spacing[dir='ltr'] .usfm_pi3 {
+.psc-gutter-markers.text-spacing .usfm_li2,
+.psc-gutter-markers.text-spacing .usfm_lim,
+.psc-gutter-markers.text-spacing .usfm_lim1,
+.psc-gutter-markers.text-spacing .usfm_pi3 {
   --para-indent: 15vw;
 }
 
 .psc-gutter-markers.text-spacing .usfm_qm,
 .psc-gutter-markers.text-spacing .usfm_qm1,
-.psc-gutter-markers.text-spacing .usfm_io3 {
+.psc-gutter-markers.text-spacing .usfm_io3,
+.psc-gutter-markers.text-spacing .usfm_li3,
+.psc-gutter-markers.text-spacing .usfm_lim2 {
   --para-indent: 20vw;
 }
 
-.psc-gutter-markers.text-spacing .usfm_io4 {
+.psc-gutter-markers.text-spacing .usfm_io4,
+.psc-gutter-markers.text-spacing .usfm_li4,
+.psc-gutter-markers.text-spacing .usfm_lim3 {
   --para-indent: 25vw;
+}
+
+.psc-gutter-markers.text-spacing .usfm_lim4 {
+  --para-indent: 30vw;
 }
 
 .psc-gutter-markers.text-spacing .usfm_ipi,
@@ -5758,7 +6494,7 @@ span.read img {
 
 /* --verse-text-start mirrors the text-indent values for paragraphs with a
    negative text-indent (hanging indent). These paragraphs render their first
-   line to the LEFT of the element's border edge, so the active focus box
+   line to the inline-start of the element's border edge, so the active focus box
    ::before must start at text-indent to align with the text. */
 
 .psc-gutter-markers.text-spacing .usfm_q,
@@ -5793,7 +6529,17 @@ span.read img {
 
 .psc-gutter-markers.text-spacing .usfm_ili,
 .psc-gutter-markers.text-spacing .usfm_ili1,
-.psc-gutter-markers.text-spacing .usfm_ili2 {
+.psc-gutter-markers.text-spacing .usfm_ili2,
+.psc-gutter-markers.text-spacing .usfm_li,
+.psc-gutter-markers.text-spacing .usfm_li1,
+.psc-gutter-markers.text-spacing .usfm_li2,
+.psc-gutter-markers.text-spacing .usfm_li3,
+.psc-gutter-markers.text-spacing .usfm_li4,
+.psc-gutter-markers.text-spacing .usfm_lim,
+.psc-gutter-markers.text-spacing .usfm_lim1,
+.psc-gutter-markers.text-spacing .usfm_lim2,
+.psc-gutter-markers.text-spacing .usfm_lim3,
+.psc-gutter-markers.text-spacing .usfm_lim4 {
   --verse-text-start: -7.5vw;
 }
 
@@ -5810,53 +6556,49 @@ span.read img {
   --verse-text-start: -5vw;
 }
 
-/* RTL: move gutter to the right */
-
-.usfm.psc-gutter-markers[dir='rtl'] {
-  padding-right: 4em;
-  padding-left: 10px; /* restore base value */
-}
-
-.psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child {
-  left: auto;
-  right: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
-  text-align: left;
-}
-
 /* ── Active text focus box ────────────────────────────────────────────────────
    Applied via .psc-active-focus when viewOptions.hasActiveTextFocusBox is true.
-   Shows an outline box around the verse range under the cursor. When used
-   alongside .psc-gutter-markers, the --verse-text-start variable aligns the box
-   with the hanging-indent text start of poetry paragraphs. Without the gutter
-   class that variable defaults to 0px, so poetry alignment is approximate. */
+   Outlines the entire paragraph under the cursor. When used alongside
+   .psc-gutter-markers, the --verse-text-start variable aligns the box with the
+   hanging-indent text start of poetry paragraphs. Without the gutter class that
+   variable defaults to 0px, so poetry alignment is approximate. */
 
 .psc-active-focus {
   --scripture-accent: #c4956a;
 }
 
-/* position: relative on the active paragraph is the containing block for ::before. */
+/* position: relative on the active paragraph is the containing block for the outline pseudo.
+   We use ::after instead of ::before because BookNode paragraphs already use ::before to render
+   the book code via attr(data-code) (see .marker-hidden .book[data-code]::before above), and that
+   rule has higher specificity than the outline's — sharing ::before would let "HAB" bleed into the
+   outline's absolutely-positioned box. */
 
 .psc-active-focus .psc-active-text {
   position: relative;
 }
 
-.psc-active-focus .psc-active-text::before {
+.psc-active-focus .psc-active-text::after {
   content: '';
   position: absolute;
-  left: var(--verse-text-start, 0px);
-  right: 0;
-  top: var(--active-verse-top, -2px);
-  bottom: var(--active-verse-bottom, -2px);
+  inset-inline-start: var(--verse-text-start, 0px);
+  inset-inline-end: 0;
+  top: -2px;
+  bottom: -2px;
   border: 2.5px solid var(--scripture-accent);
   border-radius: 4px;
   pointer-events: none;
 }
 
-/* RTL: active text box mirrors the hanging indent to the right side */
+/* In gutter-marker mode, the paragraph marker (\\p, \\q1, etc.) is absolutely positioned in the
+   gutter to the inline-start side of the paragraph's content box. Extend the outline's
+   inline-start so the box surrounds the marker too — using min() picks whichever is further
+   into the gutter, the hanging-indent text start (for poetry) or the marker's own column. */
 
-.psc-active-focus[dir='rtl'] .psc-active-text::before {
-  left: 0;
-  right: var(--verse-text-start, 0px);
+.psc-active-focus.psc-gutter-markers .psc-active-text::after {
+  inset-inline-start: min(
+    var(--verse-text-start, 0px),
+    calc(-1 * var(--psc-gutter-width) - var(--para-indent))
+  );
 }
 
 /* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/ba0e846b3f11bea5720c4aa1a3486b69feb6b7e0/packages/platform/src/editor/editor.css */
@@ -6528,6 +7270,19 @@ body {
 /* stylelint-disable selector-class-pattern */
 .footnote-editor .text-spacing .usfm_p {
   text-indent: 0;
+}
+
+/* \\fp (footnote paragraph) displays like a paragraph start — a line break before its span —
+   while the note stays one inline run in the data (no newline ever enters USJ or USFM). A
+   ::before generated line break is used instead of \`display: block\` because it keeps the span
+   inline (the trailing \\f* closer glyph stays on the last content line instead of dropping to
+   its own line) and the pseudo-element is not in the DOM, so the caret can never land in it and
+   the editor's selection/serialization are untouched. Mirrors the structural rule in the
+   editor's usj-nodes stylesheet so the popover renders the break even when the host page does
+   not load that stylesheet (e.g. Storybook). */
+.footnote-editor .note.expanded .usfm_fp::before {
+  content: '\\A';
+  white-space: pre;
 }
 /**
  * This file was automatically generated on installation of the Shadcn/Lexical editor. The default

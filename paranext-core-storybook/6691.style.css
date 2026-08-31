@@ -134,6 +134,19 @@
   text-indent: 0;
 }
 
+/* \fp (footnote paragraph) displays like a paragraph start — a line break before its span —
+   while the note stays one inline run in the data (no newline ever enters USJ or USFM). A
+   ::before generated line break is used instead of `display: block` because it keeps the span
+   inline (the trailing \f* closer glyph stays on the last content line instead of dropping to
+   its own line) and the pseudo-element is not in the DOM, so the caret can never land in it and
+   the editor's selection/serialization are untouched. Mirrors the structural rule in the
+   editor's usj-nodes stylesheet so the popover renders the break even when the host page does
+   not load that stylesheet (e.g. Storybook). */
+.footnote-editor .note.expanded .usfm_fp::before {
+  content: '\A';
+  white-space: pre;
+}
+
 .banded-row:hover {
   cursor: pointer;
 }
