@@ -193,19 +193,31 @@ difference and pulls the base's own commits in alongside ours, so there `origin/
   that disposition rather than replying to a pointer.
 - Say plainly what you could not settle and name the measurement that would settle it.
 
-## 3. Propose
+## 3. Decide what is real, and whether we act on it
 
-Per item: the smallest change that answers the concern, and **which branch it lands on** — on a
-stack, often not the PR the comment appeared on. Sort into: fixes · design preferences (you
-recommend, the user rules) · cross-reviewer conflicts (present both, never pick a side) · declines
-and deferrals, each with where the residue is recorded · no reply needed.
+Per item, two questions and no others: **is the concern real**, and **do we act on it in this
+round** — fix it here, record it somewhere durable, or decline it. Sort into: act here · design
+preferences (you recommend, the user rules) · cross-reviewer conflicts (present both, never pick a
+side) · declines and deferrals, each with where the residue is recorded · no reply needed. Note
+**which branch** an item would land on — on a stack, often not the PR the comment appeared on —
+since that is scope, not mechanism.
+
+**Do not decide *how* yet.** The shape of the fix is step 5's question, and answering it here spends
+the ruling before the investigation that would inform it: sizing a change from the reviewer's
+comment alone routinely misses a second consumer of the thing being changed, an existing seam that
+makes a different fix cheaper, or a constraint that only reading the call sites reveals — and a
+mechanism the user has already ruled on is the expensive kind of wrong, because reopening it costs a
+second gate. Where scope genuinely turns on cost — "fix it here" only makes sense if it is small —
+give a bounded estimate ("a few lines in one file", "a new abstraction across three"), never a
+design.
 
 Before sizing a reviewer's "do it properly" suggestion, check whether anything needs it. A reviewer
 proposing a general mechanism — a config knob, an interface, a second implementation — is reasoning
 from the diff in front of them, not from the call sites. Grep for real usage first, and where there
-is exactly one, "the specific fix, plus a note that the general one is a one-caller change if a
-second arrives" belongs at step 4 alongside the general one. It is an **option to present, never a
-decline to take** — the reviewer asked, so the user rules.
+is exactly one, "the narrow fix, plus a note that the general one is a one-caller change if a
+second arrives" belongs at step 4 alongside the general one. That pair is a scope question — how
+much to build — which is why it belongs at step 4 rather than with the mechanisms at step 5. It is
+an **option to present, never a decline to take** — the reviewer asked, so the user rules.
 
 A deferral needs a not-yet-started ticket. **Never create a Jira ticket** — propose it, and the
 reply names the ticket only once the user has created it.
@@ -216,6 +228,13 @@ Present per **Presenting a gate** below, and do not start implementing in the sa
 carries step 0's decision items first, then the items, then the surfaces question; step 0's
 warnings go under "No decision needed".
 
+**Every item here is a verdict and a scope decision, never a mechanism.** What the user is being
+asked is "is this real, and do we act on it in this round" — not "which of these three
+implementations". If an option reads like a design — an approach, a signature, which files change —
+it belongs at step 5, and asking it here buys a ruling on a solution nobody has investigated yet.
+Step 5's brainstorming exists to answer that question *after* reading the code, and it has its own
+gate for it. A cost estimate is fine and often necessary to settle scope; a design is not.
+
 Write the presentation and then the ruling into `rulings.md`, the ruling **verbatim**. A
 paraphrase is how a decision gets quietly widened three steps later. Approval covers only the
 items it names: anything unanswered stays unimplemented, and if the answer settles some items and
@@ -223,18 +242,26 @@ reopens others, re-present the remainder rather than reading silence as assent.
 
 ## 5. Implement
 
-Read `rulings.md` first, then `git fetch origin` and re-query `headRefOid` for every row. The gate
+**Invoke the Superpowers flow before anything else in this step** — `superpowers:brainstorming` →
+`superpowers:writing-plans` → `superpowers:test-driven-development`, scaled to the ruling; a
+one-line correction needs the TDD skill and nothing above it. This is step 5's first action, ahead
+of every read below, because the step's own momentum is what skips it: the ruling you just received
+describes work, the next instruction here is a git command, and by the time that has run you are
+already implementing. Point their specs and plans at the notes directory: they default to
+`docs/superpowers/` inside the working tree, which is the one place this flow works to keep clean.
+
+**Step 4 ruled what and whether; this flow rules how**, and it is the first step here that has read
+the code the change touches. The rulings are fixed constraints on it, not inputs to it —
+brainstorming widens a solution space, and step 4 closed a different one. Its approval gate is its
+own and is **not** covered by step 4's: a ruling to fix an item is not a ruling on the design that
+fixes it, so present the design and stop, however small it is. If the design work surfaces a reason
+a ruling is wrong — a second consumer, a cheaper seam, a cost the estimate missed — stop, put it
+back to the user as a new decision, and append the exchange to `rulings.md`.
+
+Then read `rulings.md`, `git fetch origin`, and re-query `headRefOid` for every row. The gate
 may have taken days. On a branch we own, a value that differs from the row is step 0's remote-only
 stop, and it goes to the user before anything is built on the branch; on someone else's branch it
 is a warning, noted below the table.
-
-Use the Superpowers flow — `superpowers:brainstorming` → `superpowers:writing-plans` →
-`superpowers:test-driven-development` — scaled to the ruling; a one-line correction needs the TDD
-skill and nothing above it. Point their specs and plans at the notes directory: they default to
-`docs/superpowers/` inside the working tree, which is the one place this flow works to keep clean.
-**The rulings are fixed constraints on that flow, not inputs to it.** Brainstorming widens a
-solution space; step 4 closed one. If the design work surfaces a reason a ruling is wrong, stop,
-put it back to the user as a new decision, and append the exchange to `rulings.md`.
 
 Implement only what was ruled. A ruled rebase goes onto the branch's **own** base, using the
 block under **Finish the stack** with `origin/<baseRefName>` as `<base>` — a plain
@@ -505,13 +532,17 @@ you asking me?", the gate failed** — and a gate they cannot read is one they a
 >
 > **Do we fix it here, or keep the PR to its stated scope and record the bug for you to place?**
 >
-> - **A.** Fix it here — clear the cache on project change. ~15 lines and one test.
+> - **A.** Fix this instance here — contained, one file and a test, on the order of fifteen lines.
 > - **B.** Keep this PR scoped, record the bug, and tell the reviewer that is what we did.
-> - **C.** Fix it here *and* re-key the cache by project so the class of bug goes away. Larger, and
->   a design change we would want the lead dev on.
+> - **C.** Fix the whole class of it here, not just this instance — substantially larger, and a
+>   design change we would want the lead dev on.
 >
 > **Recommendation: B** — it ships on `main` today, so it is not a regression this PR introduces,
 > and A adds an unrelated behaviour change to a round that is otherwise ready to land.
+
+Note what those options do *not* say: how the cache gets invalidated. Each is a scope the user can
+rule on, sized well enough to rule on it, and the mechanism is left to step 5 — which is the only
+step that will have read the cache's call sites before choosing one.
 
 ## `--scout-only`, and running this as a routine
 
