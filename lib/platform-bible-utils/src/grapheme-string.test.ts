@@ -528,6 +528,26 @@ describe('hostile and cross-realm arguments', () => {
   });
 });
 
+describe('iteration', () => {
+  it('iterates its graphemes, so Array.from and spreading work like they do on a string', () => {
+    // The module header steers callers from `Array.from(str)` onto a GraphemeString, so an
+    // array-like without an iterator would hand them `[undefined, undefined, ...]` and no error.
+    expect(Array.from(new GraphemeString('abc'))).toEqual(['a', 'b', 'c']);
+    expect([...new GraphemeString(MIXED)]).toEqual(MIXED_GRAPHEMES);
+    expect(Array.from(new GraphemeString(''))).toEqual([]);
+  });
+
+  it('yields whole clusters where native yields code units', () => {
+    expect([...new GraphemeString(FAMILY)]).toEqual(['a', '👨‍👩‍👧‍👦', 'b']);
+    expect(Array.from(FAMILY).length).toBeGreaterThan(3);
+  });
+
+  it('a fresh iterator starts over rather than resuming', () => {
+    const graphemeString = new GraphemeString('abc');
+    expect([...graphemeString]).toEqual([...graphemeString]);
+  });
+});
+
 describe('toString', () => {
   it('returns the original string', () => {
     expect(new GraphemeString(MIXED).toString()).toEqual(MIXED);
@@ -730,6 +750,22 @@ describe('formatReplacementToArray', () => {
 });
 
 describe('formatReplacement', () => {
+  it('treats an inherited property name as an unknown key', () => {
+    // `{key}` looks up own properties only. Reaching the prototype chain would substitute
+    // `Object.prototype.toString`'s source text into a localized string.
+    expect(new GraphemeString('x{toString}y').formatReplacement({})).toEqual('xtoStringy');
+    expect(new GraphemeString('{hasOwnProperty}').formatReplacement({})).toEqual('hasOwnProperty');
+    expect(new GraphemeString('{constructor}').formatReplacement({})).toEqual('constructor');
+    // An own property of the same name still wins.
+    expect(new GraphemeString('x{toString}y').formatReplacement({ toString: 'T' })).toEqual('xTy');
+  });
+
+  it('keeps an inherited property name out of the array form too', () => {
+    expect(new GraphemeString('{hasOwnProperty}').formatReplacementToArray({})).toEqual([
+      'hasOwnProperty',
+    ]);
+  });
+
   it('substitutes string replacers', () => {
     expect(
       new GraphemeString('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome').formatReplacement({
