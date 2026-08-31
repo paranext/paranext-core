@@ -608,6 +608,32 @@ describe('the offsets cache is invisible to callers', () => {
   });
 });
 
+describe('serialization', () => {
+  it('serializes as its text, not its internals', () => {
+    expect(JSON.stringify(new GraphemeString('abc'))).toEqual('"abc"');
+    expect(JSON.stringify(new GraphemeString(''))).toEqual('""');
+    expect(JSON.stringify(new GraphemeString(MIXED))).toEqual(JSON.stringify(MIXED));
+  });
+
+  it('serializes the same nested in an object or an array', () => {
+    expect(JSON.stringify({ name: new GraphemeString(FAMILY) })).toEqual(
+      JSON.stringify({ name: FAMILY }),
+    );
+    expect(JSON.stringify([new GraphemeString('a'), new GraphemeString('b')])).toEqual('["a","b"]');
+  });
+
+  it("a derived instance serializes to its own text, not the parent's", () => {
+    expect(JSON.stringify(new GraphemeString(MIXED).slice(0, 4))).toEqual('"Look"');
+    expect(JSON.stringify(new GraphemeString('a').padStart(3))).toEqual('"  a"');
+  });
+
+  it('serializing does not depend on whether the instance has been read', () => {
+    const read = new GraphemeString('abcabc');
+    read.indexOf('b');
+    expect(JSON.stringify(read)).toEqual(JSON.stringify(new GraphemeString('abcabc')));
+  });
+});
+
 describe('iteration', () => {
   it('iterates its graphemes, so Array.from and spreading work like they do on a string', () => {
     // The module header steers callers from `Array.from(str)` onto a GraphemeString, so an
