@@ -264,7 +264,7 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       localizeColumns(retVal.defaultWebViewTopMenu.columns),
       localizeMenuItems(retVal.defaultWebViewTopMenu.items),
       localizeMenuItems(retVal.defaultWebViewContextMenu.items),
-      localizeMenuItems(retVal.defaultWebViewTabMenu.items),
+      localizeMenuItems(retVal.defaultWebViewTabMenu?.items),
       Object.getOwnPropertyNames(retVal.webViewMenus).map(async (webViewName: string) => {
         // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
         // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -327,7 +327,7 @@ export class MenuDocumentCombiner extends DocumentCombiner {
     checkNewMenuItems(
       newMenus.defaultWebViewTabMenu?.items,
       namePrefix,
-      currentMenus?.defaultWebViewTabMenu.groups,
+      currentMenus?.defaultWebViewTabMenu?.groups,
     );
     const newWebViewMenus = newMenus?.webViewMenus;
     if (!newWebViewMenus) return;
@@ -372,8 +372,8 @@ export class MenuDocumentCombiner extends DocumentCombiner {
     checkMenuItemsForDuplicateOrdering(allMenus.defaultWebViewTopMenu.items);
     checkMenuGroupsForDuplicateOrdering(allMenus.defaultWebViewContextMenu.groups);
     checkMenuItemsForDuplicateOrdering(allMenus.defaultWebViewContextMenu.items);
-    checkMenuGroupsForDuplicateOrdering(allMenus.defaultWebViewTabMenu.groups);
-    checkMenuItemsForDuplicateOrdering(allMenus.defaultWebViewTabMenu.items);
+    checkMenuGroupsForDuplicateOrdering(allMenus.defaultWebViewTabMenu?.groups);
+    checkMenuItemsForDuplicateOrdering(allMenus.defaultWebViewTabMenu?.items);
     Object.getOwnPropertyNames(allMenus.webViewMenus).forEach((webViewName: string) => {
       // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
       // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -412,7 +412,7 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       // toolbar and content menu, not about whether its tab can be moved.
       const startingTabMenu = webViewMenu.tabMenu ?? {};
       const tabMenuCombiner = new NonValidatingDocumentCombiner(startingTabMenu, options);
-      tabMenuCombiner.addOrUpdateContribution('', retVal.defaultWebViewTabMenu);
+      tabMenuCombiner.addOrUpdateContribution('', retVal.defaultWebViewTabMenu ?? {});
       // Assert the type that schema validation should have already sorted out
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       webViewMenu.tabMenu = tabMenuCombiner.output as SingleColumnMenu | undefined;

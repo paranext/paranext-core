@@ -196,9 +196,13 @@ export type PlatformMenus = {
    * Default tab context menu, offered on every tab. Web views that specify their own tab menu have
    * this folded into it.
    *
+   * Optional so that adding it does not break code that already builds a `PlatformMenus`, matching
+   * the per-web-view `tabMenu` on the same channel. A document that omits it simply contributes no
+   * platform tab items.
+   *
    * @experimental This menu is unstable and may change or disappear without notice
    */
-  defaultWebViewTabMenu: SingleColumnMenu;
+  defaultWebViewTabMenu?: SingleColumnMenu;
 };
 
 /**
@@ -246,7 +250,6 @@ export const menuDocumentSchema = {
     'mainMenu',
     'defaultWebViewTopMenu',
     'defaultWebViewContextMenu',
-    'defaultWebViewTabMenu',
     'webViewMenus',
   ],
   additionalProperties: false,
