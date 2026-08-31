@@ -1,0 +1,44 @@
+import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { LOCALIZED_STRING_KEYS } from './overlay-connection-lost.component';
+
+// Resolved from this file's location rather than `process.cwd()` so the test is not sensitive to
+// the directory `vitest` happens to be invoked from.
+const LOCALIZATION_DIR = resolve(__dirname, '../../../../assets/localization');
+
+function localizationPath(fileName: string) {
+  return resolve(LOCALIZATION_DIR, fileName);
+}
+
+function readStrings(fileName: string): { [key: string]: unknown } {
+  return JSON.parse(readFileSync(localizationPath(fileName), 'utf8'));
+}
+
+/**
+ * Keys whose value is missing, empty, or the key itself. The localization service returns the key
+ * when a translation is missing, so such a key renders as literal `%key%` text.
+ */
+function findUnusableKeys(strings: { [key: string]: unknown }) {
+  return LOCALIZED_STRING_KEYS.filter((key) => {
+    const value = strings[key];
+    return typeof value !== 'string' || value.length === 0 || value === key;
+  });
+}
+
+describe('ConnectionLostOverlay localization keys', () => {
+  it('has a non-empty English translation for every key ConnectionLostOverlay can request', () => {
+    const missingOrInvalidKeys = findUnusableKeys(readStrings('en.json'));
+
+    if (missingOrInvalidKeys.length > 0)
+      throw new Error(
+        `The following ConnectionLostOverlay localization key(s) have no valid entry in ` +
+          `${localizationPath('en.json')}: ${missingOrInvalidKeys.join(', ')}. The localization ` +
+          `service falls back to returning the key itself when a translation is missing, so any ` +
+          `key listed here will render as literal "%key%" text in the alert instead of an ` +
+          `English label.`,
+      );
+
+    expect(missingOrInvalidKeys).toHaveLength(0);
+  });
+});
