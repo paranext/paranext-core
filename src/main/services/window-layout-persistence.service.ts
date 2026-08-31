@@ -361,7 +361,16 @@ export function isPrimaryWindow(windowId: number): boolean {
   // The flag itself deliberately does NOT move. It names the entry simple mode restores and the
   // only entry allowed the legacy layout fallback, so handing it to a window created into the gap
   // would cost the user that layout on the next launch.
-  return fileSlots.find((slot) => slot.windowId !== undefined)?.windowId === windowId;
+  //
+  // A window still waiting for the content it was created to receive is not a candidate, for the
+  // same reason `countWindowsThatCouldBeTheLastOne` leaves it out of its own count: it starts truly
+  // empty and the operation that created it can still fail and take it away again. Answering for
+  // the app would make that rollback refuse to close it — the close would be read as the primary's
+  // — and it would then stand blank with nothing to heal it.
+  return (
+    fileSlots.find((slot) => slot.windowId !== undefined && !isWindowPendingContent(slot.windowId))
+      ?.windowId === windowId
+  );
 }
 
 /** Merge captured bounds into a window's entry and schedule a write */
