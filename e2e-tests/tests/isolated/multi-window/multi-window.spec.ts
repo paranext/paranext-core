@@ -88,6 +88,7 @@ import {
   pollUntil,
   quitAndExpectCleanExit,
   waitForRendererRegistered,
+  closeWindowLikeAUser,
   widenWindowForToolbarReference,
 } from './multi-window.util';
 
@@ -578,15 +579,15 @@ test.describe('multi-window lifecycle', () => {
     await expectWindowToRenderTheme(page3, 'paratext-dark', 60_000);
     logStep('a newly created window starts on the current reference and theme');
 
-    // Close WINDOW 1 the way a user does. It hosts neither app-global service — both live in main —
-    // so nothing about this close should be special.
+    // Close a SECONDARY window the way a user does. It hosts neither app-global service — both live
+    // in main — so nothing about this close should be special.
+    //
+    // Not the primary, which this used to close: closing the primary while other windows are open
+    // now asks whether to close the whole application, so "the primary goes and the others stay" is
+    // no longer a state the app can reach. `window-close-rule.spec.ts` owns that path.
     const beforeWindowCloseMark = output.mark();
-    const page1Closed = mainPage.waitForEvent('close', { timeout: 30_000 });
-    await mainPage.evaluate(() => {
-      setTimeout(() => window.close(), 0);
-    });
-    await page1Closed;
-    logStep('window 1 closed');
+    await closeWindowLikeAUser(electronApp, page3);
+    logStep('window 3 closed');
 
     // Both services are hosted in main, which did not go anywhere, so both must keep answering
     // across the close with no handover at all.
@@ -626,12 +627,12 @@ test.describe('multi-window lifecycle', () => {
       'a scroll-group write round-trip after a window closed',
     );
     await expectToolbarReferenceToContain(page2, '8:28', 60_000);
-    await expectToolbarReferenceToContain(page3, '8:28', 60_000);
+    await expectToolbarReferenceToContain(mainPage, '8:28', 60_000);
     logStep('surviving windows followed a scroll-group write made after a window closed');
 
     await setCurrentTheme('paratext', 'light');
     await expectWindowToRenderTheme(page2, 'paratext-light', 60_000);
-    await expectWindowToRenderTheme(page3, 'paratext-light', 60_000);
+    await expectWindowToRenderTheme(mainPage, 'paratext-light', 60_000);
     logStep('surviving windows followed a theme change made after a window closed');
 
     // No window ever hosted the theme provider, so the closed window cannot have taken it with it:
