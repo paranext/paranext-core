@@ -305,7 +305,10 @@ globalThis.webViewComponent = function HelloRock3({
   const debouncedSetName = useMemo(
     () =>
       debounce((newName) => {
-        setNameInternal(newName);
+        // Runs from a timer, so a rejection here has no caller and no React boundary to reach
+        setNameInternal(newName).catch((e: unknown) => {
+          logger.warn(`Failed to set name: ${getErrorMessage(e)}`);
+        });
       }, 300),
     [setNameInternal],
   );
