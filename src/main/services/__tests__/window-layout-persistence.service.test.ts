@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { WINDOW_ID_SHAPE_PATTERN_SOURCE } from '@shared/utils/util';
 import path from 'path';
 import type { LayoutInfo } from '@shared/models/docking-framework.model';
 import type {
@@ -163,6 +164,11 @@ describe('window layout persistence service', () => {
     expect(windowIds).toHaveLength(2);
     windowIds.forEach((windowId) => expect(windowId).toEqual(expect.any(String)));
     expect(new Set(windowIds).size).toBe(2);
+    // And each is the shape every matcher that recognizes a window id reads — the suffix on a
+    // scoped web view id, the prefix on a per-window storage key. A mint this pattern stopped
+    // matching would orphan that storage and break suffix stripping, silently
+    const idShape = new RegExp(`^${WINDOW_ID_SHAPE_PATTERN_SOURCE}$`, 'i');
+    windowIds.forEach((windowId) => expect(windowId).toMatch(idShape));
 
     // Persisted by the load itself, not left for the next bounds change or layout push to carry:
     // a session that ends before either would otherwise mint again and orphan whatever the

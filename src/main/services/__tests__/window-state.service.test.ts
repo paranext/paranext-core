@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { WINDOW_ID_SHAPE_PATTERN_SOURCE } from '@shared/utils/util';
 import type { BrowserWindow } from 'electron';
 import {
   addWindow,
@@ -238,9 +239,11 @@ describe('window state tracking', () => {
       const secondId = addWindow(fakeWindow(2));
 
       expect(firstId).not.toBe(secondId);
-      // The shape a restored window's durable id and a fresh mint both have to share — see
-      // window-scoped-web-view-ids.util.ts for why this is deliberately not RFC-strict
-      expect(firstId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+      // Matched against the shared constant rather than a copy of it: every matcher that has to
+      // recognize a window id reads that constant, so a mint it no longer matches would break
+      // suffix stripping and the per-window storage prune while a hand-written regex here stayed
+      // green
+      expect(firstId).toMatch(new RegExp(`^${WINDOW_ID_SHAPE_PATTERN_SOURCE}$`, 'i'));
     });
 
     test('answers a window’s platform id from the window itself, never from Electron’s', () => {

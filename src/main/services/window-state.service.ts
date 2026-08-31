@@ -4,7 +4,7 @@
  * to the correct renderer window.
  */
 
-import { randomUUID } from 'crypto';
+import { createUuid } from '@node/utils/crypto-util';
 import { BrowserWindow } from 'electron';
 import { getErrorMessage, PlatformEventEmitter } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
@@ -38,7 +38,7 @@ type TrackedWindow = {
  * from nothing — a restored window is instead handed the id its persisted entry already carries.
  */
 function mintWindowId(): string {
-  return randomUUID();
+  return createUuid();
 }
 
 // Keep a global reference of the window objects. If you don't, the windows will

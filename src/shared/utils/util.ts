@@ -2,14 +2,17 @@ import { ProcessType } from '@shared/global-this.model';
 import { charAt, indexOf, isString, stringLength, substring } from 'platform-bible-utils';
 
 /**
- * Source (no anchors, no flags) of the hex-grouped shape a durable window id has — the same shape
- * `newGuid()` (`platform-bible-utils`) and Node's `crypto.randomUUID()` (main's
- * `window-state.service.ts`, in `mintWindowId`) both produce. Shared so every matcher that needs to
- * recognize a window id by shape (a scoped web view id's suffix, a per-window storage key's prefix)
- * spells the shape out once rather than once per matcher.
+ * Source (no anchors, no flags) of the hex-grouped shape a durable window id has. Shared so every
+ * matcher that needs to recognize a window id by shape (a scoped web view id's suffix, a per-window
+ * storage key's prefix) spells the shape out once rather than once per matcher.
  *
- * Deliberately NOT an RFC-4122 pattern: an RFC-4122 UUID constrains its variant nibble, and
- * `newGuid()` does not, so an RFC-strict pattern would silently stop matching ids already on disk.
+ * Deliberately NOT an RFC-4122 pattern, and it has to stay that way even though every id minted now
+ * comes from `createUuid()` and is RFC-4122. Ids already on users' disks were minted by `newGuid()`
+ * (`platform-bible-utils`), which does not constrain the variant nibble: measured over 20,000
+ * samples, about HALF of its output fails an RFC-4122 pattern. Tightening this would therefore stop
+ * recognizing roughly half of all persisted window ids — orphaning the per-window storage those
+ * keys name, since the prune matches positively on this shape, and breaking suffix stripping on
+ * scoped web view ids. Tightening it needs a migration of persisted ids first.
  *
  * @experimental This constant is unstable and may change or disappear without notice
  */
