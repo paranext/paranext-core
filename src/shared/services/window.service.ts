@@ -32,7 +32,7 @@ let initialize = createCachedInitializer(initializeWindowService);
 
 /** Resolve the scoped provider for whichever window currently has focus */
 async function getFocusedWindowService(): Promise<IWindowService> {
-  // The command's declared TypeScript return type is `number | undefined`, but its return schema
+  // The command's declared TypeScript return type is `string | undefined`, but its return schema
   // over JSON-RPC also permits `null` for "no focused window" — collapse a `null` to `undefined`
   // so it cannot skip the guard below and end up in a nonsense scoped provider name like
   // `...window-null`
