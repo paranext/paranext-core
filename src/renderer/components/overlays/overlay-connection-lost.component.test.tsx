@@ -101,8 +101,11 @@ describe('ConnectionLostOverlay', () => {
   });
 
   it('renders nothing while the connection is alive', () => {
-    const { container } = render(<ConnectionLostOverlay />);
-    expect(container).toBeEmptyDOMElement();
+    render(<ConnectionLostOverlay />);
+    // The component renders through a portal to document.body, so it lands as a sibling of RTL's
+    // render container rather than inside it — asserting the container is empty would pass
+    // regardless of whether the guard below exists. Look where the portal actually lands instead.
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('shows the banner once the connection is lost', () => {
@@ -115,11 +118,12 @@ describe('ConnectionLostOverlay', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Connection lost.');
   });
 
-  // The component is mounted from app startup so its localized strings and interface mode are
-  // fetched while the connection is alive — both go over PAPI, and PAPI is what breaks. Mounting it
-  // on the disconnect instead would render the raw '%overlay_connectionLost%' at the user, in the
-  // wrong place. That is invisible in a diff, so it is pinned here.
-  it('shows real text, not localization keys, after the connection is gone', () => {
+  // This only pins that the component maps localizedStrings[KEY] into props instead of passing the
+  // raw LocalizeKey constants straight through — it renders ConnectionLostOverlay directly and the
+  // mock returns real strings unconditionally, so it cannot observe mount timing or a PAPI failure.
+  // The startup-mount invariant (strings/interface mode captured before the connection drops) is
+  // pinned at the app level in app.component.test.tsx, and verified live against the running app.
+  it('maps localized strings into the banner instead of passing keys through', () => {
     render(<ConnectionLostOverlay />);
 
     act(() => {
