@@ -555,6 +555,7 @@ describe('PlatformTabTitle keyboard access to the tab menu', () => {
 
   it('forwards a contextmenu raised on the tab into the trigger', async () => {
     const { container } = renderInTab();
+    await flushMenuRead();
     const title = tabTitleIn(container);
     const received: Node[] = [];
     title.addEventListener('contextmenu', (event) => {
@@ -572,6 +573,7 @@ describe('PlatformTabTitle keyboard access to the tab menu', () => {
     // The positive control for the guard: an ordinary right-click on the title already reaches the
     // trigger by bubbling, so forwarding it would double it
     const { container } = renderInTab();
+    await flushMenuRead();
     const title = tabTitleIn(container);
     let count = 0;
     title.addEventListener('contextmenu', () => {
