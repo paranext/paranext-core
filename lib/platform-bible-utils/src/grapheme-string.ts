@@ -188,6 +188,21 @@ export class GraphemeString {
   }
 
   /**
+   * The text, for `JSON.stringify`. Without this an instance would serialize its internals — the
+   * raw string and the grapheme array beside it — at roughly twice the size of the text, and the
+   * result would not read back as anything useful.
+   *
+   * Note that this makes serialization one-way: what comes off the wire is a plain string, not a
+   * `GraphemeString`. The class is a local segmentation cache rather than a transferable value, so
+   * a receiver that wants one constructs it from the text.
+   *
+   * @returns The raw string this instance was built from, unchanged.
+   */
+  toJSON(): string {
+    return this.str;
+  }
+
+  /**
    * The grapheme clusters as an array. Returns a fresh copy, so mutating it cannot corrupt this
    * instance. Equivalent to spreading this instance, and to spreading a native string except that
    * native yields code points rather than clusters.
