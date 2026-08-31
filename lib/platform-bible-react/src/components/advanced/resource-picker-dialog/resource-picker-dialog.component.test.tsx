@@ -40,6 +40,8 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_no_results%': 'No results found',
   '%resourcePicker_search_placeholder%': 'Search resources…',
   '%resourcePicker_language_filter_any%': 'Any language',
+  '%resourcePicker_language_filter_search_placeholder%': 'Search languages…',
+  '%resourcePicker_language_filter_no_results%': 'No languages found',
   '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
   '%resourcePicker_load_error%': "Couldn't load the list of available resources.",
   '%resourcePicker_retry%': 'Try again',

@@ -25,6 +25,7 @@ export function Filter({
   selected,
   onChange,
   placeholder,
+  searchPlaceholder,
   commandEmptyMessage,
   customSelectedText,
   isDisabled,
@@ -41,6 +42,7 @@ export function Filter({
         selected={selected}
         onChange={onChange}
         placeholder={placeholder}
+        searchPlaceholder={searchPlaceholder}
         commandEmptyMessage={commandEmptyMessage}
         customSelectedText={customSelectedText}
         isDisabled={isDisabled}
