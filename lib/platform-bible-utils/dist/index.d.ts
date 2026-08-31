@@ -4195,9 +4195,35 @@ export declare function substring(string: string, begin: number, end?: number): 
 export declare function toArray(string: string): string[];
 /**
  * Replaces each `{key}` in `str` with `replacers[key]`, and unescapes `\{`/`\}`. An unknown key is
- * replaced by the key text itself. Adjacent strings are concatenated into one array entry, so a
- * replacer that is not a string stays its own entry — which is how a React element survives being
- * substituted into a localized template.
+ * replaced by the key text itself, and empty braces `{}` drop out leaving the surrounding text.
+ * Adjacent strings are concatenated into one array entry, so a replacer that is not a string stays
+ * its own entry — which is how a React element survives being substituted into a localized
+ * template.
+ *
+ * @example
+ *
+ * Substituting a React element — the reason this variant exists.
+ *
+ * ```tsx
+ * <p>
+ *   {formatReplacementStringToArray('Hi {other}! I am {name}.', {
+ *     other: 'Billy',
+ *     name: <span className="tw:text-red-500">Jim</span>,
+ *   })}
+ * </p>
+ * // ['Hi Billy! I am ', <span … >Jim</span>, '.']
+ * ```
+ *
+ * @example
+ *
+ * Escaped braces, a non-string replacer, and an unknown key together.
+ *
+ * ```ts
+ * formatReplacementStringToArray('Hi {name}! I like \{curly braces\}. Food: {food}.', {
+ *   name: ['Bill'],
+ * });
+ * // ['Hi ', ['Bill'], '! I like {curly braces}. Food: food.']
+ * ```
  *
  * @param str String containing `{key}` placeholders
  * @param replacers Object whose keys are placeholder names and whose values are the replacements
@@ -4208,7 +4234,21 @@ export declare function formatReplacementStringToArray<T = unknown>(str: string,
 } | object): (string | T)[];
 /**
  * Replaces each `{key}` in `str` with `replacers[key]`, coerces every part to a string, and joins
- * them. See {@link formatReplacementStringToArray} to keep non-string replacers intact.
+ * them. An unknown key is replaced by the key text itself, and empty braces `{}` drop out leaving
+ * the surrounding text. See {@link formatReplacementStringToArray} to keep non-string replacers
+ * intact — a React element coerced through this function becomes `[object Object]`.
+ *
+ * @example
+ *
+ * An unknown key (`food`) is left as its own text rather than raising.
+ *
+ * ```ts
+ * formatReplacementString(
+ *   'Hi, this is {name}! I like \{curly braces\}. I have a {carColor} car. Food: {food}.',
+ *   { name: 'Bill', carColor: 'blue' },
+ * );
+ * // 'Hi, this is Bill! I like {curly braces}. I have a blue car. Food: food.'
+ * ```
  *
  * @param str String containing `{key}` placeholders
  * @param replacers Object whose keys are placeholder names and whose values are the replacements
