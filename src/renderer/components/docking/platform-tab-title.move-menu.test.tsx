@@ -131,16 +131,23 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 // #endregion
 
 /** The platform's own tab menu, as the data provider hands it over */
-const CONTRIBUTED_TAB_MENU = {
+const CONTRIBUTED_TAB_MENU: Awaited<ReturnType<typeof menuDataService.getWebViewMenu>> = {
   includeDefaults: true,
   topMenu: undefined,
   contextMenu: undefined,
   tabMenu: {
     groups: { 'platform.tabWindow': { order: 100, isExtensible: true } },
     items: [
-      { label: 'Float Tab', group: 'platform.tabWindow', order: 100, command: 'platform.floatTab' },
+      {
+        label: 'Float Tab',
+        localizeNotes: 'Tab context menu > Float tab',
+        group: 'platform.tabWindow',
+        order: 100,
+        command: 'platform.floatTab',
+      },
       {
         label: 'Move tab to new window',
+        localizeNotes: 'Tab context menu > Move tab to new window',
         group: 'platform.tabWindow',
         order: 200,
         command: 'platform.moveWebViewToNewWindow',
@@ -148,11 +155,13 @@ const CONTRIBUTED_TAB_MENU = {
       {
         id: 'platform.moveTabToWindow',
         label: 'Move tab to window',
+        localizeNotes: 'Tab context menu > Move tab to window',
         group: 'platform.tabWindow',
         order: 300,
       },
       {
         label: 'Look Up Word',
+        localizeNotes: 'An extension contributing its own tab menu item',
         group: 'platform.tabWindow',
         order: 400,
         command: 'someExtension.lookUpWord',
@@ -162,8 +171,7 @@ const CONTRIBUTED_TAB_MENU = {
 };
 
 beforeEach(() => {
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(CONTRIBUTED_TAB_MENU as never);
+  vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(CONTRIBUTED_TAB_MENU);
 });
 
 /**
