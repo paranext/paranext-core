@@ -679,6 +679,17 @@ describe('a web view that is between windows on a move', () => {
 
     await expect(router.getOpenWebViewDefinition('view-1')).rejects.toThrow(/unreachable/);
 
+    // At `debug`, for the same reason the fold-in below says it: a move overlapping a search is an
+    // expected, handled condition on a path any caller can reach at any time, so an ordinary tab
+    // drag must not raise an operator-facing warning about nothing. The caller is still refused —
+    // the level says how loudly to say it, not whether the search was answered.
+    expect(mocks.loggerDebug).toHaveBeenCalledWith(
+      expect.stringContaining('is between windows on a move'),
+    );
+    expect(mocks.loggerWarn).not.toHaveBeenCalledWith(
+      expect.stringContaining('is between windows on a move'),
+    );
+
     releaseAdopt('view-1');
     await moving;
   });
@@ -816,6 +827,47 @@ describe('a web view that is between windows on a move', () => {
     );
 
     releaseAdopt('view-1');
+    await moving;
+  });
+
+  test('does not double-count a web view reported under the id the move started from', async () => {
+    // A move tracks two spellings of its web view's id — the one the caller named and the stripped
+    // one the target was handed — because a window scopes ids to itself when it loads a layout.
+    // Deduping on the captured spelling alone counts the view twice whenever the window holding it
+    // answers with the other spelling, which is what a recovery back into the source window
+    // produces once that window has re-scoped it.
+    const owner = sourceWindowShard('view-1-w2', 'view-1', { projectId: 'project-1' });
+    const target = windowShard([]);
+    let releaseAdopt: (webViewId: WebViewId) => void = () => {};
+    target.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseAdopt = resolve;
+        }),
+    );
+    withWindows({ 2: owner, 3: target });
+
+    const moving = moveWebView('view-1-w2', 3);
+    await settle();
+
+    const reportedUnderTheOriginalId: SavedWebViewDefinition = {
+      id: 'view-1-w2',
+      webViewType: 'test.type',
+      projectId: 'project-1',
+    };
+    target.getAllOpenWebViewDefinitions.mockResolvedValue([reportedUnderTheOriginalId]);
+
+    const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
+
+    // The window's own answer is there — so the assertions below are about a fold-in that did not
+    // happen, not about an empty read that could not have shown one either way.
+    expect(definitions.filter((definition) => definition.id === 'view-1-w2')).toHaveLength(1);
+    expect(definitions.filter((definition) => definition.id === 'view-1')).toHaveLength(0);
+    expect(mocks.loggerDebug).not.toHaveBeenCalledWith(
+      expect.stringContaining('are between windows on a move'),
+    );
+
+    releaseAdopt('view-1-w2');
     await moving;
   });
 });
