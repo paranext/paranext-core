@@ -60,14 +60,17 @@ import {
 import {
   MOVE_COMMAND_TIMEOUT_MS,
   WEBSOCKET_PORT,
+  APP_QUITTING_LOG,
   captureAppOutput,
   createSecondWindow,
+  expectNoFaultsWhileRunning,
   createStepLogger,
   expectWindowDockHasOnlyHomeTab,
   getWindowIdOfPage,
   homeTabTitle,
   homeTabWebViewId,
   pollUntil,
+  quitAndExpectCleanExit,
   quitAppAndWaitForExit,
   waitForAppPages,
   waitForRendererRegistered,
@@ -83,7 +86,14 @@ const CLOSE_ALL_BUTTON = 0;
 const CANCEL_BUTTON = 1;
 
 /** What the stubbed message box records about each call it received */
-type RecordedMessageBox = { buttons: string[] };
+type RecordedMessageBox = {
+  buttons: string[];
+  defaultId?: number;
+  cancelId?: number;
+  noLink?: boolean;
+  /** Whether an abort signal was passed — the signal itself cannot cross the evaluate boundary */
+  hasSignal: boolean;
+};
 
 /**
  * Replace the main process's message box with one that records every call and answers with a fixed
@@ -110,7 +120,13 @@ async function stubMessageBox(
       ): Promise<Electron.MessageBoxReturnValue> => {
         const options =
           maybeOptions ?? ('buttons' in windowOrOptions ? windowOrOptions : undefined);
-        calls.push({ buttons: options?.buttons ?? [] });
+        calls.push({
+          buttons: options?.buttons ?? [],
+          defaultId: options?.defaultId,
+          cancelId: options?.cancelId,
+          noLink: options?.noLink,
+          hasSignal: !!options?.signal,
+        });
         if (neverResolve) return new Promise(() => {});
         return Promise.resolve({ response: buttonIndex, checkboxChecked: false });
       };
@@ -128,11 +144,27 @@ async function readMessageBoxCalls(
     // `stubMessageBox` hangs the record off the dialog module; read it back the same way
     const record: unknown = Reflect.get(dialog, 'recordedMessageBoxCalls');
     if (!Array.isArray(record)) return [];
-    // Narrow each entry rather than asserting the array's type: only the `buttons` field is read
+    // Narrow each entry rather than asserting the array's type. Everything the app passed is
+    // carried through, not just the buttons: the rest of the options decide what Enter and Esc do
+    // and whether a quit can take the question down, and a reader that dropped them would leave
+    // them asserted by nothing
     return record.flatMap((entry: unknown): RecordedMessageBox[] => {
       if (typeof entry !== 'object' || !entry || !('buttons' in entry)) return [];
       const { buttons } = entry;
-      return Array.isArray(buttons) ? [{ buttons: buttons.map(String) }] : [];
+      if (!Array.isArray(buttons)) return [];
+      const numberAt = (key: string): number | undefined => {
+        const value: unknown = Reflect.get(entry, key);
+        return typeof value === 'number' ? value : undefined;
+      };
+      return [
+        {
+          buttons: buttons.map(String),
+          defaultId: numberAt('defaultId'),
+          cancelId: numberAt('cancelId'),
+          noLink: Reflect.get(entry, 'noLink') === true,
+          hasSignal: Reflect.get(entry, 'hasSignal') === true,
+        },
+      ];
     });
   });
 }
@@ -174,6 +206,12 @@ test.use({
 });
 
 test.describe('window close rule', () => {
+  // Two of these tests launch Electron twice and chain waits well past the 120 s default, so
+  // without this a labelled wait of 180 s or 240 s could never expire first and every failure
+  // would report the generic test timeout instead of the wait that actually failed. Matches the
+  // sibling that also relaunches within a test (`window-layout-persistence.spec.ts`).
+  test.setTimeout(900_000);
+
   let restoreSettings: (() => void) | undefined;
 
   test.beforeAll(() => {
@@ -196,6 +234,8 @@ test.describe('window close rule', () => {
     electronApp,
     mainPage,
   }) => {
+    // This test never quits, so its fault sweep runs at the end against a still-running app
+    const output = captureAppOutput(electronApp);
     const logStep = createStepLogger('window-close-rule');
     await waitForAppReady(mainPage, 180_000);
     const primaryId = getWindowIdOfPage(mainPage);
@@ -219,6 +259,13 @@ test.describe('window close rule', () => {
     expect(firstAsk.buttons).toHaveLength(2);
     expect(firstAsk.buttons[CLOSE_ALL_BUTTON]).toMatch(/close all windows/i);
     expect(firstAsk.buttons[CANCEL_BUTTON]).toMatch(/cancel/i);
+    // The rest of what the app asked with. Enter must land on the safe choice and Esc must too, or
+    // a reflex press closes every window; `noLink` keeps them plain buttons rather than a command
+    // link; and the abort signal is what lets a quit take the question down.
+    expect(firstAsk.defaultId).toBe(CANCEL_BUTTON);
+    expect(firstAsk.cancelId).toBe(CANCEL_BUTTON);
+    expect(firstAsk.noLink).toBe(true);
+    expect(firstAsk.hasSignal).toBe(true);
     logStep('asked once; cancelled');
 
     // …and cancelling changed nothing: both windows are still alive and the app is up
@@ -236,6 +283,8 @@ test.describe('window close rule', () => {
     );
     expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort((a, b) => a - b));
     logStep('asked again on the second close; still both windows');
+
+    expectNoFaultsWhileRunning(output);
   });
 
   test('confirming closes every window, and the next launch restores all of them', async () => {
@@ -273,7 +322,7 @@ test.describe('window close rule', () => {
       expect(exit.signal).toBeUndefined();
       expect(exit.code).toBe(0);
       const log = output.text();
-      expect(log).toContain('Main process is quitting');
+      expect(log).toContain(APP_QUITTING_LOG);
 
       // Both entries survived the quit: a primary-close-quit records every window as staying
       expect(countSavedWindowEntries(userDataDir)).toBe(2);
@@ -286,7 +335,6 @@ test.describe('window close rule', () => {
       ctx = await launchElectronApp({
         ...BASE_LAUNCH_OPTIONS,
         userDataDir,
-        preserveUserDataDir: true,
       });
       const restored = await waitForAppPages(ctx.electronApp, 2, 240_000);
       expect(restored).toHaveLength(2);
@@ -303,6 +351,8 @@ test.describe('window close rule', () => {
     electronApp,
     mainPage,
   }) => {
+    // This test never quits, so its fault sweep runs at the end against a still-running app
+    const output = captureAppOutput(electronApp);
     // Moving the primary's last tab out does what closing that tab does — Home reopens. The
     // primary neither empties away nor closes. If it closed, nothing would hold the primary role
     // and the window the user moved their work into would be a secondary whose ✕ drops its layout.
@@ -350,6 +400,8 @@ test.describe('window close rule', () => {
     );
     expect(await liveWindowIds(electronApp)).toHaveLength(2);
     logStep('the emptied primary is still the primary — its ✕ asked');
+
+    expectNoFaultsWhileRunning(output);
   });
 
   test('a quit arriving while the question is open still keeps the primary for next launch', async () => {
@@ -388,11 +440,7 @@ test.describe('window close rule', () => {
 
       // Now a real quit arrives while the question is still up. `quitAppAndWaitForExit` triggers
       // `app.quit()` itself and arms its exit listener first, which is exactly what this test needs.
-      const exit = await quitAppAndWaitForExit(ctx.electronApp, output);
-      logStep(`phase 1: exited with code ${exit.code} signal ${exit.signal}`);
-      expect(exit.signal).toBeUndefined();
-      expect(exit.code).toBe(0);
-      expect(output.text()).toContain('Main process is quitting');
+      await quitAndExpectCleanExit(ctx.electronApp, output, logStep, 'phase 1');
 
       // The proof: the primary's entry is still there. Had the quit taken the escape hatch, the
       // primary would have been recorded as leaving and its entry spliced out.
@@ -405,7 +453,6 @@ test.describe('window close rule', () => {
       ctx = await launchElectronApp({
         ...BASE_LAUNCH_OPTIONS,
         userDataDir,
-        preserveUserDataDir: true,
       });
       const restored = await waitForAppPages(ctx.electronApp, 2, 240_000);
       expect(restored).toHaveLength(2);
@@ -420,6 +467,8 @@ test.describe('window close rule', () => {
     electronApp,
     mainPage,
   }) => {
+    // This test never quits, so its fault sweep runs at the end against a still-running app
+    const output = captureAppOutput(electronApp);
     const logStep = createStepLogger('window-close-rule');
     await waitForAppReady(mainPage, 180_000);
     const primaryId = getWindowIdOfPage(mainPage);
@@ -451,12 +500,16 @@ test.describe('window close rule', () => {
     expect(await readMessageBoxCalls(electronApp)).toHaveLength(1);
     expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort((a, b) => a - b));
     logStep('still asked only once; both windows still open');
+
+    expectNoFaultsWhileRunning(output);
   });
 
   test('creating a window while the question is open does not strand the quit it might still receive', async ({
     electronApp,
     mainPage,
   }) => {
+    // This test never quits, so its fault sweep runs at the end against a still-running app
+    const output = captureAppOutput(electronApp);
     // `main.ts`'s `isFirstWindow` guard exists so a window created alongside living windows never
     // resets the shutdown latches: doing so would replace the signal the close-all race is waiting
     // on, and a quit afterwards would settle only the new signal, leaving the question (and the
@@ -494,5 +547,7 @@ test.describe('window close rule', () => {
     logStep(`exited with code ${exit.code} signal ${exit.signal}`);
     expect(exit.signal).toBeUndefined();
     expect(exit.code).toBe(0);
+
+    expectNoFaultsWhileRunning(output);
   });
 });
