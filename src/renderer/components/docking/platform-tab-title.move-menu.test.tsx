@@ -402,13 +402,23 @@ describe('PlatformTabTitle other tab-menu item selection', () => {
 
 describe('PlatformTabTitle keyboard access to the tab menu', () => {
   /**
-   * The tab title inside a stand-in for the focusable `role="tab"` element rc-tabs wraps it in.
-   * Shift+F10 and the Menu key fire `contextmenu` at that element, not at the trigger inside it.
+   * The tab title inside the two nested elements the real tab bar wraps it in, because which of
+   * them the forwarding attaches to is the whole question here.
+   *
+   * Rc-tabs renders the focusable tab as `div.dock-tab-btn` carrying `role="tab"` and `tabIndex`
+   * (`rc-tabs/es/TabNavList/TabNode.js`), and rc-dock supplies the label it contains as a
+   * `DragDropDiv` that carries `role="tab"` a second time (`rc-dock/es/DockTabs.js`). Shift+F10 and
+   * the Menu key fire `contextmenu` at the focusable outer element, so anything listening on the
+   * inner one never sees it — collapsing these two into a single stand-in hides exactly that.
    */
   const renderInTab = () =>
     render(
-      <div role="tab" tabIndex={0} data-testid="tab">
-        <PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />
+      <div className="dock-tab">
+        <div role="tab" tabIndex={0} className="dock-tab-btn" data-testid="tab">
+          <div role="tab">
+            <PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />
+          </div>
+        </div>
       </div>,
     );
 
