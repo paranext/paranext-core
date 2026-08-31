@@ -2547,9 +2547,7 @@ step, no automation. Just a record.
   historical data must keep matching the historical shape. The storage prune flips from an exclusion
   (accept any prefix, reject all-digit ones) to a positive match, closing a real gap where an
   extension's own `<prefix>_web-view-state` key in the shared origin storage could be swept up as a
-  dead window's. An entry parsed from disk still accepts the legacy `slotId` key as a fallback for
-  `windowId`, so a build already on this branch does not lose state a second time before this
-  lands. `loadWindowLayouts` tracks whether a structure was actually parsed from disk
+  dead window's. `loadWindowLayouts` tracks whether a structure was actually parsed from disk
   (`hasStructureBeenLoaded`) and `handleFilterDeadWindowIdsRequest` gates on that instead of
   `fileSlots.length === 0`: the legacy startup fallback (missing, unreadable, or empty structure
   file) synchronously tracks one window — giving `fileSlots` a freshly minted entry — before any

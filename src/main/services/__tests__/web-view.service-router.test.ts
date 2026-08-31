@@ -25,6 +25,10 @@ const mocks = vi.hoisted(() => {
   const shardAnnouncementListeners: ShardAnnouncementListeners = { create: [], dispose: [] };
   return {
     getTargetWindowId: vi.fn(),
+    // Ids are minted from a numeric counter (stringified) in this slice, so a numeric comparison
+    // recovers the creation-order ranking the real function reads from the tracked list. A vi.fn so
+    // a test can make it answer `undefined`, which is what the real one does for an untracked id.
+    getWindowCreationRank: vi.fn((windowId: string) => Number(windowId)),
     getReadyWindowIds: vi.fn(),
     getUnreachableWindowIds: vi.fn(),
     getAbandonedWindowIds: vi.fn(),
@@ -78,9 +82,7 @@ vi.mock('@main/services/window-state.service', () => ({
   getFocusedWindowId: mocks.getFocusedWindowId,
   isApplicationFocused: mocks.isApplicationFocused,
   focusWindow: mocks.focusWindow,
-  // Ids are still minted from a numeric counter (stringified) in this slice, so a numeric
-  // comparison recovers the creation-order ranking the real function reads from the tracked list.
-  getWindowCreationRank: (windowId: string) => Number(windowId),
+  getWindowCreationRank: mocks.getWindowCreationRank,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
@@ -1765,5 +1767,28 @@ describe('web view service router', () => {
 
       await expect(handler('owned-view')).rejects.toThrow('No windows available');
     });
+  });
+});
+
+describe('ordering windows that hold the same thing', () => {
+  const { byWindowAge } = testingWebViewServiceRouter;
+
+  it('puts the older window first', () => {
+    expect(byWindowAge({ windowId: '1' }, { windowId: '2' })).toBeLessThan(0);
+    expect(byWindowAge({ windowId: '2' }, { windowId: '1' })).toBeGreaterThan(0);
+  });
+
+  it('sorts a window the tracker no longer knows last, not first', () => {
+    // `getWindowCreationRank` answers `undefined` for an id it is not tracking. Treating that as
+    // rank zero ranked a window that has already gone ahead of every live one, so an open or a move
+    // could be dispatched to a shard whose window was away.
+    mocks.getWindowCreationRank.mockImplementation((windowId: string) =>
+      windowId === 'gone' ? undefined : Number(windowId),
+    );
+
+    expect(byWindowAge({ windowId: 'gone' }, { windowId: '2' })).toBeGreaterThan(0);
+    expect(byWindowAge({ windowId: '2' }, { windowId: 'gone' })).toBeLessThan(0);
+    // And it still loses to the newest live window, not just the oldest
+    expect(byWindowAge({ windowId: 'gone' }, { windowId: '99' })).toBeGreaterThan(0);
   });
 });
