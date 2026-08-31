@@ -468,21 +468,17 @@ describe('window layout persistence service', () => {
     // it are: the marked entry keeps its flag, but nothing is assigned to it any more, so the oldest
     // still-live window answers in its place.
     const service = await startService();
-    await loadAndAssignAll(
-      service,
-      [
-        { layout: layoutWithTab('one') },
-        { layout: layoutWithTab('two'), isMain: true },
-        { layout: layoutWithTab('three') },
-      ],
-      11,
-    );
+    await loadAndAssignAll(service, [
+      { windowId: '11', layout: layoutWithTab('one') },
+      { windowId: '12', layout: layoutWithTab('two'), isMain: true },
+      { windowId: '13', layout: layoutWithTab('three') },
+    ]);
 
-    service.handleWindowRemoved(12, 'entry-stays');
+    service.handleWindowRemoved('12', 'entry-stays');
 
-    expect(service.isPrimaryWindow(12)).toBe(false);
-    expect(service.isPrimaryWindow(11)).toBe(true);
-    expect(service.isPrimaryWindow(13)).toBe(false);
+    expect(service.isPrimaryWindow('12')).toBe(false);
+    expect(service.isPrimaryWindow('11')).toBe(true);
+    expect(service.isPrimaryWindow('13')).toBe(false);
   });
 
   test('a window created with no others open holds the primary role', async () => {
@@ -556,22 +552,21 @@ describe('window layout persistence service', () => {
     // from its own arithmetic. Letting one answer here makes its rollback refuse to close it, and
     // it then stands blank with nothing to heal it.
     const service = await startService();
-    await loadAndAssignAll(
-      service,
-      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
-      11,
-    );
-    service.handleWindowRemoved(11, 'entry-stays');
-    service.handleWindowRemoved(12, 'entry-stays');
+    await loadAndAssignAll(service, [
+      { windowId: '11', layout: layoutWithTab('one'), isMain: true },
+      { windowId: '12', layout: layoutWithTab('two') },
+    ]);
+    service.handleWindowRemoved('11', 'entry-stays');
+    service.handleWindowRemoved('12', 'entry-stays');
 
     // The older of the two is the one waiting for content, so "oldest wins" and "pending loses"
     // disagree here — which is what makes this pin the exclusion rather than the ordering
-    service.trackNewWindow(13);
-    service.markWindowPendingContent(13);
-    service.trackNewWindow(14);
+    service.trackNewWindow('13');
+    service.markWindowPendingContent('13');
+    service.trackNewWindow('14');
 
-    expect(service.isPrimaryWindow(13)).toBe(false);
-    expect(service.isPrimaryWindow(14)).toBe(true);
+    expect(service.isPrimaryWindow('13')).toBe(false);
+    expect(service.isPrimaryWindow('14')).toBe(true);
   });
 
   test('a main entry that leaves the structure takes isMain with it; the next load picks the first', async () => {

@@ -164,7 +164,7 @@ describe('web-view window creator wiring', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
     setWebViewWindowCreator(creator);
 
     const freshWindow = await waitingAgain;
