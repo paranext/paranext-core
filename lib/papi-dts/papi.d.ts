@@ -2263,7 +2263,7 @@ declare module 'main/services/window-state.service' {
    * Event that fires when the window routed calls go to changes — a different window, or the same
    * window going from unready to serving requests (or back).
    *
-   * Routing proxies that forward to "the focused window" need this: it is the moment their answer
+   * Service routers that forward to "the focused window" need this: it is the moment their answer
    * changes without any window's own state having changed. Every change to the tracked windows, the
    * focused window, and window readiness runs through the same target comparison, so this is the one
    * signal to react to, and it stays quiet when a change leaves the target where it was.
@@ -2287,6 +2287,22 @@ declare module 'main/services/window-state.service' {
   export function getWindows(): BrowserWindow[];
   /** Whether a window's renderer has registered its window service, so routing to it can succeed */
   export function isWindowReady(windowId: number): boolean;
+  /**
+   * Whether a window's renderer has EVER registered its window service, whether or not it is
+   * registered now.
+   *
+   * This is the fact that tells two identical-looking empty answers apart. A window that was never
+   * ready genuinely had nothing open. One that was serving a moment ago may be holding editors with
+   * unsaved work, and its own services were the only thing that could have listed them — so a caller
+   * that answers "none" for both reports a window's contents as absent when what really happened is
+   * that nobody could ask.
+   *
+   * Stays true once set, including for a window that has been given up on: {@link isWindowAbandoned}
+   * is what separates "its answer is still coming" from "there will never be one".
+   *
+   * @param windowId Window to ask about
+   */
+  export function wasWindowEverReady(windowId: number): boolean;
   /**
    * Whether a navigation replaces the page a window's renderer registered its scoped services from,
    * so everything that window registered is gone until the new page registers again.
@@ -2319,6 +2335,54 @@ declare module 'main/services/window-state.service' {
    */
   export function getReadyWindowIds(): number[];
   /**
+   * IDs of the windows that were answering routed calls and are not any more, in creation order.
+   *
+   * The half of {@link getReadyWindowIds}'s complement that a fan-out has to say something about, and
+   * only that half. Skipping one of these leaves it out of the answer entirely, so a window that is
+   * alive with work open in it comes back indistinguishable from a window that does not exist — a
+   * fan-out reports them as windows it could not ask rather than as windows with nothing to say.
+   *
+   * A window whose renderer has never registered anything is NOT in here, even though it is just as
+   * unaskable. It has never had a web view, a notification, or a dialog in it, so leaving it out of
+   * an answer loses nothing that was ever there — and every window is in that state for the seconds
+   * its renderer takes to start, so counting it would make every routed search in the app refuse to
+   * answer for the whole of every window's startup.
+   *
+   * A window the reload path has given up on is NOT in here either, however much it was serving
+   * before. This list is what makes a fan-out refuse to answer, which is only worth doing while the
+   * window's contents are coming back; once nothing is coming back, that refusal is permanent, and
+   * every routed search in the app fails for the rest of the session. What was lost with it is
+   * reported through {@link getAbandonedWindowIds} instead, which callers weigh for themselves.
+   *
+   * @returns Tracked windows that are not currently ready, have been ready at some point since they
+   *   were created, and have not been given up on — see {@link everReadyWindowIds},
+   *   {@link markWindowNotReady} and {@link markWindowAbandoned}
+   */
+  export function getUnreachableWindowIds(): number[];
+  /**
+   * IDs of the tracked windows nothing will ever run in again, in creation order.
+   *
+   * Separate from {@link getUnreachableWindowIds} on purpose, and neither list is a superset of the
+   * other. Unreachable means "could not be asked, and its answer is still coming" — a fan-out that
+   * would be wrong without it refuses to answer at all. Abandoned means "there is no answer, ever" —
+   * a fan-out has to go on working, and the honest thing is to say what it could not cover rather
+   * than to fail forever or to pretend the window had nothing in it.
+   *
+   * Callers that report coverage — the shutdown sync, which gets one shot at the app's open editors —
+   * should count these alongside the unreachable ones: a given-up window's projects really did go
+   * unsynced.
+   *
+   * @returns Tracked windows whose renderer died and will not be reloaded again — see
+   *   {@link markWindowAbandoned}
+   */
+  export function getAbandonedWindowIds(): number[];
+  /**
+   * Whether a window has been given up on, so nothing will ever run in it again.
+   *
+   * @param windowId Window to ask about
+   */
+  export function isWindowAbandoned(windowId: number): boolean;
+  /**
    * The window Electron reports as focused, or `undefined` when no window has focus.
    *
    * This is the honest answer about focus, which is not always where calls are routed — see
@@ -2328,6 +2392,21 @@ declare module 'main/services/window-state.service' {
   export function getFocusedWindowId(): number | undefined;
   /** Get the window ID to target for command/service routing. See {@link getRoutingTarget}. */
   export function getTargetWindowId(): number | undefined;
+  /**
+   * Bring a window to the front of the OS window stack, restoring it first if it is minimized.
+   *
+   * Lives here rather than at the call sites because this module is the only thing that holds a
+   * window id long enough to still have it after the window is gone: a routed call resolves its
+   * target window and then does a cross-process round trip, and the window can close during it.
+   * Looking the window up through the tracked list makes that a no-op instead of a throw on a
+   * destroyed BrowserWindow.
+   *
+   * Restoring before focusing because a minimized window that is merely focused stays minimized, so
+   * the raise the caller asked for would silently not happen.
+   *
+   * @param windowId Window to raise. Doing nothing is the right answer for a window that has closed.
+   */
+  export function focusWindow(windowId: number): void;
   /**
    * Add a window to the tracked list.
    *
@@ -2373,6 +2452,15 @@ declare module 'main/services/window-state.service' {
    */
   export function markWindowClosing(windowId: number): void;
   /**
+   * Whether a window's close has begun, so nothing should try to put it back to work.
+   *
+   * Answered from what the window's own close handler recorded rather than from the BrowserWindow,
+   * which is not destroyed until long after the close started — see {@link markWindowClosing}.
+   *
+   * @param windowId Window to ask about
+   */
+  export function isWindowClosing(windowId: number): boolean;
+  /**
    * Whether every tracked window is on its way out, so the app is going down rather than one window
    * going away.
    *
@@ -2392,9 +2480,36 @@ declare module 'main/services/window-state.service' {
    * retry against handlers that no longer exist. The window stays tracked: it is still a window, and
    * it becomes routable again through {@link markWindowReady} once its renderer registers.
    *
+   * {@link everReadyWindowIds} deliberately keeps this window, which is what makes it come back from
+   * here as a window that could not be asked rather than as one that never had anything to say. Only
+   * the window going away clears that.
+   *
    * @param windowId Window whose renderer stopped serving requests
    */
   export function markWindowNotReady(windowId: number): void;
+  /**
+   * Record that a window will never serve a routed call again — its renderer died and the reload that
+   * brings a crashed window back has run out of attempts.
+   *
+   * This is the terminal counterpart of {@link markWindowNotReady}, and the distinction is the whole
+   * point of having it. A window that merely stopped serving is one the app is still working on: its
+   * layout is held here, a reload is in flight, and the tabs the user is looking at do come back — so
+   * a fan-out that cannot ask it refuses to answer rather than reporting its contents as absent. A
+   * window that has been given up on is not coming back, and leaving it in that state makes every
+   * routed search in the app throw for the rest of the session over a window that will never hold
+   * anything again.
+   *
+   * Safe to call for a window whose renderer never registered anything, and meant to be: the caller
+   * cannot usefully tell the two apart at the moment it gives up, and the never-ready case wants the
+   * same record made for the same reason.
+   *
+   * The window stays tracked and is deliberately not closed. It is still on screen, and closing it
+   * would rewrite the persisted window layout without it — taking away the one recovery the user has
+   * left, which is to quit and relaunch.
+   *
+   * @param windowId Window nothing will ever run in again
+   */
+  export function markWindowAbandoned(windowId: number): void;
   /**
    * Drop all tracked window state. This function is only exported for testing purposes and should not
    * be used in production code — the app removes windows one at a time, as each one goes away.
@@ -2544,13 +2659,6 @@ declare module 'main/services/rpc-server' {
      * by the process that owns the other end.
      */
     private describePeer;
-    /**
-     * How many network methods this peer registered. The method map is shared by reference across
-     * every `RpcServer` on the network, so its `size` is the whole network's method count — an
-     * alarming number to attach to one socket's departure, and not the number of methods actually
-     * about to be removed.
-     */
-    private countOwnRegisteredMethods;
     private addEventListenersToWebSocket;
     private removeEventListenersFromWebSocket;
     private onWebSocketClose;
