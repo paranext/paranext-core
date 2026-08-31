@@ -7,7 +7,6 @@
   "%acceptButton_tooltip%": "Save",
   "%ariaLabel_opensInBrowser%": "Opens externally in a browser window",
   "%cancelButton_tooltip%": "Cancel",
-  "%closeApp_confirm_cancel%": "Cancel",
   "%closeApp_confirm_closeAll%": "Close all windows",
   "%closeApp_confirm_message%": "All windows will close. They will be restored the next time you open the application.",
   "%closeApp_confirm_title%": "Close the application?",

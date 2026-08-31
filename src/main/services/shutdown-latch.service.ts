@@ -12,6 +12,7 @@
  */
 
 import { areAllWindowsClosing } from '@main/services/window-state.service';
+import { AsyncVariable } from 'platform-bible-utils';
 
 let isQuitRequested = false;
 let shutdownTasksPromise: Promise<void> | undefined;
@@ -22,20 +23,22 @@ let shutdownTasksPromise: Promise<void> | undefined;
  * on a quit will answer on its own; this is what ends the wait for one that does not, so a question
  * nobody answers can never hold the app open.
  */
-let quitRequested: { promise: Promise<void>; resolve: () => void } = makeQuitRequestedSignal();
+let quitRequested = makeQuitRequestedSignal();
 
-function makeQuitRequestedSignal(): { promise: Promise<void>; resolve: () => void } {
-  let resolveSignal: () => void = () => {};
-  const promise = new Promise<void>((resolve) => {
-    resolveSignal = resolve;
-  });
-  return { promise, resolve: resolveSignal };
+/**
+ * A latch that lives as long as the session, so the timeout is disabled: `AsyncVariable` otherwise
+ * rejects an unsettled variable after ten seconds, and this one is unsettled for the whole of a
+ * session that never quits — that rejection would win the race it is waited on in.
+ */
+function makeQuitRequestedSignal(): AsyncVariable<void> {
+  return new AsyncVariable<void>('quit requested', -1);
 }
 
 /** Record that the whole app is quitting, not just one window. Called from `before-quit`. */
 export function markQuitRequested(): void {
   isQuitRequested = true;
-  quitRequested.resolve();
+  // Repeat calls are safe: settling an already-settled variable is a logged no-op, not a throw
+  quitRequested.resolveToValue(undefined);
 }
 
 /**
