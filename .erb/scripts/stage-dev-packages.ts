@@ -76,7 +76,7 @@ function getDevRepoPath(folder: string): string {
 
 /** Environment for commands run inside a dev repo. */
 function devRepoEnv() {
-  return {
+  const env = {
     ...process.env,
     // Allow volta to run pnpm commands
     VOLTA_FEATURE_PNPM: '1',
@@ -85,6 +85,13 @@ function devRepoEnv() {
     // Disable npm registry authentication since it is not needed and would cause warnings
     NODE_AUTH_TOKEN: '',
   };
+
+  // Volta sets this for anything it launches, so when npm itself runs through a Volta shim every
+  // command here inherits it — and Volta's pnpm shim then refuses to resolve Node at all ("Node is
+  // not available"). Dropping it lets pnpm run directly instead of falling back to `volta run`,
+  // which would nest Volta inside Volta and crash the nx build outright.
+  delete env._VOLTA_TOOL_RECURSION;
+  return env;
 }
 
 /** Runs a command in `cwd`, streaming its output. */
@@ -134,8 +141,12 @@ function verifyOrigin(repo: DevRepo, repoPath: string): void {
   const normalize = (url: string) => url.replace(/\/+$/, '').replace(/\.git$/, '');
   if (normalize(origin) === normalize(repo.cloneUrl)) return;
 
+  // Keep the previous URL under a remote named for its organization rather than overwriting it, so
+  // the old location stays reachable and the change is trivially reversible.
+  const previousRemoteName = /github\.com[:/]([^/]+)\//.exec(origin)?.[1] ?? 'previous-origin';
+
   throw new Error(
-    `The ${repo.folder} repo at ${repoPath} has origin "${origin}", but dev-packages.json expects "${repo.cloneUrl}".\nRe-point it (or move that checkout aside and let this script clone a fresh one):\n\n  git -C "${repoPath}" remote set-url origin "${repo.cloneUrl}"\n`,
+    `The ${repo.folder} repo at ${repoPath} has origin "${origin}", but dev-packages.json expects "${repo.cloneUrl}".\n\nThis is expected if the repo moved. Nothing here is destructive — the old URL is kept as a second remote, and you can undo it with \`git remote set-url origin "${origin}"\`:\n\n  git -C "${repoPath}" remote add ${previousRemoteName} "${origin}"\n  git -C "${repoPath}" remote set-url origin "${repo.cloneUrl}"\n  git -C "${repoPath}" fetch --all\n\nAlternatively, move this checkout aside and let this script clone a fresh one.\n`,
   );
 }
 
