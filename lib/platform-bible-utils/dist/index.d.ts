@@ -599,6 +599,9 @@ export declare class GraphemeString {
 	 * The grapheme substitutions: an empty separator splits into graphemes rather than UTF-16 units,
 	 * and a separator only matches where it begins and ends on grapheme boundaries.
 	 *
+	 * PERF: an empty separator wraps every grapheme in its own instance. When the text is all that is
+	 * wanted, {@link toArray} produces the same clusters as plain strings and skips that entirely.
+	 *
 	 * Entries are `undefined` exactly where native produces `undefined` — a capture group that did
 	 * not participate in the match.
 	 *

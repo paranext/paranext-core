@@ -1,6 +1,6 @@
 import { ensureArray } from './array-util';
 import { LocalizeKey } from './extension-contributions/menus.model';
-import { GraphemeString } from './grapheme-string';
+import { GraphemeString, toUint32 } from './grapheme-string';
 
 /*
  * The functions below are thin wrappers over `GraphemeString`. Each mirrors the same-named method on
@@ -268,6 +268,14 @@ export function slice(string: string, indexStart: number, indexEnd?: number): st
  */
 export function split(string: string, separator: string | RegExp, splitLimit?: number): string[] {
   const graphemeString = new GraphemeString(string);
+  if (separator === '') {
+    // PERF: the general path would wrap every grapheme in a GraphemeString this function unwraps on
+    // the very next line — one object and one single-element array per cluster, all discarded. The
+    // clusters as plain strings are exactly the answer, so take them directly. `toUint32` is shared
+    // with the class so the limit keeps one definition.
+    const parts = graphemeString.toArray();
+    return splitLimit === undefined ? parts : parts.slice(0, toUint32(splitLimit));
+  }
   if (typeof separator === 'string')
     return graphemeString.split(separator, splitLimit).map((part) => part.toString());
   // Native puts `undefined` in the result for a capture group that did not participate, under a
