@@ -208,6 +208,30 @@ describe('RpcClient close logging', () => {
     expect(mockLoggerWarn.mock.calls[0][0]).toContain('code=1006');
   });
 
+  test('a close during the connect handshake fails the connect rather than reporting Connected', async () => {
+    // connect() parks on the connection-complete await with the close handler already subscribed.
+    // A close in that window runs teardown to completion; if connect() then wrote Connected over
+    // it, the client would report healthy with no socket — every send throwing, and no retry
+    // possible, because connect()'s own Connected guard short-circuits.
+    const client = new RpcClient('renderer-1');
+    const connecting = client.connect(() => {});
+
+    // Wait for connect() to actually attach its listeners. Dispatching before that silently does
+    // nothing and this test would pass against the bug it exists to catch.
+    for (let tick = 0; tick < 50 && !captured.has('close'); tick += 1) {
+      // Sequential by design: each tick hands control back so connect() can advance exactly one
+      // suspension point. Awaiting these in parallel would defeat the purpose of the loop.
+      // eslint-disable-next-line no-await-in-loop
+      await Promise.resolve();
+    }
+    expect(captured.has('close')).toBe(true);
+
+    dispatch('close', new CloseEvent('close', { code: 1006 }));
+
+    await expect(connecting).resolves.toBe(false);
+    expect(client.connectionStatus).toBe(ConnectionStatus.Disconnected);
+  });
+
   test('logs exactly once when close is dispatched twice', async () => {
     await connectedClient();
     const ev = new CloseEvent('close', { code: 1006 });

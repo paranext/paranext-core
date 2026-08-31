@@ -172,6 +172,16 @@ export class RpcClient implements IRpcMethodRegistrar {
         if (this.ws.readyState !== 0) this.connectionComplete.resolveToValue();
         await this.connectionComplete.promise;
 
+        // The socket can die while this await is parked: onWebSocketClose then runs to completion,
+        // removing the listeners, nulling `this.ws` and setting Disconnected. Writing Connected over
+        // that teardown strands the client — it reports healthy with no socket, every send throws,
+        // and it can never retry, because the guard at the top of this method returns true on
+        // Connected and only onWebSocketClose (now latched, and unsubscribed) clears it.
+        if (this.hasCompletedTeardown) {
+          logger.warn(`Websocket for ${this.peerName} closed while connecting to ${url}`);
+          return false;
+        }
+
         this.connectionStatus = ConnectionStatus.Connected;
         logger.info(`Websocket connected to ${url}`);
         this.announcePeerToServer();
