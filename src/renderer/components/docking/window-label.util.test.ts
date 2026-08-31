@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { localizationService } from '@shared/services/localization.service';
+import { logger } from '@shared/services/logger.service';
 import {
   EMPTY_WINDOW_LABEL_KEY,
   getWindowLabel,
@@ -133,6 +134,8 @@ const titled = (title: string) => () => ({ tabTitle: title });
 
 beforeEach(() => {
   vi.mocked(localizationService.getLocalizedString).mockReset();
+  // Cleared per test so a message assertion reads this test's log line, not an earlier test's
+  vi.mocked(logger.warn).mockClear();
   document.title = 'unset';
 });
 
@@ -162,6 +165,23 @@ describe('updateWindowTitle', () => {
     await updateWindowTitle(layoutWith('a'), () => undefined);
 
     expect(document.title).toBe('Notes');
+  });
+
+  test('names a rejection that is not an Error, rather than logging [object Object]', async () => {
+    // A failed cross-process call rejects with a JSON-RPC payload, not an Error. Interpolating it
+    // straight into the message loses the only diagnostic a window with a silently stale title has
+    vi.mocked(localizationService.getLocalizedString).mockRejectedValue({
+      code: -32603,
+      message: 'Localization provider is down',
+    });
+
+    await updateWindowTitle(layoutWith('a'), () => undefined);
+
+    const logged = vi.mocked(logger.warn).mock.calls[0][0];
+    // The positive control: the message really did carry the payload, so the absence below is the
+    // formatting being right rather than nothing having been logged at all
+    expect(logged).toContain('Localization provider is down');
+    expect(logged).not.toContain('[object Object]');
   });
 
   test('lets the newest request win when localizing resolves out of order', async () => {

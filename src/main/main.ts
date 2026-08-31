@@ -701,6 +701,11 @@ async function main() {
       }
     }
 
+    // Deliberately no `title` here, and nothing in main may call `setTitle` on a window either.
+    // Each renderer names its own window by publishing a page title, which Electron carries to the
+    // native title; that is what the OS switcher shows and what other windows read when they offer
+    // this one as a move target. Setting a title from this process pins it, the page title stops
+    // reaching it, and the move-to-window submenu starts naming windows something they are not.
     const newWindow = new BrowserWindow({
       show: true,
       ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),

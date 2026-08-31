@@ -576,7 +576,7 @@
   "%some_localization_key%": "Esto es el texto en español para %some_localization_key%.",
   "%submitButton%": "Enviar",
   "%tab_aria_tab%": "Pestaña",
-  "%tab_contextMenu_floatPanel%": "Pestaña flotante",
+  "%tab_contextMenu_floatPanel%": "Flotar la pestaña",
   "%tab_contextMenu_moveTabToNewWindow%": "Mover la pestaña a una ventana nueva",
   "%tab_contextMenu_moveTabToWindow%": "Mover la pestaña a la ventana",
   "%tab_contextMenu_moveTab_failed%": "No se pudo mover la pestaña.",

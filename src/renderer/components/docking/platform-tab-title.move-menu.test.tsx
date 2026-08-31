@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { floatTab, getOpenTabCountSync } from '@renderer/services/web-view.service-shard';
 import { sendCommand } from '@shared/services/command.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
 import { describeWebViewMoveFailure } from '@shared/models/web-view-move.model';
@@ -23,44 +24,6 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   ]),
   useData: vi.fn(() => ({
     Focus: () => [undefined, vi.fn()],
-    WebViewMenu: () => [
-      {
-        includeDefaults: true,
-        topMenu: undefined,
-        contextMenu: undefined,
-        tabMenu: {
-          groups: { 'platform.tabWindow': { order: 1, isExtensible: true } },
-          items: [
-            {
-              label: 'Float Tab',
-              group: 'platform.tabWindow',
-              order: 1,
-              command: 'platform.floatTab',
-            },
-            {
-              label: 'Move tab to new window',
-              group: 'platform.tabWindow',
-              order: 2,
-              command: 'platform.moveWebViewToNewWindow',
-            },
-            {
-              id: 'platform.moveTabToWindow',
-              label: 'Move tab to window',
-              group: 'platform.tabWindow',
-              order: 3,
-            },
-            {
-              label: 'Look Up Word',
-              group: 'platform.tabWindow',
-              order: 4,
-              command: 'someExtension.lookUpWord',
-            },
-          ],
-        },
-      },
-      vi.fn(),
-      false,
-    ],
   })),
   useDataProvider: vi.fn(() => undefined),
 }));
@@ -105,6 +68,13 @@ vi.mock('@shared/services/notification.service', () => ({
 
 vi.mock('@shared/services/command.service', () => ({
   sendCommand: vi.fn(),
+}));
+
+vi.mock('@shared/services/menu-data.service', () => ({
+  menuDataService: {
+    dataProviderName: 'platform.menuDataServiceDataProvider',
+    getWebViewMenu: vi.fn(),
+  },
 }));
 
 // Stub the context-menu primitives so the menu items render as plain, clickable elements without
@@ -160,6 +130,129 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 
 // #endregion
 
+/** The platform's own tab menu, as the data provider hands it over */
+const CONTRIBUTED_TAB_MENU = {
+  includeDefaults: true,
+  topMenu: undefined,
+  contextMenu: undefined,
+  tabMenu: {
+    groups: { 'platform.tabWindow': { order: 100, isExtensible: true } },
+    items: [
+      { label: 'Float Tab', group: 'platform.tabWindow', order: 100, command: 'platform.floatTab' },
+      {
+        label: 'Move tab to new window',
+        group: 'platform.tabWindow',
+        order: 200,
+        command: 'platform.moveWebViewToNewWindow',
+      },
+      {
+        id: 'platform.moveTabToWindow',
+        label: 'Move tab to window',
+        group: 'platform.tabWindow',
+        order: 300,
+      },
+      {
+        label: 'Look Up Word',
+        group: 'platform.tabWindow',
+        order: 400,
+        command: 'someExtension.lookUpWord',
+      },
+    ],
+  },
+};
+
+beforeEach(() => {
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(CONTRIBUTED_TAB_MENU as never);
+});
+
+/**
+ * Let the mount-time read of the contributed menu resolve.
+ *
+ * The tab menu is no longer supplied synchronously by a subscription — each tab reads it once when
+ * it mounts — so nothing renders a menu until that has settled.
+ */
+const flushMenuRead = async () => {
+  await act(async () => {});
+};
+
+describe('PlatformTabTitle reading its contributed menu', () => {
+  afterEach(() => {
+    cleanup();
+    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(menuDataService.getWebViewMenu).mockReset();
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(sendCommand).mockReset();
+  });
+
+  it('reads the contributed menu once when the tab mounts', async () => {
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+
+    await waitFor(() => expect(menuDataService.getWebViewMenu).toHaveBeenCalledWith('foo.bar'));
+    expect(menuDataService.getWebViewMenu).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not read the contributed menu in Simple mode, which shows no tab menu', async () => {
+    // The whole point of reading it at all is a menu that can open; Simple mode renders none, so a
+    // fixed six-tab layout would otherwise pay six cross-process reads for nothing
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+
+    // The tab renders (the tooltip stub repeats its text, hence the plural query), so this is a
+    // mounted component that chose not to read rather than one that never mounted
+    await waitFor(() => expect(screen.getAllByText('Tab').length).toBeGreaterThan(0));
+    expect(menuDataService.getWebViewMenu).not.toHaveBeenCalled();
+  });
+
+  it('logs and offers no menu when the contributed menu cannot be read', async () => {
+    vi.mocked(menuDataService.getWebViewMenu).mockRejectedValue(new Error('provider is down'));
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+
+    await waitFor(() => expect(logger.warn).toHaveBeenCalled());
+    expect(vi.mocked(logger.warn).mock.calls[0][0]).toContain('provider is down');
+    expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument();
+  });
+
+  it('offers no menu at all when the contributed menu holds nothing', async () => {
+    // Rendering the menu with no children puts an empty styled popup on screen, since the content
+    // opens whatever it contains
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue({
+      includeDefaults: true,
+      tabMenu: { groups: {}, items: [] },
+    } as never);
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+
+    await waitFor(() => expect(menuDataService.getWebViewMenu).toHaveBeenCalled());
+    expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument();
+  });
+
+  it('offers the menu once the read lands, which is the control for the two cases above', async () => {
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+
+    expect(await screen.findByTestId('context-menu')).toBeInTheDocument();
+    expect(screen.getByText('Float Tab')).toBeInTheDocument();
+  });
+
+  it('does not read the open windows for a tab hosting no web view', async () => {
+    // Both readers of that list are removed from a tab with no web view, so the round trip and the
+    // re-render it causes would be discarded in full
+    render(<PlatformTabTitle id="tab-1" text="Tab" />);
+    fireEvent.click(await screen.findByTestId('open-menu'));
+
+    await waitFor(() => expect(screen.getByText('Float Tab')).toBeInTheDocument());
+    expect(sendCommand).not.toHaveBeenCalledWith('platform.getWindows');
+  });
+
+  it('does read the open windows for a web view tab, which is the control above', async () => {
+    vi.mocked(sendCommand).mockResolvedValue([]);
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    fireEvent.click(await screen.findByTestId('open-menu'));
+
+    await waitFor(() => expect(sendCommand).toHaveBeenCalledWith('platform.getWindows'));
+  });
+});
+
 describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
   afterEach(() => {
     cleanup();
@@ -171,8 +264,9 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     vi.mocked(notificationService.send).mockClear();
   });
 
-  it('a web view tab in power mode offers "Move tab to new window"', () => {
+  it('a web view tab in power mode offers "Move tab to new window"', async () => {
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
   });
@@ -180,6 +274,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
   it('clicking it sends platform.moveWebViewToNewWindow with the web view id', async () => {
     vi.mocked(sendCommand).mockResolvedValue('web-view-1');
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     fireEvent.click(screen.getByText('Move tab to new window'));
 
@@ -188,15 +283,17 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     );
   });
 
-  it('outside power mode the item is absent', () => {
+  it('outside power mode the item is absent', async () => {
     vi.mocked(useIsPowerMode).mockReturnValue(false);
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     expect(screen.queryByText('Move tab to new window')).not.toBeInTheDocument();
   });
 
-  it('a tab that is not a web view does not offer it', () => {
+  it('a tab that is not a web view does not offer it', async () => {
     render(<PlatformTabTitle id="tab-1" text="Tab" />);
+    await flushMenuRead();
 
     expect(screen.getByText('Float Tab')).toBeInTheDocument();
     expect(screen.queryByText('Move tab to new window')).not.toBeInTheDocument();
@@ -205,6 +302,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
   it('a rejected move is logged, not thrown into React', async () => {
     vi.mocked(sendCommand).mockRejectedValue(new Error('window creation failed'));
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     fireEvent.click(screen.getByText('Move tab to new window'));
 
@@ -220,6 +318,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     // them staring at a menu item that silently did nothing
     vi.mocked(sendCommand).mockRejectedValue(new Error('window creation failed'));
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     fireEvent.click(screen.getByText('Move tab to new window'));
 
@@ -243,6 +342,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
       ),
     );
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     fireEvent.click(screen.getByText('Move tab to new window'));
 
@@ -268,6 +368,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
       ),
     );
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     fireEvent.click(screen.getByText('Move tab to new window'));
 
@@ -293,6 +394,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
       ),
     );
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     fireEvent.click(screen.getByText('Move tab to new window'));
 
@@ -319,6 +421,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
       ),
     );
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     fireEvent.click(screen.getByText('Move tab to new window'));
 
@@ -345,6 +448,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
       ),
     );
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     fireEvent.click(screen.getByText('Move tab to new window'));
 
@@ -362,6 +466,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     vi.mocked(notificationService.send).mockClear();
     vi.mocked(sendCommand).mockResolvedValue('web-view-1');
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     fireEvent.click(screen.getByText('Move tab to new window'));
 
@@ -381,6 +486,7 @@ describe('PlatformTabTitle other tab-menu item selection', () => {
 
   it('clicking Float Tab floats this tab', async () => {
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     fireEvent.click(screen.getByText('Float Tab'));
 
@@ -389,6 +495,7 @@ describe('PlatformTabTitle other tab-menu item selection', () => {
 
   it('clicking an extension-contributed item runs it as a menu command', async () => {
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     fireEvent.click(screen.getByText('Look Up Word'));
 
@@ -438,7 +545,7 @@ describe('PlatformTabTitle keyboard access to the tab menu', () => {
     vi.mocked(sendCommand).mockReset();
   });
 
-  it('forwards a contextmenu raised on the tab into the trigger', () => {
+  it('forwards a contextmenu raised on the tab into the trigger', async () => {
     const { container } = renderInTab();
     const title = tabTitleIn(container);
     const received: Node[] = [];
@@ -453,7 +560,7 @@ describe('PlatformTabTitle keyboard access to the tab menu', () => {
     expect(title.contains(received[0])).toBe(true);
   });
 
-  it('leaves a contextmenu raised inside the trigger alone', () => {
+  it('leaves a contextmenu raised inside the trigger alone', async () => {
     // The positive control for the guard: an ordinary right-click on the title already reaches the
     // trigger by bubbling, so forwarding it would double it
     const { container } = renderInTab();
@@ -468,7 +575,7 @@ describe('PlatformTabTitle keyboard access to the tab menu', () => {
     expect(count).toBe(1);
   });
 
-  it('does not forward in Simple mode, where the tab menu is not offered', () => {
+  it('does not forward in Simple mode, where the tab menu is not offered', async () => {
     vi.mocked(useIsPowerMode).mockReturnValue(false);
     const { container } = renderInTab();
     const title = tabTitleIn(container);
@@ -493,6 +600,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
       command === 'platform.getWindows' ? windows : undefined,
     );
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
     fireEvent.click(screen.getByTestId('open-menu'));
     await waitFor(() => expect(sendCommand).toHaveBeenCalledWith('platform.getWindows'));
   };
@@ -533,6 +641,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
       throw new Error('[webViewMoveFailure:reopened-in-focused-window] nope');
     });
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
     fireEvent.click(screen.getByTestId('open-menu'));
 
     fireEvent.click(await screen.findByText('MRK — wgPIDGIN'));
@@ -634,6 +743,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     globalThis.windowId = '2';
     vi.mocked(sendCommand).mockRejectedValue(new Error('no windows for you'));
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     fireEvent.click(screen.getByTestId('open-menu'));
 
@@ -660,6 +770,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
         }),
     );
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    await flushMenuRead();
 
     fireEvent.click(screen.getByTestId('open-menu'));
     fireEvent.click(screen.getByTestId('open-menu'));
