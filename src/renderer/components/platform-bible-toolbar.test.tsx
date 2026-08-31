@@ -441,13 +441,32 @@ describe('PlatformBibleToolbar — Sync button', () => {
   });
 
   it('is not rendered in power mode even when send/receive is available', async () => {
-    // Sync belongs to simple mode; power users send/receive per project from the Home view
+    // Power mode deliberately has no toolbar Sync: send/receive already surfaces itself there (a
+    // notification while syncing, progress in the send/receive dialog, and progress in an open
+    // editor window), and power users start one per project from the Home view.
     vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
     mockSendCommand(true);
     render(<PlatformBibleToolbar />);
 
     await waitFor(() => {
       expect(screen.getByTestId('scroll-group-selector')).toBeInTheDocument();
+    });
+    expect(
+      document.querySelector('button[data-testid="toolbar-sync-button"]'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('is not rendered at startup while the interface mode is not yet known', async () => {
+    // A power user's first start has no cached mode, so the setting reports its 'simple' default
+    // until it resolves. Sync has to wait for the real mode rather than render on that placeholder,
+    // or it appears in the power toolbar and then vanishes.
+    localStorage.clear();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), true]);
+    mockSendCommand(true);
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-reserved-space-wrapper')).toBeInTheDocument();
     });
     expect(
       document.querySelector('button[data-testid="toolbar-sync-button"]'),

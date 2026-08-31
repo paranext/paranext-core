@@ -12,6 +12,7 @@ import {
   useProjectSetting,
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useIsSimpleMode } from '@renderer/hooks/use-is-simple-mode.hook';
 import { useOpenProjectBookIds } from '@renderer/hooks/use-open-project-book-ids.hook';
 import { useSendReceiveAvailability } from '@renderer/hooks/use-send-receive-availability.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
@@ -210,6 +211,9 @@ export function PlatformBibleToolbar() {
     useProjectPickerData();
 
   const isPowerMode = useIsPowerMode();
+  // Not `!isPowerMode`: the Sync button must never appear in power mode, so it waits for the mode
+  // to be known instead of rendering on the 'simple' placeholder.
+  const isSimpleMode = useIsSimpleMode();
 
   // The resolved navigation target: the tracked (last-selected) web view's saved definition or,
   // failing that, the main project editor's — same rule `useProjectPickerData` uses to find the
@@ -483,9 +487,13 @@ export function PlatformBibleToolbar() {
         appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
         configAreaChildren={
           <>
-            {!isPowerMode && (isSendReceiveAvailable !== false || hasBackendSynced) && (
-              // Simple mode only — power users send/receive per project from the Home
-              // view. Fail open on availability: `undefined` means not known yet (the extension
+            {isSimpleMode && (isSendReceiveAvailable !== false || hasBackendSynced) && (
+              // Simple mode only, by UX decision: power mode deliberately has no toolbar Sync
+              // because send/receive already surfaces itself there — a notification while syncing,
+              // progress inside the send/receive dialog, and progress in an open editor window —
+              // and power users start one per project from the Home view.
+              //
+              // Fail open on availability: `undefined` means not known yet (the extension
               // host is busy, or send/receive is still activating), and the button must not hinge
               // on that resolving. A settled `false` hides it — unless the backend has reported a
               // sync, which is a surface the user needs regardless of what the extension probe says

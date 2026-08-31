@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSetting } from '@renderer/hooks/papi-hooks';
 import { isPlatformError } from 'platform-bible-utils';
 import type { SettingTypes } from 'papi-shared-types';
@@ -43,38 +43,59 @@ function writeCachedInterfaceMode(mode: InterfaceMode): void {
 
 /**
  * Returns the current `platform.interfaceMode` (always a safe `'simple' | 'power'` value, falling
- * back to `'simple'` while the setting is loading or if reading it fails) along with a setter.
- * Companion to {@link useIsPowerMode}, which only reads the mode.
+ * back to the cached mode and then to `'simple'` while the setting is loading or if reading it
+ * fails) along with a setter and whether that value is actually _known_. Companion to
+ * {@link useIsPowerMode}, which only reads the mode, and {@link useIsSimpleMode}, which reads it
+ * together with `isModeKnown`.
  *
  * On startup the initial value is seeded from a `localStorage` cache of the last resolved mode so
  * mode-gated UI doesn't flash the wrong layout before `useSetting` resolves the real value.
  *
  * `setMode` is `undefined` whenever {@link useSetting} has nothing to write through — call it as
  * `setMode?.(…)`.
+ *
+ * `isModeKnown` is `false` only while the mode is a placeholder — the setting has not resolved and
+ * the cache had nothing to seed from. Power-only UI can ignore it (its own `mode === 'power'` test
+ * already fails closed), but **simple-only UI must gate on it**: without that check, `'simple'`
+ * means "really simple" and "we don't know yet" alike, so simple-only affordances render for power
+ * users until the setting resolves.
  */
 export function useInterfaceMode(): [
   mode: InterfaceMode,
   setMode:
     | ((newMode: InterfaceMode) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>)
     | undefined,
+  isModeKnown: boolean,
 ] {
-  const [modePossiblyError, setMode] = useSetting(
+  // Read the cache once per mount rather than every render: it is what seeded `useSetting` below,
+  // so re-reading it could later disagree with the value React actually started from.
+  const [cachedMode] = useState(readCachedInterfaceMode);
+
+  const [modePossiblyError, setMode, , isLoading] = useSetting(
     'platform.interfaceMode',
-    readCachedInterfaceMode() ?? 'simple',
+    cachedMode ?? 'simple',
   );
-  const mode: InterfaceMode = isPlatformError(modePossiblyError) ? 'simple' : modePossiblyError;
+
+  const didReadFail = isPlatformError(modePossiblyError);
+  // A failed read falls back to the cache before 'simple', so a transient read error does not
+  // demote a user we already know to be in power mode into simple-mode UI.
+  const mode: InterfaceMode = didReadFail ? (cachedMode ?? 'simple') : modePossiblyError;
+
+  // Known once the setting resolves, and immediately when the cache told us the user's last mode.
+  // Anything else is the 'simple' placeholder standing in for an answer we don't have.
+  const isModeKnown = (!isLoading && !didReadFail) || cachedMode !== undefined;
 
   useEffect(() => {
-    // Cache only a mode the setting actually resolved to. `mode` reports 'simple' whenever the read
-    // is a `PlatformError` — including while `useData`'s runaway guard is throttled — and that
-    // fallback is meant to last as long as the error does. Persisting it outlives the error: this
-    // cache is the startup seed `computeInitialStatus` reads, so a Power user would be routed
-    // through the first-run gate on the next launch.
-    if (isPlatformError(modePossiblyError)) return;
+    // Cache only a mode the setting actually resolved to. `mode` reports 'simple' both while the
+    // read is still in flight and whenever it is a `PlatformError` — including while `useData`'s
+    // runaway guard is throttled — and either fallback is meant to last only as long as its cause.
+    // Persisting one outlives that: this cache is the startup seed `computeInitialStatus` reads, so
+    // a Power user would be routed through the first-run gate on the next launch.
+    if (isLoading || didReadFail) return;
     writeCachedInterfaceMode(mode);
-  }, [mode, modePossiblyError]);
+  }, [didReadFail, isLoading, mode]);
 
-  return [mode, setMode];
+  return [mode, setMode, isModeKnown];
 }
 
 export default useInterfaceMode;
