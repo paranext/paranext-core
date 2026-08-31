@@ -1543,7 +1543,26 @@ async function main() {
   setWebViewWindowCreator({
     createPendingContentWindow: async () =>
       (await createWindow(undefined, { pendingContent: true })).id,
-    closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+    closeWindow: (windowId) => {
+      // Rolling back an open that never delivered must not put the close-all question on screen.
+      // The window closed here is one the router created for content that never arrived, which is
+      // not the primary in ordinary use — but `isPrimaryWindow` falls back to the oldest live
+      // window when none holds the marked entry, and on macOS the app stays resident with no
+      // windows, so a window created into that gap IS the primary. Closing it would ask the user
+      // whether to close the whole application, to undo an open they never saw start — and the
+      // router does not await this, so a cancelled close would leave it reporting success while
+      // the window stands.
+      //
+      // The other programmatic close on this path declines the primary the same way: the emptiness
+      // handler is handed `isPrimaryWindow` and answers `open-home` rather than closing it.
+      if (isPrimaryWindow(windowId)) {
+        logger.warn(
+          `Not closing window ${windowId} after its content never arrived: it is the primary window`,
+        );
+        return;
+      }
+      BrowserWindow.fromId(windowId)?.close();
+    },
   });
 
   /**
