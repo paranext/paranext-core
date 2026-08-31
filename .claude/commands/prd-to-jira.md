@@ -53,13 +53,14 @@ tools); **drafting** doesn't — if Jira isn't connected, say so and follow step
 3. **Dry-run gate (required — never skip).** Show the user the complete drafts and get explicit
    approval before creating anything. These are posted to the team's Jira under the user's name.
 4. **Create, then populate each description in a second pass.** Creating an issue in `PT` replaces
-   your description with the work-item type's default template, so follow
-   [`.claude/rules/jira-issue-creation.md`](../rules/jira-issue-creation.md) (create → read the
-   live template off the created issue → fit your content into its sections → push the edit →
-   verify). Create the parent, then each child with the parent set — one at a time, keeping the
-   created keys. The child sections this command drafts (User Story, Description, Implementation
-   Ideas, Testing Ideas, Definition of Done, Dependencies) are written to line up with a typical
-   task template — map them onto whatever headings each issue actually shows, carrying any extras
+   your description with the work-item type's default template, so use the **`jira-creation`
+   skill** ([`.claude/skills/jira-creation/SKILL.md`](../skills/jira-creation/SKILL.md)) — create
+   → read the live template off the created issue → fit your content into its sections → push the
+   edit → verify. Create the parent, then each child with the parent set — one at a time, filling
+   and verifying each before moving on, and keeping the created keys. The child sections this
+   command drafts (User Story, Description, Implementation Ideas, Testing Ideas, Definition of
+   Done, Dependencies) are written to line up with a typical task template — map them onto
+   whatever headings each issue actually shows, carrying any extras
    (e.g. **Dependencies**) under the closest section. For the parent, place the problem statement /
    PRD link / non-negotiables table under the closest headings rather than dropping the scaffold.
 5. **Back-fill the mapping**: update the parent's description so each non-negotiable row lists
