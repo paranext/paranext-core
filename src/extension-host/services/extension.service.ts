@@ -38,6 +38,7 @@ import {
   deserialize,
   formatReplacementString,
   getErrorMessage,
+  isString,
   SortedSet,
   toKebabCase,
   UnsubscriberAsync,
@@ -224,6 +225,11 @@ const nameComparator = (a: string, b: string) => a.localeCompare(b, 'en', { sens
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
   const extensionManifest: ExtensionManifest = deserialize(extensionManifestJson);
 
+  // `deserialize` cannot enforce the manifest's declared types, so a manifest whose `name` is a
+  // number, array, or object reaches here typed as `string`. Reject it now: the name flows into
+  // string operations well outside this function's caller's `try` (the priority `.sort()` in
+  // `getExtensions`), where a `TypeError` fails the whole load instead of skipping one extension.
+  if (!isString(extensionManifest.name)) throw new Error('Extension name must be a string!');
   if (extensionManifest.name.includes('..'))
     throw new Error('Extension name must not include `..`!');
   if (FORBIDDEN_EXTENSION_NAMES.some((forbiddenName) => forbiddenName === extensionManifest.name))
@@ -1658,3 +1664,8 @@ export async function shutdown() {
 }
 
 // #endregion Service initialization and shutdown
+
+/** This is an internal-only export for testing purposes and should not be used in development */
+export const testingExtensionService = {
+  parseManifest,
+};
