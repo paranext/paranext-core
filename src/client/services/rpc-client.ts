@@ -60,6 +60,13 @@ export class RpcClient implements IRpcMethodRegistrar {
    */
   readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
   /**
+   * Fires when this client's websocket closes without the app having asked it to. See
+   * {@link IRpcMethodRegistrar.onDidLoseConnection}.
+   *
+   * @experimental
+   */
+  readonly onDidLoseConnection: PlatformEvent<undefined>;
+  /**
    * Whether {@link onWebSocketClose} has already run for the current socket.
    *
    * A closed socket's listener is already removed, but a caller holding a stale reference to the
@@ -91,6 +98,7 @@ export class RpcClient implements IRpcMethodRegistrar {
   // Reconnect needs an unblocked path to the PAPI port for this client.
   private readonly connectionComplete = new AsyncVariable<void>('websocket connected');
   private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
+  private readonly connectionLostEmitter = new PlatformEventEmitter<undefined>();
   /**
    * Label identifying this process in connection log lines, so multi-window logs stay readable.
    *
@@ -104,6 +112,7 @@ export class RpcClient implements IRpcMethodRegistrar {
   constructor(peerName: string = 'client') {
     bindClassMethods.call(this);
     this.onDidDisconnectClient = this.clientDisconnectEmitter.event;
+    this.onDidLoseConnection = this.connectionLostEmitter.event;
     this.peerName = `${peerName}#${RpcClient.getPeerDiscriminator()}`;
     this.jsonRpcServer = new JSONRPCServer();
     this.jsonRpcClient = new JSONRPCClient(
@@ -376,6 +385,9 @@ export class RpcClient implements IRpcMethodRegistrar {
     // disconnect is still reported honestly if the socket actually died.
     if (isCleanCloseEvent(ev)) logger.info(summary);
     else logger.warn(summary);
+    // A close the app asked for is not a loss; intent travels in the close code, which
+    // `isCleanCloseEvent` reads. The early return above means this fires at most once per socket.
+    if (!isCleanCloseEvent(ev)) this.connectionLostEmitter.emit(undefined);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
   }

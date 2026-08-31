@@ -63,6 +63,13 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
    * @experimental
    */
   readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+  /**
+   * Never fires here. Only a process holding a client connection can lose one; this end of the seam
+   * exists so shared code can subscribe in any process without asking which one it is running in.
+   *
+   * @experimental
+   */
+  readonly onDidLoseConnection: PlatformEvent<undefined>;
   private localEventHandler: EventHandler | undefined;
   private webSocketServer: WebSocketServer | undefined;
   private nextSocketNumber = 1;
@@ -83,10 +90,12 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
    */
   private readonly warnedForeignAnnouncements = new Set<string>();
   private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
+  private readonly connectionLostEmitter = new PlatformEventEmitter<undefined>();
 
   constructor() {
     bindClassMethods.call(this);
     this.onDidDisconnectClient = this.clientDisconnectEmitter.event;
+    this.onDidLoseConnection = this.connectionLostEmitter.event;
   }
 
   get nextSocketId(): string {
