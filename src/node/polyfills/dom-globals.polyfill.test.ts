@@ -20,11 +20,14 @@ async function importPolyfillFresh(): Promise<void> {
 }
 
 /**
- * Whether an `import` clause is erased by the compiler, so it loads nothing at runtime. True for
- * `import type { … }` and for a clause whose every named binding is individually `type`-prefixed.
+ * Whether an `import`/`export` clause is erased by the compiler, so it loads nothing at runtime.
+ * True for `import type { … }` and for a clause whose every named binding is individually
+ * `type`-prefixed.
  *
  * `extensions/src/platform-scripture-editor/src/extension-host-import-boundary.test.ts` needs the
- * same parsing for the same reason; the two cannot share a helper across the workspace boundary.
+ * same parsing for the same reason; the two cannot share a helper across the workspace boundary, so
+ * this function and the specifier patterns below are a deliberate copy of that file's. Fix a
+ * parsing bug in one and fix it in the other.
  */
 function isTypeOnlyClause(clause: string): boolean {
   const trimmed = clause.trim();
@@ -40,21 +43,21 @@ function isTypeOnlyClause(clause: string): boolean {
 
 /**
  * The specifier of the first module `source` evaluates at load time — a side-effect import, a value
- * `import … from`, or a `require`. Type-only clauses are skipped because the compiler erases them,
- * so they cannot run anything.
+ * `import`/`export … from`, or a dynamic `import()`/`require()`. Type-only clauses are skipped
+ * because the compiler erases them, so they cannot run anything.
  */
 function firstEvaluatedSpecifier(source: string): string | undefined {
   const evaluated: { index: number; specifier: string }[] = [];
 
   const sideEffectImport = /(?:^|\n)[ \t]*import[ \t]*['"]([^'"]+)['"]/g;
-  const fromImport = /(?:^|\n)[ \t]*import\b([^;'"]*?)from[ \t]*['"]([^'"]+)['"]/g;
-  const runtimeRequire = /\brequire\([ \t]*['"]([^'"]+)['"]/g;
+  const fromImport = /(?:^|\n)[ \t]*(?:import|export)\b([^;'"]*?)from[ \t]*['"]([^'"]+)['"]/g;
+  const runtimeImport = /\b(?:import|require)\([ \t]*['"]([^'"]+)['"]/g;
 
   for (let match = sideEffectImport.exec(source); match; match = sideEffectImport.exec(source))
     evaluated.push({ index: match.index, specifier: match[1] });
   for (let match = fromImport.exec(source); match; match = fromImport.exec(source))
     if (!isTypeOnlyClause(match[1])) evaluated.push({ index: match.index, specifier: match[2] });
-  for (let match = runtimeRequire.exec(source); match; match = runtimeRequire.exec(source))
+  for (let match = runtimeImport.exec(source); match; match = runtimeImport.exec(source))
     evaluated.push({ index: match.index, specifier: match[1] });
 
   return evaluated.sort((a, b) => a.index - b.index)[0]?.specifier;

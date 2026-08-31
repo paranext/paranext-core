@@ -2233,11 +2233,11 @@ step, no automation. Just a record.
   plus a non-dev 0.9.x nested under scripture-utilities), letting an existing global win so a real
   DOM is never overridden. It is a **side-effect module** imported **first** by `extension-host.ts`
   — see that module's docs for why a callable function would run too late. `vitest.setup.node.ts`
-  installs it too, because the `node`-environment test projects (`extensions`,
-  `lib/platform-bible-utils`) run the same converters and would otherwise fail outright; it is kept
-  out of the shared `vitest.setup.ts` so the jsdom projects, which already have a real DOM, do not
-  pull xmldom into all ~150 of their workers for nothing. The main
-  process is deliberately **not** polyfilled: it has no converter call sites.
+  installs it too, because the `node`-environment test projects that run the converters would
+  otherwise fail outright; each such project wires that file in itself, so the ones that never touch
+  the converters do not load it. It is kept out of the shared `vitest.setup.ts` so the jsdom
+  projects, which already have a real DOM, do not pull xmldom into all ~150 of their workers for
+  nothing. The main process is deliberately **not** polyfilled: it has no converter call sites.
 - **Alternatives:** **Let the package fall back to `@xmldom/xmldom` when no DOM is present** (what
   scripture-editors issue #516 floated) — needs no core change, but it is a cross-repo change we do
   not control and would have to land first. **Install from `global-this.model.ts` alongside
