@@ -246,12 +246,7 @@ export const menuDocumentSchema = {
       additionalProperties: false,
     },
   },
-  required: [
-    'mainMenu',
-    'defaultWebViewTopMenu',
-    'defaultWebViewContextMenu',
-    'webViewMenus',
-  ],
+  required: ['mainMenu', 'defaultWebViewTopMenu', 'defaultWebViewContextMenu', 'webViewMenus'],
   additionalProperties: false,
   $defs: {
     localizeKey: {
