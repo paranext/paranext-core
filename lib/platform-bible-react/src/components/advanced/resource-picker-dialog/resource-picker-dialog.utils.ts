@@ -1,4 +1,64 @@
 import { useEffect, useRef, useState } from 'react';
+import { DblResourceData, ResourceType } from 'platform-bible-utils';
+import { MultiSelectComboBoxEntry } from '@/components/advanced/multi-select-combo-box.component';
+
+/**
+ * Whether a resource belongs to the section of the catalogue currently on display. An undefined
+ * `resourceType` means "no type filter", so everything matches; an array matches any of its types.
+ *
+ * Shared by the resource rows and the language filter so the two can never disagree about which
+ * resources are in play — a language offered by the filter always has rows behind it.
+ */
+export function matchesResourceType(
+  resource: DblResourceData,
+  resourceType?: ResourceType | ResourceType[],
+): boolean {
+  if (!resourceType) return true;
+  return Array.isArray(resourceType)
+    ? resourceType.includes(resource.type)
+    : resource.type === resourceType;
+}
+
+/**
+ * Builds the language filter's options from a resource catalogue.
+ *
+ * Languages are returned alphabetically, never in catalogue order — a DBL catalogue arrives in an
+ * arbitrary order that has nothing to do with what the user is likely to want. Languages that
+ * already have an installed resource are `starred`, which
+ * {@link MultiSelectComboBoxEntry | MultiSelectComboBox} promotes to the top of the list when its
+ * `sortSelected` prop is set. Each entry carries its resource count as `secondaryLabel`.
+ *
+ * Only languages with at least one resource of `resourceType` are offered, so selecting a language
+ * can never produce an empty result list.
+ *
+ * @param resources The full catalogue.
+ * @param resourceType If provided, restricts both the offered languages and their counts to this
+ *   type, or to any of these types.
+ * @returns Alphabetically ordered entries, ready for `MultiSelectComboBox`.
+ */
+export function buildLanguageFilterOptions(
+  resources: DblResourceData[],
+  resourceType?: ResourceType | ResourceType[],
+): MultiSelectComboBoxEntry[] {
+  const countByLanguage = new Map<string, number>();
+  const installedLanguages = new Set<string>();
+
+  resources.forEach((resource) => {
+    if (!matchesResourceType(resource, resourceType)) return;
+    const language = resource.bestLanguageName;
+    countByLanguage.set(language, (countByLanguage.get(language) ?? 0) + 1);
+    if (resource.installed) installedLanguages.add(language);
+  });
+
+  return Array.from(countByLanguage.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([language, count]) => ({
+      label: language,
+      value: language,
+      starred: installedLanguages.has(language),
+      secondaryLabel: count.toString(),
+    }));
+}
 
 /**
  * Tracks how many items from a large list should be visible, expanding the count as the user

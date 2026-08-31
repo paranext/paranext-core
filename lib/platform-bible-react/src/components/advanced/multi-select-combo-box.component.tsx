@@ -10,8 +10,81 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Check, ChevronsUpDown, Star } from 'lucide-react';
-import { ReactNode, useCallback, useMemo, useState } from 'react';
+import { ReactNode, RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type VariantProps } from 'class-variance-authority';
+
+/**
+ * Tracks whether the scrollable element matching `selector` inside `containerRef` still has content
+ * below the fold.
+ *
+ * A long option list clipped flush at a row boundary looks complete, and the scrollbar alone is a
+ * weak signal — with a few hundred options the thumb is only a few pixels tall, and on platforms
+ * with overlay scrollbars it reserves no width at all. Callers use this to draw an explicit cue.
+ *
+ * Resolves the scroller by query rather than by holding a ref to it directly, because the scroller
+ * is a vendored component whose ref forwarding is not ours to rely on.
+ */
+function useHasContentBelow(containerRef: RefObject<HTMLElement | null>, selector: string) {
+  const [hasContentBelow, setHasContentBelow] = useState(false);
+
+  useEffect(() => {
+    const element = containerRef.current?.querySelector<HTMLElement>(selector);
+    if (!element) {
+      setHasContentBelow(false);
+      return undefined;
+    }
+    const update = () => {
+      // Sub-pixel layout can leave a fractional remainder at the very bottom; 1px of slack keeps
+      // the cue from lingering once the user has actually reached the end.
+      setHasContentBelow(element.scrollTop + element.clientHeight < element.scrollHeight - 1);
+    };
+    update();
+    element.addEventListener('scroll', update);
+    // The scroller's own box never changes (its height is capped), so a resize observer on it only
+    // catches viewport-driven changes. Filtering the list changes the CONTENT height instead, which
+    // is why the mutation observer below is needed as well.
+    const resizeObserver = new ResizeObserver(update);
+    resizeObserver.observe(element);
+    const mutationObserver = new MutationObserver(update);
+    mutationObserver.observe(element, { childList: true, subtree: true });
+    return () => {
+      element.removeEventListener('scroll', update);
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+    };
+  }, [containerRef, selector]);
+
+  return hasContentBelow;
+}
+
+/**
+ * Wraps the option list and draws a fade at its bottom edge while more options remain below the
+ * fold.
+ *
+ * Its own component (rather than markup inline in {@link MultiSelectComboBox}) so that its effect
+ * runs when the popover's content mounts. The combo box does not re-render when Radix mounts the
+ * portal, so an effect living up there measures a list that has not been attached yet and concludes
+ * there is nothing to scroll.
+ */
+function OptionListScrollCue({ children }: { children: ReactNode }) {
+  // ref.current expects null not undefined for div ref
+  // eslint-disable-next-line no-null/no-null
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hasContentBelow = useHasContentBelow(containerRef, '[data-slot="command-list"]');
+
+  return (
+    <div className="tw:relative" ref={containerRef}>
+      {children}
+      {hasContentBelow && (
+        <div
+          data-slot="command-list-scroll-cue"
+          aria-hidden
+          className="tw:pointer-events-none tw:absolute tw:inset-x-0 tw:bottom-0 tw:h-6 tw:bg-gradient-to-t tw:from-popover tw:to-transparent"
+        />
+      )}
+    </div>
+  );
+}
 
 export type MultiSelectComboBoxEntry = {
   value: string;
@@ -34,6 +107,12 @@ export interface MultiSelectComboBoxProps {
   onChange: (values: string[]) => void;
   /** Placeholder text when no items are selected. */
   placeholder: string;
+  /**
+   * Placeholder for the search box inside the dropdown. Localize it in the caller — this component
+   * cannot build one, because composing a sentence around {@link placeholder} only works in English.
+   * Defaults to {@link placeholder}.
+   */
+  searchPlaceholder?: string;
   /** Whether to show select all/clear all buttons. */
   hasToggleAllFeature?: boolean;
   /** Text for the select all button. */
@@ -68,6 +147,7 @@ export function MultiSelectComboBox({
   selected,
   onChange,
   placeholder,
+  searchPlaceholder,
   hasToggleAllFeature = false,
   selectAllText = 'Select All',
   clearAllText = 'Clear All',
@@ -163,7 +243,7 @@ export function MultiSelectComboBox({
         <PopoverContent align="start" className="tw:w-full tw:p-0">
           <Command>
             <CommandInput
-              placeholder={`Search ${placeholder.toLowerCase()}...`}
+              placeholder={searchPlaceholder ?? placeholder}
               // Picker semantics: the option list is the whole point of this control and a leading
               // space in the search box is meaningless, so Space picks the highlighted option.
               spaceSelectsHighlightedItem
@@ -178,37 +258,39 @@ export function MultiSelectComboBox({
                 </Button>
               </div>
             )}
-            <CommandList>
-              <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
-              <CommandGroup>
-                {sortedOptions.map((option) => {
-                  return (
-                    <CommandItem
-                      key={option.label}
-                      value={option.label}
-                      onSelect={handleSelect}
-                      className="tw:flex tw:items-center tw:gap-2"
-                    >
-                      <div className="w-4">
-                        <Check
-                          className={cn(
-                            'tw:h-4 tw:w-4',
-                            selected.includes(option.value) ? 'tw:opacity-100' : 'tw:opacity-0',
-                          )}
-                        />
-                      </div>
-                      {option.starred && <Star className="tw:h-4 tw:w-4" />}
-                      <div className="tw:flex-grow">{option.label}</div>
-                      {option.secondaryLabel && (
-                        <div className="tw:text-end tw:text-muted-foreground">
-                          {option.secondaryLabel}
+            <OptionListScrollCue>
+              <CommandList>
+                <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
+                <CommandGroup>
+                  {sortedOptions.map((option) => {
+                    return (
+                      <CommandItem
+                        key={option.label}
+                        value={option.label}
+                        onSelect={handleSelect}
+                        className="tw:flex tw:items-center tw:gap-2"
+                      >
+                        <div className="w-4">
+                          <Check
+                            className={cn(
+                              'tw:h-4 tw:w-4',
+                              selected.includes(option.value) ? 'tw:opacity-100' : 'tw:opacity-0',
+                            )}
+                          />
                         </div>
-                      )}
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
+                        {option.starred && <Star className="tw:h-4 tw:w-4" />}
+                        <div className="tw:flex-grow">{option.label}</div>
+                        {option.secondaryLabel && (
+                          <div className="tw:text-end tw:text-muted-foreground">
+                            {option.secondaryLabel}
+                          </div>
+                        )}
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </CommandList>
+            </OptionListScrollCue>
           </Command>
         </PopoverContent>
       </Popover>
