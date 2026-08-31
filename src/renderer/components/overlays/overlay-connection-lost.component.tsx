@@ -1,7 +1,14 @@
 import { Button, Z_INDEX_CONNECTION_LOST } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
 import { AlertTriangle } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import {
+  getIsConnectionLost,
+  subscribeToConnectionLost,
+} from '@renderer/services/connection-lost-store';
 
 export const CONNECTION_LOST_TITLE_KEY: LocalizeKey = '%overlay_connectionLostTitle%';
 export const CONNECTION_LOST_MESSAGE_KEY: LocalizeKey = '%overlay_connectionLost%';
@@ -82,3 +89,53 @@ export function ConnectionLostOverlayPresentational({
     </div>
   );
 }
+
+/**
+ * The connection-lost state, wired to the store.
+ *
+ * Mounted unconditionally from app startup and rendering nothing until the connection drops. That
+ * is load-bearing, not stylistic: `useLocalizedStrings` and `useIsPowerMode` both read over PAPI,
+ * and PAPI is exactly what has broken by the time this state is needed. Mounted from startup, both
+ * resolve while the connection is alive and their values persist afterwards. Mounted on the
+ * disconnect, both would fail — showing the user a raw `%overlay_connectionLost%`, positioned for
+ * the wrong toolbar height.
+ */
+export function ConnectionLostOverlay() {
+  const [isConnectionLost, setIsConnectionLost] = useState(getIsConnectionLost);
+
+  const syncState = useCallback(() => {
+    setIsConnectionLost(getIsConnectionLost());
+  }, []);
+
+  useEffect(() => {
+    syncState();
+    return subscribeToConnectionLost(syncState);
+  }, [syncState]);
+
+  const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
+  const isPowerMode = useIsPowerMode();
+
+  const handleReload = useCallback(() => {
+    // Straight to the browser: a command or a main-process round trip would travel over the socket
+    // that just died. A page load also reruns every method registration this renderer made, which
+    // is what makes a reload a real recovery rather than a cosmetic one.
+    window.location.reload();
+  }, []);
+
+  if (!isConnectionLost) return undefined;
+
+  // Bypasses OverlayHost intentionally, as WorkspaceUpdatingOverlay does: this state must cover the
+  // whole window rather than take its place in the overlay stack.
+  return createPortal(
+    <ConnectionLostOverlayPresentational
+      title={localizedStrings[CONNECTION_LOST_TITLE_KEY]}
+      message={localizedStrings[CONNECTION_LOST_MESSAGE_KEY]}
+      reloadLabel={localizedStrings[CONNECTION_LOST_RELOAD_KEY]}
+      isPowerMode={isPowerMode}
+      onReload={handleReload}
+    />,
+    document.body,
+  );
+}
+
+export default ConnectionLostOverlay;

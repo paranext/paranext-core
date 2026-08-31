@@ -1,8 +1,43 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { describe, expect, it, vi } from 'vitest';
-import { ConnectionLostOverlayPresentational } from './overlay-connection-lost.component';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { onDidLoseConnection } from '@shared/services/network.service';
+import {
+  initConnectionLostStore,
+  resetConnectionLost,
+} from '@renderer/services/connection-lost-store';
+import {
+  ConnectionLostOverlay,
+  ConnectionLostOverlayPresentational,
+} from './overlay-connection-lost.component';
+
+vi.mock('@renderer/hooks/papi-hooks', () => ({
+  useLocalizedStrings: vi.fn(() => [
+    {
+      '%overlay_connectionLostTitle%': 'Connection lost.',
+      '%overlay_connectionLost%': "Platform.Bible can't reach its background services.",
+      '%overlay_connectionLostReload%': 'Reload',
+    },
+  ]),
+}));
+
+vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
+  useIsPowerMode: vi.fn(() => true),
+}));
+
+vi.mock('@shared/services/network.service', () => ({
+  onDidLoseConnection: vi.fn(() => () => true),
+}));
+
+/** Flips the store to lost, the way a real disconnect would. */
+function loseConnection() {
+  const subscribe = vi.mocked(onDidLoseConnection);
+  const teardown = initConnectionLostStore();
+  const callback = subscribe.mock.calls[subscribe.mock.calls.length - 1][0];
+  callback(undefined);
+  return teardown;
+}
 
 const PROPS = {
   title: 'Connection lost.',
@@ -57,5 +92,65 @@ describe('ConnectionLostOverlayPresentational', () => {
   it('starts the banner below the 56px Simple-mode toolbar', () => {
     render(<ConnectionLostOverlayPresentational {...PROPS} isPowerMode={false} />);
     expect(screen.getByRole('alert')).toHaveStyle({ top: '56px' });
+  });
+});
+
+describe('ConnectionLostOverlay', () => {
+  beforeEach(() => {
+    resetConnectionLost();
+  });
+
+  it('renders nothing while the connection is alive', () => {
+    const { container } = render(<ConnectionLostOverlay />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('shows the banner once the connection is lost', () => {
+    render(<ConnectionLostOverlay />);
+
+    act(() => {
+      loseConnection();
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Connection lost.');
+  });
+
+  // The component is mounted from app startup so its localized strings and interface mode are
+  // fetched while the connection is alive — both go over PAPI, and PAPI is what breaks. Mounting it
+  // on the disconnect instead would render the raw '%overlay_connectionLost%' at the user, in the
+  // wrong place. That is invisible in a diff, so it is pinned here.
+  it('shows real text, not localization keys, after the connection is gone', () => {
+    render(<ConnectionLostOverlay />);
+
+    act(() => {
+      loseConnection();
+    });
+
+    const alert = screen.getByRole('alert');
+    expect(alert).not.toHaveTextContent('%overlay_');
+    expect(alert).toHaveTextContent("Platform.Bible can't reach its background services.");
+  });
+
+  it('reloads the window when reload is clicked', async () => {
+    const originalLocation = window.location;
+    const reload = vi.fn();
+    // jsdom's location.reload isn't configurable in place, so replace the whole property instead
+    // of spying on it directly.
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, reload },
+    });
+    try {
+      render(<ConnectionLostOverlay />);
+      act(() => {
+        loseConnection();
+      });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Reload' }));
+
+      expect(reload).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+    }
   });
 });
