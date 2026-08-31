@@ -34,8 +34,11 @@ function fakeRpcHandler() {
     registerEvent: vi.fn(),
     unregisterEvent: vi.fn(),
     onDidDisconnectClient: vi.fn().mockReturnValue(() => true),
+    onDidLoseConnection: vi.fn().mockReturnValue(() => true),
   } as unknown as Awaited<ReturnType<typeof createRpcHandler>>;
 }
+
+let mockRpcHandler: ReturnType<typeof fakeRpcHandler>;
 
 /**
  * `hasShutDown` and `jsonRpc` are module-level state, so re-import a fresh copy of the service for
@@ -45,10 +48,14 @@ async function importNetworkService() {
   return import('@shared/services/network.service');
 }
 
-beforeEach(() => {
+let networkService: Awaited<ReturnType<typeof importNetworkService>>;
+
+beforeEach(async () => {
   vi.resetModules();
   vi.clearAllMocks();
-  mockCreateRpcHandler.mockResolvedValue(fakeRpcHandler());
+  mockRpcHandler = fakeRpcHandler();
+  mockCreateRpcHandler.mockResolvedValue(mockRpcHandler);
+  networkService = await importNetworkService();
 });
 
 // The shutdown latch is the backstop that stops a late boot-race request (e.g. the Power-mode
@@ -57,8 +64,6 @@ beforeEach(() => {
 // checks it before creating a connection.
 describe('network service shutdown latch', () => {
   it('refuses to initialize after shutdown() has begun (never initialized before)', async () => {
-    const networkService = await importNetworkService();
-
     await networkService.shutdown();
 
     await expect(networkService.initialize()).rejects.toThrow(/shut down/);
@@ -66,8 +71,6 @@ describe('network service shutdown latch', () => {
   });
 
   it('rejects a request issued after shutdown() instead of resurrecting the connection', async () => {
-    const networkService = await importNetworkService();
-
     await networkService.shutdown();
 
     await expect(networkService.requestNoRetry('command:test.command')).rejects.toThrow(
@@ -77,8 +80,6 @@ describe('network service shutdown latch', () => {
   });
 
   it('refuses to re-initialize a connection that was already torn down', async () => {
-    const networkService = await importNetworkService();
-
     await networkService.initialize();
     expect(mockCreateRpcHandler).toHaveBeenCalledTimes(1);
 
@@ -86,5 +87,41 @@ describe('network service shutdown latch', () => {
 
     await expect(networkService.initialize()).rejects.toThrow(/shut down/);
     expect(mockCreateRpcHandler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('onDidLoseConnection', () => {
+  it('relays the handler event to its own subscribers', async () => {
+    let fireFromHandler: ((event: undefined) => void) | undefined;
+    mockRpcHandler.onDidLoseConnection = vi.fn((callback: (event: undefined) => void) => {
+      fireFromHandler = callback;
+      return () => true;
+    });
+    await networkService.initialize();
+
+    const listener = vi.fn();
+    networkService.onDidLoseConnection(listener);
+    fireFromHandler?.(undefined);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('still tells the other subscribers when one of them throws', async () => {
+    let fireFromHandler: ((event: undefined) => void) | undefined;
+    mockRpcHandler.onDidLoseConnection = vi.fn((callback: (event: undefined) => void) => {
+      fireFromHandler = callback;
+      return () => true;
+    });
+    await networkService.initialize();
+
+    const throwingListener = vi.fn(() => {
+      throw new Error('subscriber blew up');
+    });
+    const goodListener = vi.fn();
+    networkService.onDidLoseConnection(throwingListener);
+    networkService.onDidLoseConnection(goodListener);
+    fireFromHandler?.(undefined);
+
+    expect(goodListener).toHaveBeenCalledTimes(1);
   });
 });

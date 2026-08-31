@@ -120,6 +120,9 @@ let jsonRpc: IRpcMethodRegistrar | undefined;
 const clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
 /** Stops relaying the RPC handler's client disconnects, once there is a handler to stop relaying */
 let unsubscribeFromClientDisconnects: Unsubscriber | undefined;
+const connectionLostEmitter = new PlatformEventEmitter<undefined>();
+/** Stops relaying the RPC handler's lost connections, once there is a handler to stop relaying */
+let unsubscribeFromConnectionLost: (() => boolean) | undefined;
 
 /**
  * Event that fires when a process disconnects from the network, carrying the names of the methods
@@ -140,6 +143,17 @@ let unsubscribeFromClientDisconnects: Unsubscriber | undefined;
  */
 export const onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent> =
   clientDisconnectEmitter.event;
+
+/**
+ * Fires when this process's own connection to the network is lost unexpectedly.
+ *
+ * Relayed through this service's own emitter so subscribers can subscribe before there is an RPC
+ * handler to subscribe to. Local to this process, and silent on a deliberate disconnect — see
+ * {@link IRpcMethodRegistrar.onDidLoseConnection}.
+ *
+ * @experimental
+ */
+export const onDidLoseConnection: PlatformEvent<undefined> = connectionLostEmitter.event;
 // Set once {@link shutdown} has begun so {@link initialize} refuses to re-open a torn-down
 // connection. `jsonRpc` alone can't distinguish "not initialized yet" from "already shut down" —
 // both leave it `undefined` — so a late request after shutdown would otherwise re-connect.
@@ -180,6 +194,20 @@ export async function initialize(): Promise<void> {
       });
     });
 
+    unsubscribeFromConnectionLost = jsonRpc.onDidLoseConnection(() => {
+      // Every socket closes at quit; reporting that as a lost connection would tell subscribers the
+      // app broke on its way out.
+      if (hasShutDown) return;
+      // One subscriber that throws must not cost the others the news: this is the only time they
+      // are told, and for a UI subscriber it is the difference between a visible failure and a
+      // silent one.
+      connectionLostEmitter.emitIsolated(undefined, (error) => {
+        logger.error(
+          `A subscriber threw while being told this process lost its connection; the rest were still told: ${getErrorMessage(error)}`,
+        );
+      });
+    });
+
     const connected = await jsonRpc.connect(handleEventFromNetwork);
     if (!connected) throw new Error(`Unable to connect protocol handler`);
   });
@@ -199,6 +227,8 @@ export const shutdown = async () => {
     // dying while the emitters that carry the news are themselves being disposed.
     unsubscribeFromClientDisconnects?.();
     unsubscribeFromClientDisconnects = undefined;
+    unsubscribeFromConnectionLost?.();
+    unsubscribeFromConnectionLost = undefined;
     await jsonRpc.disconnect();
     // Tear down the handler reference before disposing emitters so their disposers skip the
     // now-pointless per-event unregister call — the whole connection is already going away.
