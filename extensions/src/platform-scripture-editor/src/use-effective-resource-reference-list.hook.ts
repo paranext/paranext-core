@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { logger } from '@papi/frontend';
-import { isPlatformError } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import type {
   EffectiveResourceReference,
   EffectiveResourceReferenceList,
@@ -27,7 +26,7 @@ function getDeduplicationKey(item: ResourceReference): string | undefined {
   if ('id' in item && typeof item.id === 'string') return `id:${item.id}`;
   if ('name' in item && typeof item.name === 'string') return `name:${item.name}`;
   // Should never happen after upstream validation; discard rather than silently misidentify
-  logger.error(`Resource reference of type '${item.type}' has no string name; discarding.`);
+  logger.warn(`Resource reference of type '${item.type}' has no string name; discarding.`);
   return undefined;
 }
 
@@ -108,8 +107,6 @@ export function useEffectiveResourceReferenceList(
 
   useEffect(() => {
     if (!userPdp) {
-      // Clear any stale user list from a previous project so we don't merge the new project's
-      // admin setting with the old project's user data while waiting for the PDP to register.
       setUserResourceReferenceList(undefined);
       return;
     }
@@ -136,8 +133,12 @@ export function useEffectiveResourceReferenceList(
         return undefined;
       })
       .catch((err) => {
-        logger.error(`Failed to subscribe to user text connection settings: ${err}`);
-        // Fall back to the default list so callers don't spin on an undefined result forever.
+        logger.error(
+          `Failed to subscribe to user text connection settings: ${getErrorMessage(err)}`,
+        );
+        // Fall back to an empty user layer so the merged list still resolves. Leaving it
+        // `undefined` reported `loading` forever — an unresolvable spinner — and contradicted this
+        // hook's own contract, which promises the project-level items in this case.
         if (!disposed) setUserResourceReferenceList(DEFAULT_LIST);
       });
 
@@ -147,15 +148,32 @@ export function useEffectiveResourceReferenceList(
     };
   }, [userPdp, settingName]);
 
-  const value = useMemo(() => {
-    if (isProjectSettingLoading) return undefined;
-    if (isPlatformError(projectResourceReferenceList)) return undefined;
-    if (userResourceReferenceList === undefined) return undefined;
+  return useMemo(() => {
+    // Readiness must account for BOTH sources. The user layer needs `useProjectDataProvider` to
+    // resolve, then an explicit subscribe, then a first delivery — strictly more hops than the
+    // project setting — so "project setting resolved, user list still undefined" is the normal
+    // window on essentially every mount, not a narrow race. Reporting that window as anything other
+    // than `loading` is what let panels render a premature empty state.
+    if (isProjectSettingLoading) return { status: 'loading' };
 
-    return mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList);
-  }, [isProjectSettingLoading, projectResourceReferenceList, userResourceReferenceList]);
+    // `projectSettingError` is the live read failure; `projectResourceReferenceList` is only itself
+    // an error when the very first read failed. Both mean the same thing to a panel: the answer is
+    // unknown, so it must not render either a spinner or an empty prompt.
+    if (projectSettingError || isPlatformError(projectResourceReferenceList))
+      return { status: 'error' };
 
-  return [value, isProjectSettingLoading || value === undefined];
+    if (userResourceReferenceList === undefined) return { status: 'loading' };
+
+    return {
+      status: 'ready',
+      list: mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList),
+    };
+  }, [
+    isProjectSettingLoading,
+    projectSettingError,
+    projectResourceReferenceList,
+    userResourceReferenceList,
+  ]);
 }
 
 export default useEffectiveResourceReferenceList;

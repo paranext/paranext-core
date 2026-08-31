@@ -89,7 +89,26 @@ const LOCAL_NON_DBL_RESOURCE: DblResourceData = {
   updateAvailable: false,
 };
 
-const SAMPLE_USJ: Usj = { type: 'USJ', version: '3.1', content: [] };
+/**
+ * A chapter with content. It carries a chapter marker and a verse because the panel distinguishes a
+ * populated chapter from a blank one by those nodes — USJ with an empty `content` array is a
+ * _blank_ chapter, not a generic stand-in.
+ */
+const SAMPLE_USJ: Usj = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    { type: 'chapter', marker: 'c', number: '1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the beginning'],
+    },
+  ],
+};
+
+/** A chapter the resource has, but with nothing in it — no chapter marker and no verses. */
+const BLANK_USJ: Usj = { type: 'USJ', version: '3.1', content: [] };
 
 /** An effective list with a single configured dblResource model text pointing at `dblEntryUid`. */
 function configuredModelText(dblEntryUid: string): EffectiveResourceReferenceList {
@@ -295,7 +314,7 @@ describe('ModelTextPanel', () => {
       modelTextsState: readyState({
         dataVersion: '1.0.0',
         items: [{ type: 'dblResource', id: 'unknown-uid', name: 'Unknown', source: 'admin' }],
-      },
+      }),
       dblResources: [],
       showResourcePicker,
     });
@@ -310,10 +329,10 @@ describe('ModelTextPanel', () => {
     // are resolvable directly by project ID when the resource is in the installed list.
     const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
     renderPanel({
-      effectiveModelTexts: {
+      modelTextsState: readyState({
         dataVersion: '1.0.0',
         items: [{ type: 'project', id: 'proj-local', name: 'LocalRes', source: 'admin' }],
-      },
+      }),
       dblResources: [LOCAL_NON_DBL_RESOURCE],
       getResourceChapter,
     });
@@ -328,10 +347,10 @@ describe('ModelTextPanel', () => {
     // blank editor — it must show the not-found state with a way to pick another.
     const showResourcePicker = vi.fn(async () => undefined);
     renderPanel({
-      effectiveModelTexts: {
+      modelTextsState: readyState({
         dataVersion: '1.0.0',
         items: [{ type: 'project', id: 'missing-project', name: 'Missing', source: 'admin' }],
-      },
+      }),
       dblResources: [], // project not in the installed list
       showResourcePicker,
     });

@@ -3,6 +3,7 @@ import { it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
 import type { DblResourceData } from 'platform-bible-utils';
+import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 
 vi.mock('./use-effective-resource-reference-list.hook', () => ({
   useEffectiveResourceReferenceList: vi.fn(),
@@ -22,11 +23,11 @@ import { fetchDownloadedResources } from './downloaded-resources.utils';
 // eslint-disable-next-line import/first
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
 
-const effective = (
+const readyState = (
   items: EffectiveResourceReferenceList['items'],
-): EffectiveResourceReferenceList => ({
-  dataVersion: '1.1.0',
-  items,
+): EffectiveResourceReferenceListState => ({
+  status: 'ready',
+  list: { dataVersion: '1.1.0', items },
 });
 
 // Minimal catalog entry — resolveReferenced returns null for ProjectReferences with no catalog
@@ -49,10 +50,9 @@ const dblEntry = (
 beforeEach(() => vi.clearAllMocks());
 
 it('returns referenced-only rows when includeDownloaded is false', async () => {
-  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue([
-    effective([{ type: 'project', name: 'WEB', id: 'proj-web', source: 'admin' }]),
-    false,
-  ]);
+  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue(
+    readyState([{ type: 'project', name: 'WEB', id: 'proj-web', source: 'admin' }]),
+  );
   vi.mocked(fetchDownloadedResources).mockResolvedValue([]);
 
   const { result } = renderHook(() =>
@@ -63,10 +63,9 @@ it('returns referenced-only rows when includeDownloaded is false', async () => {
 });
 
 it('unions downloaded rows when includeDownloaded is true', async () => {
-  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue([
-    effective([{ type: 'project', name: 'WEB', id: 'proj-web', source: 'admin' }]),
-    false,
-  ]);
+  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue(
+    readyState([{ type: 'project', name: 'WEB', id: 'proj-web', source: 'admin' }]),
+  );
   vi.mocked(fetchDownloadedResources).mockResolvedValue([
     { projectId: 'proj-kjn', name: 'KJN', fullName: 'King James New', language: 'English' },
   ]);
@@ -79,8 +78,8 @@ it('unions downloaded rows when includeDownloaded is true', async () => {
 });
 
 it('orders admin-locked rows first when adminLockedFirst is set', async () => {
-  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue([
-    effective([
+  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue(
+    readyState([
       { type: 'project', name: 'User', id: 'p-user', source: 'user' },
       {
         type: 'project',
@@ -90,8 +89,7 @@ it('orders admin-locked rows first when adminLockedFirst is set', async () => {
         isInTextCollection: true,
       },
     ]),
-    false,
-  ]);
+  );
   vi.mocked(fetchDownloadedResources).mockResolvedValue([]);
 
   const { result } = renderHook(() =>
@@ -105,10 +103,9 @@ it('orders admin-locked rows first when adminLockedFirst is set', async () => {
 });
 
 it('exposes isLoading=true while the downloaded resource fetch is in flight', async () => {
-  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue([
-    effective([{ type: 'project', name: 'WEB', id: 'proj-web', source: 'admin' }]),
-    false,
-  ]);
+  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue(
+    readyState([{ type: 'project', name: 'WEB', id: 'proj-web', source: 'admin' }]),
+  );
   let resolveDownloaded!: (v: Awaited<ReturnType<typeof fetchDownloadedResources>>) => void;
   vi.mocked(fetchDownloadedResources).mockReturnValue(
     new Promise((resolve) => {

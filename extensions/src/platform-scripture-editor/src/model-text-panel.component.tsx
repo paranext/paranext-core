@@ -20,7 +20,6 @@ import { getErrorMessage, type DblResourceData } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
-  EffectiveResourceReferenceList,
   ProjectReference,
   ResourceReferenceList,
 } from 'platform-scripture';
@@ -40,6 +39,18 @@ import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { scrollToVerse } from './editor-dom.util';
+import { ResourceBookNotAvailable } from './resource-book-not-available.component';
+import { ResourceBlankChapter } from './resource-blank-chapter.component';
+import { ResourceTextUnavailable } from './resource-text-unavailable.component';
+import {
+  isBlankChapterOnScreen,
+  isMissingBookError,
+  isMissingBookOnScreen,
+} from './platform-scripture-editor.utils';
+import type {
+  ModelTextPanelLocalizedStringKey,
+  ModelTextPanelLocalizedStrings,
+} from './model-text-panel.const';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 

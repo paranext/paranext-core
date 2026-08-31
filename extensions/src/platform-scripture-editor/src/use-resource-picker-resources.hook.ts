@@ -19,10 +19,12 @@ export function useResourcePickerResources(
 ): [PickerResource[] | undefined, boolean] {
   const { includeDownloaded = false, adminLockedFirst = false } = options;
 
-  const [effectiveResources, isEffectiveLoading] = useEffectiveResourceReferenceList(
+  const effectiveResourcesState = useEffectiveResourceReferenceList(
     projectId,
     'platformScripture.referencedProjectsAndResources',
   );
+  const effectiveResources =
+    effectiveResourcesState.status === 'ready' ? effectiveResourcesState.list : undefined;
 
   // undefined = fetch in flight; [] = not fetching (includeDownloaded is false or fetch completed)
   const [downloaded, setDownloaded] = useState<DownloadedResource[] | undefined>(undefined);
@@ -61,5 +63,5 @@ export function useResourcePickerResources(
     return [...built].sort((a, b) => Number(b.isAdminLocked) - Number(a.isAdminLocked));
   }, [effectiveResources, downloaded, dblResources, adminLockedFirst, includeDownloaded]);
 
-  return [rows, isEffectiveLoading || rows === undefined];
+  return [rows, effectiveResourcesState.status === 'loading' || rows === undefined];
 }

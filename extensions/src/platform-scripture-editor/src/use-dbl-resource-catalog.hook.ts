@@ -24,7 +24,10 @@ export type DblResourceCatalog = {
 };
 
 /**
- * Fetches the DBL resource catalog for a panel.
+ * Fetches the resource catalog for a panel: the DBL catalog plus the locally-installed non-DBL
+ * resources (VULGP83, TNN, HBK, …), which carry `dblEntryUid === projectId` so callers can tell
+ * them apart with `isNonDblResource`. Panels resolve references of both kinds against this one
+ * list, so they must be fetched together.
  *
  * Both the Model Text and Resource panels need the same catalog and the same "has it arrived?"
  * distinction, and previously derived it with identical copy-pasted blocks. That distinction is
@@ -57,19 +60,36 @@ export function useDblResourceCatalog(): DblResourceCatalog {
 
       const generation = fetchGenerationRef.current;
 
-      try {
-        const resources = await papi.commands.sendCommand(
-          'platformGetResources.getCachedResources',
-        );
-        if (generation === fetchGenerationRef.current) setHasCatalogError(false);
+      // The local non-DBL list is supplementary: settled separately so that losing it degrades the
+      // panel to DBL-only resources rather than reporting the whole catalog as failed.
+      const [dblResult, localResult] = await Promise.allSettled([
+        papi.commands.sendCommand('platformGetResources.getCachedResources'),
+        papi.commands.sendCommand('platformGetResources.getLocalNonDblResources'),
+      ]);
 
-        return resources;
-      } catch (error) {
-        logger.warn(`Failed to load the DBL resource catalog: ${getErrorMessage(error)}`);
+      if (localResult.status === 'rejected')
+        logger.warn(
+          `Failed to load locally-installed non-DBL resources: ${getErrorMessage(localResult.reason)}`,
+        );
+      const localNonDblResources =
+        localResult.status === 'fulfilled' ? (localResult.value ?? []) : [];
+
+      if (dblResult.status === 'rejected') {
+        logger.warn(
+          `Failed to load the DBL resource catalog: ${getErrorMessage(dblResult.reason)}`,
+        );
         if (generation === fetchGenerationRef.current) setHasCatalogError(true);
 
-        return [];
+        return localNonDblResources;
       }
+
+      if (generation === fetchGenerationRef.current) setHasCatalogError(false);
+
+      // A `undefined` catalog means the fetch resolved without an answer; preserve that so
+      // `isCatalogReady` still reports "not arrived" rather than "genuinely empty".
+      if (dblResult.value === undefined) return undefined;
+
+      return [...dblResult.value, ...localNonDblResources];
     }, [fetchResources]),
     undefined,
   );
