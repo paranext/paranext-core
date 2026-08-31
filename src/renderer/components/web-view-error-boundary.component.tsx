@@ -1,3 +1,4 @@
+import { reloadWebView } from '@renderer/services/web-view.service-shard';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
 import { Component, ErrorInfo, PropsWithChildren, ReactNode } from 'react';
@@ -15,6 +16,35 @@ export type WebViewErrorBoundaryProps = PropsWithChildren<{
 type WebViewErrorBoundaryState = {
   hasError: boolean;
 };
+
+/**
+ * Re-attempts loading a crashed web view, which recreates its iframe and so gives the crashed
+ * subtree a fresh React root.
+ *
+ * `reloadWebView` RESOLVES `undefined` when the web view is no longer in the layout rather than
+ * rejecting, so a `.catch` alone would leave a Reload button that does nothing and reports nothing.
+ * Both outcomes are logged.
+ *
+ * A module-level function rather than a method because the class's two lint rules disagree about
+ * where a private instance method may sit relative to `render`
+ * (`@typescript-eslint/member-ordering` wants `render` first, `react/sort-comp` wants it last).
+ * Nothing here needs instance state, so lifting it out satisfies both without suppressing either.
+ */
+function reloadCrashedWebView(webViewId: string, webViewType: string) {
+  reloadWebView(webViewType, webViewId)
+    .then((reloadedWebViewId) => {
+      if (!reloadedWebViewId)
+        logger.warn(
+          `Could not reload crashed web view ${webViewId} (type ${webViewType}): it is no longer open`,
+        );
+      return undefined;
+    })
+    .catch((error: unknown) => {
+      logger.error(
+        `Failed to reload crashed web view ${webViewId} (type ${webViewType}): ${getErrorMessage(error)}`,
+      );
+    });
+}
 
 /**
  * Catches render failures inside a single web view so the pane shows {@link WebViewCrashedView}
@@ -52,11 +82,12 @@ export class WebViewErrorBoundary extends Component<
 
   componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
     const { webViewId, webViewType } = this.props;
+    // `ErrorInfo.componentStack` is typed `string | null`, and this repo does not write `null`. The
+    // explicit newline keeps the stack readable even if a React version returns one that does not
+    // already start with a line break.
+    const componentStack = errorInfo.componentStack ? `\n${errorInfo.componentStack}` : '';
     logger.error(
-      `Web view ${webViewId} (type ${webViewType}) crashed while rendering: ${getErrorMessage(
-        error,
-        // `ErrorInfo.componentStack` is typed `string | null`; this repo does not write `null`
-      )}${errorInfo.componentStack ?? ''}`,
+      `Web view ${webViewId} (type ${webViewType}) crashed while rendering: ${getErrorMessage(error)}${componentStack}`,
     );
   }
 
@@ -67,8 +98,7 @@ export class WebViewErrorBoundary extends Component<
     if (hasError)
       return (
         <WebViewCrashedView
-          webViewId={webViewId}
-          webViewType={webViewType}
+          onReload={() => reloadCrashedWebView(webViewId, webViewType)}
           webViewTitle={webViewTitle}
         />
       );
