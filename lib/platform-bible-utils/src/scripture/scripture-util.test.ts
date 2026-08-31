@@ -28,6 +28,10 @@ async function mockGetLocalizedString(item: {
   }
   if (localizeKey === 'Book.GEN') {
     if (language === 'zh-hans') return '创';
+    // Shape of the entries that carry a second name in fullwidth parentheses, plus one with the
+    // hyphenated form, so both separators the Chinese branch strips are covered
+    if (language === 'zh-hant') return '創世記（創世紀）';
+    if (language === 'zh-mo') return '創世記-第一卷';
   }
   return localizeKey;
 }
@@ -46,6 +50,16 @@ describe('getLocalizedIdFromBookNumber', () => {
   it('with khmer which defines a localization with localized.id', async () => {
     const result = await getLocalizedIdFromBookNumber(1, 'kh', mockGetLocalizedString);
     expect(result).toEqual('លប');
+  });
+
+  it('drops a chinese second name in fullwidth parentheses', async () => {
+    const result = await getLocalizedIdFromBookNumber(1, 'zh-hant', mockGetLocalizedString);
+    expect(result).toEqual('創世記');
+  });
+
+  it('drops a chinese hyphenated suffix', async () => {
+    const result = await getLocalizedIdFromBookNumber(1, 'zh-mo', mockGetLocalizedString);
+    expect(result).toEqual('創世記');
   });
 });
 
