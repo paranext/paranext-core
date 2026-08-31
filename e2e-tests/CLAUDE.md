@@ -5,7 +5,7 @@
 | What you're testing | Where it goes | How to run |
 |---|---|---|
 | Core happy path (app launch, basic nav) | `tests/smoke/` | `npm run test:e2e:smoke` (also CI) |
-| Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated <subset>` (`all` does not currently pass — see below; the bare form lists the subsets and exits 1) |
+| Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated <subset>`, or `all` for every subset (the bare form lists the subsets and exits 1) |
 | Tests needing real Marble resources | `tests/enhanced-resources/` | app running, then `npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/` |
 
 On WSL2, prefix a suite that launches its own Electron with `e2e-tests/run-e2e-wsl.sh --wrap` to
@@ -20,8 +20,8 @@ under its own Xvfb — and run those suites through `playwright-cdp.config.ts`, 
 globalSetup.
 
 `tests/manage-books/` also attaches, but is deliberately excluded from that config and is collected
-by nothing: two of its specs mutate real project data with no restore (a third drives the same
-mutating commands, but only against permission-denied or already-present/no-op paths). See its
+by nothing: three of its four specs mutate real project data with no restore (the fourth drives the
+same mutating commands, but only against permission-denied or already-present/no-op paths). See its
 README before removing the exclusion.
 
 **An attach-based spec must not live under `tests/isolated/`.** `playwright-cdp.config.ts` ignores
@@ -61,8 +61,12 @@ one of these.
   `'simple'` (`src/renderer/hooks/use-interface-mode.hook.ts`).
   - Check it first when a suite behaves differently than it did yesterday: `cat dev-appdata/data/settings.json`
   - A suite that depends on a mode should pin it AND declare `test.use({ requiredInterfaceMode })`,
-    which asserts the pin took effect against `document.body[data-interface-mode]` instead of
-    failing later on an element the other mode never renders.
+    which asserts the pin took effect instead of failing later on an element the other mode never
+    renders. It reads `platform.interfaceMode` from the settings service over PAPI, NOT from
+    `document.body[data-interface-mode]`: that attribute renders `readCachedInterfaceMode() ??
+    'simple'` synchronously, before its own settings round-trip resolves, so polling it for
+    `'simple'` can pass on the seed alone and never exercise the check. See `assertInterfaceMode`
+    in `fixtures/helpers.ts`.
 - **Find search history persists to `dev-appdata/extensions/platformScripture/user-data/`**, caps at
   15 entries, and survives the test, the Electron process, and the whole run. A history assertion
   that passed yesterday can fail today on what an earlier run left behind.

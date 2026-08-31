@@ -2,25 +2,6 @@ import path from 'path';
 import type { FullConfig, FullResult, Reporter, Suite } from '@playwright/test/reporter';
 
 /**
- * Fails the run when a test is reported as skipped without anyone having asked for it to be
- * skipped.
- *
- * Playwright reports a test that never executed — because its worker died, or a `beforeAll` threw,
- * or the run was interrupted — with the same outcome it uses for a deliberate `test.skip()`. On
- * Linux the list reporter prints those as "did not run" and on Windows as "skipped", and both read
- * as housekeeping rather than breakage.
- *
- * That is not hypothetical. `tests/isolated/find/` sat at "1 failed, 22 did not run" for months. In
- * that window it silently absorbed a fixture refactor, a menu label rename, a Tailwind prefix
- * migration, and a UI redesign — none of which anyone noticed, because 22 hidden tests look exactly
- * like 22 intentionally skipped ones. A suite that fails silently rots at the rate the codebase
- * changes.
- *
- * A deliberate skip carries an annotation: `test.skip()`, `test.fixme()`, and their conditional and
- * describe-scoped forms all add one, including when called at runtime. A test that never ran
- * carries none. That difference is the whole check.
- */
-/**
  * The parts of a Playwright `TestCase` this reporter reasons about.
  *
  * Structural rather than the real type so the decision below can be exercised directly, with plain
@@ -69,6 +50,25 @@ export function findLostTests<T extends TestOutcomeLike>(tests: T[]): T[] {
   return tests.filter(wasLost);
 }
 
+/**
+ * Fails the run when a test is reported as skipped without anyone having asked for it to be
+ * skipped.
+ *
+ * Playwright reports a test that never executed — because its worker died, or a `beforeAll` threw,
+ * or the run was interrupted — with the same outcome it uses for a deliberate `test.skip()`. On
+ * Linux the list reporter prints those as "did not run" and on Windows as "skipped", and both read
+ * as housekeeping rather than breakage.
+ *
+ * That is not hypothetical. `tests/isolated/find/` sat at "1 failed, 22 did not run" for months. In
+ * that window it silently absorbed a fixture refactor, a menu label rename, a Tailwind prefix
+ * migration, and a UI redesign — none of which anyone noticed, because 22 hidden tests look exactly
+ * like 22 intentionally skipped ones. A suite that fails silently rots at the rate the codebase
+ * changes.
+ *
+ * A deliberate skip carries an annotation: `test.skip()`, `test.fixme()`, and their conditional and
+ * describe-scoped forms all add one, including when called at runtime. A test that never ran
+ * carries none. That difference is the whole check.
+ */
 class NoSilentSkipsReporter implements Reporter {
   private rootSuite: Suite | undefined;
 

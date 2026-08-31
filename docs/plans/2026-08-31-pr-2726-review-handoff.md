@@ -43,9 +43,45 @@ slightly weaker warrant than the seventeen above.
 She also pre-emptively **disproved five findings of her own** and listed them so nobody re-litigates
 them. Those were taken at face value and not re-checked; that is the point of her listing them.
 
+**Blocker 5 and findings 16, 17, 18, 19, 27, 28 and two minors are already fixed on this branch** —
+see §2. What remains is the work that needs a decision.
+
 ---
 
-## 2. Two things the branch-state check turned up that are not in her review
+## 2. What this branch already fixes
+
+Everything below was **implemented on this branch** (`pr-2726-review-handoff`) because it is a
+factual correction with no judgment call in it — a wrong count, a stale claim, a citation that
+points at the wrong line, a docblock attached to the wrong symbol. None of it changes runtime
+behaviour except where noted.
+
+| Finding       | What changed                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Blocker 5** | `manage-books-functional-WP-002.spec.ts` gained the `⚠ DESTRUCTIVE` header the other three specs already carried, naming the USFM stubs it writes and pointing at its own cleanup procedure. The count was corrected from "two" to "three of four" in `tests/manage-books/README.md`, `e2e-tests/CLAUDE.md` and `playwright-cdp.config.ts`, and the README now names `manage-books-commands.spec.ts` as the fourth, non-mutating spec instead of clearing it as "a third". |
+| **16**        | `README.md`'s two bullets no longer claim `test:e2e:isolated all` cannot pass because `title-bar` attaches over CDP — it does not, since the attaching spec moved to `tests/attached/`. The `test:e2e:all` bullet keeps its caveat but now names only `enhanced-resources`, which does still attach.                                                                                                                                                                        |
+| **17**        | `e2e-tests/CLAUDE.md`'s table no longer says `all` "does not currently pass — see below" with nothing below explaining it.                                                                                                                                                                                                                                                                                                                                                  |
+| **18**        | `e2e-tests/CLAUDE.md` no longer documents `requiredInterfaceMode` as asserting against `document.body[data-interface-mode]`. It now describes the settings-service read that replaced it, and says why the DOM attribute could pass on its seed alone.                                                                                                                                                                                                                      |
+| **19**        | The data-loss warning in `playwright-cdp.config.ts` now cites by **file + symbol** rather than by line, per `.claude/rules/docs-durability.md` — the "Journey 4" test, `switchToProjectMissingBook`'s rotation pool (with `zzz6`, which the old list omitted), and WP-001's "should fire onDeleteBooks" test. It also covers WP-002, which it previously missed.                                                                                                            |
+| **27**        | `replace.spec.ts`'s Replace All assertion widened to `/replaced \d+ occurrences?/i`, so it no longer times out on a genuine replace whenever exactly one occurrence remains and the toast reads "Replaced 1 occurrence".                                                                                                                                                                                                                                                    |
+| **28**        | Three docblocks rebound to the symbols they describe: `addUsersToProject`'s (was above `xmlEscapeAttribute`), the reporter's purpose block in `no-silent-skips.reporter.ts` (was above `TestOutcomeLike`), and the orphan above `settingsPath()` — whose one unique claim, the mid-session locale-reload rationale, was preserved by folding it into `preConfigureSettings`'s own docblock rather than deleted.                                                             |
+| **Minor**     | The dead `.gitignore` rule for `dev-appdata/data/settings.json.e2e-backup` was removed; `git check-ignore -v` confirms `dev-appdata/` still covers that path.                                                                                                                                                                                                                                                                                                               |
+| **Minor**     | `.erb/scripts` added to `global-setup.ts`'s dev-bundle staleness inputs, since `webpack.config.main.dev.ts` imports `../scripts/check-node-env` and `prestart` runs `.erb/scripts/generate-dev-build-info.ts`. **This one does change behaviour** — an edit under `.erb/scripts` now triggers a rebuild, which is the point.                                                                                                                                                |
+
+**Verified:** `tsc -p e2e-tests/tsconfig.json` clean, `eslint` clean on all changed TypeScript,
+`prettier --check` clean on all changed files, and the three harness unit test files pass 18/18 —
+the same count Katherine reported running against the PR head.
+
+**Not verified:** no e2e suite was run. The only change that touches a running test's behaviour is
+finding 27's regex, which is a strict widening of an existing match.
+
+**Deliberately left alone**, because each needs a judgment call rather than a correction: blockers
+1–4, and findings 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 21, 22, 23, 25, 26, 29, 30. Finding 22's
+test strengthening in particular belongs _with_ the blocker 3 fix — writing the missing assertion
+now would leave a red test on the branch, since the guard it should exercise is still broken.
+
+---
+
+## 3. Two things the branch-state check turned up that are not in her review
 
 ### 2.1 The branch conflicts with `main`, so no CI has run on it
 
@@ -92,7 +128,7 @@ citations still resolve, and no reply needs to say "that moved."
 
 ---
 
-## 3. The five blockers, verified
+## 4. The five blockers, verified
 
 All five are in the **new crash-recovery machinery this PR adds** — not in pre-existing code. That is
 what makes them worth gating on: the safety net is currently the most dangerous thing in the diff.
@@ -176,9 +212,9 @@ rather than staged (she flags this herself):
   unbound, so a second run started in another worktree passes the port check and destroys the first
   run's live pin _and_ its backups mid-flight.
 
-**This is design question 1 in §6** — the fix is not a one-liner.
+**This is design question 1 in §7** — the fix is not a one-liner.
 
-### Blocker 5 — the destructive-spec count is four, not two, and the fourth has no warning
+### Blocker 5 — the destructive-spec count is four, not two, and the fourth has no warning — FIXED
 
 _Thread: `e2e-tests/tests/manage-books/README.md` line 29. Root comment `3884587438`._
 
@@ -206,33 +242,36 @@ The README additionally clears the **wrong file** as the harmless third: it name
 uncounted destructive spec is WP-002.
 
 The directory-wide `testIgnore` means no data loss is reachable today — but this documentation is the
-gate for the per-spec re-enablement it explicitly invites, so it needs to be right. **WP-002 should
-also get the `⚠ DESTRUCTIVE` header the other three carry.**
+gate for the per-spec re-enablement it explicitly invites, so it needs to be right.
+
+**Fixed on this branch:** WP-002 now carries the `⚠ DESTRUCTIVE` header, all three in-repo count
+claims read "three of four", and the README names the genuinely non-mutating fourth spec. **The PR
+body still says "The count is two, not three" and only Rolf can edit that.**
 
 ---
 
-## 4. Findings 6–30: status
+## 5. Findings 6–30: status
 
-Verified independently at `3e8624cd641`:
+Verified independently at `3e8624cd641`. A ✅ marks one already fixed on this branch (§2):
 
-| #   | Sev  | Finding                                                                  | Verified detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| --- | ---- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 6   | High | `storedKeyNames` returns directories                                     | `fs.readdirSync(dir)` is unfiltered; `copyFileSync` throws EISDIR _after_ `mkdirSync(backupDir)`, and the `rmSync` is non-recursive. **Latent** — the polyfill writes one flat file per key, so no subdirectory exists today.                                                                                                                                                                                                                                                                                      |
-| 7   | High | `pinAppGlobalState`'s restore is unconditional                           | It returns `() => { restoreAppGlobalState(); }` with no `createdBackup` guard, unlike `preConfigureSettings`. `teardownElectronApp` early-returns on `preserveUserDataDir`, so a relaunch chain can leave a later un-pinned launch's teardown doing the restore.                                                                                                                                                                                                                                                   |
-| 8   | High | Adding the registered user downgrades permissions                        | Five callers pass `[]`: `comments-tab.spec.ts:203-206` (four projects) and `verse-navigation-shortcuts.spec.ts:39`. With `readCurrentParatextUserName()` non-empty, `addUsersToProject` writes `<Role>TeamMember</Role>` with `TermsList` and `Progress` `Granted="false"`, replacing ParatextData's "no file → always administrator". **Live behaviour change, machine-dependent.** See design question 2.                                                                                                        |
-| 9   | High | `expect.poll` doesn't retry a throwing generator                         | Confirmed against installed Playwright (see §1). One transient PAPI rejection aborts `assertInterfaceMode` on attempt 1; since it runs in the `mainPage` fixture, every test in the suite then fails at setup.                                                                                                                                                                                                                                                                                                     |
-| 12  | High | The re-click's inherited 30 s equals the loop's own deadline             | Confirmed against installed Playwright (see §1).                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| 13  | High | A 1920×1080 screenshot floor no declared window guarantees               | `DEFAULT_WINDOW_SIZE` is 1280×800 (`helpers.ts`); `MIN_SCREENSHOT_WIDTH`/`HEIGHT` are 1920/1080 and `windowSize` defaults to `DEFAULT_WINDOW_SIZE` (`cdp.fixture.ts`); the `page.screenshot` wrapper calls `assertFullHdScreenshot`. `grep windowSize` over `tests/enhanced-resources` and `tests/markers-checklist` returns nothing. **Latent** — those suites have never run.                                                                                                                                    |
-| 14  | High | The poll race survives in the spec this PR rewrote                       | `navigation-history.spec.ts:146` and `multi-window/per-window-ui.spec.ts:304` both call `waitForAtLeastOneProjectMetadata`, then open a _specific_ project on the very next line. The targeted `waitForProjects` exists in `find.fixture.ts` and is already used by `find.spec.ts` and `replace.spec.ts`.                                                                                                                                                                                                          |
-| 15  | High | `find.spec.ts` falls back where its sibling hard-fails                   | `find.spec.ts` ends its chain `?? projects[0]`; `replace.spec.ts:187` hard-throws for the same situation with a comment explaining why.                                                                                                                                                                                                                                                                                                                                                                            |
-| 16  | High | The README says `test:e2e:isolated all` can't pass, for a removed reason | `README.md:462-463` still says the `title-bar` subset "attaches to a running app over CDP"; `tests/isolated/title-bar/` now holds only `title-bar-narrow-width.spec.ts`, which imports `isolated.fixture`. `:467-469` repeats it for `test:e2e:all`. The PR's own Verification section reports five clean `all` runs.                                                                                                                                                                                              |
-| 19  | Med  | Every line citation in the data-loss warning is wrong                    | In `playwright-cdp.config.ts`: "Replace entire books (:507, :530)" — the click is at `manage-books-journey.spec.ts:541`. Rotation pool "(:161)" is at `:172` and reads `['zzz7','wgPIDGIN','zzz6','MP1','RH2','ROT']` — the comment's list omits `zzz6`. "`WP-001.spec.ts:394` deletes GEN" — `:394` is the _Cancel_ comment; the delete click is at `:422`.                                                                                                                                                       |
-| 22  | Med  | The unit test named for the empty-store guard doesn't test it            | `app-global-state.test.ts`'s "leaves an absent store absent" asserts only `readKey(SCR_REFS_KEY) === undefined`, already true from `beforeEach`. `grep existsSync` in that file hits only `BACKUP_DIR` and the read helper — never `LIVE_DIR`. **This is the guard blocker 3 lives in**, and the PR body cites these tests as mutation-checked.                                                                                                                                                                    |
-| 24  | Med  | `process.env.CI` is a string, so `CI=false` still sweeps                 | `global-teardown.ts` is `if (process.env.CI)`. `CI=false` and `CI=0` are truthy strings and still run the machine-wide `npm run stop`.                                                                                                                                                                                                                                                                                                                                                                             |
-| 27  | Med  | The Replace All assertion matches only the plural toast                  | `replace.spec.ts:384` asserts `/replaced \d+ occurrences/i` with no optional `s`; `extensions/src/platform-scripture/contributions/localizedStrings.json:502` defines `%webView_find_replacedOneOccurrence%` = "Replaced 1 occurrence". Widen to `/replaced \d+ occurrences?/i`.                                                                                                                                                                                                                                   |
-| 30  | Med  | The `tests/attached/` convention was never promoted to the standards     | `grep -rn "tests/attached" .context/standards/ .claude/` returns nothing. `.context/standards/Testing-Guide.md:1211` still reads "Create E2E tests in: `e2e-tests/tests/{feature}/`". See design question 6.                                                                                                                                                                                                                                                                                                       |
-| 10  | High | The first-run-gate recovery can't fire in the case its docblock names    | In `src/renderer/components/first-run/first-run-overlay.component.tsx`, `ContinueWithoutSetupButton` is mounted only at `:187` (inside `status.kind === 'loading'`) and `:218` (inside `status.kind === 'error'`). The `wizard` branch at `:230` instead forwards `allowContinueWithoutRegistration`, which `startWizard` never sets. `REGISTRATION_SLOW_REVEAL_MS` resolves to `REGISTRATION_RESOLVE_TIMEOUT_MS` = `15_000` (`src/renderer/services/resolve-registration-validity.ts:11`). See design question 4. |
-| 29  | Med  | `typecheck:e2e` mid-chain masks every workspace typecheck                | `package.json:106` — `typecheck:core && typecheck:erb && typecheck:e2e && typecheck --workspaces`. `&&` short-circuits, so one e2e error hides `platform-bible-react`, `platform-bible-utils` and `papi-dts`. It passes today only because two files are excluded in `e2e-tests/tsconfig.json`, whose own comment calls their errors "real API misuse … those lines throw if they ever execute", with no ticket behind "Remove each entry as its file is fixed."                                                   |
+| #     | Sev  | Finding                                                                  | Verified detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----- | ---- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 6     | High | `storedKeyNames` returns directories                                     | `fs.readdirSync(dir)` is unfiltered; `copyFileSync` throws EISDIR _after_ `mkdirSync(backupDir)`, and the `rmSync` is non-recursive. **Latent** — the polyfill writes one flat file per key, so no subdirectory exists today.                                                                                                                                                                                                                                                                                      |
+| 7     | High | `pinAppGlobalState`'s restore is unconditional                           | It returns `() => { restoreAppGlobalState(); }` with no `createdBackup` guard, unlike `preConfigureSettings`. `teardownElectronApp` early-returns on `preserveUserDataDir`, so a relaunch chain can leave a later un-pinned launch's teardown doing the restore.                                                                                                                                                                                                                                                   |
+| 8     | High | Adding the registered user downgrades permissions                        | Five callers pass `[]`: `comments-tab.spec.ts:203-206` (four projects) and `verse-navigation-shortcuts.spec.ts:39`. With `readCurrentParatextUserName()` non-empty, `addUsersToProject` writes `<Role>TeamMember</Role>` with `TermsList` and `Progress` `Granted="false"`, replacing ParatextData's "no file → always administrator". **Live behaviour change, machine-dependent.** See design question 2.                                                                                                        |
+| 9     | High | `expect.poll` doesn't retry a throwing generator                         | Confirmed against installed Playwright (see §1). One transient PAPI rejection aborts `assertInterfaceMode` on attempt 1; since it runs in the `mainPage` fixture, every test in the suite then fails at setup.                                                                                                                                                                                                                                                                                                     |
+| 12    | High | The re-click's inherited 30 s equals the loop's own deadline             | Confirmed against installed Playwright (see §1).                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 13    | High | A 1920×1080 screenshot floor no declared window guarantees               | `DEFAULT_WINDOW_SIZE` is 1280×800 (`helpers.ts`); `MIN_SCREENSHOT_WIDTH`/`HEIGHT` are 1920/1080 and `windowSize` defaults to `DEFAULT_WINDOW_SIZE` (`cdp.fixture.ts`); the `page.screenshot` wrapper calls `assertFullHdScreenshot`. `grep windowSize` over `tests/enhanced-resources` and `tests/markers-checklist` returns nothing. **Latent** — those suites have never run.                                                                                                                                    |
+| 14    | High | The poll race survives in the spec this PR rewrote                       | `navigation-history.spec.ts:146` and `multi-window/per-window-ui.spec.ts:304` both call `waitForAtLeastOneProjectMetadata`, then open a _specific_ project on the very next line. The targeted `waitForProjects` exists in `find.fixture.ts` and is already used by `find.spec.ts` and `replace.spec.ts`.                                                                                                                                                                                                          |
+| 15    | High | `find.spec.ts` falls back where its sibling hard-fails                   | `find.spec.ts` ends its chain `?? projects[0]`; `replace.spec.ts:187` hard-throws for the same situation with a comment explaining why.                                                                                                                                                                                                                                                                                                                                                                            |
+| 16 ✅ | High | The README says `test:e2e:isolated all` can't pass, for a removed reason | `README.md:462-463` still says the `title-bar` subset "attaches to a running app over CDP"; `tests/isolated/title-bar/` now holds only `title-bar-narrow-width.spec.ts`, which imports `isolated.fixture`. `:467-469` repeats it for `test:e2e:all`. The PR's own Verification section reports five clean `all` runs.                                                                                                                                                                                              |
+| 19 ✅ | Med  | Every line citation in the data-loss warning is wrong                    | In `playwright-cdp.config.ts`: "Replace entire books (:507, :530)" — the click is at `manage-books-journey.spec.ts:541`. Rotation pool "(:161)" is at `:172` and reads `['zzz7','wgPIDGIN','zzz6','MP1','RH2','ROT']` — the comment's list omits `zzz6`. "`WP-001.spec.ts:394` deletes GEN" — `:394` is the _Cancel_ comment; the delete click is at `:422`.                                                                                                                                                       |
+| 22    | Med  | The unit test named for the empty-store guard doesn't test it            | `app-global-state.test.ts`'s "leaves an absent store absent" asserts only `readKey(SCR_REFS_KEY) === undefined`, already true from `beforeEach`. `grep existsSync` in that file hits only `BACKUP_DIR` and the read helper — never `LIVE_DIR`. **This is the guard blocker 3 lives in**, and the PR body cites these tests as mutation-checked.                                                                                                                                                                    |
+| 24    | Med  | `process.env.CI` is a string, so `CI=false` still sweeps                 | `global-teardown.ts` is `if (process.env.CI)`. `CI=false` and `CI=0` are truthy strings and still run the machine-wide `npm run stop`.                                                                                                                                                                                                                                                                                                                                                                             |
+| 27 ✅ | Med  | The Replace All assertion matches only the plural toast                  | `replace.spec.ts:384` asserts `/replaced \d+ occurrences/i` with no optional `s`; `extensions/src/platform-scripture/contributions/localizedStrings.json:502` defines `%webView_find_replacedOneOccurrence%` = "Replaced 1 occurrence". Widen to `/replaced \d+ occurrences?/i`.                                                                                                                                                                                                                                   |
+| 30    | Med  | The `tests/attached/` convention was never promoted to the standards     | `grep -rn "tests/attached" .context/standards/ .claude/` returns nothing. `.context/standards/Testing-Guide.md:1211` still reads "Create E2E tests in: `e2e-tests/tests/{feature}/`". See design question 6.                                                                                                                                                                                                                                                                                                       |
+| 10    | High | The first-run-gate recovery can't fire in the case its docblock names    | In `src/renderer/components/first-run/first-run-overlay.component.tsx`, `ContinueWithoutSetupButton` is mounted only at `:187` (inside `status.kind === 'loading'`) and `:218` (inside `status.kind === 'error'`). The `wizard` branch at `:230` instead forwards `allowContinueWithoutRegistration`, which `startWizard` never sets. `REGISTRATION_SLOW_REVEAL_MS` resolves to `REGISTRATION_RESOLVE_TIMEOUT_MS` = `15_000` (`src/renderer/services/resolve-registration-validity.ts:11`). See design question 4. |
+| 29    | Med  | `typecheck:e2e` mid-chain masks every workspace typecheck                | `package.json:106` — `typecheck:core && typecheck:erb && typecheck:e2e && typecheck --workspaces`. `&&` short-circuits, so one e2e error hides `platform-bible-react`, `platform-bible-utils` and `papi-dts`. It passes today only because two files are excluded in `e2e-tests/tsconfig.json`, whose own comment calls their errors "real API misuse … those lines throw if they ever execute", with no ticket behind "Remove each entry as its file is fixed."                                                   |
 
 **Read but not independently reproduced:** 11, 17, 18, 20, 21, 23, 25, 26, 28, and the nine minors.
 Nothing in them contradicted the code as read. Given 17/17 on the checked sample, the prior is that
@@ -243,7 +282,7 @@ can follow."
 
 ---
 
-## 5. Open decisions
+## 6. Open decisions
 
 These are the four that were put to TJ at the skill's gate 4 and are now handed to Rolf.
 
@@ -298,7 +337,7 @@ landed in, and should not resolve Katherine's threads — that is hers to do.
 Reply endpoints, for reference:
 
 - Inline thread → `POST repos/paranext/paranext-core/pulls/2726/comments/<root id>/replies`
-  (root ids in §3; it rejects a reply-to-a-reply).
+  (root ids in §4; it rejects a reply-to-a-reply).
 - The conversation comment and the review body →
   `POST repos/paranext/paranext-core/issues/2726/comments`, quoting enough to anchor it.
 
@@ -307,7 +346,7 @@ its own.
 
 ---
 
-## 6. The six questions that need real design input
+## 7. The six questions that need real design input
 
 These are the ones where the fix is a judgment call, not a mechanical edit. **These are the questions
 this hand-off most wants answered** — the rest is largely typing.
@@ -400,20 +439,26 @@ choice, since the PR is already large.
 
 ---
 
-## 7. What was deliberately not done
+## 8. What was deliberately not done
 
-- **Nothing was implemented.** No code changed, on any branch.
+- **Only the §2 corrections were implemented**, and only on this branch. Everything that needs a
+  judgment call was left for Rolf.
 - **Nothing was pushed to `e2e-tooling-fixes`.** That branch belongs to Rolf; this triage ran as
-  `tjcouch-sil`, and rewriting someone else's branch is not a default anyone should take.
+  `tjcouch-sil`, and rewriting someone else's branch is not a default anyone should take. The §2
+  commits sit on `pr-2726-review-handoff`, branched from `e2e-tooling-fixes`, for him to
+  cherry-pick or merge.
 - **Nothing was posted to the PR.** No replies drafted, no threads resolved.
 - **No Jira ticket was created.** Q5 (and arguably the `resolveInternal()` fix Rolf already flagged)
   wants one, but that is the team's to file.
 - **The rebase onto `main` was not attempted** — see decision 2.
 - **Katherine's five self-disproved findings were not re-checked**, by design.
+- **No e2e suite was run.** The §2 changes were verified by typecheck, eslint, prettier and the
+  harness unit tests only.
+- **The ~40 lines of comment trimming were not applied** — see decision 1.
 
 ---
 
-## 8. Picking this up in a fresh chat
+## 9. Picking this up in a fresh chat
 
 Everything needed is in this document; the working notes it was written from are in a gitignored
 `.review/2726-2026-08-31/` directory on TJ's machine and do not travel with this branch.
@@ -421,14 +466,17 @@ Everything needed is in this document; the working notes it was written from are
 A useful prompt shape:
 
 > Read `docs/plans/2026-08-31-pr-2726-review-handoff.md`. It is a verified triage of Katherine's
-> review on PR #2726, stopped at a decision gate. I want to answer decisions 1–4 in §5 and design
-> questions Q1–Q6 in §6, then implement. Start by re-checking that the branch head is still
+> review on PR #2726, stopped at a decision gate. The corrections in §2 are already committed on
+> this branch; §6 and §7 are what still need answers. I want to settle decisions 1–4 and design
+> questions Q1–Q6, then implement. Start by re-checking that `e2e-tooling-fixes` is still at
 > `3e8624cd641…` — if it has moved, re-verify the line citations before trusting them.
 
 If the `/process-pr-feedback` skill has landed on `main` by then, running it over PR 2726 will redo
 steps 0–3 against whatever the current state is and stop at its own gate 4 — this document is
 effectively the output of one such run, dated 2026-08-31.
 
-One caveat worth carrying forward: this PR's verification claims rest on local runs, because the
-conflict has kept CI from running at all. Whatever set of fixes gets chosen, the rebase in decision 2
-is what makes a green CI result possible again.
+Two caveats worth carrying forward. This PR's verification claims rest on local runs, because the
+conflict has kept CI from running at all — whatever set of fixes gets chosen, the rebase in
+decision 2 is what makes a green CI result possible again. And the §2 commits were made _before_
+that rebase, so they will need to travel through it; none of them touch the twelve conflicting
+files except `e2e-tests/CLAUDE.md`.

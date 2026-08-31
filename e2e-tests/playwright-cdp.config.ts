@@ -15,11 +15,19 @@ const config = defineConfig({
   // `npm run test:e2e:isolated`.
   // _example/ contains reference templates, not runnable tests.
   // manage-books is excluded because a bare `npm run test:e2e-cdp` would otherwise run it against
-  // whatever app is live, and two of its specs mutate real projects with no restore:
-  // manage-books-journey.spec.ts bulk-selects every visible book and clicks "Replace entire books"
-  // (:507, :530) against a rotation pool of real local projects — zzz7, wgPIDGIN, MP1, RH2, ROT
-  // (:161) — and manage-books-functional-WP-001.spec.ts:394 deletes GEN. Those projects exist on
-  // developer machines under ~/.platform.bible/projects, so this is data loss, not test noise.
+  // whatever app is live, and three of its four specs mutate real projects with no restore.
+  // Cited by symbol rather than line, per .claude/rules/docs-durability.md:
+  // - manage-books-journey.spec.ts bulk-selects every visible book and clicks "Replace entire
+  //   books" in its "Journey 4: Copy from source project" test, against the rotation pool in
+  //   `switchToProjectMissingBook` — zzz7, wgPIDGIN, zzz6, MP1, RH2, ROT.
+  // - manage-books-functional-WP-001.spec.ts deletes GEN in its "should fire onDeleteBooks when
+  //   destructive-confirm Delete is accepted" test.
+  // - manage-books-functional-WP-002.spec.ts creates books through `manageBooks.createBooks`,
+  //   writing USFM stubs that survive a restart; see `ROTATION_FIXTURES_REQUIRING_MISSING_BOOK`
+  //   for the manual cleanup it requires.
+  // Those projects exist on developer machines under ~/.platform.bible/projects, so this is data
+  // loss, not test noise. The fourth spec, manage-books-commands.spec.ts, drives the same commands
+  // but only down paths that cannot mutate.
   // Re-enable per-spec once the suite owns a throwaway project root (isolatedProjectRoot), the way
   // find.fixture does.
   testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**', '**/manage-books/**'],

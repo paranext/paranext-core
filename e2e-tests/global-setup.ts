@@ -83,13 +83,16 @@ function isDevBundleStale(rootDir: string, bundlePath: string): boolean {
   // run from source/dev-server and cannot go stale this way), the workspace library the bundle
   // compiles in (platform-bible-utils; the platform-bible-react import in src/shared is types-only
   // and never reaches the bundle), the webpack configs that shape the bundles, and package.json
-  // (dependency changes).
+  // (dependency changes). `.erb/scripts` is in the list because the build reaches into it too:
+  // webpack.config.main.dev.ts imports ../scripts/check-node-env, and `prestart` runs
+  // .erb/scripts/generate-dev-build-info.ts before webpack.
   const sourceDirs = [
     'src/main',
     'src/shared',
     'src/node',
     'lib/platform-bible-utils/src',
     '.erb/configs',
+    '.erb/scripts',
   ];
   const newestSource = Math.max(
     ...sourceDirs.map((dir) => newestMtimeMs(path.join(rootDir, dir))),
