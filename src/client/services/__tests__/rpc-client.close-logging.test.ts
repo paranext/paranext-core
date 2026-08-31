@@ -242,4 +242,24 @@ describe('RpcClient close logging', () => {
     expect(logged).toContain('ECONNREFUSED');
     expect(logged).not.toContain('{}');
   });
+
+  test('onUncleanClose fires when the socket closes abnormally', async () => {
+    const onUncleanClose = vi.fn();
+    const client = new RpcClient('renderer-1', onUncleanClose);
+    await client.connect(() => {});
+
+    dispatch('close', new CloseEvent('close', { code: 1006, wasClean: false }));
+
+    expect(onUncleanClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('onUncleanClose does not fire on a clean close', async () => {
+    const onUncleanClose = vi.fn();
+    const client = new RpcClient('renderer-1', onUncleanClose);
+    await client.connect(() => {});
+
+    dispatch('close', new CloseEvent('close', { code: 1000, wasClean: true }));
+
+    expect(onUncleanClose).not.toHaveBeenCalled();
+  });
 });

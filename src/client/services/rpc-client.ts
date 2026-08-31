@@ -67,7 +67,10 @@ export class RpcClient implements IRpcMethodRegistrar {
    */
   private readonly peerName: string;
 
-  constructor(peerName: string = 'client') {
+  constructor(
+    peerName: string,
+    private readonly onUncleanClose?: () => void,
+  ) {
     bindClassMethods.call(this);
     this.peerName = `${peerName}#${RpcClient.getPeerDiscriminator()}`;
     this.jsonRpcServer = new JSONRPCServer();
@@ -288,10 +291,12 @@ export class RpcClient implements IRpcMethodRegistrar {
     const summary = `Websocket for ${this.peerName} closed (${detail})`;
     // Intent travels in the close code, so a close that arrives after an intentional
     // disconnect is still reported honestly if the socket actually died.
-    if (isCleanCloseEvent(ev)) logger.info(summary);
+    const isClean = isCleanCloseEvent(ev);
+    if (isClean) logger.info(summary);
     else logger.warn(summary);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
+    if (!isClean) this.onUncleanClose?.();
   }
 
   private async onMessageReceivedByWebSocket(ev: MessageEvent) {
