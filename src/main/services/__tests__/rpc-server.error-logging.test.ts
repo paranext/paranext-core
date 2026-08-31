@@ -2,11 +2,14 @@ import { describe, expect, test, vi, beforeEach } from 'vitest';
 import { RpcServer } from '@main/services/rpc-server';
 import { RpcEventRegistry } from '@main/services/rpc-event-registry';
 
-const { mockLoggerError, mockLoggerWarn, mockLoggerInfo } = vi.hoisted(() => ({
-  mockLoggerError: vi.fn(),
-  mockLoggerWarn: vi.fn(),
-  mockLoggerInfo: vi.fn(),
-}));
+const { mockLoggerError, mockLoggerWarn, mockLoggerInfo, mockIsAppShuttingDown } = vi.hoisted(
+  () => ({
+    mockLoggerError: vi.fn(),
+    mockLoggerWarn: vi.fn(),
+    mockLoggerInfo: vi.fn(),
+    mockIsAppShuttingDown: vi.fn(() => false),
+  }),
+);
 
 // vi.mock and vi.hoisted calls are hoisted above the static imports at transform time, so the
 // imports can be written first here to satisfy import/first.
@@ -17,6 +20,13 @@ vi.mock('@shared/services/logger.service', () => ({
     info: mockLoggerInfo,
     debug: vi.fn(),
   },
+}));
+
+// Stubbed rather than exercised through the real latch: the real one answers from the tracked
+// BrowserWindow list, which would make the severity assertions below depend on window-state setup
+// instead of on the close handler under test. It also keeps `electron` out of this module graph.
+vi.mock('@main/services/shutdown-latch.service', () => ({
+  isAppShuttingDown: () => mockIsAppShuttingDown(),
 }));
 
 /** Minimal event-target stand-in: records listeners so tests can dispatch to them. */
@@ -54,6 +64,7 @@ function makeServer(socket: WebSocket) {
 describe('RpcServer error logging', () => {
   beforeEach(() => {
     mockLoggerError.mockClear();
+    mockIsAppShuttingDown.mockReturnValue(false);
   });
 
   test('logs the socket name and the real error detail, not "{}"', async () => {
@@ -102,10 +113,11 @@ describe('RpcServer close logging', () => {
   beforeEach(() => {
     mockLoggerWarn.mockClear();
     mockLoggerInfo.mockClear();
+    mockIsAppShuttingDown.mockReturnValue(false);
   });
 
-  // wasClean must be set explicitly: jsdom's CloseEvent defaults it to false, and a clean
-  // code paired with an incomplete handshake is not an event any engine actually emits.
+  // wasClean must be set explicitly: jsdom's CloseEvent defaults it to false, and each row below
+  // pairs a code with the wasClean value that really accompanies it.
   test.each([1000, 1001, 1005, 4000])(
     'logs a clean close (code %i) at info, not warn',
     async (code) => {
@@ -187,5 +199,120 @@ describe('RpcServer close logging', () => {
 
     expect(methods.has('command:mine')).toBe(false);
     expect(methods.has('command:someone-elses')).toBe(true);
+  });
+
+  test("counts only the departing peer's methods, not the whole shared registry", async () => {
+    // The method map is shared by reference across every RpcServer, so its `size` is the network's
+    // method count. Reporting that against one socket is what produced "Removing 566 methods" for a
+    // peer that had registered a handful.
+    const { socket, dispatch } = makeFakeSocket();
+    const methods = new Map();
+    const server = new RpcServer('7', socket, () => {}, methods, new RpcEventRegistry());
+    await server.connect();
+    server.registerRemoteMethod('command:mine');
+    server.registerRemoteMethod('command:mine-too');
+    methods.set('command:someone-elses', { handler: {}, methodDocs: undefined });
+    methods.set('command:someone-elses-2', { handler: {}, methodDocs: undefined });
+
+    dispatch('close', new CloseEvent('close', { code: 1006, wasClean: false }));
+
+    expect(mockLoggerWarn.mock.calls[0][0]).toContain('Removing 2 methods');
+  });
+
+  test('reports a peer that died on the way down at info, not warn', async () => {
+    // No client closes politely: main's server is still listening while the extension host calls
+    // process.exit() and each renderer process is torn down, so every peer dies with 1006 on a
+    // normal quit. At warn, that fires on every shutdown and buries the signal.
+    mockIsAppShuttingDown.mockReturnValue(true);
+    const { socket, dispatch } = makeFakeSocket();
+    const server = makeServer(socket);
+    await server.connect();
+
+    dispatch('close', new CloseEvent('close', { code: 1006, wasClean: false }));
+
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+    expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
+    // Still says what happened — the point is the severity, not hiding the abnormal close.
+    expect(mockLoggerInfo.mock.calls[0][0]).toContain('code=1006 abnormal=true');
+    expect(mockLoggerInfo.mock.calls[0][0]).toContain('expected during app shutdown');
+  });
+
+  test('still reports a peer that died while the app is running at warn', async () => {
+    // The complement of the case above, and the one PT-1641 is about: same event, app not going
+    // down, so it must stay greppable.
+    mockIsAppShuttingDown.mockReturnValue(false);
+    const { socket, dispatch } = makeFakeSocket();
+    const server = makeServer(socket);
+    await server.connect();
+
+    dispatch('close', new CloseEvent('close', { code: 1006, wasClean: false }));
+
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    expect(mockLoggerWarn.mock.calls[0][0]).not.toContain('expected during app shutdown');
+  });
+});
+
+describe('RpcServer peer identity', () => {
+  beforeEach(() => {
+    mockLoggerWarn.mockClear();
+    mockLoggerInfo.mockClear();
+    mockLoggerError.mockClear();
+    mockIsAppShuttingDown.mockReturnValue(false);
+  });
+
+  test('names the announced peer in the close line alongside its own socket id', async () => {
+    // Main labels sockets with an incrementing id that appears nowhere in the client's logs, so
+    // without the announced name the two ends' lines for one disconnect cannot be joined.
+    const { socket, dispatch } = makeFakeSocket();
+    const server = makeServer(socket);
+    await server.connect();
+    server.setPeerName('renderer#3');
+
+    dispatch('close', new CloseEvent('close', { code: 1006, wasClean: false }));
+
+    const logged = mockLoggerWarn.mock.calls[0][0];
+    expect(logged).toContain('Websocket 7 (renderer#3) closed');
+  });
+
+  test('names the announced peer in the error line too', async () => {
+    const { socket, dispatch } = makeFakeSocket();
+    const server = makeServer(socket);
+    await server.connect();
+    server.setPeerName('extension-host#4021');
+
+    dispatch('error', { message: 'read ECONNRESET' });
+
+    expect(mockLoggerError.mock.calls[0][0]).toContain('Websocket 7 (extension-host#4021)');
+  });
+
+  test('falls back to the bare socket id for a peer that never announces', async () => {
+    // The .NET data provider does not announce, so this is the live path, not a hypothetical.
+    const { socket, dispatch } = makeFakeSocket();
+    const server = makeServer(socket);
+    await server.connect();
+
+    dispatch('close', new CloseEvent('close', { code: 1006, wasClean: false }));
+
+    expect(mockLoggerWarn.mock.calls[0][0]).toContain('Websocket 7 closed');
+  });
+
+  test.each([
+    ['renderer#3 \n[main] forged line', 'renderer#3mainforgedline'],
+    ['a'.repeat(200), 'a'.repeat(60)],
+  ])('strips a peer-supplied label down to a safe one (%j)', (announced, expected) => {
+    // Peer-controlled text heading straight into log lines. The allowlist is deliberately narrower
+    // than a whitespace sweep: the shape a client generates is `<processType>#<discriminator>`.
+    const { socket } = makeFakeSocket();
+    const server = makeServer(socket);
+    server.setPeerName(announced);
+
+    expect(mockLoggerInfo.mock.calls[0][0]).toContain(expected);
+  });
+
+  test.each(['', '!!!'])('rejects a label with nothing usable in it (%j)', (announced) => {
+    const { socket } = makeFakeSocket();
+    const server = makeServer(socket);
+
+    expect(server.setPeerName(announced)).toBe(false);
   });
 });

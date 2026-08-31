@@ -1,6 +1,7 @@
-import { describe, expect, test, vi, beforeEach } from 'vitest';
+import { describe, expect, test, vi, afterEach, beforeEach } from 'vitest';
 import { RpcClient } from '@client/services/rpc-client';
 import { createWebSocket } from '@client/services/web-socket.factory';
+import { ConnectionStatus } from '@shared/data/rpc.model';
 
 const { mockLoggerWarn, mockLoggerInfo, mockLoggerError } = vi.hoisted(() => ({
   mockLoggerWarn: vi.fn(),
@@ -74,6 +75,10 @@ async function connectedClient(peerName = 'renderer-1') {
 }
 
 describe('RpcClient close logging', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     const fake = makeFakeSocket();
     fakeSocket = fake.socket;
@@ -84,31 +89,57 @@ describe('RpcClient close logging', () => {
     mockLoggerError.mockClear();
   });
 
-  test('appends a per-instance discriminator so the peer label is not just the bare processType', async () => {
-    // createRpcHandler always passes globalThis.processType as peerName, so two clients built the
-    // same way (as two BrowserWindow renderer processes would be) must carry a discriminator
-    // beyond the bare 'renderer' label, or two windows' log lines stay indistinguishable.
-    await connectedClient('renderer');
-    dispatch('close', new CloseEvent('close', { code: 1006 }));
-    const firstLabel = mockLoggerWarn.mock.calls[0][0];
-
-    mockLoggerWarn.mockClear();
+  /** Close one client built with the given window id and return the label it logged. */
+  async function labelForWindow(windowId: string | undefined): Promise<string> {
+    vi.stubGlobal('windowId', windowId);
     const fake = makeFakeSocket();
     fakeSocket = fake.socket;
     dispatch = fake.dispatch;
+    mockLoggerWarn.mockClear();
     await connectedClient('renderer');
     dispatch('close', new CloseEvent('close', { code: 1006 }));
-    const secondLabel = mockLoggerWarn.mock.calls[0][0];
+    return mockLoggerWarn.mock.calls[0][0];
+  }
 
-    // Two clients in the same process share `process.pid`, so the labels are allowed to match —
-    // what must hold is that neither collapses back to the bare 'renderer' peerName; across two
-    // separate BrowserWindow processes the pid differs and the labels genuinely diverge.
-    expect(firstLabel).toMatch(/renderer#\S+/);
-    expect(secondLabel).toMatch(/renderer#\S+/);
+  test('gives two windows labels that differ, not merely labels that are decorated', async () => {
+    // createRpcHandler passes the bare processType as peerName, so without a discriminator two
+    // BrowserWindow renderer processes emit byte-identical lines. Asserting both match
+    // /renderer#\S+/ would pass against a constant discriminator, which is exactly the regression
+    // that matters — so compare the two labels to each other.
+    const firstLabel = await labelForWindow('1');
+    const secondLabel = await labelForWindow('2');
+
+    expect(firstLabel).toContain('renderer#1');
+    expect(secondLabel).toContain('renderer#2');
+    expect(firstLabel).not.toBe(secondLabel);
   });
 
-  // wasClean must be set explicitly: jsdom's CloseEvent defaults it to false, and a clean
-  // code paired with an incomplete handshake is not an event any engine actually emits.
+  test('reuses the window id across reloads, so a reconnect is not read as a new window', async () => {
+    // The point of preferring globalThis.windowId over a per-instance random id: a reload builds a
+    // new RpcClient in the same window, and its lines must still be attributable to that window.
+    expect(await labelForWindow('7')).toBe(await labelForWindow('7'));
+  });
+
+  test('falls back to a per-instance id where neither a window id nor a pid exists', async () => {
+    // The renderer has no `process` (see logger.utils.ts), and a web view context has no window id
+    // either; the label must still not read `renderer#undefined`. The discriminator is computed in
+    // the constructor, so only construction needs the globals stubbed.
+    vi.stubGlobal('windowId', undefined);
+    vi.stubGlobal('process', undefined);
+    const client = new RpcClient('renderer');
+    vi.unstubAllGlobals();
+
+    await client.connect(() => {});
+    dispatch('close', new CloseEvent('close', { code: 1006 }));
+
+    const logged = mockLoggerWarn.mock.calls[0][0];
+    expect(logged).toMatch(/renderer#[a-z0-9]+ /);
+    expect(logged).not.toContain('undefined');
+  });
+
+  // wasClean must be set explicitly: jsdom's CloseEvent defaults it to false, so each row here
+  // pairs a clean code with the completed handshake that really accompanies it. The abnormal rows
+  // below deliberately leave it at that default.
   test.each([1000, 1001, 1005, 4000])(
     'logs a clean close (code %i) at info, not warn',
     async (code) => {
@@ -192,6 +223,21 @@ describe('RpcClient close logging', () => {
     expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
   });
 
+  test('still tears down when connectionStatus was already set to Disconnected', async () => {
+    // `connectionStatus` is public and mutable, so keying idempotence off it made teardown
+    // dependent on it: setting Disconnected in disconnect() — the natural future edit — would make
+    // the close that follows a no-op, leaking every pending request and listener the socket held.
+    const client = await connectedClient();
+    client.connectionStatus = ConnectionStatus.Disconnected;
+    const inFlight = client.request('command:slow', []);
+
+    dispatch('close', new CloseEvent('close', { code: 1006 }));
+
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    const response = await inFlight;
+    expect('error' in response && response.error?.message).toMatch(/closed/i);
+  });
+
   test('resolves in-flight requests with an error naming the closed socket', async () => {
     // json-rpc-2.0's rejectAllPendingRequests resolves each pending request's promise with a
     // JSON-RPC error response rather than rejecting it, so the request settles here instead of
@@ -226,6 +272,35 @@ describe('RpcClient close logging', () => {
     // argument would double it, so assert the occurrence count rather than pinning the full
     // log line (which would break on harmless wording changes).
     expect(logged.split('read ECONNRESET')).toHaveLength(2);
+  });
+
+  test('names the peer on the error line, usually the first symptom', async () => {
+    // In the renderer the error event carries no detail at all by specification, so without the
+    // peer label two windows emit byte-identical error lines.
+    await connectedClient('renderer-1');
+
+    dispatch('error', new WsLikeErrorEvent('read ECONNRESET'));
+
+    expect(mockLoggerError.mock.calls[0][0]).toContain('renderer-1');
+  });
+
+  test('announces its peer name to main so the two ends can be joined', async () => {
+    // Main labels the socket with an id this process never sees; this is the only thing that ties
+    // main's close line for a socket to the client's own line for the same disconnect.
+    await connectedClient('renderer-1');
+
+    const sent = fakeSocket.send.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(sent).toContain('network:announcePeer');
+    expect(sent).toContain('renderer-1#');
+  });
+
+  test('does not wait for the announcement to be answered', async () => {
+    // The fake socket never answers, so awaiting the announcement would hang connect() — which is
+    // the point: diagnostic metadata must not sit in the path of a connection that is already up,
+    // where a peer that never implements the method would block startup outright.
+    const client = new RpcClient('renderer-1');
+
+    await expect(client.connect(() => {})).resolves.toBe(true);
   });
 
   test('logs a connection failure with the peer and reason, not {}', async () => {

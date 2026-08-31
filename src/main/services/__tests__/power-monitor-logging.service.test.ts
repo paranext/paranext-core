@@ -75,6 +75,11 @@ describe('registerPowerMonitorListeners', () => {
       'utf-8',
     );
 
+    // Comments are stripped before any of the scans below run: a docblock that merely MENTIONS
+    // `require(` or a dynamic `import (…)` is prose, and turning the suite red for it would train
+    // the next reader to weaken the guard rather than trust it.
+    const serviceCode = serviceSource.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
     /**
      * True when an import clause (the part between `import` and `from`) brings in only types —
      * erased at compile time, so it cannot cause a runtime side effect and is not a route into
@@ -96,14 +101,25 @@ describe('registerPowerMonitorListeners', () => {
     }
 
     test('imports nothing but the logger service', () => {
-      // Lazy `[\s\S]*?` (rather than `.+` anchored to one line) so an import statement Prettier
-      // wraps across multiple lines is still matched.
-      const importStatements = [
-        ...serviceSource.matchAll(/import\s+([\s\S]*?)\s+from\s+'([^']+)';/g),
-      ];
+      // One statement at a time, each anchored to the start of a line and ending at its semicolon
+      // (an import statement contains none of its own), so a Prettier-wrapped multi-line import is
+      // still one match and no statement can be absorbed into a neighbour's match. A single lazy
+      // `import ... from '...'` pattern across the whole file failed OPEN for a bare side-effect
+      // import: above the logger import it was swallowed into that match, and below it was never
+      // matched at all for want of a `from`.
+      const importStatements = [...serviceCode.matchAll(/^import\b[^;]*;/gm)].map(
+        (match) => match[0],
+      );
       const runtimeImportedModules = importStatements
-        .filter((match) => !isTypeOnlyImportClause(match[1]))
-        .map((match) => match[2]);
+        .map((statement) => {
+          // `import '<module>';` has no clause at all — a side-effect-only import, which runs
+          // module-level code and so is exactly what this guard must not miss.
+          const withFrom = statement.match(/^import\b([\s\S]*?)\bfrom\s+'([^']+)';$/);
+          if (!withFrom) return { clause: '', module: statement.match(/'([^']+)'/)?.[1] ?? '' };
+          return { clause: withFrom[1], module: withFrom[2] };
+        })
+        .filter(({ clause }) => !isTypeOnlyImportClause(clause))
+        .map(({ module }) => module);
 
       // Calling into another service (e.g. a reconnect service) requires importing it. Keeping
       // the import list to just the logger is what actually prevents this diagnostic hook from
@@ -115,14 +131,14 @@ describe('registerPowerMonitorListeners', () => {
     test('contains no require(...) calls', () => {
       // A `require` call is a second route into another module that the import-statement scan
       // above does not see.
-      expect(serviceSource).not.toMatch(/\brequire\s*\(/);
+      expect(serviceCode).not.toMatch(/\brequire\s*\(/);
     });
 
     test('contains no dynamic import(...) calls', () => {
       // A dynamic `import()` is a third route into another module — also invisible to the
       // static-import scan above, and awaitable from inside a handler without changing its
       // top-level import list.
-      expect(serviceSource).not.toMatch(/\bimport\s*\(/);
+      expect(serviceCode).not.toMatch(/\bimport\s*\(/);
     });
   });
 });

@@ -1153,16 +1153,16 @@ declare module 'shared/data/rpc.model' {
    * Clean codes: 1000 (normal), 1001 (going away — a page or window navigating away or closing), 1005
    * (no status code was present in the close frame, which a plain `close()` with no arguments
    * produces), and {@link INTENTIONAL_CLOSE_CODE}, this codebase's own marker for a close we initiated
-   * on purpose. What all four have in common is that a closing handshake completed.
-   *
-   * The code that matters is 1006: no close frame was ever received, which is the fingerprint of a
-   * connection that died rather than being closed — the shape a suspend produces.
-   *
-   * Prefer {@link isCleanCloseEvent} at call sites that hold the event; `wasClean` is the
-   * authoritative signal and this code list is its fallback.
+   * on purpose. What all four have in common is that a closing handshake completed. The code that
+   * matters is 1006: no close frame was ever received, the fingerprint of a connection that died
+   * rather than being closed — the shape a suspend produces.
    *
    * Shared so the client and server close handlers cannot independently drift on which codes count as
-   * clean.
+   * clean. {@link isCleanCloseEvent} is the predicate to use where the event itself is in hand.
+   *
+   * @param code `code` from a WebSocket `close` event
+   * @returns `true` if the code indicates a completed closing handshake, `false` otherwise (including
+   *   for a non-numeric code)
    */
   export function isCleanCloseCode(code: unknown): boolean;
   /**
@@ -1175,6 +1175,9 @@ declare module 'shared/data/rpc.model' {
    * Deciding on the code alone would misreport a close frame that carried no status: that arrives as
    * 1005 with `wasClean` true, which a plain `close()` produces on every window close and page
    * reload. Marking those abnormal would bury a genuine socket death under routine noise.
+   *
+   * @param ev A WebSocket `close` event, or anything at all — a non-event is reported as not clean
+   * @returns Whether a closing handshake completed
    */
   export function isCleanCloseEvent(ev: unknown): boolean;
   /**
@@ -1184,10 +1187,17 @@ declare module 'shared/data/rpc.model' {
    * `code`/`reason`/`wasClean` as accessors on the prototype rather than own properties — so
    * `JSON.stringify` on one yields `{}`. Read the fields explicitly instead.
    *
-   * `code` is the single most diagnostic field: 1006 (abnormal, no close frame) means the connection
-   * died rather than being closed politely. A reader should not need the WebSocket code table
-   * memorized to see that, so an event that {@link isCleanCloseEvent} rejects is marked `(abnormal)`
-   * inline rather than left as a bare number.
+   * `code` is the single most diagnostic field: 1006 (no close frame) means the connection died
+   * rather than being closed politely. A reader should not need the WebSocket code table memorized to
+   * see that, so an event that {@link isCleanCloseEvent} rejects also carries an `abnormal=true` pair.
+   * The marker is its own pair rather than a parenthetical inside `code=` so the whole detail stays a
+   * sequence of space-separated `key=value` pairs.
+   *
+   * @param ev A WebSocket `close` event, or anything at all
+   * @returns Space-separated `key=value` pairs — `code`, `abnormal` (only when the connection died),
+   *   `reason` (JSON-quoted, so a reason containing a quote or a bracket cannot forge the surrounding
+   *   log line) and `wasClean`. A field that cannot be read is reported as `n/a`, so a non-event
+   *   yields `code=n/a reason=n/a wasClean=n/a` rather than throwing.
    */
   export function describeWebSocketCloseEvent(ev: unknown): string;
   /**
@@ -1199,6 +1209,12 @@ declare module 'shared/data/rpc.model' {
    *
    * Note a browser `WebSocket` fires a plain `Event` on error, carrying no detail at all by
    * specification, so `message=unknown` is the expected result on the renderer end.
+   *
+   * @param ev A WebSocket `error` event, or anything at all
+   * @returns A single log line holding `message=`, `code=` and, when the error carried one, a
+   *   `stack:` section. Never contains a line break, so an error keeps the one-record-per-line shape
+   *   every other line here has; a field that cannot be read is reported as `unknown`/`n/a` rather
+   *   than throwing.
    */
   export function describeWebSocketErrorEvent(ev: unknown): string;
   /** Serialize a payload, if needed, and send it over the provided WebSocket */
@@ -1247,6 +1263,12 @@ declare module 'shared/data/rpc.model' {
    * your request handler.
    */
   export const UNREGISTER_METHOD = 'network:unregisterMethod';
+  /**
+   * Tell main which peer is on the other end of this socket, so main's connection log lines can be
+   * joined to the client's own. Main labels each socket with an incrementing id, which appears
+   * nowhere in the client's logs; the client labels itself with a name it alone knows.
+   */
+  export const ANNOUNCE_PEER = 'network:announcePeer';
   /**
    * Register a network event emitter with the main process so that the event is tracked centrally.
    * Multi-source vs. single-source semantics are determined by looking up the event name in
@@ -1971,6 +1993,17 @@ declare module 'client/services/rpc-client' {
    */
   export class RpcClient implements IRpcMethodRegistrar {
     connectionStatus: ConnectionStatus;
+    /**
+     * Whether {@link onWebSocketClose} has already run for the current socket.
+     *
+     * A closed socket's listener is already removed, but a caller holding a stale reference to the
+     * bound handler could still invoke it directly; this makes a second call a no-op rather than
+     * double-logging and re-running teardown. Deliberately its own field rather than a read of
+     * `connectionStatus`, which is public and mutable: keyed off that, the natural future edit of
+     * setting `Disconnected` in `disconnect()` would skip teardown for the close that follows and
+     * permanently leak everything the socket had registered.
+     */
+    private hasCompletedTeardown;
     private ws;
     private requestId;
     /** Refers to the current process that created this object (i.e., not main) */
@@ -1993,15 +2026,18 @@ declare module 'client/services/rpc-client' {
     constructor(peerName?: string);
     private static handleError;
     /**
-     * A discriminator distinguishing this process from another of the same type, for the `peerName`
-     * label. `process.pid` is the natural choice, differing across `BrowserWindow`s (each its own
-     * renderer process). The renderer may or may not expose `process` depending on Electron's
-     * `webPreferences`, so fall back to a random id rather than printing `undefined` when it doesn't
-     * — two clients in the very same process will then share a pid anyway, which is expected and
-     * harmless: the label still identifies the process pair, not a specific in-process instance.
+     * A discriminator distinguishing this client from another of the same type, for the `peerName`
+     * label.
+     *
+     * Prefers `globalThis.windowId`, the id main assigns each `BrowserWindow` and passes in by query
+     * parameter, because it is the only one of the three that is STABLE: it survives a reload, so
+     * "the same window reconnected" reads differently from "a second window appeared". The renderer
+     * has no access to `process` (see `identifyCaller` in `logger.utils.ts`), so a pid would never be
+     * reached there anyway; it is kept for the extension host, which has a pid and no window. The
+     * random id is a last resort so the label never reads `undefined`; being per-instance, it cannot
+     * be correlated across a reload.
      */
     private static getPeerDiscriminator;
-    private static onError;
     connect(localEventHandler: EventHandler): Promise<boolean>;
     disconnect(): Promise<void>;
     request(
@@ -2023,11 +2059,222 @@ declare module 'client/services/rpc-client' {
     private createNextRequestId;
     private addEventListenersToWebSocket;
     private removeEventListenersFromWebSocket;
+    /**
+     * Tell main which peer owns this socket. Main labels sockets with an incrementing id that appears
+     * nowhere in this process's logs, so without this a close line on each end cannot be joined to
+     * the other.
+     *
+     * Deliberately not awaited: this is diagnostic metadata, so neither a slow response nor a peer
+     * that does not implement the method may delay or fail a connection that is already up.
+     */
+    private announcePeerToServer;
+    /**
+     * An error event is usually the FIRST symptom of a socket going bad, so it needs the peer label
+     * as much as the close line does — in the renderer the event carries no detail at all by
+     * specification, leaving the peer as the only thing separating one window's error from another's.
+     * An instance method (bound by `bindClassMethods`) rather than a static one for that reason.
+     */
+    private onError;
     private onWebSocketOpen;
     private onWebSocketClose;
     private onMessageReceivedByWebSocket;
   }
   export default RpcClient;
+}
+declare module 'main/services/window-state.service' {
+  /**
+   * Tracks the state of open BrowserWindows, which one is currently focused, and which ones can be
+   * routed to. Other services in the main process use this to route commands and network object calls
+   * to the correct renderer window.
+   */
+  import { BrowserWindow } from 'electron';
+  /**
+   * Event that fires when the window routed calls go to changes — a different window, or the same
+   * window going from unready to serving requests (or back).
+   *
+   * Routing proxies that forward to "the focused window" need this: it is the moment their answer
+   * changes without any window's own state having changed. Every change to the tracked windows, the
+   * focused window, and window readiness runs through the same target comparison, so this is the one
+   * signal to react to, and it stays quiet when a change leaves the target where it was.
+   *
+   * The payload is the target window ID for logging. Consumers should re-resolve rather than route on
+   * it: readiness moves the target without moving the ID.
+   */
+  export const onDidChangeRoutingTarget: import('platform-bible-utils').PlatformEvent<
+    number | undefined
+  >;
+  /**
+   * The tracked windows that still exist, in creation order.
+   *
+   * Destroyed windows are filtered out here rather than at each call site because callers hold the
+   * BrowserWindow and go on to act on it — restore it, focus it, count it as a reason not to open
+   * another one — and every one of those acts throws on a window Electron has already destroyed. A
+   * window stays tracked until its `closed` handler runs, so a destroyed window can be in the list.
+   *
+   * Answers the tracked set at the moment it is called; it is not a live array.
+   */
+  export function getWindows(): BrowserWindow[];
+  /** Whether a window's renderer has registered its window service, so routing to it can succeed */
+  export function isWindowReady(windowId: number): boolean;
+  /**
+   * Whether a navigation replaces the page a window's renderer registered its scoped services from,
+   * so everything that window registered is gone until the new page registers again.
+   *
+   * Only a main-frame navigation to a new document does that. Every web view in the app is an in-page
+   * `<iframe srcdoc>` inside the renderer's own page, so subframe navigations happen constantly for
+   * as long as a window is open and touch nothing the renderer registered; treating one as the page
+   * going away would take a fully working window out of the routable set with nothing to put it back.
+   * Same-document navigations (fragment changes, `pushState`/`replaceState`, same-page history) keep
+   * the document and every script in it alive, so they leave the registrations alone too.
+   *
+   * @param navigation Navigation details from Electron's `did-start-navigation`
+   */
+  export function doesNavigationReplaceRendererRegistrations(navigation: {
+    isMainFrame: boolean;
+    isSameDocument: boolean;
+  }): boolean;
+  /**
+   * IDs of the windows that can currently answer a routed call, in creation order.
+   *
+   * Fan-outs that ask every window a question use this rather than {@link getWindows}: a window that
+   * has not registered its services cannot own a web view or be showing a notification, so asking it
+   * can only produce a wait on the network service's registration retry and a warning.
+   *
+   * A window that has begun closing is still listed, unlike in {@link getRoutingTarget}. This answers
+   * "who can be asked", not "where should new work go": a window is the only thing that knows what it
+   * has open, and it can answer for as long as it is there. The shutdown sync of a whole quit selects
+   * the projects it sends this way, and by the time it runs every window is marked closing — so
+   * dropping them here would make a quit select nothing and send nothing.
+   */
+  export function getReadyWindowIds(): number[];
+  /**
+   * The window Electron reports as focused, or `undefined` when no window has focus.
+   *
+   * This is the honest answer about focus, which is not always where calls are routed — see
+   * {@link getTargetWindowId} for that. Consumers that mean "the window the user is looking at" (such
+   * as the `platform.getFocusedWindowId` command) want this one.
+   */
+  export function getFocusedWindowId(): number | undefined;
+  /** Get the window ID to target for command/service routing. See {@link getRoutingTarget}. */
+  export function getTargetWindowId(): number | undefined;
+  /**
+   * Add a window to the tracked list.
+   *
+   * Its id is read once, here, while the window is certain to be alive, and every reader answers from
+   * that copy afterwards — see {@link TrackedWindow}.
+   */
+  export function addWindow(window: BrowserWindow): void;
+  /**
+   * Remove a window from the tracked list, along with everything keyed by its ID.
+   *
+   * The window is gone, so it is no longer focused and no longer routable, and the routing target
+   * moves to a surviving window here rather than in the close handler — a caller that had to notice
+   * the target was the closing window and re-point focus itself would be one ordering mistake away
+   * from leaving routing pinned to a destroyed window.
+   *
+   * @param window Window to stop tracking. Matched by identity, never read from: this runs from the
+   *   `closed` handler, where the BrowserWindow is already destroyed and every property read is a
+   *   chance to throw — which here would abandon the rest of the closing window's teardown.
+   * @param windowId The window's ID, captured while it was still alive.
+   */
+  export function removeWindow(window: BrowserWindow, windowId: number): void;
+  /** Set the focused window ID (called from BrowserWindow focus events) */
+  export function setFocusedWindowId(windowId: number | undefined): void;
+  /**
+   * Record that a window's renderer has registered its window service, so it can be routed to.
+   *
+   * Safe to call again for a window that is already ready; it announces only if the routing target
+   * moved. A window that went through {@link markWindowNotReady} and came back does move the target,
+   * even though the ID is unchanged, because its scoped services are new objects.
+   *
+   * @param windowId Window whose renderer is now serving requests
+   */
+  export function markWindowReady(windowId: number): void;
+  /**
+   * Record that a window has begun closing. Call this at the top of a window's close handling, before
+   * anything reads {@link areAllWindowsClosing}.
+   *
+   * A window on its way out stops being where new work goes, so this announces like every other
+   * mutation here — routing proxies hold a resolved service for the target window and have nothing
+   * else to tell them it moved.
+   *
+   * @param windowId Window that is on its way out
+   */
+  export function markWindowClosing(windowId: number): void;
+  /**
+   * Whether every tracked window is on its way out, so the app is going down rather than one window
+   * going away.
+   *
+   * Answered from what every window's close handler has recorded rather than from the tracked list
+   * alone, which nothing trims until a window is actually gone. See {@link markWindowClosing}.
+   *
+   * No windows at all is not the app going down: `every` answers `true` for an empty list, but that
+   * state is the app coming UP — process start, and the moment a macOS dock reactivation runs before
+   * its window exists — where nothing is closing and refusing to create a window would be fatal.
+   */
+  export function areAllWindowsClosing(): boolean;
+  /**
+   * Record that a window's renderer can no longer serve routed calls — it crashed, or it is reloading
+   * and its registrations went away with the old page.
+   *
+   * Routing moves to a window that can answer instead of burning the network service's registration
+   * retry against handlers that no longer exist. The window stays tracked: it is still a window, and
+   * it becomes routable again through {@link markWindowReady} once its renderer registers.
+   *
+   * @param windowId Window whose renderer stopped serving requests
+   */
+  export function markWindowNotReady(windowId: number): void;
+  /**
+   * Drop all tracked window state. This function is only exported for testing purposes and should not
+   * be used in production code — the app removes windows one at a time, as each one goes away.
+   */
+  export function resetForTesting(): void;
+}
+declare module 'main/services/shutdown-latch.service' {
+  /** Record that the whole app is quitting, not just one window. Called from `before-quit`. */
+  export function markQuitRequested(): void;
+  /**
+   * Whether the whole app is quitting, as opposed to a single window being closed. A window's `close`
+   * handler needs this to tell the two apart, because `before-quit` fires ahead of every `close` and
+   * the tracked-window count alone cannot distinguish them.
+   */
+  export function isAppQuitRequested(): boolean;
+  /**
+   * Whether the app is on its way down, by either of the two routes it can take.
+   *
+   * A quit (Cmd+Q, menu Quit, OS logout) sets the quit flag from `before-quit`. Closing the last
+   * window with the X button does not: on non-macOS, `window-all-closed` only calls `app.quit()` once
+   * every window is already gone, so for the whole shutdown the quit flag is false while every
+   * tracked window is on its way out.
+   *
+   * Both the guard that refuses to create a window during a shutdown and the decision a window's
+   * close handler makes about whether to run the app's shutdown tasks have to agree on this, or the
+   * guard protects the shared shutdown run from only one of the two ways it can be undermined.
+   */
+  export function isAppShuttingDown(): boolean;
+  /**
+   * Run the shutdown tasks, sharing one run across every window that closes as part of the same quit.
+   *
+   * @param performShutdownTasks Work to run once for this session
+   * @returns The shared run, so each caller can wait for it before destroying its window
+   */
+  export function runShutdownTasksOnce(performShutdownTasks: () => Promise<void>): Promise<void>;
+  /**
+   * Clear both latches because a new session is starting. Called when a window is created.
+   *
+   * Without this the shutdown tasks would run at most once per process. Closing the last window on
+   * macOS runs them and leaves the app resident; reactivating from the dock then gives the user a
+   * fresh session whose work is never synced on the way out, because the memoized promise had already
+   * settled. A stale quit flag is the same class of problem pointed the other way — it would make an
+   * ordinary window close look like a quit for the rest of the process, running the shutdown tasks
+   * when only one of several windows was being closed.
+   *
+   * Must not be called while a quit is under way — every window is sitting in `preventDefault()`
+   * waiting on the shared run at that point, and dropping it would let a window closing afterwards
+   * start a second one while the windows still waiting stop waiting for anything. The one caller
+   * refuses to create a window during a quit for exactly this reason.
+   */
+  export function resetShutdownLatchesForNewSession(): void;
 }
 declare module 'main/services/rpc-server' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
@@ -2052,10 +2299,27 @@ declare module 'main/services/rpc-server' {
    */
   export class RpcServer implements IRpcHandler {
     connectionStatus: ConnectionStatus;
+    /**
+     * Whether {@link onWebSocketClose} has already run for the current socket.
+     *
+     * A closed socket's listener is already removed, but a caller holding a stale reference to the
+     * bound handler could still invoke it directly; this makes a second call a no-op rather than
+     * double-logging and re-running teardown. Deliberately its own field rather than a read of
+     * `connectionStatus`, which is public and mutable: keyed off that, the natural future edit of
+     * setting `Disconnected` in `disconnect()` would skip teardown for the close that follows and
+     * permanently leak everything the socket had registered.
+     */
+    private hasCompletedTeardown;
     private ws;
     private requestId;
     /** Only used for logging to differentiate from other RpcServer objects */
     private readonly name;
+    /**
+     * How the peer on the other end of this socket labels itself in its own logs, once it has said so
+     * (see {@link ANNOUNCE_PEER}). Undefined until then, and for a peer that never announces — the
+     * .NET data provider does not.
+     */
+    private peerName;
     /** Refers to the main process */
     private readonly jsonRpcServer;
     /** Refers to any process that connected to main over the websocket */
@@ -2086,9 +2350,31 @@ declare module 'main/services/rpc-server' {
       documentation?: SingleNotificationDocumentation,
     ): boolean;
     unregisterRemoteEvent(eventName: string): boolean;
+    /**
+     * Record how the peer on the other end labels itself, so this socket's log lines can be joined to
+     * that process's own. Called remotely by a connecting client; see {@link ANNOUNCE_PEER}.
+     *
+     * @param peerName The peer's label for itself
+     * @returns Whether a usable label was recorded
+     */
+    setPeerName(peerName: string): boolean;
     private createNextRequestId;
     private addMethodToRpcServer;
     private handleError;
+    /**
+     * How to name this socket in a log line: main's own incrementing id, plus the peer's self-applied
+     * label once it has announced one. Both halves are needed — the id is what main's other lines
+     * use, and the label is the only thing that ties a line here to the same disconnect as reported
+     * by the process that owns the other end.
+     */
+    private describePeer;
+    /**
+     * How many network methods this peer registered. The method map is shared by reference across
+     * every `RpcServer` on the network, so its `size` is the whole network's method count — an
+     * alarming number to attach to one socket's departure, and not the number of methods actually
+     * about to be removed.
+     */
+    private countOwnRegisteredMethods;
     private addEventListenersToWebSocket;
     private removeEventListenersFromWebSocket;
     private onWebSocketClose;

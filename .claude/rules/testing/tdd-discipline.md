@@ -33,6 +33,13 @@ Every test must be capable of failing. Verify by:
 2. Run the test - it MUST fail
 3. If it passes without implementation, rewrite it
 
+**One exception: a `test.fails` tripwire.** A `test.fails` case pins a known, reproduced defect that
+has been deliberately deferred to a named ticket; it passes while the defect is present and turns red
+when the defect is fixed, which is the intended alarm rather than a broken test. Do not rewrite or
+delete one — see "Exception: `test.fails` tripwires" in
+[Testing-Guide.md](../../../.context/standards/Testing-Guide.md#verifying-tests-can-fail) for the
+conditions it has to meet.
+
 ## Test Quality (Not Enforceable by Lint)
 
 - Test behavior (WHAT), not implementation (HOW)

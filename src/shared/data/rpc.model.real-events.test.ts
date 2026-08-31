@@ -1,7 +1,15 @@
 // @vitest-environment node
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 import { describeWebSocketCloseEvent, describeWebSocketErrorEvent } from '@shared/data/rpc.model';
+
+// vi.mock is hoisted above the static imports at transform time, so the imports can be written
+// first here to satisfy import/first. Without it the real electron-log stack initializes in a plain
+// node worker — printing `Unexpected process type: undefined` on stderr every run — even though the
+// formatters under test never log.
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
 
 /**
  * Find a port nothing is listening on: bind an ephemeral server, read the port it was assigned,

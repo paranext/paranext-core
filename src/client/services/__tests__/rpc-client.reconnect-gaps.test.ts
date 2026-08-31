@@ -1,4 +1,4 @@
-import { describe, expect, test, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, test, vi, beforeEach } from 'vitest';
 import { RpcClient } from '@client/services/rpc-client';
 import { ConnectionStatus } from '@shared/data/rpc.model';
 
@@ -28,6 +28,13 @@ describe('RpcClient reconnect gaps (deferred — see TODO(PT-4435) in rpc-client
   beforeEach(() => {
     listeners.clear();
     fakeSocket.readyState = 1;
+  });
+
+  // These bodies are EXPECTED to throw, and `test.fails` reports a throw as a pass — so a case that
+  // installs fake timers and throws before restoring them would leak the fake clock into the next
+  // test while still looking green, landing the symptom on a different test than the cause.
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   // TODO(PT-4435): Pins a premature `Connected` status on reconnect — `connectionComplete` is a

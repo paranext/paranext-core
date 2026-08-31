@@ -309,14 +309,25 @@ describe('describeWebSocketCloseEvent', () => {
     // a line that contradicted itself. The marker must agree with wasClean.
     const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(1005, '', true));
     expect(result).toContain('code=1005');
-    expect(result).not.toContain('(abnormal)');
+    expect(result).not.toContain('abnormal');
     expect(result).toContain('wasClean=true');
   });
 
   test('marks a died-without-handshake close abnormal', () => {
     const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(1006, '', false));
-    expect(result).toContain('code=1006 (abnormal)');
+    expect(result).toContain('code=1006 abnormal=true');
     expect(result).toContain('wasClean=false');
+  });
+
+  test('emits only space-separated key=value pairs, so a log parser can read the whole detail', () => {
+    // The abnormal marker used to live inside the `code=` value as `1006 (abnormal)`, which put a
+    // space inside one pair and left a parser with a bare unparseable token.
+    const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(1006, 'went away', false));
+    result.split(' ').forEach((token) => {
+      // `reason="went away"` legitimately splits on its inner space; every token must either be a
+      // pair or the continuation of the quoted reason.
+      expect(token).toMatch(/^(\w+=|away")/);
+    });
   });
 
   test('the fixture reproduces the JSON.stringify collapse the formatter exists to avoid', () => {
@@ -357,7 +368,7 @@ describe('describeWebSocketCloseEvent', () => {
     [1006, false, true],
   ])('code %i with wasClean %s is marked abnormal: %s', (code, wasClean, isAbnormal) => {
     const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(code, '', wasClean));
-    expect(result.includes('(abnormal)')).toBe(isAbnormal);
+    expect(result.includes('abnormal=true')).toBe(isAbnormal);
   });
 
   test.each([
@@ -365,7 +376,31 @@ describe('describeWebSocketCloseEvent', () => {
     [1005, false],
     [1006, true],
   ])('falls back to the code list for code %i when wasClean is absent: %s', (code, isAbnormal) => {
-    expect(describeWebSocketCloseEvent({ code }).includes('(abnormal)')).toBe(isAbnormal);
+    expect(describeWebSocketCloseEvent({ code }).includes('abnormal=true')).toBe(isAbnormal);
+  });
+
+  test('does not claim a close was abnormal when there is no code to attribute it to', () => {
+    // With neither field readable the wasClean pair is the whole story; a bare `abnormal=true`
+    // would assert something about a socket this event says nothing about.
+    expect(describeWebSocketCloseEvent({ reason: 'hm' })).toBe('code=n/a reason="hm" wasClean=n/a');
+  });
+
+  test('reads code and wasClean once each, so the marker cannot contradict the printed code', () => {
+    // A non-idempotent accessor is the hostile case these formatters are tested against. Read
+    // twice, `code=1006` could be printed while the marker was computed from a clean second read.
+    let codeReads = 0;
+    const flipping = {
+      get code() {
+        codeReads += 1;
+        return codeReads === 1 ? 1006 : 1000;
+      },
+      reason: '',
+    };
+
+    const result = describeWebSocketCloseEvent(flipping);
+
+    expect(codeReads).toBe(1);
+    expect(result).toContain('code=1006 abnormal=true');
   });
 
   test('renders code 0 rather than swallowing it as falsy', () => {
@@ -394,9 +429,40 @@ describe('describeWebSocketCloseEvent', () => {
     expect(result.includes('…')).toBe(shouldTruncate);
   });
 
-  test('tolerates a reason containing lone surrogates', () => {
-    const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(1006, '\uD800bad', false));
+  test('escapes a reason so a peer cannot forge the shape of the log line', () => {
+    // Peer-controlled input. Quoting it raw let a reason of `said "goodbye")` close the caller's
+    // own `(${detail})` wrapper early and unbalance the quotes around it.
+    const result = describeWebSocketCloseEvent(
+      new WsLikeCloseEvent(1006, 'said "goodbye")', false),
+    );
+    // The escaped quotes are what makes the field's end unambiguous: the reason reads back out of
+    // the log line intact, `)` and all, instead of the raw quotes closing early and leaving the
+    // trailing `)` looking like the end of the caller's own `(${detail})` wrapper.
+    const quoted = result.slice(
+      result.indexOf('reason=') + 'reason='.length,
+      result.indexOf(' wasClean='),
+    );
+    expect(JSON.parse(quoted)).toBe('said "goodbye")');
+  });
+
+  test('escapes a lone surrogate produced by truncating mid-astral-character', () => {
+    // The bound is applied by `slice`, which counts UTF-16 units, so a truncation landing inside a
+    // surrogate pair is the one place a lone surrogate can actually be MANUFACTURED here — a short
+    // reason that merely contains one never reaches that branch.
+    const reason = `${'x'.repeat(MAX_LOGGED_DETAIL_LENGTH - 1)}😀tail`;
+    const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(1006, reason, false));
+
+    expect(result).toContain(String.raw`\ud83d`);
     expect(result).toContain('code=1006');
+  });
+
+  test('replaces control characters that a newline sweep alone would miss', () => {
+    // All peer-supplied, and all of them break a line-oriented log — U+2028/U+2029 render as line
+    // breaks in JavaScript-based log viewers even though they are not control characters.
+    const result = describeWebSocketCloseEvent(
+      new WsLikeCloseEvent(1006, 'a\fb\vc\u0000d\u001Be\u0085f\u2028g\u2029h', false),
+    );
+    expect(result).toContain('a b c d e f g h');
   });
 
   test('omits wasClean when absent rather than printing undefined', () => {
@@ -476,7 +542,6 @@ describe('describeWebSocketErrorEvent', () => {
 
   test('returns a useful string for a bare DOM Event, the only shape Chromium sends on error', () => {
     const result = describeWebSocketErrorEvent(new Event('error'));
-    expect(result).not.toBe('{}');
     expect(result).toBe('message=unknown code=n/a');
   });
 
@@ -486,9 +551,42 @@ describe('describeWebSocketErrorEvent', () => {
     const result = describeWebSocketErrorEvent(new WsLikeErrorEvent('outer', error));
     // Stack content is environment-dependent (varies by runtime/formatting), so pin the
     // fixed prefix exactly and assert the stack text follows rather than hard-coding it.
-    const expectedPrefix = 'message=socket hang up code=ECONNRESET\nstack: ';
+    const expectedPrefix = 'message=socket hang up code=ECONNRESET stack: ';
     expect(result.startsWith(expectedPrefix)).toBe(true);
     expect(result.length).toBeGreaterThan(expectedPrefix.length);
+  });
+
+  test('never emits a line break, so an error stays one log record', () => {
+    // `formatLog` wraps any message containing a newline as `[main]\n…\n[/main]`, so a stack
+    // introduced with `\n` gave socket errors a different record shape from every other line here.
+    const error = new Error('socket hang up');
+    const result = describeWebSocketErrorEvent(new WsLikeErrorEvent('outer', error));
+    expect(result).toContain('stack: ');
+    expect(result).not.toMatch(/[\r\n]/);
+  });
+
+  test('keeps a populated outer message when the inner error carries an empty one', () => {
+    const result = describeWebSocketErrorEvent(
+      new WsLikeErrorEvent('read ECONNRESET', { message: '' }),
+    );
+    expect(result).toContain('read ECONNRESET');
+  });
+
+  test('surfaces an error that is itself a string', () => {
+    const result = describeWebSocketErrorEvent(new WsLikeErrorEvent('outer', 'just a string'));
+    expect(result).toContain('just a string');
+  });
+
+  test('bounds the message and its cause together, not each half separately', () => {
+    const error = new Error('m'.repeat(MAX_LOGGED_DETAIL_LENGTH), {
+      cause: new Error('c'.repeat(MAX_LOGGED_DETAIL_LENGTH)),
+    });
+    const result = describeWebSocketErrorEvent(new WsLikeErrorEvent('outer', error));
+
+    const message = result.slice('message='.length, result.indexOf(' code='));
+    // Bounding the halves independently let the pair run to twice the stated bound. The ellipsis
+    // costs one character beyond it.
+    expect(message.length).toBeLessThanOrEqual(MAX_LOGGED_DETAIL_LENGTH + 1);
   });
 
   test('surfaces a refused-connection error, the startup-race fingerprint', () => {
@@ -501,7 +599,7 @@ describe('describeWebSocketErrorEvent', () => {
     expect(result).toContain('8876');
   });
 
-  test('surfaces a numeric error code, which the previous server-side check dropped', () => {
+  test('surfaces a numeric error code, not only a string one', () => {
     const error = new Error('boom');
     Object.defineProperty(error, 'code', { value: 4091, enumerable: true });
     expect(describeWebSocketErrorEvent(new WsLikeErrorEvent('outer', error))).toContain('4091');
@@ -557,9 +655,18 @@ describe('describeWebSocketErrorEvent', () => {
 
   // null is itself one of the garbage inputs under test
   // eslint-disable-next-line no-null/no-null
-  test.each([undefined, null, {}, 'nope', 42])('never returns {} for input %p', (input) => {
-    expect(describeWebSocketErrorEvent(input)).not.toBe('{}');
-  });
+  // `not.toBe('{}')` would be non-falsifiable here — the function's only return statement starts
+  // with `message=`, so no input can produce `{}`. Pin the sentinel these inputs must actually
+  // yield instead.
+  // null is itself one of the garbage inputs under test
+  // eslint-disable-next-line no-null/no-null
+  test.each([undefined, null, {}, 'nope', 42])(
+    'reports the unknown sentinel for input %p rather than throwing',
+    (input) => {
+      expect(() => describeWebSocketErrorEvent(input)).not.toThrow();
+      expect(describeWebSocketErrorEvent(input)).toBe('message=unknown code=n/a');
+    },
+  );
 
   test('does not throw when a getter throws', () => {
     const hostile = {
