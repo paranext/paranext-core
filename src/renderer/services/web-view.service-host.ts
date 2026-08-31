@@ -14,6 +14,7 @@ import {
   type SettingsTabData,
   TAB_TYPE_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
+import { spliceIntoWebViewHead } from '@renderer/services/web-view-head.util';
 import { localThemeService } from '@renderer/services/theme.service-host';
 import {
   deleteFullWebViewStateById,
@@ -2142,21 +2143,14 @@ async function openOrReloadWebView(
       form-action 'self';
     ">`;
 
-  // Add some elements at the start of the head to give access to papi, CSP, styles, etc.
-  // Native string methods, not the grapheme-aware helpers: this scans ASCII markup for the opening
-  // `<head` tag and its closing `>`, and the index is only ever used to splice this same string, so
-  // it never escapes into another index space. The helpers would segment the entire web view
-  // document four times per web view, which measured as seconds of startup time.
-  // A document with no `<head` leaves headStart at -1, which `indexOf` clamps to 0 — the same
-  // behavior the grapheme-aware helper had, so malformed documents splice as they did before.
-  const headStart = webViewContent.indexOf('<head');
-  const headEnd = webViewContent.indexOf('>', headStart);
-
-  // Inject the CSP, styles, and import scripts into the html if it is not a URL iframe
+  // Add some elements at the start of the head to give access to papi, CSP, styles, etc. if it is
+  // not a URL iframe
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL) {
     const themeStylesheet = `<style nonce="${srcNonce}" id="${THEME_STYLE_ELEMENT_ID}" data-theme-id="${theme.id}">${getStylesheetForTheme(theme)}</style>`;
 
-    webViewContent = `${webViewContent.substring(0, headEnd + 1)}
+    webViewContent = spliceIntoWebViewHead(
+      webViewContent,
+      `
     ${contentSecurityPolicy}
     <script nonce="${srcNonce}">
     ${imports}
@@ -2167,7 +2161,8 @@ async function openOrReloadWebView(
     <style nonce="${srcNonce}">
       ${SCROLLBAR_STYLES_RAW}
     </style>
-    ${themeStylesheet}${webViewContent.substring(headEnd + 1)}`;
+    ${themeStylesheet}`,
+    );
   }
 
   const finalWebView: WebViewTabProps = {
