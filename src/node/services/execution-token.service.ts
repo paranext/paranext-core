@@ -1,10 +1,13 @@
 import { ExecutionToken, ExecutionTokenType } from '@node/models/execution-token.model';
+import { isString } from 'platform-bible-utils';
 
 const tokenMap = new Map<string, ExecutionToken>();
 
 function getMapKey(name: string, tokenType: ExecutionTokenType = 'extension'): string {
-  if (!name || name.length < 1) throw new Error('name must be defined');
-  if (!tokenType || tokenType.length < 1) throw new Error('type must be defined');
+  // `length` on a non-string is `undefined`, and `undefined < 1` is false, so both checks test the
+  // type as well — otherwise a non-string builds a key that silently never matches a real token.
+  if (!isString(name) || name.length < 1) throw new Error('name must be defined');
+  if (!isString(tokenType) || tokenType.length < 1) throw new Error('type must be defined');
 
   return `${tokenType}:${name}`;
 }

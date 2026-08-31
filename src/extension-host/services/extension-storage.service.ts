@@ -8,6 +8,7 @@ import {
 import { ExecutionToken } from '@node/models/execution-token.model';
 import { executionTokenService } from '@node/services/execution-token.service';
 import { Buffer } from 'node:buffer';
+import { isString } from 'platform-bible-utils';
 
 // #region Functions that need to be called by other services to initialize this service
 
@@ -27,6 +28,10 @@ export function setExtensionUris(urisPerExtension: Map<string, string>) {
 
 /** Allow alphanumeric characters and the following: -_.()/\ */
 function isValidFileOrDirectoryName(name: string): boolean {
+  // This is a path-traversal guard on an API extensions call across the network, so the declared
+  // `string` is not a guarantee. `RegExp.exec` stringifies its argument, so `['../../secret.txt']`
+  // would test as the valid-looking `../../secret.txt`; reject anything that is not a string.
+  if (!isString(name)) return false;
   // Regex with no match returns null
   // eslint-disable-next-line no-null/no-null
   return /^[\w\d-_.()/\\]*$/.exec(name) !== null;
