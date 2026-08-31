@@ -475,10 +475,8 @@ const createRemoteProxy = (
       if (key === 'then' || key in target) return target[key as keyof typeof target];
       // If the prop requested is a symbol, that doesn't work over the network. Reject
       if (!isString(key)) return undefined;
-      // Don't create remote proxies for events
-      // Native `startsWith`, not the grapheme-aware helper: network object property names are
-      // JavaScript identifiers matched against an ASCII prefix, and this trap runs on every property
-      // access. Each call gets a fresh key, so there is no instance to reuse.
+      // Don't create remote proxies for events. Native `startsWith` for the same reason as the
+      // data provider proxy traps — ASCII both sides, fresh key per access, nothing to reuse.
       if (key.startsWith('on')) return undefined;
 
       // If the local network object doesn't have the property, build a request for it

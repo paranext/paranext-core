@@ -237,6 +237,13 @@ export type DataProviderInternal<TDataTypes extends DataProviderDataTypes = Data
   >;
 
 /** The functions that a data provider has for each data type */
+/**
+ * Prefixes that mark a data provider function, longest-match-independent: `find` below returns the
+ * first prefix that matches, so this list is only order-neutral because no entry is a prefix of
+ * another. Adding one that is — `sub`, or `getAll` — would make the strip below cut the wrong
+ * number of characters depending on where it landed in this array, and produce a data type name
+ * that silently does not match the engine's.
+ */
 const dataProviderFunctionPrefixes = ['set', 'get', 'subscribe'];
 
 /**

@@ -5,10 +5,9 @@
  *
  * Uses native `String` methods rather than the grapheme-aware helpers in `platform-bible-utils`:
  * the needles are ASCII markup, and the indexes are only ever used to splice the same string they
- * came from, so the index space never escapes. Segmenting instead costs roughly a second per
- * megabyte of document — see the measurements in
- * `.context/plans/pt-2626-native-string-call-sites.md` — and web views inline their whole bundled
- * app, so a megabyte or two is ordinary.
+ * came from, so the index space never escapes. Segmenting instead cost 36 ms on a 100 KB document,
+ * 186 ms at 500 KB and 1023 ms at 2 MB, against roughly 0 ms native — and web views inline their
+ * whole bundled app, so a megabyte or two is ordinary.
  *
  * KNOWN GAP, deliberately preserved: the splice point is "the first `>` at or after the first
  * `<head`", which is not always the end of the opening `<head>` tag.

@@ -1,12 +1,13 @@
 import { describe, expect, test, vi } from 'vitest';
-import { ProcessType } from '@shared/global-this.model';
 import { testingExtensionService } from '@extension-host/services/extension.service';
 
 // The extension service logs through the shared logger as it loads, which warns when it cannot tell
 // which process it is running in — so this has to be set before the import above, not after it.
-// `vi.hoisted` runs above the imports, which is also why `ProcessType` cannot be referenced here.
-vi.hoisted(() => {
-  globalThis.processType = 'extension-host' as ProcessType;
+// `vi.hoisted` runs above the imports, which is also why `ProcessType` has to be imported here
+// rather than at the top of the file.
+vi.hoisted(async () => {
+  const { ProcessType } = await import('@shared/global-this.model');
+  globalThis.processType = ProcessType.ExtensionHost;
 });
 
 // Importing the extension service runs its module-level `createDir` calls for the installed- and
