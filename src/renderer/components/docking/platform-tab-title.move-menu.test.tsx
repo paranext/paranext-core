@@ -572,11 +572,26 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
   });
 
-  it('keeps move-to-new-window for a lone tab in the window holding the primary role', async () => {
-    // And the third read: alone, but this IS the primary window, so the move is not a no-op
+  it('drops move-to-new-window for a lone tab in the primary window while another window stands', async () => {
+    // The primary role does not decide this. Main empties a window by counting the windows that
+    // could be the last one, which never reads the role, so with another window standing this one
+    // closes when its last tab leaves — building an identical window and taking this one down.
     globalThis.windowId = '1';
     vi.mocked(getOpenTabCountSync).mockReturnValue(1);
     await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
+
+    expect(screen.queryByText('Move tab to new window')).not.toBeInTheDocument();
+    // Positive control: the guard removed one item rather than the menu failing to render
+    expect(screen.getByText('Float Tab')).toBeInTheDocument();
+  });
+
+  it('keeps move-to-new-window for a lone tab when no other window would remain', async () => {
+    // Nothing marks a window primary again after startup, so once the window holding the role goes
+    // down no window reports it. This one is the last standing: emptying it docks Home rather than
+    // closing it, so the move is not a no-op and the item has to stay.
+    globalThis.windowId = '2';
+    vi.mocked(getOpenTabCountSync).mockReturnValue(1);
+    await openMenuOn([{ ...OTHER_WINDOW }]);
 
     expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
   });

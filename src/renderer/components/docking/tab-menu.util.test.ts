@@ -28,7 +28,7 @@ const CONTRIBUTED = [floatItem, moveToNewWindowItem, moveToWindowSubmenu];
 const context = (overrides: Partial<TabMenuContext> = {}): TabMenuContext => ({
   webViewId: 'tab-1',
   otherWindows: [{ windowId: 2, label: 'Biblical Terms', isMain: false }],
-  isOnlyTabInSecondaryWindow: false,
+  isOnlyTabInWindowThatWouldClose: false,
   ...overrides,
 });
 
@@ -91,12 +91,12 @@ describe('buildTabMenuItems', () => {
     expect(idsOf(result)).toEqual(['platform.floatTab']);
   });
 
-  test('drops move-to-new-window when the tab is alone in a secondary window', () => {
+  test('drops move-to-new-window when the tab is alone in a window that would close', () => {
     // Paratext 9 hides its float item in the same situation: the action would build an identical
     // window and empty the one the tab is in
     const result = buildTabMenuItems(
       CONTRIBUTED,
-      context({ isOnlyTabInSecondaryWindow: true }),
+      context({ isOnlyTabInWindowThatWouldClose: true }),
       'Empty window',
     );
 

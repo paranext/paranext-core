@@ -23,10 +23,15 @@ export type TabMenuContext = {
   /** Every window except the one this tab is in, in the order to offer them */
   otherWindows: WindowSummary[];
   /**
-   * Whether this tab is the only one in a window that does not hold the primary role. Moving it to
-   * a new window would then build an identical window and empty the one it is in.
+   * Whether this tab is the only one in a window that would close once it left. Moving it to a new
+   * window would then build an identical window and take this one down with it.
+   *
+   * Main decides a window's fate on emptying by counting the windows that could be the last one,
+   * and never by which window holds the primary role — a window empties into Home when nothing else
+   * would remain, and closes when something would. So the question here is whether another window
+   * is standing, not whether this one is the primary.
    */
-  isOnlyTabInSecondaryWindow: boolean;
+  isOnlyTabInWindowThatWouldClose: boolean;
 };
 
 /** Reads the target window id back out of a generated submenu entry, if that is what was selected */
@@ -38,9 +43,9 @@ export function getMoveTargetWindowId(itemId: string): number | undefined {
 
 /** Whether a contributed item is one this tab cannot currently act on */
 function isUnavailable(item: OverlayContextMenuItem, context: TabMenuContext): boolean {
-  const { webViewId, otherWindows, isOnlyTabInSecondaryWindow } = context;
+  const { webViewId, otherWindows, isOnlyTabInWindowThatWouldClose } = context;
   if (item.type === 'item' && item.id === MOVE_TO_NEW_WINDOW_COMMAND)
-    return !webViewId || isOnlyTabInSecondaryWindow;
+    return !webViewId || isOnlyTabInWindowThatWouldClose;
   if (item.type === 'submenu' && item.id === MOVE_TO_WINDOW_ITEM_ID)
     return !webViewId || otherWindows.length === 0;
   return false;
