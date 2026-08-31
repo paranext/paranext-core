@@ -4114,7 +4114,11 @@ export declare function slice(string: string, indexStart: number, indexEnd?: num
  * @param splitLimit Maximum number of substrings to return. As in native, anything past the limit
  *   is discarded, and the limit is converted with `ToUint32` — so `-1` means "no limit" while `NaN`
  *   and `Infinity` yield an empty array
- * @returns An array of strings, split at each point where separator occurs in the starting string
+ * @returns An array of strings, split at each point where separator occurs in the starting string.
+ *   A regular expression's capture groups are interleaved into the result, as in native. Every
+ *   entry is a string: a capture group that did not participate in its match is `''` here, where
+ *   native yields `undefined`. That makes it indistinguishable from a group that matched the empty
+ *   string — use {@link GraphemeString.split} where the difference matters
  */
 export declare function split(string: string, separator: string | RegExp, splitLimit?: number): string[];
 /**
