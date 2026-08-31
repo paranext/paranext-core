@@ -335,6 +335,24 @@ export declare const MAX_PADDING_LENGTH: number;
  * segmentation carries into the result instead of being recomputed. Call `toString()` for the
  * text.
  *
+ * ## Segmentation fidelity
+ *
+ * Clusters come from `stringz`, which is emoji-aware rather than UAX #29 conformant. It correctly
+ * keeps ZWJ sequences, skin-tone modifiers, regional-indicator flags, precomposed Hangul, and
+ * combining marks on Latin together as one cluster. It splits four things a conformant segmenter
+ * would keep whole:
+ *
+ * - `\r\n`, which UAX #29 rule GB3 makes a single cluster
+ * - Indic conjuncts formed with a virama — Devanagari `क्षि`, Tamil `நி`, Bengali `ক্ত`
+ * - Thai and other spacing combining marks — `กำ`
+ * - Hangul written as decomposed Jamo rather than precomposed syllables
+ *
+ * So `length` counts what a reader would call characters for Latin and emoji, and overcounts for
+ * the scripts above. `Intl.Segmenter` is conformant and is the obvious swap, but it is ~10x slower
+ * on Latin text and, more importantly, it makes `\r\n` one cluster — which would stop `'\n'` from
+ * being a boundary-aligned separator and silently break line splitting on any Windows-authored
+ * file. Changing segmenters is therefore a behavioral decision, not a drop-in upgrade.
+ *
  * @example
  *
  * ```ts
@@ -4035,6 +4053,9 @@ export declare function lastIndexOf(string: string, searchString: string, positi
  * grapheme clusters instead of UTF-16 code units. Since `length` appears to be a reserved keyword,
  * the function was renamed to `stringLength`.
  *
+ * Counts as a reader would for Latin and emoji. Overcounts for `\r\n`, Indic conjuncts, Thai
+ * spacing marks, and decomposed Hangul Jamo — see the module note above.
+ *
  * @param string String to return the length for
  * @returns Number of grapheme clusters in the string
  */
@@ -4165,7 +4186,8 @@ export declare function startsWith(string: string, searchString: string, positio
 export declare function substring(string: string, begin: number, end?: number): string;
 /**
  * Converts a string to an array of its grapheme clusters. Mirrors spreading a native string, except
- * that native yields code points rather than grapheme clusters.
+ * that native yields code points rather than grapheme clusters. See the module note above for where
+ * these clusters differ from UAX #29.
  *
  * @param string String to convert to an array
  * @returns An array of the string's grapheme clusters
