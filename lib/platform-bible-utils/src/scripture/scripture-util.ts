@@ -323,9 +323,10 @@ export async function getLocalizedIdFromBookNumber(
     localizeKey: `Book.${id}`,
     languagesToSearch: [localizationLanguage],
   });
-  // Grapheme-aware `split`, deliberately, even though both separators are single characters: the
-  // string being split is a localized book name, so a separator could sit next to a combining mark
-  // and native splitting would cut through the middle of a cluster. Keep this off native.
+  // Grapheme-aware `split`, deliberately, even though both separators are single characters. These
+  // are localized book names, so a separator can carry a combining mark — and a decorated separator
+  // is part of a larger cluster, which means it is not a separator. Native splits there anyway and
+  // orphans the mark onto the front of the next piece. Keep this off native.
   const parts = split(bookName, '-');
   // some entries had a second name inside ideographic parenthesis. This is the fullwidth left
   // parenthesis U+FF08, which needs the four-digit `\u` escape — the two-digit `\xff08` is `ÿ08`.
@@ -789,6 +790,20 @@ function isUsjContentEmpty(content: MarkerContent[] | undefined) {
 }
 
 /**
+ * The text of `graphemeString` with trailing whitespace graphemes removed. Scans the existing
+ * segmentation for the cut point and then slices once, so it costs a single pass over the text.
+ */
+function trimEndOfGraphemes(graphemeString: GraphemeString): string {
+  const { length } = graphemeString;
+  let end = length;
+  while (end > 0 && isWhiteSpace(graphemeString.charAt(end - 1))) end -= 1;
+  // Slicing would copy the grapheme array to reach the same text. Roughly half the calls here trim
+  // nothing, so answer those without the copy.
+  if (end === length) return graphemeString.toString();
+  return graphemeString.slice(0, end).toString();
+}
+
+/**
  * Determines if the content object is the final child of a parent that is a block-level marker.
  *
  * We do not need to walk up the ancestors to the _closest_ block marker because spaces are
@@ -801,16 +816,6 @@ function isUsjContentEmpty(content: MarkerContent[] | undefined) {
  * @returns `true` if `contentObject` is the final child of the closest block-level marker; `false`
  *   otherwise
  */
-/**
- * The text of `graphemeString` with trailing whitespace graphemes removed. Scans the existing
- * segmentation for the cut point and then slices once, so it costs a single pass over the text.
- */
-function trimEndOfGraphemes(graphemeString: GraphemeString): string {
-  let end = graphemeString.length;
-  while (end > 0 && isWhiteSpace(graphemeString.charAt(end - 1))) end -= 1;
-  return graphemeString.slice(0, end).toString();
-}
-
 function isAtEndOfBlockMarker(
   contentObject: MarkerContent | Usj,
   parent: MarkerObject | Usj | undefined,

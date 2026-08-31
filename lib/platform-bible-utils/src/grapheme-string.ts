@@ -175,12 +175,24 @@ export class GraphemeString {
 
   /**
    * The grapheme clusters as an array. Returns a fresh copy, so mutating it cannot corrupt this
-   * instance. No native equivalent.
+   * instance. Equivalent to spreading this instance, and to spreading a native string except that
+   * native yields code points rather than clusters.
    *
    * @returns A new array of the grapheme clusters, in order. Empty for the empty string.
    */
   toArray(): string[] {
     return [...this.graphemes];
+  }
+
+  /**
+   * Iterate the grapheme clusters, so `Array.from(...)` and spreading behave the way they do on a
+   * native string — with clusters as the unit. Without this an instance would read as array-like,
+   * and `Array.from` would silently produce a run of `undefined` instead of failing.
+   *
+   * @returns An iterator over the grapheme clusters, in order.
+   */
+  *[Symbol.iterator](): IterableIterator<string> {
+    yield* this.graphemes;
   }
 
   /**
@@ -780,12 +792,14 @@ function buildReplacementParts<T = unknown>(
           const closeCurlyBraceIndex = indexOfClosestClosingCurlyBrace(graphemeString, i, false);
           if (closeCurlyBraceIndex >= 0) {
             const replacerKey = graphemeString.slice(i + 1, closeCurlyBraceIndex).toString();
-            const replacerContent =
-              replacerKey in replacers
-                ? // `replacerKey in replacers` is a narrowing check; the cast is sound.
-                  // eslint-disable-next-line no-type-assertion/no-type-assertion
-                  replacers[replacerKey as keyof typeof replacers]
-                : replacerKey;
+            // Own properties only. `in` would walk the prototype chain, so `{toString}` in a
+            // localized template would substitute `Object.prototype.toString`'s source text
+            // instead of being left as the unknown key it is.
+            const replacerContent = Object.hasOwn(replacers, replacerKey)
+              ? // `Object.hasOwn` is a narrowing check; the cast is sound.
+                // eslint-disable-next-line no-type-assertion/no-type-assertion
+                replacers[replacerKey as keyof typeof replacers]
+              : replacerKey;
             addToContents(replacerContent, i, closeCurlyBraceIndex + 1 - i);
             i = closeCurlyBraceIndex;
           }
