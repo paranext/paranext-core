@@ -3,7 +3,7 @@
   "repos": [
     {
       "folder": "scripture-editors",
-      "cloneUrl": "https://github.com/eten-tech-foundation/scripture-editors.git",
+      "cloneUrl": "https://github.com/paranext/scripture-editors.git",
       "revision": "platform-yalc",
       "devPackages": [
         {
