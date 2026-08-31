@@ -11,43 +11,16 @@
  */
 import { describe, expect, it } from 'vitest';
 import { act, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import {
   CARET_IN_NOTE_TEXT,
   caretAncestry,
+  installPopoverJsdomStubs,
   renderPopoverAndWaitForInit,
+  visibleView,
 } from './footnote-editor.test-harness';
 
-// The menu is a cmdk command list inside a Radix popover, which instantiates a ResizeObserver and
-// scrolls its active item into view; jsdom ships neither.
-class NoopResizeObserver implements ResizeObserver {
-  private readonly targets = new Set<Element>();
-
-  observe(target: Element) {
-    this.targets.add(target);
-  }
-
-  unobserve(target: Element) {
-    this.targets.delete(target);
-  }
-
-  disconnect() {
-    this.targets.clear();
-  }
-}
-
-if (typeof globalThis.ResizeObserver === 'undefined') {
-  globalThis.ResizeObserver = NoopResizeObserver;
-}
-if (typeof Element.prototype.scrollIntoView !== 'function') {
-  Element.prototype.scrollIntoView = () => {};
-}
-/** The markers menu anchors itself to the caret's bounding box; jsdom has no Range geometry. */
-if (typeof Range.prototype.getBoundingClientRect !== 'function') {
-  Range.prototype.getBoundingClientRect = () => new DOMRect();
-}
-
-/** The non-editable marker mode the scripture editor uses outside Standard view. */
-const visibleView = { markerMode: 'visible', hasSpacing: true, isFormattedFont: true } as const;
+installPopoverJsdomStubs();
 
 const MARKER_MENU_TRIGGER = '\\';
 
@@ -82,5 +55,26 @@ describe('FootnoteEditor inline markers menu', () => {
     // Dismissing focuses the editor again; that bare focus must not push the caret out of the
     // character runs, or the user is back to typing where their text joins nothing.
     expect(caretAncestry(lexical)).toEqual(CARET_IN_NOTE_TEXT);
+  }, 20000);
+
+  it('offers the markers of the note actually being edited, not a fixed note type', async () => {
+    const { editorInput } = await renderPopoverAndWaitForInit(visibleView);
+
+    // Switch the note to a cross-reference, then ask for the menu from inside its text.
+    await userEvent.click(
+      screen.getByRole('button', { name: /footnoteEditor_noteType_footnote_label/ }),
+    );
+    await userEvent.click(
+      await screen.findByRole('menuitemcheckbox', {
+        name: /footnoteEditor_noteType_crossReference_label/,
+      }),
+    );
+    editorInput.focus();
+    await pressKey(MARKER_MENU_TRIGGER);
+
+    // `xo` belongs to `\x` alone — `\f` offers only `\xt` from the cross-reference group — so this
+    // can only pass if the note's own marker is what the menu was built from.
+    expect(markerMenuSearchBox()).not.toBeNull();
+    expect(screen.getByText('xo')).toBeDefined();
   }, 20000);
 });

@@ -15,40 +15,12 @@ import { $getRoot, $isElementNode, $isTextNode, LexicalNode, TextNode } from 'le
 import {
   CARET_IN_NOTE_TEXT,
   caretAncestry,
+  installPopoverJsdomStubs,
   renderPopoverAndWaitForInit,
+  visibleView,
 } from './footnote-editor.test-harness';
 
-// The note-type dropdown is a Radix menu, which observes its trigger and scrolls the active item
-// into view; jsdom ships neither API. These tests assert caret position, not layout.
-class NoopResizeObserver implements ResizeObserver {
-  private readonly targets = new Set<Element>();
-
-  observe(target: Element) {
-    this.targets.add(target);
-  }
-
-  unobserve(target: Element) {
-    this.targets.delete(target);
-  }
-
-  disconnect() {
-    this.targets.clear();
-  }
-}
-
-if (typeof globalThis.ResizeObserver === 'undefined') {
-  globalThis.ResizeObserver = NoopResizeObserver;
-}
-if (typeof Element.prototype.scrollIntoView !== 'function') {
-  Element.prototype.scrollIntoView = () => {};
-}
-// A focused editor measures its caret; jsdom has no Range geometry.
-if (typeof Range.prototype.getBoundingClientRect !== 'function') {
-  Range.prototype.getBoundingClientRect = () => new DOMRect();
-}
-
-/** The non-editable marker mode the scripture editor uses outside Standard view. */
-const visibleView = { markerMode: 'visible', hasSpacing: true, isFormattedFont: true } as const;
+installPopoverJsdomStubs();
 
 /** Partway through the note text, standing in for where a user was editing. */
 const MID_TEXT_OFFSET = 2;
@@ -118,5 +90,25 @@ describe('FootnoteEditor note-type change', () => {
     await switchNoteTypeToCrossReference();
 
     expect(caretAncestry(lexical)).toEqual(CARET_IN_NOTE_TEXT);
+  }, 20000);
+
+  it('returns focus to the dropdown when it is dismissed without choosing', async () => {
+    const { editorInput } = await renderPopoverAndWaitForInit(visibleView);
+    editorInput.focus();
+    const trigger = screen.getByRole('button', {
+      name: /footnoteEditor_noteType_footnote_label/,
+    });
+
+    await userEvent.click(trigger);
+    await userEvent.keyboard('{Escape}');
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    });
+
+    // Nothing changed, so the user goes back to the control they opened rather than being
+    // relocated into the editor — they keep their place in the toolbar.
+    expect(document.activeElement).toBe(trigger);
   }, 20000);
 });

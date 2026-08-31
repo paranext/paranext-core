@@ -29,10 +29,11 @@ export function generateInlineMarkerMenuListItems(
 
   // A caret inside a character run reports that run's marker (`ft`, `fq`, …), and those define no
   // children. What a user can insert there is what the enclosing note allows, so fall back to it.
-  const markerDetails = usfmMarkers[parentMarker]?.children
-    ? usfmMarkers[parentMarker]
-    : usfmMarkers[noteMarker ?? parentMarker];
-  if (!markerDetails?.children) return [];
+  const caretMarkerDetails = usfmMarkers[parentMarker];
+  const markerDetails = caretMarkerDetails?.children
+    ? caretMarkerDetails
+    : noteMarker && usfmMarkers[noteMarker];
+  if (!markerDetails || !markerDetails.children) return [];
 
   const markerMenuItems: MarkerMenuItem[] = [];
   Object.entries(markerDetails.children).forEach(([, markers]) => {
