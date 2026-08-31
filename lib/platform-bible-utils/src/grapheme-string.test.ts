@@ -354,6 +354,16 @@ describe('native parity: split', () => {
 
 // #region Grapheme awareness — where the unit deliberately differs from native
 
+/**
+ * A value of the given JSON shape, typed loosely. TypeScript callers cannot reach the cases these
+ * guard, but this package is published to untyped extension code that can, and `JSON.parse` is how
+ * such a value realistically arrives — it types as `any` without a cast, so the tests read the way
+ * the hazard actually looks.
+ */
+function untyped(json: string): string {
+  return JSON.parse(json);
+}
+
 /** Honest cluster count of `text`, computed from a fresh instance rather than a derived one. */
 function stringLengthOf(text: string): number {
   return new GraphemeString(text).length;
@@ -497,11 +507,6 @@ describe('hostile and cross-realm arguments', () => {
     ).toEqual(['a', 'b', 'c']);
   });
 
-  // TypeScript callers cannot reach these, but this package is published to untyped extension code
-  // that can. `JSON.parse` is how such a value realistically arrives, and it types as `any` without
-  // a cast, so these read the way the hazard actually looks.
-  const untyped = (json: string): string => JSON.parse(json);
-
   it('coerces a non-string needle the way native does', () => {
     const nullNeedle = untyped('null');
     expect(new GraphemeString('anullb').indexOf(nullNeedle)).toEqual('anullb'.indexOf(nullNeedle));
@@ -605,6 +610,75 @@ describe('the offsets cache is invisible to callers', () => {
     const untouched = new GraphemeString('abc');
     read.indexOf('b');
     expect(JSON.stringify(read)).toEqual(JSON.stringify(untouched));
+  });
+});
+
+describe('formatReplacement degrades on values it cannot coerce', () => {
+  // The template is a localized string and the replacers are caller-supplied runtime values, so one
+  // bad value must not take down the whole localization call.
+  it('stringifies a Symbol instead of throwing', () => {
+    expect(new GraphemeString('Hi {v}!').formatReplacement({ v: Symbol('tag') })).toEqual(
+      'Hi Symbol(tag)!',
+    );
+  });
+
+  it('falls back for a value with nothing to coerce through', () => {
+    // `Object.create(null)` is the recommended way to build a lookup free of prototype pollution,
+    // so the safe idiom is the one with no inherited `toString`/`valueOf`.
+    // The rule guards against `null` as a value. Here it is the prototype argument, and
+    // `Object.create(null)` is the only way to build the object this test is about.
+    // eslint-disable-next-line no-null/no-null
+    const noPrototype: object = Object.create(null);
+    expect(new GraphemeString('Hi {v}!').formatReplacement({ v: noPrototype })).toEqual(
+      'Hi [object Object]!',
+    );
+    const throwsOnToString = {
+      toString() {
+        throw new Error('boom');
+      },
+      valueOf() {
+        throw new Error('boom');
+      },
+    };
+    expect(new GraphemeString('Hi {v}!').formatReplacement({ v: throwsOnToString })).toEqual(
+      'Hi [object Object]!',
+    );
+  });
+
+  it('degrades even when the fallback itself throws', () => {
+    const hostile = Object.defineProperty({}, Symbol.toStringTag, {
+      get() {
+        throw new Error('boom');
+      },
+    });
+    expect(new GraphemeString('Hi {v}!').formatReplacement({ v: hostile })).toEqual(
+      'Hi [object Unknown]!',
+    );
+    const proxy = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error('boom');
+        },
+      },
+    );
+    expect(new GraphemeString('Hi {v}!').formatReplacement({ v: proxy })).toEqual(
+      'Hi [object Unknown]!',
+    );
+  });
+
+  it('leaves every ordinarily coercible value exactly as it was', () => {
+    expect(new GraphemeString('{v}').formatReplacement({ v: 'Jim' })).toEqual('Jim');
+    expect(new GraphemeString('{v}').formatReplacement({ v: 42 })).toEqual('42');
+    expect(new GraphemeString('{v}').formatReplacement({ v: untyped('null') })).toEqual('null');
+    expect(new GraphemeString('{v}').formatReplacement({ v: undefined })).toEqual('undefined');
+    expect(new GraphemeString('{v}').formatReplacement({ v: { a: 1 } })).toEqual('[object Object]');
+    expect(new GraphemeString('{v}').formatReplacement({ v: ['a', 'b'] })).toEqual('a,b');
+  });
+
+  it('the array variant still hands back the value untouched', () => {
+    const tag = Symbol('tag');
+    expect(new GraphemeString('Hi {v}!').formatReplacementToArray({ v: tag })[1]).toBe(tag);
   });
 });
 
