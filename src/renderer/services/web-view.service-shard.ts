@@ -3659,6 +3659,20 @@ async function adoptWebView(
   // decided inside it: `isWindowToldToClose` latches whenever an emptiness report is answered, which
   // can be at any moment. The guard above spoke for the moment this adopt arrived, not for this one.
   throwIfWindowIsClosing(`adopt web view ${savedWebViewDefinition.id}`);
+  // Checked here rather than at entry, for the same reason as the guard above: the waits park for
+  // as long as a load takes, and this has to speak for the moment the seed happens. A legitimate
+  // move never reaches this — capture removes the source tab before the destination is asked — so
+  // an id this window already holds means a bundle that did not come from one. Seeding would
+  // overwrite the live view's state, and the decline and throw paths below would then delete it,
+  // which is the loss `openOrReloadWebView`'s still-docked branch refuses for the same reason.
+  // Read out after the waits above, never before them, for the reason `getDockLayout`'s own doc
+  // gives and `captureAndCloseWebView` repeats: a wait is the stretch in which a re-register
+  // invalidates a dock layout already held in a variable.
+  const dockLayout = await getDockLayout();
+  if (dockLayout.getWebViewDefinition(savedWebViewDefinition.id) !== undefined)
+    throw new Error(
+      `Cannot adopt web view ${savedWebViewDefinition.id}: this window already has it docked, and adopting would overwrite the state of the view it is showing`,
+    );
   // Seeded before the provider runs: the moved view's state must be in this window's storage
   // for the view to read, including when the provider does not echo state back. A provider
   // that returns state still wins — the open persists the provider's state after this

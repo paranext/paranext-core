@@ -337,6 +337,30 @@ describe('adoptWebView', () => {
     expect(deleteFullWebViewStateById).toHaveBeenCalledWith('moved-view');
   });
 
+  test('adopt refuses an id this window already holds docked, without touching its state', async () => {
+    // The seed runs before the provider, so a shape-valid bundle naming a view this window already
+    // has docked would overwrite that live view's state — and the decline and throw paths would
+    // then delete it outright. Refused before either can happen, so the docked view is untouched.
+    const { setFullWebViewStateById, deleteFullWebViewStateById } = await import(
+      '@renderer/services/web-view-state.service'
+    );
+    vi.mocked(setFullWebViewStateById).mockClear();
+    vi.mocked(deleteFullWebViewStateById).mockClear();
+    const alreadyDocked = {
+      id: 'moved-view',
+      webViewType: 'test.type',
+      contentType: 'html',
+      content: '<p>the live view</p>',
+    } as unknown as WebViewDefinition;
+    const { shard } = await shardOverDockLayout(alreadyDocked);
+    await primeProvider(async () => undefined);
+
+    await expect(shard.adoptWebView(SAVED_DEFINITION)).rejects.toThrow(/already/i);
+
+    expect(setFullWebViewStateById).not.toHaveBeenCalled();
+    expect(deleteFullWebViewStateById).not.toHaveBeenCalled();
+  });
+
   test('a failed adopt leaves no seeded state behind', async () => {
     const { deleteFullWebViewStateById } = await import(
       '@renderer/services/web-view-state.service'
