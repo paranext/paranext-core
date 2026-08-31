@@ -2,17 +2,17 @@
  * Shared test harness for the footnote-editor suites that mount the REAL `Editorial` (rather than
  * the mocked `@eten-tech-foundation/platform-editor` used by footnote-editor.component.test.tsx).
  *
- * Both footnote-editor.popover-init.test.tsx and footnote-editor.enter-guard.test.tsx exercise real
- * Lexical reconciliation/selection behavior that a mock cannot observe, and both need the same
- * popover mount, the same deferred-init wait, and the same non-public Lexical-handle extraction —
- * so those live here once instead of being copied per file. (This module is not a test itself; its
- * name is intentionally outside the `*.{test,spec}.*` glob so Vitest does not collect it.
- * Dependency-light fixtures live in footnote-editor.fixtures so the Storybook story can share them
- * without pulling in `@testing-library/react`.)
+ * Those suites exercise real Lexical reconciliation/selection behavior that a mock cannot observe,
+ * and each needs the same popover mount, the same deferred-init wait, the same non-public
+ * Lexical-handle extraction, and the same way of reading where the caret ended up — so those live
+ * here once instead of being copied per file. (This module is not a test itself; its name is
+ * intentionally outside the `*.{test,spec}.*` glob so Vitest does not collect it. Dependency-light
+ * fixtures live in footnote-editor.fixtures so the Storybook story can share them without pulling
+ * in `@testing-library/react`.)
  */
 import { act, render } from '@testing-library/react';
 import type { DeltaOpInsertNoteEmbed, EditorOptions } from '@eten-tech-foundation/platform-editor';
-import { LexicalEditor } from 'lexical';
+import { $getSelection, $isRangeSelection, LexicalEditor, LexicalNode } from 'lexical';
 import FootnoteEditor, { FootnoteEditorMarkerPalette } from './footnote-editor.component';
 import { buildLocalizedStrings, scrRef, sentinelNoteOp } from './footnote-editor.fixtures';
 
@@ -77,4 +77,25 @@ export async function renderPopoverAndWaitForInit(
   const lexical = (editorInput as unknown as { __lexicalEditor?: LexicalEditor }).__lexicalEditor;
   if (!lexical) throw new Error('lexical editor handle not found on popover editor-input');
   return { utils, editorInput, lexical };
+}
+
+/**
+ * The ancestry a caret has when it sits in one of the note's character runs — text the user can
+ * type into, rather than the note itself, which is where a bare `focus` leaves it.
+ */
+export const CARET_IN_NOTE_TEXT = ['text', 'char', 'note', 'para', 'root'];
+
+/** The type of the caret's node and of each of its ancestors, innermost first. */
+export function caretAncestry(lexical: LexicalEditor): string[] {
+  return lexical.getEditorState().read(() => {
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection)) throw new Error('expected a range selection');
+    const types: string[] = [];
+    let node: LexicalNode | null = selection.anchor.getNode();
+    while (node) {
+      types.push(node.getType());
+      node = node.getParent();
+    }
+    return types;
+  });
 }
