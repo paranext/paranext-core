@@ -93,10 +93,13 @@ function getPathInfoFromUri(uri: Uri): { scheme: string; uriPath: string } {
   // Add app scheme to the uri if it doesn't have one
   const fullUri = uri.includes(PROTOCOL_PART) ? uri : `${APP_SCHEME}${PROTOCOL_PART}${uri}`;
 
-  const [scheme, uriPath] = fullUri.split(PROTOCOL_PART);
+  // Split at the FIRST separator only. A plain `split` would drop everything after a second one,
+  // so a cached path that itself holds a URL (`file://C:/cache/https://x/y`) would silently resolve
+  // to `C:/cache/https` rather than failing.
+  const separatorIndex = fullUri.indexOf(PROTOCOL_PART);
   return {
-    scheme,
-    uriPath,
+    scheme: fullUri.substring(0, separatorIndex),
+    uriPath: fullUri.substring(separatorIndex + PROTOCOL_PART.length),
   };
 }
 

@@ -28,13 +28,16 @@ const knownMimeTypes = {
   '.svg': 'image/svg+xml',
   '.txt': 'text/plain',
   '.wav': 'audio/wav',
+  '.webp': 'image/webp',
 };
 
 /** Lookup the MIME type to pass back to the renderer */
 function getMimeTypeForFileName(fileName: string): string {
   const dotIndex = fileName.lastIndexOf('.');
   if (dotIndex > 0) {
-    const fileType: string = fileName.substring(dotIndex);
+    // Lowercased because the table's keys are: a file named `logo.PNG` is still a PNG, and this
+    // must agree with `getMimeTypeForImageId`, which serves the same kinds of file over `papi-er:`
+    const fileType: string = fileName.substring(dotIndex).toLowerCase();
     // Assert key type confirmed in check.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     if (fileType in knownMimeTypes) return knownMimeTypes[fileType as keyof typeof knownMimeTypes];
