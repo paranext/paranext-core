@@ -405,21 +405,22 @@ async function open(
       await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
     }
 
-    // Only for a genuine switch: `replace-tab` alone isn't enough to tell that apart from the
-    // cold-start editor fill, since the placeholder editor (no project) that first fill replaces
-    // also dispatches as `replace-tab` - checking that the replaced tab itself had a project is
-    // what actually distinguishes the two. Not gated on isEditable; see 5f12cbee72c for why that
-    // gate was tried and reverted. The whole check-and-claim is one fire-and-forget unit,
-    // including the interfaceMode read: `open()`'s sequential awaits above give the user a window
-    // to have switched back to Power mode, so the value captured at the top of this function is
-    // too stale to trust here, and re-reading it inline (rather than fire-and-forget) would add a
+    // Deliberately includes the cold-start editor fill, not just a later genuine switch: scroll
+    // group 0's source is restored from state persisted across app restarts, and there is no
+    // guarantee it matches whichever project the cold start happens to (re)open - the two are
+    // reconciled by entirely separate mechanisms. Skipping the claim here (an earlier version of
+    // this code did, to avoid paying it on a path that looked like it had nothing to claim away
+    // from) left Text Collection stuck on whatever the persisted source was until the next real
+    // switch corrected it - on cold start that could be blank or a stale project's texts under
+    // the newly-opened one. The claim's own early-exit (already the requested project, or
+    // genuinely unknown) already avoids the round trip in the one case where cold start really
+    // has nothing to do. Not gated on isEditable; see 5f12cbee72c for why that gate was tried and
+    // reverted. The whole check-and-claim is one fire-and-forget unit, including the
+    // interfaceMode read: `open()`'s sequential awaits above give the user a window to have
+    // switched back to Power mode, so the value captured at the top of this function is too
+    // stale to trust here, and re-reading it inline (rather than fire-and-forget) would add a
     // round trip to the switch's critical path.
-    const replacedTabHadProject =
-      dispatch.kind === 'replace-tab' &&
-      allScriptureEditors.some(
-        (editor) => editor.id === dispatch.targetTabId && editor.projectId !== undefined,
-      );
-    if (replacedTabHadProject && projectForWebView.projectId) {
+    if (dispatch.kind === 'replace-tab' && projectForWebView.projectId) {
       const projectIdToClaim = projectForWebView.projectId;
       (async () => {
         if ((await papi.settings.get('platform.interfaceMode')) === 'simple')
