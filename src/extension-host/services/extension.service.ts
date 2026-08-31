@@ -40,6 +40,7 @@ import {
   getErrorMessage,
   isString,
   SortedSet,
+  startsWith,
   toKebabCase,
   UnsubscriberAsync,
   UnsubscriberAsyncList,
@@ -216,6 +217,13 @@ let shouldReload = false;
 const uriHandlersByExtensionKey = new Map<ExtensionKey, UriHandler>();
 
 /** Regex matching to spaces */
+/**
+ * File extension for TypeScript declaration files. Named rather than repeated as a literal because
+ * one of its uses is `slice(0, -DTS_EXTENSION.length)`, where a bare literal reads as a puzzle and
+ * a mismatch between the check and the slice silently truncates a folder name.
+ */
+const DTS_EXTENSION = '.d.ts';
+
 const spaceRegex = /\s/;
 
 /** String comparison function used to check for similarity of extension and publisher names */
@@ -607,7 +615,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
     extensionInfos.map(async (extensionInfo) => {
       const extensionNameKebabCase = toKebabCase(extensionInfo.name);
       /** The default assumed name for the dts file including `.d.ts` */
-      const extensionDtsBaseDefault = `${extensionNameKebabCase}.d.ts`;
+      const extensionDtsBaseDefault = `${extensionNameKebabCase}${DTS_EXTENSION}`;
       /** The declaration file uri we are copying for this extension */
       let extensionDtsInfo: DtsInfo | undefined;
       /** The declaration file name we are creating for this extension including `.d.ts` */
@@ -634,7 +642,9 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
         // it can lead to problems with race conditions. If this ever becomes a problem, we can fix
         // this code.
         const dtsInfos = (
-          await nodeFS.readDir(extensionInfo.dirUri, (entryName) => entryName.endsWith('.d.ts'))
+          await nodeFS.readDir(extensionInfo.dirUri, (entryName) =>
+            entryName.endsWith(DTS_EXTENSION),
+          )
         )[nodeFS.EntryType.File].map(createDtsInfoFromUri);
 
         if (dtsInfos.length <= 0) {
@@ -649,10 +659,15 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
           extensionDtsInfo = dtsInfos.find((dtsInfo) => dtsInfo.base === extensionDtsBaseDefault);
 
         // Try using a dts file whose name starts with the name of the extension in case they suffixed
-        // with version number or something
+        // with version number or something.
+        // Grapheme-aware `startsWith`: neither side is ASCII by construction — the needle comes from
+        // the extension's name and the haystack is a file name off disk, which macOS stores
+        // decomposed. Native prefix matching would let extension `cafe` adopt a sibling `café.d.ts`
+        // and then cache it in a folder named `café`, which no longer matches the module name, so
+        // the extension silently loses Intellisense.
         if (!extensionDtsInfo)
           extensionDtsInfo = dtsInfos.find((dtsInfo) =>
-            dtsInfo.base.startsWith(extensionNameKebabCase),
+            startsWith(dtsInfo.base, extensionNameKebabCase),
           );
 
         // Try using a dts file whose name is `index.d.ts`
@@ -668,8 +683,12 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
       }
 
       // If the dts file has stuff after the extension name, we want to use it so they can suffix a
-      // version number or something
-      if (extensionDtsInfo.base.startsWith(extensionNameKebabCase))
+      // version number or something. It has to end in `.d.ts` for the slice below to name the
+      // folder correctly: the manifest's `types` path is used verbatim and is not required to.
+      if (
+        startsWith(extensionDtsInfo.base, extensionNameKebabCase) &&
+        extensionDtsInfo.base.endsWith(DTS_EXTENSION)
+      )
         extensionDtsBaseDestination = extensionDtsInfo.base;
 
       // Put the extension's dts in the types cache in its own folder
@@ -682,7 +701,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
         userExtensionTypesCacheUri,
         // Folder name must match module name which we are assuming is the same as the name of the
         // .d.ts file, so get the .d.ts file's name and use it as the folder name
-        extensionDtsBaseDestination.slice(0, -'.d.ts'.length),
+        extensionDtsBaseDestination.slice(0, -DTS_EXTENSION.length),
         'index.d.ts',
       );
 
@@ -733,7 +752,9 @@ function extractExtensionDetailsFromFileNames(fileUris: string[]): ExtensionIden
   return fileUris.map((fileUri: string) => {
     // Splits by either a forward-slash or back-slash to support Windows as well
     const fileName = fileUri.split(path.sep).pop();
-    if (!fileName?.endsWith('.zip')) throw new Error(`Not a ZIP file: ${fileName}`);
+    // Lowercased to match the discovery filters that select the files reaching here — otherwise a
+    // `FOO.ZIP` they accept is rejected as "not a ZIP file" once it arrives
+    if (!fileName?.toLowerCase().endsWith('.zip')) throw new Error(`Not a ZIP file: ${fileName}`);
     const lastDashIndex = fileName.lastIndexOf('_');
     const extensionName = fileName.substring(0, lastDashIndex);
     const extensionVersion = fileName.substring(lastDashIndex + 1, fileName.length - 4);
@@ -767,14 +788,14 @@ async function extractExtensionDetailsFromZip(
  */
 async function normalizeExtensionFileNames(): Promise<void> {
   const enabledExtensionZipUris = (
-    await nodeFS.readDir(installedExtensionsUri, (uri) => uri?.toLowerCase().endsWith('zip'))
+    await nodeFS.readDir(installedExtensionsUri, (uri) => uri?.toLowerCase().endsWith('.zip'))
   ).file;
   const enabledExtensionPromises = enabledExtensionZipUris.map(async (enabledZipUri) => {
     await normalizeExtensionFileName(installedExtensionsUri, enabledZipUri);
   });
 
   const disabledExtensionZipUris = (
-    await nodeFS.readDir(disabledExtensionsUri, (uri) => uri?.toLowerCase().endsWith('zip'))
+    await nodeFS.readDir(disabledExtensionsUri, (uri) => uri?.toLowerCase().endsWith('.zip'))
   ).file;
   const disabledExtensionPromises = disabledExtensionZipUris.map(async (disabledZipUri) => {
     await normalizeExtensionFileName(disabledExtensionsUri, disabledZipUri);
@@ -938,13 +959,13 @@ async function disableExtension(extensionId: ExtensionIdentifier) {
 async function getInstalledExtensions(): Promise<InstalledExtensions> {
   // "Enabled" extensions are all the ones in the "installed" directory
   const installedExtensionZips = (
-    await nodeFS.readDir(installedExtensionsUri, (uri) => uri?.toLowerCase().endsWith('zip'))
+    await nodeFS.readDir(installedExtensionsUri, (uri) => uri?.toLowerCase().endsWith('.zip'))
   ).file;
   const enabled = extractExtensionDetailsFromFileNames(installedExtensionZips);
 
   // "Disabled" extensions are all the ones in the "disabled" directory that aren't also "enabled"
   const disabledExtensionZips = (
-    await nodeFS.readDir(disabledExtensionsUri, (uri) => uri?.toLowerCase().endsWith('zip'))
+    await nodeFS.readDir(disabledExtensionsUri, (uri) => uri?.toLowerCase().endsWith('.zip'))
   ).file;
   const disabled = extractExtensionDetailsFromFileNames(disabledExtensionZips).filter(
     (disabledId) =>
