@@ -105,11 +105,11 @@ export function UserProfilePopover() {
   const handleInterfaceModeChange = (value: string) => {
     if (value === '') return;
     if (value !== 'simple' && value !== 'power') return;
-    try {
-      setInterfaceMode(value);
-    } catch (e: unknown) {
+    // Setting writes are asynchronous, so the failure arrives as a rejection: a synchronous
+    // try/catch around this call cannot see it.
+    setInterfaceMode(value).catch((e: unknown) => {
       logger.warn(`UserProfilePopover: failed to set interface mode: ${getErrorMessage(e)}`);
-    }
+    });
   };
 
   const handleProfileAndRegistration = async () => {
@@ -153,11 +153,11 @@ export function UserProfilePopover() {
     if (value === '') return;
     if (value === primaryLanguage) return;
     const next = [value, ...safeInterfaceLanguage.filter((l) => l !== value)];
-    try {
-      setInterfaceLanguage(next);
-    } catch (e: unknown) {
+    // Setting writes are asynchronous, so the failure arrives as a rejection: a synchronous
+    // try/catch around this call cannot see it.
+    setInterfaceLanguage(next).catch((e: unknown) => {
       logger.warn(`UserProfilePopover: failed to set interface language: ${getErrorMessage(e)}`);
-    }
+    });
   };
 
   const themeDataProvider = useDataProvider(themeServiceDataProviderName);

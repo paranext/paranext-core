@@ -56,6 +56,8 @@ import { useMemo } from 'react';
  *       the reset is rejected.
  *   - `isLoading`: whether the setting value is awaiting retrieval from the Project Data Provider
  *
+ *   Subject to the same runaway-loop throttling as {@link useData} — see its docs for what the
+ *   returned values look like while throttled.
  * @throws When subscription callback function is called with an update that has an unexpected
  *   message type
  */

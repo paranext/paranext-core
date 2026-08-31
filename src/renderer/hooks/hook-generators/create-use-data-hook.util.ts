@@ -29,12 +29,10 @@ const RUNAWAY_EVENTS_PER_WINDOW = 100;
 /** Rolling window the runaway guard measures over */
 const RUNAWAY_WINDOW_MS = 1000;
 /**
- * How long the guard stays tripped before it re-arms and resubscribes.
- *
- * A burst is not always a bug: a Send/Receive or bulk import fans out real updates far faster than
- * anything a consumer can cause. Staying tripped forever would leave a pane degraded long after the
- * provider went quiet, recoverable only by closing the tab. Re-arming bounds a genuine loop to one
- * burst per cooldown instead of running unbounded, and lets a transient burst heal itself.
+ * How long the guard stays tripped before it re-arms and resubscribes. Long enough that a genuine
+ * loop is throttled to a small fraction of its free-running rate, short enough that a legitimate
+ * burst — a Send/Receive or bulk import — heals without the user closing the tab. See
+ * `ADR-runaway-data-hook-guard` for why the trip expires rather than latching.
  */
 const RUNAWAY_COOLDOWN_MS = 5000;
 
@@ -56,14 +54,11 @@ type RunawayCounters = {
  *   delivery is ever counted — this loop is invisible to delivery counting alone, and it is the
  *   loop the warning's "memoize your parameters" advice actually describes.
  *
- * Renders are deliberately NOT counted: a consumer can re-render rapidly for reasons unrelated to
- * this data (a busy parent, a cold-start storm), and stopping a healthy subscription over that
- * would be wrong.
- *
- * A trip lasts {@link RUNAWAY_COOLDOWN_MS}, then the guard re-arms and the subscription is rebuilt.
- * Re-arming is deliberately on a timer and NOT on selector or data provider change: an unstable
- * selector — the very mistake being reported — gets a new identity every render, so re-arming on it
- * would disarm the guard entirely.
+ * Renders are deliberately NOT counted — a busy consumer is not a broken one. A trip lasts
+ * {@link RUNAWAY_COOLDOWN_MS} and then re-arms, on a timer rather than on selector or data provider
+ * change: an unstable selector, the very mistake being reported, gets a new identity every render,
+ * so re-arming on it would disarm the guard entirely. `ADR-runaway-data-hook-guard` records the
+ * alternatives behind both choices.
  *
  * @param dataType Data type name, used to name the offending hook in the warning
  * @returns `recordDelivery` and `recordSubscribe`, each called once per event of that kind and
@@ -101,9 +96,10 @@ function useRunawayLoopGuard(dataType: string): {
   const reArmTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(reArmTimeoutRef.current), []);
 
-  const trip = useCallback((whatHappened: string) => {
+  // The clause must begin with the data type name — this prepends `Data of type ` to it
+  const trip = useCallback((whatHappenedStartingWithDataType: string) => {
     hasTrippedRef.current = true;
-    const runawayMessage = `Data of type ${whatHappened} Please ensure hook calls and their parameters are memoized.`;
+    const runawayMessage = `Data of type ${whatHappenedStartingWithDataType} Please ensure hook calls and their parameters are memoized.`;
     logger.warn(runawayMessage);
     setMessage(runawayMessage);
 
@@ -274,9 +270,13 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
       // teardown. Rapid selector changes tear down multiple subscriptions whose completions settle
       // in unpredictable order, so a teardown-driven `setIsLoading(true)` could land AFTER the
       // current subscription already delivered and wedge the flag at the wrong value.
+      //
+      // `runawayError` belongs here too: when the guard re-arms it clears, and the fresh
+      // subscription has not delivered yet. Without it the hook would report data from before the
+      // trip as settled for the whole round trip.
       useEffect(() => {
         setIsLoading(true);
-      }, [dataProvider, selector]);
+      }, [dataProvider, runawayError, selector]);
 
       // Wrap subscribe so we can call it as a normal PapiEvent in useEvent
       const wrappedSubscribeEvent:
