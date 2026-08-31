@@ -7,6 +7,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Spinner,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -24,7 +25,7 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 import type { DblResourceReference } from 'platform-scripture';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
 import {
   getOrderedScriptureTextGridContents,
@@ -76,6 +77,7 @@ const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
+const LOADING_KEY = '%webView_scriptureTextGrid_loading%';
 const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
 // Screen-reader announcements for the chapter-context split opening/closing.
 const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
@@ -90,6 +92,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   NO_PROJECT_KEY,
   CHAPTER_CONTEXT_CLOSE_KEY,
   EMPTY_STATE_KEY,
+  LOADING_KEY,
   CELL_ACCESSIBLE_NAME_KEY,
   ARIA_OPENED_KEY,
   ARIA_CLOSED_KEY,
@@ -283,11 +286,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     sources !== undefined && !isLoadingCachedResources,
   );
 
-  // Latch the displayed project. Each grid resource cell is itself a Scripture editor, so focusing
-  // one (e.g. clicking a verse in Chapter view) makes that resource the active editor. Never switch
-  // the grid to one of its own displayed resources — that project has no text collection and would
-  // blank the grid; keep the current project instead. Still follow the active editor to a genuinely
-  // different text-collection project.
+  // Latch the displayed project. Each grid resource cell is itself a Scripture editor, so navigating
+  // from one (e.g. clicking a verse in Chapter view) makes that resource the scroll group's source
+  // project. Never switch the grid to one of its own displayed resources — that project has no text
+  // collection and would blank the grid; keep the current project instead. Still follow the
+  // candidate to a genuinely different text-collection project.
   useEffect(() => {
     setEffectiveProjectId((previous) =>
       resolveTextCollectionProjectId(previous, {
@@ -489,6 +492,75 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   const installingResourceNames = useMemo(() => installing.map((info) => info.name), [installing]);
 
+  // Nothing is renderable yet: no `sources` means no references to lay out, and unresolved localized
+  // strings would render raw `%key%` text. A project switch re-points this panel by reloading it
+  // (see updateRelatedTextCollectionPanel), so this window opens on every switch rather than only at
+  // first mount — which is why it gets a real loading state rather than an empty body.
+  const isBodyLoading =
+    sources === undefined || isLoadingCachedResources || isLoadingLocalizedStrings;
+
+  // Assigned in branches rather than nested ternaries in the JSX below: three body states
+  // (the cells / loading / nothing to show) don't read as an expression.
+  //
+  // The cells come FIRST, ahead of the loading check, and that order is load-bearing:
+  // `toGridResources` maps every chosen reference, resolved or not, so there are cells to render as
+  // soon as `sources` arrives — even while the cached DBL list is still in flight. Each cell carries
+  // its own loading / not-installed / unavailable state for that window, so showing the text that is
+  // ready beats hiding the whole grid behind a spinner.
+  let bodyContent: ReactNode;
+  if (resources.length > 0) {
+    bodyContent = (
+      <ScriptureTextGrid
+        ariaLabel={localizedStrings[TITLE_KEY]}
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode={viewMode}
+        zoom={zoom}
+        zoomMenuLabels={zoomMenuLabels}
+        chapterContext={chapterContext}
+        onChapterContextChange={handleChapterContextChange}
+        onChapterContextClose={handleCloseChapterContext}
+        closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
+        cellAccessibleNameTemplate={localizedStrings[CELL_ACCESSIBLE_NAME_KEY]}
+        onReorder={handleReorder}
+        getReorderHandleLabel={getReorderHandleLabel}
+        reorderHint={localizedStrings[REORDER_HINT_KEY]}
+        getReorderAnnouncement={getReorderAnnouncement}
+      />
+    );
+  } else if (isBodyLoading) {
+    // Mirrors LoadingView in panel-state-views.component.tsx — a spinner in a `role="status"`
+    // region — but sized for this body: LoadingView is `h-screen` for a whole-panel state and would
+    // overflow the flex body that sits beneath this view's header.
+    bodyContent = (
+      <div
+        className="tw:flex tw:h-full tw:items-center tw:justify-center tw:gap-2 tw:p-4 tw:text-center"
+        role="status"
+      >
+        <Spinner aria-hidden />
+        {/* Held back until the label resolves: `useLocalizedStrings` seeds every key with the key
+            itself, so rendering it early would show a raw `%key%`. The live region announces the
+            text once it arrives. */}
+        {!isLoadingLocalizedStrings && <span>{localizedStrings[LOADING_KEY]}</span>}
+      </div>
+    );
+  } else {
+    // Centered in the grid body; the message names the View Options button by interpolating
+    // its own localized label so a rename can't desync the copy.
+    bodyContent = (
+      <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
+        <EmptyState
+          id="scripture-text-grid-empty-state"
+          className="tw:text-center"
+          message={formatReplacementString(localizedStrings[EMPTY_STATE_KEY], {
+            viewOptionsLabel: localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
+          })}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       data-testid="scripture-text-grid"
@@ -543,48 +615,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           </PopoverContent>
         </Popover>
       </div>
-      {/* Grid body: the empty state when nothing is renderable, otherwise the verse-cell rows.
-          Gate the empty state on loading being finished so it can't flash before data arrives —
-          `sources` undefined and `cachedResources` still loading each make `resources` transiently
-          empty (a DBL ref resolves to a cell only once the cached list loads). The
-          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`. */}
-      <div className="tw:flex-1 tw:overflow-hidden">
-        {resources.length === 0 &&
-        sources !== undefined &&
-        !isLoadingCachedResources &&
-        !isLoadingLocalizedStrings ? (
-          // Centered in the grid body; the message names the View Options button by interpolating
-          // its own localized label so a rename can't desync the copy.
-          <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
-            <EmptyState
-              id="scripture-text-grid-empty-state"
-              className="tw:text-center"
-              message={formatReplacementString(localizedStrings[EMPTY_STATE_KEY], {
-                viewOptionsLabel: localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
-              })}
-            />
-          </div>
-        ) : (
-          <ScriptureTextGrid
-            ariaLabel={localizedStrings[TITLE_KEY]}
-            resources={resources}
-            scrRef={scrRef}
-            setScrRef={setScrRef}
-            viewMode={viewMode}
-            zoom={zoom}
-            zoomMenuLabels={zoomMenuLabels}
-            chapterContext={chapterContext}
-            onChapterContextChange={handleChapterContextChange}
-            onChapterContextClose={handleCloseChapterContext}
-            closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
-            cellAccessibleNameTemplate={localizedStrings[CELL_ACCESSIBLE_NAME_KEY]}
-            onReorder={handleReorder}
-            getReorderHandleLabel={getReorderHandleLabel}
-            reorderHint={localizedStrings[REORDER_HINT_KEY]}
-            getReorderAnnouncement={getReorderAnnouncement}
-          />
-        )}
-      </div>
+      {/* Grid body: a labelled spinner while any input is still resolving, then the empty state
+          when there is genuinely nothing to show, otherwise the verse-cell rows. See
+          `bodyContent` above for why each branch exists. */}
+      <div className="tw:flex-1 tw:overflow-hidden">{bodyContent}</div>
     </div>
   );
 };

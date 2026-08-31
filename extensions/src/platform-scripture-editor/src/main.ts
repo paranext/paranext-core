@@ -44,6 +44,7 @@ import {
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+  type TextCollectionPanelOptions,
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
@@ -976,7 +977,10 @@ const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebV
  * Pending projectId to apply during the next model text panel getWebView call. `undefined` means no
  * pending value; reset to `undefined` after each getWebView call consumes it.
  *
- * Used to pass a new projectId through reloadWebView, which has no options for extra data.
+ * Predates the options route: `reloadWebView` types its third argument as `ReloadWebViewOptions`
+ * (only `bringToFront`), but both it and `openWebView` forward that object to
+ * `IWebViewProvider.getWebView`, so a wider options type carries a projectId through directly — see
+ * `updateRelatedTextCollectionPanel`. Prefer that over adding another pending slot.
  */
 let currentModelTextProjectId: string | undefined;
 
@@ -1019,15 +1023,20 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
 const scriptureTextGridWebViewProvider: IWebViewProvider = {
   async getWebView(
     savedWebView: SavedWebViewDefinition,
-    openWebViewOptions: ResourceViewerOptions,
+    // The same type `updateRelatedTextCollectionPanel` writes, so the two halves of the re-point are
+    // linked by the type system rather than only by the field name.
+    openWebViewOptions: TextCollectionPanelOptions,
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
       throw new Error(
         `${SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
     // Project-binding seam: the grid is project-bound so it can fire first-open overlay init and,
-    // once content selection lands, select its contents. The PT10 default-layout open passes no
-    // projectId (dormant until content selection lands).
+    // once content selection lands, select its contents. The default-layout open passes no
+    // projectId, so the grid starts unbound and falls back to following the scroll group; from then
+    // on `updateRelatedTextCollectionPanel` supplies a projectId here on every Simple-mode project
+    // switch, which is what keeps the panel off the outgoing project. Do not assume the
+    // `openWebViewOptions.projectId` branch is unused.
     const projectId = openWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
     // Re-read every call so mode changes are picked up at open/replace/restore time.
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
@@ -1075,7 +1084,9 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
  * type. A Map entry present (even with value `undefined`) means a reload is in progress and the
  * pending value should be used. Absence means no pending value.
  *
- * Used to pass a new projectId through reloadWebView, which has no options for extra data.
+ * Predates the options route: a wider options type passed to `reloadWebView` reaches
+ * `IWebViewProvider.getWebView` directly — see `updateRelatedTextCollectionPanel`. Prefer that over
+ * adding another pending slot.
  */
 const currentResourceTextPanelProjectIds = new Map<string, string | undefined>();
 

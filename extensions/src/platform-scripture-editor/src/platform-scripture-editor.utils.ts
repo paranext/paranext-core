@@ -47,7 +47,13 @@ import type { MarkerMenuItem } from 'platform-bible-react';
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
-/** Web view type of the Text Collection panel (the Scripture Text Grid) in Column 3. */
+/**
+ * Web view type of the Text Collection panel (the Scripture Text Grid) in Column 3.
+ *
+ * Note: the renderer has copies of this value it cannot import —
+ * `src/renderer/components/docking/default-layout-supplement.json` and
+ * `platform-dock-layout-positioning.util.ts` — keep them in sync.
+ */
 export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 
 /**
@@ -1244,28 +1250,43 @@ export async function openOrUpdateRelatedPanels(
  * `IWebViewProvider.getWebView`, so a wider type that structurally satisfies it is how a project
  * change reaches the provider. Declared as a named type rather than passed as an object literal
  * because an inline literal would trip TypeScript's excess-property check.
+ *
+ * Exported so `scriptureTextGridWebViewProvider` in `main.ts` types its `openWebViewOptions` with
+ * this same type: the writer here and the reader there are otherwise linked only by the field name,
+ * so renaming or dropping `projectId` on one side would leave `typecheck` green and silently stop
+ * the panel following project switches. (Mirrors `FindWebViewOptions`, which Find exports once and
+ * uses on both sides.)
  */
-type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
+export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
 
 /**
  * Re-points the Text Collection panel at `projectId`, the way {@link openOrUpdateRelatedPanels}
  * re-points the rest of Column 3.
  *
- * Re-pointing is a reload because `projectId` is not one of the
- * `WebViewDefinitionUpdatableProperties`: only a reload re-runs the provider, which is what picks
- * the new project up. Without this the panel would have to infer its own project from the scroll
- * group's source project — the project that last SET the group's reference, which a project switch
- * does not change — and would keep rendering the outgoing project's texts until the user next
- * navigated.
+ * Re-pointing is a reload, not an in-place `projectId` update, for two reasons. `papi.webViews`
+ * exposes no definition-updating call at all — only a web view can update its _own_ definition
+ * (`updateWebViewDefinition` in `WebViewProps`), so from the service side a reload is the only way
+ * to change any updatable property, as `reloadWebView`'s own TSDoc says. More importantly the grid
+ * _requires_ a remount: it reads admin layout settings through `useBufferedLayoutSetting`, which
+ * documents itself as built for consumers that switch projects via `reloadWebView` and NOT safe for
+ * ones that change `projectId` in place (it would keep serving the previous project's held value,
+ * and it `logger.warn`s if it detects that). Without any re-point the panel would fall back to
+ * inferring its project from the scroll group's source project — the project that last SET the
+ * group's reference, which a project switch does not change — and would keep rendering the outgoing
+ * project's texts until the user next navigated.
  *
  * Three deliberate constraints:
  *
- * - Never creates a panel when none is open. In Simple mode the Text Collection is part of the fixed
- *   Column 3 layout and is always already there; in Power mode it is a panel the user opened
- *   deliberately (and is gated by the `platformScriptureEditor.enableScriptureTextGrid` setting),
- *   where a project switch is not a request to open it.
+ * - Never creates a panel when none is open. The Text Collection has no open command and no menu
+ *   entry: its only open path is the default-layout supplement, which puts it in Column 3 from
+ *   startup. So "not open" means the tab was closed in Power mode or the
+ *   `platformScriptureEditor.enableScriptureTextGrid` setting is off, and neither is a state a
+ *   project switch should reverse. (In practice the sole caller is Simple-mode-only, so this guard
+ *   is a contract, not a hot path.)
  * - Skips the reload when the panel already shows `projectId`, because rebuilding the iframe drops
- *   transient grid state (an open chapter-context split, per-cell zoom) for no gain.
+ *   the grid's in-memory React state (an open chapter-context split, in-flight "Installing…" rows)
+ *   for no gain. State held through `useWebViewState` — `viewMode`, per-cell zoom — survives, since
+ *   a reload reuses the same web view id.
  * - Never brings the panel to front. This runs as part of re-pointing the whole column, not because
  *   anyone asked for the Text Collection, and the admin's shared layout chooses the front tab
  *   immediately afterward.
@@ -1287,6 +1308,10 @@ export async function updateRelatedTextCollectionPanel(
     );
     if (!existingPanel || existingPanel.projectId === projectId) return;
 
+    // Hidden case: Simple mode shows one Column 3 tab at a time, so this usually lands on an
+    // inactive tab. That is fine and needs no catch-up — the reload remounts the panel and its
+    // render is entirely data-driven (no geometry reads, no scrollIntoView), so it produces the
+    // right content while hidden and is simply revealed when the tab is next activated.
     const options: TextCollectionPanelOptions = { projectId, bringToFront: false };
     await papi.webViews.reloadWebView(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, existingPanel.id, options);
   } catch (e) {
@@ -1301,9 +1326,10 @@ export async function updateRelatedTextCollectionPanel(
  * in the editor, and a project switch that replaces the editor tab mints a new one. Running this
  * alongside the other panels would hand Find the id of the editor being replaced.
  *
- * Find is also the one Column 3 panel that is re-pointed without being opened. In Simple mode it is
- * part of the fixed layout from startup, so it is always already there; anywhere else it is a panel
- * the user opened deliberately, and a project switch is not a request to open it.
+ * Find is re-pointed without being opened, the same way {@link updateRelatedTextCollectionPanel}
+ * treats the Text Collection. In Simple mode it is part of the fixed layout from startup, so it is
+ * always already there; anywhere else it is a panel the user opened deliberately, and a project
+ * switch is not a request to open it.
  *
  * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
  * swallowed, because the project switch itself has already succeeded by this point.

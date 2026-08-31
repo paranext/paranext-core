@@ -2237,10 +2237,16 @@ step, no automation. Just a record.
   Collection is re-pointed by `updateRelatedTextCollectionPanel`, called directly from
   `openOrUpdateRelatedPanels` (same module, so no command indirection is needed — unlike the four
   panels whose handlers live in `main.ts`). It follows Find's variant of the mechanism rather than the
-  older three: re-point by `reloadWebView` (because `projectId` is not one of the
-  `WebViewDefinitionUpdatableProperties`, only a reload re-runs the provider), never open a panel that
-  is not already there, skip the reload when the panel already shows the project, and never bring the
-  tab to front. The scroll-group source project survives only as the fallback for a grid opened with
+  older three: re-point by `reloadWebView`, never open a panel that is not already there, skip the
+  reload when the panel already shows the project, and never bring the tab to front. Reload rather
+  than an in-place `projectId` update for two reasons — `papi.webViews` exposes no
+  definition-updating call at all (only a web view can update its *own* definition, so from the
+  service side a reload is the only route), and, more bindingly, the grid reads admin layout settings
+  through `useBufferedLayoutSetting`, which documents itself as built for consumers that switch
+  projects via `reloadWebView` and NOT safe for ones that change `projectId` in place, with a
+  `logger.warn` tripwire for exactly that. (`projectId` *is* in
+  `WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS` — the constraint is the absent service-side updater
+  and the hook's remount requirement, not the property list.) The scroll-group source project survives only as the fallback for a grid opened with
   no explicit project, and its call-site name now says what it is.
 - **Alternatives:** **Fix the inferred signal instead** — track the live Scripture editor's web view
   from inside the panel and follow that rather than the scroll group. Rejected: it re-derives, inside
@@ -2260,10 +2266,14 @@ step, no automation. Just a record.
   it should be re-pointed explicitly instead. Note that `adr-find-follows-editor-to-read-only`
   records Find as "the only Column 3 panel that command re-points without also being able to open
   it" — that is no longer the only such panel, though the Text Collection is re-pointed by a direct
-  call rather than a command. Reloading the grid drops transient per-web-view state (an open
-  chapter-context split, per-cell zoom); accepted, because the collection's contents legitimately
-  change on a project switch anyway, and the skip-if-unchanged guard keeps it from happening when the
-  project did not change. If a sixth Column 3 panel appears, the rule to apply is this one: add it to
+  call rather than a command. Reloading the grid drops its in-memory React state (an open
+  chapter-context split, in-flight "Installing…" rows); state held through `useWebViewState` —
+  `viewMode`, per-cell zoom — survives, because a reload reuses the same web view id. The loss is
+  accepted, because the collection's contents legitimately change on a project switch anyway, and the
+  skip-if-unchanged guard keeps it from happening when the project did not change. The reload also
+  reopens the panel's load window on every switch, not just at first mount, so the grid body now
+  renders a labelled spinner for that window instead of an empty container — matching the three
+  sibling panels re-pointed by the same mechanism. If a sixth Column 3 panel appears, the rule to apply is this one: add it to
   `openOrUpdateRelatedPanels` (or, if it needs the new editor's id, beside `updateRelatedFindPanel`)
   rather than giving it a signal to infer from.
 - **Source:** PT-4423, which fixes PT-4238.

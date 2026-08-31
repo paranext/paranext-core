@@ -3362,8 +3362,8 @@ describe('updateRelatedTextCollectionPanel', () => {
   });
 
   it('does not open a panel when none is open', async () => {
-    // In Power mode the grid is a panel the user opened deliberately; a project switch is not a
-    // request to open it.
+    // "Not open" means the tab was closed in Power mode or the feature setting is off — neither is
+    // a state a project switch should reverse.
     const { papi, mockReloadWebView, mockOpenWebView } = createRelatedPanelsMockPapi([
       { id: 'other-1', webViewType: 'platformScriptureEditor.bibleTexts', projectId: 'proj-a' },
     ]);
