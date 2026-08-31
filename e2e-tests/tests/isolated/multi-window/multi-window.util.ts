@@ -683,6 +683,23 @@ export async function quitAppAndWaitForExit(
 }
 
 /**
+ * Sweep a still-running app's output for faults and duplicate registrations.
+ *
+ * The counterpart to {@link quitAndExpectCleanExit} for a test that never quits.
+ * {@link RENDERER_STARTING_LOG} is the positive control: every caller creates a window during the
+ * test, so that line lands after the capture attached — without it an empty capture would satisfy
+ * both negative assertions and the sweep would examine nothing.
+ *
+ * @param output The capture taken at the start of the test
+ */
+export function expectNoFaultsWhileRunning(output: AppOutputCapture): void {
+  const log = output.text();
+  expect(log).toContain(RENDERER_STARTING_LOG);
+  FAULT_MARKERS.forEach((marker) => expect(log).not.toContain(marker));
+  expect(log).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
+}
+
+/**
  * The graceful-quit epilogue shared by the multi-window suites: trigger a real quit and wait for
  * the OS process to exit (see {@link quitAppAndWaitForExit}), assert the exit was clean (code 0, no
  * signal), assert the capture actually saw the quit ({@link APP_QUITTING_LOG}, so the sweeps that
