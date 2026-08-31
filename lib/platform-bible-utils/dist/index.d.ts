@@ -302,6 +302,20 @@ export declare class EventRollingTimeCounter {
 	hasViolatedThreshold(minRollingTimeMs: number): boolean;
 }
 /**
+ * Largest padding target the padding methods accept, in graphemes.
+ *
+ * This is the one place the class deliberately stops short of native. Native pads into a compact
+ * character buffer and gives up only at V8's string limit (`2**29 - 24`); a `GraphemeString` holds
+ * one string object per grapheme, so the same target costs roughly an order of magnitude more
+ * memory and exhausts the heap well before reaching it. Measured on the padding path: `2**20` costs
+ * ~9ms and ~9MB, `2**24` costs ~173ms and ~130MB, and V8's own limit cannot be reached at all.
+ *
+ * A million graphemes of padding is already far past any display or formatting use, so the limit is
+ * set where the cost is still negligible rather than where the engine finally gives out. Exceeding
+ * it throws `RangeError`, as native does for its own limit.
+ */
+export declare const MAX_PADDING_LENGTH: number;
+/**
  * A string pre-segmented into Unicode grapheme clusters. Segmentation happens once in the
  * constructor (the expensive step); every other operation reuses it. Derived values
  * (substring/slice/etc.) reuse the parent grapheme slice and never re-segment.
@@ -486,6 +500,8 @@ export declare class GraphemeString {
 	 * @param padString Text to repeat, truncated at a grapheme boundary to hit `targetLength`
 	 *   exactly. Defaults to a single space; an empty string adds no padding.
 	 * @returns A new padded instance, or this instance unchanged when no padding is needed.
+	 * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
+	 *   actually be added. An empty `padString` never pads, so it never throws.
 	 */
 	padStart(targetLength: number, padString?: string): GraphemeString;
 	/**
@@ -494,6 +510,8 @@ export declare class GraphemeString {
 	 * @param targetLength Desired length in graphemes.
 	 * @param padString Text to repeat. Defaults to a single space.
 	 * @returns A new padded instance, or this instance unchanged when no padding is needed.
+	 * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
+	 *   actually be added.
 	 */
 	padEnd(targetLength: number, padString?: string): GraphemeString;
 	/**
@@ -4033,6 +4051,8 @@ export declare function ordinalCompare(string1: string, string2: string, options
  *   `stringLength(string)`, the string is returned as is
  * @param padString The string to pad with, truncated to fit `targetLength`. Default is `" "`
  * @returns String with the appropriate padding at the end
+ * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
+ *   actually be added. This ceiling is lower than native's; see {@link MAX_PADDING_LENGTH}.
  */
 export declare function padEnd(string: string, targetLength: number, padString?: string): string;
 /**
@@ -4047,6 +4067,8 @@ export declare function padEnd(string: string, targetLength: number, padString?:
  *   `stringLength(string)`, the string is returned as is
  * @param padString The string to pad with, truncated to fit `targetLength`. Default is `" "`
  * @returns String with the appropriate padding at the start
+ * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
+ *   actually be added. This ceiling is lower than native's; see {@link MAX_PADDING_LENGTH}.
  */
 export declare function padStart(string: string, targetLength: number, padString?: string): string;
 /**
