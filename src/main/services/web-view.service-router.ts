@@ -316,9 +316,7 @@ async function findOwner(
   const targetWindowId = getTargetWindowId();
   const owner =
     matches.find((candidate) => candidate.windowId === targetWindowId) ??
-    matches.sort(
-      (a, b) => (getWindowCreationRank(a.windowId) ?? 0) - (getWindowCreationRank(b.windowId) ?? 0),
-    )[0];
+    matches.sort(byWindowAge)[0];
   // Both matchers mean "the one in the app", and they differ in what backs that up rather than in
   // what they intend. For an `id` matcher it is enforced: `withWindowScopedWebViewIds` suffixes
   // every id with its window at creation, so two windows answering the same id search means that
@@ -438,9 +436,7 @@ async function findLayoutTargetOwner(
   const targetWindowId = getTargetWindowId();
   const owner =
     holdingWindows.find((candidate) => candidate.windowId === targetWindowId) ??
-    holdingWindows.sort(
-      (a, b) => (getWindowCreationRank(a.windowId) ?? 0) - (getWindowCreationRank(b.windowId) ?? 0),
-    )[0];
+    holdingWindows.sort(byWindowAge)[0];
   return { owner, hadUnreachableWindows: hadServiceErrors };
 }
 
@@ -1255,11 +1251,29 @@ function resetWindowCreatorForTesting(): void {
  * sequential case the promise is not about.
  */
 export const testingWebViewServiceRouter = {
+  byWindowAge,
   moveWebView,
   createFreshWindow,
   WINDOW_CREATOR_WIRING_TIMEOUT_MS,
   resetWindowCreatorForTesting,
 };
+
+/**
+ * Orders windows holding the same thing oldest first, so a tie-break between them is predictable
+ * rather than whichever answered first.
+ *
+ * A window the tracker no longer knows sorts LAST, not first. `getWindowCreationRank` answers
+ * `undefined` for an id it is not tracking, and treating that as rank zero would rank a window that
+ * has already gone ahead of every live one — handing an open or a move to a shard whose window is
+ * away. Sorting it last means a live window always wins, and one only loses to another live
+ * window.
+ */
+function byWindowAge(a: { windowId: string }, b: { windowId: string }): number {
+  return (
+    (getWindowCreationRank(a.windowId) ?? Number.MAX_SAFE_INTEGER) -
+    (getWindowCreationRank(b.windowId) ?? Number.MAX_SAFE_INTEGER)
+  );
+}
 
 // Router methods that route to the focused window's WebView service shard
 
