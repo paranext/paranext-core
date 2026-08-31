@@ -41,4 +41,20 @@ describe('ConnectionLostOverlay localization keys', () => {
 
     expect(missingOrInvalidKeys).toHaveLength(0);
   });
+
+  // Nothing in the build enforces en/es parity, so a key added to English only ships a Spanish UI
+  // that falls back to English. Guarding both arms is what catches that at the moment the key is
+  // added.
+  it('has a non-empty Spanish translation for every key ConnectionLostOverlay can request', () => {
+    const missingOrInvalidKeys = findUnusableKeys(readStrings('es.json'));
+
+    if (missingOrInvalidKeys.length > 0)
+      throw new Error(
+        `The following ConnectionLostOverlay localization key(s) have no valid entry in ` +
+          `${localizationPath('es.json')}: ${missingOrInvalidKeys.join(', ')}. Add the Spanish ` +
+          `translation alongside the English one — en and es are both maintained in this repo.`,
+      );
+
+    expect(missingOrInvalidKeys).toHaveLength(0);
+  });
 });

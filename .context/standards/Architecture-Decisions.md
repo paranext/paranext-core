@@ -2915,12 +2915,25 @@ step, no automation. Just a record.
     listening from startup"), the same pattern already used to pin `<FirstRunOverlay />`'s presence
     in the same file.
   - **Scrim:** a blocking scrim, not a `pointer-events: none` dimming, covering the toolbar as well
-    as the dock (`overlay-connection-lost.component.tsx:69-74`, `tw:fixed tw:inset-0` at
+    as the dock (`overlay-connection-lost.component.tsx:114-126`, `tw:fixed tw:inset-0` at
     `Z_INDEX_CONNECTION_LOST`). Every toolbar control — project selector, reference, sync, menus —
     reaches the rest of the app over the same dead socket, so leaving the toolbar clickable would
     leave the exact silent failure NN-6 exists to end: controls that look live but do nothing.
+  - **Keyboard gate:** a scrim stops pointers only, so the fixed layer is also a modal —
+    `role="alertdialog"` + `aria-modal="true"` (`overlay-connection-lost.component.tsx:115-118`) with a
+    document-level Tab/Shift+Tab handler that returns focus to Reload (lines 97-110). Reload is the
+    layer's only focusable element, so the cycle is one stop and needs no focus-trap library; a Radix `Dialog` (the
+    `FirstRunOverlay` precedent) was not used because its `DialogContent` owns the layout, and this
+    state is a banner pinned under the toolbar over a full-window scrim, not a centered panel.
+    Without the gate, Tab off Reload reaches the toolbar and dock, where every control is still
+    focusable and Enter-activatable — the same silent failure by keyboard.
+  - **English fallback:** `localizedOrEnglish`
+    (`overlay-connection-lost.component.tsx:42-49`) substitutes the `en.json` text when a value is
+    still the raw key. The unconditional mount is necessary but not sufficient: a socket that dies
+    before localization has answered leaves `useLocalizedStrings` returning `defaultState`, and
+    there is no live PAPI left to wait for.
   - **Recovery:** the Reload button calls `window.location.reload()` directly
-    (`overlay-connection-lost.component.tsx:118-123`) — no command, no main-process round trip,
+    (`overlay-connection-lost.component.tsx:182-187`) — no command, no main-process round trip,
     because both are unreachable by definition once the socket is dead. A page load also reruns
     every method registration the renderer made, which is what makes reload a genuine recovery
     rather than a cosmetic one; PT-4434 verified this empirically (a broken renderer's reload logged

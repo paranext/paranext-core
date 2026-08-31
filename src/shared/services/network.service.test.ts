@@ -111,6 +111,27 @@ describe('onDidLoseConnection', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  // Nothing in `src/renderer` calls `shutdown()`, so this guard is the Node processes' protection:
+  // every socket closes at quit, and relaying that as a lost connection would tell subscribers the
+  // app broke on its way out.
+  it('does not relay after shutdown() has begun', async () => {
+    const networkService = await importNetworkService();
+
+    let fireFromHandler: ((event: undefined) => void) | undefined;
+    mockRpcHandler.onDidLoseConnection = vi.fn((callback: (event: undefined) => void) => {
+      fireFromHandler = callback;
+      return () => true;
+    });
+    await networkService.initialize();
+
+    const listener = vi.fn();
+    networkService.onDidLoseConnection(listener);
+    await networkService.shutdown();
+    fireFromHandler?.(undefined);
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it('still tells the other subscribers when one of them throws', async () => {
     const networkService = await importNetworkService();
 

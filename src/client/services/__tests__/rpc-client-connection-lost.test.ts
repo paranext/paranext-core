@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ConnectionStatus, INTENTIONAL_CLOSE_CODE } from '@shared/data/rpc.model';
+import { INTENTIONAL_CLOSE_CODE } from '@shared/data/rpc.model';
 import { RpcClient } from '@client/services/rpc-client';
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -20,17 +20,9 @@ function closeSocket(
   (rpcClient as any).onWebSocketClose(ev);
 }
 
-/** Puts the client in the state a live connection leaves it in, without opening a socket. */
-function markConnected(rpcClient: RpcClient) {
-  // See closeSocket: reaching a private field is the only way to set this without a real socket.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-  (rpcClient as any).connectionStatus = ConnectionStatus.Connected;
-}
-
 describe('RpcClient connection-lost announcement', () => {
   it('fires onDidLoseConnection when the socket dies unexpectedly', () => {
     const rpcClient = new RpcClient();
-    markConnected(rpcClient);
     const listener = vi.fn();
     rpcClient.onDidLoseConnection(listener);
 
@@ -39,9 +31,8 @@ describe('RpcClient connection-lost announcement', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  it('stays silent when the app closed the socket on purpose', () => {
+  it('stays silent when the close completed a handshake', () => {
     const rpcClient = new RpcClient();
-    markConnected(rpcClient);
     const listener = vi.fn();
     rpcClient.onDidLoseConnection(listener);
 
@@ -56,7 +47,6 @@ describe('RpcClient connection-lost announcement', () => {
 
   it('fires once even if the close handler is invoked again', () => {
     const rpcClient = new RpcClient();
-    markConnected(rpcClient);
     const listener = vi.fn();
     rpcClient.onDidLoseConnection(listener);
 
@@ -68,7 +58,6 @@ describe('RpcClient connection-lost announcement', () => {
 
   it('stops calling a listener that unsubscribed', () => {
     const rpcClient = new RpcClient();
-    markConnected(rpcClient);
     const listener = vi.fn();
     const unsubscribe = rpcClient.onDidLoseConnection(listener);
     unsubscribe();

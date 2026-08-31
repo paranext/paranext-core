@@ -143,6 +143,15 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/renderer/components/notification-display.tsx'],
   },
   {
+    id: 'connection-lost-contain-focus',
+    purpose:
+      'Keep focus on Reload while the connection-lost state is shown, so the keyboard cannot reach controls that can no longer work',
+    category: 'Navigation',
+    context: 'Renderer (global, only while the connection-lost state is shown)',
+    keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
+    locations: ['src/renderer/components/overlays/overlay-connection-lost.component.tsx'],
+  },
+  {
     id: 'zoom-in',
     purpose: 'Zoom in',
     category: 'Zoom',

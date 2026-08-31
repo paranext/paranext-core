@@ -195,8 +195,10 @@ export async function initialize(): Promise<void> {
     });
 
     unsubscribeFromConnectionLost = jsonRpc.onDidLoseConnection(() => {
-      // Every socket closes at quit; reporting that as a lost connection would tell subscribers the
-      // app broke on its way out.
+      // Only relay while this process still considers itself up. Every socket closes at quit, so a
+      // process that has begun its own `shutdown()` — the Node processes, which call it; not the
+      // renderer, which never does — would otherwise report routine teardown as the app breaking on
+      // its way out.
       if (hasShutDown) return;
       // One subscriber that throws must not cost the others the news: this is the only time they
       // are told, and for a UI subscriber it is the difference between a visible failure and a
