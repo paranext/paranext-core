@@ -688,8 +688,8 @@ export declare function clearPaletteSessionIfCurrent<TSession extends {
 	token: number;
 }>(sessionRef: React$1.MutableRefObject<TSession | undefined>, token: number): void;
 /**
- * The session record {@link runMarkerPaletteSession} creates and hands to the consumer's session
- * ref — the forwarding table's {@link MarkerPaletteSessionState} plus the `token` that scopes async
+ * The session record {@link runMarkerPaletteSession} creates and hands to the consumer's session ref
+ * — the forwarding table's {@link MarkerPaletteSessionState} plus the `token` that scopes async
  * settle-time cleanup to THIS session (see `clearPaletteSessionIfCurrent`) and the consumer's own
  * item type, so commit resolution (`items.find` by marker) returns full items.
  */
@@ -704,8 +704,8 @@ export interface MarkerPaletteOpenSession<TItem extends {
 }
 /**
  * The per-consumer half of a marker-palette session — everything the shared spine cannot own
- * because it differs between the web view and the footnote popover, plus the consumer-owned
- * session bookkeeping the spine drives through narrow callbacks.
+ * because it differs between the web view and the footnote popover, plus the consumer-owned session
+ * bookkeeping the spine drives through narrow callbacks.
  */
 export interface RunMarkerPaletteSessionOptions<TItem extends {
 	marker: string;
@@ -722,15 +722,15 @@ export interface RunMarkerPaletteSessionOptions<TItem extends {
 	 */
 	passive: boolean;
 	/**
-	 * See {@link MarkerPaletteSessionState.shouldSpaceCommit}. Attached to `'backslash'` sessions
-	 * only — Space over a selection is the wrap commit, which has no typed-literal route to except.
+	 * See {@link MarkerPaletteSessionState.shouldSpaceCommit}. Attached to `'backslash'` sessions only
+	 * — Space over a selection is the wrap commit, which has no typed-literal route to except.
 	 */
 	shouldSpaceCommit?: (filter: string) => boolean;
 	/**
 	 * The consumer's monotonic token allocator. Caller-owned (not module state) so ALL of a
-	 * consumer's palette opens — including kinds outside this spine, like the web view's
-	 * Enter-split palette — draw from ONE sequence and stale-settlement cleanup stays totally
-	 * ordered across them.
+	 * consumer's palette opens — including kinds outside this spine, like the web view's Enter-split
+	 * palette — draw from ONE sequence and stale-settlement cleanup stays totally ordered across
+	 * them.
 	 */
 	sessionCounterRef: React$1.MutableRefObject<number>;
 	/** Stores the freshly created session as the consumer's current one. */
@@ -749,8 +749,8 @@ export interface RunMarkerPaletteSessionOptions<TItem extends {
 	/**
 	 * Shows the palette with the spine-built key-forwarding declaration and resolves the selected
 	 * item's id, or `undefined` when dismissed. The consumer owns the whole request/driver shape;
-	 * only `keyForwarding` is supplied, because its `keys` must be exactly the set the session's
-	 * kind claims.
+	 * only `keyForwarding` is supplied, because its `keys` must be exactly the set the session's kind
+	 * claims.
 	 */
 	show(keyForwarding: PaletteKeyForwarding): Promise<string | undefined>;
 	/**
