@@ -23,6 +23,8 @@ interface FootnoteTypeDropdownProps {
   handleNoteTypeChange: (newNoteType: string) => void;
   localizedStrings: FootnoteEditorLocalizedStrings;
   isTypeSwitchable: boolean;
+  /** Returns the caret and keyboard focus to the note being edited. See `onCloseAutoFocus` below. */
+  focusNoteText: () => void;
 }
 
 const renderNoteTypeButtonContent = (
@@ -75,6 +77,7 @@ export function FootnoteTypeDropdown({
   handleNoteTypeChange,
   localizedStrings,
   isTypeSwitchable,
+  focusNoteText,
 }: FootnoteTypeDropdownProps) {
   return (
     <DropdownMenu>
@@ -92,7 +95,18 @@ export function FootnoteTypeDropdown({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <DropdownMenuContent style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}>
+      <DropdownMenuContent
+        style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
+        // Radix restores focus to the trigger when the menu closes, which lands the user on a
+        // button in the middle of an editor popover: the note type changes, the caret is in the
+        // right place, and typing still goes nowhere. The note text is the only place worth
+        // returning to here, so claim the restore and hand focus there instead — for a dismissal
+        // as much as for a choice.
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          focusNoteText();
+        }}
+      >
         <DropdownMenuLabel>
           {localizedStrings['%footnoteEditor_noteTypeDropdown_label%']}
         </DropdownMenuLabel>
