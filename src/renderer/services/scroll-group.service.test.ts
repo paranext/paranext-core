@@ -35,6 +35,7 @@ const { emitters, networkEventHandlers, networkObjectGet, waitForNetworkObject, 
         getScrRefForProject: vi.fn(),
         getReferenceHistory: vi.fn(),
         navigateReferenceHistory: vi.fn(),
+        claimScrollGroupSourceProject: vi.fn(),
         getScrollGroupSnapshot: vi.fn(),
         migrateStoredScrollGroupState: vi.fn(),
       },
@@ -163,6 +164,7 @@ beforeEach(() => {
   Object.values(host).forEach((mock) => mock.mockReset());
   host.setScrRef.mockResolvedValue(true);
   host.navigateReferenceHistory.mockResolvedValue(true);
+  host.claimScrollGroupSourceProject.mockResolvedValue(true);
   host.getScrollGroupSnapshot.mockResolvedValue(emptySnapshot());
   host.migrateStoredScrollGroupState.mockResolvedValue(undefined);
 });
@@ -891,6 +893,27 @@ describe('versification conversion', () => {
     callbacks.sourceProj('a-different-versification'); // genuine mid-session change
     expect(emit).toHaveBeenCalledTimes(1);
     expect(emit).toHaveBeenCalledWith({ projectId: 'sourceProj' });
+  });
+});
+
+describe('claimScrollGroupSourceProject', () => {
+  it('delegates to the host and returns its result', async () => {
+    host.claimScrollGroupSourceProject.mockResolvedValue(true);
+    const service = await startService();
+
+    const result = await service.claimScrollGroupSourceProject(0, 'targetProj');
+
+    expect(result).toBe(true);
+    expect(host.claimScrollGroupSourceProject).toHaveBeenCalledWith(0, 'targetProj');
+  });
+
+  it('propagates a false result from the host', async () => {
+    host.claimScrollGroupSourceProject.mockResolvedValue(false);
+    const service = await startService();
+
+    const result = await service.claimScrollGroupSourceProject(0, 'targetProj');
+
+    expect(result).toBe(false);
   });
 });
 

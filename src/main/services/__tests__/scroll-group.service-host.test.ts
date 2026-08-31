@@ -167,6 +167,141 @@ describe('scroll group service host source project tracking', () => {
   });
 });
 
+describe('claimScrollGroupSourceProject', () => {
+  it('converts the current ref and writes it with the new project as source, returning true', async () => {
+    const converted = { book: 'PSA', chapterNum: 146, verseNum: 1 };
+    sendCommand.mockResolvedValue(converted);
+    const host = await import('@main/services/scroll-group.service-host');
+    await host.setScrRef(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'projA');
+
+    const claimed = await host.claimScrollGroupSourceProject(0, 'projB');
+
+    expect(claimed).toBe(true);
+    expect(sendCommand).toHaveBeenCalledWith(
+      'platformScripture.mapVerseRefBetweenProjects',
+      { book: 'PSA', chapterNum: 147, verseNum: 1 },
+      'projA',
+      'projB',
+    );
+    expect(await host.getScrRef(0)).toEqual(converted);
+    expect((await host.getScrollGroupSnapshot()).scrRefSourceProjectIds[0]).toBe('projB');
+  });
+
+  it('does not record reference history', async () => {
+    sendCommand.mockResolvedValue({ book: 'PSA', chapterNum: 146, verseNum: 1 });
+    const host = await import('@main/services/scroll-group.service-host');
+    // setScrRef itself lazily seeds history on first use, so capture the post-seed state as the
+    // baseline rather than asserting on an empty history.
+    await host.setScrRef(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'projA');
+    const historyBefore = await host.getReferenceHistory(0);
+    const { emit: historyEmit } = emitters[EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY];
+    historyEmit.mockClear();
+
+    await host.claimScrollGroupSourceProject(0, 'projB');
+
+    expect(historyEmit).not.toHaveBeenCalled();
+    expect(await host.getReferenceHistory(0)).toEqual(historyBefore);
+  });
+
+  it('broadcasts onDidUpdateScrRef with the new source', async () => {
+    const converted = { book: 'PSA', chapterNum: 146, verseNum: 1 };
+    sendCommand.mockResolvedValue(converted);
+    const host = await import('@main/services/scroll-group.service-host');
+    await host.setScrRef(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'projA');
+    const { emit: scrRefEmit } = emitters[EVENT_NAME_ON_DID_UPDATE_SCR_REF];
+    scrRefEmit.mockClear();
+
+    await host.claimScrollGroupSourceProject(0, 'projB');
+
+    expect(scrRefEmit).toHaveBeenCalledWith({
+      scrollGroupId: 0,
+      scrRef: converted,
+      sourceProjectId: 'projB',
+    });
+  });
+
+  it('skips the claim and returns false when the source project is already the target', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+    await host.setScrRef(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'projA');
+
+    const claimed = await host.claimScrollGroupSourceProject(0, 'projA');
+
+    expect(claimed).toBe(false);
+    expect(sendCommand).not.toHaveBeenCalled();
+  });
+
+  it('skips the claim and returns false when the source project is unknown, leaving it unknown', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+    await host.setScrRef(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }); // no source
+
+    const claimed = await host.claimScrollGroupSourceProject(0, 'projB');
+
+    expect(claimed).toBe(false);
+    expect(sendCommand).not.toHaveBeenCalled();
+    expect((await host.getScrollGroupSnapshot()).scrRefSourceProjectIds[0]).toBeUndefined();
+  });
+
+  it('skips the claim, returns false, and logs a warning when conversion fails, leaving the source unchanged', async () => {
+    sendCommand.mockRejectedValue(new Error('conversion command not ready'));
+    const host = await import('@main/services/scroll-group.service-host');
+    await host.setScrRef(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'projA');
+
+    const claimed = await host.claimScrollGroupSourceProject(0, 'projB');
+
+    expect(claimed).toBe(false);
+    expect((await host.getScrollGroupSnapshot()).scrRefSourceProjectIds[0]).toBe('projA');
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(expect.stringContaining('projB'));
+  });
+
+  it('abandons the claim when the source project changed while the conversion was in flight', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+    await host.setScrRef(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'projA');
+    let resolveConversion: (value: SerializedVerseRef) => void = () => {};
+    sendCommand.mockReturnValue(
+      new Promise<SerializedVerseRef>((resolve) => {
+        resolveConversion = resolve;
+      }),
+    );
+
+    const claimPromise = host.claimScrollGroupSourceProject(0, 'projB');
+    // A concurrent write (e.g. a different claim, or a real navigation) lands while the conversion
+    // above is still in flight.
+    await host.setScrRef(0, { book: 'MRK', chapterNum: 1, verseNum: 1 }, 'projC');
+    resolveConversion({ book: 'PSA', chapterNum: 146, verseNum: 1 });
+
+    expect(await claimPromise).toBe(false);
+    // The concurrent write's state is what survives, not the stale claim.
+    expect((await host.getScrollGroupSnapshot()).scrRefSourceProjectIds[0]).toBe('projC');
+    expect(await host.getScrRef(0)).toEqual({ book: 'MRK', chapterNum: 1, verseNum: 1 });
+  });
+
+  it('abandons a slow claim superseded by a later one, even when the later claim itself no-ops', async () => {
+    // ABA inversion: source starts at A. claim(B)'s conversion is slow. Before it resolves, the
+    // user switches back to A - claim(A) starts and finds the source is ALREADY A, so it no-ops
+    // immediately without writing anything. If claim(B) is not aware a newer claim happened, its
+    // slow conversion resolving afterward would incorrectly leave the group on B, even though the
+    // user's last action was switching to A.
+    const host = await import('@main/services/scroll-group.service-host');
+    await host.setScrRef(0, { book: 'PSA', chapterNum: 147, verseNum: 1 }, 'projA');
+    let resolveConversion: (value: SerializedVerseRef) => void = () => {};
+    sendCommand.mockReturnValue(
+      new Promise<SerializedVerseRef>((resolve) => {
+        resolveConversion = resolve;
+      }),
+    );
+
+    const claimBPromise = host.claimScrollGroupSourceProject(0, 'projB');
+    // claim(A) starts while claim(B)'s conversion is still pending, and no-ops immediately since
+    // the source is already 'projA' - no write, no conversion round trip.
+    const claimAResult = await host.claimScrollGroupSourceProject(0, 'projA');
+    resolveConversion({ book: 'PSA', chapterNum: 146, verseNum: 1 });
+
+    expect(claimAResult).toBe(false); // nothing to claim, source was already projA
+    expect(await claimBPromise).toBe(false); // superseded by claim(A), even though claim(A) wrote nothing
+    expect((await host.getScrollGroupSnapshot()).scrRefSourceProjectIds[0]).toBe('projA');
+  });
+});
+
 describe('reference history', () => {
   it('setScrRef records history seeded with the starting reference', async () => {
     const host = await import('@main/services/scroll-group.service-host');
@@ -400,6 +535,7 @@ describe('registration', () => {
     expect(experimentalMethodNames).toEqual([
       'getReferenceHistory',
       'navigateReferenceHistory',
+      'claimScrollGroupSourceProject',
       'getScrollGroupSnapshot',
       'migrateStoredScrollGroupState',
     ]);

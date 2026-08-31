@@ -395,22 +395,26 @@ async function open(
     // here.
     if (interfaceMode === 'simple' && projectForWebView.projectId) {
       await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
-      // Fire-and-forget: must not block the switch/overlay on a papi.scrollGroups round trip (can
-      // hang up to 30s mid re-arm). Views injected via the default-layout supplement rather than
-      // pinned into simple-layout.data.ts (e.g., Text Collection) update via onDidUpdateScrRef
-      // whenever this resolves.
-      //
-      // Not gated on isEditable, matching openOrUpdateRelatedPanels/sharedLayoutReceiver above:
-      // an isEditable gate here would only prevent this specific on-open write, not the same
-      // outcome from the user's very next reference navigation. In Simple mode ALL navigation goes
-      // through the top toolbar's BookChapterControl (the per-editor one is Power-mode only), whose
-      // target resolves via resolveTargetWebView(pinToMainEditor=true) -> resolveMainEditorWebView()
-      // in navigation-target.util.ts - "the first open Scripture editor with a project," with no
-      // isEditable/isReadOnly check anywhere in that path. So opening a read-only resource and then
-      // navigating claims scroll group 0 for the resource regardless of what this call does; gating
-      // it only delays that by one navigation while leaving Text Collection stale until then.
-      claimScrollGroupSourceProject(papi, projectForWebView.projectId);
       await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
+    }
+
+    // Only for a genuine switch (replace-tab) - not the cold-start editor fill, which also lands
+    // here with a projectId but has nothing to claim scroll group 0 away FROM. Not gated on
+    // isEditable; see 5f12cbee72c for why that gate was tried and reverted. The whole check-and-
+    // claim is one fire-and-forget unit, including the interfaceMode read: `open()`'s sequential
+    // awaits above give the user a window to have switched back to Power mode, so the value
+    // captured at the top of this function is too stale to trust here, and re-reading it inline
+    // (rather than fire-and-forget) would add a round trip to the switch's critical path.
+    if (dispatch.kind === 'replace-tab' && projectForWebView.projectId) {
+      const projectIdToClaim = projectForWebView.projectId;
+      (async () => {
+        if ((await papi.settings.get('platform.interfaceMode')) === 'simple')
+          await claimScrollGroupSourceProject(papi, projectIdToClaim);
+      })().catch((e) => {
+        logger.warn(
+          `Error checking interface mode before claiming scroll group 0's source: ${getErrorMessage(e)}`,
+        );
+      });
     }
 
     // Re-check the replace-tab target after openOrUpdateRelatedPanels: concurrent panel
@@ -457,9 +461,9 @@ async function open(
 
     // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find waits
     // until here because it is the one panel that needs the id of the editor this call just created.
-    // Same guard as `openOrUpdateRelatedPanels`, for the same reason: the Column 3 panels follow the
-    // active translation project, so a read-only resource opened in the editor column must not drag
-    // them along.
+    // Gated on isEditable, unlike `openOrUpdateRelatedPanels` above (which lost this gate in
+    // dc972233209) or the scroll-group claim (which was never gated on it - see 5f12cbee72c):
+    // a read-only resource opened in the editor column must not re-point Find at it.
     if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable)
       await updateRelatedFindPanel(papi, projectForWebView.projectId, openedWebViewId);
 

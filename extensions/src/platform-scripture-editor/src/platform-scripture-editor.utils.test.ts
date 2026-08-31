@@ -2437,6 +2437,7 @@ function createFinalizeMockPapi() {
     }
     return undefined;
   });
+  const mockClaimScrollGroupSourceProject = vi.fn().mockResolvedValue(true);
   // Defaults to 'simple' - matches the common case (the switch this replays side effects for only
   // ever originates from a Power -> Simple mode change), so most tests don't need to set it.
   const mockSettingsGet = vi.fn().mockResolvedValue('simple');
@@ -2445,6 +2446,7 @@ function createFinalizeMockPapi() {
   const papi = {
     commands: { sendCommand: mockSendCommand },
     dataProviders: { get: mockDataProvidersGet },
+    scrollGroups: { claimScrollGroupSourceProject: mockClaimScrollGroupSourceProject },
     settings: { get: mockSettingsGet },
     logger: { warn: mockWarn },
   } as unknown as typeof PapiBackend;
@@ -2454,6 +2456,7 @@ function createFinalizeMockPapi() {
     mockWarn,
     mockRecordProjectOpened,
     mockDataProvidersGet,
+    mockClaimScrollGroupSourceProject,
     mockSettingsGet,
   };
 }
@@ -2503,6 +2506,23 @@ describe('finalizeProjectSwitch', () => {
     expect(applyForProject).not.toHaveBeenCalled();
   });
 
+  it("claims scroll group 0's source when still in Simple mode", async () => {
+    const { papi, mockClaimScrollGroupSourceProject } = createFinalizeMockPapi();
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockClaimScrollGroupSourceProject).toHaveBeenCalledWith(0, 'proj-1');
+  });
+
+  it('does not claim scroll group 0 when the user has since switched back to Power mode', async () => {
+    const { papi, mockSettingsGet, mockClaimScrollGroupSourceProject } = createFinalizeMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockClaimScrollGroupSourceProject).not.toHaveBeenCalled();
+  });
+
   it('does not throw when applyForProject is undefined', async () => {
     const { papi } = createFinalizeMockPapi();
 
@@ -2540,55 +2560,32 @@ describe('finalizeProjectSwitch', () => {
 // #region claimScrollGroupSourceProject
 
 function createScrollGroupMockPapi() {
-  const mockGetScrRefForProject = vi.fn();
-  const mockSetScrRef = vi.fn().mockResolvedValue(true);
+  const mockClaim = vi.fn().mockResolvedValue(true);
   const mockWarn = vi.fn();
   // Must cast since the mock only includes the papi properties used by
   // claimScrollGroupSourceProject.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
-    scrollGroups: { getScrRefForProject: mockGetScrRefForProject, setScrRef: mockSetScrRef },
+    scrollGroups: { claimScrollGroupSourceProject: mockClaim },
     logger: { warn: mockWarn },
   } as unknown as typeof PapiBackend;
-  return { papi, mockGetScrRefForProject, mockSetScrRef, mockWarn };
+  return { papi, mockClaim, mockWarn };
 }
 
 describe('claimScrollGroupSourceProject', () => {
-  it("converts the current ref into the incoming project's versification, then writes it back with the incoming project as source", async () => {
-    const { papi, mockGetScrRefForProject, mockSetScrRef } = createScrollGroupMockPapi();
-    const convertedRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
-    mockGetScrRefForProject.mockResolvedValue(convertedRef);
+  it('delegates to papi.scrollGroups.claimScrollGroupSourceProject with scroll group 0 and the incoming project', async () => {
+    const { papi, mockClaim } = createScrollGroupMockPapi();
 
     await claimScrollGroupSourceProject(papi, 'proj-incoming');
 
-    expect(mockGetScrRefForProject).toHaveBeenCalledWith(0, 'proj-incoming');
-    expect(mockSetScrRef).toHaveBeenCalledWith(0, convertedRef, 'proj-incoming');
+    expect(mockClaim).toHaveBeenCalledWith(0, 'proj-incoming');
   });
 
-  it('resolves without throwing when the papi.scrollGroups round trip is unreachable', async () => {
-    // getScrRefForProject's own conversion failures already resolve with a raw-reference
-    // fallback (see scroll-group.service-host.ts) rather than rejecting, so the only realistic
-    // rejection here is the network object itself being unreachable (e.g. mid re-arm) — not a
-    // bad conversion.
-    const { papi, mockGetScrRefForProject } = createScrollGroupMockPapi();
-    mockGetScrRefForProject.mockRejectedValue(new Error('scroll group service unreachable'));
+  it('resolves without throwing and logs a warning naming the incoming project when the call rejects', async () => {
+    const { papi, mockClaim, mockWarn } = createScrollGroupMockPapi();
+    mockClaim.mockRejectedValue(new Error('scroll group service unreachable'));
 
     await expect(claimScrollGroupSourceProject(papi, 'proj-incoming')).resolves.toBeUndefined();
-  });
-
-  it('resolves without throwing when setScrRef rejects', async () => {
-    const { papi, mockGetScrRefForProject, mockSetScrRef } = createScrollGroupMockPapi();
-    mockGetScrRefForProject.mockResolvedValue({ book: 'GEN', chapterNum: 1, verseNum: 1 });
-    mockSetScrRef.mockRejectedValue(new Error('write failed'));
-
-    await expect(claimScrollGroupSourceProject(papi, 'proj-incoming')).resolves.toBeUndefined();
-  });
-
-  it('logs a warning naming the incoming project when the papi.scrollGroups round trip fails', async () => {
-    const { papi, mockGetScrRefForProject, mockWarn } = createScrollGroupMockPapi();
-    mockGetScrRefForProject.mockRejectedValue(new Error('scroll group service unreachable'));
-
-    await claimScrollGroupSourceProject(papi, 'proj-incoming');
 
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-incoming'));
   });

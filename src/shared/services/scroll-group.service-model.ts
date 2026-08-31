@@ -221,6 +221,33 @@ export interface IScrollGroupRemoteService {
    */
   getReferenceHistory(scrollGroupId: ScrollGroupId): Promise<ReferenceHistory>;
   /**
+   * Atomically re-stamp the scroll group's source project as `projectId`, converting the current
+   * reference into that project's versification, WITHOUT recording reference history (unlike
+   * {@link setScrRef}) and without the read-then-write gap a caller combining
+   * {@link getScrRefForProject} and {@link setScrRef} across two round trips would have to race
+   * against — prefer this over that combination for exactly that reason.
+   *
+   * Skips the write (returns `false`) rather than persisting a guess when any of:
+   *
+   * - The group's source project is already `projectId` — nothing to claim.
+   * - The group's source project is unknown (`undefined`) — converting from an unknown frame would
+   *   mis-frame the reference with false confidence, so the honest "unknown" state is left alone to
+   *   self-heal on the user's next real navigation instead.
+   * - The versification conversion to `projectId` fails — this does NOT fall back to the raw
+   *   reference tagged with `projectId` as if it were a success.
+   * - The group's source project changed while the conversion was in flight — some other write won
+   *   the race and must not be clobbered.
+   *
+   * @param scrollGroupId Scroll group to claim. If `undefined`, defaults to 0
+   * @param projectId Project to claim the group's source as
+   * @returns `true` if the claim was written; `false` if skipped for any of the reasons above
+   * @experimental
+   */
+  claimScrollGroupSourceProject(
+    scrollGroupId: ScrollGroupId | undefined,
+    projectId: string,
+  ): Promise<boolean>;
+  /**
    * Navigate within the reference history of the provided scroll group, browser-`history.go` style:
    * negative offset = back that many steps, positive = forward that many steps.
    *

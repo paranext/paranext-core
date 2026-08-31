@@ -949,6 +949,25 @@ export async function getScrRefForProject(
   return conversionPromise;
 }
 
+/**
+ * See {@link IScrollGroupRemoteService.claimScrollGroupSourceProject}
+ *
+ * Plain delegation to the host, unlike {@link setScrRefSync}/{@link navigateReferenceHistorySync}:
+ * those predict locally because they drive this window's own visible UI (the BCV control moves the
+ * instant it is clicked), so waiting on a round trip would be felt. Nothing in this window
+ * initiates a source claim — the caller is extension-host code reacting to a project switch — so
+ * there is no local UI to keep in sync ahead of the host's answer, and the write reaches this
+ * window's cache the same way any OTHER process's write would: via the `onDidUpdateScrRef`
+ * broadcast {@link subscribeToScrollGroupUpdates} already applies.
+ */
+export async function claimScrollGroupSourceProject(
+  scrollGroupId: ScrollGroupId | undefined,
+  projectId: string,
+): Promise<boolean> {
+  const host = await getScrollGroupHost();
+  return host.claimScrollGroupSourceProject(scrollGroupId, projectId);
+}
+
 // #endregion
 
 // #region startup
@@ -1136,6 +1155,7 @@ export const rendererScrollGroupService: IScrollGroupService = {
   getReferenceHistory: async (scrollGroupId) => getReferenceHistorySync(scrollGroupId),
   navigateReferenceHistory: async (scrollGroupId, offset) =>
     navigateReferenceHistorySync(scrollGroupId, offset),
+  claimScrollGroupSourceProject,
   onDidUpdateScrRef,
   onDidChangeReferenceHistory,
 };
