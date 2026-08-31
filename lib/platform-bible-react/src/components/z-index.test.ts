@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   Z_INDEX_ABOVE_DOCK,
   Z_INDEX_ABOVE_POPOVER,
+  Z_INDEX_CONNECTION_LOST,
   Z_INDEX_FIRST_RUN,
   Z_INDEX_MODAL,
   Z_INDEX_MODAL_BACKDROP,
@@ -22,6 +23,13 @@ describe('z-index scale', () => {
   // The first-run wizard gates the entire app at startup; nothing may cover it.
   it('keeps the first-run gate above everything else', () => {
     expect(Z_INDEX_FIRST_RUN).toBeGreaterThan(Z_INDEX_ABOVE_POPOVER);
+  });
+
+  // The connection-lost state must cover the first-run wizard, not sit under it: the wizard is
+  // entirely PAPI-driven, so a socket death mid-wizard would otherwise strand the user in a form
+  // that cannot submit, behind a layer telling them nothing is wrong.
+  it('keeps the connection-lost state above the first-run gate', () => {
+    expect(Z_INDEX_CONNECTION_LOST).toBeGreaterThan(Z_INDEX_FIRST_RUN);
   });
 });
 
