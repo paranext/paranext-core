@@ -40,6 +40,8 @@ const RESOURCE_PICKER_STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_no_results%': 'No results found',
   '%resourcePicker_search_placeholder%': 'Search resources…',
   '%resourcePicker_language_filter_any%': 'Any language',
+  '%resourcePicker_language_filter_search_placeholder%': 'Search languages…',
+  '%resourcePicker_language_filter_no_results%': 'No languages found',
   '%resourcePicker_language_filter_multipleSelected%': '{selectCount} languages',
   '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
 };

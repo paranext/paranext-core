@@ -11,7 +11,11 @@ import { DblResourceData, ResourceType, formatReplacementString } from 'platform
 import { Check } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Spinner } from '@/components/basics/spinner.component';
-import { useProgressiveList } from './resource-picker-dialog.utils';
+import {
+  buildLanguageFilterOptions,
+  matchesResourceType,
+  useProgressiveList,
+} from './resource-picker-dialog.utils';
 
 /**
  * Localization keys used by {@link ResourcePickerDialog}. Pass to `useLocalizedStrings` and forward
@@ -26,6 +30,8 @@ export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_search_placeholder%',
   '%resourcePicker_language_filter_any%',
   '%resourcePicker_language_filter_multipleSelected%',
+  '%resourcePicker_language_filter_search_placeholder%',
+  '%resourcePicker_language_filter_no_results%',
   '%resourcePicker_showing_count%',
 ] as const);
 
@@ -184,11 +190,7 @@ export default function ResourcePickerDialog({
   const filteredResources = useMemo(
     () =>
       allResources
-        .filter(
-          (r) =>
-            !resourceType ||
-            (Array.isArray(resourceType) ? resourceType.includes(r.type) : r.type === resourceType),
-        )
+        .filter((r) => matchesResourceType(r, resourceType))
         .filter((r) => matchesSearch(r, searchText))
         .filter(
           (r) => selectedLanguages.length === 0 || selectedLanguages.includes(r.bestLanguageName),
@@ -218,12 +220,8 @@ export default function ResourcePickerDialog({
   const { visibleItems: visibleToDownload, sentinelRef, hasMore } = useProgressiveList(toDownload);
 
   const languageOptions: MultiSelectComboBoxEntry[] = useMemo(
-    () =>
-      Array.from(new Set(allResources.map((r) => r.bestLanguageName))).map((lang) => ({
-        label: lang,
-        value: lang,
-      })),
-    [allResources],
+    () => buildLanguageFilterOptions(allResources, resourceType),
+    [allResources, resourceType],
   );
 
   const hasNoResults =
@@ -232,6 +230,14 @@ export default function ResourcePickerDialog({
   const titleText = localizeString(localizedStrings, '%resourcePicker_title%');
   const searchPlaceholder = localizeString(localizedStrings, '%resourcePicker_search_placeholder%');
   const anyLanguageText = localizeString(localizedStrings, '%resourcePicker_language_filter_any%');
+  const languageSearchPlaceholder = localizeString(
+    localizedStrings,
+    '%resourcePicker_language_filter_search_placeholder%',
+  );
+  const noLanguagesText = localizeString(
+    localizedStrings,
+    '%resourcePicker_language_filter_no_results%',
+  );
   const alreadySelectedLabel = localizeString(
     localizedStrings,
     '%resourcePicker_section_already_selected%',
@@ -279,7 +285,10 @@ export default function ResourcePickerDialog({
           onChange={setSelectedLanguages}
           customSelectedText={customLanguageSelectText}
           placeholder={anyLanguageText}
+          searchPlaceholder={languageSearchPlaceholder}
+          commandEmptyMessage={noLanguagesText}
           variant="outline"
+          sortSelected
         />
       </div>
       {/* The live region stays mounted and only its content changes: assistive tech announces

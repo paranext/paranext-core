@@ -844,6 +844,12 @@ interface MultiSelectComboBoxProps {
 	onChange: (values: string[]) => void;
 	/** Placeholder text when no items are selected. */
 	placeholder: string;
+	/**
+	 * Placeholder for the search box inside the dropdown. Localize it in the caller — this component
+	 * cannot build one, because composing a sentence around {@link placeholder} only works in English.
+	 * Defaults to {@link placeholder}.
+	 */
+	searchPlaceholder?: string;
 	/** Whether to show select all/clear all buttons. */
 	hasToggleAllFeature?: boolean;
 	/** Text for the select all button. */
@@ -872,7 +878,7 @@ interface MultiSelectComboBoxProps {
 	id?: string;
 }
 /** MultiSelectComboBox component for selecting multiple items from a list. */
-export declare function MultiSelectComboBox({ entries, selected, onChange, placeholder, hasToggleAllFeature, selectAllText, clearAllText, commandEmptyMessage, customSelectedText, isOpen, onOpenChange, isDisabled, sortSelected, icon, className, variant, id, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
+export declare function MultiSelectComboBox({ entries, selected, onChange, placeholder, searchPlaceholder, hasToggleAllFeature, selectAllText, clearAllText, commandEmptyMessage, customSelectedText, isOpen, onOpenChange, isDisabled, sortSelected, icon, className, variant, id, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 interface FilterProps extends MultiSelectComboBoxProps {
 	/**
 	 * Placeholder text that will be displayed when no items are selected. It will appear at the
@@ -888,7 +894,7 @@ interface FilterProps extends MultiSelectComboBoxProps {
  * selected options. A placeholder text must be provided through 'badgesPlaceholder'. This will be
  * displayed if no items are selected,
  */
-export declare function Filter({ entries, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
+export declare function Filter({ entries, selected, onChange, placeholder, searchPlaceholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 export type FootnoteLayout = "horizontal" | "vertical";
 /** Interface defining the properties for a single footnote item component */
 export interface FootnoteItemProps {

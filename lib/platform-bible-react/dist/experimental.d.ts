@@ -265,6 +265,8 @@ export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%resourcePicker_search_placeholder%",
 	"%resourcePicker_language_filter_any%",
 	"%resourcePicker_language_filter_multipleSelected%",
+	"%resourcePicker_language_filter_search_placeholder%",
+	"%resourcePicker_language_filter_no_results%",
 	"%resourcePicker_showing_count%"
 ];
 /**

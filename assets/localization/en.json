@@ -377,6 +377,8 @@
   "%resourcePicker_button_use%": "Include",
   "%resourcePicker_language_filter_any%": "Any language",
   "%resourcePicker_language_filter_multipleSelected%": "{selectCount} languages",
+  "%resourcePicker_language_filter_no_results%": "No languages found",
+  "%resourcePicker_language_filter_search_placeholder%": "Search languages…",
   "%resourcePicker_no_results%": "No results found",
   "%resourcePicker_notice_allResourcesUnavailable%": "Can't load the resource list right now. Check your connection, then close and reopen the resource picker.",
   "%resourcePicker_notice_dblCatalogUnavailable%": "Can't reach the Digital Bible Library right now, so only resources already on this computer are shown.",
