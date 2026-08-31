@@ -140,4 +140,36 @@ describe('web-view window creator wiring', () => {
       new RegExp(`window creator was never wired up within ${WINDOW_CREATOR_WIRING_TIMEOUT_MS} ms`),
     );
   });
+
+  test('a call arriving after an earlier wait timed out waits its own bound, not the spent one', async () => {
+    // The bound is meant to say "wiring did not arrive while this call waited". A latch shared with
+    // a call that already spent it says something else — that wiring was late for someone else,
+    // once, earlier — and answers instantly on a boot where wiring is still moments away.
+    vi.useFakeTimers();
+    resetWindowCreatorForTesting();
+    withWindows({ 7: emptyWindowShard() });
+
+    const spentTheBound = createFreshWindow('someType');
+    // Attached before the clock runs, as the test above does and for the same reason.
+    spentTheBound.catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(WINDOW_CREATOR_WIRING_TIMEOUT_MS);
+    await expect(spentTheBound).rejects.toThrow();
+
+    // Real time from here: this call's own bound is the subject and is never reached, because
+    // wiring lands immediately after it starts waiting.
+    vi.useRealTimers();
+
+    const waitingAgain = createFreshWindow('someType');
+    waitingAgain.catch(() => undefined);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+
+    const freshWindow = await waitingAgain;
+
+    expect(creator.createPendingContentWindow).toHaveBeenCalledTimes(1);
+    expect(freshWindow.discard).toBeTypeOf('function');
+  });
 });
