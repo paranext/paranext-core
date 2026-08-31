@@ -575,6 +575,39 @@ describe('padding keeps its segmentation honest', () => {
   });
 });
 
+describe('the offsets cache is invisible to callers', () => {
+  it('a frozen instance works whatever order it was frozen in', () => {
+    // The class doc tells callers to treat an instance as immutable after construction, so freezing
+    // one is a reasonable thing to do. It must not matter whether a read warmed the cache first.
+    const frozenFirst = Object.freeze(new GraphemeString('abcabc'));
+    expect(frozenFirst.indexOf('b')).toEqual(1);
+    expect(frozenFirst.lastIndexOf('b')).toEqual(4);
+    expect(frozenFirst.slice(1, 3).toString()).toEqual('bc');
+    expect(frozenFirst.split('c').map(String)).toEqual(['ab', 'ab', '']);
+
+    const readFirst = new GraphemeString('abcabc');
+    readFirst.indexOf('b');
+    Object.freeze(readFirst);
+    expect(readFirst.indexOf('c')).toEqual(2);
+  });
+
+  it('reading an instance does not change its enumerable shape', () => {
+    const graphemeString = new GraphemeString('abc');
+    const before = Object.keys(graphemeString);
+    graphemeString.indexOf('b');
+    graphemeString.slice(1);
+    expect(Object.keys(graphemeString)).toEqual(before);
+    expect(before).not.toContain('offsetsCache');
+  });
+
+  it('two instances over the same text stay structurally equal after a read', () => {
+    const read = new GraphemeString('abc');
+    const untouched = new GraphemeString('abc');
+    read.indexOf('b');
+    expect(JSON.stringify(read)).toEqual(JSON.stringify(untouched));
+  });
+});
+
 describe('iteration', () => {
   it('iterates its graphemes, so Array.from and spreading work like they do on a string', () => {
     // The module header steers callers from `Array.from(str)` onto a GraphemeString, so an

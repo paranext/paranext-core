@@ -349,7 +349,7 @@ export declare class GraphemeString {
 	/**
 	 * The raw string. Used for `toString`, the native scans behind search, and regex split. Not
 	 * `readonly` only because {@link fromSegmented} assigns it; treat it as immutable after
-	 * construction, since {@link offsetsCache} is derived from it.
+	 * construction, since the cached offsets behind {@link offsets} are derived from it.
 	 */
 	private str;
 	/**
@@ -359,8 +359,6 @@ export declare class GraphemeString {
 	 * text.
 	 */
 	private graphemes;
-	/** Lazily built cache behind {@link offsets}. */
-	private offsetsCache?;
 	/**
 	 * Segment `string` into grapheme clusters once, up front. Every operation on the result reuses
 	 * that work rather than re-segmenting.
@@ -649,7 +647,9 @@ export declare class GraphemeString {
 	 *
 	 * PERF: built on first use rather than in the constructor. Only the search and range methods need
 	 * it; `length`, the point accessors, and the padding methods do not, and those are both the
-	 * cheapest and the most frequent operations — building it eagerly taxes them for nothing.
+	 * cheapest and the most frequent operations — building it eagerly taxes them for nothing. That
+	 * matters most for derived instances: `split` alone produces one per piece, and most are never
+	 * indexed into. Cached in {@link offsetsByInstance} rather than on the instance.
 	 */
 	private offsets;
 	/** Build the grapheme array a padding method should prepend/append, empty when none is needed. */
