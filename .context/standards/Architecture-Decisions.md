@@ -2240,7 +2240,14 @@ step, no automation. Just a record.
   scrollbars and the theme stylesheet, never the renderer's Tailwind build, so `tw:` classes render
   unstyled there. Theme CSS custom properties do resolve, because the iframe body is given the theme
   id class. (3) **The fallback falls back to English literals**, not to the localize key, because one
-  known cause of a blank web view is a crash inside `useLocalizedStrings` itself.
+  known cause of a blank web view is a crash inside `useLocalizedStrings` itself — and, for the same
+  reason, **the part of the fallback that reaches the localization service sits below a second,
+  inner boundary**. React hands an error thrown inside a boundary's own fallback to the *next*
+  boundary up, and above a web view's root there is none, so a throw while localizing the crash
+  panel would blank the pane exactly as an uncaught web view crash does. An unresolved string and a
+  throwing hook are different failure modes: the English literals cover the first, the inner
+  boundary covers the second. Everything above that inner boundary — the panel's markup, styles and
+  focus handling — must therefore stay service-free.
 - **Alternatives:** **A boundary per extension** (the editor extension wrapping its own web view) —
   rejected: same day of work for a fraction of the coverage, repeated per extension, leaving Text
   Collection, resource panels, Find and the rest still blanking. **A boundary in the renderer's
@@ -2253,10 +2260,27 @@ step, no automation. Just a record.
   crashed". Not covered, and worth stating wherever this is relied on: event handlers, async
   callbacks and unhandled rejections (React boundaries never see those — global `onerror` capture is
   PT-3776); a data provider returning a `PlatformError` instead of throwing (e.g. the render-rate
-  guard in `create-use-data-hook.util.ts`); and a throw inside the fallback itself. Because the crash
-  unmounts everything focusable in the pane, including its toolbar, there is no in-tree signal that
-  could reset the boundary — hence the reload button and the focus move on mount, both load-bearing
-  rather than polish. Editor coverage additionally rests on a cross-package assumption:
+  guard in `create-use-data-hook.util.ts`); and a throw in the part of the fallback above the inner
+  boundary, which is why that part stays service-free. Because the crash unmounts everything
+  focusable in the pane, including its toolbar, there is no in-tree signal that could reset the
+  boundary — hence the reload button and the focus move on mount, both load-bearing rather than
+  polish.
+
+  **A crashed pane stays crashed until the web view is reloaded**, and nothing resets the boundary
+  on a web view definition update. This is deliberate rather than an omission. The generated iframe
+  script re-runs `root.render` against the same boundary instance on every `onDidUpdateWebView`, and
+  `updateWebViewDefinition` is reachable only from a web view's own component (bound to its own id
+  in the generated script; the web view service exposes no cross-web-view update to extensions), so
+  a crashed pane — whose component is unmounted — only ever receives updates from elsewhere in the
+  renderer: `scrollGroupScrRef` on every navigation, `state`, `isClosable`, bring-to-front. Resetting
+  on those would re-run the same failing render on every verse move, costing a crash-and-log cycle
+  each time and never producing a different result. The changes that genuinely mean "show something
+  else in this pane" do not take that path at all: switching a tab's project mints a new web view
+  via `replace-tab`, and re-pointing a related panel calls `reloadWebView` — both build a fresh
+  iframe, hence a fresh React root and a fresh boundary. Reload is therefore the only recovery path
+  that could work, which is why the panel leads with it.
+
+  Editor coverage additionally rests on a cross-package assumption:
   `@eten-tech-foundation/platform-editor` configures Lexical with `onError(error) { throw error; }`,
   so Lexical's own boundary re-throws out of `componentDidCatch` and React hands the error up to us.
   If a future platform-editor release swallows there instead, editor crashes would silently show

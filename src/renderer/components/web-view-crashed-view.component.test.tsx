@@ -3,7 +3,7 @@ import path from 'path';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   WebViewCrashedView,
   ENGLISH_DEFAULTS,
@@ -35,6 +35,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   onReload = vi.fn();
   vi.mocked(useLocalizedStrings).mockReturnValue([LOCALIZED, false]);
+});
+
+afterEach(() => {
+  // Several tests spy on `document.hasFocus` and on `console.error`; without this they leak into
+  // the tests that follow them
+  vi.restoreAllMocks();
 });
 
 describe('WebViewCrashedView', () => {
@@ -89,6 +95,46 @@ describe('WebViewCrashedView', () => {
     );
 
     expect(screen.getByText('Localized message with no title')).toBeInTheDocument();
+    expect(screen.queryByText(/%webView_modelTextPanel_title%/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to English rather than blanking when localizing throws', () => {
+    // Nothing above this component could catch such a throw: React hands an error raised inside an
+    // error boundary's fallback to the NEXT boundary up, and a web view's root has none. An
+    // unresolved string and a throwing hook are different failure modes, and a crash inside
+    // `useLocalizedStrings` is one of the live causes of the blank pane this panel replaces.
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(useLocalizedStrings).mockImplementation(() => {
+      throw new Error('localization boom');
+    });
+
+    render(<WebViewCrashedView onReload={onReload} webViewTitle="Editor" />);
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByText('This panel stopped working')).toBeInTheDocument();
+    expect(
+      screen.getByText('Something went wrong and “Editor” could not be displayed.'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    expect(onReload).toHaveBeenCalledOnce();
+  });
+
+  it('uses the untitled message when localizing throws and the title is a localize key', () => {
+    // A localize-key title cannot be resolved with localization down, and a raw `%…%` on screen is
+    // exactly what this panel exists to avoid
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(useLocalizedStrings).mockImplementation(() => {
+      throw new Error('localization boom');
+    });
+
+    render(
+      <WebViewCrashedView onReload={onReload} webViewTitle="%webView_modelTextPanel_title%" />,
+    );
+
+    expect(
+      screen.getByText('Something went wrong and this panel could not be displayed.'),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/%webView_modelTextPanel_title%/)).not.toBeInTheDocument();
   });
 
