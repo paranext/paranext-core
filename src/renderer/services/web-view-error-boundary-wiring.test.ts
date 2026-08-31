@@ -73,7 +73,9 @@ describe('web view error boundary wiring', () => {
       serviceShard.indexOf('const unsubscribeUpdateWebView'),
     );
 
-    expect(mountCall).toContain('webViewId:');
+    // All three read from the same saved definition, so a definition update cannot leave the
+    // boundary reporting one web view's id against another's type or title
+    expect(mountCall).toContain('webViewId: savedWebViewDefinition.id');
     expect(mountCall).toContain('webViewType: savedWebViewDefinition.webViewType');
     expect(mountCall).toContain('webViewTitle: savedWebViewDefinition.title');
   });

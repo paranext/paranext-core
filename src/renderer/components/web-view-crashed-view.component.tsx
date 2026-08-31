@@ -1,7 +1,21 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { LocalizationData } from '@shared/services/localization.service-model';
-import { formatReplacementString, isLocalizeKey, LocalizeKey } from 'platform-bible-utils';
-import { CSSProperties, useEffect, useMemo, useRef } from 'react';
+import { logger } from '@shared/services/logger.service';
+import {
+  formatReplacementString,
+  getErrorMessage,
+  isLocalizeKey,
+  LocalizeKey,
+} from 'platform-bible-utils';
+import {
+  Component,
+  CSSProperties,
+  PropsWithChildren,
+  ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
 
 const TITLE_KEY = '%webView_error_crashed_title%';
 const MESSAGE_KEY = '%webView_error_crashed_message%';
@@ -16,14 +30,22 @@ type WebViewCrashedViewStringKey =
 
 /**
  * Keys this view resolves. Declared at module level because `useLocalizedStrings` requires a stable
- * array reference - a new array each render would resubscribe on every render.
+ * array reference - a new array each render would resubscribe on every render. Mutable because the
+ * hook's parameter is `LocalizeKey[]`; only the `readonly` view of it leaves this module.
  */
-export const WEB_VIEW_CRASHED_VIEW_STRING_KEYS: LocalizeKey[] = [
+const STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
   MESSAGE_KEY,
   MESSAGE_NO_TITLE_KEY,
   RELOAD_BUTTON_KEY,
 ];
+
+/**
+ * The keys this view resolves, as a `readonly` view of the array the hook subscribes with. Exposed
+ * so tests can check the English defaults cover exactly these keys; `readonly` so no consumer can
+ * mutate the array the hook depends on being stable.
+ */
+export const WEB_VIEW_CRASHED_VIEW_STRING_KEYS: readonly LocalizeKey[] = STRING_KEYS;
 
 /**
  * Last-resort English text.
@@ -143,28 +165,30 @@ export type WebViewCrashedViewProps = {
   webViewTitle?: string;
 };
 
+type CrashedViewShellProps = {
+  /** Heading, already resolved to display text. */
+  title: string;
+  /** Explanation naming the crashed pane, already resolved and interpolated. */
+  message: string;
+  /** Label on the reload button, already resolved to display text. */
+  reloadLabel: string;
+  /** Re-attempts loading the crashed web view. */
+  onReload: () => void;
+};
+
 /**
- * Replaces a web view's content when {@link WebViewErrorBoundary} catches a render failure, so the
- * pane shows what happened instead of going blank.
+ * The panel itself: fixed markup and fixed styles over text that is already resolved.
+ *
+ * Calls React's own hooks only. Nothing here reaches a service, so it renders the same whether the
+ * text came from the localization service or from {@link ENGLISH_DEFAULTS} - which is what lets the
+ * English path stay identical in layout to the localized one.
  *
  * Takes focus on mount only if this web view already had it - the crash unmounted everything
  * focusable in the pane, so a keyboard or screen-reader user who was working here would otherwise
  * be left on `body` with no route to the reload button. `role="alert"` announces the text either
  * way, which is what covers the panes that do not take focus. See the effect for the cases.
  */
-export function WebViewCrashedView({ onReload, webViewTitle }: WebViewCrashedViewProps) {
-  const [localizedStrings] = useLocalizedStrings(WEB_VIEW_CRASHED_VIEW_STRING_KEYS);
-
-  // A web view's title may be a localize key rather than display text, so it needs resolving before
-  // it can go in the message - otherwise the panel that exists to avoid showing raw `%…%` keys shows
-  // one. Resolved separately from the keys above because it varies per web view; memoized because
-  // `useLocalizedStrings` requires a stable array reference.
-  const titleKeys = useMemo<LocalizeKey[]>(
-    () => (webViewTitle && isLocalizeKey(webViewTitle) ? [webViewTitle] : []),
-    [webViewTitle],
-  );
-  const [localizedTitles] = useLocalizedStrings(titleKeys);
-
+function CrashedViewShell({ title, message, reloadLabel, onReload }: CrashedViewShellProps) {
   // React refs passed to DOM elements must be initialized with null, not undefined.
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
@@ -186,6 +210,41 @@ export function WebViewCrashedView({ onReload, webViewTitle }: WebViewCrashedVie
     if (containerRef.current?.ownerDocument.hasFocus()) containerRef.current.focus();
   }, []);
 
+  return (
+    <>
+      {/* Outside the alert region so the region holds only what is announced. */}
+      <style>{BUTTON_STATE_CSS}</style>
+      <div ref={containerRef} style={CONTAINER_STYLE} role="alert" tabIndex={-1}>
+        <p style={TITLE_STYLE}>{title}</p>
+        <p style={MESSAGE_STYLE}>{message}</p>
+        <button type="button" className={BUTTON_CLASS} style={BUTTON_STYLE} onClick={onReload}>
+          {reloadLabel}
+        </button>
+      </div>
+    </>
+  );
+}
+
+/**
+ * The panel with its text resolved through the localization service.
+ *
+ * Everything in this view that can reach a service lives here, below
+ * {@link CrashedViewLocalizationBoundary}, so a failure to localize costs the user English text
+ * rather than the blank pane this whole view exists to replace.
+ */
+function LocalizedCrashedView({ onReload, webViewTitle }: WebViewCrashedViewProps) {
+  const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
+
+  // A web view's title may be a localize key rather than display text, so it needs resolving before
+  // it can go in the message - otherwise the panel that exists to avoid showing raw `%…%` keys shows
+  // one. Resolved separately from the keys above because it varies per web view; memoized because
+  // `useLocalizedStrings` requires a stable array reference.
+  const titleKeys = useMemo<LocalizeKey[]>(
+    () => (webViewTitle && isLocalizeKey(webViewTitle) ? [webViewTitle] : []),
+    [webViewTitle],
+  );
+  const [localizedTitles] = useLocalizedStrings(titleKeys);
+
   // Falls back to the untitled message rather than showing a key that did not resolve. Nested so
   // `isLocalizeKey` narrows `webViewTitle` before it is used to index the resolved strings.
   let resolvedTitle: string | undefined;
@@ -205,14 +264,100 @@ export function WebViewCrashedView({ onReload, webViewTitle }: WebViewCrashedVie
     : localize(localizedStrings, MESSAGE_NO_TITLE_KEY);
 
   return (
-    <div ref={containerRef} style={CONTAINER_STYLE} role="alert" tabIndex={-1}>
-      <style>{BUTTON_STATE_CSS}</style>
-      <p style={TITLE_STYLE}>{localize(localizedStrings, TITLE_KEY)}</p>
-      <p style={MESSAGE_STYLE}>{message}</p>
-      <button type="button" className={BUTTON_CLASS} style={BUTTON_STYLE} onClick={onReload}>
-        {localize(localizedStrings, RELOAD_BUTTON_KEY)}
-      </button>
-    </div>
+    <CrashedViewShell
+      title={localize(localizedStrings, TITLE_KEY)}
+      message={message}
+      reloadLabel={localize(localizedStrings, RELOAD_BUTTON_KEY)}
+      onReload={onReload}
+    />
+  );
+}
+
+/**
+ * The panel with its text taken straight from {@link ENGLISH_DEFAULTS}, reaching no service at all.
+ *
+ * A localize-key title cannot be resolved on this path, so it degrades to the untitled message
+ * rather than putting a raw `%…%` on screen.
+ */
+function EnglishCrashedView({ onReload, webViewTitle }: WebViewCrashedViewProps) {
+  const displayTitle = webViewTitle && !isLocalizeKey(webViewTitle) ? webViewTitle : undefined;
+
+  return (
+    <CrashedViewShell
+      title={ENGLISH_DEFAULTS[TITLE_KEY]}
+      message={
+        displayTitle
+          ? formatReplacementString(ENGLISH_DEFAULTS[MESSAGE_KEY], { webViewTitle: displayTitle })
+          : ENGLISH_DEFAULTS[MESSAGE_NO_TITLE_KEY]
+      }
+      reloadLabel={ENGLISH_DEFAULTS[RELOAD_BUTTON_KEY]}
+      onReload={onReload}
+    />
+  );
+}
+
+type CrashedViewLocalizationBoundaryProps = PropsWithChildren<{
+  /** Rendered instead of the children if resolving localized text throws. */
+  fallback: ReactNode;
+  /** Raw title of the crashed web view, named in the log so the failure can be traced to a pane. */
+  webViewTitle?: string;
+}>;
+
+/**
+ * Shows `fallback` if resolving this panel's localized text throws.
+ *
+ * {@link WebViewErrorBoundary} cannot cover this. React hands an error thrown inside a boundary's
+ * own fallback to the NEXT boundary up, and above a web view's root there is none - so a throw
+ * while localizing this panel would blank the pane, which is the exact failure the panel exists to
+ * replace. A crash inside `useLocalizedStrings` is one of the known causes of that blank pane, so
+ * the one part of this panel that reaches a service gets its own boundary and degrades to English.
+ *
+ * Everything above this boundary - {@link CrashedViewShell} included - must stay service-free for
+ * the same reason: a throw there still has nothing to catch it.
+ */
+class CrashedViewLocalizationBoundary extends Component<
+  CrashedViewLocalizationBoundaryProps,
+  { hasError: boolean }
+> {
+  constructor(props: CrashedViewLocalizationBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    const { webViewTitle } = this.props;
+    logger.warn(
+      `Crash panel for web view ${webViewTitle ?? '(untitled)'} could not localize its text, falling back to English: ${getErrorMessage(error)}`,
+    );
+  }
+
+  render(): ReactNode {
+    const { children, fallback } = this.props;
+    const { hasError } = this.state;
+
+    return hasError ? fallback : children;
+  }
+}
+
+/**
+ * Replaces a web view's content when {@link WebViewErrorBoundary} catches a render failure, so the
+ * pane shows what happened instead of going blank.
+ *
+ * Localized when localization works, English when it does not - including when it throws, which
+ * nothing above this component could catch.
+ */
+export function WebViewCrashedView({ onReload, webViewTitle }: WebViewCrashedViewProps) {
+  return (
+    <CrashedViewLocalizationBoundary
+      fallback={<EnglishCrashedView onReload={onReload} webViewTitle={webViewTitle} />}
+      webViewTitle={webViewTitle}
+    >
+      <LocalizedCrashedView onReload={onReload} webViewTitle={webViewTitle} />
+    </CrashedViewLocalizationBoundary>
   );
 }
 
