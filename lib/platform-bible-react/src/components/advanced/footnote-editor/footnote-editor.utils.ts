@@ -13,6 +13,8 @@ import { MarkerMenuItem } from '../marker-menu.component';
  *
  * @param editorRef The ref for the editor component to be able to insert markers
  * @param parentMarker The current parent marker which is used to determine which markers to include
+ * @param noteMarker The marker of the note being edited (`f`, `fe`, `x`), used when the caret's own
+ *   marker defines no children of its own
  * @returns The list of inline marker menu items
  */
 export function generateInlineMarkerMenuListItems(
@@ -20,11 +22,16 @@ export function generateInlineMarkerMenuListItems(
   closeMarkersMenu: () => void,
   localizedStrings: LanguageStrings,
   parentMarker?: string,
+  noteMarker?: string,
 ): MarkerMenuItem[] {
   // Makes it so that if the parent marker is a paragraph, won't show the marker menu
   if (!parentMarker || parentMarker === 'p') return [];
 
-  const markerDetails = usfmMarkers[parentMarker];
+  // A caret inside a character run reports that run's marker (`ft`, `fq`, …), and those define no
+  // children. What a user can insert there is what the enclosing note allows, so fall back to it.
+  const markerDetails = usfmMarkers[parentMarker]?.children
+    ? usfmMarkers[parentMarker]
+    : usfmMarkers[noteMarker ?? parentMarker];
   if (!markerDetails?.children) return [];
 
   const markerMenuItems: MarkerMenuItem[] = [];
