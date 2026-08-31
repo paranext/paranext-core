@@ -397,10 +397,23 @@ export async function getScrRef(scrollGroupId: ScrollGroupId = 0): Promise<Seria
 
 /**
  * Low-level ref write: store `scrRef` (+ its source project) for the scroll group, persist, and
- * broadcast `onDidUpdateScrRef`. NO versification no-op guard and NO history recording — a caller
- * that wants those wraps this (see {@link setScrRefSync}). Reference-history navigation writes
- * through here directly: the stacks already reflect the move, so the destination must always be
- * applied — including a multi-step jump onto a same-numbers entry whose source frame differs.
+ * broadcast `onDidUpdateScrRef`. NO history recording (no push/replace on the back/forward stacks)
+ * — a caller that wants that wraps this (see {@link setScrRefSync}). Reference-history navigation
+ * writes through here directly: the stacks already reflect the move, so the destination must always
+ * be applied — including a multi-step jump onto a same-numbers entry whose source frame differs.
+ *
+ * Does, however, keep a pre-existing `history.current` entry's `sourceProjectId` in sync when this
+ * write does not move the ref (same book/chapter/verse) — seeing that as "recording" would be wrong
+ * (nothing is pushed or replaced on any stack, so this is not a navigation event), but leaving it
+ * unsynced is also wrong: `history.current` is documented as mirroring the live position, and
+ * {@link getOrCreateReferenceHistory} lazily seeds it from whatever the live source happens to be at
+ * first access. A reader (e.g. the Back/Forward button, on mount) can seed it before an async,
+ * fire-and-forget caller of this function — {@link claimScrollGroupSourceProject} is the motivating
+ * case — has corrected that source; without this, the stale seed sits in `history.current` (or gets
+ * pushed onto `back` by the next real navigation) and a later Back resurrects it, even after the
+ * live source was fixed. A genuinely new position never matches the scrRef comparison below, so a
+ * real navigation's old `history.current` is left alone here for {@link setScrRefSync}'s subsequent
+ * `recordNavigation` call to push onto `back` as usual.
  *
  * @param scrRef Reference to store. Deep-cloned before storing so it never aliases the caller's
  *   object (nor, for history navigation, the stored history entry).
@@ -420,6 +433,11 @@ function writeScrRef(
   // lost-frame bug — an unknown frame is honestly unknown.
   scrRefSourceProjectIds[scrollGroupId] = sourceProjectId;
   hasOwnScrollGroupState = true;
+
+  const history = referenceHistories.get(scrollGroupId);
+  if (history?.current && compareScrRefs(history.current.scrRef, scrRef) === 0) {
+    history.current = { scrRef: deepClone(scrRef), sourceProjectId };
+  }
   // Scheduled, not written, so a store that is slow or failing can neither delay nor prevent the
   // broadcast below. The broadcast is the correctness-critical half — it is what stops the other
   // windows from silently showing a different verse than this one — while the file only decides

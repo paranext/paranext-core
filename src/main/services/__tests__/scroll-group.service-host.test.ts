@@ -300,6 +300,23 @@ describe('claimScrollGroupSourceProject', () => {
     expect(await claimBPromise).toBe(false); // superseded by claim(A), even though claim(A) wrote nothing
     expect((await host.getScrollGroupSnapshot()).scrRefSourceProjectIds[0]).toBe('projA');
   });
+
+  it("keeps a pre-existing history entry's source in sync when the claim doesn't move the ref, so a later Back does not resurrect the pre-claim source", async () => {
+    const ref = { book: 'PSA', chapterNum: 147, verseNum: 1 };
+    // The conversion returns the same numbers - i.e. the claim re-tags the source without moving
+    // the ref, exactly like a lazily-seeded history entry that raced ahead of this claim would have
+    // recorded before the claim resolved.
+    sendCommand.mockResolvedValue(ref);
+    const host = await import('@main/services/scroll-group.service-host');
+    // Seeds history.current with source projA - stands in for a reader (e.g. the Back/Forward
+    // button) lazily seeding history from the live source before a slower claim corrects it.
+    await host.setScrRef(0, ref, 'projA');
+
+    await host.claimScrollGroupSourceProject(0, 'projB');
+
+    const history = await host.getReferenceHistory(0);
+    expect(history.current?.sourceProjectId).toBe('projB');
+  });
 });
 
 describe('reference history', () => {
