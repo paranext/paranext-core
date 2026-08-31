@@ -43,6 +43,7 @@ import type { PickerResource } from './downloaded-resources.utils';
 import {
   canPublishResourcePanelProjectIds,
   getResourcePanelReadiness,
+  type ResourcePanelReadiness,
 } from './resource-panel-readiness.utils';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { PanelReadinessView } from './panel-readiness-view.component';
@@ -51,11 +52,24 @@ import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook'
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { useIsOnline } from './use-is-online.hook';
 import {
-  getRefLabel,
   isDblResourceReference,
   isProjectReference,
+  getRefLabel,
 } from './resource-reference.utils';
-import { InstallFailedView, InstallingView } from './install-state-views.component';
+import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
+import { ResourceBookNotAvailable } from './resource-book-not-available.component';
+import { ResourceBlankChapter } from './resource-blank-chapter.component';
+import { ResourceTextUnavailable } from './resource-text-unavailable.component';
+import {
+  isBlankChapterOnScreen,
+  isMissingBookError,
+  resolveResourceContentState,
+} from './platform-scripture-editor.utils';
+import {
+  RESOURCE_PANEL_TYPED_STRING_KEYS,
+  resolveResourcePanelStringKeys,
+} from './resource-panel-strings.utils';
+import { RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
@@ -99,8 +113,14 @@ const COMMENTARIES_ICON_URLS: TabIconUrls = {
   lightUnselected: 'papi-extension://platformScriptureEditor/assets/file-text-unselected.svg',
 };
 
+// This panel offers locally-downloaded resources alongside the ones already in the text
+// collection, so its rows are the union of both.
 const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
 
+/**
+ * A stable identity for a picker row. Namespaced by reference kind because a DBL entry UID and a
+ * project ID are drawn from different spaces and could otherwise collide.
+ */
 function pickerRowId(row: PickerResource): string {
   const { reference } = row;
   if (isDblResourceReference(reference)) return `dbl:${reference.id}`;
@@ -148,8 +168,7 @@ function ResourceSelectorDropdown({
                 key={refId}
                 checked={refId === (selectedRef ? pickerRowId(selectedRef) : undefined)}
                 onCheckedChange={() => {
-                  if (isDblResourceReference(ref.reference) || isProjectReference(ref.reference))
-                    onSelectResource(refId);
+                  onSelectResource(refId);
                 }}
               >
                 {getRefLabel(ref.reference, dblResources)}
@@ -239,37 +258,19 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Data sources
 
+  const effectiveResourcesState = useEffectiveResourceReferenceList(
+    projectId,
+    'platformScripture.referencedProjectsAndResources',
+  );
+
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
     projectId,
   );
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
-    useCallback(async () => {
-      if (fetchResources) {
-        // Sets the `fetchResources` flag to false which will trigger the promise again next render
-        // to fetch the resources
-        setFetchResources(false);
-        return Promise.resolve(undefined);
-      }
-
-      const [cachedResult, localResult] = await Promise.allSettled([
-        papi.commands.sendCommand('platformGetResources.getCachedResources'),
-        papi.commands.sendCommand('platformGetResources.getLocalNonDblResources'),
-      ]);
-      const cachedResources = cachedResult.status === 'fulfilled' ? cachedResult.value : undefined;
-      const localNonDblResources =
-        localResult.status === 'fulfilled' ? localResult.value : undefined;
-      return [...(cachedResources ?? []), ...(localNonDblResources ?? [])];
-    }, [fetchResources]),
-    undefined,
-  );
-  const dblResources = useMemo(
-    () => resourcesPossiblyUndefined ?? [],
-    [resourcesPossiblyUndefined],
-  );
-  const [pickerResources] = useResourcePickerResources(
+  const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
+  const [pickerResources, arePickerResourcesLoading] = useResourcePickerResources(
     projectId,
     RESOURCE_PICKER_OPTIONS,
     dblResources,
@@ -305,12 +306,21 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // Readiness is decided from whether the sources have ARRIVED, never from whether the filtered
   // result came out empty — see `getResourcePanelReadiness`.
-  const readiness = getResourcePanelReadiness({
+  const listReadiness = getResourcePanelReadiness({
     listState: effectiveResourcesState,
     isCatalogReady,
     hasCatalogError,
     matchingCount: filteredResources.length,
   });
+
+  // `getResourcePanelReadiness` answers "is anything configured?" from the referenced list alone.
+  // This panel also offers locally-downloaded resources that are not referenced yet, so an empty
+  // referenced list is only genuinely empty once those rows have arrived and none of them matched.
+  let readiness: ResourcePanelReadiness = listReadiness;
+  if (listReadiness === 'empty') {
+    if (arePickerResourcesLoading) readiness = 'loading';
+    else if (filteredResources.length > 0) readiness = 'configured';
+  }
 
   // #endregion
 
@@ -333,12 +343,12 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // Auto-correct selectedResourceId when the selected item leaves the filtered list.
   // Skipped while a pending selection is in-flight to avoid overriding it prematurely.
-  // Skips rows with no projectId (unresolvable references) to avoid a permanent spinner.
   useEffect(() => {
     if (filteredResources.length === 0) return;
     if (pendingResourceId) return;
     const currentId = filteredResources.find((r) => pickerRowId(r) === selectedResourceId);
     if (!currentId) {
+      // A row with no `projectId` has nothing to display, so selecting it would spin forever.
       const firstUsable = filteredResources.find((r) => r.projectId !== undefined);
       if (firstUsable) setSelectedResourceId(pickerRowId(firstUsable));
     }
@@ -347,19 +357,18 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const selectedRef =
     filteredResources.find((r) => pickerRowId(r) === selectedResourceId) ?? filteredResources[0];
 
-  // PickerResource.projectId is pre-computed — no need to re-derive from the reference shape.
-  const resourceProjectId = selectedRef?.projectId;
-
-  // dblMatch is still needed for the dynamic title's displayName.
-  let dblMatch: (typeof dblResources)[number] | undefined;
   const [isSelecting, setIsSelecting] = useState(false);
 
-  if (selectedRef) {
-    const { reference } = selectedRef;
-    if (isDblResourceReference(reference)) {
-      dblMatch = dblResources.find((r) => r.dblEntryUid === reference.id);
-    }
-  }
+  // resourceProjectId is the search source passed to Find: the project of the resource this panel
+  // is displaying, NOT the panel's own `projectId` prop (that is the container project whose
+  // reference list is shown). `PickerResource` resolves it for every reference kind.
+  const resourceProjectId = selectedRef?.projectId;
+
+  // The catalog entry behind the selection, for the dynamic title's display name.
+  const dblMatch =
+    selectedRef && isDblResourceReference(selectedRef.reference)
+      ? findCachedDblResource(selectedRef.reference, dblResources)
+      : undefined;
 
   // Auto-install a selected DBL resource matched in the catalog but not installed locally yet
   // (shared with the model-text panel); without it the panel spins forever. Skipped while a manual
@@ -525,21 +534,16 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Resource picker dialog
 
-  // Build the set of resource IDs that are already in the user's text collection. Resources with
-  // source 'downloaded' are locally installed but NOT in text connections — they should appear in
-  // INSTALLED in the picker (not INCLUDED). Only text-connection resources (source 'admin' or
-  // 'user') are INCLUDED. ProjectReference IDs are included so that locally-installed non-DBL
-  // resources added via selectTextConnection appear in INCLUDED rather than re-appearing in
-  // INSTALLED on the next picker open.
-  // Uses ALL pickerResources (not the type-filtered filteredResources) so that resources of any
-  // type in the text collection (e.g. CommentaryResource TNN/TND alongside ScriptureResource
-  // texts) are marked as INCLUDED, not re-offered in INSTALLED.
+  // The IDs the Resource Picker shows as already INCLUDED. Rows sourced from `downloaded` are
+  // installed locally but not in the text collection, so they belong in the picker's INSTALLED
+  // section instead. Drawn from every picker row rather than the type-filtered ones so a resource
+  // of another type that is in the text collection (a commentary alongside Bible texts) is not
+  // re-offered as INSTALLED.
   const currentFilteredDblIds = useMemo(() => {
     return (pickerResources ?? []).flatMap((r) => {
       if (r.source === 'downloaded') return [];
       const { reference } = r;
-      if (isDblResourceReference(reference)) return [reference.id];
-      if (isProjectReference(reference)) return [reference.id];
+      if (isDblResourceReference(reference) || isProjectReference(reference)) return [reference.id];
       return [];
     });
   }, [pickerResources]);
@@ -577,8 +581,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
     useMemo(
-      () => ({ selectedResourceIds: currentFilteredDblIds, isModal: true, resourceType }),
-      [currentFilteredDblIds, resourceType],
+      () => ({ resourceType, selectedResourceIds: currentFilteredDblIds, isModal: true }),
+      [resourceType, currentFilteredDblIds],
     ),
     useCallback(
       (resource: DblResourceData | undefined) => {
@@ -636,9 +640,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Also shows spinner for if loading resources, except if there is no resources then it should
-  // directly show the button to pick a resource below
-  if (!pickerResources || (isLoadingResources && filteredResources.length !== 0)) {
+  // Front of the state machine: still resolving, unreadable setting, or genuinely nothing
+  // configured. Driven by one readiness value so the empty prompt can only appear once emptiness is
+  // actually known — the loading branch deliberately outlasts the catalog fetch when something is
+  // configured, which is the window the old guard let fall through to the empty state.
+  if (readiness !== 'configured') {
     return (
       <PanelReadinessView
         readiness={readiness}
