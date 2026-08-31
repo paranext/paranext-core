@@ -104,6 +104,7 @@ import {
   waitForAppPages,
   waitForRendererRegistered,
   webViewTabTitle,
+  windowScopedWebViewId,
 } from './multi-window.util';
 
 /**
@@ -879,7 +880,9 @@ test.describe('window layout persistence', () => {
       // that lost the legacy layout would show one Home tab (fallback, or its own docked Home), and
       // fail here.
       await expect(homeTabTitle(pageB, windowBId)).toBeAttached({ timeout: 60_000 });
-      await expect(webViewTabTitle(pageB, `${LEGACY_SECOND_TAB_UUID}-w${windowBId}`)).toBeAttached({
+      await expect(
+        webViewTabTitle(pageB, windowScopedWebViewId(LEGACY_SECOND_TAB_UUID, windowBId)),
+      ).toBeAttached({
         timeout: 60_000,
       });
       await expect(pageB.locator('.platform-tab-title')).toHaveCount(2);

@@ -94,10 +94,12 @@ export type WindowEmptinessHandlerDependencies = {
    * routed open or a move's adopt can land in the window while the report is in flight, and closing
    * it then takes content the user is looking at with it.
    *
-   * Answering `false` means "close it", and covers BOTH "still empty" and "could not tell": the
-   * report was the window's own word about its own dock, and a question that could not be asked is
-   * no reason to leave an empty window standing. The wiring is what decides not to ask — a window
-   * that cannot serve a request answers `false` without a round trip.
+   * Answering `false` means the report stands, and covers BOTH "still empty" and "could not tell":
+   * the report was the window's own word about its own dock, and a question that could not be asked
+   * is no reason to treat it as still holding content. What the report standing then leads to
+   * depends on the branch that follows — closing for most windows, docking Home for a born-empty or
+   * primary one. The wiring is what decides not to ask — a window that cannot serve a request
+   * answers `false` without a round trip.
    *
    * Optional so a caller with no way to reach the window can compose the handler without it; every
    * report is then taken at its word.

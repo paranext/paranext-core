@@ -28,10 +28,16 @@
  * whether or not it ever answers, so nothing but the guard around `isAskingAboutClose` stops a
  * second click from putting up a second question — this is the guard's own test, not the dialog's.
  *
+ * TEST 6 — a window created while the question is open does not strand the quit it might still
+ * receive. `main.ts`'s `isFirstWindow` guard around `resetShutdownLatchesForNewSession` exists so a
+ * window created alongside living windows never replaces the signal a still-open close-all question
+ * is waiting on; this is the one sequence that discriminates it, and the only test in this file
+ * that creates a window DURING the question rather than before it.
+ *
  * The native dialog is stubbed in the main process through `electronApp.evaluate`, which records
- * each call and answers as the test directs, or holds the question open for test 4. `app.quit()` is
- * deliberately NOT how test 2 brings the app down: that path sets the quit latch first and never
- * asks, which is the behaviour the rule leaves unchanged.
+ * each call and answers as the test directs, or holds the question open for tests 4 and 6.
+ * `app.quit()` is deliberately NOT how test 2 brings the app down: that path sets the quit latch
+ * first and never asks, which is the behaviour the rule leaves unchanged.
  *
  * Every test carries a "the primary is still what it should be" assertion in one form or another,
  * because the failure they guard against is silent: a stuck guard, a stuck latch, or a spliced
@@ -445,5 +451,48 @@ test.describe('window close rule', () => {
     expect(await readMessageBoxCalls(electronApp)).toHaveLength(1);
     expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort((a, b) => a - b));
     logStep('still asked only once; both windows still open');
+  });
+
+  test('creating a window while the question is open does not strand the quit it might still receive', async ({
+    electronApp,
+    mainPage,
+  }) => {
+    // `main.ts`'s `isFirstWindow` guard exists so a window created alongside living windows never
+    // resets the shutdown latches: doing so would replace the signal the close-all race is waiting
+    // on, and a quit afterwards would settle only the new signal, leaving the question (and the
+    // app) stuck open forever. The one sequence that discriminates the guard is a window created
+    // WHILE the question is showing — every other test in this file creates its second window
+    // before asking, never during.
+    const logStep = createStepLogger('window-close-rule');
+    await waitForAppReady(mainPage, 180_000);
+    const primaryId = getWindowIdOfPage(mainPage);
+
+    const page2 = await createSecondWindow(electronApp);
+    const secondId = getWindowIdOfPage(page2);
+    await waitForRendererRegistered(secondId, 120_000);
+    logStep(`windows ${primaryId} (primary) and ${secondId} up`);
+
+    await stubMessageBox(electronApp, CANCEL_BUTTON, true);
+    await clickCloseOn(electronApp, primaryId);
+    await pollUntil(
+      () => readMessageBoxCalls(electronApp),
+      (calls) => calls.length === 1,
+      30_000,
+      'the close-all question to be showing',
+    );
+    logStep('question showing; creating a third window underneath it');
+
+    const page3 = await createSecondWindow(electronApp);
+    const thirdId = getWindowIdOfPage(page3);
+    await waitForRendererRegistered(thirdId, 120_000);
+    logStep(`window ${thirdId} created while the question was still open`);
+
+    // Had the reset fired for this window too, the signal the race below waits on would have been
+    // replaced out from under the still-open question, and this quit would hang until
+    // `quitAppAndWaitForExit`'s own 120 s timeout instead of exiting.
+    const exit = await quitAppAndWaitForExit(electronApp);
+    logStep(`exited with code ${exit.code} signal ${exit.signal}`);
+    expect(exit.signal).toBeUndefined();
+    expect(exit.code).toBe(0);
   });
 });

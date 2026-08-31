@@ -282,6 +282,30 @@ describe('window layout persistence service', () => {
     expect(service.isPrimaryWindow(13)).toBe(false);
   });
 
+  test('the primary role is released the moment its window is removed, and falls to the oldest live window', async () => {
+    // `isPrimaryWindow` is answered live off the marked slot's `windowId` (see its doc comment), so
+    // this has to hold without any explicit re-derivation step like `trackNewWindow`. Window 11 is
+    // the fallback here for the same reason the "no live window holds the marked entry" tests above
+    // it are: the marked entry keeps its flag, but nothing is assigned to it any more, so the oldest
+    // still-live window answers in its place.
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [
+        { layout: layoutWithTab('one') },
+        { layout: layoutWithTab('two'), isMain: true },
+        { layout: layoutWithTab('three') },
+      ],
+      11,
+    );
+
+    service.handleWindowRemoved(12, 'entry-stays');
+
+    expect(service.isPrimaryWindow(12)).toBe(false);
+    expect(service.isPrimaryWindow(11)).toBe(true);
+    expect(service.isPrimaryWindow(13)).toBe(false);
+  });
+
   test('a window created with no others open holds the primary role', async () => {
     const service = await startService();
 

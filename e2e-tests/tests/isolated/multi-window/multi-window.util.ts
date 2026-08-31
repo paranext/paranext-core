@@ -448,19 +448,25 @@ export async function waitForRendererRegistered(
 }
 
 /**
+ * Apply the window-scope suffix a saved-layout web view id carries once it is loaded into a
+ * specific window — the same suffix `window-scoped-web-view-ids.util.ts`
+ * (`withWindowScopedWebViewIdInTab`) stamps on in the app itself. Centralized here so a change to
+ * that scheme surfaces as one place to update instead of every call site's locator silently
+ * building against the old id and timing out with nothing to name.
+ */
+export function windowScopedWebViewId(webViewId: string, windowId: number): string {
+  return `${webViewId}-w${windowId}`;
+}
+
+/**
  * A window's Home tab web view id BY ITS FIXED FALLBACK-LAYOUT ID — only valid for a window that
  * loaded the single-Home-tab fallback layout ({@link HOME_TAB_UUID}), i.e. the first window of a
  * fresh profile or one restored from a saved layout that already carried that id. A window whose
  * Home tab was docked on the fly (see {@link expectWindowDockHasOnlyHomeTab}) gets a freshly
  * generated web view id each time, so this is not that id.
- *
- * The window suffix this appends is owned by `window-scoped-web-view-ids.util.ts`
- * (`withWindowScopedWebViewIdInTab`), not by this file — calling this rather than spelling the
- * suffix out at each call site means a change to that scheme surfaces as one place to update
- * instead of a locator silently built against the old id and timing out with nothing to name.
  */
 export function homeTabWebViewId(windowId: number): string {
-  return `${HOME_TAB_UUID}-w${windowId}`;
+  return windowScopedWebViewId(HOME_TAB_UUID, windowId);
 }
 
 /**
@@ -625,10 +631,21 @@ export async function quitAppAndWaitForExit(
   // Raced against the exit rather than bare-awaited: a trigger that brings the process down itself
   // (closing the primary through its ✕, say) can have its own round trip rejected with "Target
   // page, context or browser has been closed" once that process is gone — before it ever resolves.
-  // A bare await would propagate that rejection straight out of this function, skipping both the
-  // wait below and the process-group reap that follows it. Racing lets the exit event settle this
-  // step even when the trigger's own promise never gets to.
-  if (triggerExit) await Promise.race([triggerExit(), processExit]);
+  // The rejection is caught rather than left to settle the race: `Promise.race` resolves OR rejects
+  // on whichever promise settles first, so an uncaught rejection here would still be able to win
+  // against `processExit` and throw out of this function on a run where the CDP round trip is cut
+  // before libuv reaps the child — skipping both the wait below and the process-group reap that
+  // follows it. Catching it means this race can only ever resolve — whichever of the two settles
+  // first — so the wait and the reap below always run, and the error is kept to report if the
+  // trigger failed for a reason unrelated to the exit it caused.
+  let triggerError: unknown;
+  if (triggerExit)
+    await Promise.race([
+      triggerExit().catch((e: unknown) => {
+        triggerError = e;
+      }),
+      processExit,
+    ]);
   else
     await electronApp.evaluate(({ app }) => {
       setTimeout(() => app.quit(), 0);
@@ -640,9 +657,12 @@ export async function quitAppAndWaitForExit(
     new Promise<never>((_resolve, reject) => {
       setTimeout(() => {
         const outputTail = output?.text().split('\n').slice(-60).join('\n');
+        const triggerErrorNote = triggerError
+          ? `; trigger failed with: ${triggerError instanceof Error ? triggerError.message : String(triggerError)}`
+          : '';
         reject(
           new Error(
-            `Electron process did not exit within 120 s of ${exitTriggerDescription}${
+            `Electron process did not exit within 120 s of ${exitTriggerDescription}${triggerErrorNote}${
               outputTail ? `; last app output:\n${outputTail}` : ''
             }`,
           ),

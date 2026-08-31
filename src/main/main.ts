@@ -426,7 +426,8 @@ async function main() {
     // The shared registry, not only this handler's own decisions: a window the user is closing can
     // report empty mid-teardown, and it must get the same "closing" answer instead of a second close
     isWindowClosing: isWindowMarkedClosing,
-    // The reporting window's own reading, asked only when a close is otherwise about to be decided
+    // The reporting window's own reading, asked whenever the answer could still change — a close
+    // for most windows, or the primary's Home dock for the primary
     hasContentArrivedSinceEmptyReport: async (windowId) => {
       // A window that is not serving requests cannot be asked, and waiting on one that will never
       // answer would hold up every window's decision behind it. `false` is what the handler reads
