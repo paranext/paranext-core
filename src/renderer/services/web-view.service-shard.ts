@@ -2430,6 +2430,7 @@ export async function openOrReloadWebView(
   window.ReactDom = window.parent.ReactDom;
   window.ReactDOMClient = window.parent.ReactDOMClient;
   window.createRoot = window.parent.createRoot;
+  window.WebViewErrorBoundary = window.parent.WebViewErrorBoundary;
   window.SillsdevScripture = window.parent.SillsdevScripture;
   var require = window.parent.webViewRequire;
   var getWebViewStateById = window.parent.getWebViewStateById;
@@ -2576,7 +2577,21 @@ export async function openOrReloadWebView(
                     updateWebViewDefinition: window.updateWebViewDefinition,
                   };
 
-                  root.render(React.createElement(globalThis.webViewComponent, webViewProps));
+                  // Every React web view mounts here, with nothing above it, so an uncaught render
+                  // throw would tear down this iframe's whole root and leave an empty pane. The
+                  // boundary is the only thing between that throw and a blank web view, which is
+                  // why it wraps here rather than in any one extension's component.
+                  root.render(
+                    React.createElement(
+                      WebViewErrorBoundary,
+                      {
+                        webViewId: '${webView.id}',
+                        webViewType: savedWebViewDefinition.webViewType,
+                        webViewTitle: savedWebViewDefinition.title,
+                      },
+                      React.createElement(globalThis.webViewComponent, webViewProps),
+                    ),
+                  );
                 }
 
                 const unsubscribeUpdateWebView = window.papi.webViews.onDidUpdateWebView(
