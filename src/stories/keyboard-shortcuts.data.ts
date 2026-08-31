@@ -609,7 +609,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // equivalent for this, so the menu is reached there by right-clicking (or Control-clicking) the
     // tab. Power mode only — Simple mode offers no tab menu.
     context: 'Renderer (focused tab, Power mode)',
-    keys: { macOS: '—', windows: 'Shift+F10 / Menu', linux: 'Shift+F10 / Menu' },
+    keys: { macOS: 'Not available', windows: 'Shift+F10 / Menu', linux: 'Shift+F10 / Menu' },
     locations: ['src/renderer/components/docking/platform-tab-title.component.tsx'],
   },
 ];

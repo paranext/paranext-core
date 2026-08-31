@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
+import { menuDataService } from '@shared/services/menu-data.service';
 import { PlatformTabTitle } from './platform-tab-title.component';
 
 // #region mocks
@@ -24,28 +25,29 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   ]),
   useData: vi.fn(() => ({
     Focus: () => [mockFocusSubject, vi.fn()],
-    WebViewMenu: () => [
-      {
-        includeDefaults: true,
-        topMenu: undefined,
-        contextMenu: undefined,
-        tabMenu: {
-          groups: { 'platform.tabWindow': { order: 1, isExtensible: true } },
-          items: [
-            {
-              label: 'Float Tab',
-              group: 'platform.tabWindow',
-              order: 1,
-              command: 'platform.floatTab',
-            },
-          ],
-        },
-      },
-      vi.fn(),
-      false,
-    ],
   })),
   useDataProvider: vi.fn(() => undefined),
+}));
+
+vi.mock('@shared/services/menu-data.service', () => ({
+  menuDataService: {
+    dataProviderName: 'platform.menuDataServiceDataProvider',
+    // Each tab reads its contributed menu once at mount rather than subscribing to it
+    getWebViewMenu: vi.fn(async () => ({
+      includeDefaults: true,
+      tabMenu: {
+        groups: { 'platform.tabWindow': { order: 100, isExtensible: true } },
+        items: [
+          {
+            label: 'Float Tab',
+            group: 'platform.tabWindow',
+            order: 100,
+            command: 'platform.floatTab',
+          },
+        ],
+      },
+    })),
+  },
 }));
 
 vi.mock('@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook', () => ({
@@ -367,9 +369,11 @@ describe('PlatformTabTitle context-menu gating', () => {
     vi.mocked(useIsPowerMode).mockReturnValue(true);
   });
 
-  it('power mode: wraps the title in a ContextMenu', () => {
+  it('power mode: wraps the title in a ContextMenu', async () => {
     vi.mocked(useIsPowerMode).mockReturnValue(true);
     render(<PlatformTabTitle text="Tab" id="tab-1" />);
+    // The tab reads its contributed menu when it mounts, and renders no menu until that lands
+    await act(async () => {});
     expect(screen.queryByTestId('context-menu')).toBeInTheDocument();
   });
 

@@ -1,4 +1,4 @@
-import { isLocalizeKey, LocalizeKey } from 'platform-bible-utils';
+import { getErrorMessage, isLocalizeKey, LocalizeKey } from 'platform-bible-utils';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 
@@ -118,6 +118,6 @@ export async function updateWindowTitle(
     if (latestRequestedLabel === label) document.title = localizedLabel;
   } catch (error) {
     // Keep whatever title the window already shows; a stale name is better than an empty one
-    logger.warn(`Could not localize this window's title from ${label}: ${error}`);
+    logger.warn(`Could not localize this window's title from ${label}: ${getErrorMessage(error)}`);
   }
 }
