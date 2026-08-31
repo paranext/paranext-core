@@ -2361,31 +2361,33 @@ step, no automation. Just a record.
   `padStart`/`padEnd` throw `RangeError` above 2**20 graphemes, where native only gives up at V8's
   string limit (2**29 - 24). A `GraphemeString` holds one string object per grapheme rather than a
   compact character buffer, so the native ceiling is unreachable — it exhausts the V8 heap first —
-  and the band below it is slow enough to be a trap (2**24 costs ~173ms and ~130MB). The limit is
-  set where the cost is still negligible (~9ms, ~9MB) rather than where the engine finally fails, on
-  the grounds that padding a string to a million graphemes is never a deliberate act. Second, a
-  padded result is *shorter* than `targetLength` when the pad string fuses with the text at the seam
-  — a filler ending in a combining mark, say. Padding to an exact cluster count and holding
-  `graphemes.join('') === str` with an honest segmentation cannot both be satisfied there, because
-  the fused text genuinely has fewer clusters; the segmentation wins, since every index, search, and
-  slice reads through it, and an instance whose array disagrees with its own text slices clusters in
-  half. Third, the free `split` in `string-util` substitutes `''` for a capture group that did not
-  participate, where native yields `undefined`. Native declares `string[]` and then puts `undefined`
-  in it, so `split(s, re).map((p) => p.trim())` type-checks and throws; a wrapper that advertises
-  `string[]` should deliver one. The cost is that a non-participating group reads the same as one
-  that matched empty — `GraphemeString.split` declares `(GraphemeString | undefined)[]` and keeps
-  the distinction for callers who need it. This also restores a guarantee the pre-wrapper
-  implementation had by accident: it built results from `substring` and could never emit
-  `undefined`, so no existing caller can depend on one. Two additions are kept (`normalize('none')`,
-  `ordinalCompare`), plus `toArray`. Range and padding methods still return `GraphemeString` rather
-  than `string` so derived values inherit the parent's segmentation — a type-level difference, not a
-  behavioral one. The raw text comes back from `toString()` rather than a `.string` getter, so an
-  instance drops straight into a template literal or `String(...)`; `length` is the sole remaining
-  getter, kept as a property precisely because that is what makes `gs.length` read like
-  `str.length`. Then **`string-util`'s functions become thin wrappers over the class** and the
-  `@deprecated` tags are removed: every existing caller gets the faster implementation with no
-  source change, and the documented advice becomes "doing more than one operation on the same
-  string? construct one `GraphemeString`", not "this function is going away".
+  and the band below it is slow enough to be a trap. Padding also re-segments the result to keep the
+  grapheme array honest, so the cost is super-linear: 2**16 costs ~5ms and ~2MB, 2**18 ~12ms and
+  ~10MB, 2**20 ~38ms and ~34MB. The limit is set where that is still bounded rather than where the
+  engine finally fails, on the grounds that padding a string to a million graphemes is never a
+  deliberate act. Second, a padded result is *shorter* than `targetLength` when the pad string fuses
+  with the text at the seam — a filler ending in a combining mark, say. Padding to an exact cluster
+  count and holding `graphemes.join('') === str` with an honest segmentation cannot both be
+  satisfied there, because the fused text genuinely has fewer clusters; the segmentation wins, since
+  every index, search, and slice reads through it, and an instance whose array disagrees with its
+  own text slices clusters in half. Third, the free `split` in `string-util` substitutes `''` for a
+  capture group that did not participate, where native yields `undefined`. Native declares
+  `string[]` and then puts `undefined` in it, so `split(s, re).map((p) => p.trim())` type-checks and
+  throws; a wrapper that advertises `string[]` should deliver one. The cost is that a
+  non-participating group reads the same as one that matched empty — `GraphemeString.split` declares
+  `(GraphemeString | undefined)[]` and keeps the distinction for callers who need it. This also
+  restores a guarantee the pre-wrapper implementation had by accident: it built results from
+  `substring` and could never emit `undefined`, so no existing caller can depend on one. Two
+  additions are kept (`normalize('none')`, `ordinalCompare`), plus `toArray`. Range and padding
+  methods still return `GraphemeString` rather than `string` so derived values inherit the parent's
+  segmentation — a type-level difference, not a behavioral one. The raw text comes back from
+  `toString()` rather than a `.string` getter, so an instance drops straight into a template literal
+  or `String(...)`; `length` is the sole remaining getter, kept as a property precisely because that
+  is what makes `gs.length` read like `str.length`. Then **`string-util`'s functions become thin
+  wrappers over the class** and the `@deprecated` tags are removed: every existing caller gets the
+  faster implementation with no source change, and the documented advice becomes "doing more than
+  one operation on the same string? construct one `GraphemeString`", not "this function is going
+  away".
 - **Alternatives:** **Uniform indexing** (the earlier choice) — rejected: the utility's whole
   premise is being a drop-in for `String` with a corrected unit, so every semantic departure is a
   trap for a reader who knows JavaScript, and the departures are invisible at the call site.
