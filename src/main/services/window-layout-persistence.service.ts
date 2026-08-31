@@ -43,7 +43,8 @@ import {
   savedLayoutHasAnyTabs,
   savedLayoutHasViewableTabs,
 } from '@shared/utils/saved-layout-reconciliation.util';
-import { getErrorMessage, newGuid } from 'platform-bible-utils';
+import { getErrorMessage } from 'platform-bible-utils';
+import { createUuid } from '@node/utils/crypto-util';
 
 /** File holding the persisted structure, in the app's user data folder */
 const WINDOW_LAYOUTS_FILE_NAME = 'window-layouts.json';
@@ -187,8 +188,9 @@ function parseEntry(value: unknown): ParsedEntry | undefined {
     entry: {
       ...parseBoundsState(record, record.bounds),
       // An entry written before entries carried their own id gets one now. It is minted rather
-      // than derived from the entry's position so it never changes once the file is rewritten.
-      windowId: windowIdOnDisk ?? newGuid(),
+      // than derived from the entry's position so it never changes once the file is rewritten, and
+      // through the same generator the tracker mints with so one kind of id fills this space.
+      windowId: windowIdOnDisk ?? createUuid(),
       // Reconcile at load so phantom content in a saved layout never reaches a window
       layout: layout ? reconcileSavedLayout(layout) : undefined,
       isMain: record.isMain === true ? true : undefined,
