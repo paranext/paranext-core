@@ -2109,6 +2109,21 @@ declare module 'shared/models/rpc.interface' {
      * @experimental
      */
     onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+    /**
+     * Event that fires when this process's own connection to the network is lost unexpectedly — the
+     * websocket closed without the app having asked it to.
+     *
+     * This is a local, in-process event. Only a process that holds a client connection can lose one,
+     * so it fires exclusively on clients; in the process that owns the websocket server it is a real
+     * event that simply never fires. A deliberate disconnect does not fire it: intent travels in the
+     * close code, and a close the app asked for is not a loss.
+     *
+     * Carries no payload. The close detail is logged where it is observed, and a subscriber's job is
+     * to react to the loss rather than to classify it.
+     *
+     * @experimental
+     */
+    onDidLoseConnection: PlatformEvent<undefined>;
   }
   export type RegisteredRpcMethodDetails = {
     handler: IRpcHandler;
@@ -2231,6 +2246,13 @@ declare module 'client/services/rpc-client' {
      */
     readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
     /**
+     * Fires when this client's websocket closes without the app having asked it to. See
+     * {@link IRpcMethodRegistrar.onDidLoseConnection}.
+     *
+     * @experimental
+     */
+    readonly onDidLoseConnection: PlatformEvent<undefined>;
+    /**
      * Whether {@link onWebSocketClose} has already run for the current socket.
      *
      * A closed socket's listener is already removed, but a caller holding a stale reference to the
@@ -2252,6 +2274,7 @@ declare module 'client/services/rpc-client' {
     private readonly registrationMutexMap;
     private readonly connectionComplete;
     private readonly clientDisconnectEmitter;
+    private readonly connectionLostEmitter;
     /**
      * Label identifying this process in connection log lines, so multi-window logs stay readable.
      *
@@ -2542,6 +2565,13 @@ declare module 'main/services/rpc-websocket-listener' {
      * @experimental
      */
     readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+    /**
+     * Never fires here. Only a process holding a client connection can lose one; this end of the seam
+     * exists so shared code can subscribe in any process without asking which one it is running in.
+     *
+     * @experimental
+     */
+    readonly onDidLoseConnection: PlatformEvent<undefined>;
     private localEventHandler;
     private webSocketServer;
     private nextSocketNumber;
@@ -2562,6 +2592,7 @@ declare module 'main/services/rpc-websocket-listener' {
      */
     private readonly warnedForeignAnnouncements;
     private readonly clientDisconnectEmitter;
+    private readonly connectionLostEmitter;
     constructor();
     get nextSocketId(): string;
     connect(localEventHandler: EventHandler): Promise<boolean>;
@@ -2664,6 +2695,16 @@ declare module 'shared/services/network.service' {
    * @experimental
    */
   export const onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+  /**
+   * Fires when this process's own connection to the network is lost unexpectedly.
+   *
+   * Relayed through this service's own emitter so subscribers can subscribe before there is an RPC
+   * handler to subscribe to. Local to this process, and silent on a deliberate disconnect — see
+   * {@link IRpcMethodRegistrar.onDidLoseConnection}.
+   *
+   * @experimental
+   */
+  export const onDidLoseConnection: PlatformEvent<undefined>;
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
