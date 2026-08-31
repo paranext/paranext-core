@@ -24,6 +24,7 @@ import {
   toKebabCase,
   collapseMiddleWords,
 } from './string-util';
+import { GraphemeString } from './grapheme-string';
 
 const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
 const SHORT_SURROGATE_PAIRS_ARRAY = ['L', 'o', 'o', 'k', '𐐷', 'A', 't', '👨‍👩‍👧‍👦', '👮🏽‍♀️'];
@@ -643,6 +644,41 @@ describe('split', () => {
   it('split with RegExp separator that matches nothing in the string', () => {
     const result = split(MEDIUM_SURROGATE_PAIRS_STRING, /\d/);
     expect(result).toEqual([MEDIUM_SURROGATE_PAIRS_STRING]);
+  });
+
+  it('a non-participating capture group is an empty string, not `undefined`', () => {
+    // Native puts `undefined` here under a `string[]` declaration that does not admit it, so
+    // `.map((part) => part.trim())` type-checks and then throws. This wrapper delivers the type it
+    // advertises.
+    expect('a1b'.split(/(z)?(\d)/)).toEqual(['a', undefined, '1', 'b']);
+    expect(split('a1b', /(z)?(\d)/)).toEqual(['a', '', '1', 'b']);
+    expect(() => split('a1b', /(z)?(\d)/).map((part) => part.trim())).not.toThrow();
+  });
+
+  it('every entry is a string for any capturing separator', () => {
+    const separators = [/(z)?(\d)/, /(a)|(1)/, /(x)?(y)?(b)/, /(-)/];
+    separators.forEach((separator) => {
+      ['a1b', 'ab', '2026-08-27', ''].forEach((subject) => {
+        split(subject, separator).forEach((part) => {
+          expect(typeof part).toEqual('string');
+        });
+      });
+    });
+  });
+
+  it('capture groups still interleave, as native does', () => {
+    expect(split('2026-08-27', /(-)/)).toEqual(['2026', '-', '08', '-', '27']);
+  });
+
+  it('the class keeps `undefined` where a group did not participate', () => {
+    // The substitution is the wrapper's, made to honor its `string[]` contract. The class declares
+    // `(GraphemeString | undefined)[]`, so it reports the difference the wrapper has to flatten.
+    expect(new GraphemeString('a1b').split(/(z)?(\d)/).map((part) => part?.toString())).toEqual([
+      'a',
+      undefined,
+      '1',
+      'b',
+    ]);
   });
 });
 
