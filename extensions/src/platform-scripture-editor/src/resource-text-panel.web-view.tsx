@@ -1,6 +1,7 @@
 import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
 import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
+import type { SerializedVerseRef } from '@sillsdev/scripture';
 import papi, { logger } from '@papi/frontend';
 import {
   useDataProvider,
@@ -177,6 +178,20 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // Whether this tab is the active one in its stack — the trigger for the verse scroll below.
   const isViewVisible = useViewVisibility();
+
+  // Tracks the latest scrRef this panel's editor just published, so the scroll effect below can
+  // suppress the echo that comes back through scroll group 0 and avoid yanking the user's own click
+  // target to the top of the viewport. Mirrors `model-text-panel.component.tsx`.
+  const lastPublishedScrRefRef = useRef<SerializedVerseRef | undefined>(undefined);
+
+  // Records what we publish before forwarding it, so the echo is recognizable when it returns.
+  const handleScrRefChange = useCallback(
+    (newScrRef: SerializedVerseRef) => {
+      lastPublishedScrRefRef.current = newScrRef;
+      setScrRef(newScrRef);
+    },
+    [setScrRef],
+  );
 
   // #region Web view state
 
@@ -560,15 +575,32 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // both do; this panel did not, which is why a Find result activated here revealed the tab at
   // whatever position it was already parked at).
   //
-  // Triggering on VISIBILITY rather than on `scrRef` is deliberate, and is what lets this skip the
-  // echo suppression the model text panel needs: this panel is on scroll group 0, so a verse click
-  // inside it publishes to the group and bounces straight back as a prop update — a `scrRef`-keyed
-  // scroll would snap the user's own click target to the top of the viewport. A tab activation never
-  // echoes. `usjFromPdp` is included because a reveal can beat the chapter load, and querying the DOM
-  // before the new chapter paints would scroll within the previous chapter's content; a same-chapter
-  // verse move does not change it, so the echo case still cannot fire this.
+  // Keyed on visibility AND on the reference: visibility covers the reveal (a tab activation carries
+  // no reference change of its own), and the reference covers "go to result" landing on a panel that
+  // is already visible. `usjFromPdp` is included because a reveal can beat the chapter load, and
+  // querying the DOM before the new chapter paints would scroll within the previous chapter's
+  // content.
+  //
+  // Because the reference is a dependency, this panel needs the same echo suppression the model text
+  // panel does — see the guard at the top of the effect.
   useEffect(() => {
     if (!isViewVisible || !usjFromPdp) return undefined;
+
+    // Suppress our own echo. This panel resolves to scroll group 0, so a verse click inside
+    // `Editorial` publishes to the group and bounces straight back as a prop update. The effect is
+    // keyed on the reference (which is what makes "go to result" scroll a panel that is ALREADY
+    // visible), so without this check that echo would scroll the user's own click target to the top
+    // of the viewport right after they clicked it.
+    const lastPublished = lastPublishedScrRefRef.current;
+    if (
+      lastPublished &&
+      lastPublished.book === scrRef.book &&
+      lastPublished.chapterNum === scrRef.chapterNum &&
+      lastPublished.verseNum === scrRef.verseNum
+    ) {
+      lastPublishedScrRefRef.current = undefined;
+      return undefined;
+    }
 
     // Wait for the revealed pane's layout to SETTLE, then scroll exactly once.
     //
@@ -722,7 +754,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
         <Editorial
           ref={editorRef}
           scrRef={scrRef}
-          onScrRefChange={setScrRef}
+          onScrRefChange={handleScrRefChange}
           options={options}
           logger={logger}
         />
