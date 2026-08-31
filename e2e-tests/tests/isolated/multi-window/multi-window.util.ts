@@ -350,6 +350,34 @@ export async function createSecondWindow(electronApp: ElectronApplication): Prom
 const TOOLBAR_REFERENCE_MIN_CSS_PX = 800;
 
 /**
+ * Close a window the way the user's ✕ does, and wait for it to go.
+ *
+ * Deliberately not `window.close()` from the renderer. That destroys the web contents and fires
+ * only the past-tense `closed`, so the cancellable `close` never reaches main — and with it none of
+ * main's close handler runs: not the shutdown work, not the layout flush, not the close-all
+ * question. A test closing that way looks like a user close and exercises none of one.
+ *
+ * @param electronApp The running app
+ * @param page The window to close
+ */
+export async function closeWindowLikeAUser(
+  electronApp: ElectronApplication,
+  page: Page,
+): Promise<void> {
+  const windowId = getWindowIdOfPage(page);
+  const pageClosed = page.waitForEvent('close', { timeout: 30_000 });
+  await electronApp.evaluate(
+    ({ BrowserWindow }, { id }) => {
+      const win = BrowserWindow.fromId(id);
+      if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+      win.close();
+    },
+    { id: windowId },
+  );
+  await pageClosed;
+}
+
+/**
  * Widen a window until its toolbar has room to show a reference in full, and return the renderer
  * width that achieved it.
  *
