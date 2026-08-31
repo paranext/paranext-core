@@ -197,7 +197,9 @@ If you are developing `paranext-core` itself or developing extensions based on a
 
 - [`eten-tech-foundation/scripture-editors`](https://github.com/eten-tech-foundation/scripture-editors?tab=readme-ov-file#developer-quick-start)
 
-Running `npm install` in `paranext-core` will automatically link development versions of npm packages `@eten-tech-foundation/platform-editor` and `@eten-tech-foundation/scripture-utilities` from `scripture-editors` via [yalc](https://github.com/wclr/yalc). This allows you to develop those packages alongside Platform.Bible.
+Running `npm install` in `paranext-core` builds development versions of the npm packages `@eten-tech-foundation/platform-editor` and `@eten-tech-foundation/scripture-utilities` from `scripture-editors` and stages them into `dev-packages/staging/`. This repo's `package.json` files depend on those staged folders with `file:` specifiers, so `npm install` reads each staged package's own manifest and installs its dependencies into this repo's tree. The staged copies are symlinked into `node_modules`, so a rebuild is visible immediately without reinstalling.
+
+This means `scripture-editors` is free to add, bump, or drop its own dependencies without this repo restating them, and nothing here resolves the editor from the npm registry. Staging is a copy of exactly the files the package would publish rather than a link to the source folder: the source lives in a pnpm workspace whose per-package `node_modules` holds its own `react` and `lexical`, and linking straight to it would bind the editor to those copies instead of ours.
 
 Note: `npm install` will check out the revision of `scripture-editors` specified in [`dev-packages.json`](./dev-packages.json) (it will throw and ask you to do something with your working changes if you have any so your changes don't get messed up). However, the general expectation is that this revision for the `scripture-editors` repository is the branch named `platform-yalc` when this repo is on `main` and `release-prep` when this repo is on `release-prep`. To make your local development and build servers use changes from `scripture-editors/main`, update the corresponding branch in the `eten-tech-foundation/scripture-editors` repository by rebasing it onto `main` and force-pushing. Example:
 
@@ -229,17 +231,13 @@ To manually set up `scripture-editors` to be linked locally (this should all be 
    pnpm install
    cd ../paranext-core
    ```
-3. Run `npm install` in this repo. The postinstall script will automatically run `devpub` in `scripture-editors` and link the packages via yalc.
+3. Run `npm install` in this repo. The preinstall script builds each package in `scripture-editors` and stages it into `dev-packages/staging/`.
 
-You can also manually link/unlink packages using:
+After changing `scripture-editors`, re-stage without a full reinstall using:
 
-- `npm run link-dev-packages` (will also run `devpub` in `scripture-editors`)
-- `npm run unlink-dev-packages`
+- `npm run stage-dev-packages`
 
-OR
-
-- `npm run editor:link` / `npm run editor:unlink`
-- `npm run utils:link` / `npm run utils:unlink`
+Run `npm install` as well if your change added, removed, or bumped one of that package's own dependencies, so npm updates this repo's tree to match.
 
 #### Install and build
 

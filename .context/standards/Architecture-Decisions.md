@@ -2667,3 +2667,50 @@ step, no automation. Just a record.
   chain so the change is caught at upgrade time.
 - **Source:** PT-4422 (NN1b), Sprint 89 Simple Quality. Mount-point placement proposed in the PT-4421
   investigation; the Lexical re-throw chain verified by running it, not by reading it.
+
+## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** `scripture-editors` supplies `@eten-tech-foundation/platform-editor` and
+  `@eten-tech-foundation/scripture-utilities`. Every consumer declared them as registry ranges
+  (`~0.8.15` / `~0.1.6`) and then yalc-linked a locally built copy over the installed package. The
+  registry entry's real job was never the code — that is discarded seconds later — but the
+  *dependency closure*: 8 of the editor's 13 runtime dependencies (`@floating-ui/dom`, five
+  `@lexical/*`, `quill-delta`, plus the `yjs` peer) reach this repo's `node_modules` only as
+  transitive dependencies of the published package. That ties the editor's dependency set to
+  whatever was last published by an organization we do not control: a dependency the editor adds is
+  never installed, and one it bumps silently resolves to the older published version. The source had
+  already drifted to 0.8.16 against a published 0.8.15, and a fresh worktree resolving the registry
+  copy failed 36 tests against a symbol the published build lacked.
+- **Decision:** A `preinstall` step (`.erb/scripts/stage-dev-packages.ts`) builds each package listed
+  in `dev-packages.json` and copies exactly the files `npm pack` would publish into
+  `dev-packages/staging/<stagingFolder>`. Every `package.json` here depends on that folder with a
+  `file:` specifier. npm reads the staged manifest and installs the package's own dependencies into
+  this repo's tree, so the editor's dependency set is authoritative and no consumer restates it.
+  Staging must run in `preinstall` because the staged folders are the resolution targets; the script
+  is therefore plain Node importing only the standard library, since no devDependency exists yet.
+  pnpm `workspace:` specifiers are rewritten to `file:` paths at the sibling staged package, keeping
+  the whole graph on the build we just made. yalc is removed.
+- **Alternatives:** **Keep yalc, declare the editor's dependencies here** — rejected: correct, but
+  the sync obligation multiplies by consumer (paratext-bible-extensions is already a second one) and
+  every editor dependency change would require edits in each. **`file:` straight at the source
+  package** — rejected: the source sits in a pnpm workspace whose per-package `node_modules` holds
+  its own `react`, `react-dom`, and `lexical`; Node resolves a link through its real path, so the
+  editor would bind to those, giving duplicate React (invalid hook calls) and duplicate Lexical
+  (cross-boundary `instanceof` node checks fail). It also installs no closure, since npm only does
+  that for a target inside the project. **`file:` at a packed tarball** — rejected: npm never
+  re-reads a tarball at a stable path, so a rebuild silently installs the cached previous build.
+  **Publishing** (npm scope or GitHub Release assets) — deferred: both work and both give semver
+  ranges, but publishing needs a scope we own, which means renaming the packages.
+- **Consequences:** Nothing here resolves the editor from the npm registry, and `scripture-editors`
+  can change its dependencies freely. Install gets stricter: `preinstall` now needs git, pnpm, and
+  reachability of the dev repo, so a failure to stage fails the install rather than silently leaving
+  a stale published copy. `package-lock.json` records the staged packages' resolved dependencies, so
+  an editor dependency change produces a lockfile commit here. Honoring the editor's declared ranges
+  surfaced that it asks for `@sillsdev/scripture@^2.1.0` while this repo's lockfile pinned 2.0.5 —
+  previously masked, since the linked build just resolved whatever was in the tree. Only the staged
+  output must live inside this repo; the source checkout may stay a sibling.
+  **Revisit** if a third consumer appears that cannot build the editor or sit beside a built
+  `paranext-core`, which is the point at which publishing earns its cost.
+- **Source:** PT-4500, forking `scripture-editors` into the paranext organization.
