@@ -323,8 +323,9 @@ export async function getLocalizedIdFromBookNumber(
     languagesToSearch: [localizationLanguage],
   });
   const parts = split(bookName, '-');
-  // some entries had a second name inside ideographic parenthesis
-  const parts2 = split(parts[0], '\xff08');
+  // some entries had a second name inside ideographic parenthesis. This is the fullwidth left
+  // parenthesis U+FF08, which needs the four-digit `\u` escape — the two-digit `\xff08` is `ÿ08`.
+  const parts2 = split(parts[0], '（');
   const retVal = parts2[0].trim();
   return retVal;
 }
@@ -873,6 +874,10 @@ function areUsjContentsEqualExceptWhitespaceInternal(
       if (!isAtEndOfBlockMarker(b, bParent)) return false;
 
       // Trim the end of each string
+      // TODO(PT-2626): Hold one `GraphemeString` per string across these loops. `at` and `slice`
+      // each re-segment the whole string, and the loop calls both once per trailing whitespace
+      // character, so trimming n characters costs n full segmentations. Native `String` is not the
+      // fix here — the trim is grapheme-aware on purpose — a reused instance is.
       let aTrimmed = aNormalized;
       while (isWhiteSpace(at(aTrimmed, -1) ?? '')) aTrimmed = slice(aTrimmed, 0, -1);
       let bTrimmed = bNormalized;
