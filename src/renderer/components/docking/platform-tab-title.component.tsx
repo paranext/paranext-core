@@ -589,16 +589,24 @@ export function PlatformTabTitle({
     if (!containerElement || !tabElement) return undefined;
 
     const forwardToTrigger = (event: Event) => {
+      // Read the trigger's element now rather than closing over the one that was here at mount.
+      // This component swaps its root between the plain title and the menu-wrapped title as the
+      // contributed menu arrives, and React rebuilds the whole subtree when it does — so the
+      // element captured above is detached by the time any key reaches this, and dispatching to it
+      // would go nowhere. The tab element the listener hangs off is rc-tabs' own and survives.
+      const triggerElement = containerRef.current;
+      if (!triggerElement) return;
+
       // Anything raised inside the trigger already reaches it by bubbling, so leave it alone: every
       // ordinary right-click on the tab's title, and the forwarded event below on its way back up,
       // whose target is the element it was dispatched on
-      if (event.target instanceof Node && containerElement.contains(event.target)) return;
+      if (event.target instanceof Node && triggerElement.contains(event.target)) return;
 
       event.preventDefault();
       // Carry the position across so the menu opens where the event said, which for a keyboard
       // press is the focused tab rather than wherever the pointer happens to rest
       const { clientX, clientY } = event instanceof MouseEvent ? event : { clientX: 0, clientY: 0 };
-      containerElement.dispatchEvent(
+      triggerElement.dispatchEvent(
         new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX, clientY }),
       );
     };
