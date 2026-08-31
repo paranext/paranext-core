@@ -182,11 +182,27 @@ let windowCreator: WebViewWindowCreator | undefined;
  * Resolves once {@link setWebViewWindowCreator} wires the creator, so a caller that reaches
  * {@link createFreshWindow} before wiring exists can wait for it instead of failing outright. See
  * {@link setWebViewWindowCreator} for the boot-ordering constraint this depends on.
+ *
+ * Absent until something actually waits: an `AsyncVariable` starts its timeout when it is
+ * constructed, so one made at module load would measure a bound nobody asked for — rejecting with
+ * no waiter attached on a boot slower than the bound, and handing an instant rejection to the first
+ * caller to arrive after it. {@link waitForWindowCreatorWiring} makes it, so the bound always means
+ * "wiring did not arrive while a call waited for it".
  */
-let windowCreatorWired = new AsyncVariable<void>(
-  'WebViewWindowCreator wiring',
-  WINDOW_CREATOR_WIRING_TIMEOUT_MS,
-);
+let windowCreatorWired: AsyncVariable<void> | undefined;
+
+/**
+ * Wait for the window creator to be wired, bounded by {@link WINDOW_CREATOR_WIRING_TIMEOUT_MS}
+ * measured from this call — see {@link windowCreatorWired} for why it is not measured from load.
+ * Callers that already have a creator do not come here at all.
+ */
+function waitForWindowCreatorWiring(): Promise<void> {
+  windowCreatorWired ??= new AsyncVariable<void>(
+    'WebViewWindowCreator wiring',
+    WINDOW_CREATOR_WIRING_TIMEOUT_MS,
+  );
+  return windowCreatorWired.promise;
+}
 
 /**
  * Wire the window facilities the window-layout rung uses. See {@link WebViewWindowCreator}
@@ -199,7 +215,9 @@ let windowCreatorWired = new AsyncVariable<void>(
  */
 export function setWebViewWindowCreator(creator: WebViewWindowCreator): void {
   windowCreator = creator;
-  windowCreatorWired.resolveToValue(undefined);
+  // Only if something is waiting on it. Wiring that beats every caller leaves nothing to resolve,
+  // and the callers that follow read `windowCreator` directly rather than waiting.
+  windowCreatorWired?.resolveToValue(undefined);
 }
 
 /** A window a search settled on, and the shard an operation runs in it through */
@@ -526,8 +544,12 @@ type FreshWindow = {
 async function createFreshWindow(webViewDescription: string): Promise<FreshWindow> {
   if (!windowCreator) {
     try {
-      await windowCreatorWired.promise;
+      await waitForWindowCreatorWiring();
     } catch {
+      // Cleared so the next caller waits its own bound rather than inheriting this spent one. A
+      // settled latch answers instantly, which on a boot where wiring is still moments away would
+      // refuse a call that had not waited at all.
+      windowCreatorWired = undefined;
       throw new Error(
         `Cannot open ${webViewDescription} in a new window: the window creator was never wired up within ${WINDOW_CREATOR_WIRING_TIMEOUT_MS} ms`,
       );
@@ -1187,16 +1209,13 @@ async function moveWebViewToWindow(
 }
 
 /**
- * Puts the window creator back to its unwired startup state — a fresh latch nothing has resolved —
- * so a test can exercise {@link createFreshWindow}'s before-wiring wait more than once. Testing
- * only.
+ * Puts the window creator back to its unwired startup state — no creator and no latch, so the next
+ * wait builds one and times itself — letting a test exercise {@link createFreshWindow}'s
+ * before-wiring wait more than once. Testing only.
  */
 function resetWindowCreatorForTesting(): void {
   windowCreator = undefined;
-  windowCreatorWired = new AsyncVariable<void>(
-    'WebViewWindowCreator wiring',
-    WINDOW_CREATOR_WIRING_TIMEOUT_MS,
-  );
+  windowCreatorWired = undefined;
 }
 
 /**
