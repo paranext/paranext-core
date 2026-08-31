@@ -112,6 +112,24 @@ const offsetsByInstance = new WeakMap<GraphemeString, number[]>();
  * segmentation carries into the result instead of being recomputed. Call `toString()` for the
  * text.
  *
+ * ## Segmentation fidelity
+ *
+ * Clusters come from `stringz`, which is emoji-aware rather than UAX #29 conformant. It correctly
+ * keeps ZWJ sequences, skin-tone modifiers, regional-indicator flags, precomposed Hangul, and
+ * combining marks on Latin together as one cluster. It splits four things a conformant segmenter
+ * would keep whole:
+ *
+ * - `\r\n`, which UAX #29 rule GB3 makes a single cluster
+ * - Indic conjuncts formed with a virama — Devanagari `क्षि`, Tamil `நி`, Bengali `ক্ত`
+ * - Thai and other spacing combining marks — `กำ`
+ * - Hangul written as decomposed Jamo rather than precomposed syllables
+ *
+ * So `length` counts what a reader would call characters for Latin and emoji, and overcounts for
+ * the scripts above. `Intl.Segmenter` is conformant and is the obvious swap, but it is ~10x slower
+ * on Latin text and, more importantly, it makes `\r\n` one cluster — which would stop `'\n'` from
+ * being a boundary-aligned separator and silently break line splitting on any Windows-authored
+ * file. Changing segmenters is therefore a behavioral decision, not a drop-in upgrade.
+ *
  * @example
  *
  * ```ts
