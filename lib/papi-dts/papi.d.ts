@@ -1,14 +1,17 @@
 declare module 'shared/utils/util' {
   import { ProcessType } from 'shared/global-this.model';
   /**
-   * Source (no anchors, no flags) of the hex-grouped shape a durable window id has — the same shape
-   * `newGuid()` (`platform-bible-utils`) and Node's `crypto.randomUUID()` (main's
-   * `window-state.service.ts`, in `mintWindowId`) both produce. Shared so every matcher that needs to
-   * recognize a window id by shape (a scoped web view id's suffix, a per-window storage key's prefix)
-   * spells the shape out once rather than once per matcher.
+   * Source (no anchors, no flags) of the hex-grouped shape a durable window id has. Shared so every
+   * matcher that needs to recognize a window id by shape (a scoped web view id's suffix, a per-window
+   * storage key's prefix) spells the shape out once rather than once per matcher.
    *
-   * Deliberately NOT an RFC-4122 pattern: an RFC-4122 UUID constrains its variant nibble, and
-   * `newGuid()` does not, so an RFC-strict pattern would silently stop matching ids already on disk.
+   * Deliberately NOT an RFC-4122 pattern, and it has to stay that way even though every id minted now
+   * comes from `createUuid()` and is RFC-4122. Ids already on users' disks were minted by `newGuid()`
+   * (`platform-bible-utils`), which does not constrain the variant nibble: measured over 20,000
+   * samples, about HALF of its output fails an RFC-4122 pattern. Tightening this would therefore stop
+   * recognizing roughly half of all persisted window ids — orphaning the per-window storage those
+   * keys name, since the prune matches positively on this shape, and breaking suffix stripping on
+   * scoped web view ids. Tightening it needs a migration of persisted ids first.
    *
    * @experimental This constant is unstable and may change or disappear without notice
    */
@@ -936,8 +939,10 @@ declare module 'shared/models/web-view.model' {
      * names the window.
      *
      * Window ids are assigned by the platform and never reused within a profile, in this run of the
-     * app or any later one, so an id names one window and only ever that window. Get the current
-     * window's id via the `platform.getFocusedWindowId` command.
+     * app or any later one, so an id names one window and only ever that window. Get the id of the
+     * window this code is running in with `papi.window.getWindowId()` — not
+     * `platform.getFocusedWindowId`, which answers with a different window's id whenever this one is
+     * not the focused window.
      *
      * @experimental This option is unstable and may change or disappear without notice
      */
@@ -5070,7 +5075,9 @@ declare module 'papi-shared-types' {
     'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
     /**
      * Move a web view to an existing window, named by its window id (see
-     * `platform.getFocusedWindowId`). Ids are platform-assigned and never reused within a profile.
+     * `papi.window.getWindowId()` for the id of the window the caller is in, or
+     * `platform.getFocusedWindowId` for whichever window the user is looking at). Ids are
+     * platform-assigned and never reused within a profile.
      *
      * Same semantics as `platform.moveWebViewToNewWindow` — including the marker a failed move
      * carries to say where it left the web view — and: moving a web view to the window it is
