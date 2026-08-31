@@ -300,8 +300,8 @@ export function PlatformTabTitle({
    */
   const [menuTargets, setMenuTargets] = useState<{
     otherWindows: WindowSummary[];
-    isOnlyTabInSecondaryWindow: boolean;
-  }>({ otherWindows: [], isOnlyTabInSecondaryWindow: false });
+    isOnlyTabInWindowThatWouldClose: boolean;
+  }>({ otherWindows: [], isOnlyTabInWindowThatWouldClose: false });
 
   /**
    * Identifies the most recent call to {@link handleMenuOpenChange}, so a round trip that resolves
@@ -329,28 +329,32 @@ export function PlatformTabTitle({
       // empty list would read as "there are no other windows", which is a different claim
       logger.warn(`Could not read the open windows for the tab menu: ${getErrorMessage(error)}`);
       if (latestMenuOpenRequestRef.current === thisMenuOpenRequest)
-        setMenuTargets({ otherWindows: [], isOnlyTabInSecondaryWindow: false });
+        setMenuTargets({ otherWindows: [], isOnlyTabInWindowThatWouldClose: false });
       return;
     }
 
     const otherWindows = windows.filter((window) => `${window.windowId}` !== globalThis.windowId);
-    const isThisWindowSecondary = !windows.some(
-      (window) => `${window.windowId}` === globalThis.windowId && window.isMain,
-    );
 
     // Counting this window's tabs is guarded separately because it can fail for reasons that say
     // nothing about the windows — it throws before the dock layout registers. Folding it into the
     // read above would throw away a window list that arrived perfectly well, and report the failure
     // as one the open windows could not be read.
     //
-    // Moving the only web view out of a window that is not the primary one empties that window only
-    // when nothing else is left behind — a window still holding a dialog, an error tab, or any other
-    // non-web-view tab is not emptied by the move. Counting every tab, not just web views, is what
-    // tells the two cases apart; an actually-empty window would build an identical one and lose this
-    // one, which is the no-op Paratext 9 hides its float item for.
-    let isOnlyTabInSecondaryWindow = false;
+    // Moving the only web view out of a window empties that window only when nothing else is left
+    // behind — a window still holding a dialog, an error tab, or any other non-web-view tab is not
+    // emptied by the move. Counting every tab, not just web views, is what tells the two cases
+    // apart; an actually-empty window would build an identical one and lose this one, which is the
+    // no-op Paratext 9 hides its float item for.
+    //
+    // Whether emptying closes this window is decided by whether another window is standing, which
+    // is the rule main applies — it counts the windows that could be the last one and never reads
+    // which window holds the primary role. One class of window divides the two lists: a window
+    // still waiting for its content is offered as a move target here but does not count toward
+    // main's arithmetic, so while one is starting up this errs toward hiding an action that would
+    // in fact have been safe.
+    let isOnlyTabInWindowThatWouldClose = false;
     try {
-      isOnlyTabInSecondaryWindow = isThisWindowSecondary && getOpenTabCountSync() <= 1;
+      isOnlyTabInWindowThatWouldClose = otherWindows.length > 0 && getOpenTabCountSync() <= 1;
     } catch (error) {
       // Offering the action is the safe way to be wrong: at worst the user makes a window they did
       // not want, which they can close
@@ -358,7 +362,7 @@ export function PlatformTabTitle({
     }
 
     if (latestMenuOpenRequestRef.current === thisMenuOpenRequest)
-      setMenuTargets({ otherWindows, isOnlyTabInSecondaryWindow });
+      setMenuTargets({ otherWindows, isOnlyTabInWindowThatWouldClose });
   };
 
   // Handle applying and removing the CSS styles for flashing
