@@ -97,10 +97,10 @@ export function serializeRequestType(category: string, directive: string): Seria
 export function deserializeRequestType(requestType: SerializedRequestType): RequestType {
   if (!requestType) throw new Error('deserializeRequestType: must be a non-empty string');
 
-  // Native string methods, not the grapheme-aware helpers: the separator and the identifiers around
-  // it are ASCII by construction, and the index never leaves this function — it is produced and
-  // consumed in the same index space, so UTF-16 and grapheme counting land on the same split.
-  // Segmenting here would cost four passes over the string on every message crossing PAPI.
+  // Native string methods: the index below is produced and consumed in the same index space, so
+  // the split lands in the same place either way, and this runs on every message crossing PAPI.
+  // Converting any one of these four calls without the others would mix index spaces — see
+  // `.claude/rules/code-quality/native-string-vs-grapheme-helpers.md`.
   const colonIndex = requestType.indexOf(REQUEST_TYPE_SEPARATOR);
   if (colonIndex <= 0 || colonIndex >= requestType.length - 1)
     throw new Error(

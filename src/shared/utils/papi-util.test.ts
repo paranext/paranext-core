@@ -41,10 +41,8 @@ describe('PAPI Util Functions: serializeRequestType and deserializeRequestType',
     expect(directive).toEqual(DIRECTIVE);
   });
 
-  // A category containing characters whose grapheme count differs from their UTF-16 length makes the
-  // two index spaces disagree on the separator's position. Splitting is only correct while the index
-  // and the substring that consumes it come from the same space, so these pin the split point
-  // against a change that converts one call and leaves its partner.
+  // These fail if a change converts one of `deserializeRequestType`'s calls and leaves its partner,
+  // mixing a UTF-16 index with a grapheme-indexed substring.
   it('splits at the separator when the category contains non-BMP characters', () => {
     const CATEGORY = 'my\u{1F984}Category';
     const DIRECTIVE = 'myDirective';

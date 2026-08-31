@@ -76,7 +76,11 @@ impossible even in principle: the trap receives a fresh key string each invocati
 nothing to hold an instance across. Native is the only available fix.
 
 **Risk** A method name containing a combining mark directly after the prefix would newly classify as
-a getter/setter/event. Not reachable from any TypeScript identifier anyone writes.
+a getter/setter/event. This *is* reachable — U+0301 is `ID_Continue`, so `{ get́Data() {} }` parses
+and `Object.keys` returns `get́Data` — but the failure is loud rather than silent: such a method
+groups as a `get`, trips the get/set-count check in `buildDataProvider`, and `registerEngine`
+rejects the whole provider. Nobody writes such an identifier by accident, and if they do they find
+out immediately.
 
 ---
 
@@ -140,13 +144,33 @@ change on malformed documents, so it is deliberately excluded here and left as a
 Native and grapheme-aware must agree on every realistic input, so the test for each item pins the
 observable output rather than the index arithmetic:
 
-- WI-1: the existing data-provider and network-object suites already exercise the traps; add cases
-  for a property name that is a prefix exactly (`get`, `on`) and one that merely contains it
-  (`forgetful`, `onset` vs `ongoing`).
+- WI-1: no test. Native `startsWith` matches a superset of what the grapheme-aware version matches,
+  and every property name these traps see is ASCII, so a `get`/`forgetful` case cannot distinguish
+  the two implementations — it passes either way. (There is no `data-provider.service.test.ts` or
+  `network-object.service.test.ts` to add it to in any case.) The behavior that *is* worth pinning
+  is the loud-failure path described under WI-1's risk, which `registerEngine` already enforces.
 - WI-2: round-trip `serializeRequestType` → `deserializeRequestType`, including a category and a
-  directive containing non-ASCII text, proving the split lands in the same place either way.
-- WI-3: splice a document whose text contains non-ASCII characters before and after the `<head>` tag,
-  asserting the output is byte-identical to the pre-change implementation.
+  directive containing non-ASCII text, proving the split lands in the same place either way. In
+  `papi-util.test.ts`.
+- WI-3: the splice is extracted as `spliceIntoWebViewHead` (`web-view-head.util.ts`) so it can be
+  reached at all, and `web-view-head.util.test.ts` asserts it against both an independently computed
+  expectation and the grapheme-aware implementation it replaced, over documents with astral
+  characters, combining marks, and a CRLF pair on each side of the `<head>` tag. The two known gaps —
+  a document with no `<head`, and a `>` inside an attribute value — are pinned as they behave today,
+  so changing either reads as deliberate.
+
+### What the `<head>` splice actually cost
+
+Measured with the pre-change helper against the post-change native method, four calls per document:
+
+| Document | helper (4 calls) | native |
+| --- | --- | --- |
+| 100 KB | 36 ms | ~0 ms |
+| 500 KB | 186 ms | ~0 ms |
+| 2 MB | 1023 ms | ~0 ms |
+
+Web views inline their bundled app, so 1–2 MB is ordinary — which is where the "~1.2 s per tab open"
+figure above comes from.
 
 ---
 
@@ -166,9 +190,31 @@ across 32 files** in `paranext-core`. Of those, **73 converted to native** and 1
 | `extension-host.ts:167` — `substring(exampleData, 0, 100)` | Truncating arbitrary data for a log line. Native could cut a surrogate pair in half and emit a broken glyph. |
 | `extension-asset.utils.ts` — the `> 100` length guard | See below. |
 
+### Two sites that qualify for reasons other than the stated rule
+
+Both were converted, and both are safe, but neither is safe *because* the needle and haystack are
+ASCII by construction — so the reason is written down here rather than left to be re-derived.
+
+**Namespace-ownership gates** — `menu-document-combiner.ts:47, 65, 76, 90, 93, 332`,
+`settings-document-combiner-base.ts:222`, `theme.service-host.ts:135, 445`. These check that a
+contributed name starts with the contributing document's namespace. The needle is
+`` `${documentName}.` ``, derived from the extension's `name`, which `parseManifest` does not
+restrict to ASCII — so this is not the "JavaScript property names from a TypeScript API surface"
+case the proxy traps are. What makes it safe is the trailing `.`: native prefix matching differs
+from grapheme only when the character following the match is a combining mark, and a combining mark
+is not a `.`. A name that is genuinely inside a foreign namespace still fails, and a name that
+merely *starts* with a foreign namespace's letters cannot end its match on the separator. No
+cross-namespace escalation is constructible.
+
+**`inventory-utils.ts:9`** — `codePointAt(char, 0)` → `char.codePointAt(0)`. The haystack is user
+scripture text, which the rule excludes outright. It is safe for a narrower reason: at index 0 the
+two agree by definition — the first code point of the first grapheme cluster *is* the string's
+first code point. Only index 0 has this property; the same conversion at any other index would be
+wrong.
+
 ### The length guard is worth its own note
 
-`parseExtensionAssetUri` converted almost entirely — the URI is percent-encoded and ASCII while it is
+`getAssetPathInfoFromExtensionUri` converted almost entirely — the URI is percent-encoded and ASCII while it is
 being parsed. But `extensionName` and `assetPath` go through `decodeURIComponent` first, and the
 guard that follows reads:
 
@@ -186,15 +232,18 @@ saying so.
 The neighbouring `assetPath.startsWith('assets/')` checks *did* convert: a filesystem path prefix is
 correctly compared by code unit, and every other path check in the codebase already does.
 
-### The bug this fixed on the way past
+### The latent index-space mix it tidied on the way past
 
-`project-lookup.service-model.ts:57-58` previously mixed index spaces in a single expression:
+Not a live bug — grapheme and native `slice` agree for every input here, astral and combining-mark
+cases included, because `PDP_FACTORY_LABEL` is ASCII. It is the shape the migration exists to kill,
+found already written. `project-lookup.service-model.ts:57-58` mixed index spaces in a single
+expression:
 
 ```ts
 endsWith(pdpFactoryNetworkObjectName, PDP_FACTORY_LABEL)
   ? slice(pdpFactoryNetworkObjectName, 0, -PDP_FACTORY_LABEL.length)
 ```
 
-A native UTF-16 `.length` used as a negative *grapheme* index. Benign while the label is ASCII, but
-wrong in principle — it is the exact bug class this migration exists to kill. Converting the
-expression to native makes both halves agree.
+A native UTF-16 `.length` used as a negative *grapheme* index. Harmless while the label is ASCII, and
+it would stay harmless until someone changed the label. Converting the expression to native makes
+both halves agree by construction rather than by coincidence.

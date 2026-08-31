@@ -393,11 +393,11 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
         let newDataProviderMethod: // eslint-disable-next-line @typescript-eslint/no-explicit-any
         DataProviderInternal<DataProviderTypes[DataProviderName]>[any] | undefined;
 
-        // If they want a subscriber, build a subscribe function specific to the data type used
-        // Native `startsWith`, not the grapheme-aware helper: these are JavaScript property names from
-        // a TypeScript API surface matched against lowercase ASCII prefixes, so segmentation cannot
-        // change the answer. This trap runs on every property access on every data provider, and it is
-        // the one place a construct-once instance cannot help — each call gets a fresh key string.
+        // If they want a subscriber, build a subscribe function specific to the data type used.
+        // Native `startsWith` — property name and prefix are both ASCII by construction; see
+        // `.claude/rules/code-quality/native-string-vs-grapheme-helpers.md`. Reusing one
+        // `GraphemeString` is not an option either: this trap runs on every property access and
+        // receives a fresh key string each time.
         if (isString(prop) && prop.startsWith('subscribe')) {
           const dataType =
             getDataProviderDataTypeFromFunctionName<DataProviderTypes[DataProviderName]>(prop);
