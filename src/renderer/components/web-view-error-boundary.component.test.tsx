@@ -1,6 +1,7 @@
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { reloadWebView } from '@renderer/services/web-view.service-shard';
 import { logger } from '@shared/services/logger.service';
 import { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -89,6 +90,26 @@ describe('WebViewErrorBoundary', () => {
     // that is still broken
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.queryByText('recovered content')).not.toBeInTheDocument();
+  });
+
+  it('reloads the web view when the crash view asks it to', async () => {
+    renderBoundary(<Boom />);
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(reloadWebView).toHaveBeenCalledExactlyOnceWith('testWebView', 'web-view-id');
+  });
+
+  it('logs rather than silently doing nothing when the web view is no longer open', async () => {
+    // `reloadWebView` RESOLVES undefined in this case instead of rejecting, so a `.catch` alone
+    // would leave a button that does nothing and reports nothing
+    vi.mocked(reloadWebView).mockResolvedValueOnce(undefined);
+    renderBoundary(<Boom />);
+
+    fireEvent.click(screen.getByRole('button'));
+    await vi.waitFor(() => expect(logger.warn).toHaveBeenCalledOnce());
+
+    expect(vi.mocked(logger.warn).mock.calls[0][0]).toContain('no longer open');
   });
 
   it('catches a crash that Lexical re-throws out of its own error boundary', () => {
