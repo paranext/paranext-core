@@ -1,20 +1,14 @@
+import { readFileSync } from 'fs';
+import path from 'path';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { reloadWebView } from '@renderer/services/web-view.service-shard';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   WebViewCrashedView,
+  ENGLISH_DEFAULTS,
   WEB_VIEW_CRASHED_VIEW_STRING_KEYS,
 } from './web-view-crashed-view.component';
-
-vi.mock('@shared/services/logger.service', () => ({
-  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
-}));
-
-vi.mock('@renderer/services/web-view.service-shard', () => ({
-  reloadWebView: vi.fn(async () => 'web-view-id'),
-}));
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(),
@@ -35,14 +29,17 @@ const LOCALIZED = {
  */
 const UNRESOLVED = Object.fromEntries(WEB_VIEW_CRASHED_VIEW_STRING_KEYS.map((key) => [key, key]));
 
+let onReload: ReturnType<typeof vi.fn>;
+
 beforeEach(() => {
   vi.clearAllMocks();
+  onReload = vi.fn();
   vi.mocked(useLocalizedStrings).mockReturnValue([LOCALIZED, false]);
 });
 
 describe('WebViewCrashedView', () => {
   it('renders the localized title, message and button', () => {
-    render(<WebViewCrashedView webViewId="id" webViewType="type" webViewTitle="Editor - WEB" />);
+    render(<WebViewCrashedView onReload={onReload} webViewTitle="Editor - WEB" />);
 
     expect(screen.getByText('Localized title')).toBeInTheDocument();
     expect(screen.getByText('Localized message for Editor - WEB')).toBeInTheDocument();
@@ -50,15 +47,49 @@ describe('WebViewCrashedView', () => {
   });
 
   it('names the panel that crashed so the user knows which one died', () => {
-    render(<WebViewCrashedView webViewId="id" webViewType="type" webViewTitle="Text Collection" />);
+    render(<WebViewCrashedView onReload={onReload} webViewTitle="Text Collection" />);
 
     expect(screen.getByText('Localized message for Text Collection')).toBeInTheDocument();
   });
 
   it('uses the untitled message when the web view has no title', () => {
-    render(<WebViewCrashedView webViewId="id" webViewType="type" />);
+    render(<WebViewCrashedView onReload={onReload} />);
 
     expect(screen.getByText('Localized message with no title')).toBeInTheDocument();
+  });
+
+  it('resolves a title that is a localize key rather than printing the key', () => {
+    // Web view definitions carry either display text or a localize key as their title, and several
+    // panels (Model Text, Scripture Text Grid, Enhanced Resources) ship keys. Interpolating one
+    // verbatim would put a raw `%…%` on screen - the exact thing this view exists to avoid.
+    vi.mocked(useLocalizedStrings).mockImplementation((keys) =>
+      keys.includes('%webView_modelTextPanel_title%')
+        ? [{ '%webView_modelTextPanel_title%': 'Model Text' }, false]
+        : [LOCALIZED, false],
+    );
+
+    render(
+      <WebViewCrashedView onReload={onReload} webViewTitle="%webView_modelTextPanel_title%" />,
+    );
+
+    expect(screen.getByText('Localized message for Model Text')).toBeInTheDocument();
+    expect(screen.queryByText(/%webView_modelTextPanel_title%/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to the untitled message when a localize-key title does not resolve', () => {
+    // Unresolved keys come back seeded with themselves, which must not reach the message
+    vi.mocked(useLocalizedStrings).mockImplementation((keys) =>
+      keys.includes('%webView_modelTextPanel_title%')
+        ? [{ '%webView_modelTextPanel_title%': '%webView_modelTextPanel_title%' }, true]
+        : [LOCALIZED, false],
+    );
+
+    render(
+      <WebViewCrashedView onReload={onReload} webViewTitle="%webView_modelTextPanel_title%" />,
+    );
+
+    expect(screen.getByText('Localized message with no title')).toBeInTheDocument();
+    expect(screen.queryByText(/%webView_modelTextPanel_title%/)).not.toBeInTheDocument();
   });
 
   it('falls back to English rather than showing raw localize keys', () => {
@@ -66,7 +97,7 @@ describe('WebViewCrashedView', () => {
     // blank web view — `%webView_error_crashed_title%` on screen would be worse than English
     vi.mocked(useLocalizedStrings).mockReturnValue([UNRESOLVED, true]);
 
-    render(<WebViewCrashedView webViewId="id" webViewType="type" webViewTitle="Editor" />);
+    render(<WebViewCrashedView onReload={onReload} webViewTitle="Editor" />);
 
     expect(screen.getByText('This panel stopped working')).toBeInTheDocument();
     expect(
@@ -76,19 +107,67 @@ describe('WebViewCrashedView', () => {
     expect(screen.queryByText(/%webView_error_crashed/)).not.toBeInTheDocument();
   });
 
-  it('reloads the web view when the button is clicked', () => {
-    render(<WebViewCrashedView webViewId="the-id" webViewType="the-type" webViewTitle="Editor" />);
+  it('asks its caller to reload when the button is clicked', () => {
+    render(<WebViewCrashedView onReload={onReload} webViewTitle="Editor" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Localized reload' }));
 
-    expect(reloadWebView).toHaveBeenCalledExactlyOnceWith('the-type', 'the-id');
+    expect(onReload).toHaveBeenCalledOnce();
   });
 
-  it('announces itself and takes focus, since the crash unmounted everything focusable', () => {
-    render(<WebViewCrashedView webViewId="id" webViewType="type" webViewTitle="Editor" />);
+  it('announces itself and takes focus when the crash destroyed what the user was working in', () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+
+    render(<WebViewCrashedView onReload={onReload} webViewTitle="Editor" />);
 
     const alert = screen.getByRole('alert');
     expect(alert).toBeInTheDocument();
     expect(alert).toHaveFocus();
+  });
+
+  it('leaves focus alone when the crash happened in a pane the user was not in', () => {
+    // Several web views are visible at once, so a background pane crashing on a shared state change
+    // must not pull the caret out of whatever the user is actually typing in
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    const outsideInput = document.createElement('input');
+    document.body.appendChild(outsideInput);
+    outsideInput.focus();
+
+    render(<WebViewCrashedView onReload={onReload} webViewTitle="Editor" />);
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).not.toHaveFocus();
+    expect(outsideInput).toHaveFocus();
+
+    outsideInput.remove();
+  });
+});
+
+// `ENGLISH_DEFAULTS` deliberately restates the English text that also lives in `en.json`, because
+// this view has to render when the localization service is the thing that broke. `en.json` is read
+// from disk by the extension host rather than bundled into the renderer, so importing it here to
+// derive the defaults would add a second 41KB copy to the renderer's load path for four strings -
+// the wrong trade against a startup-performance target. The duplication stays; these tests are what
+// stop it drifting, since a copy edit to `en.json` would otherwise leave the fallback silently stale.
+describe('English fallbacks stay in step with en.json', () => {
+  const englishStrings: Record<string, string> = JSON.parse(
+    readFileSync(path.resolve(__dirname, '../../../assets/localization/en.json'), 'utf-8'),
+  );
+
+  it('has an English default for every key the view resolves', () => {
+    expect(Object.keys(ENGLISH_DEFAULTS).sort()).toEqual(
+      [...WEB_VIEW_CRASHED_VIEW_STRING_KEYS].sort(),
+    );
+  });
+
+  // Iterating the entries rather than the key list keeps the keys typed, so this needs no assertion
+  Object.entries(ENGLISH_DEFAULTS).forEach(([key, englishDefault]) => {
+    it(`declares ${key} in en.json`, () => {
+      expect(englishStrings[key]).toBeTruthy();
+    });
+
+    it(`uses the same English text as en.json for ${key}`, () => {
+      expect(englishDefault).toBe(englishStrings[key]);
+    });
   });
 });
