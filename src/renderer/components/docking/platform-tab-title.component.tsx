@@ -114,14 +114,6 @@ const cssHighlightDurationMilliseconds = 3000;
 /** A tab menu with nothing in it, for a tab whose menu has not loaded or failed to */
 const EMPTY_TAB_MENU = Object.freeze({ groups: {}, items: [] });
 
-/** What `useData` shows while the contributed menu is still loading */
-const TAB_MENU_DEFAULT = Object.freeze({
-  includeDefaults: false,
-  topMenu: undefined,
-  contextMenu: undefined,
-  tabMenu: undefined,
-});
-
 /** Render converted menu items into the context-menu primitives, submenus and all */
 function renderTabMenuItems(
   items: OverlayContextMenuItem[],
@@ -269,14 +261,54 @@ export function PlatformTabTitle({
   const tabLabel = localizedStrings[tabAria];
   const emptyWindowLabel = localizedStrings[EMPTY_WINDOW_LABEL_KEY];
 
-  // Every tab has a tab menu. One hosting no web view has no type to look a contributed menu up by,
-  // and the data provider answers an unrecognized name with the platform's own items
-  const [webViewMenuPossiblyError] = useData(menuDataService.dataProviderName).WebViewMenu(
-    // Assume the web view type is correctly formatted; it has already been checked where it is set
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    (webViewType as `${string}.${string}`) ?? 'platform.tab',
-    TAB_MENU_DEFAULT,
-  );
+  /**
+   * The contributed tab menu, converted for rendering. Empty until the read below lands, and for a
+   * tab whose read failed.
+   */
+  const [contributedItems, setContributedItems] = useState<OverlayContextMenuItem[]>([]);
+
+  // Read once when the tab mounts, rather than subscribed to. The platform's own items are a fixed
+  // contribution, and the two things that do change while a tab lives — which windows are open, and
+  // which actions apply to this tab — are read when the menu opens instead. A live subscription
+  // would re-read on every contribution resync for a list that had not changed.
+  //
+  // Only where the menu can open: Simple mode renders no tab menu at all, so its fixed layout would
+  // otherwise pay one cross-process read per tab for something never shown.
+  //
+  // The trade this accepts: an extension installed or removed mid-session has its tab items appear
+  // when the tab next mounts, not immediately.
+  useEffect(() => {
+    if (!isPowerMode) return undefined;
+
+    let isStillMounted = true;
+    (async () => {
+      try {
+        // Every tab has a tab menu. One hosting no web view has no type to look a contributed menu
+        // up by, and the data provider answers an unrecognized name with the platform's own items
+        const webViewMenu = await menuDataService.getWebViewMenu(
+          // Assume the web view type is correctly formatted; it has already been checked where it
+          // is set
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          (webViewType as `${string}.${string}`) ?? 'platform.tab',
+        );
+        if (isStillMounted)
+          setContributedItems(
+            convertContributionToContextMenuItems(webViewMenu.tabMenu ?? EMPTY_TAB_MENU),
+          );
+      } catch (error) {
+        // Said out loud rather than swallowed into an empty menu: the extension host logs the cause
+        // at debug and without knowing which tab asked, so nothing here would otherwise explain a
+        // tab that quietly has no menu
+        logger.warn(
+          `Could not read the tab menu for ${webViewType ?? 'a tab hosting no web view'} (${id}): ${getErrorMessage(error)}`,
+        );
+      }
+    })();
+
+    return () => {
+      isStillMounted = false;
+    };
+  }, [isPowerMode, webViewType, id]);
 
   /**
    * What this tab can currently do, read when the menu opens rather than subscribed to. The menu
@@ -312,7 +344,10 @@ export function PlatformTabTitle({
   const latestMenuOpenRequestRef = useRef<symbol | undefined>(undefined);
 
   const handleMenuOpenChange = async (isOpen: boolean) => {
-    if (!isOpen) return;
+    // Both readers of what this fetches — the move-to-new-window item and the move-to-window
+    // submenu — are removed from the menu of a tab hosting no web view, so for a dialog or an error
+    // tab the round trip and the re-render it causes are discarded in full
+    if (!isOpen || !webViewId) return;
 
     // Every call here passes the same `true`, so there is no resolved value of its own to compare
     // against later the way `window-label.util.ts` compares its resolved label — a token stands in
@@ -770,10 +805,6 @@ export function PlatformTabTitle({
     ...menuTargets,
   };
 
-  const contributedItems = isPlatformError(webViewMenuPossiblyError)
-    ? []
-    : convertContributionToContextMenuItems(webViewMenuPossiblyError.tabMenu ?? EMPTY_TAB_MENU);
-
   const handleSelect = (itemId: string) => {
     if (itemId === FLOAT_TAB_COMMAND) {
       handleFloatTab(id);
@@ -788,20 +819,25 @@ export function PlatformTabTitle({
       if (webViewId) handleMoveTabToWindow(webViewId, targetWindowId);
       return;
     }
-    // Anything else is an extension's own item, run the way every other contributed menu runs it
+    // Anything else is an extension's own item, run the way every other contributed menu runs it.
+    // The id arrives as a plain string and the command handler takes a `ReferencedItem`; TypeScript
+    // cannot narrow one to the other, and the menu schema has already validated the shape that
+    // makes the assertion true.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     handleMenuCommand({ command: itemId } as Parameters<typeof handleMenuCommand>[0], id);
   };
 
+  const tabMenuItems = buildTabMenuItems(contributedItems, menuContext, emptyWindowLabel);
+
+  // Rendering the menu with nothing in it puts an empty styled popup on screen, since the content
+  // opens whatever its children are. A tab with nothing to offer — its read has not landed, or
+  // failed — has no menu at all instead, which is what the overlay path does with the same problem.
+  if (tabMenuItems.length === 0) return titleWithTooltip;
+
   return (
     <ContextMenu onOpenChange={handleMenuOpenChange}>
       <ContextMenuTrigger>{titleWithTooltip}</ContextMenuTrigger>
-      <ContextMenuContent>
-        {renderTabMenuItems(
-          buildTabMenuItems(contributedItems, menuContext, emptyWindowLabel),
-          handleSelect,
-        )}
-      </ContextMenuContent>
+      <ContextMenuContent>{renderTabMenuItems(tabMenuItems, handleSelect)}</ContextMenuContent>
     </ContextMenu>
   );
 }
