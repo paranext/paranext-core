@@ -306,13 +306,14 @@ export declare class EventRollingTimeCounter {
  *
  * This is the one place the class deliberately stops short of native. Native pads into a compact
  * character buffer and gives up only at V8's string limit (`2**29 - 24`); a `GraphemeString` holds
- * one string object per grapheme, so the same target costs roughly an order of magnitude more
- * memory and exhausts the heap well before reaching it. Measured on the padding path: `2**20` costs
- * ~9ms and ~9MB, `2**24` costs ~173ms and ~130MB, and V8's own limit cannot be reached at all.
+ * one string object per grapheme and re-segments the padded text to keep that array honest, so the
+ * same target costs far more time and memory and exhausts the heap well before reaching native's
+ * ceiling. Measured on the padding path: `2**16` costs ~5ms and ~2MB, `2**18` ~12ms and ~10MB, and
+ * `2**20` ~38ms and ~34MB — super-linear in both, and V8's own limit cannot be reached at all.
  *
  * A million graphemes of padding is already far past any display or formatting use, so the limit is
- * set where the cost is still negligible rather than where the engine finally gives out. Exceeding
- * it throws `RangeError`, as native does for its own limit.
+ * set where the cost is still bounded rather than where the engine finally gives out. Exceeding it
+ * throws `RangeError`, as native does for its own limit.
  */
 export declare const MAX_PADDING_LENGTH: number;
 /**
@@ -473,9 +474,15 @@ export declare class GraphemeString {
 	 * new GraphemeString('a{n}b').formatReplacement({ n: 9000 }); // 'a9000b'
 	 * ```
 	 *
+	 * A replacer that cannot be converted to a string degrades to a placeholder rather than throwing,
+	 * because the template is a localized string and the replacers are caller-supplied values — one
+	 * bad value must not take down the whole call. Use {@link formatReplacementToArray} to keep a
+	 * non-string replacer intact instead of coerced.
+	 *
 	 * @param replacers Map from key text to its replacement. A key absent from the map is replaced by
 	 *   the key text itself.
-	 * @returns The formatted string. `''` if this string is empty.
+	 * @returns The formatted string. `''` if this string is empty. A replacer that cannot be
+	 *   converted becomes `[object Object]`, or `[object Unknown]` if even that inspection throws.
 	 */
 	formatReplacement(replacers: {
 		[key: string | number]: unknown;
