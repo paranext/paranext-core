@@ -64,8 +64,9 @@ describe('shutdown latches', () => {
   });
 
   test('a wait begun before a reset is not settled by a quit requested after it', async () => {
-    // The mirror of the test above: there the capture happens after the reset; here it happens
-    // before. A primary holding open the close-all question captures its wait this way, ahead of
+    // The mirror of "a new session leaves nothing waiting on the last session's quit": there the
+    // capture happens after the reset; here it happens before. A primary holding open the
+    // close-all question captures its wait this way, ahead of
     // any reset a later window creation might trigger, and the signal it is holding must stay its
     // own — a quit requested afterward has to settle only the session's new signal, not reach back
     // and settle the one this wait is still holding.
@@ -82,6 +83,36 @@ describe('shutdown latches', () => {
 
     // The new session's own wait is unaffected — it settles normally from the same quit.
     await expect(whenQuitRequested()).resolves.toBeUndefined();
+  });
+
+  test('a session that runs on without quitting still has a usable quit signal', async () => {
+    // The signal is an `AsyncVariable`, which by default rejects anything waiting on it once ten
+    // seconds pass without it settling. A session that simply has not quit yet is the normal case,
+    // and that rejection would reach the close-all decision — which races this signal — and turn
+    // "ask the user" into "could not decide", so the primary's ✕ would quietly stop asking. The
+    // timeout is disabled for exactly that reason; this pins it.
+    vi.useFakeTimers();
+    try {
+      // Built while the fake clock is installed, so the variable's own timer is a fake one. A
+      // signal constructed at module load carries a real timer that advancing fake time never
+      // fires, and this test would then pass whatever the timeout is set to.
+      resetShutdownLatchesForNewSession();
+      const waiting = whenQuitRequested();
+      let rejectedWith: unknown;
+      waiting.catch((e: unknown) => {
+        rejectedWith = e;
+      });
+
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(rejectedWith).toBeUndefined();
+
+      // The positive control: the signal is not merely inert — it still settles when a quit comes
+      markQuitRequested();
+      await expect(waiting).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('does not report a quit until one is requested', () => {

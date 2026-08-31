@@ -11,9 +11,6 @@
   "%cancelButton_tooltip%": {
     "fallbackKey": "%general_cancel%"
   },
-  "%closeApp_confirm_cancel%": {
-    "fallbackKey": "%general_cancel%"
-  },
   "%commentEditor_cancelButton_tooltip%": {
     "deprecationInfo": {
       "date": "2026-04-22",

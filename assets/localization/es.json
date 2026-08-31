@@ -129,7 +129,6 @@
   "%Book.ZEC%": "Zacarías",
   "%Book.ZEP%": "Sofonías",
   "%cancelButton_tooltip%": "Cancelar",
-  "%closeApp_confirm_cancel%": "Cancelar",
   "%closeApp_confirm_closeAll%": "Cerrar todas las ventanas",
   "%closeApp_confirm_message%": "Se cerrarán todas las ventanas. Se restaurarán la próxima vez que abra la aplicación.",
   "%closeApp_confirm_title%": "¿Cerrar la aplicación?",

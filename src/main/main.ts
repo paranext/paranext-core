@@ -45,7 +45,10 @@ import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
-import type { CloseAllAnswer } from '@main/services/window-close-decision.service';
+import type {
+  CloseAllAnswer,
+  WindowCloseDecision,
+} from '@main/services/window-close-decision.service';
 import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationServiceRouter } from '@main/services/notification.service-router';
 import {
@@ -1137,7 +1140,7 @@ async function main() {
       // Secondary windows and a primary on its own skip the question and close as they always did.
       // TODO(PT-4286): a live switch to Simple mode must also close the secondary windows.
       isAskingAboutClose = true;
-      let decision;
+      let decision: WindowCloseDecision;
       try {
         decision = await decideWindowClose(windowId, () => confirmCloseAllWindows(newWindow));
       } catch (e) {
@@ -1607,11 +1610,20 @@ async function main() {
    * @param primaryWindow The window whose close is being confirmed
    */
   async function confirmCloseAllWindows(primaryWindow: BrowserWindow): Promise<CloseAllAnswer> {
-    const titleKey: LocalizeKey = '%closeApp_confirm_title%';
-    const messageKey: LocalizeKey = '%closeApp_confirm_message%';
-    const closeAllKey: LocalizeKey = '%closeApp_confirm_closeAll%';
-    const cancelKey: LocalizeKey = '%closeApp_confirm_cancel%';
-    const fallbackStrings: Record<LocalizeKey, string> = {
+    // `satisfies` rather than an annotation, so each stays its own literal type. Annotating them
+    // `LocalizeKey` widens them to the template `%${string}%`, which turns the record below into a
+    // pattern index signature — and then a mistyped key reads back `undefined` with no error, and
+    // goes into the dialog as a missing title or a blank button.
+    const titleKey = '%closeApp_confirm_title%' satisfies LocalizeKey;
+    const messageKey = '%closeApp_confirm_message%' satisfies LocalizeKey;
+    const closeAllKey = '%closeApp_confirm_closeAll%' satisfies LocalizeKey;
+    // The shared cancel string rather than one of this dialog's own: the localization guide forbids
+    // duplicating a generic string that already exists, and this button says exactly what it says
+    const cancelKey = '%general_cancel%' satisfies LocalizeKey;
+    const fallbackStrings: Record<
+      typeof titleKey | typeof messageKey | typeof closeAllKey | typeof cancelKey,
+      string
+    > = {
       [titleKey]: 'Close the application?',
       [messageKey]:
         'All windows will close. They will be restored the next time you open the application.',
@@ -1619,37 +1631,32 @@ async function main() {
       [cancelKey]: 'Cancel',
     };
     let strings = fallbackStrings;
-    let localizeTimeoutHandle: ReturnType<typeof setTimeout> | undefined;
     try {
       // Bounded, because this is a NETWORK call to the extension host and the ✕ is already
       // committed by the time it runs: a rejection reaches the English fallback below, but a hang
       // would leave the window prevented from closing with no question on screen and every further
       // ✕ a silent no-op — the close button would simply look dead. English on time beats
       // localized eventually.
-      const localizeTimeout = new Promise<never>((_resolve, reject) => {
-        localizeTimeoutHandle = setTimeout(
-          () => reject(new Error(`no answer within ${CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS} ms`)),
-          CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS,
-        );
-      });
+      //
+      // Raced against a throwing timer rather than `waitForDuration`, which is otherwise the shape
+      // for this: that helper is built on `Promise.any`, so it never rejects — a request that fails
+      // FAST would be swallowed and the question held back for the whole bound before falling back
+      // to English, which is the delay this bound exists to prevent.
       strings = {
         ...fallbackStrings,
         ...(await Promise.race([
           localizationService.getLocalizedStrings({
             localizeKeys: [titleKey, messageKey, closeAllKey, cancelKey],
           }),
-          localizeTimeout,
+          wait(CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS).then<never>(() => {
+            throw new Error(`no answer within ${CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS} ms`);
+          }),
         ])),
       };
     } catch (e) {
       logger.warn(
         `Could not localize the close-all prompt; showing English: ${getErrorMessage(e)}`,
       );
-    } finally {
-      // Cleared on every path, not just the timeout's own: when localization wins the race, the
-      // timer would otherwise sit armed for the rest of its bound, rejecting a promise nothing is
-      // waiting on any more.
-      if (localizeTimeoutHandle) clearTimeout(localizeTimeoutHandle);
     }
     const closeAllIndex = 0;
     const cancelIndex = 1;
@@ -1672,9 +1679,9 @@ async function main() {
       signal: dismissOnQuit.signal,
       type: 'question',
       // No `title`: macOS hides it, and on Windows and Linux it would print the question twice
-      message: strings['%closeApp_confirm_title%'],
-      detail: strings['%closeApp_confirm_message%'],
-      buttons: [strings['%closeApp_confirm_closeAll%'], strings['%closeApp_confirm_cancel%']],
+      message: strings[titleKey],
+      detail: strings[messageKey],
+      buttons: [strings[closeAllKey], strings[cancelKey]],
       // The safe choice is what Enter takes: this question exists to interrupt a click whose reach
       // is wider than expected, so the wide-reaching button must not also be the one a reflex press
       // lands on. Button order is set by `buttons` above, not by this.
