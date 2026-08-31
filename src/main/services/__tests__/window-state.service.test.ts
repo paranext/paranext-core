@@ -413,29 +413,29 @@ describe('window state tracking', () => {
   describe('routing target change event', () => {
     test('announces the window that took focus', () => {
       const heard: (string | undefined)[] = [];
-      addWindow(fakeWindow(2));
-      markWindowReady('2');
-      addWindow(fakeWindow(3));
-      markWindowReady('3');
-      setFocusedWindowId('2');
+      const firstId = addWindow(fakeWindow(2));
+      markWindowReady(firstId);
+      const secondId = addWindow(fakeWindow(3));
+      markWindowReady(secondId);
+      setFocusedWindowId(firstId);
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      setFocusedWindowId('3');
+      setFocusedWindowId(secondId);
       unsubscribe();
 
-      expect(heard).toEqual(['3']);
+      expect(heard).toEqual([secondId]);
     });
 
     test('stays quiet when the same window is re-reported as focused', () => {
       // Electron re-fires `focus` in situations that do not change which window is focused; service
       // routers re-point their update relay on every emission, so a repeat is real work for nothing
       const heard: (string | undefined)[] = [];
-      addWindow(fakeWindow(3));
-      setFocusedWindowId('3');
+      const onlyId = addWindow(fakeWindow(3));
+      setFocusedWindowId(onlyId);
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      setFocusedWindowId('3');
-      setFocusedWindowId('3');
+      setFocusedWindowId(onlyId);
+      setFocusedWindowId(onlyId);
       unsubscribe();
 
       expect(heard).toEqual([]);
@@ -460,12 +460,12 @@ describe('window state tracking', () => {
 
     test('announces focus being cleared when the last window goes away', () => {
       const only = fakeWindow(3);
-      addWindow(only);
-      setFocusedWindowId('3');
+      const onlyId = addWindow(only);
+      setFocusedWindowId(onlyId);
       const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      removeWindow(only, '3');
+      removeWindow(only, onlyId);
       unsubscribe();
 
       expect(heard).toEqual([undefined]);
@@ -591,11 +591,11 @@ describe('window state tracking', () => {
 
     test('stops calling a listener that unsubscribed', () => {
       const heard: (string | undefined)[] = [];
-      addWindow(fakeWindow(4));
+      const onlyId = addWindow(fakeWindow(4));
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
       unsubscribe();
-      setFocusedWindowId('4');
+      setFocusedWindowId(onlyId);
 
       expect(heard).toEqual([]);
     });

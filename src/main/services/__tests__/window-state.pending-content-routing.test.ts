@@ -19,7 +19,13 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
-/** Stand-in for a BrowserWindow — the service only reads `id` and `isDestroyed` */
+/**
+ * Stand-in for a BrowserWindow — the service only reads `id` and `isDestroyed`.
+ *
+ * The number here is the ELECTRON id and is not what the service is told about afterwards: a
+ * window's platform id is whatever `addWindow` returns, which is minted rather than derived from
+ * this. Every test below names windows by that returned value.
+ */
 function fakeWindow(id: number): BrowserWindow {
   // Constructing a real BrowserWindow needs the Electron runtime; these are the only members the
   // service under test touches
@@ -33,31 +39,31 @@ describe('routing around pending-content windows', () => {
   });
 
   test('a focused pending-content window is passed over for the last real window', () => {
-    addWindow(fakeWindow(1));
-    markWindowReady('1');
-    setFocusedWindowId('1');
-    addWindow(fakeWindow(7));
-    markWindowReady('7');
-    setWindowPendingContentPredicate((windowId) => windowId === '7');
+    const realWindowId = addWindow(fakeWindow(1));
+    markWindowReady(realWindowId);
+    setFocusedWindowId(realWindowId);
+    const pendingWindowId = addWindow(fakeWindow(7));
+    markWindowReady(pendingWindowId);
+    setWindowPendingContentPredicate((windowId) => windowId === pendingWindowId);
     // A window created for routed content is shown — and takes OS focus — before its content
     // arrives
-    setFocusedWindowId('7');
+    setFocusedWindowId(pendingWindowId);
 
-    expect(getTargetWindowId()).toBe('1');
+    expect(getTargetWindowId()).toBe(realWindowId);
   });
 
   test('the window becomes the routing target once its content has arrived', () => {
-    addWindow(fakeWindow(1));
-    markWindowReady('1');
-    setFocusedWindowId('1');
-    addWindow(fakeWindow(7));
-    markWindowReady('7');
+    const realWindowId = addWindow(fakeWindow(1));
+    markWindowReady(realWindowId);
+    setFocusedWindowId(realWindowId);
+    const pendingWindowId = addWindow(fakeWindow(7));
+    markWindowReady(pendingWindowId);
     let isPending = true;
-    setWindowPendingContentPredicate((windowId) => windowId === '7' && isPending);
-    setFocusedWindowId('7');
+    setWindowPendingContentPredicate((windowId) => windowId === pendingWindowId && isPending);
+    setFocusedWindowId(pendingWindowId);
 
     isPending = false;
 
-    expect(getTargetWindowId()).toBe('7');
+    expect(getTargetWindowId()).toBe(pendingWindowId);
   });
 });
