@@ -369,6 +369,32 @@ describe('window layout persistence service', () => {
     expect(service.isPrimaryWindow(14)).toBe(false);
   });
 
+  test('a window still waiting for its content does not answer for the app', async () => {
+    // The fallback exists so SOME live window carries the "ask before closing" duty when no marked
+    // entry survives. A window created to receive a routed open is not a candidate for that: it
+    // starts truly empty, and the operation that created it can still fail and take it away again —
+    // which is the same reason `countWindowsThatCouldBeTheLastOne` already excludes these windows
+    // from its own arithmetic. Letting one answer here makes its rollback refuse to close it, and
+    // it then stands blank with nothing to heal it.
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      11,
+    );
+    service.handleWindowRemoved(11, 'entry-stays');
+    service.handleWindowRemoved(12, 'entry-stays');
+
+    // The older of the two is the one waiting for content, so "oldest wins" and "pending loses"
+    // disagree here — which is what makes this pin the exclusion rather than the ordering
+    service.trackNewWindow(13);
+    service.markWindowPendingContent(13);
+    service.trackNewWindow(14);
+
+    expect(service.isPrimaryWindow(13)).toBe(false);
+    expect(service.isPrimaryWindow(14)).toBe(true);
+  });
+
   test('a main entry that leaves the structure takes isMain with it; the next load picks the first', async () => {
     // Main-ness is a property of the ENTRY, so an entry that leaves takes the flag with it rather
     // than handing it to a neighbour at write time. A structure left carrying no flag at all is the
