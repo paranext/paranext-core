@@ -7,6 +7,12 @@ import { WindowSummary } from '@shared/services/window.service-model';
 type SummarizableWindow = {
   id: number;
   getTitle: () => string;
+  /**
+   * Whether this window's renderer has ever reported itself ready, which is what says its title is
+   * its own. Before that, `getTitle()` answers with Electron's default rather than nothing, so the
+   * title cannot be told apart from a name the window actually chose.
+   */
+  wasEverReady: boolean;
 };
 
 /**
@@ -28,7 +34,7 @@ export function summarizeWindows(
 ): WindowSummary[] {
   return windows.map((window) => ({
     windowId: window.id,
-    label: window.getTitle(),
+    label: window.wasEverReady ? window.getTitle() : '',
     isMain: window.id === mainWindowId,
   }));
 }

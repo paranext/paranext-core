@@ -1,9 +1,22 @@
 import { describe, expect, test } from 'vitest';
 import { summarizeWindows } from '@main/window-summary.util';
 
-const window = (id: number, title: string) => ({ id, getTitle: () => title });
+const window = (id: number, title: string, wasEverReady = true) => ({
+  id,
+  getTitle: () => title,
+  wasEverReady,
+});
 
 describe('summarizeWindows', () => {
+  test('labels a window that has never been ready with nothing, not with the name Electron gave it', () => {
+    // Until a renderer publishes a page title, `getTitle()` answers with Electron's own default,
+    // which is a real non-empty string. Passing that through offers the user a window named after
+    // the framework; an empty label is what lets the caller supply a name of its own.
+    const summaries = summarizeWindows([window(1, 'Electron', false)], undefined);
+
+    expect(summaries).toEqual([{ windowId: 1, label: '', isMain: false }]);
+  });
+
   test('reports one entry per window, labelled by its title', () => {
     expect(summarizeWindows([window(1, 'MRK — wgPIDGIN'), window(2, 'Biblical Terms')], 1)).toEqual(
       [
