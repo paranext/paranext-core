@@ -204,6 +204,8 @@ export function ordinalCompare(
  *   `stringLength(string)`, the string is returned as is
  * @param padString The string to pad with, truncated to fit `targetLength`. Default is `" "`
  * @returns String with the appropriate padding at the end
+ * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
+ *   actually be added. This ceiling is lower than native's; see {@link MAX_PADDING_LENGTH}.
  */
 export function padEnd(string: string, targetLength: number, padString?: string): string {
   return new GraphemeString(string).padEnd(targetLength, padString).toString();
@@ -221,6 +223,8 @@ export function padEnd(string: string, targetLength: number, padString?: string)
  *   `stringLength(string)`, the string is returned as is
  * @param padString The string to pad with, truncated to fit `targetLength`. Default is `" "`
  * @returns String with the appropriate padding at the start
+ * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
+ *   actually be added. This ceiling is lower than native's; see {@link MAX_PADDING_LENGTH}.
  */
 export function padStart(string: string, targetLength: number, padString?: string): string {
   return new GraphemeString(string).padStart(targetLength, padString).toString();

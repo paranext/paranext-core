@@ -17,7 +17,7 @@ const MAX_UINT32 = 2 ** 32 - 1;
  * set where the cost is still negligible rather than where the engine finally gives out. Exceeding
  * it throws `RangeError`, as native does for its own limit.
  */
-const MAX_PADDING_LENGTH = 2 ** 20;
+export const MAX_PADDING_LENGTH = 2 ** 20;
 
 /**
  * The ECMAScript `ToIntegerOrInfinity` abstract operation: `NaN` becomes 0, infinities are
@@ -318,6 +318,8 @@ export class GraphemeString {
    * @param padString Text to repeat, truncated at a grapheme boundary to hit `targetLength`
    *   exactly. Defaults to a single space; an empty string adds no padding.
    * @returns A new padded instance, or this instance unchanged when no padding is needed.
+   * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
+   *   actually be added. An empty `padString` never pads, so it never throws.
    */
   padStart(targetLength: number, padString?: string): GraphemeString {
     const padding = this.buildPadding(targetLength, padString);
@@ -334,6 +336,8 @@ export class GraphemeString {
    * @param targetLength Desired length in graphemes.
    * @param padString Text to repeat. Defaults to a single space.
    * @returns A new padded instance, or this instance unchanged when no padding is needed.
+   * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
+   *   actually be added.
    */
   padEnd(targetLength: number, padString?: string): GraphemeString {
     const padding = this.buildPadding(targetLength, padString);
@@ -475,7 +479,7 @@ export class GraphemeString {
     const limit = splitLimit === undefined ? MAX_UINT32 : toUint32(splitLimit);
     if (limit === 0) return [];
     if (separator === undefined) return [this];
-    if (separator instanceof RegExp) return this.splitOnRegExp(separator, limit);
+    if (isRegExp(separator)) return this.splitOnRegExp(separator, limit);
     return this.splitOnString(rawNeedle(separator), limit);
   }
 
@@ -537,8 +541,12 @@ export class GraphemeString {
    */
   private splitOnRegExp(separator: RegExp, limit: number): (GraphemeString | undefined)[] {
     const { length } = this.graphemes;
-    // The spec matches stickily at each position in turn; scanning globally finds the same leftmost
-    // match far more cheaply, so a caller's `y` flag is dropped and `g` is ensured.
+    // The spec matches stickily at each position in turn; scanning globally is far cheaper, so a
+    // caller's `y` flag is dropped and `g` is ensured. The two are not equivalent, though: a `u`/`v`
+    // regex rounds a `lastIndex` that lands inside a surrogate pair back to the pair's start, so the
+    // scan can be handed a match that begins *before* where it resumed. Left unchecked that pins a
+    // CPU core, which is why every `searchOffset` assignment below forces forward progress instead
+    // of trusting `match.index`.
     const flags = separator.flags.replace('y', '');
     const scanner = new RegExp(separator.source, flags.includes('g') ? flags : `${flags}g`);
 
@@ -554,16 +562,20 @@ export class GraphemeString {
 
       const matchEndOffset = match.index + match[0].length;
       const matchStart = this.graphemeIndexAtOffset(match.index);
+      // Each `searchOffset` assignment below is floored at `searchOffset + 1` so the scan always
+      // moves forward. A match reported before where this pass resumed was already considered by an
+      // earlier pass, so nothing is skipped by refusing to go back to it.
+      const minimumNextOffset = searchOffset + 1;
       if (matchStart < 0 || !this.isBoundary(matchEndOffset)) {
         // Straddles a grapheme boundary, so it cannot split a grapheme-indexed string.
-        searchOffset = match.index + 1;
+        searchOffset = Math.max(match.index + 1, minimumNextOffset);
       } else {
         const matchEnd =
           matchEndOffset >= this.str.length ? length : this.graphemeIndexAtOffset(matchEndOffset);
         if (matchEnd === pieceStart) {
           // A zero-width match at the piece start would make no progress; skip one grapheme.
           if (matchStart + 1 >= length) break;
-          searchOffset = this.offsets()[matchStart + 1];
+          searchOffset = Math.max(this.offsets()[matchStart + 1], minimumNextOffset);
         } else {
           result.push(this.derive(pieceStart, matchStart));
           if (result.length === limit) return result;
@@ -573,7 +585,7 @@ export class GraphemeString {
             if (result.length === limit) return result;
           }
           pieceStart = matchEnd;
-          searchOffset = matchEndOffset;
+          searchOffset = Math.max(matchEndOffset, minimumNextOffset);
         }
       }
     }
@@ -605,17 +617,22 @@ export class GraphemeString {
   private buildPadding(targetLength: number, padString?: string): string[] {
     const maxLength = toLength(targetLength);
     if (maxLength <= this.graphemes.length) return [];
+    // A non-string filler is coerced exactly as native's `ToString` does, before it reaches stringz
+    // — which otherwise throws a bare "A string is expected as input" naming neither method nor
+    // argument.
+    const filler = padString === undefined ? ' ' : `${padString}`;
+    // The pad string is segmented here rather than taken pre-segmented: it is tiny and never a
+    // hot-loop culprit, so accepting a raw string is the ergonomic choice.
+    const fillGraphemes = stringzToArray(filler);
+    // An empty filler pads nothing at any target, as native's `StringPad` does. Answered before the
+    // ceiling below, which exists to bound an allocation this path never makes.
+    if (fillGraphemes.length === 0) return [];
     // Check before allocating, so an out-of-range target fails immediately instead of grinding
     // through — or dying on — a multi-million-element array first.
     if (maxLength > MAX_PADDING_LENGTH)
       throw new RangeError(
         `Invalid string length: padding to ${maxLength} graphemes exceeds the limit of ${MAX_PADDING_LENGTH}`,
       );
-    const filler = padString === undefined ? ' ' : padString;
-    // The pad string is segmented here rather than taken pre-segmented: it is tiny and never a
-    // hot-loop culprit, so accepting a raw string is the ergonomic choice.
-    const fillGraphemes = stringzToArray(filler);
-    if (fillGraphemes.length === 0) return [];
     const count = maxLength - this.graphemes.length;
     const padding: string[] = new Array(count);
     for (let i = 0; i < count; i++) padding[i] = fillGraphemes[i % fillGraphemes.length];
@@ -673,9 +690,22 @@ export class GraphemeString {
   }
 }
 
-/** Extract the raw string form of a search needle (string or GraphemeString). */
+/**
+ * Whether a value is a `RegExp`, including one built in another realm. Electron runs the renderer,
+ * the extension host, and each WebView iframe in separate realms, and this package is loaded into
+ * all of them, so `instanceof RegExp` would silently mistake a foreign regex for a literal string.
+ */
+function isRegExp(value: unknown): value is RegExp {
+  return Object.prototype.toString.call(value) === '[object RegExp]';
+}
+
+/**
+ * Extract the raw string form of a search needle (string or GraphemeString). A non-string is
+ * coerced exactly as native's `ToString` does — including throwing on a `Symbol` — so an untyped JS
+ * caller sees native's behavior rather than a `TypeError` about a missing method.
+ */
 function rawNeedle(searchString: string | GraphemeString): string {
-  return typeof searchString === 'string' ? searchString : searchString.toString();
+  return typeof searchString === 'string' ? searchString : `${searchString}`;
 }
 
 /**
