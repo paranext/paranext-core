@@ -2879,9 +2879,9 @@ step, no automation. Just a record.
   - **Signal:** a new local event, `onDidLoseConnection: PlatformEvent<undefined>`, added to
     `IRpcMethodRegistrar` (`src/shared/models/rpc.interface.ts:148`). It is real on `RpcClient`
     (`src/client/services/rpc-client.ts:68`, emitted at line 380:
-    `if (!isCleanCloseEvent(ev)) this.connectionLostEmitter.emit(undefined);`, guarded by the
-    existing `onWebSocketClose` early return on `ConnectionStatus.Disconnected` so it cannot
-    double-fire) and inert on `RpcWebSocketListener`
+    `if (!isCleanCloseEvent(ev)) this.connectionLostEmitter.emit(undefined);`, guarded by
+    `onWebSocketClose`'s own early return on `this.hasCompletedTeardown` (lines 368-369) so it
+    cannot double-fire) and inert on `RpcWebSocketListener`
     (`src/main/services/rpc-websocket-listener.ts:72`, documented as "never fires here" because
     only a process holding a client connection can lose one). This deliberately mirrors
     `onDidDisconnectClient`, which is the same seam in the opposite direction — real in main, inert
