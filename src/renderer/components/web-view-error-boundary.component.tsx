@@ -62,10 +62,19 @@ function reloadCrashedWebView(webViewId: string, webViewType: string) {
  * Covers throws during render and during commit (`useEffect` included) anywhere in the web view's
  * tree, which is the class of failure that blanks panes today. It does NOT cover errors in event
  * handlers, async callbacks or unhandled rejections — React error boundaries never see those — nor
- * a data provider that returns a `PlatformError` rather than throwing. It also cannot catch a throw
- * inside its own fallback: React routes that to the next boundary up, of which there is none, so
- * the pane would blank as before. That is why {@link WebViewCrashedView} stays small and falls back
- * to English rather than depending on localization resolving.
+ * a data provider that returns a `PlatformError` rather than throwing.
+ *
+ * It also cannot catch a throw inside its own fallback: React routes that to the next boundary up,
+ * of which there is none, so the pane would blank as before. That is why {@link WebViewCrashedView}
+ * stays small, why it falls back to English literals rather than depending on localization
+ * resolving, and why the one part of it that reaches a service carries a boundary of its own.
+ *
+ * A crashed subtree stays crashed until the web view is reloaded. Nothing resets it on a definition
+ * update, deliberately: the definition updates that reach a crashed pane are shared-state ones
+ * (`scrollGroupScrRef` on every navigation, `state`, bring-to-front), so resetting on them would
+ * re-run the same failing render on every verse move. The changes that genuinely mean "show
+ * something else here" — switching a tab's project, re-pointing a panel — replace or reload the web
+ * view, which builds a fresh iframe and so a fresh boundary anyway.
  */
 export class WebViewErrorBoundary extends Component<
   WebViewErrorBoundaryProps,

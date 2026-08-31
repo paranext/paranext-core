@@ -92,6 +92,29 @@ describe('WebViewErrorBoundary', () => {
     expect(screen.queryByText('recovered content')).not.toBeInTheDocument();
   });
 
+  it('keeps showing the crash view when the web view definition changes', () => {
+    // The generated iframe script re-runs `root.render` against this same boundary instance on
+    // every `onDidUpdateWebView`, and the updates that reach a crashed pane are shared-state ones -
+    // `scrollGroupScrRef` on every navigation, `state`, bring-to-front. Resetting on those would
+    // re-run the same failing render on every verse move. The updates that genuinely mean "show
+    // something else here" replace or reload the web view, which builds a fresh iframe and a fresh
+    // boundary with it.
+    const { rerender } = renderBoundary(<Boom />);
+
+    rerender(
+      <WebViewErrorBoundary
+        webViewId="web-view-id"
+        webViewType="testWebView"
+        webViewTitle="Editor - after navigation"
+      >
+        <div>recovered content</div>
+      </WebViewErrorBoundary>,
+    );
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByText('recovered content')).not.toBeInTheDocument();
+  });
+
   it('reloads the web view when the crash view asks it to', async () => {
     renderBoundary(<Boom />);
 

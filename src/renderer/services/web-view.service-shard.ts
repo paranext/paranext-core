@@ -2840,7 +2840,7 @@ export async function openOrReloadWebView(
                     React.createElement(
                       WebViewErrorBoundary,
                       {
-                        webViewId: '${webView.id}',
+                        webViewId: savedWebViewDefinition.id,
                         webViewType: savedWebViewDefinition.webViewType,
                         webViewTitle: savedWebViewDefinition.title,
                       },
