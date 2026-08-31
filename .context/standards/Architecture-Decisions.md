@@ -2234,28 +2234,41 @@ step, no automation. Just a record.
   consistent rule is easier to learn than native's per-method inconsistencies. It also planned to
   leave `string-util` in place marked `@deprecated`, migrating call sites over time.
 - **Decision:** **Match the native `String` API exactly**, including the parts that are arguably
-  inconsistent: `charAt`/`indexOf`/`lastIndexOf`/`startsWith`/`endsWith` clamp a negative position to
-  0 while only `at` counts from the end; `substring` swaps a backwards range while `slice` does not;
-  an empty needle is found at the clamped position; `split`'s limit discards the remainder past it
-  and is converted with `ToUint32`. Index arguments go through the spec's `ToIntegerOrInfinity`, so
-  fractional and `NaN` arguments behave as native does. The single substitution is the **unit**:
+  inconsistent: `charAt`/`indexOf`/`lastIndexOf`/`startsWith`/`endsWith` clamp a negative position
+  to 0 while only `at` counts from the end; `substring` swaps a backwards range while `slice` does
+  not; an empty needle is found at the clamped position; `split`'s limit discards the remainder past
+  it and is converted with `ToUint32`. Index arguments go through the spec's `ToIntegerOrInfinity`,
+  so fractional and `NaN` arguments behave as native does. The single substitution is the **unit**:
   grapheme cluster instead of UTF-16 code unit, with a search additionally required to begin and end
-  on cluster boundaries. **One behavioral exception is accepted deliberately:** `padStart`/`padEnd`
-  throw `RangeError` above 2**20 graphemes, where native only gives up at V8's string limit
-  (2**29 - 24). A `GraphemeString` holds one string object per grapheme rather than a compact
-  character buffer, so the native ceiling is unreachable — it exhausts the V8 heap first — and the
-  band below it is slow enough to be a trap (2**24 costs ~173ms and ~130MB). The limit is set where
-  the cost is still negligible (~9ms, ~9MB) rather than where the engine finally fails, on the
-  grounds that padding a string to a million graphemes is never a deliberate act. Two additions are kept (`normalize('none')`, `ordinalCompare`), plus
-  `toArray`. Range and padding methods still return `GraphemeString` rather than `string` so derived
-  values inherit the parent's segmentation — a type-level difference, not a behavioral one. The raw
-  text comes back from `toString()` rather than a `.string` getter, so an instance drops straight into
-  a template literal or `String(...)`; `length` is the sole remaining getter, kept as a property
-  precisely because that is what makes `gs.length` read like `str.length`. Then
-  **`string-util`'s functions become thin wrappers over the class** and the `@deprecated` tags are
-  removed: every existing caller gets the faster implementation with no source change, and the
-  documented advice becomes "doing more than one operation on the same string? construct one
-  `GraphemeString`", not "this function is going away".
+  on cluster boundaries. **Three behavioral exceptions are accepted deliberately.** First,
+  `padStart`/`padEnd` throw `RangeError` above 2**20 graphemes, where native only gives up at V8's
+  string limit (2**29 - 24). A `GraphemeString` holds one string object per grapheme rather than a
+  compact character buffer, so the native ceiling is unreachable — it exhausts the V8 heap first —
+  and the band below it is slow enough to be a trap (2**24 costs ~173ms and ~130MB). The limit is
+  set where the cost is still negligible (~9ms, ~9MB) rather than where the engine finally fails, on
+  the grounds that padding a string to a million graphemes is never a deliberate act. Second, a
+  padded result is *shorter* than `targetLength` when the pad string fuses with the text at the seam
+  — a filler ending in a combining mark, say. Padding to an exact cluster count and holding
+  `graphemes.join('') === str` with an honest segmentation cannot both be satisfied there, because
+  the fused text genuinely has fewer clusters; the segmentation wins, since every index, search, and
+  slice reads through it, and an instance whose array disagrees with its own text slices clusters in
+  half. Third, the free `split` in `string-util` substitutes `''` for a capture group that did not
+  participate, where native yields `undefined`. Native declares `string[]` and then puts `undefined`
+  in it, so `split(s, re).map((p) => p.trim())` type-checks and throws; a wrapper that advertises
+  `string[]` should deliver one. The cost is that a non-participating group reads the same as one
+  that matched empty — `GraphemeString.split` declares `(GraphemeString | undefined)[]` and keeps
+  the distinction for callers who need it. This also restores a guarantee the pre-wrapper
+  implementation had by accident: it built results from `substring` and could never emit
+  `undefined`, so no existing caller can depend on one. Two additions are kept (`normalize('none')`,
+  `ordinalCompare`), plus `toArray`. Range and padding methods still return `GraphemeString` rather
+  than `string` so derived values inherit the parent's segmentation — a type-level difference, not a
+  behavioral one. The raw text comes back from `toString()` rather than a `.string` getter, so an
+  instance drops straight into a template literal or `String(...)`; `length` is the sole remaining
+  getter, kept as a property precisely because that is what makes `gs.length` read like
+  `str.length`. Then **`string-util`'s functions become thin wrappers over the class** and the
+  `@deprecated` tags are removed: every existing caller gets the faster implementation with no
+  source change, and the documented advice becomes "doing more than one operation on the same
+  string? construct one `GraphemeString`", not "this function is going away".
 - **Alternatives:** **Uniform indexing** (the earlier choice) — rejected: the utility's whole
   premise is being a drop-in for `String` with a corrected unit, so every semantic departure is a
   trap for a reader who knows JavaScript, and the departures are invisible at the call site.
@@ -2273,17 +2286,33 @@ step, no automation. Just a record.
 - **Consequences:** Native is now the test oracle: for ASCII input one grapheme is exactly one code
   unit, so the suite compares `GraphemeString` against `String.prototype` across a matrix of
   edge-case arguments rather than hand-written expectations — which is what surfaced native's
-  `ToUint32` limit conversion and the `NaN`-means-`+Infinity` rule in `lastIndexOf`. The wrapper swap
-  moves the old API's behavior to native as a side effect, which fixes five long-standing bugs
-  (`endsWith` ignoring its position, `padStart`/`padEnd` overshooting with a multi-grapheme pad,
-  `slice(1, 0)` returning most of the string, `split` throwing on a limit above the match count,
-  `lastIndexOf('')` off by one) and changes one behavior in a data-losing direction: `split` with a
-  limit now discards the remainder instead of keeping it as a final piece. No in-repo call site
-  passes a `split` limit, and a scan for the other changed shapes (negative index arguments, an
-  `indexOf` result reused as a position, multi-grapheme pads) found no site whose behavior changes —
-  `stringz` had clamped negative positions to 0 just as native does. External extension authors are
-  the residual exposure. The previously-flagged hazard of a `-1` sentinel being read as
-  "count from the end" is gone, because negative positions now clamp.
+  `ToUint32` limit conversion and the `NaN`-means-`+Infinity` rule in `lastIndexOf`. Note the limit
+  of that oracle: ASCII makes every grapheme index equal its UTF-16 offset, so the harness cannot
+  see the grapheme-boundary layer at all — deleting the boundary rule outright leaves it green, and
+  only the hand-written cluster tests object. The harness also always builds from the constructor,
+  so instances derived by `slice`/`substring`/`split`/padding are never the subject under test. Both
+  gaps hid real defects. The wrapper swap moves the old API's behavior to native as a side effect,
+  which fixes six long-standing bugs: `endsWith` ignoring its position; `padStart`/`padEnd`
+  overshooting with a multi-grapheme pad; `slice(1, 0)` returning most of the string; `split`
+  throwing on a limit above the match count; `lastIndexOf('')` off by one; and a string separator
+  compiled via `new RegExp(sep, 'g')`, so `split('a.b', '.')` treated the separator as a
+  metacharacter. It also ends an `indexOf('a', 'a', -Infinity)` infinite loop the old
+  `stringz`-backed scan had. Beyond those, it changes behavior for inputs that were always valid,
+  and these reach external callers with no compile-time signal: `split` with a limit now discards
+  the remainder instead of keeping it as a final piece (the one data-losing change); a
+  regular-expression separator now interleaves its capture groups and honors flags other than `g`,
+  where the old code recompiled the source and discarded them; `substring` swaps a backwards range
+  instead of returning `''`; `endsWith(s, '')` is `true` rather than `false`; and `at`, `charAt`,
+  and `codePointAt` route fractional and `NaN` indexes through `ToIntegerOrInfinity`, so `charAt(s,
+  NaN)` returns element 0 where it used to return `''`. No in-repo call site passes a `split` limit
+  or a regular-expression separator, and a scan for the other changed shapes (negative index
+  arguments, an `indexOf` result reused as a position, multi-grapheme pads) found no site whose
+  behavior changes — `stringz` had clamped negative positions to 0 just as native does. External
+  extension authors are the residual exposure, which is why the full list belongs somewhere they
+  will read rather than only here. The previously-flagged hazard of a `-1` sentinel being read as
+  "count from the end" is gone for every *search position*, which now clamps to 0 — but not for
+  `substring`'s end argument, where `-1` clamps to 0 and the backwards range is then swapped, so
+  `substring(s, 5, -1)` returns text from the front of the string instead of `''`.
 - **Source:** PT-2626 grapheme-string-util work. The decision rests on a benchmark investigation by
   Matthew Getgen comparing the old per-call `stringz` segmentation against a segment-once
   `GraphemeString`, across the operations `string-util` exposes and over string lengths from tens to
