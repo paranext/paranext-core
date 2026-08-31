@@ -543,11 +543,8 @@ test.describe('window close rule', () => {
     // Had the reset fired for this window too, the signal the race below waits on would have been
     // replaced out from under the still-open question, and this quit would hang until
     // `quitAppAndWaitForExit`'s own 120 s timeout instead of exiting.
-    const exit = await quitAppAndWaitForExit(electronApp);
-    logStep(`exited with code ${exit.code} signal ${exit.signal}`);
-    expect(exit.signal).toBeUndefined();
-    expect(exit.code).toBe(0);
-
-    expectNoFaultsWhileRunning(output);
+    // The quit-aware epilogue, not the still-running sweep: this test ends by quitting, so the
+    // control for its sweep is the quit line rather than a renderer's first line
+    await quitAndExpectCleanExit(electronApp, output, logStep, 'quit under the open question');
   });
 });
