@@ -34,6 +34,8 @@ interface FootnoteCallerDropdownProps {
   updateCaller: (newCallerType: FootnoteCallerType, newCustomCaller: string) => void;
   /** Localized strings from the parent component */
   localizedStrings: FootnoteEditorLocalizedStrings;
+  /** Returns the caret and keyboard focus to the note being edited. See `onCloseAutoFocus` below. */
+  focusNoteText: () => void;
 }
 
 const renderCallerButtonContent = (
@@ -69,7 +71,12 @@ export function FootnoteCallerDropdown({
   customCaller,
   updateCaller,
   localizedStrings,
+  focusNoteText,
 }: FootnoteCallerDropdownProps) {
+  // Whether this visit actually committed a caller, read on close to decide who gets focus. Set
+  // where `updateCaller` is called below, so it tracks a real change rather than merely opening the
+  // menu or moving the highlight around inside it.
+  const committedCaller = useRef(false);
   // The ref must start with being null to be passed as an element ref
   // eslint-disable-next-line no-null/no-null
   const customCallerInputRef = useRef<HTMLInputElement>(null);
@@ -122,8 +129,10 @@ export function FootnoteCallerDropdown({
       if (pendingCallerType !== 'custom' || pendingCustomCaller) {
         // One call for one choice: this is a save, and the note is replaced in the popover's
         // editor on the way through, so a close must never produce two of them.
-        if (pendingCallerType !== callerType || pendingCustomCaller !== customCaller)
+        if (pendingCallerType !== callerType || pendingCustomCaller !== customCaller) {
+          committedCaller.current = true;
           updateCaller(pendingCallerType, pendingCustomCaller);
+        }
       } else {
         setSelectedCallerType(callerType);
         setNewCustomCaller(customCaller);
@@ -181,6 +190,16 @@ export function FootnoteCallerDropdown({
       </TooltipProvider>
       <DropdownMenuContent
         style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
+        // Mirrors the note-type dropdown: after a committed caller, claim Radix's restore and send
+        // focus to the note text, since the caller is applied by replacing the note and the user is
+        // mid-edit. After a dismissal nothing changed, so Radix's own restore to this trigger is
+        // both what the user expects and what WCAG 2.4.3 asks for.
+        onCloseAutoFocus={(event) => {
+          if (!committedCaller.current) return;
+          committedCaller.current = false;
+          event.preventDefault();
+          focusNoteText();
+        }}
         onClick={() => {
           if (isCustomCallerInputFocused.current) isCustomCallerInputFocused.current = false;
         }}

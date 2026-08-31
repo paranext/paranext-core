@@ -19,6 +19,51 @@ import { buildLocalizedStrings, scrRef, sentinelNoteOp } from './footnote-editor
 // Re-export the shared fixtures so existing importers of the harness keep working.
 export * from './footnote-editor.fixtures';
 
+/** The popover's menus observe their triggers; jsdom ships no ResizeObserver. */
+class NoopResizeObserver implements ResizeObserver {
+  private readonly targets = new Set<Element>();
+
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+
+  disconnect() {
+    this.targets.clear();
+  }
+}
+
+/**
+ * Installs the browser APIs the popover's Radix/cmdk menus and the focused editor reach for and
+ * jsdom does not implement. Idempotent, and never replaces an API the environment already has.
+ *
+ * These suites assert caret position, focus and content — never layout — so no-ops are enough. Call
+ * it at module scope in any suite that mounts the popover.
+ */
+export function installPopoverJsdomStubs() {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = NoopResizeObserver;
+  }
+  if (typeof Element.prototype.scrollTo !== 'function') Element.prototype.scrollTo = () => {};
+  if (typeof Element.prototype.scrollIntoView !== 'function') {
+    Element.prototype.scrollIntoView = () => {};
+  }
+  // The markers menu anchors to the caret's bounding box, and a focused editor measures its caret.
+  if (typeof Range.prototype.getBoundingClientRect !== 'function') {
+    Range.prototype.getBoundingClientRect = () => new DOMRect();
+  }
+}
+
+/** The non-editable marker mode the scripture editor uses outside Standard view. */
+export const visibleView: EditorOptions['view'] = {
+  markerMode: 'visible',
+  hasSpacing: true,
+  isFormattedFont: true,
+};
+
 /**
  * Mounts the REAL `FootnoteEditor` (no mocked `Editorial`) for the given view, waits for its
  * deferred init, and returns the render utils, the popover's `.editor-input` element, and the
@@ -84,6 +129,22 @@ export async function renderPopoverAndWaitForInit(
  * type into, rather than the note itself, which is where a bare `focus` leaves it.
  */
 export const CARET_IN_NOTE_TEXT = ['text', 'char', 'note', 'para', 'root'];
+
+/**
+ * True when the caret sits anywhere inside the note node.
+ *
+ * Tolerant of there being no selection at all (answering `false`), unlike {@link caretAncestry},
+ * which throws — some callers are asking exactly whether a caret made it into the note.
+ */
+export function caretIsInsideNote(lexical: LexicalEditor): boolean {
+  return lexical.getEditorState().read(() => {
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection)) return false;
+    for (let node: LexicalNode | null = selection.anchor.getNode(); node; node = node.getParent())
+      if (node.getType() === 'note') return true;
+    return false;
+  });
+}
 
 /** The type of the caret's node and of each of its ancestors, innermost first. */
 export function caretAncestry(lexical: LexicalEditor): string[] {

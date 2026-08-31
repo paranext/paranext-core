@@ -347,7 +347,11 @@ export default function FootnoteEditor({
 
   /**
    * Puts the caret back in the note's text and focuses the editor, so the user can carry on typing
-   * after a control in the popover has taken focus. Always prefer this to a bare `focus`.
+   * after a control in the popover has taken focus.
+   *
+   * Use this wherever focus is handed back from a control that may have outlived the selection — a
+   * dropdown that replaced the note. A bare `focus` is right only where the selection is known to
+   * still be live, since with none it resolves to the end of the document.
    */
   const focusNoteText = useCallback(() => {
     restoreSelectionIfLost();
@@ -519,9 +523,13 @@ export default function FootnoteEditor({
    * editor's selection — leaving the caret on the note itself, outside the character runs, where
    * the next keystroke joins no text.
    *
-   * The selection read here is the reliable one: it is taken while the caret is still live and
-   * still in the note's text. The focus-out capture {@link focusNoteText} falls back to is only as
-   * good as wherever focus happened to leave from, which can itself be the note level.
+   * What the restore buys is the right NODE, not the right offset: the popover re-focuses its
+   * editor after the change, and that focus resolves to the end of whatever run the caret is in. It
+   * is still worth reading, because it is taken while the selection is live and inside the note's
+   * text — the focus-out capture {@link focusNoteText} otherwise falls back to is only as good as
+   * wherever focus happened to leave from, which can be the note level. Deleting this line drops
+   * the caret out of the character runs entirely; `footnote-editor.note-type-change.test.tsx` fails
+   * if it goes.
    */
   const replaceNoteKeepingCaret = useCallback(
     (noteOp: DeltaOpInsertNoteEmbed) => {
@@ -1108,6 +1116,7 @@ export default function FootnoteEditor({
               customCaller={customCaller}
               updateCaller={handleCallerChange}
               localizedStrings={localizedStrings}
+              focusNoteText={focusNoteText}
             />
           </div>
           <div className="tw:flex tw:w-full tw:justify-end">
