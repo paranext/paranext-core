@@ -122,7 +122,7 @@ const clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEven
 let unsubscribeFromClientDisconnects: Unsubscriber | undefined;
 const connectionLostEmitter = new PlatformEventEmitter<undefined>();
 /** Stops relaying the RPC handler's lost connections, once there is a handler to stop relaying */
-let unsubscribeFromConnectionLost: (() => boolean) | undefined;
+let unsubscribeFromConnectionLost: Unsubscriber | undefined;
 
 /**
  * Event that fires when a process disconnects from the network, carrying the names of the methods
