@@ -362,9 +362,29 @@ Verification run:
 | `tsc` (platform-bible-react)                  | clean                                                                                                                                                   |
 | `npm run typecheck` (repo)                    | 1 error, environmental: missing gitignored `release/app/buildInfo.json`                                                                                 |
 
+Packaged build:
+
+`npm run package` succeeded (exit 0), producing `release/build/win-unpacked`, the NSIS installer,
+and the portable exe. Two levels of check against that build:
+
+- **The change is in the shipped bundle.** Grepping `resources/app.asar` finds
+  `command-list-scroll-cue`, both new localization keys, and the string `Search languages`. A
+  sentinel string that should not be there returns no match, so the grep discriminates rather than
+  matching everything.
+- **The dialog renders the localized strings.** Launched the packaged exe with
+  `--remote-debugging-port=9223`, opened a project, clicked **Pick model text…** to open the
+  resource picker, and opened the language filter. Its search box reads `Search languages…` and its
+  empty state reads `No languages found` — the two strings that were hardcoded English before.
+
+What the packaged build could **not** exercise: the DBL catalogue fetch fails in this environment
+(`Background DBL resources fetch failed after 10 attempts`), so the picker holds zero resources and
+therefore zero languages. Ordering, the per-language counts, the installed stars, and the scroll cue
+have no data to act on here. Those are covered instead by the chromium browser-mode story tests,
+which assert against real layout — but a reviewer with DBL access should still open the filter once
+and confirm it by eye.
+
 Remaining:
 
-- **Packaged-build verification** (the ticket's third DoD item) — not yet done.
 - `npm run build:pbr` exits non-zero on a **pre-existing** typedoc warning,
   `Failed to resolve link to "Z_INDEX_TOOLTIP" in comment for Z_INDEX_ABOVE_DOCK`
   (`components/z-index.ts`, untouched here — the `{@link}` on line 11 precedes the export on
@@ -380,6 +400,7 @@ guessed.
 
 ## 15. Definition of Done (from the ticket)
 
-- [ ] Language picker works in the resource picker
-- [ ] Regression test added
-- [ ] Packaged-build verified
+- [x] Language picker works in the resource picker
+- [x] Regression test added
+- [x] Packaged-build verified — shipped-bundle grep plus the two localized strings rendering in the
+      running packaged app; see the caveat above about the empty DBL catalogue
