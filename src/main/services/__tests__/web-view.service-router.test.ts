@@ -28,7 +28,9 @@ const mocks = vi.hoisted(() => {
     // Ids are minted from a numeric counter (stringified) in this slice, so a numeric comparison
     // recovers the creation-order ranking the real function reads from the tracked list. A vi.fn so
     // a test can make it answer `undefined`, which is what the real one does for an untracked id.
-    getWindowCreationRank: vi.fn((windowId: string) => Number(windowId)),
+    getWindowCreationRank: vi.fn<(windowId: string) => number | undefined>((windowId: string) =>
+      Number(windowId),
+    ),
     getReadyWindowIds: vi.fn(),
     getUnreachableWindowIds: vi.fn(),
     getAbandonedWindowIds: vi.fn(),
