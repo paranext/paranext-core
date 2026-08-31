@@ -219,7 +219,7 @@ class MenuDataDataProviderEngine
     try {
       this.mainMenu = menuData.mainMenu;
       this.unlocalizedMainMenu = unlocalizedMainMenu.mainMenu;
-      this.defaultTabMenu = menuData.defaultWebViewTabMenu;
+      this.defaultTabMenu = menuData.defaultWebViewTabMenu ?? { groups: {}, items: [] };
       const { webViewMenus } = menuData;
 
       Object.entries(webViewMenus).forEach(([webViewType, value]) => {
