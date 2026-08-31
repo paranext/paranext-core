@@ -260,18 +260,22 @@ export function slice(string: string, indexStart: number, indexEnd?: number): st
  * @param splitLimit Maximum number of substrings to return. As in native, anything past the limit
  *   is discarded, and the limit is converted with `ToUint32` — so `-1` means "no limit" while `NaN`
  *   and `Infinity` yield an empty array
- * @returns An array of strings, split at each point where separator occurs in the starting string
+ * @returns An array of strings, split at each point where separator occurs in the starting string.
+ *   A regular expression's capture groups are interleaved into the result, as in native. Every
+ *   entry is a string: a capture group that did not participate in its match is `''` here, where
+ *   native yields `undefined`. That makes it indistinguishable from a group that matched the empty
+ *   string — use {@link GraphemeString.split} where the difference matters
  */
 export function split(string: string, separator: string | RegExp, splitLimit?: number): string[] {
   const graphemeString = new GraphemeString(string);
   if (typeof separator === 'string')
     return graphemeString.split(separator, splitLimit).map((part) => part.toString());
-  // A capture group that did not participate in the match yields `undefined`, exactly as native
-  // `String.prototype.split` does at runtime — and, as in native's own type declaration, that is not
-  // reflected in the `string[]` return type. Widening this signature would break every existing
-  // caller's types for a case only a capturing separator reaches.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return graphemeString.split(separator, splitLimit).map((part) => part?.toString()) as string[];
+  // Native puts `undefined` in the result for a capture group that did not participate, under a
+  // `string[]` declaration that does not admit it — so `split(s, re).map((p) => p.trim())` type
+  // checks and then throws. This function keeps the promise its signature makes and substitutes
+  // `''`. The cost is that a non-participating group reads the same as one that matched empty;
+  // `GraphemeString.split` declares `(GraphemeString | undefined)[]` and reports the difference.
+  return graphemeString.split(separator, splitLimit).map((part) => part?.toString() ?? '');
 }
 
 /**
