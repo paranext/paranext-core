@@ -90,6 +90,7 @@ import {
   isWindowClosing as isWindowMarkedClosing,
   isWindowTracked,
   isWindowReady,
+  wasWindowEverReady,
   markWindowAbandoned,
   markWindowClosing,
   markWindowNotReady,
@@ -704,8 +705,11 @@ async function main() {
     // Deliberately no `title` here, and nothing in main may call `setTitle` on a window either.
     // Each renderer names its own window by publishing a page title, which Electron carries to the
     // native title; that is what the OS switcher shows and what other windows read when they offer
-    // this one as a move target. Setting a title from this process pins it, the page title stops
-    // reaching it, and the move-to-window submenu starts naming windows something they are not.
+    // this one as a move target. A title set from this process does not hold — the renderer's page
+    // title replaces it as soon as one is published, and keeps replacing it — so it can only govern
+    // the moment before the renderer loads, and naming a window for that moment alone means naming
+    // it something it never chose. Until then Electron answers `getTitle()` with its own default,
+    // which is why `summarizeWindows` reads a window's readiness rather than trusting its title.
     const newWindow = new BrowserWindow({
       show: true,
       ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
@@ -1768,10 +1772,15 @@ async function main() {
       // on its way out, and one whose renderer is dead with no reload coming can never receive
       // anything. Picking either sends the user's action nowhere. A window that has not finished
       // starting is deliberately still offered — it is on screen, the user can see it, and work
-      // sent to it lands once it is ready.
-      const availableWindows = getWindows().filter(
-        (window) => !isWindowMarkedClosing(window.id) && !isWindowAbandoned(window.id),
-      );
+      // sent to it lands once it is ready. Its name is the one thing it cannot supply yet, which is
+      // why its readiness travels with it.
+      const availableWindows = getWindows()
+        .filter((window) => !isWindowMarkedClosing(window.id) && !isWindowAbandoned(window.id))
+        .map((window) => ({
+          id: window.id,
+          getTitle: () => window.getTitle(),
+          wasEverReady: wasWindowEverReady(window.id),
+        }));
       return summarizeWindows(availableWindows, getMainWindowId());
     },
     {
