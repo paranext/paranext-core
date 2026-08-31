@@ -1,7 +1,17 @@
 import { vi } from 'vitest';
+import { JSONRPCErrorCode } from 'json-rpc-2.0';
 import { testingSettingService } from '@extension-host/services/settings.service-host';
+import { getJsonRpcRequestErrorMessagePrefix } from '@shared/data/rpc.model';
 import { LocalizationSelectors } from '@shared/services/localization.service-model';
+import { CATEGORY_EXTENSION_SETTING_VALIDATOR } from '@shared/services/settings.service-model';
 import { SettingNames } from 'papi-shared-types';
+
+const mocks = vi.hoisted(() => ({ networkRequest: vi.fn() }));
+
+vi.mock('@shared/services/network.service', async () => ({
+  ...(await vi.importActual('@shared/services/network.service')),
+  request: mocks.networkRequest,
+}));
 
 const MOCK_SETTINGS_DATA = {
   'platform.interfaceLanguage': ['fre'],
@@ -131,4 +141,60 @@ test('Set requestTimeout throws', async () => {
   await expect(result).rejects.toThrow(
     "Error setting value for key 'platform.requestTimeout': validation failed",
   );
+});
+
+describe('validateSetting for a setting with no core validator', () => {
+  // Not in the mocked `coreSettingsValidators`, so validation goes out over the network
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const KEY = 'settingsTest.needsValidator' as SettingNames;
+  const REQUEST_TYPE = `${CATEGORY_EXTENSION_SETTING_VALIDATOR}:${KEY}`;
+
+  /** What `doRequest` throws for a JSON-RPC error response with the given code */
+  function requestError(code: number, message: string): Error {
+    return new Error(`${getJsonRpcRequestErrorMessagePrefix(code)}: ${message}`);
+  }
+
+  test('lets the change through when no validator is registered', async () => {
+    mocks.networkRequest.mockRejectedValueOnce(
+      requestError(JSONRPCErrorCode.MethodNotFound, `'${REQUEST_TYPE}' not found`),
+    );
+
+    await expect(settingsProviderEngine.validateSetting(KEY, 'new', 'old')).resolves.toBe(true);
+  });
+
+  test('lets the change through when the other producer of a method-not-found response answers', async () => {
+    mocks.networkRequest.mockRejectedValueOnce(
+      requestError(JSONRPCErrorCode.MethodNotFound, `No handler found for ${REQUEST_TYPE}`),
+    );
+
+    await expect(settingsProviderEngine.validateSetting(KEY, 'new', 'old')).resolves.toBe(true);
+  });
+
+  // "No validator registered" has to be told apart from "a validator ran and failed" by the
+  // JSON-RPC error code, not by the words in the message: a validator's own error is free to
+  // contain the request type and "not found", and reading that as "no validator" writes the invalid
+  // value the validator just rejected.
+  test('propagates an error from a validator that ran, even when its message reads like a missing validator', async () => {
+    mocks.networkRequest.mockRejectedValueOnce(
+      requestError(
+        JSONRPCErrorCode.InternalError,
+        `Validator '${REQUEST_TYPE}' not found a matching option for "new"`,
+      ),
+    );
+
+    await expect(settingsProviderEngine.validateSetting(KEY, 'new', 'old')).rejects.toThrow(
+      /not found a matching option/,
+    );
+  });
+
+  test('propagates a method-not-found response for a different request type', async () => {
+    mocks.networkRequest.mockRejectedValueOnce(
+      requestError(
+        JSONRPCErrorCode.MethodNotFound,
+        `'${CATEGORY_EXTENSION_SETTING_VALIDATOR}:someOther.setting' not found`,
+      ),
+    );
+
+    await expect(settingsProviderEngine.validateSetting(KEY, 'new', 'old')).rejects.toThrow();
+  });
 });

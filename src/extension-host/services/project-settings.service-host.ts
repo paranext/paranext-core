@@ -8,9 +8,10 @@ import {
   projectSettingsServiceNetworkObjectName,
   projectSettingsServiceObjectToProxy,
 } from '@shared/services/project-settings.service-model';
+import { isJsonRpcMethodNotFoundError } from '@shared/data/rpc.model';
 import { serializeRequestType } from '@shared/utils/util';
 import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
-import { getErrorMessage, isLocalizeKey, isString } from 'platform-bible-utils';
+import { isLocalizeKey, isString } from 'platform-bible-utils';
 import { LocalizedProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
 import {
   projectSettingsDocumentCombiner,
@@ -52,9 +53,10 @@ async function isValid<ProjectSettingName extends ProjectSettingNames>(
   try {
     return await networkService.request(requestType, newValue, currentValue, allChanges ?? {});
   } catch (error) {
-    // If there is no validator just let the change go through
-    const missingValidatorMsg = `'${requestType}' not found`;
-    if (`${getErrorMessage(error)}`.includes(missingValidatorMsg)) return true;
+    // If there is no validator just let the change go through. Only a method-not-found response
+    // means "no validator registered" — an error from a validator that ran and rejected must
+    // propagate, or an invalid value gets written.
+    if (isJsonRpcMethodNotFoundError(error, requestType)) return true;
     throw error;
   }
 }
