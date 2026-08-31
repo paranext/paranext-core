@@ -1,3 +1,4 @@
+import vm from 'node:vm';
 import { describe, it, expect } from 'vitest';
 import { GraphemeString, testingGraphemeStringUtils } from './grapheme-string';
 
@@ -463,6 +464,67 @@ describe('graphemes are the unit, not UTF-16 code units', () => {
     // A match that does not begin and end on grapheme boundaries is skipped instead.
     expect(family.split(/\u{1F468}/u).map((part) => part?.toString())).toEqual([FAMILY]);
     expect(FAMILY.split(/\u{1F468}/u)).toEqual(['a', '\u200d👩‍👧‍👦b']);
+  });
+});
+
+describe('hostile and cross-realm arguments', () => {
+  it('a `u`-flagged separator that snaps back into a surrogate pair still terminates', () => {
+    // A `u`/`v` regex rounds a `lastIndex` landing inside a surrogate pair back to the pair's
+    // start, so a scan that resumes at `match.index + 1` can be handed the same match forever.
+    expect(new GraphemeString('👍🏽').split(/./u).map((part) => part?.toString())).toEqual(['👍🏽']);
+    expect(new GraphemeString('👍🏽').split(/./v).map((part) => part?.toString())).toEqual(['👍🏽']);
+    // `a` and `b` split; every code point inside the cluster straddles a boundary and is skipped,
+    // so the cluster survives whole. Native cuts it into eight empty pieces.
+    expect(new GraphemeString(FAMILY).split(/./u).map((part) => part?.toString())).toEqual([
+      '',
+      '👨‍👩‍👧‍👦',
+      '',
+    ]);
+  });
+
+  it('recognizes a RegExp built in another realm', () => {
+    // Electron runs the renderer, extension host, and each WebView iframe in separate realms, so a
+    // separator can reach this package with a different `RegExp` intrinsic than `instanceof` knows.
+    const foreignRegExp: RegExp = vm.runInNewContext('/,/g');
+    expect(foreignRegExp instanceof RegExp).toEqual(false);
+    expect(
+      new GraphemeString('a,b,c').split(foreignRegExp).map((part) => part?.toString()),
+    ).toEqual(['a', 'b', 'c']);
+  });
+
+  // TypeScript callers cannot reach these, but this package is published to untyped extension code
+  // that can. `JSON.parse` is how such a value realistically arrives, and it types as `any` without
+  // a cast, so these read the way the hazard actually looks.
+  const untyped = (json: string): string => JSON.parse(json);
+
+  it('coerces a non-string needle the way native does', () => {
+    const nullNeedle = untyped('null');
+    expect(new GraphemeString('anullb').indexOf(nullNeedle)).toEqual('anullb'.indexOf(nullNeedle));
+    expect(new GraphemeString('anullb').includes(nullNeedle)).toEqual(true);
+    expect(new GraphemeString('a1b').lastIndexOf(untyped('1'))).toEqual(1);
+    expect(new GraphemeString('null').startsWith(nullNeedle)).toEqual(true);
+    expect(new GraphemeString('anull').endsWith(nullNeedle)).toEqual(true);
+    expect(new GraphemeString('anullb').split(nullNeedle).map(String)).toEqual(['a', 'b']);
+  });
+
+  it('coerces a non-string pad string the way native does', () => {
+    const nullPad = untyped('null');
+    const numericPad = untyped('5');
+    expect(new GraphemeString('abc').padStart(8, nullPad).toString()).toEqual(
+      'abc'.padStart(8, nullPad),
+    );
+    expect(new GraphemeString('abc').padEnd(8, numericPad).toString()).toEqual(
+      'abc'.padEnd(8, numericPad),
+    );
+  });
+
+  it('an empty pad string is answered before the padding ceiling is enforced', () => {
+    // Native `StringPad` returns the string untouched when the filler is empty, whatever the
+    // target. Nothing is allocated on that path, so the ceiling has nothing to protect against.
+    expect(new GraphemeString('abc').padStart(2 ** 21, '').toString()).toEqual('abc');
+    expect(new GraphemeString('abc').padEnd(2 ** 21, '').toString()).toEqual('abc');
+    // The ceiling still fires for a target that would actually allocate.
+    expect(() => new GraphemeString('abc').padStart(2 ** 21)).toThrow(RangeError);
   });
 });
 
