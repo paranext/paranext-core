@@ -14,15 +14,12 @@
  */
 import { act } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { $getRoot, $isElementNode, LexicalEditor, LexicalNode } from 'lexical';
 import {
-  $getRoot,
-  $getSelection,
-  $isElementNode,
-  $isRangeSelection,
-  LexicalEditor,
-  LexicalNode,
-} from 'lexical';
-import { editableView, renderPopoverAndWaitForInit } from './footnote-editor.test-harness';
+  caretIsInsideNote,
+  editableView,
+  renderPopoverAndWaitForInit,
+} from './footnote-editor.test-harness';
 
 // jsdom doesn't implement `getBoundingClientRect` on `Range`; moving the caret can make
 // Lexical's post-commit scroll-into-view read a Range rect. Stub it (a zero rect nothing
@@ -95,17 +92,6 @@ function noteCharMarkers(lexical: LexicalEditor): string[] {
   });
 }
 
-/** True when the Lexical selection anchor is inside the note node. */
-function lexicalCaretInsideNote(lexical: LexicalEditor): boolean {
-  return lexical.read(() => {
-    const selection = $getSelection();
-    if (!$isRangeSelection(selection)) return false;
-    for (let node: LexicalNode | null = selection.anchor.getNode(); node; node = node.getParent())
-      if (node.getType() === 'note') return true;
-    return false;
-  });
-}
-
 describe('FootnoteEditor Enter guard (popover Enter must not split the wrapper)', () => {
   it('claims Enter when the DOM caret is outside the note and routes the caret into it', async () => {
     const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView);
@@ -122,7 +108,7 @@ describe('FootnoteEditor Enter guard (popover Enter must not split the wrapper)'
     // wrapper start) and the caret has been routed into the note for the next keystroke.
     expect(rootChildCount(lexical)).toBe(childCountBefore);
     expect(noteCharMarkers(lexical)).not.toContain('fp');
-    expect(lexicalCaretInsideNote(lexical)).toBe(true);
+    expect(caretIsInsideNote(lexical)).toBe(true);
   });
 
   it('leaves Enter alone when the caret is inside the note (the library \\fp path)', async () => {

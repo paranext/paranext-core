@@ -16,6 +16,7 @@ import {
 import { FunctionSquare, SquareSigma, SquareX } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import { Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
+import { useRef } from 'react';
 import { FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 
 interface FootnoteTypeDropdownProps {
@@ -79,6 +80,16 @@ export function FootnoteTypeDropdown({
   isTypeSwitchable,
   focusNoteText,
 }: FootnoteTypeDropdownProps) {
+  // Whether this opening of the menu actually changed the note type, read on close to decide who
+  // gets focus. A ref rather than state: nothing renders from it, and the close handler has to see
+  // the choice made moments earlier in the same batch.
+  const choseNoteType = useRef(false);
+
+  const chooseNoteType = (newNoteType: string) => {
+    choseNoteType.current = true;
+    handleNoteTypeChange(newNoteType);
+  };
+
   return (
     <DropdownMenu>
       <TooltipProvider>
@@ -97,12 +108,15 @@ export function FootnoteTypeDropdown({
       </TooltipProvider>
       <DropdownMenuContent
         style={{ zIndex: Z_INDEX_ABOVE_POPOVER }}
-        // Radix restores focus to the trigger when the menu closes, which lands the user on a
-        // button in the middle of an editor popover: the note type changes, the caret is in the
-        // right place, and typing still goes nowhere. The note text is the only place worth
-        // returning to here, so claim the restore and hand focus there instead — for a dismissal
-        // as much as for a choice.
+        // After a CHOICE, claim Radix's restore and send focus to the note text: the user asked for
+        // an edit, and Radix would otherwise leave them on a button in the middle of an editor
+        // popover — the note type changed, the caret is in the right place, and typing goes nowhere.
+        // After a DISMISSAL nothing changed, so Radix's own restore is what the user expects (and
+        // what WCAG 2.4.3 asks for): they are returned to the control they opened, still in the
+        // toolbar, one Tab from its neighbours.
         onCloseAutoFocus={(event) => {
+          if (!choseNoteType.current) return;
+          choseNoteType.current = false;
           event.preventDefault();
           focusNoteText();
         }}
@@ -114,7 +128,7 @@ export function FootnoteTypeDropdown({
         <DropdownMenuCheckboxItem
           disabled={noteType !== 'x' && !isTypeSwitchable}
           checked={noteType === 'x'}
-          onCheckedChange={() => handleNoteTypeChange('x')}
+          onCheckedChange={() => chooseNoteType('x')}
           className="tw:gap-2"
         >
           <SquareX />
@@ -123,7 +137,7 @@ export function FootnoteTypeDropdown({
         <DropdownMenuCheckboxItem
           disabled={noteType === 'x' && !isTypeSwitchable}
           checked={noteType === 'f'}
-          onCheckedChange={() => handleNoteTypeChange('f')}
+          onCheckedChange={() => chooseNoteType('f')}
           className="tw:gap-2"
         >
           <FunctionSquare />
@@ -132,7 +146,7 @@ export function FootnoteTypeDropdown({
         <DropdownMenuCheckboxItem
           disabled={noteType === 'x' && !isTypeSwitchable}
           checked={noteType === 'fe'}
-          onCheckedChange={() => handleNoteTypeChange('fe')}
+          onCheckedChange={() => chooseNoteType('fe')}
           className="tw:gap-2"
         >
           <SquareSigma />
