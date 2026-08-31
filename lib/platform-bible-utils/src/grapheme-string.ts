@@ -79,6 +79,20 @@ export function toUint32(value: number): number {
 }
 
 /**
+ * UTF-16 offsets per instance, built on first use by {@link GraphemeString.offsets}.
+ *
+ * Held beside the instances rather than on them for two reasons. A caller told the class is
+ * immutable may reasonably `Object.freeze` an instance, and a cache stored as an own property makes
+ * that a crash on the next search — but only if nothing warmed it first, so the failure is
+ * load-order dependent. And an own property would make merely _reading_ an instance change its
+ * enumerable shape, so `Object.keys`, structural equality, and `JSON.stringify` would all report
+ * something different before and after a search.
+ *
+ * Weak, so an entry dies with its instance.
+ */
+const offsetsByInstance = new WeakMap<GraphemeString, number[]>();
+
+/**
  * A string pre-segmented into Unicode grapheme clusters. Segmentation happens once in the
  * constructor (the expensive step); every other operation reuses it. Derived values
  * (substring/slice/etc.) reuse the parent grapheme slice and never re-segment.
@@ -112,7 +126,7 @@ export class GraphemeString {
   /**
    * The raw string. Used for `toString`, the native scans behind search, and regex split. Not
    * `readonly` only because {@link fromSegmented} assigns it; treat it as immutable after
-   * construction, since {@link offsetsCache} is derived from it.
+   * construction, since the cached offsets behind {@link offsets} are derived from it.
    */
   private str: string;
 
@@ -123,9 +137,6 @@ export class GraphemeString {
    * text.
    */
   private graphemes: string[];
-
-  /** Lazily built cache behind {@link offsets}. */
-  private offsetsCache?: number[];
 
   /**
    * Segment `string` into grapheme clusters once, up front. Every operation on the result reuses
@@ -621,19 +632,21 @@ export class GraphemeString {
    *
    * PERF: built on first use rather than in the constructor. Only the search and range methods need
    * it; `length`, the point accessors, and the padding methods do not, and those are both the
-   * cheapest and the most frequent operations — building it eagerly taxes them for nothing.
+   * cheapest and the most frequent operations — building it eagerly taxes them for nothing. That
+   * matters most for derived instances: `split` alone produces one per piece, and most are never
+   * indexed into. Cached in {@link offsetsByInstance} rather than on the instance.
    */
   private offsets(): number[] {
-    if (!this.offsetsCache) {
-      const offsets: number[] = new Array(this.graphemes.length);
-      let offset = 0;
-      for (let i = 0; i < this.graphemes.length; i++) {
-        offsets[i] = offset;
-        offset += this.graphemes[i].length;
-      }
-      this.offsetsCache = offsets;
+    const cached = offsetsByInstance.get(this);
+    if (cached) return cached;
+    const offsets: number[] = new Array(this.graphemes.length);
+    let offset = 0;
+    for (let i = 0; i < this.graphemes.length; i++) {
+      offsets[i] = offset;
+      offset += this.graphemes[i].length;
     }
-    return this.offsetsCache;
+    offsetsByInstance.set(this, offsets);
+    return offsets;
   }
 
   /** Build the grapheme array a padding method should prepend/append, empty when none is needed. */
