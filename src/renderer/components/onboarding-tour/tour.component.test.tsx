@@ -250,6 +250,7 @@ describe('Tour', () => {
     // reflowing as its web view loads, or the toolbar config area reflowing as its async children
     // resolve. Without the ResizeObserver the cutout and card keep the stale geometry.
     const observed: Element[] = [];
+    let disconnectCount = 0;
     let triggerResize = () => {};
     // A constructor returning an object literal rather than a class: the stub's members close over
     // the test's `observed` array rather than instance state, and `new` yields the returned object.
@@ -263,16 +264,24 @@ describe('Tour', () => {
         observe: (element: Element) => {
           observed.push(element);
         },
-        disconnect: () => {},
+        disconnect: () => {
+          disconnectCount += 1;
+        },
         unobserve: () => {},
       };
     }) as unknown as typeof ResizeObserver;
     let stub = stubRectFor('a', { left: 100, top: 50, width: 80, height: 40 });
     try {
-      renderWithTargets([{ target: '#a', title: 'Resize Step', description: 'x' }], ['a']);
+      const { unmount } = renderWithTargets(
+        [{ target: '#a', title: 'Resize Step', description: 'x' }],
+        ['a'],
+      );
       expect(getCardLeft('Resize Step')).toBe(100);
-      // The observer must watch the target itself, not just the root.
+      // Both are observed for different reasons: the target catches its own box changing, the root
+      // catches a reflow that moves the target without resizing it (font or theme swap, zoom).
+      // Asserting only the target would let either half be dropped silently.
       expect(observed).toContain(document.getElementById('a'));
+      expect(observed).toContain(document.documentElement);
 
       stub.restore();
       stub = stubRectFor('a', { left: 400, top: 50, width: 80, height: 40 });
@@ -285,6 +294,12 @@ describe('Tour', () => {
       });
 
       expect(getCardLeft('Resize Step')).toBe(400);
+
+      // Cleanup must disconnect, or every step change leaks an observer that keeps firing against
+      // a stale closure for the rest of the session.
+      expect(disconnectCount).toBe(0);
+      unmount();
+      expect(disconnectCount).toBeGreaterThan(0);
     } finally {
       stub.restore();
       globalThis.ResizeObserver = priorResizeObserver;
