@@ -393,7 +393,7 @@ test.describe('window layout persistence', () => {
       profileDir = userDataDir;
       const output1 = captureAppOutput(ctx.electronApp);
       const [mainPage1] = await waitForAppPages(ctx.electronApp, 1, 90_000);
-      await waitForAppReady(mainPage1, 180_000);
+      await waitForAppReady(mainPage1, { timeout: 180_000 });
       const window1Id = getWindowIdOfPage(mainPage1);
       logStep(`phase 1: window ${window1Id} ready`);
 
@@ -503,7 +503,7 @@ test.describe('window layout persistence', () => {
       const [mainPage2, secondPage2] = pagesPhase2;
       const mainId2 = getWindowIdOfPage(mainPage2);
       const secondId2 = getWindowIdOfPage(secondPage2);
-      await waitForAppReady(mainPage2, 180_000);
+      await waitForAppReady(mainPage2, { timeout: 180_000 });
       await waitForRendererRegistered(secondId2, 120_000);
       logStep(`phase 2: windows ${mainId2} and ${secondId2} restored`);
 
@@ -573,7 +573,7 @@ test.describe('window layout persistence', () => {
       const pagesPhase3 = await waitForAppPages(ctx.electronApp, 1, 180_000);
       const mainPage3 = pagesPhase3[0];
       const mainId3 = getWindowIdOfPage(mainPage3);
-      await waitForAppReady(mainPage3, 180_000);
+      await waitForAppReady(mainPage3, { timeout: 180_000 });
       await expect(homeTabTitle(mainPage3, mainId3)).toBeAttached({ timeout: 60_000 });
       logStep(`phase 3: window ${mainId3} restored with its Home tab`);
 
