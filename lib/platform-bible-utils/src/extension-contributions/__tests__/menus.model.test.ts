@@ -124,12 +124,25 @@ describe('menus.model — tab menu channel', () => {
     expect(compileValidator()(doc)).toBe(true);
   });
 
-  it('requires the platform default tab menu', () => {
-    // The positive control for the two cases above: without this, dropping the key from `required`
-    // would leave them passing and prove nothing about the schema knowing the channel exists
+  it('accepts a document that contributes no platform default tab menu', () => {
+    // The channel is optional on both surfaces, matching the per-web-view `tabMenu` beside it, so
+    // that adding it did not break anything already constructing a whole menu document. A document
+    // without it simply contributes no platform tab items.
     const { defaultWebViewTabMenu, ...docWithoutTabMenu } = makeDoc();
     expect(defaultWebViewTabMenu).toBeDefined();
-    expect(compileValidator()(docWithoutTabMenu)).toBe(false);
+    expect(compileValidator()(docWithoutTabMenu)).toBe(true);
+  });
+
+  it('still rejects an ill-formed platform default tab menu', () => {
+    // The positive control for the case above: optional must not mean unchecked, or dropping the
+    // key from `required` would leave the schema knowing nothing about the channel at all
+    const doc = makeDoc();
+    // A group order has to be a number; a string is the cheapest way to be ill-formed here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (doc.defaultWebViewTabMenu as unknown as { groups: Record<string, unknown> }).groups = {
+      'platform.tabWindow': { order: 'first' },
+    };
+    expect(compileValidator()(doc)).toBe(false);
   });
 
   it('rejects a multi-column menu in the tab menu, which renders as one column', () => {
