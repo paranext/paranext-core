@@ -66,8 +66,11 @@ function toLength(value: number): number {
  * The ECMAScript `ToUint32` abstract operation, used for `split`'s limit. Note the consequences
  * this has in native: a limit of `-1` becomes 4294967295 (effectively no limit), while `NaN` and
  * `Infinity` both become 0 (an empty result).
+ *
+ * Exported for `string-util`'s `split`, which resolves the same limit without going through this
+ * class. Not part of the package's public surface — `index.ts` does not re-export it.
  */
-function toUint32(value: number): number {
+export function toUint32(value: number): number {
   // `>>> 0` IS the ToUint32 operation. Spelling it out arithmetically (modulo 2**32, with sign and
   // non-finite handling) is longer and easier to get wrong than the single idiom the spec itself is
   // defined in terms of.
@@ -467,6 +470,9 @@ export class GraphemeString {
    *
    * The grapheme substitutions: an empty separator splits into graphemes rather than UTF-16 units,
    * and a separator only matches where it begins and ends on grapheme boundaries.
+   *
+   * PERF: an empty separator wraps every grapheme in its own instance. When the text is all that is
+   * wanted, {@link toArray} produces the same clusters as plain strings and skips that entirely.
    *
    * Entries are `undefined` exactly where native produces `undefined` — a capture group that did
    * not participate in the match.
