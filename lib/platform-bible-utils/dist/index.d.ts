@@ -500,25 +500,32 @@ export declare class GraphemeString {
 	 */
 	substring(begin?: number, end?: number): GraphemeString;
 	/**
-	 * Mirrors `String.prototype.padStart`, padding by whole graphemes so the result is exactly
-	 * `targetLength` graphemes long. Throws `RangeError` above {@link MAX_PADDING_LENGTH} — a lower
-	 * ceiling than native's, and the class's one deliberate departure from native behavior.
+	 * Mirrors `String.prototype.padStart`, padding by whole graphemes so the result is `targetLength`
+	 * graphemes long. Throws `RangeError` above {@link MAX_PADDING_LENGTH} — a lower ceiling than
+	 * native's, and the class's one deliberate departure from native behavior.
+	 *
+	 * The result is shorter than `targetLength` when the pad string fuses with the text at the seam —
+	 * a filler ending in a combining mark, for instance. The two cannot both hold, and an honest
+	 * segmentation wins: every index, search, and slice on the result depends on it.
 	 *
 	 * @param targetLength Desired length in graphemes. No padding is added when it is at or below the
 	 *   current length.
-	 * @param padString Text to repeat, truncated at a grapheme boundary to hit `targetLength`
-	 *   exactly. Defaults to a single space; an empty string adds no padding.
-	 * @returns A new padded instance, or this instance unchanged when no padding is needed.
+	 * @param padString Text to repeat, truncated at a grapheme boundary. Defaults to a single space;
+	 *   an empty string adds no padding.
+	 * @returns A new padded instance, or this instance unchanged when no padding is needed. Shorter
+	 *   than `targetLength` when the padding fuses with the text at the seam.
 	 * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
 	 *   actually be added. An empty `padString` never pads, so it never throws.
 	 */
 	padStart(targetLength: number, padString?: string): GraphemeString;
 	/**
-	 * Mirrors `String.prototype.padEnd`. See {@link padStart}, including the `RangeError` ceiling.
+	 * Mirrors `String.prototype.padEnd`. See {@link padStart}, including the `RangeError` ceiling and
+	 * the shorter-than-`targetLength` result when the padding fuses with the text at the seam.
 	 *
 	 * @param targetLength Desired length in graphemes.
 	 * @param padString Text to repeat. Defaults to a single space.
-	 * @returns A new padded instance, or this instance unchanged when no padding is needed.
+	 * @returns A new padded instance, or this instance unchanged when no padding is needed. Shorter
+	 *   than `targetLength` when the padding fuses with the text at the seam.
 	 * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
 	 *   actually be added.
 	 */

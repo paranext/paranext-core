@@ -354,6 +354,11 @@ describe('native parity: split', () => {
 
 // #region Grapheme awareness — where the unit deliberately differs from native
 
+/** Honest cluster count of `text`, computed from a fresh instance rather than a derived one. */
+function stringLengthOf(text: string): number {
+  return new GraphemeString(text).length;
+}
+
 const FAMILY = 'a👨‍👩‍👧‍👦b';
 const OFFICER = '👮🏽‍♀️';
 const MIXED = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
@@ -525,6 +530,48 @@ describe('hostile and cross-realm arguments', () => {
     expect(new GraphemeString('abc').padEnd(2 ** 21, '').toString()).toEqual('abc');
     // The ceiling still fires for a target that would actually allocate.
     expect(() => new GraphemeString('abc').padStart(2 ** 21)).toThrow(RangeError);
+  });
+});
+
+describe('padding keeps its segmentation honest', () => {
+  // A pad string can fuse with the text at the seam. The class's foundational invariant is that
+  // `graphemes` is an honest segmentation of `str` — every index, search, and slice depends on it —
+  // so a fused seam yields a SHORTER result rather than a dishonest one.
+  it('a pad string that combines with the text yields a shorter, honest result', () => {
+    const padded = new GraphemeString('\u0301b').padStart(3);
+    expect(padded.toString()).toEqual(' \u0301b');
+    // The pad space and the combining acute are one cluster, so 3 was never reachable honestly.
+    expect(padded.length).toEqual(2);
+    expect(padded.length).toEqual(stringLengthOf(padded.toString()));
+  });
+
+  it('a padded instance never slices a cluster in half', () => {
+    const padded = new GraphemeString('a').padEnd(3, '\u0301');
+    expect(padded.toString()).toEqual('a\u0301\u0301');
+    expect(padded.length).toEqual(1);
+    // Before, this returned 'a\u0301' — half a cluster, which the class doc promises never happens.
+    expect(padded.slice(0, 2).toString()).toEqual('a\u0301\u0301');
+  });
+
+  it('a non-combining pad still hits the target exactly', () => {
+    expect(new GraphemeString('abc').padEnd(5, OFFICER).length).toEqual(5);
+    expect(new GraphemeString('abc').padStart(5, OFFICER).length).toEqual(5);
+    expect(new GraphemeString('ab').padStart(6, 'xy').length).toEqual(6);
+  });
+
+  it('every derived instance reports the length its own text segments to', () => {
+    const fixtures = ['\u0301b', 'a', 'ab', FAMILY, MIXED];
+    const pads = [undefined, ' ', '\u0301', 'xy', OFFICER];
+    fixtures.forEach((fixture) => {
+      pads.forEach((pad) => {
+        [0, 1, 3, 6].forEach((target) => {
+          const start = new GraphemeString(fixture).padStart(target, pad);
+          expect(start.length).toEqual(stringLengthOf(start.toString()));
+          const end = new GraphemeString(fixture).padEnd(target, pad);
+          expect(end.length).toEqual(stringLengthOf(end.toString()));
+        });
+      });
+    });
   });
 });
 
