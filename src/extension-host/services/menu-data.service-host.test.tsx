@@ -621,3 +621,71 @@ describe('Tab menu', () => {
     expect(commandsIn(result.tabMenu)).toContain('platform.moveWebViewToNewWindow');
   });
 });
+
+describe('Platform tab menu order reservation', () => {
+  /**
+   * Orders an extension is most likely to reach for first. The platform has to stay clear of these,
+   * not merely differ from them.
+   */
+  const ORDERS_AN_EXTENSION_WOULD_PICK_FIRST = 10;
+
+  test('an extension picking the first order for its tab group keeps its menus', async () => {
+    // The guarantee the reservation exists for, exercised rather than inferred: fold the shipped
+    // platform document together with an extension that takes `order: 1` — the obvious first
+    // choice — and the extension's menus have to survive it.
+    const { MenuDocumentCombiner } = await import('@shared/utils/menu-document-combiner');
+    const { default: shippedMenus } = await import('@extension-host/data/menu.data.json');
+    const combiner = new MenuDocumentCombiner(shippedMenus);
+
+    expect(() =>
+      combiner.addOrUpdateContribution('firstOrder', {
+        webViewMenus: {
+          'firstOrder.webView': {
+            includeDefaults: false,
+            tabMenu: {
+              groups: { 'firstOrder.tabGroup': { order: 1 } },
+              items: [
+                {
+                  label: '%rewind%',
+                  group: 'firstOrder.tabGroup',
+                  order: 1,
+                  command: 'firstOrder.rewind',
+                },
+              ],
+            },
+          },
+        },
+      }),
+    ).not.toThrow();
+
+    // The positive control: the contribution really is in the output, so this is a fold that
+    // happened rather than one that was dropped without throwing
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const output = combiner.rawOutput as unknown as {
+      webViewMenus: Record<string, { tabMenu?: { items: { command?: string }[] } }>;
+    };
+    expect(
+      output.webViewMenus['firstOrder.webView'].tabMenu?.items.map((item) => item.command),
+    ).toEqual(expect.arrayContaining(['firstOrder.rewind', 'platform.floatTab']));
+  });
+
+  test('the shipped tab menu leaves the low orders free for extensions', async () => {
+    // The tab menu folds into every web view's menu whether or not the web view asked for defaults,
+    // so an extension cannot opt out of sharing this order space. A collision makes
+    // `checkMenuGroupsForDuplicateOrdering` throw, the combiner drop the whole contribution, and
+    // `contribution.service` swallow it with a warn — so an extension that picks `order: 1` for its
+    // own tab group loses its entire menus.json, main menu and context menus included, with nothing
+    // on screen to explain it. Reserving high orders here is what keeps that from happening.
+    const { default: shippedMenus } = await import('@extension-host/data/menu.data.json');
+    const tabMenu = shippedMenus.defaultWebViewTabMenu;
+
+    const groupOrders = Object.values(tabMenu.groups).map((group) => group.order);
+    const itemOrders = tabMenu.items.map((item) => item.order);
+
+    expect(groupOrders.length).toBeGreaterThan(0);
+    expect(itemOrders.length).toBeGreaterThan(0);
+    expect(Math.min(...groupOrders, ...itemOrders)).toBeGreaterThan(
+      ORDERS_AN_EXTENSION_WOULD_PICK_FIRST,
+    );
+  });
+});
