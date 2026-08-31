@@ -74,16 +74,23 @@ export function ConnectionLostOverlayPresentational({
         />
         <div
           role="alert"
-          className="tw:absolute tw:inset-x-0 tw:flex tw:items-center tw:gap-3 tw:border-y tw:border-destructive/40 tw:bg-destructive/10 tw:px-3 tw:py-2 tw:text-sm tw:text-destructive"
+          // The banner sits directly over the editor's own toolbar row, so `tw:bg-destructive/10`
+          // alone would let that row show through and collide with the banner's text. `tw:bg-background`
+          // here gives the tint an opaque ground to composite over, so the banner reads as solid while
+          // still carrying the destructive tone on top of it — rather than reaching for a fully
+          // saturated `tw:bg-destructive`, which would flatten the text contrast this tint is tuned for.
+          className="tw:absolute tw:inset-x-0 tw:bg-background"
           style={{ top: isPowerMode ? POWER_MODE_TOOLBAR_HEIGHT : SIMPLE_MODE_TOOLBAR_HEIGHT }}
         >
-          <AlertTriangle aria-hidden="true" className="tw:shrink-0" />
-          <span className="tw:font-medium">{title}</span>
-          <span className="tw:min-w-0">{message}</span>
-          <div className="tw:grow" />
-          <Button ref={reloadRef} variant="outline" size="sm" onClick={onReload}>
-            {reloadLabel}
-          </Button>
+          <div className="tw:flex tw:items-center tw:gap-3 tw:border-y tw:border-destructive/40 tw:bg-destructive/10 tw:px-3 tw:py-2 tw:text-sm tw:text-destructive">
+            <AlertTriangle aria-hidden="true" className="tw:shrink-0" />
+            <span className="tw:font-medium">{title}</span>
+            <span className="tw:min-w-0">{message}</span>
+            <div className="tw:grow" />
+            <Button ref={reloadRef} variant="outline" size="sm" onClick={onReload}>
+              {reloadLabel}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
