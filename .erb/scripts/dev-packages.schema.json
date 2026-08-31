@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "DevPackagesConfig",
-  "description": "Configuration for development repositories to link into this repo via yalc. The DevRepo and DevPackage types in dev-package-utils.ts mirror this schema — if you change one, update the other.",
+  "description": "Configuration for development repositories staged into `dev-packages/staging/` for `file:` consumption by this repo. The DevRepo and DevPackage types in stage-dev-packages.ts mirror this schema — if you change one, update the other.",
   "type": "object",
   "required": ["repos"],
   "additionalProperties": false,
@@ -38,7 +38,7 @@
         },
         "devPackages": {
           "type": "array",
-          "description": "The packages within this repo to publish and link.",
+          "description": "The packages within this repo to build and stage.",
           "items": {
             "$ref": "#/definitions/DevPackage"
           }
@@ -47,17 +47,21 @@
     },
     "DevPackage": {
       "type": "object",
-      "description": "A package within a dev repo that can be published locally via yalc and linked into this repo.",
-      "required": ["devpubTarget", "repoLinkScript"],
+      "description": "A package within a dev repo that gets staged for `file:` consumption by this repo.",
+      "required": ["nxProject", "packagePath", "stagingFolder"],
       "additionalProperties": false,
       "properties": {
-        "devpubTarget": {
+        "nxProject": {
           "type": "string",
-          "description": "The nx project name passed to `nx devpub <target>` to publish this package."
+          "description": "The nx project name, used to build the package and roll up its type declarations."
         },
-        "repoLinkScript": {
+        "packagePath": {
           "type": "string",
-          "description": "The npm script prefix in this repo used to link/unlink the package, e.g. `editor` maps to `editor:link` and `editor:unlink`."
+          "description": "The package's path within its repo, e.g. `packages/platform`."
+        },
+        "stagingFolder": {
+          "type": "string",
+          "description": "The folder name under `dev-packages/staging/` to stage into. The `file:` specifiers in this repo's `package.json` files point at this name, so changing it means changing them too."
         }
       }
     }
