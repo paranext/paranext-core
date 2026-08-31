@@ -319,7 +319,11 @@ async function findOwner(
   // Asked only once nothing was found: a window that holds the view settles the search, and a move
   // registered for a view some window still holds has not reached its capture yet.
   if (!owner && isMatchedByMoveInFlight(matcher)) {
-    logger.warn(
+    // `debug`, not `warn`, for the reason the mid-move fold-in gives: a move overlapping a search is
+    // an expected, handled condition on a path any caller can reach at any time, so an ordinary tab
+    // drag would otherwise raise an operator-facing warning about nothing. The level says how loudly
+    // to report it; the refusal below is what answers the caller.
+    logger.debug(
       `${describeMatcher(matcher)} is between windows on a move, so no window holds it right now; ${operation} is told the question could not be answered rather than that nothing has it`,
     );
     hadServiceErrors = true;
@@ -1500,10 +1504,15 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   // by id rather than appended unconditionally: the target may already have adopted while the move
   // record is still in the set (a late-landing adopt only clears it once its own probe confirms), and
   // counting that view twice would be as wrong as missing it.
+  //
+  // Matched against every id the move tracks, not just the captured one: a window scopes web view
+  // ids to itself when it loads a layout, so the window holding this view may answer with the
+  // spelling the move started from rather than the stripped one the target was handed. One match
+  // means this view is already in the read under a name of its own.
   const definitionIds = new Set(definitions.map((definition) => definition.id));
   const foldedInDefinitions: SavedWebViewDefinition[] = [];
   webViewMovesInFlight.forEach((move) => {
-    if (definitionIds.has(move.capturedDefinition.id)) return;
+    if (move.webViewIds.some((webViewId) => definitionIds.has(webViewId))) return;
     definitionIds.add(move.capturedDefinition.id);
     foldedInDefinitions.push(move.capturedDefinition);
   });
