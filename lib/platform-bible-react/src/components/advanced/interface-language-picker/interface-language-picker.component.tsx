@@ -37,6 +37,33 @@ export type InterfaceLanguagePickerProps = {
   id?: string;
 };
 
+/**
+ * Folds text for searching: decomposes accented characters and drops their combining marks so an
+ * unaccented query (`francais`) still matches an accented name (`Français`). Only the Latin
+ * combining-accent block (U+0300–U+036F) is stripped, so marks that carry meaning in other scripts
+ * (Devanagari matras, Khmer vowel signs) survive untouched.
+ */
+function foldForSearch(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+type LanguageEntry = {
+  tag: string;
+  info: LanguageInfo;
+  /** Folded names this entry matches on. Never displayed. */
+  keywords: string[];
+};
+
+/** Entries with at least one keyword containing the query. An empty query matches everything. */
+function filterEntries(entries: LanguageEntry[], query: string): LanguageEntry[] {
+  if (!query) return entries;
+  const folded = foldForSearch(query);
+  return entries.filter(({ keywords }) => keywords.some((keyword) => keyword.includes(folded)));
+}
+
 /** English first, then by autonym (locale-aware). */
 function sortLanguages(entries: [string, LanguageInfo][]): [string, LanguageInfo][] {
   return [...entries].sort(([aTag, aInfo], [bTag, bInfo]) => {
@@ -69,22 +96,28 @@ export function InterfaceLanguagePicker({
   // Command root div so arrow-key / Enter navigation continues to work.
   const [search, setSearch] = useState('');
 
-  // Precompute the search keywords per language here so they aren't rebuilt on every render.
+  // cmdk's keyboard highlight, controlled so it can follow our filtering. cmdk keeps highlighting
+  // whatever it last selected, and with `shouldFilter={false}` it doesn't know we narrowed the
+  // list, so after typing the highlight can sit on a row that is no longer rendered and Enter has
+  // nothing to choose. Starts on the current language so Enter without typing re-picks it.
+  const [highlightedTag, setHighlightedTag] = useState(value);
+
+  // Precompute the folded search keywords per language here so they aren't rebuilt on every render.
   const entries = useMemo(
     () =>
       sortLanguages(Object.entries(languages)).map(([tag, info]) => ({
         tag,
         info,
-        keywords: [info.autonym, ...Object.values(info.uiNames ?? {}), ...(info.otherNames ?? [])],
+        keywords: [
+          info.autonym,
+          ...Object.values(info.uiNames ?? {}),
+          ...(info.otherNames ?? []),
+        ].map(foldForSearch),
       })),
     [languages],
   );
 
-  const visibleEntries = useMemo(() => {
-    if (!search) return entries;
-    const lower = search.toLowerCase();
-    return entries.filter(({ keywords }) => keywords.some((k) => k.toLowerCase().includes(lower)));
-  }, [entries, search]);
+  const visibleEntries = useMemo(() => filterEntries(entries, search), [entries, search]);
 
   const showSearch = entries.length > 1;
   const searchPlaceholder = localizedStrings['%firstRun_language_search_placeholder%'] ?? '';
@@ -92,7 +125,13 @@ export function InterfaceLanguagePicker({
   const selectedLabel = localizedStrings['%firstRun_language_selected%'] ?? '';
 
   return (
-    <Command id={id} className={cn('pr-twp', className)} shouldFilter={false}>
+    <Command
+      id={id}
+      className={cn('pr-twp', className)}
+      shouldFilter={false}
+      value={highlightedTag}
+      onValueChange={setHighlightedTag}
+    >
       {showSearch && (
         // Plain <input> (not CommandPrimitive.Input) so cmdk cannot update this field after
         // item selection. Arrow-key and Enter events from here bubble to the Command root div
@@ -105,7 +144,12 @@ export function InterfaceLanguagePicker({
               placeholder={searchPlaceholder}
               aria-label={searchPlaceholder}
               value={search}
-              onChange={(e) => setSearch(e.currentTarget.value)}
+              onChange={(e) => {
+                const nextSearch = e.currentTarget.value;
+                setSearch(nextSearch);
+                // Move the highlight to the top match so Enter chooses it without arrowing first.
+                setHighlightedTag(filterEntries(entries, nextSearch)[0]?.tag ?? '');
+              }}
               className="tw:w-full tw:text-sm tw:outline-hidden tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
             />
             <InputGroupAddon>

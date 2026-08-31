@@ -130,4 +130,93 @@ describe('InterfaceLanguagePicker', () => {
     );
     expect(screen.queryByPlaceholderText('Search languages')).not.toBeInTheDocument();
   });
+  test('shows the no-results message when nothing matches', async () => {
+    render(
+      <InterfaceLanguagePicker
+        languages={LANGUAGES}
+        value="en"
+        onChange={() => {}}
+        localizedStrings={STRINGS}
+      />,
+    );
+    await userEvent.type(screen.getByPlaceholderText('Search languages'), 'zzzz');
+    expect(await screen.findByText('No matching languages')).toBeInTheDocument();
+    expect(screen.queryByText('English')).not.toBeInTheDocument();
+  });
+
+  test('keeps the typed query after choosing a filtered match (cmdk v1 regression)', async () => {
+    const onChange = vi.fn();
+    render(
+      <InterfaceLanguagePicker
+        languages={LANGUAGES}
+        value="en"
+        onChange={onChange}
+        localizedStrings={STRINGS}
+      />,
+    );
+    const search = screen.getByPlaceholderText('Search languages');
+    await userEvent.type(search, 'Spa');
+    await userEvent.click(screen.getByText('Español'));
+    expect(onChange).toHaveBeenCalledWith('es');
+    // cmdk v1 would overwrite the search box with the chosen item's `value` prop ('es'), so the
+    // query the user typed must still be there afterwards.
+    expect(search).toHaveValue('Spa');
+  });
+
+  test('Enter chooses the first match after typing', async () => {
+    const onChange = vi.fn();
+    render(
+      <InterfaceLanguagePicker
+        languages={LANGUAGES}
+        value="en"
+        onChange={onChange}
+        localizedStrings={STRINGS}
+      />,
+    );
+    await userEvent.type(screen.getByPlaceholderText('Search languages'), 'Spa{Enter}');
+    expect(onChange).toHaveBeenCalledWith('es');
+  });
+
+  test('search ignores accents, so an unaccented query still matches', async () => {
+    render(
+      <InterfaceLanguagePicker
+        languages={LANGUAGES}
+        value="en"
+        onChange={() => {}}
+        localizedStrings={STRINGS}
+      />,
+    );
+    await userEvent.type(screen.getByPlaceholderText('Search languages'), 'francais');
+    expect(screen.getByText('Français')).toBeInTheDocument();
+    expect(screen.queryByText('English')).not.toBeInTheDocument();
+  });
+
+  test('search still matches when the query carries the accents', async () => {
+    render(
+      <InterfaceLanguagePicker
+        languages={LANGUAGES}
+        value="en"
+        onChange={() => {}}
+        localizedStrings={STRINGS}
+      />,
+    );
+    await userEvent.type(screen.getByPlaceholderText('Search languages'), 'Español');
+    expect(screen.getByText('Español')).toBeInTheDocument();
+    expect(screen.queryByText('Français')).not.toBeInTheDocument();
+  });
+  test('arrow keys move the highlight through the filtered list', async () => {
+    const onChange = vi.fn();
+    render(
+      <InterfaceLanguagePicker
+        languages={LANGUAGES}
+        value="en"
+        onChange={onChange}
+        localizedStrings={STRINGS}
+      />,
+    );
+    // 'n' matches English, Español (Spanish), Français (French), and Tok Pisin (Pidgin).
+    await userEvent.type(screen.getByPlaceholderText('Search languages'), 'n');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    expect(onChange).toHaveBeenCalledWith('es');
+  });
 });
