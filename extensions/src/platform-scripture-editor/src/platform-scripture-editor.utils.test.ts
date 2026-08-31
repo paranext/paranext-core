@@ -2325,14 +2325,13 @@ describe('startDefaultProjectPicker', () => {
 
 // #region syncOnProjectSwitch
 
-function createSyncMockPapi() {
-  const mockSendCommand = vi.fn().mockResolvedValue(undefined);
-  const mockWarn = vi.fn();
-  const mockInfo = vi.fn();
-  // `syncOnProjectSwitch` reads two settings. Defaults are Simple mode with consent given, so the
-  // other assertions exercise the syncing behavior; a test overrides one to close the gate, or
-  // stores an `Error` to make that key's read reject. An unstubbed key throws so a newly added
-  // read cannot pass unnoticed.
+/**
+ * Key-aware `papi.settings.get` stub seeded with Simple mode and first-run consent given - the
+ * defaults that let assertions exercise syncing behavior rather than the consent gate. A test
+ * overrides a key to close the gate, or stores an `Error` under it to make that key's read reject.
+ * An unstubbed key throws so a newly added read cannot pass unnoticed.
+ */
+function createSettingsStub() {
   const settings: Record<string, unknown> = {
     'platform.interfaceMode': 'simple',
     'platform.firstRunComplete': true,
@@ -2346,6 +2345,14 @@ function createSyncMockPapi() {
     if (value instanceof Error) throw value;
     return value;
   });
+  return { mockGetSetting, setSetting };
+}
+
+function createSyncMockPapi() {
+  const mockSendCommand = vi.fn().mockResolvedValue(undefined);
+  const mockWarn = vi.fn();
+  const mockInfo = vi.fn();
+  const { mockGetSetting, setSetting } = createSettingsStub();
   // Must cast since the mock only includes the papi properties used by syncOnProjectSwitch.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
@@ -2536,6 +2543,7 @@ const GRID_WEBVIEW_ID = 'text-collection-1';
 function createFinalizeMockPapi() {
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
   const mockWarn = vi.fn();
+  const mockInfo = vi.fn();
   const mockRecordProjectOpened = vi.fn().mockResolvedValue(undefined);
   const mockDataProvidersGet = vi.fn().mockImplementation(async (name: string) => {
     if (name === 'platformScripture.recentlyOpenedProjects') {
@@ -2543,9 +2551,10 @@ function createFinalizeMockPapi() {
     }
     return undefined;
   });
-  // Defaults to 'simple' - matches the common case (the switch this replays side effects for only
-  // ever originates from a Power -> Simple mode change), so most tests don't need to set it.
-  const mockSettingsGet = vi.fn().mockResolvedValue('simple');
+  // `finalizeProjectSwitch` reads the interface mode itself and dispatches `syncOnProjectSwitch`,
+  // which reads the mode and the first-run consent flag. Simple mode matches the common case: the
+  // switch this replays side effects for only ever originates from a Power -> Simple mode change.
+  const { mockGetSetting, setSetting } = createSettingsStub();
   // The Text Collection re-point runs from here, so the mock needs a webViews surface; without one
   // it would take the swallowed-failure path and the assertions below would pass vacuously.
   const mockGetAllOpenWebViewDefinitions = vi
@@ -2562,21 +2571,23 @@ function createFinalizeMockPapi() {
   const papi = {
     commands: { sendCommand: mockSendCommand },
     dataProviders: { get: mockDataProvidersGet },
-    settings: { get: mockSettingsGet },
+    settings: { get: mockGetSetting },
     webViews: {
       getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions,
       reloadWebView: mockReloadWebView,
     },
-    logger: { warn: mockWarn, error: mockError },
+    logger: { warn: mockWarn, info: mockInfo, error: mockError },
   } as unknown as typeof PapiBackend;
   return {
     papi,
     mockSendCommand,
     mockWarn,
+    mockInfo,
     mockError,
     mockRecordProjectOpened,
     mockDataProvidersGet,
-    mockSettingsGet,
+    mockGetSetting,
+    setSetting,
     mockGetAllOpenWebViewDefinitions,
     mockReloadWebView,
   };
@@ -2638,8 +2649,8 @@ describe('finalizeProjectSwitch', () => {
   });
 
   it('does not re-point the Text Collection once the user is back in Power mode', async () => {
-    const { papi, mockReloadWebView, mockSettingsGet } = createFinalizeMockPapi();
-    mockSettingsGet.mockResolvedValue('power');
+    const { papi, mockReloadWebView, setSetting } = createFinalizeMockPapi();
+    setSetting('platform.interfaceMode', 'power');
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
@@ -2656,8 +2667,8 @@ describe('finalizeProjectSwitch', () => {
   });
 
   it('does not call applyForProject when the user has since switched back to Power mode', async () => {
-    const { papi, mockSettingsGet } = createFinalizeMockPapi();
-    mockSettingsGet.mockResolvedValue('power');
+    const { papi, setSetting } = createFinalizeMockPapi();
+    setSetting('platform.interfaceMode', 'power');
     const applyForProject = vi.fn().mockResolvedValue(undefined);
 
     await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
@@ -2680,8 +2691,8 @@ describe('finalizeProjectSwitch', () => {
   });
 
   it('records the project as recently opened even when no longer in Simple mode', async () => {
-    const { papi, mockSettingsGet, mockRecordProjectOpened } = createFinalizeMockPapi();
-    mockSettingsGet.mockResolvedValue('power');
+    const { papi, setSetting, mockRecordProjectOpened } = createFinalizeMockPapi();
+    setSetting('platform.interfaceMode', 'power');
 
     await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
