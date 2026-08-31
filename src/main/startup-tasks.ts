@@ -8,6 +8,7 @@ import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
+import { isFirstRunComplete } from '@main/first-run-consent.util';
 import {
   RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE,
   type ScheduledSessionSyncResult,
@@ -160,24 +161,19 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
   // checked branch. A future third mode would be a compile error here (interfaceMode is typed from
   // the setting), not a silent no-sync.
 
-  // First-run gate: skip auto-sync until the simple-mode wizard completes, so a fresh user never
-  // syncs before consenting. On an unreadable flag, default to NOT syncing (consent-safe).
-  let firstRunComplete = false;
-  try {
-    firstRunComplete = (await settingsService.get('platform.firstRunComplete')) === true;
-  } catch (e) {
-    logger.warn(
-      `Could not read platform.firstRunComplete; skipping startup sync: ${getErrorMessage(e)}`,
-    );
-  }
-  if (!firstRunComplete) {
-    logger.debug('Startup sync skipped: first run not complete');
+  // Consent gate (see isFirstRunComplete): no automatic sync until the user has been asked.
+  if (!(await isFirstRunComplete())) {
+    // States only what is known: the gate is also closed when the flag could not be read, which
+    // already warned for itself. Info, not debug, so it survives the packaged builds' info log
+    // level — matching the shutdown and window-close consent skips (`shutdown-tasks.ts`), which
+    // support reads to explain a session that did not sync.
+    logger.info('Startup sync skipped: first-run sync consent not confirmed');
     return;
   }
 
-  // Sync-consent gate: if the user chose "Skip automatic sync" on the sync-consent step, honor that
-  // permanently. On an unreadable flag, default to syncing (consent-safe: the user likely never
-  // explicitly skipped — a read failure here should not silently suppress a legitimate sync).
+  // Startup-sync preference: if the user turned off platform.syncOnStartup in settings, honor that.
+  // On an unreadable flag, default to syncing (consent-safe: the user likely never turned it off —
+  // a read failure here should not silently suppress a legitimate sync).
   let syncDisabled = false;
   try {
     syncDisabled = (await settingsService.get('platform.syncOnStartup')) === false;

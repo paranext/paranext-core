@@ -49,17 +49,17 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_button_next%',
   '%firstRun_button_back%',
   '%firstRun_button_finish%',
-  '%firstRun_button_skipSync%',
+  '%firstRun_button_dontSyncYet%',
   // Referenced via {%product_name%} in the title; formatReplacementString expands it.
   '%product_name%',
 ];
 
 /**
  * Owns the wizard chrome (title, step indicator) and the shared footer (Back / Next), plus step
- * navigation. Steps that need a skip action call `setCanSkip(true)` to surface the shell's Skip
- * button. Runs ordinary forward/back navigation seeded from `entryStep` (the startup reducer
- * already chose where to start). Derives the Next busy state from the async action and surfaces a
- * thrown action as an inline error.
+ * navigation. A step that offers an early exit calls `setCanSkip(true)` to surface the shell's
+ * decline button ("Don't sync yet" — see the render site). Runs ordinary forward/back navigation
+ * seeded from `entryStep` (the startup reducer already chose where to start). Derives the Next busy
+ * state from the async action and surfaces a thrown action as an inline error.
  */
 export function FirstRunShell({
   entryStep,
@@ -132,6 +132,9 @@ export function FirstRunShell({
     setStep(next);
   }, []);
 
+  // Finishing the wizard is identical from the last step's Next/Finish and from the decline button.
+  const completeWizard = useCallback(() => runAction(completeFirstRun), [runAction]);
+
   const onNext = useCallback(() => {
     // Guard against re-entrant calls (e.g. step calls onNext programmatically while busy). Read the
     // ref, not `isBusy` — two synchronous calls in one tick share a stale render-closure `isBusy`.
@@ -140,8 +143,8 @@ export function FirstRunShell({
     // Synchronous step advance: no async work, so skip runAction to avoid a spurious isBusy flash.
     // Only the final step calls completeFirstRun(), which is async and needs the busy state.
     if (next) goToStep(next);
-    else runAction(() => completeFirstRun());
-  }, [index, runAction, goToStep]);
+    else completeWizard();
+  }, [index, completeWizard, goToStep]);
 
   const onBack = useMemo(
     () =>
@@ -149,10 +152,8 @@ export function FirstRunShell({
     [isInterstitial, index, entryIndex, goToStep],
   );
 
-  const onSkip = useMemo(
-    () => (canSkip ? () => runAction(() => completeFirstRun({ skippedStep: step })) : undefined),
-    [canSkip, step, runAction],
-  );
+  // No useMemo: `completeWizard` is already stable, so both branches are referentially stable.
+  const onSkip = canSkip ? completeWizard : undefined;
 
   // React refs passed to DOM elements must be initialized with null, not undefined.
   // eslint-disable-next-line no-null/no-null
@@ -217,7 +218,7 @@ export function FirstRunShell({
         )}
 
         {/* Steps that render their own footer (via WizardStepForm) set managesOwnFooter so the shell
-            does not stack a second Back/Skip/Next row beneath the step's own. Back/Skip are still
+            does not stack a second Back/decline/Next row beneath the step's own. Both are still
             handed to the step through onBack/onSkip; the step places them in its own row. */}
         {!managesOwnFooter && (
           <div className="tw:flex tw:items-center tw:justify-between">
@@ -231,9 +232,9 @@ export function FirstRunShell({
             <div className="tw:flex tw:gap-2">
               {onSkip && (
                 // Label is sync-specific; if a future step also calls setCanSkip(true) for a
-                // different reason, the shell will need to accept a skip-label callback from it.
+                // different reason, the shell will need to accept a label callback from it.
                 <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
-                  {strings['%firstRun_button_skipSync%']}
+                  {strings['%firstRun_button_dontSyncYet%']}
                 </Button>
               )}
               {canProceed !== undefined && (

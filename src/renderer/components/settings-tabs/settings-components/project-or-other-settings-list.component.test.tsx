@@ -1,7 +1,19 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Localized, SettingProperties } from 'platform-bible-utils';
+import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { ProjectOrOtherSettingsList } from './project-or-other-settings-list.component';
+
+// Controlled per test so the `hiddenInterfaceModes` filter can be driven through both modes without
+// standing up the real `platform.interfaceMode` setting subscription.
+vi.mock('@renderer/hooks/use-interface-mode.hook', () => ({
+  useInterfaceMode: vi.fn(),
+}));
+
+function mockInterfaceMode(mode: 'simple' | 'power') {
+  vi.mocked(useInterfaceMode).mockReturnValue([mode, vi.fn()]);
+}
 
 // Stub the leaf setting components to capture the `disabled` prop the list forwards, without dragging
 // in useProjectSetting / useData / localizationService. The list takes `disabled` as a PROP: the
@@ -34,6 +46,7 @@ const PROJECT_SETTING_PROPERTIES = {
 describe('ProjectOrOtherSettingsList sync-block disabled wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockInterfaceMode('simple');
   });
 
   it('forwards disabled to the project setting editors when disabled is passed', () => {
@@ -84,5 +97,56 @@ describe('ProjectOrOtherSettingsList sync-block disabled wiring', () => {
     );
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});
+
+// One always-visible setting alongside one that declares itself Power-mode-hidden (the shape
+// `platform.syncOnStartup` uses) and one hidden in every mode, so each filter branch is separable.
+const MODE_SETTING_PROPERTIES: Localized<SettingProperties> = {
+  'testExtension.alwaysShown': { label: 'Always Shown', default: true },
+  'testExtension.simpleOnly': {
+    label: 'Simple Only',
+    default: true,
+    hiddenInterfaceModes: ['power'],
+  },
+  'testExtension.neverShown': { label: 'Never Shown', default: true, isHidden: true },
+};
+
+describe('ProjectOrOtherSettingsList interface-mode visibility filtering', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows a setting hidden in power mode while the app is in simple mode', () => {
+    mockInterfaceMode('simple');
+
+    render(
+      <ProjectOrOtherSettingsList settingProperties={MODE_SETTING_PROPERTIES} groupLabel="Group" />,
+    );
+
+    expect(screen.getByText('Simple Only')).toBeInTheDocument();
+    expect(screen.getByText('Always Shown')).toBeInTheDocument();
+  });
+
+  it('drops a setting hidden in power mode while the app is in power mode', () => {
+    mockInterfaceMode('power');
+
+    render(
+      <ProjectOrOtherSettingsList settingProperties={MODE_SETTING_PROPERTIES} groupLabel="Group" />,
+    );
+
+    expect(screen.queryByText('Simple Only')).not.toBeInTheDocument();
+    // The rest of the group is untouched, so the filter isn't just emptying the list.
+    expect(screen.getByText('Always Shown')).toBeInTheDocument();
+  });
+
+  it('keeps dropping isHidden settings in every mode', () => {
+    mockInterfaceMode('simple');
+
+    render(
+      <ProjectOrOtherSettingsList settingProperties={MODE_SETTING_PROPERTIES} groupLabel="Group" />,
+    );
+
+    expect(screen.queryByText('Never Shown')).not.toBeInTheDocument();
   });
 });
