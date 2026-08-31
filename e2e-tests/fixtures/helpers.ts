@@ -732,12 +732,6 @@ export async function waitForAtLeastOneProjectMetadata(
 }
 
 /**
- * Path to the shared dev-appdata settings file. Platform.Bible reads this file at startup in
- * development mode to restore user settings. Writing it before launching Electron is the correct
- * way to pre-configure locale and interface mode for E2E tests — it avoids triggering the
- * mid-session locale reload path, which sequentially reloads every open WebView.
- */
-/**
  * The settings file the app reads at startup in development.
  *
  * Resolved on each call rather than captured once, so the unit tests covering the crash-recovery
@@ -926,7 +920,10 @@ export function restoreLeakedSettings(): string[] | undefined {
  * Preserves any existing settings (e.g. `platform.verseRef`) so the app session starts from the
  * developer's saved state plus the overrides.
  *
- * Must be called BEFORE `launchElectronApp` so the app reads the correct values at startup.
+ * Must be called BEFORE `launchElectronApp` so the app reads the correct values at startup. That is
+ * also why this is the right way to pre-configure locale and interface mode: setting them at
+ * startup avoids the mid-session locale reload path, which sequentially reloads every open
+ * WebView.
  *
  * @returns A restore function that writes the settings file back to its exact pre-call contents (or
  *   deletes it if it did not exist). Call it in worker teardown, AFTER the app has closed, so the
@@ -974,17 +971,6 @@ export function preConfigureSettings(overrides: Record<string, unknown>): () => 
 }
 
 /**
- * Adds the given usernames as team members of the specified Paratext project so they appear in the
- * "Assign to" dropdown.
- *
- * Writes a `ProjectUserAccess.xml` file into the project directory. The Paratext Data library
- * (`CommentThread.GetAssignToUsers`) reads this file to determine assignable users. Call this
- * before the data provider opens the project (i.e., during project setup) to avoid caching issues.
- *
- * @param projectDir Absolute path to the project directory
- * @param users Usernames to add as project team members
- */
-/**
  * Escape a value for use inside an XML attribute.
  *
  * Needed because one caller feeds in the machine's registered Paratext display name, which is free
@@ -1001,6 +987,17 @@ function xmlEscapeAttribute(value: string): string {
     .replace(/'/g, '&apos;');
 }
 
+/**
+ * Adds the given usernames as team members of the specified Paratext project so they appear in the
+ * "Assign to" dropdown.
+ *
+ * Writes a `ProjectUserAccess.xml` file into the project directory. The Paratext Data library
+ * (`CommentThread.GetAssignToUsers`) reads this file to determine assignable users. Call this
+ * before the data provider opens the project (i.e., during project setup) to avoid caching issues.
+ *
+ * @param projectDir Absolute path to the project directory
+ * @param users Usernames to add as project team members
+ */
 export function addUsersToProject(projectDir: string, users: string[]): void {
   const userEntries = users
     .map(

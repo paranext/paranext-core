@@ -1,4 +1,18 @@
 /**
+ * ⚠ DESTRUCTIVE — this spec writes to REAL project data, and has never run.
+ *
+ * Its Category 9 tests drive `manageBooks.createBooks` against the rotation projects, which writes
+ * USFM stub files into `~/.platform.bible/projects/Paratext 9 Projects/<project>` that persist
+ * across restarts, with no restore. See the cleanup procedure documented on
+ * `ROTATION_FIXTURES_REQUIRING_MISSING_BOOK` below. `playwright-cdp.config.ts` testIgnores this
+ * whole directory for that reason, and it is not a project in `playwright.config.ts` either, so
+ * nothing collects it. Do not remove either exclusion until these specs have a disposable project
+ * fixture of their own.
+ *
+ * Nothing reports on this file, so read it as a record of intent rather than as coverage. See
+ * `e2e-tests/tests/manage-books/README.md`.
+ */
+/**
  * === NEW IN PT10 === Reason: Functional E2E tests for WP-002 (GreekEstherTemplatePicker wiring +
  * integration into the manage-books Create flow).
  *

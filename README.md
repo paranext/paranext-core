@@ -459,13 +459,13 @@ All `test:e2e:*` scripts are there for running variations of the playwright end-
 - `test:e2e:isolated` runs tests that need their own application instance rather than sharing
   one. These tests are organized into feature subsets under `e2e-tests/tests/isolated/`; run
   `npm run test:e2e:isolated <subset>` for one feature, or pass no arguments to list the available
-  subsets (no tests are run in that case). `npm run test:e2e:isolated all` does not currently pass:
-  the `title-bar` subset attaches to a running app over CDP, which the project's own global setup
-  refuses to start alongside
+  subsets (no tests are run in that case). `npm run test:e2e:isolated all` runs every subset: specs
+  that attach to an app you started live in `e2e-tests/tests/attached/` instead, so nothing under
+  `tests/isolated/` needs a running app
 - `test:e2e-cdp` runs tests that require the application UI to be open already
-- `test:e2e:all` runs every project in `e2e-tests/playwright.config.ts`. Like
-  `test:e2e:isolated all` it cannot currently pass: `enhanced-resources` and `title-bar` both
-  attach to a running app, which that config's global setup refuses to start alongside
+- `test:e2e:all` runs every project in `e2e-tests/playwright.config.ts`. It cannot currently pass:
+  `enhanced-resources` attaches to a running app, which that config's global setup refuses to start
+  alongside
 
 ## Storybook
 

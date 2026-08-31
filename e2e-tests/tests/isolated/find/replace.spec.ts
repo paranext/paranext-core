@@ -381,7 +381,7 @@ test.describe('Replace operations', () => {
     await expect(replaceAllBtn).toBeEnabled({ timeout: 5_000 });
     await replaceAllBtn.click();
 
-    await expect(frame.getByText(/replaced \d+ occurrences/i).first()).toBeVisible({
+    await expect(frame.getByText(/replaced \d+ occurrences?/i).first()).toBeVisible({
       timeout: 10_000,
     });
 

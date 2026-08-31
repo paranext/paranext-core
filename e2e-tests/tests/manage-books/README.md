@@ -26,13 +26,17 @@ Whether to fix, delete, or keep these is an open decision.
 in `playwright.config.ts`. **Do not remove that exclusion without first giving these specs a
 disposable project fixture.**
 
-Two specs here write to whatever real projects the running app has, with no restore:
+Three of the four specs here write to whatever real projects the running app has, with no restore:
 
 - `manage-books-journey.spec.ts` selects every visible book and clicks **"Replace entire books"**
   against a rotation pool of real local project short names.
 - `manage-books-functional-WP-001.spec.ts` deletes GEN.
+- `manage-books-functional-WP-002.spec.ts` creates books through `manageBooks.createBooks`, which
+  writes USFM stub files under `~/.platform.bible/projects/Paratext 9 Projects/<project>` that
+  survive a restart. Its own `ROTATION_FIXTURES_REQUIRING_MISSING_BOOK` docblock carries the manual
+  cleanup procedure, including restoring each project's `Settings.xml` from its `.BAK`.
 
-A third, `manage-books-commands.spec.ts`, drives the same book-mutating commands against real
+The fourth, `manage-books-commands.spec.ts`, drives the same book-mutating commands against real
 projects, but only down paths that cannot mutate anything: a bogus project id that fails before
 touching disk, a permission-denied gate, or a book that is already present and gets filtered out.
 
