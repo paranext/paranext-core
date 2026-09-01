@@ -1,7 +1,7 @@
 /**
  * Service router for the window service. Publishes a data provider under the generic
  * "platform.windowServiceDataProvider" name that forwards to the focused window's shard (e.g.
- * "platform.windowServiceDataProvider-1").
+ * "platform.windowServiceDataProvider-f81d4fae-7dec-11d0-a765-00a0c91e6bf6").
  *
  * Each renderer registers its window service shard under a window-scoped name so several windows
  * can coexist, which would otherwise leave the generic name — the one declared in `papi.d.ts` and

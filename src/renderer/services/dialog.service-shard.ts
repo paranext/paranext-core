@@ -1,8 +1,8 @@
 /**
  * Dialog service shard — the dialog service implementation for THIS window. Registered as a network
- * object under a window-scoped name (e.g. "DialogService-1") so several windows can coexist; the
- * main process's `dialog.service-router.ts` publishes the generic `dialog:*` request names and
- * forwards each request to the window that should show the dialog.
+ * object under a window-scoped name (e.g. "DialogService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6") so
+ * several windows can coexist; the main process's `dialog.service-router.ts` publishes the generic
+ * `dialog:*` request names and forwards each request to the window that should show the dialog.
  *
  * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
  * service shard".
@@ -376,9 +376,10 @@ export async function startDialogServiceShard(): Promise<void> {
   if (globalThis.windowId === undefined)
     throw new Error('Cannot start DialogService: windowId is not set');
 
-  // Registered under this window's scoped name (e.g. `DialogService-1`) so every window can own its
-  // own dialogs. The object type and window id are how the main process's dialog service router
-  // finds this shard; the name it is registered under is nobody else's business.
+  // Registered under this window's scoped name (e.g.
+  // `DialogService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`) so every window can own its own dialogs.
+  // The object type and window id are how the main process's dialog service router finds this
+  // shard; the name it is registered under is nobody else's business.
   const dialogServiceNetworkObject = await networkObjectService.set<IDialogServiceShard>(
     `${DIALOG_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${globalThis.windowId}`,
     dialogServiceShard,

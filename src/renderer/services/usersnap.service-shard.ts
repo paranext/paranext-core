@@ -1,8 +1,8 @@
 /**
  * Usersnap service shard — the Usersnap feedback widget for THIS window. Registered as a network
- * object under a window-scoped name (e.g. "UsersnapService-1") so several windows can coexist; the
- * main process's `usersnap.service-router.ts` publishes the `platform.usersnap*` commands and
- * forwards each to the window the user is working in.
+ * object under a window-scoped name (e.g. "UsersnapService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6")
+ * so several windows can coexist; the main process's `usersnap.service-router.ts` publishes the
+ * `platform.usersnap*` commands and forwards each to the window the user is working in.
  *
  * The widget's state (the loaded space API, whether a form is open, the DOM observer) is module
  * state in `usersnap.service.ts` and stays there — this is only the entry point that lets the main

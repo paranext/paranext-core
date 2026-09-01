@@ -2738,10 +2738,15 @@ step, no automation. Just a record.
   review rather than riding in on an id-durability change.
 - **Consequences:** The matchers that recognize a *live* window id by requiring digits
   (`WINDOW_SUFFIX_PATTERN` in `window-scoped-web-view-ids.util.ts`, the per-window storage prune in
-  `local-storage.service.ts`) now require the GUID shape instead
+  `local-storage.service.ts`) now take the GUID shape
   (`WINDOW_ID_SHAPE_PATTERN_SOURCE`, `shared/utils/util.ts`) — deliberately shape-only rather than
-  RFC-4122-strict, since `newGuid()` (`platform-bible-utils`) leaves the variant nibble
-  unconstrained and ids of that shape are already on disk. One digit-requiring matcher is deliberately
+  RFC-4122-strict, since the first builds to persist a window id minted it with `newGuid()`
+  (`platform-bible-utils`), which leaves the variant nibble unconstrained, and profiles carrying
+  those ids are in use. The suffix matcher takes the numeric shape **as well**, because a layout
+  saved by a build that scoped by numeric window id is still on disk and its ids have to strip;
+  the storage prune deliberately does not, because it decides what to delete from storage shared
+  with every web view iframe, where a bare run of digits is a plausible prefix for a key belonging
+  to an extension. One digit-requiring matcher is deliberately
   left alone: `PREFIXED_DOCK_LAYOUT_KEY_PATTERN` (`web-view.service-shard.ts`) is a one-way reader
   for pre-multi-window layouts, whose keys were written by builds that scoped storage by *numeric*
   window id, and `getLegacySavedLayout` picks the lowest such id as the newest saved layout.

@@ -1,8 +1,8 @@
 /**
  * WebView service shard — the WebView service implementation for THIS window. Registered under a
- * window-scoped network object id (e.g. "WebViewService-1") so several windows can coexist; the
- * main process's `web-view.service-router.ts` publishes the generic name and forwards each call to
- * the window that should handle it.
+ * window-scoped network object id (e.g. "WebViewService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6") so
+ * several windows can coexist; the main process's `web-view.service-router.ts` publishes the
+ * generic name and forwards each call to the window that should handle it.
  *
  * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
  * service shard".
@@ -3840,10 +3840,11 @@ export async function startWebViewServiceShard(): Promise<void> {
   if (globalThis.windowId === undefined)
     throw new Error('Cannot start WebViewService: windowId is not set');
 
-  // Register this window's shard under a window-scoped name (e.g. "WebViewService-1") so multiple
-  // renderers can coexist. The main process's WebView service router registers the generic name and
-  // forwards to the shard that should handle each call. The object type and window id are how the
-  // router finds this shard; the name it is registered under is nobody else's business.
+  // Register this window's shard under a window-scoped name (e.g.
+  // "WebViewService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6") so multiple renderers can coexist. The
+  // main process's WebView service router registers the generic name and forwards to the shard that
+  // should handle each call. The object type and window id are how the router finds this shard; the
+  // name it is registered under is nobody else's business.
   await networkObjectService.set<WebViewServiceShard>(
     `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`,
     webViewServiceShard,
