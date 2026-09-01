@@ -201,7 +201,11 @@ describe('a root reached through a symlink', () => {
   it.skipIf(process.platform !== 'linux')(
     "claims its own processes when the run's root is a symlink",
     () => {
-      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'scoped-cleanup-'));
+      // Resolved once up front: os.tmpdir() itself is a symlink on some hosts (e.g. macOS's /tmp ->
+      // /private/tmp), and comparing against an unresolved scratch dir would make `mine.cwd` below
+      // fail to match the same way a real symlinked checkout would, for a reason unrelated to what
+      // this test is checking.
+      const scratch = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'scoped-cleanup-')));
       try {
         const realRoot = path.join(scratch, 'real-checkout');
         const linkedRoot = path.join(scratch, 'linked-checkout');
