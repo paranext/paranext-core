@@ -73,6 +73,7 @@ import {
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
 } from '@main/services/shutdown-latch.service';
+import { setAppShutdownSignal } from '@main/services/rpc-server';
 import { startWebViewServiceRouter } from '@main/services/web-view.service-router';
 import {
   addWindow,
@@ -303,6 +304,10 @@ async function openExternal(url: string) {
 async function main() {
   // This is the run boundary the startup-waterfall parser keys on (main + process-start).
   markStartup(STARTUP_MARK_PROCESS_START);
+
+  // Before the first socket can close: main owns the shutdown latch, and the socket-close handler
+  // that needs it deliberately does not import it. See `setAppShutdownSignal`.
+  setAppShutdownSignal(isAppShuttingDown);
 
   // The network service has to start first, and it uses the shared store after initialization
   await networkService.initialize();

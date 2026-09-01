@@ -1,15 +1,19 @@
 import { describe, expect, test, vi, beforeEach } from 'vitest';
-import { RpcServer } from '@main/services/rpc-server';
+import { RpcServer, setAppShutdownSignal } from '@main/services/rpc-server';
 import { RpcEventRegistry } from '@main/services/rpc-event-registry';
 
-const { mockLoggerError, mockLoggerWarn, mockLoggerInfo, mockIsAppShuttingDown } = vi.hoisted(
-  () => ({
-    mockLoggerError: vi.fn(),
-    mockLoggerWarn: vi.fn(),
-    mockLoggerInfo: vi.fn(),
-    mockIsAppShuttingDown: vi.fn(() => false),
-  }),
-);
+const { mockLoggerError, mockLoggerWarn, mockLoggerInfo } = vi.hoisted(() => ({
+  mockLoggerError: vi.fn(),
+  mockLoggerWarn: vi.fn(),
+  mockLoggerInfo: vi.fn(),
+}));
+
+/**
+ * Stands in for main's shutdown latch, registered through the same seam production uses. The real
+ * latch answers from the tracked BrowserWindow list, which would make the severity assertions below
+ * depend on window-state setup instead of on the close handler under test.
+ */
+const mockIsAppShuttingDown = vi.fn(() => false);
 
 // vi.mock and vi.hoisted calls are hoisted above the static imports at transform time, so the
 // imports can be written first here to satisfy import/first.
@@ -20,13 +24,6 @@ vi.mock('@shared/services/logger.service', () => ({
     info: mockLoggerInfo,
     debug: vi.fn(),
   },
-}));
-
-// Stubbed rather than exercised through the real latch: the real one answers from the tracked
-// BrowserWindow list, which would make the severity assertions below depend on window-state setup
-// instead of on the close handler under test. It also keeps `electron` out of this module graph.
-vi.mock('@main/services/shutdown-latch.service', () => ({
-  isAppShuttingDown: () => mockIsAppShuttingDown(),
 }));
 
 /** Minimal event-target stand-in: records listeners so tests can dispatch to them. */
@@ -72,6 +69,7 @@ describe('RpcServer error logging', () => {
   beforeEach(() => {
     mockLoggerError.mockClear();
     mockIsAppShuttingDown.mockReturnValue(false);
+    setAppShutdownSignal(() => mockIsAppShuttingDown());
   });
 
   test('logs the socket name and the real error detail, not "{}"', async () => {
@@ -349,5 +347,23 @@ describe('RpcServer peer identity', () => {
     const server = makeServer(socket);
 
     expect(server.setPeerName(announced)).toBe(false);
+  });
+
+  test('keeps the first announced label and ignores every later one', async () => {
+    // A second announcement would relabel a socket whose earlier lines are already attributed to
+    // the first name, and re-log the announcement line once per call.
+    const { socket, dispatch } = makeFakeSocket();
+    const server = makeServer(socket);
+    await server.connect();
+
+    expect(server.setPeerName('renderer#3')).toBe(true);
+    expect(server.setPeerName('renderer#9')).toBe(false);
+
+    dispatch('close', new CloseEvent('close', { code: 1006, wasClean: false }));
+
+    expect(closeSummaries(mockLoggerWarn)[0]).toContain('Websocket 7 (renderer#3) closed');
+    expect(
+      mockLoggerInfo.mock.calls.filter(([line]) => `${line}`.includes('is renderer#')),
+    ).toHaveLength(1);
   });
 });

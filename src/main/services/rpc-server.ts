@@ -15,7 +15,6 @@ import {
   IRpcHandler,
   RegisteredRpcMethodDetails,
 } from '@shared/models/rpc.interface';
-import { isAppShuttingDown } from '@main/services/shutdown-latch.service';
 import {
   ANNOUNCE_PEER,
   ConnectionStatus,
@@ -42,6 +41,29 @@ import {
   SingleNotificationDocumentation,
 } from '@shared/models/openrpc.model';
 import { getErrorMessage } from 'platform-bible-utils';
+
+/**
+ * Whether the app is on its way down, as {@link RpcServer.onWebSocketClose} needs to know to
+ * classify a handshake-less close. Defaults to "not shutting down", so a process that never
+ * supplies it reports every socket death as a fault.
+ *
+ * Injected rather than imported from the main-process shutdown latch that answers it, because every
+ * module this one imports lands in the generated `papi.d.ts`: importing the latch published it and
+ * the window-state service it depends on — `resetForTesting()` included — as extension-facing API.
+ */
+let isAppShuttingDown: () => boolean = () => false;
+
+/**
+ * Tell socket-close severity how to ask whether the app is shutting down.
+ *
+ * Called once by the process that owns the answer, before the network starts. See
+ * {@link isAppShuttingDown} for why this is wired in rather than imported.
+ *
+ * @param signal Returns whether the app is currently coming down
+ */
+export function setAppShutdownSignal(signal: () => boolean): void {
+  isAppShuttingDown = signal;
+}
 
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
 
@@ -225,10 +247,15 @@ export class RpcServer implements IRpcHandler {
    * Record how the peer on the other end labels itself, so this socket's log lines can be joined to
    * that process's own. Called remotely by a connecting client; see {@link ANNOUNCE_PEER}.
    *
+   * A socket gets to say this once. Accepting later announcements would let a peer relabel itself
+   * mid-session — so log lines already attributed to one name could be continued under another —
+   * and would let it re-log this line as often as it liked.
+   *
    * @param peerName The peer's label for itself
    * @returns Whether a usable label was recorded
    */
   setPeerName(peerName: string): boolean {
+    if (this.peerName) return false;
     if (typeof peerName !== 'string') return false;
     // Peer-supplied text going straight into log lines, so allowlist rather than sanitize: the
     // label a client generates is `<processType>#<discriminator>`, and nothing outside that shape
