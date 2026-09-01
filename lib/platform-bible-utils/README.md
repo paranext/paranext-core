@@ -2,6 +2,81 @@
 
 A set of utility functions, types, and classes for use inside Platform.Bible and extensions.
 
+## Behavior Changes
+
+If you consume this package from an extension, read this section before upgrading. The string
+utilities and the new `GraphemeString` class changed behavior for inputs that were always valid.
+None of it is caught by a type error. Rationale for each decision lives in
+`.context/standards/Architecture-Decisions.md` under `adr-grapheme-string-native-parity` and
+`adr-grapheme-segmenter-unicode-segmenter`.
+
+### 1. Grapheme segmentation is now UAX #29 conformant
+
+This is the change most likely to affect you, because it changes results for ordinary text rather
+than edge-case arguments. Segmentation moved from `stringz` to `unicode-segmenter`. `stringz` was
+never a UAX #29 implementation — it scored 65.8% on Unicode's own `GraphemeBreakTest.txt` — so any
+count, index, `slice`, or search over the following scripts was wrong before and is right now:
+
+| Text                              | Before | Now |
+| --------------------------------- | ------ | --- |
+| `בְּרֵאשִׁית` — pointed Hebrew    | 11     | 6   |
+| `مَرْحَبً` — Arabic with harakat  | 8      | 4   |
+| `ܣܰܘܪ` — Syriac with vowel points | 4      | 3   |
+| `हिन्दी` — Devanagari conjunct    | 6      | 2   |
+| `กุ๊` — Thai base + vowel + tone  | 3      | 1   |
+| decomposed Hangul jamo            | 6      | 2   |
+| `\r\n`                            | 2      | 1   |
+
+Emoji, flags, skin-tone modifiers and Latin diacritics were already correct and are unchanged.
+
+Two consequences follow from conformance and are worth checking your code against:
+
+- **`\r\n` is a single cluster.** Searches only report boundary-aligned hits, so `'\n'` is not
+  findable inside a `\r\n`, and `split(text, '\n')` will not break Windows-style lines apart. Use a
+  regex matching the whole terminator: `split(text, /\r?\n/)`.
+- **A zero-width joiner attaches to the character before it**, not after. A string ending in
+  ZWJ + space now ends in a cluster that is entirely whitespace.
+
+### 2. Bug fixes — the old behavior was trying to match native `String` and failed
+
+| Function                                                  | Before                                                                                              | Now                |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------ |
+| `endsWith(s, needle, endPosition)`                        | required the _last_ occurrence to end at `endPosition`, so `endsWith('abcabc','abc',3)` was `false` | `true`             |
+| `split(s, sep)` with a string separator                   | compiled the separator as a regex, so `split('a.b','.')` split on every character                   | splits literally   |
+| `slice(s, 1, 0)`                                          | tested `indexEnd` for truthiness, returning `'bcdef'`                                               | `''`               |
+| `padStart`/`padEnd` with a multi-grapheme pad             | overshot `targetLength`                                                                             | exact              |
+| `lastIndexOf(s, '')`                                      | `stringLength(s) - 1`                                                                               | `stringLength(s)`  |
+| `split(s, sep, limit)` with `limit` above the match count | threw `RangeError`                                                                                  | returns the pieces |
+| `indexOf(s, needle, -Infinity)`                           | looped forever                                                                                      | returns `0`        |
+
+### 3. Behavior changes for valid input, adopting native `String` semantics
+
+| Call                       | Before                                              | Now                                                                 |
+| -------------------------- | --------------------------------------------------- | ------------------------------------------------------------------- |
+| `split(s, sep, limit)`     | kept the unsplit remainder as a final element       | **discards** everything past the limit; `0` → `[]`, `-1` → no limit |
+| `split(s, /(-)/)`          | dropped capture groups                              | interleaves them, so length and every position shift                |
+| `split(s, /x/i)`           | recompiled the source, discarding all flags but `g` | honors the regex's own flags                                        |
+| `substring(s, 5, 2)`       | `''`                                                | `'cde'` — a backwards range is swapped                              |
+| `endsWith(s, '')`          | `false`                                             | `true`, for every input                                             |
+| `charAt(s, NaN)`           | `''`                                                | element 0                                                           |
+| `at(s, -0.5)`              | last grapheme                                       | element 0                                                           |
+| `at(s, stringLength(s))`   | `''`                                                | `undefined`                                                         |
+| `startsWith('a', 'a', -1)` | `false`                                             | `true`                                                              |
+| `indexOf('abc', '', -1)`   | `-1`                                                | `0`                                                                 |
+
+**Scrutinize the `split` limit change.** It is the only one that loses text silently:
+`split('Look𐐷At🦄This𐐷Thing', '𐐷', 2)` was `['Look', 'At🦄This𐐷Thing']` and is now
+`['Look', 'At🦄This']`.
+
+### 4. Two deliberate divergences from native
+
+- `padStart`/`padEnd` throw `RangeError` above 2²⁰ graphemes. Native only gives up at V8's string
+  limit, which is unreachable here — padding builds an array element per grapheme, so the heap goes
+  first.
+- `split(s, regex)` yields `''` where native yields `undefined` for a capture group that did not
+  participate, so the declared `string[]` is honest. Use `GraphemeString.split`, which declares
+  `(GraphemeString | undefined)[]`, if you need to tell the two apart.
+
 ## Scripture Location Types Overview
 
 There are many types exported from this package that describe specific positions in a Scripture project.
