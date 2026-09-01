@@ -17,6 +17,9 @@ import {
 vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: vi.fn(() => vi.fn(() => vi.fn())),
+  // `network-object.service` reaches this module through a namespace import and subscribes at
+  // module scope, so the factory has to carry this export even though no test here fires it.
+  onDidDisconnectClient: vi.fn(() => vi.fn()),
 }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
