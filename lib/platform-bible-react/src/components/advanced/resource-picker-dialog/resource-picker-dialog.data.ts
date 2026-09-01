@@ -296,14 +296,23 @@ export const MANY_LANGUAGE_INSTALLED_LANGUAGES = [
 ];
 
 /**
- * Languages whose resources in {@link MANY_LANGUAGE_RESOURCES} are ALL non-Scripture. A picker
- * scoped to `ScriptureResource` must not offer these, because selecting one yields zero rows.
+ * Languages deliberately forced to carry only non-Scripture resources in
+ * {@link MANY_LANGUAGE_RESOURCES}. A picker scoped to `ScriptureResource` must not offer these,
+ * because selecting one yields zero rows.
+ *
+ * These are named so a test can assert against them by name; they are NOT the complete set of
+ * languages without a Scripture resource — the generator's type cycle leaves many more in the same
+ * position. Assert set equality against the fixture rather than using this list as a complement.
  */
 export const MANY_LANGUAGE_NON_SCRIPTURE_LANGUAGES = ['Coptic', "Ge'ez", 'Syriac', 'Ugaritic'];
 
 /**
- * A catalogue-sized resource list: ~130 languages, a handful of them installed, and a few carrying
- * only non-Scripture resources.
+ * A catalogue-sized resource list: 132 languages, six of them with an installed resource.
+ *
+ * 47 of the languages end up with no Scripture resource at all — the four named in
+ * {@link MANY_LANGUAGE_NON_SCRIPTURE_LANGUAGES}, which are forced to `XmlResource`, plus every
+ * language whose `step % 3 === 1` and so receives only `SourceLanguageResource` + `XmlResource`.
+ * Scoping this fixture to Scripture therefore drops about a third of the list, not four entries.
  *
  * Emitted in a deliberately non-alphabetical order (a fixed coprime stride over the language list)
  * so it mimics a real DBL catalogue's arbitrary ordering. Any test asserting alphabetical ordering

@@ -426,6 +426,7 @@
       "%webView_characterInventory_title%": "Character Inventory: {projectName}",
       "%webView_checksSidePanel_checkTypeFilter_countLabel%": "Checks ({resultsCount} selected)",
       "%webView_checksSidePanel_checkTypeFilter_label%": "Check Type",
+      "%webView_checksSidePanel_checkTypeFilter_searchPlaceholder%": "Search check types…",
       "%webView_checksSidePanel_checkingBadge_title%": "Checking...",
       "%webView_checksSidePanel_checkRequiresSetup%": "Setup required",
       "%webView_checksSidePanel_checkRequiresSetup_tooltip%": "For reliable results, complete the inventory or settings for this check",
