@@ -17,12 +17,12 @@ function isProjectReference(ref: ResourceReference): boolean {
 
 /**
  * Splits a flat `referencedProjectsAndResources` list into per-tab sub-lists, mirroring the
- * filtering `resource-text-panel.web-view.tsx` already applies for display: `dblResource` items are
- * typed via the cached DBL resource catalog, `project` items always belong to the Scripture tab,
- * and any other reference type — including a `dblResource` item whose id isn't (currently) found in
- * the catalog — is routed into `otherResources` instead of being dropped. The dialog doesn't
- * display or let the admin edit `otherResources`, but callers must round-trip it unchanged when
- * writing the setting back out, or those references are permanently lost.
+ * filtering `resource-text-panel.component.tsx` already applies for display: `dblResource` items
+ * are typed via the cached DBL resource catalog, `project` items always belong to the Scripture
+ * tab, and any other reference type — including a `dblResource` item whose id isn't (currently)
+ * found in the catalog — is routed into `otherResources` instead of being dropped. The dialog
+ * doesn't display or let the admin edit `otherResources`, but callers must round-trip it unchanged
+ * when writing the setting back out, or those references are permanently lost.
  */
 export function splitResourcesByTab(
   items: ResourceReference[],

@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
+import { Canon } from '@sillsdev/scripture';
 import { ResourceCell } from './resource-cell.component';
 
 const {
@@ -42,6 +43,7 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_scriptureTextGrid_cell_not_installed%': 'Resource not installed',
       '%webView_scriptureTextGrid_cell_status_loading%': 'Resource is loading…',
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
+      '%webView_scriptureTextGrid_cell_status_bookNotAvailable%': 'Book not in this text',
       '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
     },
     false,
@@ -543,5 +545,60 @@ describe('ResourceCell zoom', () => {
     const [lastOptions] = capturedEditorOptions.mock.lastCall ?? [];
     // The editor must not receive a contextMenu — zoom is handled by the view's own right-click menu.
     expect(lastOptions?.contextMenu).toBeUndefined();
+  });
+});
+
+/**
+ * The exact message the C# `MissingBookException` produces. `parseMissingBookError` reads the book
+ * number and project id back out of it positionally, so a differently-worded rejection lands on the
+ * generic failure state instead — build the fixture from the real shape, never an approximation.
+ */
+function missingBookError(book: string, projectId = 'p1') {
+  return {
+    platformErrorVersion: 1,
+    message: `Book number ${Canon.bookIdToNumber(book)} not found in project ${projectId}.`,
+  };
+}
+
+describe('ResourceCell book not in this text', () => {
+  it('names the book as absent rather than blaming the download', () => {
+    setUsjResult(missingBookError('MAT'), false);
+    render(<ResourceCell {...props} />);
+
+    expect(screen.getByText('Book not in this text')).toBeInTheDocument();
+    // Nothing went wrong and no download can help, so neither the fault nor a retry may appear.
+    expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource is loading…')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+
+  it('keeps waiting when the failure names the book the user just left', () => {
+    // The cell shows MAT while the hook still serves GEN's rejection: re-keying the chapter
+    // subscription does not clear the previous selector's result until the first update lands.
+    setUsjResult(missingBookError('GEN'), false);
+    render(<ResourceCell {...props} />);
+
+    expect(screen.queryByText('Book not in this text')).not.toBeInTheDocument();
+    expect(screen.getByText('Resource is loading…')).toBeInTheDocument();
+  });
+
+  it('keeps waiting when the failure names a resource this cell is not showing', () => {
+    setUsjResult(missingBookError('MAT', 'a-different-project'), false);
+    render(<ResourceCell {...props} />);
+
+    expect(screen.queryByText('Book not in this text')).not.toBeInTheDocument();
+    expect(screen.getByText('Resource is loading…')).toBeInTheDocument();
+  });
+
+  it('returns to the text when the user navigates to a book the resource does contain', () => {
+    setUsjResult(missingBookError('MAT'), false);
+    const { rerender } = render(<ResourceCell {...props} />);
+    expect(screen.getByText('Book not in this text')).toBeInTheDocument();
+
+    setUsjResult(chapter, false);
+    rerender(<ResourceCell {...props} scrRef={{ ...scrRef, book: 'GEN' }} />);
+
+    expect(screen.queryByText('Book not in this text')).not.toBeInTheDocument();
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
   });
 });
