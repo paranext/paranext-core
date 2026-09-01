@@ -13,14 +13,24 @@ import { PlatformTabTitle } from './platform-tab-title.component';
 
 // #region mocks
 
+const { localizedStrings } = vi.hoisted(() => {
+  const strings: Record<string, string> = {
+    '%tab_aria_tab%': 'tab',
+    '%tab_contextMenu_floatPanel%': 'Float Tab',
+    '%tab_contextMenu_moveTabToNewWindow%': 'Move tab to new window',
+    '%tab_contextMenu_moveTabToWindow%': 'Move tab to window',
+    '%window_label_empty%': 'Empty window',
+    '%someExtension_lookUpWord%': 'Look Up Word',
+  };
+  return { localizedStrings: strings };
+});
+
 vi.mock('@renderer/hooks/papi-hooks', () => ({
-  useLocalizedStrings: vi.fn(() => [
-    {
-      '%tab_aria_tab%': 'tab',
-      '%tab_contextMenu_floatPanel%': 'Float Tab',
-      '%tab_contextMenu_moveTabToNewWindow%': 'Move tab to new window',
-      '%window_label_empty%': 'Empty window',
-    },
+  // Answers for the keys it is asked for and nothing else, the way the real hook does. A component
+  // that renders a key it never requested therefore renders the raw key, which is what lets a test
+  // tell "localized" apart from "happened to be handed the string anyway"
+  useLocalizedStrings: vi.fn((keys: string[]) => [
+    Object.fromEntries(keys.map((key) => [key, localizedStrings[key] ?? key])),
   ]),
   useData: vi.fn(() => ({
     Focus: () => [undefined, vi.fn()],
@@ -191,6 +201,82 @@ describe('PlatformTabTitle reading its contributed menu', () => {
     vi.mocked(menuDataService.getWebViewMenu).mockReset();
     vi.mocked(logger.warn).mockClear();
     vi.mocked(sendCommand).mockReset();
+  });
+
+  it('localizes contributed labels that arrive as raw localize keys', async () => {
+    // What the data provider really hands over before the extension host's first contribution
+    // resync: the combiner's `rawOutput`, whose own docs say it is served "without replacing any
+    // LocalizeKey values". A tab that mounts in that window is the reachable case — the menu data
+    // provider registers before extensions load, and a restored layout needs nothing from them.
+    vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue({
+      ...CONTRIBUTED_TAB_MENU,
+      tabMenu: {
+        groups: { 'platform.tabWindow': { order: 100, isExtensible: true } },
+        items: [
+          {
+            label: '%tab_contextMenu_floatPanel%',
+            localizeNotes: 'Tab context menu > Float tab',
+            group: 'platform.tabWindow',
+            order: 100,
+            command: 'platform.floatTab',
+          },
+          {
+            id: 'platform.moveTabToWindow',
+            label: '%tab_contextMenu_moveTabToWindow%',
+            localizeNotes: 'Tab context menu > Move tab to window',
+            group: 'platform.tabWindow',
+            order: 300,
+          },
+        ],
+      },
+    });
+
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    await flushMenuRead();
+
+    expect(screen.getByText('Float Tab')).toBeInTheDocument();
+    expect(screen.queryByText('%tab_contextMenu_floatPanel%')).not.toBeInTheDocument();
+  });
+
+  it('localizes a raw key inside a submenu, not only at the top level', async () => {
+    // The submenu label is resolved on a different branch from the plain items, so a localizer that
+    // walks only the top level passes the test above and still ships a raw key on screen
+    vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue({
+      ...CONTRIBUTED_TAB_MENU,
+      tabMenu: {
+        groups: { 'platform.tabWindow': { order: 100, isExtensible: true } },
+        items: [
+          // The menu needs one always-available item, or it renders nothing at all and there is
+          // no menu to open
+          {
+            label: '%tab_contextMenu_floatPanel%',
+            localizeNotes: 'Tab context menu > Float tab',
+            group: 'platform.tabWindow',
+            order: 100,
+            command: 'platform.floatTab',
+          },
+          {
+            id: 'platform.moveTabToWindow',
+            label: '%tab_contextMenu_moveTabToWindow%',
+            localizeNotes: 'Tab context menu > Move tab to window',
+            group: 'platform.tabWindow',
+            order: 300,
+          },
+        ],
+      },
+    });
+    vi.mocked(sendCommand).mockResolvedValue([
+      { windowId: 1, label: 'MRK — wgPIDGIN', isMain: true },
+      { windowId: 2, label: 'Biblical Terms', isMain: false },
+    ]);
+
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    await flushMenuRead();
+    fireEvent.click(screen.getByTestId('open-menu'));
+    await waitFor(() => expect(sendCommand).toHaveBeenCalledWith('platform.getWindows'));
+
+    expect(screen.getByText('Move tab to window')).toBeInTheDocument();
+    expect(screen.queryByText('%tab_contextMenu_moveTabToWindow%')).not.toBeInTheDocument();
   });
 
   it('reads the contributed menu once when the tab mounts', async () => {

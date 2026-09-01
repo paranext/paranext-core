@@ -294,8 +294,13 @@ export function OverlayContextMenuPresentational({
 
 // ── Localization Helpers ──
 
-/** Recursively collects all LocalizeKey values from context menu items */
-function collectContextMenuKeys(items: OverlayContextMenuItem[]): LocalizeKey[] {
+/**
+ * Recursively collects all LocalizeKey values from context menu items.
+ *
+ * Exported for the tab menu, which renders the same item union through its own ContextMenu
+ * primitives and so has to resolve the same keys before it renders them.
+ */
+export function collectContextMenuKeys(items: OverlayContextMenuItem[]): LocalizeKey[] {
   return items.reduce<LocalizeKey[]>((keys, item) => {
     if (item.type === 'separator') return keys;
     if (isLocalizeKey(item.label)) keys.push(item.label);
@@ -304,8 +309,12 @@ function collectContextMenuKeys(items: OverlayContextMenuItem[]): LocalizeKey[] 
   }, []);
 }
 
-/** Recursively resolves LocalizeKey labels in context menu items using localized strings */
-function localizeContextMenuItems(
+/**
+ * Recursively resolves LocalizeKey labels in context menu items using localized strings.
+ *
+ * Exported alongside {@link collectContextMenuKeys}; the two are used as a pair.
+ */
+export function localizeContextMenuItems(
   items: OverlayContextMenuItem[],
   localizedStrings: LanguageStrings,
 ): OverlayContextMenuItem[] {
