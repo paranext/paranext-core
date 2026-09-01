@@ -137,9 +137,11 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
         'Stop the running Platform.Bible instance (npm run stop) before running E2E tests.',
     );
   }
-  // AFTER the port check, deliberately. Both restores overwrite files a running app owns, so
-  // recovering a stale backup while the developer's own app is up would revert their live
-  // settings and scroll position — and then abort the run telling them to close that app.
+  // What makes these two safe is that each backup records the run that took it: a backup owned by a
+  // process still running is left alone, and one whose owner is gone is the only kind recovered. A
+  // free port was never that evidence — an isolated run spends seconds between launches with 8876
+  // unbound, and an app that is still starting has not bound it yet.
+  //
   // Undo a settings pin left behind by a run that died before its teardown. Done first, so the
   // developer's real settings are back in place before anything reads them — and so a suite that
   // pins nothing does not silently inherit another suite's mode from a run that crashed days ago.
@@ -158,7 +160,9 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   if (recoveredKeys !== undefined) {
     console.log(
       'Recovered app-global main-process storage from a previous run that was killed before it ' +
-        `could restore it. Keys restored: ${recoveredKeys.join(', ')}`,
+        // An empty list is a real recovery: that run pinned a store that was empty at the time.
+        // Reporting it as nothing at all is how a silent wipe used to look.
+        `could restore it. Keys restored: ${recoveredKeys.join(', ') || '(the store was empty when it was pinned)'}`,
     );
   }
 
