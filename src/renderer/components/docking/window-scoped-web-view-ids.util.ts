@@ -17,11 +17,23 @@ type LayoutBoxes = {
 };
 
 /**
- * Matches the window suffix this module appends — `-w` followed by the window's (durable) platform
- * id — so re-scoping replaces rather than stacks. See {@link WINDOW_ID_SHAPE_PATTERN_SOURCE} for why
- * this matches by shape rather than requiring an RFC-4122-strict UUID.
+ * Matches the window suffix this module appends — `-w` followed by the window's platform id — so
+ * re-scoping replaces rather than stacks. See {@link WINDOW_ID_SHAPE_PATTERN_SOURCE} for why the
+ * durable shape matches by shape rather than requiring an RFC-4122-strict UUID.
+ *
+ * Both the durable shape and a bare run of digits, because a saved layout can carry either: a
+ * window id was the stringified Electron window id until it became durable, and layouts written
+ * under that scheme are still in profiles. Accepting only the durable shape would leave those
+ * unstrippable, so re-scoping would stack a second suffix onto the first and the id would never
+ * return to the one its web view was minted with.
+ *
+ * The digits are safe to accept HERE and are deliberately not accepted where this module's sibling
+ * matches a whole storage key (`local-storage.service.ts`): that one decides what to delete from
+ * storage shared with every web view iframe, so widening it would put an extension's own key in
+ * reach. This pattern only ever reads ids out of layouts this module wrote, after an anchored
+ * `-w`.
  */
-const WINDOW_SUFFIX_PATTERN = new RegExp(`-w${WINDOW_ID_SHAPE_PATTERN_SOURCE}$`, 'i');
+const WINDOW_SUFFIX_PATTERN = new RegExp(`-w(?:${WINDOW_ID_SHAPE_PATTERN_SOURCE}|\\d+)$`, 'i');
 
 /**
  * Remove the window suffix {@link withWindowScopedWebViewIds} appends, giving back the id the web
