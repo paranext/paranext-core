@@ -199,15 +199,33 @@ export async function createCommentTestProject(
   // PermissionManager.HaveRoleNotObserver), but once the file exists a user missing from it has no
   // role and every comment write is refused. localUsers.txt only exists where Paratext 9 has run,
   // so the machine's registered name is read directly as well.
-  const currentUser = readCurrentParatextUserName();
-  const allUsers = [
-    ...new Set([...users, ...localUserNames, ...(currentUser ? [currentUser] : [])]),
-  ];
-  if (allUsers.length > 0) {
-    addUsersToProject(projectDir, allUsers);
-  }
+  const allUsers = projectUsersToWrite(users, localUserNames, readCurrentParatextUserName());
+  if (allUsers) addUsersToProject(projectDir, allUsers);
 
   return { shortName, projectDir, projectId, users };
+}
+
+/**
+ * The users to write into a project's `ProjectUserAccess.xml`, or `undefined` when none should be
+ * written at all.
+ *
+ * A caller asking for no users is asking for no file. ParatextData grants full access when a
+ * project has NO users file ("If no project users file, always administrator" —
+ * `PermissionManager.HaveRoleNotObserver`), so writing one anyway — merely because the machine
+ * happens to have a registered Paratext user — silently downgrades the project to a TeamMember with
+ * permissions explicitly denied, and does it only on machines that have a registration.
+ *
+ * Once the file does exist, a user missing from it has no role and every comment write is refused.
+ * So a caller that DID ask for users still gets the machine's own name and the local users added,
+ * or its own writes would be refused.
+ */
+export function projectUsersToWrite(
+  requested: string[],
+  localUserNames: string[],
+  currentUser: string | undefined,
+): string[] | undefined {
+  if (requested.length === 0) return undefined;
+  return [...new Set([...requested, ...localUserNames, ...(currentUser ? [currentUser] : [])])];
 }
 
 /**
