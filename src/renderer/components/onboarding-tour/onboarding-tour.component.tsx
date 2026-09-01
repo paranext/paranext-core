@@ -9,7 +9,12 @@ import {
   SIMPLE_PANEL_ID_RESOURCES,
 } from '@renderer/components/docking/simple-layout.data';
 import { Tour, TourStep, TOUR_LOCALIZE_KEYS } from './tour.component';
-import { readTourDone, writeTourDone } from './onboarding-tour.store';
+import {
+  getTourReplayCount,
+  readTourDone,
+  subscribeToTourReplay,
+  writeTourDone,
+} from './onboarding-tour.store';
 
 // NOTE ON THE TRIGGER: `getFirstRunStatus()` returns `{ kind: 'app' }` for EVERY already-onboarded
 // user (seeded from the completion cache at module load), not only for someone who just finished the
@@ -17,7 +22,8 @@ import { readTourDone, writeTourDone } from './onboarding-tour.store';
 // (initial), `wizard` (first-run wizard active), `app` (wizard completed or bypassed), `error`
 // (status could not be determined). So this tour shows once to anyone in Simple mode who has not
 // yet seen it (new users after the wizard, existing users on their next launch), then never again
-// thanks to the localStorage flag. That is the intended behavior.
+// on its own thanks to the localStorage flag. That is the intended behavior; Help > Show the tour
+// again is the deliberate way back to it.
 
 const STEP_LOCALIZE_KEYS: LocalizeKey[] = [
   '%onboardingTour_step_project_title%',
@@ -40,16 +46,17 @@ const STEP_LOCALIZE_KEYS: LocalizeKey[] = [
 const LOCALIZE_KEYS: LocalizeKey[] = [...STEP_LOCALIZE_KEYS, ...TOUR_LOCALIZE_KEYS];
 
 /** Hook-bearing implementation of the tour — mounted only while the tour might still show. */
-function OnboardingTourNotYetDone() {
+function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
   const isPowerMode = useIsPowerMode();
   const firstRunStatus = useSyncExternalStore(subscribeToFirstRun, getFirstRunStatus);
   // The persisted flag is re-read every render (it is a cheap synchronous localStorage read)
   // rather than snapshotted in state: an external writer — e.g. the e2e harness suppressing the
   // tour between mount and open — must be honored at the moment the tour would open. The state
   // half only exists to trigger the closing re-render on Done/Skip, since same-document
-  // localStorage writes fire no event.
+  // localStorage writes fire no event. A replay skips the flag entirely: the user asked for the
+  // tour from the Help menu, which only ever happens after they have already completed it.
   const [finishedThisSession, setFinishedThisSession] = useState(false);
-  const tourDone = finishedThisSession || readTourDone();
+  const tourDone = finishedThisSession || (!isReplay && readTourDone());
 
   const [strings, isLoading] = useLocalizedStrings(LOCALIZE_KEYS);
 
@@ -162,12 +169,13 @@ function OnboardingTourNotYetDone() {
 }
 
 /**
- * One-shot Simple-mode orientation tour. Shows five spotlight stops once per user (see the trigger
- * note above), then never shows again (persisted in localStorage). Renders nothing if:
+ * Simple-mode orientation tour. Shows five spotlight stops once per user (see the trigger note
+ * above), then never shows again on its own (persisted in localStorage) — Help > Show the tour
+ * again is the one way back to it. Renders nothing if:
  *
  * - The user is in Power mode
  * - The app is not yet unlocked (`firstRunStatus.kind !== 'app'` — still loading or in the wizard)
- * - The tour has already been completed or skipped
+ * - The tour has already been completed or skipped, and no replay has been requested
  *
  * Completion is recorded on Done and on Skip (Escape routes through Skip), and only then. Quitting
  * or reloading with the tour still open leaves the flag unwritten, so the tour resumes from stop 1
@@ -178,16 +186,19 @@ function OnboardingTourNotYetDone() {
  * `readDirection()`); this component never reads layout direction.
  */
 export function OnboardingTour() {
+  // Replay requests arrive from the Help menu by way of the onboarding tour service shard. The
+  // count is also the remount key, so asking again while the tour is open restarts it from stop 1
+  // rather than leaving it wherever it was.
+  const replayCount = useSyncExternalStore(subscribeToTourReplay, getTourReplayCount);
   // One-shot gate: for users who completed the tour in an earlier session (the permanent common
   // case), skip mounting the implementation entirely so every launch doesn't pay its localized-
   // strings subscription and first-run/power-mode hooks for a tour that can never show. Read once
-  // at mount — re-showing the tour requires clearing the flag and reloading (the documented
-  // retrigger path).
+  // at mount, since only a replay can reopen the tour after that.
   const [doneAtMount] = useState(readTourDone);
   // React components render nothing via null.
   // eslint-disable-next-line no-null/no-null
-  if (doneAtMount) return null;
-  return <OnboardingTourNotYetDone />;
+  if (doneAtMount && replayCount === 0) return null;
+  return <OnboardingTourNotYetDone key={replayCount} isReplay={replayCount > 0} />;
 }
 
 export default OnboardingTour;
