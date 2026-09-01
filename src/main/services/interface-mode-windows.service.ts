@@ -110,14 +110,28 @@ export function getCachedInterfaceMode(): InterfaceMode | undefined {
 }
 
 /**
+ * A snapshot of the switch-generation counter, taken before starting a window restore whose result
+ * will later be seeded. Passed back into {@link seedInterfaceMode} so it can tell whether a live
+ * switch ran while the restore was in flight.
+ */
+export function getSwitchGeneration(): number {
+  return switchGeneration;
+}
+
+/**
  * Record the mode a window restore acted on, without treating it as a change.
  *
  * The restore decides how many windows to build from its own read of the mode, and this is that
  * value. Reacting to it would run a switch against a window set that already matches it.
  *
  * @param mode Mode the restore read, or `undefined` if it could not be read
+ * @param sinceGeneration The generation {@link getSwitchGeneration} reported before the restore
+ *   started, if the caller can wait on other events meanwhile. A real switch that ran in that
+ *   window already moved the cache to a value this seed would otherwise stomp with a stale reading,
+ *   so the seed is skipped when the generation has moved on.
  */
-export function seedInterfaceMode(mode: InterfaceMode | undefined): void {
+export function seedInterfaceMode(mode: InterfaceMode | undefined, sinceGeneration?: number): void {
+  if (sinceGeneration !== undefined && sinceGeneration !== switchGeneration) return;
   cachedInterfaceMode = mode;
 }
 
@@ -184,6 +198,12 @@ function closeSecondaryWindows(deps: ModeSwitchDependencies): void {
     return;
   }
 
+  // Collected rather than thrown from inside the loop: one window failing to close is not a
+  // reason to leave the rest of the batch visible, so every window still gets its turn. The
+  // failure is rethrown once the loop is done so the caller still rolls the cached mode back —
+  // this process could not fully act on the new mode, and a later delivery of the same mode must
+  // not be swallowed by the same-value guard.
+  const closeFailures: unknown[] = [];
   trackedWindowIds.forEach((windowId) => {
     if (windowId === survivorId) return;
     // A window already on its way out has a close handler mid-flight; telling it to close again
@@ -192,18 +212,30 @@ function closeSecondaryWindows(deps: ModeSwitchDependencies): void {
     // the switch, or its entry would be kept and the window they closed would come back on the way
     // to power.
     if (deps.isWindowClosing(windowId)) return;
-    // Marked before it is told to close, so a layout it pushes on its way out is already
-    // recognizable as one to ignore, and taken off screen at the same moment: from here its chrome
-    // shows the mode it is moving to over a dock still holding the mode it is leaving.
-    modeSwitchClosingWindowIds.add(windowId);
-    deps.markWindowClosing(windowId);
-    deps.hideWindow(windowId);
-    if (!deps.closeWindow(windowId)) {
-      // Nothing was there to close, so nothing will ever report it closed — and the record would
-      // otherwise outlive the window, dropping layouts for an id that no longer names anything
-      modeSwitchClosingWindowIds.delete(windowId);
+    try {
+      // Marked before it is told to close, so a layout it pushes on its way out is already
+      // recognizable as one to ignore, and taken off screen at the same moment: from here its
+      // chrome shows the mode it is moving to over a dock still holding the mode it is leaving.
+      modeSwitchClosingWindowIds.add(windowId);
+      deps.markWindowClosing(windowId);
+      deps.hideWindow(windowId);
+      if (!deps.closeWindow(windowId)) {
+        // Nothing was there to close, so nothing will ever report it closed — and the record would
+        // otherwise outlive the window, dropping layouts for an id that no longer names anything
+        modeSwitchClosingWindowIds.delete(windowId);
+      }
+    } catch (e) {
+      closeFailures.push(e);
+      logger.warn(
+        `Could not close window ${windowId} for the switch to simple mode: ${getErrorMessage(e)}`,
+      );
     }
   });
+  if (closeFailures.length > 0) {
+    throw new Error(
+      `Could not close ${closeFailures.length} window(s) for the switch to simple mode`,
+    );
+  }
 }
 
 /**
