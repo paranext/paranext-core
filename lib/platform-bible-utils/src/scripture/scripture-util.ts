@@ -6,7 +6,7 @@ import {
   USJ_TYPE,
 } from '@eten-tech-foundation/scripture-utilities';
 import { BookInfo, ScrollGroupId } from './scripture.model';
-import { isWhiteSpace, split, startsWith } from '../string-util';
+import { isWhiteSpace, startsWith } from '../string-util';
 import { GraphemeString } from '../grapheme-string';
 import { LocalizeKey } from '../extension-contributions/menus.model';
 import { isString } from '../util';
@@ -323,16 +323,20 @@ export async function getLocalizedIdFromBookNumber(
     localizeKey: `Book.${id}`,
     languagesToSearch: [localizationLanguage],
   });
-  // Grapheme-aware `split`, deliberately, even though both separators are single characters. These
-  // are localized book names, so a separator can carry a combining mark — and a decorated separator
-  // is part of a larger cluster, which means it is not a separator. Native splits there anyway and
-  // orphans the mark onto the front of the next piece. Keep this off native.
-  const parts = split(bookName, '-');
-  // some entries had a second name inside ideographic parenthesis. This is the fullwidth left
-  // parenthesis U+FF08, which needs the four-digit `\u` escape — the two-digit `\xff08` is `ÿ08`.
-  const parts2 = split(parts[0], '（');
-  const retVal = parts2[0].trim();
-  return retVal;
+  // Grapheme-aware splitting, deliberately, even though both separators are single characters.
+  // These are localized book names, so a separator can carry a combining mark — and a decorated
+  // separator is part of a larger cluster, which means it is not a separator. Native splits there
+  // anyway and orphans the mark onto the front of the next piece. Keep this off native.
+  //
+  // Split the instance rather than calling the free function twice: the pieces carry the parent's
+  // segmentation, so the second split reuses it. The free function takes a bare string and would
+  // segment again — the same text again, whenever the name has no hyphen.
+  const graphemeName = new GraphemeString(bookName);
+  // Some entries carry a second name inside ideographic parentheses. That is the fullwidth left
+  // parenthesis U+FF08, which needs the four-digit `\u` escape — the two-digit `\xff08` is `ÿ08`,
+  // which is what this used to split on, so the split never matched.
+  const beforeParenthesis = graphemeName.split('-')[0].split('\uff08')[0];
+  return beforeParenthesis.toString().trim();
 }
 
 /**
@@ -903,8 +907,8 @@ function areUsjContentsEqualExceptWhitespaceInternal(
       if (!isAtEndOfBlockMarker(a, aParent)) return false;
       if (!isAtEndOfBlockMarker(b, bParent)) return false;
 
-      // If they are not equal after trimming, they are not equal. Compare the text, not the
-      // instances: two GraphemeStrings are never `===` each other.
+      // If they are not equal after trimming, they are not equal. Compare the text: `===` on two
+      // instances asks whether they are the same object, which is not the question here.
       if (trimEndOfGraphemes(aGraphemes) !== trimEndOfGraphemes(bGraphemes())) return false;
     }
   } else if (!aIsString && !bIsString) {
