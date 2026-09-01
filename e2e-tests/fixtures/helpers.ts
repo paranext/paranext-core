@@ -268,10 +268,11 @@ export type RequiredInterfaceMode = 'simple' | 'power';
 export async function assertInterfaceMode(
   required: RequiredInterfaceMode,
   howToFix: string,
-  timeoutMs = 30_000,
+  timeoutMs = 60_000,
 ): Promise<void> {
   const start = Date.now();
   let actual: string | undefined;
+  let lastReadError: unknown;
   try {
     const remainingForRegistration = Math.max(1000, timeoutMs - (Date.now() - start));
     await waitForPapiMethodRegistered(SETTINGS_GET_METHOD, undefined, remainingForRegistration);
@@ -281,12 +282,22 @@ export async function assertInterfaceMode(
       .poll(
         async () => {
           const remainingForGet = Math.max(1000, timeoutMs - (Date.now() - start));
-          actual = await sendPapiRequestOnce<string | undefined>(
-            SETTINGS_GET_METHOD,
-            ['platform.interfaceMode'],
-            undefined,
-            remainingForGet,
-          );
+          try {
+            actual = await sendPapiRequestOnce<string | undefined>(
+              SETTINGS_GET_METHOD,
+              ['platform.interfaceMode'],
+              undefined,
+              remainingForGet,
+            );
+          } catch (error) {
+            // Playwright evaluates this generator OUTSIDE the try/catch that retries a failed
+            // match, so letting a rejection escape ends the poll on its first attempt instead of
+            // polling. A transient socket error or a request that outran its own share of the
+            // budget would then fail every test in the suite at fixture setup, reporting that the
+            // settings service was never reachable moments after it was proved reachable.
+            lastReadError = error;
+            actual = undefined;
+          }
           return actual;
         },
         { timeout: Math.max(1000, timeoutMs - (Date.now() - start)) },
@@ -299,12 +310,20 @@ export async function assertInterfaceMode(
     // message that may not be what happened.
     throw new Error(
       `e2e precondition: this spec requires '${required}' interface mode, but the running app is in ` +
-        `'${actual ?? 'unknown (the settings service never became reachable — the renderer may not have finished mounting)'}'. ` +
+        `'${actual ?? unreachableDescription(lastReadError)}'. ` +
         `${howToFix} If you did not choose this mode, a killed e2e run probably left it behind: ` +
         `preConfigureSettings merges into the shared settings file and only restores in teardown.`,
-      { cause: err },
+      { cause: lastReadError ?? err },
     );
   }
+}
+
+/** How to describe a mode that could not be read, naming the last failure when there was one. */
+function unreachableDescription(lastReadError: unknown): string {
+  if (lastReadError === undefined)
+    return 'unknown (the settings service never became reachable — the renderer may not have finished mounting)';
+  const reason = lastReadError instanceof Error ? lastReadError.message : String(lastReadError);
+  return `unknown (every read of the settings service failed; the last said: ${reason})`;
 }
 
 /**
@@ -771,9 +790,14 @@ export function classifyBackupOwner(ownerPid: number): BackupOwner {
  * `writeFileSync` truncates before it writes, so an interrupt inside that window leaves a zero-byte
  * or partial file behind. Renaming a fully-written temporary file over the target is atomic within
  * a filesystem, so a reader sees either the previous contents or the complete new ones.
+ *
+ * The temp path carries the writing process's pid. A shared `${filePath}.tmp` would let two
+ * processes writing the same target each overwrite the other's temp file before either renames, so
+ * one rename could install the other's contents under a path it believes is its own. Within a
+ * process the writes are synchronous, so the pid alone is enough to keep them apart.
  */
 function writeFileAtomic(filePath: string, contents: string): void {
-  const tempPath = `${filePath}.tmp`;
+  const tempPath = `${filePath}.${process.pid}.tmp`;
   fs.writeFileSync(tempPath, contents);
   fs.renameSync(tempPath, filePath);
 }
@@ -1328,13 +1352,12 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
  * async round-trip, and on a slow/cold CI runner (observed on Windows, occasionally macOS) that
  * round-trip can resolve to `undefined` rather than `true` if it lands before the settings service
  * has finished loading the file. When that happens, the app falls back to treating first-run as
- * incomplete, probes local registration validity (which reads as invalid on a CI machine with no
- * real Paratext registration), and renders the gate — a full-screen modal that aria-hides the rest
- * of the app and intercepts pointer events. A test proceeding past it then fails on whatever it
- * clicks next with a generic timeout that gives no hint the gate is why: the locator it clicked can
- * even resolve to a real, visible, enabled element (the app underneath is still there) while
- * Playwright's actionability check keeps failing because the gate's overlay is covering the click
- * point.
+ * incomplete, probes local registration validity, and renders the gate — a full-screen modal that
+ * aria-hides the rest of the app and intercepts pointer events. A test proceeding past it then
+ * fails on whatever it clicks next with a generic timeout that gives no hint the gate is why: the
+ * locator it clicked can even resolve to a real, visible, enabled element (the app underneath is
+ * still there) while Playwright's actionability check keeps failing because the gate's overlay is
+ * covering the click point.
  *
  * The gate — `data-testid="first-run-dialog"` — mounts in the SAME initial React commit as
  * `dock-layout` (both are siblings rendered by `Main()`), showing a `'loading'` spinner until
@@ -1345,15 +1368,24 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
  * clicks), which is why this checks the gate directly rather than piggy-backing on the earlier
  * dock-layout wait above.
  *
- * This races the gate becoming not-visible (the normal path — resolution succeeds quickly, the
- * gate's brief `'loading'` flash clears) against its own "continue without finishing setup" button
- * appearing (which the app itself reveals once its startup probe runs long —
- * `REGISTRATION_SLOW_REVEAL_MS` in `first-run-overlay.component.tsx`) and clicks that button if the
- * gate wins. That is the app's own intended remedy for a slow/stuck resolve, so using it here is
- * low-risk — but it treats the SYMPTOM. The real fix is closing the read race in
- * `resolveInternal()` itself, which is app onboarding code used by real users on slow machines, not
- * just CI, and belongs in its own reviewed change, not a tooling branch. If the warning below
- * starts firing often, that is the signal to do that work.
+ * This tells three states apart. The gate clearing is the normal path — resolution settles and the
+ * brief `'loading'` flash goes. The "continue without finishing setup" button appearing means the
+ * resolve is slow but recoverable: the app reveals that button itself once its startup probe runs
+ * long (`REGISTRATION_SLOW_REVEAL_MS` in `first-run-overlay.component.tsx`, 15 s), so a budget
+ * shorter than that can never see it. The setup wizard's stepper appearing means the gate is stuck
+ * in the one state with no escape hatch at all — a registration that resolves as invalid routes
+ * there (`first-run.reducer.ts` -> `startWizard`), and that branch renders no such button by design
+ * — so this fails immediately naming the cause instead of waiting out a budget it cannot recover
+ * from.
+ *
+ * Anything else within the budget is inconclusive and returns quietly, because this is a recovery
+ * step: the readiness waits after it will fail with their own message if something is genuinely
+ * wrong, and treating "I could not tell" as failure turned a merely slow start into a hard error.
+ * That is the app's own intended remedy for a slow/stuck resolve, so using it here is low-risk —
+ * but it treats the SYMPTOM. The real fix is closing the read race in `resolveInternal()` itself,
+ * which is app onboarding code used by real users on slow machines, not just CI, and belongs in its
+ * own reviewed change, not a tooling branch. If the warning below starts firing often, that is the
+ * signal to do that work.
  *
  * Deliberately loud when it fires, with a stable, greppable tag: this is called from
  * `waitForAppReady`, which is about POST-first-run behaviour, never first-run itself (that is
@@ -1363,8 +1395,7 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
  * Takes and respects a caller-supplied budget rather than its own fixed timeout, matching every
  * other step in `waitForAppReady`: a stuck gate that never resolves must not be allowed to run out
  * the clock on its own, independent 120 s wait on top of whatever the overall readiness budget
- * already spent getting here — that starved `app-launch.spec.ts`'s first (deliberately fast) test
- * of its fixture-setup budget the one time this was tried unbudgeted.
+ * already spent getting here.
  */
 async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<void> {
   const start = Date.now();
@@ -1372,13 +1403,43 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
   const escapeHatch = page.getByRole('button', {
     name: /continue without (finishing setup|registration)/i,
   });
-  const gateStuck = await Promise.race([
-    expect(firstRunDialog)
-      .not.toBeVisible({ timeout })
-      .then(() => false),
-    escapeHatch.waitFor({ state: 'visible', timeout }).then(() => true),
+  // The wizard branch renders the setup shell's stepper and NO escape hatch, so it is the one stuck
+  // state this cannot recover from — worth telling apart rather than waiting out.
+  const wizardStep = firstRunDialog.getByRole('button', { name: /^(Next|Finish)$/i });
+
+  // Each leg swallows its own timeout so the race reports what it SAW rather than rejecting: a
+  // rejection makes the gate's ordinary loading flash a hard failure whenever the remaining budget
+  // is short, which is exactly when this is called.
+  const settled = await Promise.race([
+    firstRunDialog
+      .waitFor({ state: 'hidden', timeout })
+      .then(() => 'cleared' as const)
+      .catch(() => 'inconclusive' as const),
+    escapeHatch
+      .waitFor({ state: 'visible', timeout })
+      .then(() => 'recoverable' as const)
+      .catch(() => 'inconclusive' as const),
+    wizardStep
+      .waitFor({ state: 'visible', timeout })
+      .then(() => 'wizard' as const)
+      .catch(() => 'inconclusive' as const),
   ]);
-  if (!gateStuck) return;
+
+  if (settled === 'cleared') return;
+
+  if (settled === 'wizard')
+    throw new Error(
+      'e2e precondition: the app started its first-run setup wizard, so the pin that should have ' +
+        'skipped it did not take. Check that platform.firstRunComplete is seeded before launch — ' +
+        "through the fixture's seedSettings option, not a preConfigureSettings call in a hook. " +
+        'The wizard renders no "continue without finishing setup" button, by design, so nothing ' +
+        'here can dismiss it.',
+    );
+
+  // Nothing recognisable within the budget. Say nothing and let the readiness steps after this one
+  // fail with their own message: this is a recovery, and guessing at an inconclusive state would
+  // turn a run that was merely slow into a failure.
+  if (settled === 'inconclusive') return;
 
   // Stable "[e2e-first-run-gate-race]" tag: grep CI logs for it to count how often this actually
   // fires, independent of which test happened to hit it.
