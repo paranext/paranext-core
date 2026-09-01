@@ -1306,6 +1306,16 @@ async function openWebView(
       throw new Error(
         `Cannot open ${webViewType}: a replace-tab layout names its own window through its target tab, so targetWindowId cannot also name one. Pass one or the other.`,
       );
+    // Ahead of the reuse search below rather than beside the placement that consumes the id: reuse
+    // can satisfy the open from whichever window already holds the web view and return from there,
+    // so a check further down never sees a caller who named a window and reused a view in another.
+    // Naming a window nothing has is that caller's error either way — the contract is that naming
+    // one means wanting that one.
+    //
+    // `options` is a network message, so its type here describes what a well-behaved caller sends
+    // rather than what arrived. Checked the same way the move commands check their target: this is
+    // reached the same way and by the same callers.
+    assertWindowExists(options.targetWindowId, 'openWebView');
   }
 
   /**
@@ -1379,10 +1389,10 @@ async function openWebView(
   // A named window outranks placement inference: the caller said where. It never outranks
   // `existingId` reuse above — an existing view stays wherever it lives.
   if (options?.targetWindowId !== undefined) {
-    // `options` is a network message, so its type here describes what a well-behaved caller sends
-    // rather than what arrived. Checked the same way the move commands check their target: this
-    // is reached the same way and by the same callers.
-    assertWindowExists(options.targetWindowId, 'openWebView');
+    // Existence was already checked above, before the reuse search could return past it. What is
+    // checked here instead is decided late on purpose: a window whose close is decided while this
+    // open is in flight is only a problem for the path that is about to use it.
+    //
     // A window whose close has been decided is a stale target the caller cannot know about — same
     // rule the move commands apply: opening into it would report success and then lose the web
     // view when the close lands
