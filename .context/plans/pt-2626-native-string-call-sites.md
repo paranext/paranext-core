@@ -185,8 +185,8 @@ across 32 files** in `paranext-core`. Of those, **73 converted to native** and 1
 | Site | Reason |
 | --- | --- |
 | `scripture-util.ts:309, 311` — `split(bookName, '-')`, `split(parts[0], '\xff08')` | Localized book names. ASCII separators, but the haystack is user-facing text; needs a human call. |
-| `scripture-util.ts:833, 842, 844` — the USJ trailing-whitespace trim | Genuinely wants one `GraphemeString` instance, not native. The loop re-segments per iteration, which is the only quadratic shape left. Belongs to the construct-once work. |
-| `book.utils.ts:165-174` — book search | `includes` over localized book names and ids against a user-typed query. This is the case grapheme awareness exists for. |
+| `scripture-util.ts:833, 842, 844` — the USJ trailing-whitespace trim | Genuinely wants one `GraphemeString` instance, not native. The loop re-segments per iteration, which is the only quadratic shape left. Belongs to the construct-once work — measured at ~256 ms per call; see the TODO at the site. |
+| `book.utils.ts:165-174` — book search | Split since this table was written: the localized-name and localized-id comparisons stay grapheme-aware, because that is the case grapheme awareness exists for. The English name and canon id went native — an ASCII haystack makes the index spaces coincide whatever the query is. |
 | `extension-host.ts:167` — `substring(exampleData, 0, 100)` | Truncating arbitrary data for a log line. Native could cut a surrogate pair in half and emit a broken glyph. |
 | `extension-asset.utils.ts` — the `> 100` length guard | See below. |
 
