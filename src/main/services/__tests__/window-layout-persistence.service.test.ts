@@ -120,7 +120,7 @@ async function loadAndAssignAll(
   seedFiles({ structure: { windows: entries } });
   const plan = await service.loadWindowLayouts();
   if (plan.kind !== 'restore') throw new Error('expected a restore plan');
-  plan.entries.forEach((entry, index) => service.assignEntryToWindow(entry.windowId, index));
+  plan.entries.forEach((entry) => service.assignEntryToWindow(entry.windowId, entry.windowId));
 }
 
 describe('window layout persistence service', () => {
@@ -203,8 +203,8 @@ describe('window layout persistence service', () => {
     const plan = await service.loadWindowLayouts();
     if (plan.kind !== 'restore') throw new Error('expected a restore plan');
     const [firstEntry, survivorEntry] = plan.entries;
-    service.assignEntryToWindow(firstEntry.windowId, 0);
-    service.assignEntryToWindow(survivorEntry.windowId, 1);
+    service.assignEntryToWindow(firstEntry.windowId, firstEntry.windowId);
+    service.assignEntryToWindow(survivorEntry.windowId, survivorEntry.windowId);
 
     service.handleWindowRemoved(firstEntry.windowId, 'entry-goes-with-it');
     service.trackNewWindow('a-fresh-window');
@@ -214,6 +214,57 @@ describe('window layout persistence service', () => {
       survivorEntry.windowId,
       'a-fresh-window',
     ]);
+  });
+
+  test('binds each restored window to its own entry when an earlier one closes mid-restore', async () => {
+    // The restore loop reads every entry's position before it starts and awaits between binds, so
+    // a window the user closes in one of those gaps shifts every later entry down. Resolving the
+    // slot by position then hands the remaining windows their neighbours' entries, and the last
+    // one finds no slot at all and is tracked as new — writing an id that is already on disk, so
+    // the next launch brings up two windows under one identity.
+    const service = await startService();
+    seedFiles({
+      structure: {
+        windows: [
+          { layout: layoutWithTab('zero'), isMain: true },
+          { layout: layoutWithTab('one') },
+          { layout: layoutWithTab('two') },
+          { layout: layoutWithTab('three') },
+        ],
+      },
+    });
+    const plan = await service.loadWindowLayouts();
+    if (plan.kind !== 'restore') throw new Error('expected a restore plan');
+    const [zero, one, two, three] = plan.entries;
+    service.assignEntryToWindow(zero.windowId, zero.windowId);
+    service.assignEntryToWindow(one.windowId, one.windowId);
+
+    service.handleWindowRemoved(one.windowId, 'entry-goes-with-it');
+    service.assignEntryToWindow(two.windowId, two.windowId);
+    service.assignEntryToWindow(three.windowId, three.windowId);
+    await service.writeNow();
+
+    const written = writtenStructure().windows.map((entry) => entry.windowId);
+    expect(written).toEqual([zero.windowId, two.windowId, three.windowId]);
+    expect(new Set(written).size).toBe(written.length);
+  });
+
+  test('every entry carries an id by the time a window can be bound to it', async () => {
+    // What the bind above resolves by. An entry written before entries carried ids gets one at
+    // load, so a legacy structure binds by id like any other rather than falling through to being
+    // tracked as a new window and losing what that entry was keeping.
+    const service = await startService();
+    seedFiles({
+      structure: {
+        windows: [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      },
+    });
+
+    const plan = await service.loadWindowLayouts();
+
+    if (plan.kind !== 'restore') throw new Error('expected a restore plan');
+    plan.entries.forEach((entry) => expect(entry.windowId).toEqual(expect.any(String)));
+    expect(plan.entries.every(({ windowId }) => windowId.length > 0)).toBe(true);
   });
 
   test('a window tracked mid-session is written with its own id, not a separately minted one', async () => {
@@ -389,9 +440,9 @@ describe('window layout persistence service', () => {
     ]);
     expect(plan.mainEntryIndex).toBe(0);
 
-    service.assignEntryToWindow('11', 0);
-    service.assignEntryToWindow('12', 1);
-    service.assignEntryToWindow('13', 2);
+    service.assignEntryToWindow('11', plan.entries[0].windowId);
+    service.assignEntryToWindow('12', plan.entries[1].windowId);
+    service.assignEntryToWindow('13', plan.entries[2].windowId);
     const getLayout = registeredHandler('windowLayout:get');
     await expect(getLayout('12')).resolves.toEqual({
       kind: 'entry',
@@ -617,7 +668,7 @@ describe('window layout persistence service', () => {
     const service = await startService();
     const plan = await service.loadWindowLayouts();
     if (plan.kind !== 'restore') throw new Error('expected a restore plan');
-    service.assignEntryToWindow('21', plan.mainEntryIndex);
+    service.assignEntryToWindow('21', plan.entries[plan.mainEntryIndex].windowId);
     service.setMainWindowId('21');
 
     const movedBounds = { x: 50, y: 60, width: 800, height: 600 };
@@ -694,8 +745,8 @@ describe('window layout persistence service', () => {
 
     if (plan.kind !== 'restore') throw new Error('expected a restore plan');
     expect(plan.entries).toHaveLength(2);
-    service.assignEntryToWindow('11', 0);
-    service.assignEntryToWindow('12', 1);
+    service.assignEntryToWindow('11', plan.entries[0].windowId);
+    service.assignEntryToWindow('12', plan.entries[1].windowId);
     await expect(registeredHandler('windowLayout:get')('12')).resolves.toEqual({
       kind: 'entry',
       layout: emptyLayout,
@@ -720,8 +771,8 @@ describe('window layout persistence service', () => {
 
     if (plan.kind !== 'restore') throw new Error('expected a restore plan');
     expect(plan.entries).toHaveLength(2);
-    service.assignEntryToWindow('11', 0);
-    service.assignEntryToWindow('12', 1);
+    service.assignEntryToWindow('11', plan.entries[0].windowId);
+    service.assignEntryToWindow('12', plan.entries[1].windowId);
     await expect(registeredHandler('windowLayout:get')('12')).resolves.toEqual({
       kind: 'empty',
     });
@@ -750,8 +801,8 @@ describe('window layout persistence service', () => {
 
     if (plan.kind !== 'restore') throw new Error('expected a restore plan');
     expect(plan.entries).toHaveLength(2);
-    service.assignEntryToWindow('11', 0);
-    service.assignEntryToWindow('12', 1);
+    service.assignEntryToWindow('11', plan.entries[0].windowId);
+    service.assignEntryToWindow('12', plan.entries[1].windowId);
     await expect(registeredHandler('windowLayout:get')('12')).resolves.toEqual({
       kind: 'entry',
       layout: pushedEmptyShape,
@@ -770,7 +821,7 @@ describe('window layout persistence service', () => {
     const plan = await service.loadWindowLayouts();
 
     if (plan.kind !== 'restore') throw new Error('expected a restore plan');
-    service.assignEntryToWindow('41', 0);
+    service.assignEntryToWindow('41', plan.entries[0].windowId);
     await expect(registeredHandler('windowLayout:get')('41')).resolves.toEqual({
       kind: 'legacy',
     });
@@ -1357,14 +1408,14 @@ describe('window layout persistence service', () => {
     ]);
   });
 
-  test('assigning to a missing entry index tracks the window as new instead', async () => {
+  test('assigning to a missing entry id tracks the window as new instead', async () => {
     const service = await startService();
     await loadAndAssignAll(service, [
       { windowId: '11', layout: layoutWithTab('one'), isMain: true },
     ]);
     service.setMainWindowId('11');
 
-    service.assignEntryToWindow('99', 5);
+    service.assignEntryToWindow('99', 'no-such-entry');
 
     // The window is tracked (it appears in writes) but received no entry layout
     await expect(registeredHandler('windowLayout:get')('99')).resolves.toEqual({
@@ -1383,9 +1434,9 @@ describe('window layout persistence service', () => {
       { windowId: '11', layout: layoutWithTab('one'), isMain: true },
     ]);
 
-    service.assignEntryToWindow('12', 0);
+    service.assignEntryToWindow('12', '11');
 
-    // Window 12 must not receive entry 0's layout — that slot belongs to window 11
+    // Window 12 must not receive window 11's entry — that entry is already bound there
     await expect(registeredHandler('windowLayout:get')('12')).resolves.toEqual({
       kind: 'empty',
     });
@@ -1407,10 +1458,10 @@ describe('window layout persistence service', () => {
     });
     const plan = await service.loadWindowLayouts();
     if (plan.kind !== 'restore') throw new Error('expected a restore plan');
-    service.assignEntryToWindow('11', 0);
+    service.assignEntryToWindow('11', plan.entries[0].windowId);
     service.setMainWindowId('11');
 
-    service.assignEntryToWindow('11', 1);
+    service.assignEntryToWindow('11', plan.entries[1].windowId);
 
     await expect(registeredHandler('windowLayout:get')('11')).resolves.toEqual({
       kind: 'entry',
