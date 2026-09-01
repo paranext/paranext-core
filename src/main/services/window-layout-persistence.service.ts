@@ -553,6 +553,20 @@ export function getPreservedEntryIndexes(): number[] {
 }
 
 /**
+ * The entry at a position in the structure, for a caller creating the window that restores it.
+ *
+ * A copy, so a caller reading a window's saved placement cannot alter the entry the live window is
+ * about to start keeping up to date.
+ *
+ * @param entryIndex Position in the structure
+ * @returns The entry, or `undefined` if nothing is at that position
+ */
+export function getEntryAtIndex(entryIndex: number): WindowLayoutEntry | undefined {
+  const slot = fileSlots[entryIndex];
+  return slot ? { ...slot.entry } : undefined;
+}
+
+/**
  * Mark a window as created-for-content: its layout get answers `pending-content` (start truly
  * empty) until the window pushes its first real layout.
  */
