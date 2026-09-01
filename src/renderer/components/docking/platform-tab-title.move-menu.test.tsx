@@ -237,9 +237,9 @@ describe('PlatformTabTitle reading its contributed menu', () => {
     expect(screen.queryByText('%tab_contextMenu_floatPanel%')).not.toBeInTheDocument();
   });
 
-  it('localizes a raw key inside a submenu, not only at the top level', async () => {
-    // The submenu label is resolved on a different branch from the plain items, so a localizer that
-    // walks only the top level passes the test above and still ships a raw key on screen
+  it('localizes a submenu label, which resolves on a different branch from a plain item', async () => {
+    // A submenu's label is resolved on the submenu branch rather than the plain-item one, so a
+    // localizer handling only plain items passes the test above and still ships a raw key
     vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue({
       ...CONTRIBUTED_TAB_MENU,
       tabMenu: {
@@ -276,6 +276,98 @@ describe('PlatformTabTitle reading its contributed menu', () => {
 
     expect(screen.getByText('Move tab to window')).toBeInTheDocument();
     expect(screen.queryByText('%tab_contextMenu_moveTabToWindow%')).not.toBeInTheDocument();
+  });
+
+  it('renders two items that share an id without colliding their React keys', async () => {
+    // An item's id is its `command`, and nothing makes that unique within a menu.
+    // `checkMenuItemsForDuplicateOrdering` rejects only a repeated group+order pair, and
+    // `checkNewMenuItems` prefix-checks a contributed item's `id` but not its `command` — and
+    // `platform.tabWindow` is `isExtensible: true`, so an extension can drop a second item
+    // carrying `platform.floatTab` straight into the platform's own group.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue({
+      ...CONTRIBUTED_TAB_MENU,
+      tabMenu: {
+        groups: { 'platform.tabWindow': { order: 100, isExtensible: true } },
+        items: [
+          {
+            label: 'Float Tab',
+            localizeNotes: 'Tab context menu > Float tab',
+            group: 'platform.tabWindow',
+            order: 100,
+            command: 'platform.floatTab',
+          },
+          {
+            label: 'Float Tab Again',
+            localizeNotes: 'A second item an extension contributed with the same command',
+            group: 'platform.tabWindow',
+            order: 200,
+            command: 'platform.floatTab',
+          },
+        ],
+      },
+    });
+
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    await flushMenuRead();
+
+    // Both are on screen, and React did not warn about a duplicate key
+    expect(screen.getByText('Float Tab')).toBeInTheDocument();
+    expect(screen.getByText('Float Tab Again')).toBeInTheDocument();
+    const duplicateKeyWarnings = consoleError.mock.calls.filter((args) =>
+      args.some((arg) => typeof arg === 'string' && arg.includes('same key')),
+    );
+    expect(duplicateKeyWarnings).toEqual([]);
+    consoleError.mockRestore();
+  });
+
+  it('localizes a raw key on a submenu\u2019s own child, not only on the submenu itself', async () => {
+    // The recursive half of the localizer: `collectContextMenuKeys` must descend into a submenu's
+    // items to ask for their keys, and `localizeContextMenuItems` must map them on the way back.
+    // Only the move-to-window submenu has its children replaced by generated targets, so any other
+    // contributed submenu keeps children that still need resolving — this is that case.
+    vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue({
+      ...CONTRIBUTED_TAB_MENU,
+      tabMenu: {
+        groups: {
+          'platform.tabWindow': { order: 100, isExtensible: true },
+          // A group anchored to a menu item becomes a submenu whose children come from this group
+          'someExtension.lookUpGroup': {
+            order: 200,
+            menuItem: 'someExtension.lookUpSubmenu',
+          },
+        },
+        items: [
+          {
+            label: 'Float Tab',
+            localizeNotes: 'Tab context menu > Float tab',
+            group: 'platform.tabWindow',
+            order: 100,
+            command: 'platform.floatTab',
+          },
+          {
+            id: 'someExtension.lookUpSubmenu',
+            label: 'Look Up',
+            localizeNotes: 'An extension contributing a submenu of its own',
+            group: 'platform.tabWindow',
+            order: 400,
+          },
+          {
+            label: '%someExtension_lookUpWord%',
+            localizeNotes: 'A child of that submenu, contributed carrying a raw key',
+            group: 'someExtension.lookUpGroup',
+            order: 1,
+            command: 'someExtension.lookUpWord',
+          },
+        ],
+      },
+    });
+
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    await flushMenuRead();
+
+    expect(screen.getByText('Look Up Word')).toBeInTheDocument();
+    expect(screen.queryByText('%someExtension_lookUpWord%')).not.toBeInTheDocument();
   });
 
   it('reads the contributed menu once when the tab mounts', async () => {
@@ -764,7 +856,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     // The frame between opening the menu and the window read resolving. `buildTabMenuItems` runs
     // during render against the seeded targets, so this is what is actually on screen first: the
     // move-to-new-window item present, the submenu absent. Every other test here awaits the read
-    // before asserting, so nothing pinned this.
+    // before asserting, so this is the only one that pins the pre-resolution frame.
     let resolveWindows: (windows: unknown) => void = () => {};
     vi.mocked(sendCommand).mockReturnValue(
       new Promise((resolve) => {

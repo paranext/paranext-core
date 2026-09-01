@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 import {
   buildTabMenuItems,
+  getMoveTargetWindowId,
   MOVE_TO_WINDOW_TARGET_ID_PREFIX,
   type TabMenuContext,
 } from '@renderer/components/docking/tab-menu.util';
@@ -138,5 +139,28 @@ describe('buildTabMenuItems', () => {
       '---',
       'platform.moveWebViewToNewWindow',
     ]);
+  });
+});
+
+describe('getMoveTargetWindowId', () => {
+  test('reads the window id back out of a generated target', () => {
+    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}2`)).toBe(2);
+    // Window ids come from Electron and start at 1, but nothing here depends on that
+    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}0`)).toBe(0);
+  });
+
+  test('ignores an item id that is not a generated target', () => {
+    expect(getMoveTargetWindowId('platform.floatTab')).toBeUndefined();
+  });
+
+  test('refuses a suffix that is not plainly a number', () => {
+    // `Number` is far more permissive than the ids this ever mints: it reads the empty string as 0,
+    // trims whitespace, and accepts hex and exponent forms. Each of these would otherwise name a
+    // real window — the empty one most dangerously, since it would resolve to window 0.
+    expect(getMoveTargetWindowId(MOVE_TO_WINDOW_TARGET_ID_PREFIX)).toBeUndefined();
+    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX} 3 `)).toBeUndefined();
+    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}0x2`)).toBeUndefined();
+    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}1e2`)).toBeUndefined();
+    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}-1`)).toBeUndefined();
   });
 });
