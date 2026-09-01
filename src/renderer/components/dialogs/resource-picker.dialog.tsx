@@ -1,5 +1,5 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { usePromise } from 'platform-bible-react';
+import { useRetryablePromise } from 'platform-bible-react';
 import {
   ResourcePickerDialog,
   RESOURCE_PICKER_DIALOG_STRING_KEYS,
@@ -27,15 +27,26 @@ function ResourcePickerDialogWrapper({
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
   // Fetches all resources to pass into the resource picker
-  const [resources, isResourcesLoading] = usePromise(
+  const {
+    data: resources,
+    isLoading: isResourcesLoading,
+    hasError,
+    refetch,
+  } = useRetryablePromise(
     useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
-    undefined,
   );
+
+  // `getCachedResources` signals failure two ways: it rejects on one path and resolves `undefined`
+  // on another. Reading only the rejection would leave the second one rendering as an empty
+  // catalog, which is the state the user cannot act on.
+  const hasResourcesError = hasError || (!isResourcesLoading && resources === undefined);
 
   return (
     <ResourcePickerDialog
       allResources={resources ?? []}
       isResourcesLoading={isResourcesLoading}
+      hasResourcesError={hasResourcesError}
+      onRetryResources={refetch}
       resourceType={resourceType}
       selectedResourceIds={selectedResourceIds}
       localizedStrings={localizedStrings}

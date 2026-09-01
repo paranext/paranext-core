@@ -265,7 +265,11 @@ export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%resourcePicker_search_placeholder%",
 	"%resourcePicker_language_filter_any%",
 	"%resourcePicker_language_filter_multipleSelected%",
-	"%resourcePicker_showing_count%"
+	"%resourcePicker_showing_count%",
+	"%resourcePicker_load_error%",
+	"%resourcePicker_retry%",
+	"%resourcePicker_no_results_filtered%",
+	"%resourcePicker_clear_filters%"
 ];
 /**
  * Map of localized strings required by {@link ResourcePickerDialog}. Derive from
@@ -280,6 +284,17 @@ export interface ResourcePickerDialogProps {
 	allResources: DblResourceData[];
 	/** Whether the `allResources` is still loading */
 	isResourcesLoading?: boolean;
+	/**
+	 * Whether loading `allResources` failed. Distinct from an empty `allResources`: without it the
+	 * dialog can only report "no results", which reads as a truthful empty catalog and leaves the
+	 * user nothing to act on.
+	 */
+	hasResourcesError?: boolean;
+	/**
+	 * Re-runs the caller's resource fetch. Omit when the caller has no way to re-drive it; the error
+	 * state then renders its message without a retry rather than an inert button.
+	 */
+	onRetryResources?: () => void;
 	/** If provided, only resources of this type are shown */
 	resourceType?: ResourceType;
 	/** IDs of resources already selected in the calling panel */
@@ -308,7 +323,7 @@ export interface ResourcePickerDialogProps {
  *
  * @param props See {@link ResourcePickerDialogProps}
  */
-export function ResourcePickerDialog({ allResources, isResourcesLoading, resourceType, selectedResourceIds, localizedStrings, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, resourceType, selectedResourceIds, localizedStrings, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Derives the list of available, non-obsolete book IDs from the `availableBookInfo` string
  *

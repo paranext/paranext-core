@@ -138,6 +138,10 @@ const meta: Meta<typeof ShareLayoutDialogContent> = {
     initialCommentaryResources: [IVP],
     allResources: ALL_RESOURCES,
     isResourcesLoading: false,
+    hasResourcesError: false,
+    // Storybook story — console.log is the intended demo handler
+    // eslint-disable-next-line no-console
+    onRetryResources: () => console.log('Retry requested'),
     resourcePickerLocalizedStrings: RESOURCE_PICKER_STRINGS,
     localizedStrings: SHARE_LAYOUT_STRINGS,
     // Storybook story — console.log is the intended demo handler

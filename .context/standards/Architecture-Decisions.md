@@ -2856,3 +2856,45 @@ step, no automation. Just a record.
   Node 22.12 / ICU 76.1. Write-up: "Replacing stringz" artifact. Reproduction:
   `~/repos/test/grapheme-segmentation`, `npm run all`. Memory, non-V8 engines and browser runtimes
   were not measured.
+
+## adr-picker-recovery-injected-fetch-hook: A failed fetch is recovered through an injected-fetcher hook in `platform-bible-react`
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** The resource panels resolve their front state through `getResourcePanelReadiness` and
+  render it through `PanelReadinessView`, so a failed DBL-catalog fetch says so and offers a retry
+  that can re-drive it. The picker surfaces those panels hand off to did not: the
+  `platform.resourcePicker` dialog, the Send Layout dialog's two embedded pickers, and the Get
+  Resources web view all reported a failed catalog as "no results", which reads as a truthful empty
+  catalog and leaves the user no control that could change it. Worse, Get Resources is where the
+  picker's empty state points, so the two screens agreed on a false answer. The
+  fetch-with-error-and-retry logic already existed once, in `useDblResourceCatalog`, but it imports
+  PAPI and lives in `platform-scripture-editor`, so neither the renderer nor a different extension
+  could reuse it.
+- **Decision:** The recovery primitive is `useRetryablePromise` in `platform-bible-react` — a
+  PAPI-free hook that takes the caller's fetch as an injected callback and returns
+  `{ data, isLoading, hasError, refetch }`, with a generation guard so a superseded in-flight fetch
+  cannot clear an error raised by a newer one (`usePromise`'s own currency flag guards only the state
+  it owns). Presentational components take the failure as a prop and pair it with a retry callback
+  (`hasResourcesError`/`onRetryResources` on `ResourcePickerDialog`, `isResourcesError`/
+  `onRetryResources` on `GetResources`); each host injects its own command-sending mechanism, which
+  is what lets the renderer's `sendCommand` and a web view's `papi.commands.sendCommand` share one
+  hook.
+- **Alternatives:** **Duplicate the error-and-retry logic in each host** — rejected: it is ~25 lines
+  whose subtlety (a rejection is not an empty result; a stale fetch must not clear a newer error) is
+  exactly what gets copied wrong, and it would have made a fourth near-copy. **Move
+  `useDblResourceCatalog` into a shared package** — rejected: it imports PAPI, which
+  `lib/platform-bible-react/` must not.
+- **Consequences:** `useDblResourceCatalog` is now a near-duplicate of the shared hook and is
+  deliberately left un-migrated; rewiring two shipped panels is restructuring, and the ticket that
+  introduced the hook was scoped to bug fixes. Anyone touching it should migrate it then.
+  Separately, `platformGetResources.getCachedResources` signals failure **two** ways — it resolves
+  `undefined` on one path and rejects on another, because `fetchAndCacheResources()` is returned
+  un-awaited from inside its own `try` — so every host folds both in as
+  `hasError || (!isLoading && data === undefined)`. Normalizing that command to one failure signal
+  is the cleaner fix but changes a registered command's declared contract and every caller's
+  `?? []`, so it is deferred.
+  **Revisit** when a second consumer wants a value where `undefined` is a legitimate result rather
+  than a failure; the fold-in rule above is host knowledge, not hook behavior, precisely so the hook
+  stays honest about that distinction.
+- **Source:** PT-4433 (NN5d, Sprint 89 Simple Quality), resource-picker dead-ends.

@@ -81,6 +81,10 @@ export type ShareLayoutDialogContentProps = {
   initialCommentaryResources: ResourceReference[];
   allResources: DblResourceData[];
   isResourcesLoading: boolean;
+  /** Whether loading `allResources` failed; forwarded to every embedded resource picker. */
+  hasResourcesError: boolean;
+  /** Re-runs the resource fetch; forwarded to every embedded resource picker. */
+  onRetryResources: () => void;
   resourcePickerLocalizedStrings: ResourcePickerDialogLocalizedStrings;
   localizedStrings: ShareLayoutDialogLocalizedStrings;
   onConfirm: (result: ShareLayoutResult) => void;
@@ -154,6 +158,8 @@ export function ShareLayoutDialogContent({
   initialCommentaryResources,
   allResources,
   isResourcesLoading,
+  hasResourcesError,
+  onRetryResources,
   resourcePickerLocalizedStrings,
   localizedStrings: strings,
   onConfirm,
@@ -261,6 +267,8 @@ export function ShareLayoutDialogContent({
               <ResourcePickerDialog
                 allResources={allResources}
                 isResourcesLoading={isResourcesLoading}
+                hasResourcesError={hasResourcesError}
+                onRetryResources={onRetryResources}
                 resourceType={tab}
                 selectedResourceIds={resources.filter(hasStringId).map((r) => r.id)}
                 localizedStrings={resourcePickerLocalizedStrings}
@@ -315,6 +323,8 @@ export function ShareLayoutDialogContent({
                   <ResourcePickerDialog
                     allResources={allResources}
                     isResourcesLoading={isResourcesLoading}
+                    hasResourcesError={hasResourcesError}
+                    onRetryResources={onRetryResources}
                     resourceType="ScriptureResource"
                     selectedResourceIds={modelText && hasStringId(modelText) ? [modelText.id] : []}
                     localizedStrings={resourcePickerLocalizedStrings}

@@ -27,6 +27,10 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_search_placeholder%': 'Search resources…',
   '%resourcePicker_language_filter_any%': 'Any language',
   '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
+  '%resourcePicker_load_error%': "Couldn't load the list of available resources.",
+  '%resourcePicker_retry%': 'Try again',
+  '%resourcePicker_no_results_filtered%': 'No resources match your search.',
+  '%resourcePicker_clear_filters%': 'Clear filters',
 };
 
 function renderDialog(overrides: Partial<Parameters<typeof ResourcePickerDialog>[0]> = {}) {
@@ -122,14 +126,58 @@ describe('ResourcePickerDialog', () => {
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'download-1' }));
   });
 
-  it('shows "No results found" when search matches nothing', () => {
+  it('blames the search, not the catalog, when the search matches nothing', () => {
     renderDialog();
     const searchInput = screen.getByPlaceholderText('Search resources…');
     fireEvent.change(searchInput, { target: { value: 'zzznomatch' } });
-    expect(screen.getByText('No results found')).toBeInTheDocument();
+    expect(screen.getByText('No resources match your search.')).toBeInTheDocument();
+    expect(screen.queryByText('No results found')).not.toBeInTheDocument();
     expect(screen.queryByText('Already selected')).not.toBeInTheDocument();
     expect(screen.queryByText('Installed')).not.toBeInTheDocument();
     expect(screen.queryByText('Available to download')).not.toBeInTheDocument();
+  });
+
+  it('restores the full list when the filters are cleared', () => {
+    renderDialog();
+    fireEvent.change(screen.getByPlaceholderText('Search resources…'), {
+      target: { value: 'zzznomatch' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(screen.queryByText('No resources match your search.')).not.toBeInTheDocument();
+    expect(screen.getByText('NIV')).toBeInTheDocument();
+  });
+
+  it('keeps the plain no-results text when the catalog is empty with no filter applied', () => {
+    renderDialog({ allResources: [], selectedResourceIds: [] });
+
+    expect(screen.getByText('No results found')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+  });
+
+  it('reports a failed catalog fetch instead of claiming there are no results', () => {
+    renderDialog({ allResources: [], hasResourcesError: true });
+
+    expect(screen.getByText("Couldn't load the list of available resources.")).toBeInTheDocument();
+    expect(screen.queryByText('No results found')).not.toBeInTheDocument();
+  });
+
+  it('offers a retry that re-drives the fetch when the catalog fetch failed', () => {
+    const onRetryResources = vi.fn();
+    renderDialog({ allResources: [], hasResourcesError: true, onRetryResources });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(onRetryResources).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the loading spinner rather than the error while the fetch is still running', () => {
+    renderDialog({ allResources: [], isResourcesLoading: true, hasResourcesError: true });
+
+    expect(
+      screen.queryByText("Couldn't load the list of available resources."),
+    ).not.toBeInTheDocument();
   });
 
   it('filters all sections by search text', () => {

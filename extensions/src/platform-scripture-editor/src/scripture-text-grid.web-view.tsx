@@ -408,10 +408,24 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
-      if (!textConnectionPdp) return;
+      // A pick that cannot be applied must say so. Returning silently closes the picker over an
+      // unchanged grid, leaving the user unable to tell a slow save from one that never happened.
+      if (!textConnectionPdp) {
+        papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+        logger.warn(
+          `Ignoring pick of ${resource.dblEntryUid}: the text-connection data provider is not available`,
+        );
+        return;
+      }
 
       if (!resource.installed) {
-        if (!dblResourcesProvider) return;
+        if (!dblResourcesProvider) {
+          papi.notifications.send({ message: INSTALL_FAILED_KEY, severity: 'error' });
+          logger.warn(
+            `Ignoring pick of ${resource.dblEntryUid}: the DBL resources data provider is not available`,
+          );
+          return;
+        }
         const pending = { id: resource.dblEntryUid, name: resource.displayName };
         setInstalling((prev) => [...prev, pending]);
         try {

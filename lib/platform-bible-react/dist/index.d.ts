@@ -3752,6 +3752,49 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 	value: T,
 	isLoading: boolean
 ];
+/** What {@link useRetryablePromise} reports about the fetch it is driving. */
+export type RetryablePromiseState<T> = {
+	/**
+	 * The most recently resolved value, or `undefined` before one arrives.
+	 *
+	 * A rejection leaves an already-resolved value alone (`usePromise` does not wipe it), so a caller
+	 * whose fetch can fail after having succeeded should decide whether a stale value or an error
+	 * state serves its user better, rather than assuming `hasError` means there is nothing to show.
+	 */
+	data: T | undefined;
+	/** Whether a fetch is in flight. */
+	isLoading: boolean;
+	/**
+	 * Whether the last fetch rejected. Distinct from an absent `data`: a caller reading only `data`
+	 * cannot tell "the fetch failed" from "the answer is genuinely nothing", which is the distinction
+	 * that lets a UI say what happened instead of reporting an empty result.
+	 *
+	 * Recoverable — call {@link RetryablePromiseState.refetch}.
+	 */
+	hasError: boolean;
+	/** Clears any error and re-runs the fetch. */
+	refetch: () => void;
+};
+/**
+ * Awaits a promise like `usePromise`, and additionally reports whether it rejected and offers a way
+ * to run it again.
+ *
+ * `usePromise` alone leaves a rejection indistinguishable from a value that has not arrived, so a
+ * UI driven by it can only say "nothing here" for a failure — with no way for the user to try
+ * again. This hook adds the two things such a UI needs: a failure flag and a working retry.
+ *
+ * Deliberately takes the fetch as a callback rather than performing one itself, so this library
+ * stays free of any PAPI dependency and both the renderer and extension web views can use it with
+ * their own command-sending mechanism.
+ *
+ * @param promiseFactoryCallback A function that returns the promise to await, or `undefined` for
+ *   nothing to run.
+ *
+ *   WARNING: MUST BE STABLE - const or wrapped in useCallback. A reference that is updated every
+ *   render re-runs the fetch every render.
+ * @returns See {@link RetryablePromiseState}.
+ */
+export declare const useRetryablePromise: <T>(promiseFactoryCallback: (() => Promise<T>) | undefined) => RetryablePromiseState<T>;
 /**
  * Adds a CSS stylesheet to the current document in a
  * [`style`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/style) element

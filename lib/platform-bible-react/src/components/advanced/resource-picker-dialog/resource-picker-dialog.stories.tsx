@@ -19,6 +19,10 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_language_filter_any%': 'Any language',
   '%resourcePicker_language_filter_multipleSelected%': '{selectCount} languages',
   '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
+  '%resourcePicker_load_error%': "Couldn't load the list of available resources.",
+  '%resourcePicker_retry%': 'Try again',
+  '%resourcePicker_no_results_filtered%': 'No resources match your search.',
+  '%resourcePicker_clear_filters%': 'Clear filters',
 };
 
 const meta: Meta<typeof ResourcePickerDialog> = {
@@ -58,6 +62,25 @@ export const NoResults: Story = {
     allResources: [],
   },
 };
+
+/**
+ * The catalog fetch failed. Distinguishable from {@link NoResults} — which reports a genuinely empty
+ * catalog — and paired with the retry that can actually re-drive the fetch.
+ */
+export const CatalogFailedToLoad: Story = {
+  args: {
+    allResources: [],
+    hasResourcesError: true,
+    onRetryResources: () => console.log('Retry requested'),
+  },
+};
+
+/**
+ * Type a term that matches nothing (or pick a language with no entries) to reach the filtered-empty
+ * state: it blames the filter rather than the catalog, and offers a one-click way back to the full
+ * list. Driven by the component's own filter state, so there is no prop to preset it.
+ */
+export const NoResultsForFilter: Story = {};
 
 export const EmptyAlreadySelected: Story = {
   args: {

@@ -1,7 +1,7 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
-import { usePromise } from 'platform-bible-react';
+import { useRetryablePromise } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { GetResources, GET_RESOURCES_STRING_KEYS, ResourceAction } from './get-resources.component';
@@ -20,20 +20,22 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installResource = dblResourcesProvider?.installDblResource;
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
-  const [fetchResources, setFetchResources] = useState(true);
-  const [resources, isLoadingResources] = usePromise(
-    useCallback(async () => {
-      if (fetchResources) {
-        // Sets the `fetchResources` flag to false which will trigger the promise again next render
-        // to fetch the resources
-        setFetchResources(false);
-        return Promise.resolve(undefined);
-      }
-
-      return papi.commands.sendCommand('platformGetResources.getCachedResources');
-    }, [fetchResources]),
-    undefined,
+  const {
+    data: resources,
+    isLoading: isLoadingResources,
+    hasError,
+    refetch: refetchResources,
+  } = useRetryablePromise(
+    useCallback(
+      async () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      [],
+    ),
   );
+
+  // `getCachedResources` signals failure two ways: it rejects on one path and resolves `undefined`
+  // on another. Reading only the rejection would leave the second one rendering as an empty
+  // catalog, which is the state the user cannot act on.
+  const isResourcesError = hasError || (!isLoadingResources && resources === undefined);
 
   const resolvedResources = useMemo(() => resources ?? [], [resources]);
 
@@ -96,7 +98,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       return actionFunction(dblEntryUid)
         .then(() => {
           // Trigger a refetch so the resource list reflects the new installed state.
-          setFetchResources(true);
+          refetchResources();
           return undefined;
         })
         .catch((error) => {
@@ -107,7 +109,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
           throw error;
         });
     },
-    [installResource, uninstallResource],
+    [installResource, uninstallResource, refetchResources],
   );
 
   /** Removes resources from array of resources that are currently being handled */
@@ -132,7 +134,8 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
       resources={resolvedResources}
       isLoadingResources={isLoadingResources}
-      isResourcesError={false}
+      isResourcesError={isResourcesError}
+      onRetryResources={refetchResources}
       idsBeingHandled={idsBeingHandled}
       selectedTypes={selectedTypes}
       selectedLanguages={selectedLanguages}

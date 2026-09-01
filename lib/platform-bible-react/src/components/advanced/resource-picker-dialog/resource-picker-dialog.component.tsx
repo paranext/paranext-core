@@ -1,3 +1,4 @@
+import { Button } from '@/components/shadcn-ui/button';
 import { DialogHeader, DialogTitle } from '@/components/shadcn-ui/dialog';
 import { Label } from '@/components/shadcn-ui/label';
 import { Table, TableBody, TableCell, TableRow } from '@/components/shadcn-ui/table';
@@ -8,7 +9,7 @@ import {
 import { SearchBar } from '@/components/basics/search-bar.component';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
 import { Check } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Spinner } from '@/components/basics/spinner.component';
 import { useProgressiveList } from './resource-picker-dialog.utils';
 
@@ -26,6 +27,10 @@ export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_language_filter_any%',
   '%resourcePicker_language_filter_multipleSelected%',
   '%resourcePicker_showing_count%',
+  '%resourcePicker_load_error%',
+  '%resourcePicker_retry%',
+  '%resourcePicker_no_results_filtered%',
+  '%resourcePicker_clear_filters%',
 ] as const);
 
 /**
@@ -47,6 +52,17 @@ export interface ResourcePickerDialogProps {
   allResources: DblResourceData[];
   /** Whether the `allResources` is still loading */
   isResourcesLoading?: boolean;
+  /**
+   * Whether loading `allResources` failed. Distinct from an empty `allResources`: without it the
+   * dialog can only report "no results", which reads as a truthful empty catalog and leaves the
+   * user nothing to act on.
+   */
+  hasResourcesError?: boolean;
+  /**
+   * Re-runs the caller's resource fetch. Omit when the caller has no way to re-drive it; the error
+   * state then renders its message without a retry rather than an inert button.
+   */
+  onRetryResources?: () => void;
   /** If provided, only resources of this type are shown */
   resourceType?: ResourceType;
   /** IDs of resources already selected in the calling panel */
@@ -156,6 +172,8 @@ function matchesSearch(resource: DblResourceData, searchText: string): boolean {
 export default function ResourcePickerDialog({
   allResources,
   isResourcesLoading,
+  hasResourcesError,
+  onRetryResources,
   resourceType,
   selectedResourceIds,
   localizedStrings,
@@ -164,6 +182,13 @@ export default function ResourcePickerDialog({
 }: ResourcePickerDialogProps) {
   const [searchText, setSearchText] = useState('');
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+
+  // Resets BOTH filters: clearing only the one the user is looking at leaves the list still
+  // filtered by the other, which reads as the control having done nothing.
+  const clearFilters = useCallback(() => {
+    setSearchText('');
+    setSelectedLanguages([]);
+  }, []);
 
   const filteredResources = useMemo(
     () =>
@@ -222,6 +247,13 @@ export default function ResourcePickerDialog({
     '%resourcePicker_section_available_to_download%',
   );
   const noResultsText = localizeString(localizedStrings, '%resourcePicker_no_results%');
+  const loadErrorText = localizeString(localizedStrings, '%resourcePicker_load_error%');
+  const retryText = localizeString(localizedStrings, '%resourcePicker_retry%');
+  const noResultsFilteredText = localizeString(
+    localizedStrings,
+    '%resourcePicker_no_results_filtered%',
+  );
+  const clearFiltersText = localizeString(localizedStrings, '%resourcePicker_clear_filters%');
   const showingCountTemplate = localizeString(localizedStrings, '%resourcePicker_showing_count%');
 
   const customLanguageSelectText = useMemo(() => {
@@ -276,10 +308,28 @@ export default function ResourcePickerDialog({
             <Spinner />
           </p>
         )}
-        {hasNoResults && !isResourcesLoading && (
+        {hasResourcesError && !isResourcesLoading && (
+          <div className="tw:flex tw:flex-col tw:items-center tw:gap-3 tw:py-8" role="alert">
+            <p className="tw:text-center tw:text-muted-foreground">{loadErrorText}</p>
+            {onRetryResources && (
+              <Button variant="outline" size="sm" onClick={onRetryResources}>
+                {retryText}
+              </Button>
+            )}
+          </div>
+        )}
+        {hasNoResults && !hasResourcesError && !isResourcesLoading && isFiltered && (
+          <div className="tw:flex tw:flex-col tw:items-center tw:gap-3 tw:py-8">
+            <p className="tw:text-center tw:text-muted-foreground">{noResultsFilteredText}</p>
+            <Button variant="outline" size="sm" onClick={clearFilters}>
+              {clearFiltersText}
+            </Button>
+          </div>
+        )}
+        {hasNoResults && !hasResourcesError && !isResourcesLoading && !isFiltered && (
           <p className="tw:py-8 tw:text-center tw:text-muted-foreground">{noResultsText}</p>
         )}
-        {!hasNoResults && !isResourcesLoading && (
+        {!hasNoResults && !hasResourcesError && !isResourcesLoading && (
           <Table>
             <TableBody>
               <ResourceSection

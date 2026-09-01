@@ -6,7 +6,7 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { isPlatformError } from 'platform-bible-utils';
-import { Spinner, usePromise } from 'platform-bible-react';
+import { Spinner, usePromise, useRetryablePromise } from 'platform-bible-react';
 import { RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react/experimental';
 import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { DIALOG_BASE, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
@@ -56,10 +56,19 @@ function ShareLayoutDialogWrapper({
   const [localizedStrings] = useLocalizedStrings(SHARE_LAYOUT_STRING_KEYS);
   const [resourcePickerLocalizedStrings] = useLocalizedStrings(RESOURCE_PICKER_STRING_KEYS);
 
-  const [allResources, isResourcesLoading] = usePromise(
+  const {
+    data: allResources,
+    isLoading: isResourcesLoading,
+    hasError,
+    refetch: onRetryResources,
+  } = useRetryablePromise(
     useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
-    undefined,
   );
+
+  // `getCachedResources` signals failure two ways: it rejects on one path and resolves `undefined`
+  // on another. Reading only the rejection would leave the second one rendering as an empty
+  // catalog, which is the state the user cannot act on.
+  const hasResourcesError = hasError || (!isResourcesLoading && allResources === undefined);
 
   const [projectResourcesSetting, setProjectResources] = useProjectSetting(
     projectId,
@@ -197,6 +206,8 @@ function ShareLayoutDialogWrapper({
       initialCommentaryResources={commentaryResources}
       allResources={allResources ?? []}
       isResourcesLoading={isResourcesLoading}
+      hasResourcesError={hasResourcesError}
+      onRetryResources={onRetryResources}
       resourcePickerLocalizedStrings={resourcePickerLocalizedStrings}
       localizedStrings={localizedStrings}
       onConfirm={handleConfirm}

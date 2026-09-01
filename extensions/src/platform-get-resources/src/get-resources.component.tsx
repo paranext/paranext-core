@@ -65,6 +65,7 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_open%',
   '%resources_remove%',
   '%resources_results%',
+  '%resources_retry%',
   '%resources_showing%',
   '%resources_size%',
   '%resources_type%',
@@ -184,6 +185,11 @@ export type GetResourcesProps = {
   isLoadingResources?: boolean;
   /** Whether loading the resource list failed (shows the error message instead of the table). */
   isResourcesError?: boolean;
+  /**
+   * Re-runs the caller's resource fetch. Omit when the caller has no way to re-drive it; the error
+   * state then renders its message without a retry rather than an inert button.
+   */
+  onRetryResources?: () => void;
   /** DBL entry UIDs that are currently installing/removing (shown with a spinner). */
   idsBeingHandled?: string[];
   /** Currently selected resource type filter values. */
@@ -222,6 +228,7 @@ export function GetResources({
   resources = emptyResources,
   isLoadingResources = false,
   isResourcesError = false,
+  onRetryResources,
   idsBeingHandled = [],
   selectedTypes = [],
   selectedLanguages = [],
@@ -248,6 +255,7 @@ export function GetResources({
   const languagesText: string = getLocalizedString('%resources_languages%');
   const noResultsText: string = getLocalizedString('%resources_noResults%');
   const noResultsErrorText: string = getLocalizedString('%resources_noResultsError%');
+  const retryText: string = getLocalizedString('%resources_retry%');
   const openText: string = getLocalizedString('%resources_open%');
   const removeText: string = getLocalizedString('%resources_remove%');
   const resultsText: string = getLocalizedString('%resources_results%');
@@ -446,8 +454,13 @@ export function GetResources({
             /* eslint-disable no-nested-ternary */
             <div>
               {isResourcesError ? (
-                <div className="tw:m-4 tw:flex tw:justify-center">
+                <div className="tw:m-4 tw:flex tw:flex-col tw:items-center tw:gap-3">
                   <Label>{noResultsErrorText}</Label>
+                  {onRetryResources && (
+                    <Button variant="outline" size="sm" onClick={onRetryResources}>
+                      {retryText}
+                    </Button>
+                  )}
                 </div>
               ) : sortedResources.length === 0 ? (
                 <div className="tw:m-4 tw:flex tw:justify-center">
