@@ -275,4 +275,30 @@ describe('withWindowScopedWebViewIdInTab', () => {
     expect(readIds(scoped).id).toBe(`abc-123-w${globalThis.windowId}`);
     expect(stripWindowScopeFromWebViewId(readIds(scoped).id)).toBe('abc-123');
   });
+
+  describe('a suffix written before window ids were durable', () => {
+    // A saved layout on disk today can carry `-w3`: a window id was the stringified Electron
+    // window id until this scheme changed, and layouts written by those builds are still in real
+    // profiles. Both shapes have to strip, or re-scoping stacks a second suffix onto the first and
+    // the id never returns to the one the web view was minted with.
+
+    test('strips a numeric suffix', () => {
+      expect(stripWindowScopeFromWebViewId('paratext.home-w3')).toBe('paratext.home');
+    });
+
+    test('replaces a numeric suffix rather than stacking a durable one onto it', () => {
+      globalThis.windowId = newGuid();
+
+      const rescoped = readIds(withWindowScopedWebViewIdInTab(webViewTab('paratext.home-w3'))).id;
+
+      expect(rescoped).toBe(`paratext.home-w${globalThis.windowId}`);
+      expect(stripWindowScopeFromWebViewId(rescoped)).toBe('paratext.home');
+    });
+
+    test('leaves an id whose own name ends in something suffix-shaped alone', () => {
+      // The pattern only takes what follows the last `-w`, so a web view whose minted id happens
+      // to end that way keeps it.
+      expect(stripWindowScopeFromWebViewId('some-widget')).toBe('some-widget');
+    });
+  });
 });
