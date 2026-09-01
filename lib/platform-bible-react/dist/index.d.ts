@@ -4011,7 +4011,7 @@ export declare function useShrinkStepValue(): number;
  * At 600 this sits above the overlay, modal, and tooltip layers, which is why content portalled out
  * of a popover needs {@link Z_INDEX_ABOVE_POPOVER} to stay visible. Two consequences are unresolved
  * and deliberately not papered over here: a tooltip triggered from inside a popover
- * ({@link Z_INDEX_TOOLTIP}, 550) renders BEHIND it, and a popover renders OVER a modal dialog
+ * (`Z_INDEX_TOOLTIP`, 550) renders BEHIND it, and a popover renders OVER a modal dialog
  * ({@link Z_INDEX_MODAL}, 500). Both want the scale re-ordered rather than another constant raised.
  */
 export declare const Z_INDEX_ABOVE_DOCK = 600;
