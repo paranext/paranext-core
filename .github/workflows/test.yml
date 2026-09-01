@@ -166,7 +166,9 @@ jobs:
           bundler-cache: true
 
       - name: Install packages
-        run: npm ci
+        run: |
+          npm run stage-dev-packages
+          npm ci
 
       # build:main has to run before typecheck as it creates buildInfo.json which typecheck requires
       - name: type checking
