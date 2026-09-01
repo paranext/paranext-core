@@ -125,7 +125,11 @@ function renderTabMenuItems(
   keyPrefix = '',
 ): ReactNode[] {
   return items.map((item, index) => {
-    const key = `${keyPrefix}${index}`;
+    // Keyed by the item's own id where it has one, so an item keeps its identity when the list
+    // around it changes — the move items come and go as the window read lands. A separator never
+    // has one and a submenu's is optional, so position remains the only key available for those
+    const itemId = item.type === 'separator' ? undefined : item.id;
+    const key = itemId === undefined ? `${keyPrefix}${index}` : `${keyPrefix}${itemId}`;
     if (item.type === 'separator') return <ContextMenuSeparator key={key} />;
     if (item.type === 'submenu')
       return (
@@ -821,15 +825,30 @@ export function PlatformTabTitle({
     </TooltipProvider>
   );
 
+  const menuContext: TabMenuContext = useMemo(
+    () => ({ webViewId, ...menuTargets }),
+    [webViewId, menuTargets],
+  );
+
+  // Memoized, and above the Simple-mode return so it stays a hook: a single focus change re-renders
+  // every mounted tab title, because the focus subscription, useLastFocusedTabId and
+  // useLastSelectedScriptureNavigableWebViewId all fan out to all of them. Without this, each one
+  // re-filters and re-maps its item list on every one of those.
+  //
+  // The Simple-mode short-circuit lives inside rather than around it, so that mode still pays
+  // nothing for a menu it never shows.
+  const tabMenuItems = useMemo(
+    () =>
+      isPowerMode
+        ? buildTabMenuItems(localizedContributedItems, menuContext, emptyWindowLabel)
+        : [],
+    [isPowerMode, localizedContributedItems, menuContext, emptyWindowLabel],
+  );
+
   // Simple mode: skip the tab menu entirely. Every item it offers is either a no-op here (floating
   // is off, since the group config has floatable: false) or reaches a second window, which Simple
   // mode does not have. Removing the menu prevents dead options from being shown.
   if (!isPowerMode) return titleWithTooltip;
-
-  const menuContext: TabMenuContext = {
-    webViewId,
-    ...menuTargets,
-  };
 
   const handleSelect = (itemId: string) => {
     if (itemId === FLOAT_TAB_COMMAND) {
@@ -852,8 +871,6 @@ export function PlatformTabTitle({
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     handleMenuCommand({ command: itemId } as Parameters<typeof handleMenuCommand>[0], id);
   };
-
-  const tabMenuItems = buildTabMenuItems(localizedContributedItems, menuContext, emptyWindowLabel);
 
   // Rendering the menu with nothing in it puts an empty styled popup on screen, since the content
   // opens whatever its children are. A tab with nothing to offer — its read has not landed, or
