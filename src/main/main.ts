@@ -1204,6 +1204,11 @@ async function main() {
       // Everything from here down is inside the guard: the window is now prevented from closing and
       // latched as closing, so a throw that escaped would strand it exactly there — visible, inert,
       // and (from an async listener) reported only as a rejection Electron never sees.
+      //
+      // The fan-out above is deliberately outside it, and survives being so: each sibling's own
+      // close handler is async, so a throw inside one becomes a rejected promise rather than an
+      // exception travelling back through `close()` into this loop, and the process-level
+      // unhandled-rejection handler reports it.
       try {
         // Recorded before the decision below, and read by every window's handler, so that windows
         // closing at the same moment agree on what is happening rather than each leaving the
