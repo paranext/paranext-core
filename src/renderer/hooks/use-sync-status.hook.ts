@@ -14,7 +14,7 @@ import { normalizeProjectId } from '@shared/models/project-lookup.service-model'
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useEvent, usePromise } from 'platform-bible-react';
-import type { ResultStatus, SyncProgressEvent, SyncState } from 'paratext-bible-send-receive';
+import type { ResultStatus, SyncProgressEvent } from 'paratext-bible-send-receive';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 /**
@@ -144,6 +144,25 @@ function deriveOutcomeFromResults(resultsInfo: unknown): 'synced' | 'failed' | u
 }
 
 /**
+ * The parts of a `getSyncState` response this hook actually reads, and the shape
+ * {@link isValidSyncState} actually checks.
+ *
+ * Deliberately NOT the seam's `SyncState`. Narrowing to the full declared type would promise that
+ * `lastResults` conforms to `ResultsData`, which nothing here verifies — and verifying it is the
+ * wrong fix: a snapshot whose `resultsInfo` cannot be read still carries perfectly good `isSyncing`
+ * and `syncingProjectIds`, and rejecting the whole payload over an unreadable historical outcome
+ * would discard the live fields with it (`adr-toolbar-sync-status-is-local` follow-up 5).
+ * {@link deriveOutcomeFromResults} therefore takes `resultsInfo` as `unknown` and answers `unknown`
+ * for anything it cannot read, which is the honest verdict.
+ */
+type ReadableSyncState = {
+  isSyncing: boolean;
+  lastRequestedProjectIds: string[];
+  syncingProjectIds?: string[];
+  lastResults?: { resultsInfo?: unknown };
+};
+
+/**
  * Maps a snapshot to the status to show. Unlike an event — where `isSyncing: false` always means a
  * sync just finished — a snapshot's `isSyncing: false` only means one is not running, which is also
  * true before anything has synced. `lastResults` is what separates the two, and what its
@@ -151,7 +170,7 @@ function deriveOutcomeFromResults(resultsInfo: unknown): 'synced' | 'failed' | u
  * success requires evidence of success; a `lastResults` whose contents cannot be read is reported
  * as `unknown` rather than as either verdict.
  */
-function deriveStatusFromSnapshot(state: SyncState): SyncStatus {
+function deriveStatusFromSnapshot(state: ReadableSyncState): SyncStatus {
   if (state.isSyncing) return 'syncing';
   if (!state.lastResults) return 'idle';
   return deriveOutcomeFromResults(state.lastResults.resultsInfo) ?? 'unknown';
@@ -188,9 +207,9 @@ function isValidProjectIdsField(projectIds: unknown): boolean {
 }
 
 /** Narrows a `getSyncState` response to the parts this hook reads. See {@link hasIsSyncingFlag}. */
-function isValidSyncState(state: unknown): state is SyncState {
+function isValidSyncState(state: unknown): state is ReadableSyncState {
   if (!hasIsSyncingFlag(state)) return false;
-  // Checked even though this hook never reads it: the predicate narrows to the WHOLE `SyncState`,
+  // Checked even though this hook never reads it: the predicate narrows to a type that DECLARES it,
   // so leaving it unvalidated would hand the next reader of that field an `undefined` the type says
   // cannot happen.
   if (!('lastRequestedProjectIds' in state) || !Array.isArray(state.lastRequestedProjectIds))
@@ -328,7 +347,7 @@ export function useSyncStatus(): SyncStatusInfo {
     setSyncingProjectIds((prevIds) => (isSameProjectIdSet(prevIds, nextIds) ? prevIds : nextIds));
   }, []);
 
-  const readSyncState = useCallback(async (): Promise<SyncState | undefined> => {
+  const readSyncState = useCallback(async (): Promise<ReadableSyncState | undefined> => {
     try {
       const state = await sendCommand('paratextBibleSendReceive.getSyncState');
       if (!isValidSyncState(state)) {

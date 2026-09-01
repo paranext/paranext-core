@@ -68,7 +68,7 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_sync_cancelling%',
   '%toolbar_sync_open_status%',
   '%toolbar_sync_popover_cancelled%',
-  '%toolbar_sync_popover_failed%',
+  '%toolbar_sync_popover_last_sync_unfinished%',
   '%toolbar_sync_popover_idle%',
   '%toolbar_sync_popover_synced%',
   '%toolbar_sync_popover_unknown%',
@@ -529,15 +529,16 @@ export function SyncStatusButton() {
    * underscore status underscore unknown percent, button". The live region beside it is explicitly
    * guarded against the same thing.
    */
+  const unknownStatusText = localizedStrings['%toolbar_sync_status_unknown%'];
   const buttonAccessibleName =
-    status === 'unknown' && areStringsLoaded
-      ? `${buttonLabel} — ${localizedStrings['%toolbar_sync_status_unknown%']}`
+    status === 'unknown' && areStringsLoaded && unknownStatusText
+      ? `${buttonLabel} — ${unknownStatusText}`
       : undefined;
 
   const popoverStatusMessage = (() => {
     if (status === 'synced') return localizedStrings['%toolbar_sync_popover_synced%'];
     if (wasCancelled) return localizedStrings['%toolbar_sync_popover_cancelled%'];
-    if (status === 'failed') return localizedStrings['%toolbar_sync_popover_failed%'];
+    if (status === 'failed') return localizedStrings['%toolbar_sync_popover_last_sync_unfinished%'];
     // `unknown` means the read didn't answer, so "no sync is running" would be a positive claim with
     // nothing behind it.
     if (status === 'unknown') return localizedStrings['%toolbar_sync_popover_unknown%'];

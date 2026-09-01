@@ -42,7 +42,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_cancelling%': 'Test Cancelling',
       '%toolbar_sync_open_status%': 'Test Sync status',
       '%toolbar_sync_popover_cancelled%': 'Test The last sync was cancelled.',
-      '%toolbar_sync_popover_failed%': 'Test last sync did not finish',
+      '%toolbar_sync_popover_last_sync_unfinished%': 'Test last sync did not finish',
       '%toolbar_sync_popover_idle%': 'Test no sync running',
       '%toolbar_sync_popover_synced%': 'Test last sync finished',
       '%toolbar_sync_popover_unknown%': 'Test status unavailable',

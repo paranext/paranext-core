@@ -157,6 +157,15 @@
       "message": "This exists to test deprecating localized strings. Do not remove or use."
     }
   },
+  "%toolbar_sync_popover_failed%": {
+    "deprecationInfo": {
+      "date": "2026-09-01",
+      "message": "The failed-sync popover no longer instructs the reader to open the sync status: a \"View sync details\" button sits directly beneath the message and names that destination itself, so the sentence carried a second, redundant instruction. Use %toolbar_sync_popover_last_sync_unfinished%, which states the outcome only."
+    }
+  },
+  "%toolbar_sync_popover_last_sync_unfinished%": {
+    "fallbackKey": "%toolbar_sync_popover_failed%"
+  },
   "%toolbar_sync_unavailable%": {
     "deprecationInfo": {
       "date": "2026-08-19",

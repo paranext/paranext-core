@@ -2383,21 +2383,33 @@ step, no automation. Just a record.
     because the opposite default on either side risks combining with the other's failure mode to
     leave the user with **no** sync feedback. Preserve "fail toward showing something", not "fail
     toward showing exactly one thing".
-  - **`useSyncStatus` runs two independent seed-retry loops.** Each has its own
-    `SYNC_SEED_RETRY_WINDOW_MS` budget, because a claim event or a claim seed that gives up must not
-    end the activity seed's retries, and vice versa. A full budget is spent only on a Studio build
-    predating `getSyncActivity`. Public Platform.Bible pays far less: nothing implements the command,
-    so `isSendReceiveAvailable` settles to a real `false` and the toolbar unmounts this control after
-    `SEND_RECEIVE_UNKNOWN_GRACE_MS`, tearing both loops down after three or four attempts. The cost
-    is cold-start warn-level log volume, not behavior.
+  - **The two inputs seed independently, and at different altitudes.** The claim's seed-retry loop
+    belongs to `useSyncStatus` and restarts with it; the activity signal's belongs to
+    `initSyncActivityService`, started once from `renderer/index.tsx` and shared through
+    `sync-activity-store`. Separate budgets, because a claim event or a claim seed that gives up must
+    not end the activity seed's retries, and vice versa. Putting the activity seed in a startup
+    service rather than the hook is what stops a Simple/Power toggle from discarding a seeded snapshot
+    and re-running the retries, and what lets the toolbar's mount gate read the same validated
+    snapshot the union does. `getSyncActivity` IS implemented in every build — core's own
+    `SyncActivityNotifierService` registers it and answers an idle snapshot — so only the CLAIM's loop
+    ever spends a full budget, and only on a build without the Send/Receive extension, where
+    `isSendReceiveAvailable` settles to a real `false` and the toolbar unmounts the control after
+    `SEND_RECEIVE_UNKNOWN_GRACE_MS`. The cost is cold-start warn-level log volume, not behavior.
   - **A settled "send/receive unavailable" must not hide a live sync.** The toolbar gates the
     indicator on `useSendReceiveAvailability`, which asks whether the send/receive EXTENSION is
     present — but syncs start from paths that never touch it, so a settled `false` while the backend
     is mid-sync would leave a Simple-mode sync with no surface at all, which is the exact failure
-    this ADR exists to prevent. `useBackendSyncActivity` closes that: a subscription-only read of
-    `onSyncActivityChanged` (no pull, no seed retries, no availability probe) that can only ever
-    reveal the indicator, never hide it, and costs one never-firing subscription in builds that never
-    sync.
+    this ADR exists to prevent. `useBackendSyncActivity` closes that, reading
+    `sync-activity-store`'s `hasObservedSyncRun`, which can only ever reveal the indicator and never
+    hide it.
+
+    Two properties of that gate are load-bearing and easy to lose. It must be SEEDED, because
+    `onSyncActivityChanged` carries no replay and the backend's idle baseline fires once per backend
+    start rather than once per subscriber — so a gate that only subscribes never learns about a sync
+    that was already running when it mounted, which is precisely the Simple-mode startup sync this ADR
+    is about. And it must be STICKY, because a gate on "is syncing right now" unmounts the control in
+    the same commit the closing snapshot arrives, discarding the outcome before it can be painted or
+    announced and tearing down the status hook's seed loop mid-flight.
   - **The two halves only compose in a real build.** The run bracket that raises the signal, and the
     toast gate, live in Studio's patch; the seam, the notifier, and the union live here. Core's union degrades cleanly to claim-only when the patch is
     absent, by the declare-it-optional pattern `adr-toolbar-sync-status-is-local` established — but the invisible-path gap and

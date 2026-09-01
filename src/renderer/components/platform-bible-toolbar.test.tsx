@@ -38,6 +38,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_open_status%': 'Test Sync status',
       '%toolbar_sync_status_synced%': 'Test Synced',
       '%toolbar_sync_status_syncing%': 'Test Syncing',
+      '%toolbar_sync_status_unknown%': 'Test Sync status unavailable',
       '%mainMenu_openHome%': 'Home',
     },
   ]),
@@ -368,7 +369,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
     render(<PlatformBibleToolbar />);
 
     // Reachable via the accessibility tree and keyboard, and shows the idle label
-    const btn = screen.getByRole('button', { name: 'Sync' });
+    const btn = screen.getByRole('button', { name: /Sync/ });
     expect(btn).toBeInTheDocument();
     expect(btn).not.toHaveAttribute('aria-hidden');
     expect(btn).not.toHaveAttribute('tabIndex');
@@ -406,12 +407,12 @@ describe('PlatformBibleToolbar — Sync button', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sync/ })).toBeInTheDocument();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(SEND_RECEIVE_UNKNOWN_GRACE_MS);
     });
-    expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sync/ })).toBeInTheDocument();
     vi.useRealTimers();
   });
 
@@ -457,7 +458,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
     mockSendCommand(true);
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      const btn = screen.getByRole('button', { name: 'Sync' });
+      const btn = screen.getByRole('button', { name: /Sync/ });
       expect(btn).toBeInTheDocument();
       expect(btn).toHaveTextContent('Sync');
     });
@@ -490,7 +491,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
     render(<PlatformBibleToolbar />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Sync/ })).toBeInTheDocument();
     });
 
     expect(capturedSyncStateCallback).toBeDefined();

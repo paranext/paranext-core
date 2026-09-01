@@ -491,15 +491,20 @@ declare module 'papi-shared-types' {
      * status on mount rather than waiting for the next
      * `paratextBibleSendReceive.onSyncActivityChanged` event.
      *
-     * An in-memory read in the dotnet backend; cheap enough to call on mount and on each state
-     * change. Rejects if the command is not available (either the Send/Receive extension has not
-     * registered yet, a cold start, or the application is plain Platform.Bible rather than Paratext
-     * 10 Studio). Callers should keep their existing state on failure rather than assuming idle.
+     * Note: this command is served from the dotnet process. Like
+     * {@link CommandHandlers['paratextBibleSendReceive.getAutoSyncBlocking']} and unlike most
+     * Send/Receive commands, it is registered by core's own `SyncActivityNotifierService` rather
+     * than the extension, so it is answered on plain Platform.Bible too — always an idle snapshot
+     * there, since only the Paratext 10 Studio patch carries the run bracket that reports
+     * activity.
+     *
+     * An in-memory read; cheap enough to call on mount and on each state change. The realistic
+     * failure mode is a cold-start race: if the dotnet process has not registered the command
+     * within main's retry budget (~9s), the request rejects. A caller must keep its existing state
+     * on failure rather than reading a rejection as "no sync is running", and should retry rather
+     * than treat one rejection as the final answer.
      *
      * @returns The current {@link SyncActivitySnapshot}
-     * @throws `PlatformUnimplementedException` when nothing in this build implements the command —
-     *   public Platform.Bible, or a Paratext 10 Studio build predating this signal. An extension
-     *   author must handle the rejection rather than reading it as "no sync is running".
      * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.getSyncActivity': () => Promise<SyncActivitySnapshot>;
@@ -658,9 +663,15 @@ declare module 'papi-shared-types' {
      * `onSyncStateChanged`, this covers syncs that reach the dotnet `syncProjects`/
      * `sendReceiveProjects` commands directly and raise no Send/Receive extension claim.
      *
-     * Only emitted by Paratext 10 Studio builds. Nothing in public Platform.Bible emits it, so a
-     * subscriber there simply never hears from it and must not read that silence as "no sync is
-     * running".
+     * Registered by core's own `SyncActivityNotifierService`, so EVERY build emits it — an idle
+     * baseline once per backend (re)start, exactly like `onSyncWriteLockChanged`. Only Paratext 10
+     * Studio builds carry the run bracket that reports real activity, so in public Platform.Bible
+     * the baseline is all a subscriber ever hears.
+     *
+     * That baseline fires ONCE PER BACKEND START, not once per subscriber, and this event carries
+     * no replay: a subscriber that starts mid-sync has already missed it, and the next thing it
+     * hears is the CLOSING snapshot. A consumer that needs to be correct from the moment it starts
+     * must seed from `paratextBibleSendReceive.getSyncActivity` rather than subscribing alone.
      *
      * @experimental This event is unstable and may change or disappear without notice
      */
