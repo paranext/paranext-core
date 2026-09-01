@@ -434,7 +434,10 @@ Before creating utility functions:
    - `lib/platform-bible-utils/src/scripture/` — scripture utilities
    - `lib/platform-bible-utils/src/string-util.ts` — string manipulation
    - `lib/platform-bible-utils/src/index.ts` — all public exports
-2. If it exists, use it — import from `platform-bible-utils`.
+2. If it exists, use it — import from `platform-bible-utils`. The one exception is `string-util.ts`,
+   whose functions are grapheme-aware replacements for methods `String` already has: those are a
+   deliberate choice with a real cost, not a default. See
+   [native-string-vs-grapheme-helpers.md](../../.claude/rules/code-quality/native-string-vs-grapheme-helpers.md).
 3. If it doesn't exist, create it in the appropriate shared location (see Placement below).
 
 ### Utility Placement

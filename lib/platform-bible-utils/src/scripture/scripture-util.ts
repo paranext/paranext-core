@@ -6,7 +6,7 @@ import {
   USJ_TYPE,
 } from '@eten-tech-foundation/scripture-utilities';
 import { BookInfo, ScrollGroupId } from './scripture.model';
-import { at, isWhiteSpace, slice, split, startsWith } from '../string-util';
+import { at, isWhiteSpace, slice, split } from '../string-util';
 import { LocalizeKey } from '../extension-contributions/menus.model';
 import { isString } from '../util';
 
@@ -311,7 +311,7 @@ export async function getLocalizedIdFromBookNumber(
 ) {
   const id = Canon.bookNumberToId(bookNumber);
 
-  if (!startsWith(Intl.getCanonicalLocales(localizationLanguage)[0], 'zh'))
+  if (!Intl.getCanonicalLocales(localizationLanguage)[0].startsWith('zh'))
     return getLocalizedString({
       localizeKey: `LocalizedId.${id}`,
       languagesToSearch: [localizationLanguage],
@@ -323,8 +323,9 @@ export async function getLocalizedIdFromBookNumber(
     languagesToSearch: [localizationLanguage],
   });
   const parts = split(bookName, '-');
-  // some entries had a second name inside ideographic parenthesis
-  const parts2 = split(parts[0], '\xff08');
+  // some entries had a second name inside ideographic parenthesis. This is the fullwidth left
+  // parenthesis U+FF08, which needs the four-digit `\u` escape — the two-digit `\xff08` is `ÿ08`.
+  const parts2 = split(parts[0], '（');
   const retVal = parts2[0].trim();
   return retVal;
 }
@@ -873,6 +874,16 @@ function areUsjContentsEqualExceptWhitespaceInternal(
       if (!isAtEndOfBlockMarker(b, bParent)) return false;
 
       // Trim the end of each string
+      // TODO: Delete this comment along with these loops when the construct-once `GraphemeString`
+      // work lands — its `trimEndOfGraphemes` already replaces them with a single segmentation.
+      // Kept until then only to record what it costs: `at` and `slice` each re-segment the whole
+      // string and the loop calls both per character removed, so trimming n characters costs 2n
+      // segmentations — ~256 ms per call on a 10,000-character string with 200 trailing spaces.
+      // Whatever replaces this must keep comparing whole clusters. `stringz` groups a zero-width
+      // joiner with the character after it, so a trailing ZWJ+space is one cluster that is not
+      // entirely white space and does not get trimmed; native `String` or a `/\s+$/` replace would
+      // trim it. (Whether a caller can reach that difference is unproven — the guard above returns
+      // early on those shapes.)
       let aTrimmed = aNormalized;
       while (isWhiteSpace(at(aTrimmed, -1) ?? '')) aTrimmed = slice(aTrimmed, 0, -1);
       let bTrimmed = bNormalized;
@@ -987,7 +998,7 @@ export function collectUsjMarkers(usj: Usj | undefined): string[] {
       // String nodes are text runs, not markers.
       if (isString(node)) return;
       const { marker } = node;
-      if (marker && !startsWith(marker, 'z') && !seen.has(marker)) {
+      if (marker && !marker.startsWith('z') && !seen.has(marker)) {
         seen.add(marker);
         markers.push(marker);
       }

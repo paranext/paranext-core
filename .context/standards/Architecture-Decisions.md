@@ -2216,3 +2216,119 @@ step, no automation. Just a record.
   for a typed surface rather than a state key.
 - **Source:** PT-4346, global BCV control showing books from open resources.
 
+## adr-node-dom-globals-polyfill: Node processes install `@xmldom/xmldom` DOM globals; the extension host does it in a first-import side-effect module
+
+- **Date:** 2026-08-22
+- **Status:** Accepted
+- **Context:** scripture-editors PR
+  [#541](https://github.com/eten-tech-foundation/scripture-editors/pull/541) drops `@xmldom/xmldom`
+  from `@eten-tech-foundation/scripture-utilities` (~89 KB off browser bundles) and makes the
+  USX⇔USJ converters use the platform's **native** `DOMParser`/`XMLSerializer`. Browsers and web
+  views have those; our extension host is plain Node and does not, so the converters throw. It
+  reaches them through `platform-scripture`'s finder and extender PDPEs — every scripture read and
+  write. There was no runtime DOM shim anywhere in `src/`; every `jsdom` reference was in tests.
+- **Decision:** paranext-core supplies the globals rather than waiting on the package.
+  `src/node/polyfills/dom-globals.polyfill.ts` installs them from `@xmldom/xmldom` (now a declared
+  root dependency; previously it reached us only transitively — a dev-only 0.8.x hoisted via `plist`
+  plus a non-dev 0.9.x nested under scripture-utilities), letting an existing global win so a real
+  DOM is never overridden. It is a **side-effect module** imported **first** by `extension-host.ts`
+  — see that module's docs for why a callable function would run too late. `vitest.setup.node.ts`
+  installs it too, because the `node`-environment test projects that run the converters would
+  otherwise fail outright; each such project wires that file in itself, so the ones that never touch
+  the converters do not load it. It is kept out of the shared `vitest.setup.ts` so the jsdom
+  projects, which already have a real DOM, do not pull xmldom into all ~150 of their workers for
+  nothing. The main process is deliberately **not** polyfilled: it has no converter call sites.
+- **Alternatives:** **Let the package fall back to `@xmldom/xmldom` when no DOM is present** (what
+  scripture-editors issue #516 floated) — needs no core change, but it is a cross-repo change we do
+  not control and would have to land first. **Install from `global-this.model.ts` alongside
+  `polyfillLocalStorage()`** — matches the existing polyfill pattern, but that module already
+  transitively imports `platform-bible-utils`, so its graph is fully evaluated before the install
+  would run; the ordering guarantee would be accidental rather than structural. **Pin the root dep
+  to `^0.8.10`** to match the dev-only hoisted copy — rejected: scripture-utilities parses and
+  serializes with 0.9.x internally, and this code writes scripture to disk, so the extension host
+  should stay on the 0.9 line rather than drop to an older parser. Note this does not pin an exact
+  engine: declaring `^0.9.8` at the root dedupes the package's own nested 0.9.10 away, so the
+  converters now run on whatever 0.9.x resolves at the root (0.9.12 today).
+- **Consequences:** Two `@xmldom/xmldom` majors now live in the tree on purpose.
+  `platform-enhanced-resources` declares `^0.8.10` because `marble-converter.ts` passes
+  `errorHandler` as an object, which 0.9 rejects with a `TypeError`; that dependency was previously
+  undeclared and resolved to the hoisted copy, so the root declaration would otherwise have silently
+  upgraded it and broken every marble conversion. npm satisfies that range by hoisting 0.8.x to
+  `extensions/node_modules/`, which makes it the default for **every** package under
+  `extensions/src/*`, not just this one — `import/no-extraneous-dependencies` is off, so the next
+  extension to import `@xmldom/xmldom` binds to 0.8.x with no warning. Two follow-ups worth taking
+  together: PT-4445 migrates `marble-converter` to 0.9's `onError` and drops the pin, and PT-4446
+  supersedes it — `convertMarbleChapterXml` runs only in a web view, which already has a native
+  `DOMParser`, so dropping the dependency there removes the pin, the version split, and this
+  paragraph at once. Separately, `@xmldom/xmldom` emits no `parsererror` element, so PR #541's
+  malformed-XML guard is inert under the shim; fatally malformed USX still throws (as a `ParseError`
+  from inside `parseFromString`, not the renderer's `Invalid USX:` error), but *recoverable* defects
+  are silently repaired rather than rejected — on the extension host that repaired form is what gets
+  written back to disk. That write-path asymmetry is **PT-4444**, flagged at the save site in
+  `platform-scripture-extender-pdpe.model.ts`. Revisit if the package ever ships its own Node
+  fallback.
+- **Source:** PT-4412, review of #2714.
+
+## adr-renderer-websocket-suspend-disconnect: Diagnose the renderer's Chromium WebSocket as the PT-1641 suspend failure, instrument before reconnecting
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** PT-1641 sat unreproduced for 20 months. A macOS `pmset sleepnow` reproduces one shape of it in about one second of sleep: the renderer's PAPI socket dies during the suspend transition, nothing reconnects, and the editor shows a blank pane with an endless spinner. Only the renderer's socket dies — the extension host and the .NET data provider survive the same suspend — because the renderer is the one peer using Chromium's native `WebSocket` (`src/client/services/web-socket.factory.ts:15`, returning a real `new WebSocket(...)` at `src/renderer/services/renderer-web-socket.service.ts:73`), while the extension host uses Node's `ws`. Chromium tears its WebSockets down across a suspend; `ws` does not. Timeline evidence from the reproduction: close logged at 16:15:31, `Tried to send payload while not connected` at 16:15:33-36, `Timeout reached when waiting for wait-for-net-obj` at 16:18:30, blank pane and spinner still turning at 16:18:57, with zero reconnect attempts. This is one of at least three distinct failure shapes reported under PT-1641, and this decision explains only this one: (2) a startup connect race leaves the extension host dead on a cold install, with raw `%localizeKey%` text everywhere and no providers registered — `RpcWebSocketListener.connect()` never awaits the server's `listening` event, so a client can be spawned into the gap before the socket is bound, and its ~9.98s failure is `AsyncVariable`'s 10-second default (`lib/platform-bible-utils/src/promises/async-variable.ts:19`) timing out the await at `src/client/services/rpc-client.ts`, not a crash; a fix for this is in flight on a separate branch and was deliberately not touched here. (3) A report of the main process failing to complete a synchronous `forEach` for 17 minutes — a main-process stall, not a renderer socket teardown, and nothing in this investigation accounts for it.
+- **Decision:** Treat the observed (shape-1) failure as a missing-reconnect problem on the renderer's Chromium WebSocket, not a silent-socket problem. Instrument first — close codes on both ends, client-side close reporting with peer identity, OS power-transition logging — and defer reconnect and any connection-lost UI to follow-up work.
+- **Alternatives:** A heartbeat/ping-pong keepalive, deferred — not because a heartbeat is a bad idea, but because the transport is loopback-only (`src/main/services/rpc-websocket-listener.ts:105` binds `localhost`, clients connect to `localhost`), and a half-open connection dying with no FIN — the failure a heartbeat exists to catch — is unlikely on loopback. It is deferred for that reason, not merely because this one repro happened to deliver a close event. This does not foreclose adding a heartbeat later; what would reopen it: an observed no-close-event case, or the shape-3 stall turning out to present as one.
+- **Consequences:** This rests on a single reproduction of a single trigger; it does not establish that every PT-1641 report is this failure. Three failure shapes are recorded above and only one (shape 1) is explained — the next reader should not mistake this entry for "PT-1641 is solved." A `TODO(PT-4435)` at `src/client/services/rpc-client.ts` records three pre-existing reconnect blockers, all traced to `AsyncVariable` being single-shot and freezing on settle so `connectionComplete` cannot be reused: a reconnect would report a false `Connected`, a timed-out first connect is permanently fatal, and `applyMiddleware` stacks per `connect()` call. All three are pinned by `test.fails` cases in `src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts`, so the gap is visible in CI rather than only in prose, and will start failing the suite (by inverting to pass) the moment a real reconnect implementation lands, which is the intended trip wire. Also worth recording: the diagnosis is only as good as its instrumentation — before this work the client logged nothing at all on close, and the shipped comment explaining the observed `{}` log collapse was factually wrong (it blamed non-enumerable properties; `ws` marks its event properties enumerable, and `JSON.stringify` skips them because it serializes only own properties, not enumerability). That wrong comment went unnoticed because no test exercised a real `ws` close event until this work added one.
+- **Consequences (severity, and what stays deferred):** Severity is split by whether a closing handshake completed, which is the transport's own verdict — but no peer closes politely today, so on the way down every socket dies with 1006. Main's server is still listening while the extension host calls `process.exit()` (`src/extension-host/extension-host.ts`) and each renderer process is torn down; `networkService.shutdown()` runs afterwards (`src/main/main.ts`). Reporting those at `warn` would fire on every quit and bury the signal. Main therefore asks `isAppShuttingDown()` (`src/main/services/shutdown-latch.service.ts`) and reports a handshake-less close at `info`, annotated `expected during app shutdown`, while the app is coming down. Two things follow. (a) A residual: one window closing out of several is not an app shutdown, so that renderer's socket death still reports at `warn`. Attributing it would need the socket-to-window mapping main does not have; the announced peer name (see below) is the first half of that. (b) The polite-close path stays unbuilt on purpose. `INTENTIONAL_CLOSE_CODE` (4000) is unreachable from every peer: `RpcClient.disconnect()` has no client-side caller, because `IRpcHandler.disconnect` is reached only from `networkService.shutdown()`, which runs in main where the handler is an `RpcWebSocketListener`; and `RpcServer.disconnect()` has no caller at all, because `RpcWebSocketListener.disconnect()` closes the WebSocket server without iterating its `RpcServer`s — leaving `IRpcHandler.disconnect`'s documented "on servers: disconnects from all clients" unmet. Both are recorded as `TODO(PT-4435)` at their definitions. Making peers close politely changes what shutdown does to live sockets, which belongs with the reconnect/teardown work rather than with instrumentation.
+- **Consequences (a fourth reconnect blocker, outside the tests):** Beyond the three `AsyncVariable` blockers above, the renderer cannot reconnect at all: `blockWebSocketsToPapiNetwork()` runs at `src/renderer/index.tsx` AFTER the initial connect, so a later attempt throws `Invalid URL` from `PapiRendererWebSocket`'s constructor and never reaches the `AsyncVariable` problems. It is invisible to `rpc-client.reconnect-gaps.test.ts`, which mocks the socket factory — so unlike the other three it is recorded only as a `TODO(PT-4435)` comment, with no test pinning it.
+- **Consequences (two of three peers, not three):** "Diagnosable from the log" holds for the renderer and the extension host. The .NET data provider is outside this scheme: `c-sharp/PapiClient.cs` logs `JSONRPC disconnected: Reason = …` with no close code and no clean/abnormal classification, and the only close-status handling anywhere in `c-sharp/` is the `NormalClosure` it sends — which lands on `isCleanCloseCode`'s clean list by coincidence rather than by contract. Not urgent (the .NET socket survives a suspend, per the evidence above), but a third peer disconnecting is currently less diagnosable than the two this work covers.
+- **Consequences (the `shutdown` power marker costs a Linux inhibitor):** `POWER_EVENTS` registers Electron's `shutdown` listener, which is what separates "the OS took the app down" from "the app died" in a log that simply stops — the NN-6 distinction. Subscribing to it makes Electron hold a logind shutdown-delay inhibitor for the session on Linux. Nothing is actually delayed: the handler only logs and never calls `preventDefault()`, so the OS proceeds on its own schedule. The marker is judged worth that, since without it an OS-initiated shutdown is indistinguishable from a crash. Revisit if the inhibitor is ever observed to change shutdown behavior on a supported Linux target.
+- **Consequences (the shutdown signal is injected, not imported):** `RpcServer` reads whether the app is coming down through `setAppShutdownSignal`, wired from `src/main/main.ts`, rather than importing `shutdown-latch.service` directly. Every module `rpc-server` imports is reachable from `papi.d.ts`'s entry points, so the direct import published the shutdown latch and the window-state service it depends on — `resetForTesting()` included — as extension-facing API on the generated surface and the TypeDoc site. Any future main-process-only state a shared or client-reachable module needs should come in through the same kind of seam.
+- **Source:** PT-4434; diagnosed on macOS 2026-08-26. Reviewed in PR #2731, which is where the severity, unreachable-4000 and third-peer consequences above were established.
+
+## adr-native-string-when-ascii-by-construction: `string-util`'s grapheme-aware helpers are a deliberate choice, not the default
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** `platform-bible-utils`' `string-util.ts` exports grapheme-aware replacements for
+  methods `String` already has (`includes`, `indexOf`, `startsWith`, `endsWith`, `slice`, `split`,
+  `substring`, `stringLength`, ...). Every one segments its input into grapheme clusters, and
+  segmenting is the whole cost — native `String` never segments and is several times faster than
+  even a reused `GraphemeString`. A sweep for PT-2626 found 86 call sites across 32 files, most
+  passing machine-generated identifiers, request types, property names, or markup through a
+  segmenter that could not change the answer. The web view `<head>` splice alone segmented an
+  entire HTML document four times per web view: 36 ms at 100 KB, 186 ms at 500 KB, 1023 ms at 2 MB,
+  against ~0 ms native. Web views inline their bundled app, so 1–2 MB is ordinary.
+
+  The standing guidance pointed the other way. `Code-Style-Guide.md`'s decision framework said
+  "Check `platform-bible-utils` first … `string-util.ts` — string manipulation. If it exists, use
+  it", and a grep of `.context/standards/**` and `.claude/rules/**` for
+  `grapheme|GraphemeString|stringz` returned that line and nothing else.
+- **Decision:** Grapheme awareness is opt-in per call site, qualified by a stated rule: **native
+  `String` only when both the needle and the haystack are ASCII by construction.** The rule, the
+  index-space discipline it depends on (convert whole expressions, never single calls), the
+  non-string-argument trap, and the `dist/` publishing requirement live in
+  [`.claude/rules/code-quality/native-string-vs-grapheme-helpers.md`](../../.claude/rules/code-quality/native-string-vs-grapheme-helpers.md);
+  the Code Style Guide's decision framework now defers to it rather than contradicting it.
+- **Alternatives:**
+  - **Leave the rule in the plan document** (`.context/plans/pt-2626-native-string-call-sites.md`)
+    — rejected. That document is the record of *why* this sweep was done and is explicitly frozen;
+    a rule only agents and reviewers do not read is a rule that gets partially reverted on the next
+    feature.
+  - **An ASCII fast path inside the helpers themselves** — attractive and still open: an ASCII
+    haystack means the index spaces coincide, so the helper could skip segmentation and every
+    unconverted site would benefit, with the correctness argument checked by code rather than
+    asserted by a human rule. Not taken here because it changes a shared library's hot path for
+    every consumer and deserves its own change with its own benchmarks; the per-site rule is what
+    the sweep could verify.
+  - **Convert everything to native and drop the helpers** — rejected. The helpers exist for real
+    cases: searching localized book names, truncating arbitrary text for a log line, and any limit
+    a user reads as "characters".
+- **Consequences:** Reviewers of any diff touching these functions have one question to ask — is
+  the haystack ASCII by construction? — and one thing to check: that the call's index-space partner
+  was converted with it. The rule is stated at a scope narrow enough to be checkable, which means
+  some hot sites keep segmenting; those want a reused `GraphemeString` instance, tracked separately.
+  A residual asymmetry: `.claude/rules/` has no mechanical enforcement, so nothing prevents a future
+  edit from reintroducing a helper call on an ASCII path or, worse, a native call on a localized
+  one. `lib/eslint-plugin-paranext/` already hosts custom rules and is the obvious home for one, but
+  writing it is deferred rather than done.
+- **Source:** PT-2626 review (PR #2727), finding 7 — "the current standard tells the next author to
+  do the opposite of what this PR establishes."

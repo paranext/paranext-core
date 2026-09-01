@@ -1,5 +1,5 @@
 import {
-  getJsonRpcRequestErrorMessagePrefix,
+  isJsonRpcMethodNotFoundError,
   JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
   MAX_REQUEST_ATTEMPTS,
   REQUEST_ATTEMPT_WAIT_TIME_MS,
@@ -13,7 +13,6 @@ import {
   type ScheduledSessionSyncResult,
   type SessionSyncBoundary,
 } from '@main/scheduled-session-sync.util';
-import { JSONRPCErrorCode } from 'json-rpc-2.0';
 import type { SettingTypes } from 'papi-shared-types';
 import { getErrorMessage, wait } from 'platform-bible-utils';
 
@@ -237,7 +236,7 @@ async function performPowerModeStartupSync(signals?: StartupTasksSignals): Promi
     // (e.g. no S/R extension installed); anything else means the command was present but the call
     // failed (a request timeout, or a registered handler that threw) — so don't blame missing
     // registration for a failure that isn't one.
-    if (isMethodNotFoundError(e))
+    if (isJsonRpcMethodNotFoundError(e))
       logger.warn(
         `Power-mode startup sync skipped: runScheduledSessionSync never registered within the boot retry budget: ${getErrorMessage(e)}`,
       );
@@ -270,36 +269,6 @@ async function performPowerModeStartupSync(signals?: StartupTasksSignals): Promi
 }
 
 /**
- * Whether `error` is what `networkService`'s request plumbing (`doRequest` in `network.service.ts`)
- * throws for a JSON-RPC "method not found" response — i.e. no handler for the requested command has
- * registered yet anywhere on the network (see the `createErrorResponse(...,
- * JSONRPCErrorCode.MethodNotFound)` calls in `rpc-server.ts` / `rpc-websocket-listener.ts`).
- *
- * This is the one thing that needs distinguishing here: "not registered yet" is worth retrying, but
- * a registered handler that threw is a real failure and must NOT be retried blindly. Getting that
- * distinction wrong the other way — treating every failure as retryable — would silently repeat a
- * genuine handler error for up to {@link STARTUP_SYNC_RETRY_BUDGET_MS} before reporting it.
- *
- * `networkService` does not expose the raw JSON-RPC error code to callers for this to key off of
- * directly: `doRequest` flattens every RPC-level error — method-not-found and a handler throwing
- * alike — into a thrown value whose `message` is `JSON-RPC Request error (${code}): ${message}`,
- * with no other machine-readable marker distinguishing the two (the richer `platformErrorCode`
- * field is populated only for C# `PlatformErrorCodes.WithCode` throws, which a "no handler yet"
- * response never carries — it has no `error.data` at all). Matching the numeric JSON-RPC code
- * embedded in that message is therefore the only signal available today. This mirrors the same
- * message-substring-matching pattern already used by
- * `isErrorMessageAboutParatextBlockingInternetAccess` / `isErrorMessageAboutRegistryAuthFailure` in
- * `platform-bible-utils` for the same reason (no richer signal exposed). The exact format comes
- * from {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
- * with, so a reformat there can't silently stop this matcher (and its test fixture) from matching.
- */
-function isMethodNotFoundError(error: unknown): boolean {
-  return getErrorMessage(error).includes(
-    getJsonRpcRequestErrorMessagePrefix(JSONRPCErrorCode.MethodNotFound),
-  );
-}
-
-/**
  * Whether `error` is what `networkService`'s request plumbing throws when a request times out
  * client-side before any response arrives (`doRequest` in `network.service.ts` builds `JSON-RPC
  * Request timed out: <requestType> <args>` when its per-request `AsyncVariable` fires).
@@ -312,8 +281,8 @@ function isMethodNotFoundError(error: unknown): boolean {
  * collapse the whole boot budget to a single attempt against a handler that is present and
  * working.
  *
- * Matches by message substring for the same reason as {@link isMethodNotFoundError}, deriving the
- * format from the same producer ({@link JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX}).
+ * Matches by message substring for the same reason as {@link isJsonRpcMethodNotFoundError}, deriving
+ * the format from the same producer ({@link JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX}).
  */
 function isRequestTimedOutError(error: unknown): boolean {
   return getErrorMessage(error).includes(JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX);
@@ -322,13 +291,13 @@ function isRequestTimedOutError(error: unknown): boolean {
 /**
  * Whether `error` from a `runScheduledSessionSync` attempt is a boot-race condition worth retrying
  * within the budget rather than a genuine handler failure. Both retryable shapes mean "the handler
- * isn't answering yet", not "the handler ran and failed": a {@link isMethodNotFoundError} (no
+ * isn't answering yet", not "the handler ran and failed": a {@link isJsonRpcMethodNotFoundError} (no
  * handler registered anywhere on the network yet) or a {@link isRequestTimedOutError} (a handler may
  * be present but hasn't responded in time this early in boot). Anything else — a registered handler
  * that threw — is a real failure and must NOT be retried blindly.
  */
 function isRetryableBootRaceError(error: unknown): boolean {
-  return isMethodNotFoundError(error) || isRequestTimedOutError(error);
+  return isJsonRpcMethodNotFoundError(error) || isRequestTimedOutError(error);
 }
 
 /**

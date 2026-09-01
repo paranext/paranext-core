@@ -2,7 +2,6 @@ import { vi } from 'vitest';
 import { testingProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { LocalizationSelectors } from '@shared/services/localization.service-model';
 import { ProjectSettingValidator } from '@shared/services/project-settings.service-model';
-import { slice } from 'platform-bible-utils';
 
 vi.mock('@shared/services/network.service', async () => ({
   ...(await vi.importActual('@shared/services/network.service')),
@@ -39,7 +38,7 @@ vi.mock('@shared/services/localization.service', () => ({
     async getLocalizedStrings({
       localizeKeys: keys,
     }: LocalizationSelectors): Promise<{ [localizeKey: string]: string }> {
-      return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
+      return Object.fromEntries(keys.map((key) => [key, key.slice(1, -1)]));
     },
   },
 }));

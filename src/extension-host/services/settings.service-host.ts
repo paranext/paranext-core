@@ -21,13 +21,13 @@ import {
   debounce,
   deserialize,
   getErrorMessage,
-  includes,
   isLocalizeKey,
   isString,
   serialize,
 } from 'platform-bible-utils';
 import { joinUriPaths } from '@node/utils/util';
 import * as nodeFS from '@node/services/node-file-system.service';
+import { isJsonRpcMethodNotFoundError } from '@shared/data/rpc.model';
 import { serializeRequestType } from '@shared/utils/util';
 import { LocalizedSettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
 import {
@@ -188,9 +188,10 @@ class SettingDataProviderEngine
     try {
       return await networkService.request(requestType, newValue, currentValue, allChanges ?? {});
     } catch (error) {
-      // If there is no validator just let the change go through
-      const missingValidatorMsg = `'${requestType}' not found`;
-      if (includes(getErrorMessage(error), missingValidatorMsg)) return true;
+      // If there is no validator just let the change go through. Only a method-not-found response
+      // means "no validator registered" — an error from a validator that ran and rejected must
+      // propagate, or an invalid value gets written.
+      if (isJsonRpcMethodNotFoundError(error, requestType)) return true;
       throw error;
     }
   }

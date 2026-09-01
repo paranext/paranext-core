@@ -4455,14 +4455,14 @@ export type DblResourceData = {
 	projectId: string;
 };
 /**
- * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or by
- * the `startsWith(dblEntryUid)` convention (the local project id of an installed DBL resource begins
- * with its DBL entry UID).
+ * Whether a DBL catalog row already accounts for a local project — by exact `projectId` match, or
+ * by the `startsWith(dblEntryUid)` convention (the local project id of an installed DBL resource
+ * begins with its DBL entry UID).
  *
  * Both branches require the row to have been reconciled against disk at least once (`installed`, or
  * a non-empty `projectId`). A never-synced row carries `installed: false, projectId: ''`, and
- * `''.startsWith('')` is true for every string, so trusting such a row would let a stale entry for a
- * DBL-reassigned UID hide a local project whose real UID still matches.
+ * `''.startsWith('')` is true for every string, so trusting such a row would let a stale entry for
+ * a DBL-reassigned UID hide a local project whose real UID still matches.
  *
  * This is the single home for that rule. Producers on both sides of the picker consult it — the one
  * that decides which local projects are NOT already in the catalog, and the one that decides which

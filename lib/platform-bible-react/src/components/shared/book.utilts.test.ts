@@ -55,6 +55,28 @@ describe('doesBookMatchQuery', () => {
     expect(doesBookMatchQuery('GEN', 'genesis', localizedBookNames)).toBe(true);
   });
 
+  // English names and canon ids are ASCII, which is what lets the English comparison use native
+  // `includes`: a non-ASCII query has nothing to match in an ASCII haystack either way.
+  test('does not match a non-ASCII query against an English name', () => {
+    expect(doesBookMatchQuery('GEN', 'génesis')).toBe(false);
+    expect(doesBookMatchQuery('GEN', 'gén')).toBe(false);
+    expect(doesBookMatchQuery('GEN', '创世记')).toBe(false);
+  });
+
+  // Localized names are the case grapheme awareness exists for, so that comparison must stay
+  // grapheme-aware: a query that would end in the middle of a cluster is not a match. Here the
+  // accented letter is decomposed (`e` + U+0301), the form macOS and some input methods produce.
+  test('does not match a query ending mid-cluster in a localized name', () => {
+    // Starts with `x` so the query below can only reach the localized comparison — nothing in the
+    // English name `Genesis` or the id `GEN` matches it
+    const localizedBookNames = new Map([
+      ['GEN', { localizedId: 'Xe\u0301n', localizedName: 'Xe\u0301nesis' }],
+    ]);
+
+    expect(doesBookMatchQuery('GEN', 'xe', localizedBookNames)).toBe(false);
+    expect(doesBookMatchQuery('GEN', 'xe\u0301nesis', localizedBookNames)).toBe(true);
+  });
+
   test('localized book names do not interfere with other books', () => {
     const localizedBookNames = new Map([['GEN', { localizedId: 'Gén', localizedName: 'Génesis' }]]);
 
