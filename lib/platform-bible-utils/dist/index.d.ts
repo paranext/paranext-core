@@ -665,6 +665,18 @@ export declare class GraphemeString {
 	 */
 	split(separator: RegExp, splitLimit?: number): (GraphemeString | undefined)[];
 	/**
+	 * Splitting on a separator whose kind is not known statically — a `string | RegExp` union, which
+	 * is what the free `split` in `string-util` declares. TypeScript matches a union argument against
+	 * one overload at a time rather than distributing it, so without this a caller holding that union
+	 * gets `TS2769` and has to narrow at every call.
+	 *
+	 * @param separator Literal string, GraphemeString, or regular expression to split on.
+	 * @param splitLimit Maximum number of entries to return, converted with `ToUint32`.
+	 * @returns The pieces in order. An entry can be `undefined` only when the separator turns out to
+	 *   be a regular expression with a capture group that did not participate.
+	 */
+	split(separator: string | GraphemeString | RegExp, splitLimit?: number): (GraphemeString | undefined)[];
+	/**
 	 * The scan behind {@link indexOf} and {@link lastIndexOf}.
 	 *
 	 * PERF: native `String.indexOf`/`lastIndexOf` do the scanning (C++); this only validates that a
