@@ -3269,76 +3269,39 @@ describe('formatEditorTitle', () => {
 
 // #region openOrUpdateRelatedPanels
 
-/** Papi mock exposing only what `openOrUpdateRelatedPanels` touches: sendCommand and logger.warn. */
-function createRelatedPanelsMockPapi() {
+/** Papi mock exposing only what `openOrUpdateRelatedPanels` touches. */
+function createRelatedPanelsMockPapi(openWebViewDefs: { webViewType: string; id: string }[] = []) {
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
+  const mockReloadWebView = vi.fn().mockResolvedValue('grid-web-view-id');
   const mockWarn = vi.fn();
   // Must cast since the mock only includes the papi properties openOrUpdateRelatedPanels uses.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
     commands: { sendCommand: mockSendCommand },
+    webViews: {
+      getAllOpenWebViewDefinitions: vi.fn().mockResolvedValue(openWebViewDefs),
+      reloadWebView: mockReloadWebView,
+    },
     logger: { warn: mockWarn },
   } as unknown as typeof PapiBackend;
-  return { papi, mockSendCommand, mockWarn };
+  return { papi, mockSendCommand, mockReloadWebView, mockWarn };
 }
 
-/** The command names fired for one project switch, in the order they were sent. */
+const OPEN_GRID_PANEL = [
+  { webViewType: 'platformScriptureEditor.scriptureTextGrid', id: 'grid-tab' },
+];
+
+/** The command names fired for one project switch. */
 function sentCommandNames(mockSendCommand: ReturnType<typeof vi.fn>): string[] {
   return mockSendCommand.mock.calls.map(([commandName]) => commandName);
 }
 
 describe('openOrUpdateRelatedPanels', () => {
-  it('re-points the Scripture Text Grid at the project alongside the other related panels', async () => {
-    const { papi, mockSendCommand } = createRelatedPanelsMockPapi();
-
-    await openOrUpdateRelatedPanels(papi, 'proj-1', true);
-
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      'platformScriptureEditor.repointScriptureTextGrid',
-      'proj-1',
-    );
-  });
-
   it('fires every related-panel command for one project switch', async () => {
-    const { papi, mockSendCommand } = createRelatedPanelsMockPapi();
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi(OPEN_GRID_PANEL);
 
     await openOrUpdateRelatedPanels(papi, 'proj-1', true);
 
-    expect(sentCommandNames(mockSendCommand)).toEqual(
-      expect.arrayContaining([
-        'platformScriptureEditor.openModelText',
-        'platformScriptureEditor.openResourceText',
-        'legacyCommentManager.openCommentListPanel',
-        'platformScriptureEditor.repointScriptureTextGrid',
-      ]),
-    );
-  });
-
-  it('still fires the grid command when an earlier panel command fails', async () => {
-    const { papi, mockSendCommand } = createRelatedPanelsMockPapi();
-    mockSendCommand.mockImplementation(async (commandName: string) => {
-      if (commandName === 'platformScriptureEditor.openModelText')
-        throw new Error('model text panel failed');
-    });
-
-    await openOrUpdateRelatedPanels(papi, 'proj-1', true);
-
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      'platformScriptureEditor.repointScriptureTextGrid',
-      'proj-1',
-    );
-  });
-
-  it('logs a warning and keeps the other panels when the grid command fails', async () => {
-    const { papi, mockSendCommand, mockWarn } = createRelatedPanelsMockPapi();
-    mockSendCommand.mockImplementation(async (commandName: string) => {
-      if (commandName === 'platformScriptureEditor.repointScriptureTextGrid')
-        throw new Error('grid failed');
-    });
-
-    await expect(openOrUpdateRelatedPanels(papi, 'proj-1', true)).resolves.toBeUndefined();
-
-    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('grid failed'));
     expect(sentCommandNames(mockSendCommand)).toEqual(
       expect.arrayContaining([
         'platformScriptureEditor.openModelText',
@@ -3348,23 +3311,27 @@ describe('openOrUpdateRelatedPanels', () => {
     );
   });
 
-  it('resolves without throwing when every panel command fails', async () => {
-    const { papi, mockSendCommand } = createRelatedPanelsMockPapi();
-    mockSendCommand.mockRejectedValue(new Error('everything is down'));
+  it('re-points the Text Collection alongside the other related panels', async () => {
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi(OPEN_GRID_PANEL);
 
-    await expect(openOrUpdateRelatedPanels(papi, 'proj-1', true)).resolves.toBeUndefined();
+    await openOrUpdateRelatedPanels(papi, 'proj-1', true);
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(
+      'platformScriptureEditor.scriptureTextGrid',
+      'grid-tab',
+      expect.objectContaining({ projectId: 'proj-1' }),
+    );
   });
 
-  // A text collection is built from an editable project's settings, so opening a read-only
-  // resource in the editor column must leave the grid pointed where it was.
-  it('leaves the Scripture Text Grid alone for a read-only resource', async () => {
-    const { papi, mockSendCommand } = createRelatedPanelsMockPapi();
+  // A text collection is built from an editable project's settings, so opening a read-only resource
+  // in the editor column must leave the panel pointed where it was.
+  it('leaves the Text Collection alone for a read-only resource', async () => {
+    const { papi, mockReloadWebView, mockSendCommand } =
+      createRelatedPanelsMockPapi(OPEN_GRID_PANEL);
 
     await openOrUpdateRelatedPanels(papi, 'resource-1', false);
 
-    expect(sentCommandNames(mockSendCommand)).not.toContain(
-      'platformScriptureEditor.repointScriptureTextGrid',
-    );
+    expect(mockReloadWebView).not.toHaveBeenCalled();
     // The other Column 3 panels follow the editor either way, so a read-only open still re-points
     // those.
     expect(sentCommandNames(mockSendCommand)).toEqual(
@@ -3374,6 +3341,26 @@ describe('openOrUpdateRelatedPanels', () => {
         'legacyCommentManager.openCommentListPanel',
       ]),
     );
+  });
+
+  it('still re-points the Text Collection when an earlier panel command fails', async () => {
+    const { papi, mockSendCommand, mockReloadWebView } =
+      createRelatedPanelsMockPapi(OPEN_GRID_PANEL);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openModelText')
+        throw new Error('model text panel failed');
+    });
+
+    await openOrUpdateRelatedPanels(papi, 'proj-1', true);
+
+    expect(mockReloadWebView).toHaveBeenCalled();
+  });
+
+  it('resolves without throwing when every panel command fails', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi(OPEN_GRID_PANEL);
+    mockSendCommand.mockRejectedValue(new Error('everything is down'));
+
+    await expect(openOrUpdateRelatedPanels(papi, 'proj-1', true)).resolves.toBeUndefined();
   });
 });
 

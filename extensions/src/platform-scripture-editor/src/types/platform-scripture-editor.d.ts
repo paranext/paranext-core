@@ -911,19 +911,6 @@ declare module 'papi-shared-types' {
       resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
       projectId?: string,
     ) => Promise<string | undefined>;
-    /**
-     * Re-points an open Scripture Text Grid ("Text Collection") panel at a project, reloading it so
-     * its project-bound controls work. It never opens a panel — whether a grid exists is decided by
-     * the `platformScriptureEditor.enableScriptureTextGrid` setting and the layout that places its
-     * tab.
-     *
-     * @param projectId The project ID the grid should be bound to. If not provided, the panel is
-     *   reloaded with no project.
-     * @returns WebView id for the reloaded panel, or `undefined` if no grid panel is open
-     */
-    'platformScriptureEditor.repointScriptureTextGrid': (
-      projectId?: string,
-    ) => Promise<string | undefined>;
   }
 
   export interface DataProviders {
