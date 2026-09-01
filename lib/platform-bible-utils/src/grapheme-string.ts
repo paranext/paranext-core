@@ -39,7 +39,8 @@ function toIntegerOrInfinity(value: number): number {
  */
 function relativeIndex(index: number, length: number): number {
   const integer = toIntegerOrInfinity(index);
-  if (integer === -Infinity) return 0;
+  // `-Infinity` needs no case of its own: `length + -Infinity` is `-Infinity`, which the clamp
+  // already takes to 0.
   if (integer < 0) return Math.max(length + integer, 0);
   return Math.min(integer, length);
 }
@@ -96,7 +97,9 @@ const offsetsByInstance = new WeakMap<GraphemeString, number[]>();
 /**
  * A string pre-segmented into Unicode grapheme clusters. Segmentation happens once in the
  * constructor (the expensive step); every other operation reuses it. Derived values
- * (substring/slice/etc.) reuse the parent grapheme slice and never re-segment.
+ * (substring/slice/etc.) reuse the parent grapheme slice rather than re-segmenting. The single
+ * exception is a regular expression's capture groups, whose text the parent's segmentation does not
+ * cover — a group can match across a boundary the parent never had.
  *
  * Every method mirrors its `String.prototype` counterpart exactly — including the edge cases around
  * negative, fractional, `NaN`, and out-of-range arguments — with one substitution: the unit of
@@ -267,8 +270,8 @@ export class GraphemeString {
    * @param replacers Map from key text to its replacement. A key absent from the map is replaced by
    *   the key text itself rather than treated as an error.
    * @returns The formatted parts in order. Adjacent strings are merged into one entry, so a
-   *   non-string replacer is always its own entry. Never empty — an unmatched template yields a
-   *   single string entry.
+   *   non-string replacer is always its own entry. A template with no placeholders yields a single
+   *   string entry; only the empty string yields an empty array.
    */
   formatReplacementToArray<T = unknown>(
     replacers: { [key: string | number]: T } | object,
@@ -715,8 +718,14 @@ export class GraphemeString {
 
   /** UTF-16 offset where grapheme `index` starts, or the end of the string for `index === length`. */
   private offsetAt(index: number): number {
-    const offsets = this.offsets();
-    return index < offsets.length ? offsets[index] : this.str.length;
+    // PERF: both ends are known without the array, which is what a default-position `startsWith`
+    // or `endsWith` asks for. That matters for `isLocalizeKey`, which runs once per tab title and
+    // per menu item: a string that is not a key now fails `str.startsWith('%')` before anything
+    // needs offsets, so no array is built at all. A string that *is* a key still builds one, since
+    // the boundary check after the match needs it.
+    if (index <= 0) return 0;
+    if (index >= this.graphemes.length) return this.str.length;
+    return this.offsets()[index];
   }
 
   /**
