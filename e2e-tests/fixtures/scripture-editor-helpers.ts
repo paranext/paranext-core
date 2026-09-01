@@ -1,5 +1,9 @@
 import { type Frame, type Page } from '@playwright/test';
-import { sendPapiRequestOnce, waitForPapiMethodRegistered } from './helpers';
+import { SAMPLE_WEB_PROJECT_ID, sendPapiRequestOnce, waitForPapiMethodRegistered } from './helpers';
+
+// Re-exported so the specs that reach for it through this module keep working: it is defined in
+// helpers.ts, which is the lower-level module and the single home for it.
+export { SAMPLE_WEB_PROJECT_ID };
 
 /** Options accepted by {@link openScriptureEditorForProject}. */
 export interface OpenScriptureEditorOptions {
@@ -13,8 +17,6 @@ export interface OpenScriptureEditorOptions {
    */
   skipInitialLayoutGuard?: boolean;
 }
-/** Fixed GUID of the bundled sample WEB project (c-sharp/assets/WEB/Settings.xml <Guid>). */
-export const SAMPLE_WEB_PROJECT_ID = '32664dc3288a28df2e2bb75ded887fc8f17a15fb';
 const WEBSOCKET_PORT = 8876;
 const COMMAND_TIMEOUT_MS = 30_000;
 /**
