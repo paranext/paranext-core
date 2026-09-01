@@ -43,6 +43,8 @@ import {
   updateRelatedFindPanel,
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+  type TextCollectionPanelOptions,
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
@@ -56,7 +58,6 @@ logger.debug('Scripture Editor is importing!');
 const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
-const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 /** Tab title/tooltip for the Text Collection (Scripture Text Grid) tab. */
 const SCRIPTURE_TEXT_GRID_TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 
@@ -1027,24 +1028,26 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
  *
  * Used to pass a new projectId through reloadWebView, which has no options for extra data.
  */
-const currentColumn3PanelProjectIds = new Map<string, string | undefined>();
+const currentResourceTextPanelProjectIds = new Map<string, string | undefined>();
 
 const scriptureTextGridWebViewProvider: IWebViewProvider = {
   async getWebView(
     savedWebView: SavedWebViewDefinition,
-    openWebViewOptions: ResourceViewerOptions,
+    // The same type `updateRelatedTextCollectionPanel` writes, so the two halves of the re-point are
+    // linked by the type system rather than only by the field name.
+    openWebViewOptions: TextCollectionPanelOptions,
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
       throw new Error(
         `${SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
     // Project-binding seam: the grid is project-bound so it can fire first-open overlay init and,
-    // once content selection lands, select its contents.
-    // Priority: pending (reload path) > options (new-panel path) > saved (existing panel reload)
-    const projectId = currentColumn3PanelProjectIds.has(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
-      ? currentColumn3PanelProjectIds.get(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
-      : (openWebViewOptions.projectId ?? savedWebView.projectId);
-    currentColumn3PanelProjectIds.delete(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
+    // once content selection lands, select its contents. The default-layout open passes no
+    // projectId, so the grid starts unbound and falls back to following the scroll group; from then
+    // on `updateRelatedTextCollectionPanel` supplies a projectId here on every Simple-mode project
+    // switch, which is what keeps the panel off the outgoing project. Do not assume the
+    // `openWebViewOptions.projectId` branch is unused.
+    const projectId = openWebViewOptions.projectId ?? savedWebView.projectId;
     // Re-read every call so mode changes are picked up at open/replace/restore time.
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
     // Resolve here (not left to the web view's own effect): PlatformTabTitle auto-resolves a raw
@@ -1108,10 +1111,10 @@ function createResourceTextPanelProvider(
           } web view`,
         );
       // Priority: pending (reload path) > options (new-panel path) > saved (existing panel reload)
-      const projectId = currentColumn3PanelProjectIds.has(webViewType)
-        ? currentColumn3PanelProjectIds.get(webViewType)
+      const projectId = currentResourceTextPanelProjectIds.has(webViewType)
+        ? currentResourceTextPanelProjectIds.get(webViewType)
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
-      currentColumn3PanelProjectIds.delete(webViewType);
+      currentResourceTextPanelProjectIds.delete(webViewType);
       // Re-read every call so mode changes are picked up at open/replace/restore time.
       const interfaceMode = await papi.settings.get('platform.interfaceMode');
       // Intentionally does not force scrollGroupScrRef in simple mode. Bible texts and
@@ -1166,48 +1169,12 @@ async function openResourceText(
   const existingPanel = allOpenDefs.find((def) => def.webViewType === webViewType);
 
   if (existingPanel) {
-    currentColumn3PanelProjectIds.set(webViewType, projectId);
+    currentResourceTextPanelProjectIds.set(webViewType, projectId);
     return papi.webViews.reloadWebView(webViewType, existingPanel.id, { bringToFront: true });
   }
 
   const openOptions: ResourceViewerOptions = { projectId };
   return papi.webViews.openWebView(webViewType, { type: 'tab' }, openOptions);
-}
-
-/**
- * Re-points an already-open Scripture Text Grid panel at `projectId`, the way `openResourceText`
- * re-points the other Column 3 panels. A no-op when no grid panel is open.
- *
- * It deliberately does not open one, unlike its siblings: the grid is gated behind the
- * `platformScriptureEditor.enableScriptureTextGrid` setting and its tab is placed by the
- * default-layout supplement, so whether a grid exists at all is the layout's decision. Falling back
- * to `openWebView` would conjure a grid tab on every project switch even where that setting says
- * there should be none.
- *
- * For the same reason the reload does not `bringToFront`: this hands the panel a project it is
- * already showing in Column 3's tab stack, and fronting it would make a project switch silently
- * change which Column 3 tab the user is looking at.
- */
-async function repointScriptureTextGrid(projectId?: string): Promise<string | undefined> {
-  const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-  const existingPanel = allOpenDefs.find(
-    (def) => def.webViewType === SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-  );
-  if (!existingPanel) return undefined;
-
-  currentColumn3PanelProjectIds.set(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, projectId);
-  try {
-    return await papi.webViews.reloadWebView(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, existingPanel.id);
-  } finally {
-    // The provider clears the pending id when it consumes it, so this is usually a no-op. It
-    // matters when the reload never reached the provider — `reloadWebView` resolves `undefined`
-    // without calling it when the panel closed between the probe above and the reload — since a
-    // pending id left behind would bind the next panel to this project. Only clear the id this
-    // call put there: a second switch that started during the await owns the entry now, and
-    // deleting its value would drop that switch back to the project the panel already had.
-    if (currentColumn3PanelProjectIds.get(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE) === projectId)
-      currentColumn3PanelProjectIds.delete(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
-  }
 }
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
@@ -1492,32 +1459,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
-  // Registered regardless of `platformScriptureEditor.enableScriptureTextGrid`: the handler already
-  // no-ops when no grid panel is open, and an unregistered command would make every project switch
-  // log a warning from `openOrUpdateRelatedPanels`' send-and-log isolation.
-  const repointScriptureTextGridPromise = papi.commands.registerCommand(
-    'platformScriptureEditor.repointScriptureTextGrid',
-    repointScriptureTextGrid,
-    {
-      method: {
-        summary: 'Re-point an open Scripture Text Grid panel at a project',
-        params: [
-          {
-            name: 'projectId',
-            required: false,
-            summary: 'The project ID the grid should be bound to',
-            schema: { type: 'string' },
-          },
-        ],
-        result: {
-          name: 'return value',
-          summary: 'The ID of the reloaded WebView, or undefined if no grid panel is open',
-          schema: { type: 'string' },
-        },
-      },
-    },
-  );
-
   const openModelTextPanelPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openModelText',
     async (projectId?: string) => {
@@ -1652,7 +1593,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await commentariesPanelWebViewProviderPromise,
     ...(scriptureTextGridRegistration ? [scriptureTextGridRegistration] : []),
     await openResourceTextPromise,
-    await repointScriptureTextGridPromise,
     selectionChangedEventEmitter,
     {
       dispose: async () => {
