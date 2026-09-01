@@ -41,6 +41,17 @@ function orphanTheBackup(): void {
   fs.writeFileSync(manifestPath, JSON.stringify({ ...manifest, ownerPid: 2 ** 31 - 1 }));
 }
 
+/**
+ * Re-point the standing backup at a process that IS running and is not us, which is what a second
+ * run holding these files looks like. `process.ppid` started this runner, so it is alive by
+ * definition and is a different pid.
+ */
+function giveTheBackupALiveOwner(): void {
+  const manifestPath = `${LIVE_DIR}.e2e-backup.json`;
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+  fs.writeFileSync(manifestPath, JSON.stringify({ ...manifest, ownerPid: process.ppid }));
+}
+
 function writeKey(key: string, value: string): void {
   fs.mkdirSync(LIVE_DIR, { recursive: true });
   fs.writeFileSync(path.join(LIVE_DIR, key), value);
@@ -171,5 +182,24 @@ describe('app-global state recovery is not destructive', () => {
     restoreB();
 
     expect(fs.existsSync(BACKUP_DIR)).toBe(true);
+  });
+});
+
+describe('app-global recovery refuses a backup another run still owns', () => {
+  it('restores nothing and deletes nothing while the owning process is alive', () => {
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+    pinAppGlobalState();
+    giveTheBackupALiveOwner();
+
+    // Stand in for the still-running owner's app writing as it goes.
+    writeKey(SCR_REFS_KEY, '{"0":{"book":"REV","chapterNum":1,"verseNum":1}}');
+
+    expect(restoreAppGlobalState()).toBeUndefined();
+
+    // Everything is left exactly as the live run had it: no keys reverted, and the backup is still
+    // there for its real owner to restore from.
+    expect(readKey(SCR_REFS_KEY)).toBe('{"0":{"book":"REV","chapterNum":1,"verseNum":1}}');
+    expect(fs.existsSync(BACKUP_DIR)).toBe(true);
+    expect(fs.existsSync(`${LIVE_DIR}.e2e-backup.json`)).toBe(true);
   });
 });
