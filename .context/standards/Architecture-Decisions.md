@@ -3084,12 +3084,11 @@ step, no automation. Just a record.
 - **Consequences:** Closing secondaries on a switch to simple makes the colliding-web-view-id
   precondition true rather than assumed: the simple-mode fast path loads a static layout whose tab
   ids are identical in every window and are never window-scoped, and only single-window simple mode
-  keeps two windows from holding them at once. It also required `platform.getWindows` to report the
-  role the application actually acts on: it derived `isMain` from the marked entry alone, which is
-  empty whenever no live window holds that entry, while everything that acts on the role asks the
-  lookup that falls back to the oldest live window. A renderer asking the narrower question would
-  have been told no window is primary while one is, and every window would then have run the switch
-  — the duplication this decision exists to remove. Two residuals are deliberate. The primary
+  keeps two windows from holding them at once. It also depends on the window summary reporting the
+  role as the application acts on it — the runtime answer, including the fallback to the oldest live
+  window — rather than the persisted flag alone, which is empty whenever no live window holds the
+  marked entry. A renderer asking the narrower question would be told no window is primary while one
+  is, and every window would then run the switch: the duplication this decision exists to remove. Two residuals are deliberate. The primary
   question fails open — a question that cannot be answered, or a list naming no primary at all,
   which now happens only when every window is still waiting for its content — and on those paths
   the duplicate side effects above are unchanged, because refusing the switch would leave the mode
