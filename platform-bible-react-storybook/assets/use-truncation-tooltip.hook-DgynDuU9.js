@@ -1,0 +1,1 @@
+import{r as e}from"./iframe-Bl__27RN.js";function i(){const[r,n]=e.useState(!1),o=e.useRef(null),c=e.useCallback(()=>{const t=o.current;t&&t.scrollWidth>t.clientWidth&&n(!0)},[]),l=e.useCallback(()=>n(!1),[]);return{ref:o,open:r,onPointerEnter:c,onPointerLeave:l}}export{i as u};
