@@ -42,7 +42,6 @@ import WebSocket from 'ws';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   SAMPLE_WEB_PROJECT_ID,
-  preConfigureSettings,
   sendPapiRequestOnce,
   waitForAppReady,
   waitForProjectMetadata,
@@ -252,6 +251,13 @@ async function setScrollGroupRef(
 }
 
 test.use({
+  // Seeded through the fixture rather than a preConfigureSettings call in a hook, which the
+  // fixture would both override and then write back into the developer's shared settings.
+  // Power mode because these suites need each opened view to become its own dock tab;
+  // firstRunComplete because the wizard is a modal that aria-hides the app. The English
+  // interface language the selectors depend on is seeded by the fixture itself.
+  interfaceMode: 'power',
+  seedSettings: { 'platform.firstRunComplete': true },
   // Same launch shape as the sibling multi-window specs — see multi-window.spec.ts's test.use
   // comment for the full rationale.
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
@@ -261,19 +267,9 @@ test.describe('per-window UI isolation', () => {
   // One launch (up to ~180 s worst case) plus a second window and a dozen quick scenarios.
   test.setTimeout(420_000);
 
-  let restoreSettings: (() => void) | undefined;
+  test.beforeAll(() => {});
 
-  test.beforeAll(() => {
-    restoreSettings = preConfigureSettings({
-      'platform.firstRunComplete': true,
-      'platform.interfaceLanguage': ['en'],
-      'platform.interfaceMode': 'power',
-    });
-  });
-
-  test.afterAll(() => {
-    restoreSettings?.();
-  });
+  test.afterAll(() => {});
 
   test('overlays, dialogs, notifications, and navigation targets stay in their own window', async ({
     electronApp,

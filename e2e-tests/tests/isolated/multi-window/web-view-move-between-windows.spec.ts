@@ -66,11 +66,7 @@
  */
 import type { ElectronApplication, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import {
-  preConfigureSettings,
-  sendPapiRequestOnce,
-  waitForAppReady,
-} from '../../../fixtures/helpers';
+import { sendPapiRequestOnce, waitForAppReady } from '../../../fixtures/helpers';
 import {
   DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
@@ -271,6 +267,13 @@ const MOVE_FAILURE_LOG = 'Failed to move web view';
 // #endregion
 
 test.use({
+  // Seeded through the fixture rather than a preConfigureSettings call in a hook, which the
+  // fixture would both override and then write back into the developer's shared settings.
+  // Power mode because this suite needs each view to become its own dock tab; firstRunComplete
+  // because the wizard is a modal that aria-hides the app. The English interface language the
+  // selectors depend on is seeded by the fixture itself.
+  interfaceMode: 'power',
+  seedSettings: { 'platform.firstRunComplete': true },
   // Same options as the sibling multi-window specs — see the `test.use` comment in
   // `multi-window.spec.ts` for the rationale. DEV_NOISY=false is what gives window 1 the
   // single-Home-tab layout whose fixed web view id every identity assertion here keys on.
@@ -282,21 +285,12 @@ test.describe('moving a web view between windows', () => {
   // startups — a move to a new window contains a whole cold renderer start of its own.
   test.setTimeout(480_000);
 
-  let restoreSettings: (() => void) | undefined;
-
   test.beforeAll(() => {
     // Written before any launch and restored after the last test so the developer's own settings
     // survive the suite. See the file header for why power mode is load-bearing here.
-    restoreSettings = preConfigureSettings({
-      'platform.firstRunComplete': true,
-      'platform.interfaceLanguage': ['en'],
-      'platform.interfaceMode': 'power',
-    });
   });
 
-  test.afterAll(() => {
-    restoreSettings?.();
-  });
+  test.afterAll(() => {});
 
   test('a tab moved to a new window through its context menu leaves its window, arrives in the new one, and leaves a Home tab behind', async ({
     electronApp,
