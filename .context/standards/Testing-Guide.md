@@ -1357,7 +1357,7 @@ test.describe('{Feature} E2E Tests', () => {
 });
 ```
 
-**Render Smoke Test (cdp.fixture):**
+**Render Smoke Test (cdp.fixture — for specs under `tests/attached/`):**
 
 ```typescript
 import { test, expect } from '../../fixtures/cdp.fixture';
@@ -1412,7 +1412,7 @@ A cross-screen journey test that only checks `toBeVisible()` proves the page ren
 **IMPORTANT**: Always use the `--config` flag when running Playwright from the repo root. Without `--config`, Playwright uses defaults — the `--project` flag won't work, no dev server is started, and bare `npx playwright test` (without a test path) will discover vitest `.test.ts` files and fail.
 
 ```bash
-# CDP mode (default — app already running via ./.erb/scripts/refresh.sh)
+# CDP mode (app already running via ./.erb/scripts/refresh.sh)
 npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=list
 
 # CDP mode with HTML report
