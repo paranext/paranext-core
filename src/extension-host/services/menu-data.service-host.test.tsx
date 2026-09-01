@@ -541,9 +541,12 @@ describe('Tab menu', () => {
   });
 
   test('a recognized web view that never asked for defaults still gets the platform items', async () => {
-    // Most shipped web views omit `includeDefaults`, so the combiner folds nothing into their tab
-    // menu. The items act on the tab frame rather than the web view, so opting out of them is not
-    // meaningful — without this the menu would be empty on almost every tab
+    // What this pins is the engine's own fallback, not the production shape: MOCK_MENU_DATA is an
+    // unfolded fixture, so this entry reaches the engine with no `tabMenu` and the `??` supplies
+    // the platform's. In production the combiner has already folded the tab menu into every entry
+    // before the engine sees it — it does that above the `includeDefaults` gate, because these
+    // items act on the tab frame rather than on the web view — so the fallback is not reached
+    // there. The fold itself is covered in menu-document-combiner.test.ts
     const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
     await Promise.resolve();
     await Promise.resolve();

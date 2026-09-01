@@ -94,8 +94,8 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<object>();
   return {
     ...actual,
-    // Opening is explicit rather than automatic so tests that do not care about the window list
-    // behave exactly as they did before the menu started reading it on open
+    // Opening is explicit rather than automatic, so a test that does not care about the window list
+    // never triggers the read the menu does on open
     ContextMenu: ({
       children,
       onOpenChange,
@@ -187,8 +187,7 @@ beforeEach(() => {
 /**
  * Let the mount-time read of the contributed menu resolve.
  *
- * The tab menu is no longer supplied synchronously by a subscription — each tab reads it once when
- * it mounts — so nothing renders a menu until that has settled.
+ * Each tab reads its menu once when it mounts, so nothing renders a menu until that has settled.
  */
 const flushMenuRead = async () => {
   await act(async () => {});
@@ -759,6 +758,36 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     expect(screen.queryByTestId('submenu-content')).toBeNull();
     // Positive control: the rest of the menu is there, so this is not an empty render
     expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
+  });
+
+  it('offers move-to-new-window and no submenu until the window read lands', async () => {
+    // The frame between opening the menu and the window read resolving. `buildTabMenuItems` runs
+    // during render against the seeded targets, so this is what is actually on screen first: the
+    // move-to-new-window item present, the submenu absent. Every other test here awaits the read
+    // before asserting, so nothing pinned this.
+    let resolveWindows: (windows: unknown) => void = () => {};
+    vi.mocked(sendCommand).mockReturnValue(
+      new Promise((resolve) => {
+        resolveWindows = resolve;
+      }),
+    );
+
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" webViewType="foo.bar" text="Tab" />);
+    await flushMenuRead();
+    fireEvent.click(screen.getByTestId('open-menu'));
+
+    expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
+    expect(screen.queryByTestId('submenu-content')).not.toBeInTheDocument();
+
+    // And once it lands, the two swap over
+    await act(async () => {
+      resolveWindows([
+        { windowId: 1, label: 'MRK — wgPIDGIN', isMain: true },
+        { windowId: 2, label: 'Biblical Terms', isMain: false },
+      ]);
+    });
+
+    expect(await screen.findByTestId('submenu-content')).toBeInTheDocument();
   });
 
   it('drops move-to-new-window when this tab is alone in a window that is not the primary one', async () => {

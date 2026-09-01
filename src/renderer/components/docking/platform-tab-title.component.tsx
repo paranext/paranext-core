@@ -118,6 +118,18 @@ const cssHighlightDurationMilliseconds = 3000;
 /** A tab menu with nothing in it, for a tab whose menu has not loaded or failed to */
 const EMPTY_TAB_MENU = Object.freeze({ groups: {}, items: [] });
 
+/**
+ * Web view type asked for on behalf of a tab that hosts none — a dialog, or an error tab.
+ *
+ * Nothing registers this, which is the point: the menu data provider answers a name it does not
+ * recognize with the platform's own tab items, and those are exactly what such a tab should offer.
+ * Deliberately inside the `platform.` namespace even though it is not a real web view type, because
+ * that is the one namespace no extension can contribute under — `platform` is a forbidden extension
+ * name, and the combiner rejects a `webViewMenus` key that is not prefixed with its contributor's
+ * name — so nothing can register a menu here and change what these tabs are offered.
+ */
+const TAB_WITHOUT_WEB_VIEW_TYPE = 'platform.tab';
+
 /** Render converted menu items into the context-menu primitives, submenus and all */
 function renderTabMenuItems(
   items: OverlayContextMenuItem[],
@@ -311,7 +323,7 @@ export function PlatformTabTitle({
           // Assume the web view type is correctly formatted; it has already been checked where it
           // is set
           // eslint-disable-next-line no-type-assertion/no-type-assertion
-          (webViewType as `${string}.${string}`) ?? 'platform.tab',
+          (webViewType as `${string}.${string}`) ?? TAB_WITHOUT_WEB_VIEW_TYPE,
         );
         if (isStillMounted)
           setContributedItems(
