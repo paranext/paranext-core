@@ -319,12 +319,21 @@ export async function loadWindowLayouts(): Promise<StartupWindowsPlan> {
  * Tie a freshly created window to the file entry it restores. The entry is where that window's
  * layout and bounds live from here on, so a session that never updates it writes the entry back out
  * unchanged.
+ *
+ * The entry is named by its own durable id rather than by where it sits in the file: the restore
+ * loop reads every position before it creates the first window and yields between windows, so a
+ * window closing in one of those gaps takes its entry out of the list and moves every later one.
+ * Nothing tells the loop that happened, and a position resolved afterwards names a different entry
+ * than the one that window restores.
+ *
+ * @param windowId Platform id of the window being tied to the entry
+ * @param entryWindowId Durable id of the entry it restores, from the restore plan
  */
-export function assignEntryToWindow(windowId: string, entryIndex: number): void {
-  const slot = fileSlots[entryIndex];
+export function assignEntryToWindow(windowId: string, entryWindowId: string): void {
+  const slot = fileSlots.find((candidate) => candidate.entry.windowId === entryWindowId);
   if (!slot || slot.windowId !== undefined || findSlotByWindowId(windowId)) {
     logger.warn(
-      `Cannot assign window ${windowId} to window-layout entry ${entryIndex}; tracking it as a new window instead`,
+      `Cannot assign window ${windowId} to the window-layout entry for ${entryWindowId}; tracking it as a new window instead`,
     );
     trackNewWindow(windowId);
     return;

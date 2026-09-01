@@ -815,7 +815,7 @@ async function main() {
     );
 
     // Tie the window to its persisted identity so layout persistence can serve and save it
-    if (restoreInfo?.kind === 'entry') assignEntryToWindow(windowId, restoreInfo.entryIndex);
+    if (restoreInfo?.kind === 'entry') assignEntryToWindow(windowId, restoreInfo.entry.windowId);
     else if (restoreInfo?.kind === 'legacy') trackLegacyWindow(windowId);
     else trackNewWindow(windowId);
 
