@@ -14,7 +14,11 @@ import { normalizeProjectId } from '@shared/models/project-lookup.service-model'
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useEvent, usePromise } from 'platform-bible-react';
-import type { ResultStatus, SyncProgressEvent } from 'paratext-bible-send-receive';
+import type {
+  ResultStatus,
+  SyncProgressDetail,
+  SyncProgressEvent,
+} from 'paratext-bible-send-receive';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 /**
@@ -42,6 +46,22 @@ export type SyncingProject = {
   name: string;
 };
 
+/** How far along the running sync is, when the backend is reporting that. */
+export type SyncProgress = {
+  /**
+   * What to show. For DETERMINATE progress this is the bare current item — usually a project name —
+   * which the consumer is expected to present alongside {@link SyncProgress.fraction}. For
+   * INDETERMINATE progress it is a complete, already-localized sentence (e.g. ParatextData's
+   * "Connection to server lost. Retrying…") and must be shown verbatim.
+   */
+  text: string;
+  /**
+   * 0–1 completion fraction, or `undefined` for indeterminate progress. A consumer must not render
+   * `0` as "0%" when it means "no idea": absent and zero are different claims.
+   */
+  fraction?: number;
+};
+
 export type SyncStatusInfo = {
   status: SyncStatus;
   /**
@@ -51,6 +71,15 @@ export type SyncStatusInfo = {
    * than reading empty as "nothing is syncing". Use {@link SyncStatusInfo.status} for that.
    */
   syncingProjects: readonly SyncingProject[];
+  /**
+   * Progress within the running sync, or `undefined` when there is none to report — nothing is
+   * syncing, or the backend has not sent a progress tick yet.
+   *
+   * Absent is the common case and not an error: `onSyncProgress` is emitted by the Send/Receive
+   * implementation, so a build without one reports a sync with no detail. A consumer must therefore
+   * render the sync perfectly well without this.
+   */
+  syncProgress?: SyncProgress;
 };
 
 /**
@@ -514,6 +543,39 @@ export function useSyncStatus(): SyncStatusInfo {
   );
   useEvent(onSyncStateChanged, handleSyncStateChanged);
 
+  /**
+   * Progress within the running sync, from `onSyncProgress`.
+   *
+   * Held separately from every other input and never unioned with them: it is DETAIL about a sync
+   * something else has already established is running, not evidence that one is. Treating a
+   * progress tick as a third authority on "is a sync running" would let a late or duplicated tick
+   * assert a sync after it ended — the reverse of the direction this hook is careful about
+   * everywhere else.
+   */
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | undefined>(undefined);
+
+  const handleSyncProgress = useCallback((detail: SyncProgressDetail) => {
+    // Untrusted wire data, like every other payload here. Text is the only required half; a
+    // malformed `progressValue` degrades to indeterminate rather than discarding the message.
+    if (typeof detail?.progressText !== 'string' || detail.progressText === '') return;
+    const fraction = detail.progressValue;
+    setSyncProgress({
+      text: detail.progressText,
+      // `null` means indeterminate on the wire, and a value outside 0–1 is not a fraction. Both
+      // become `undefined`, which consumers render as "no percent" rather than as 0%.
+      fraction:
+        typeof fraction === 'number' && Number.isFinite(fraction) && fraction >= 0 && fraction <= 1
+          ? fraction
+          : undefined,
+    });
+  }, []);
+
+  const onSyncProgress = useMemo(
+    () => getNetworkEvent('paratextBibleSendReceive.onSyncProgress'),
+    [],
+  );
+  useEvent(onSyncProgress, handleSyncProgress);
+
   const onDidReloadExtensions = useMemo(
     () => getNetworkEvent('platform.onDidReloadExtensions'),
     [],
@@ -583,6 +645,14 @@ export function useSyncStatus(): SyncStatusInfo {
     return claimStatus;
   })();
 
+  // Progress describes a RUNNING sync, so it is dropped the moment one is not. Without this the last
+  // tick of the previous sync would sit in the popover — a stale project name and percent under a
+  // "The last sync finished" message, and the first thing shown for the NEXT sync before its own
+  // first tick arrives.
+  useEffect(() => {
+    if (status !== 'syncing') setSyncProgress(undefined);
+  }, [status]);
+
   /**
    * Which projects to name. The claim is the detail source when it has an answer; the activity
    * signal fills in only when the claim has none — e.g. the Simple-mode startup sync, which the
@@ -644,7 +714,10 @@ export function useSyncStatus(): SyncStatusInfo {
     NO_SYNCING_PROJECTS,
   );
 
-  return useMemo(() => ({ status, syncingProjects }), [status, syncingProjects]);
+  return useMemo(
+    () => ({ status, syncingProjects, syncProgress }),
+    [status, syncingProjects, syncProgress],
+  );
 }
 
 export default useSyncStatus;

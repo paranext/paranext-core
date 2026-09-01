@@ -597,6 +597,7 @@
   "%toolbar_sync_popover_last_sync_unfinished%": "La última sincronización no finalizó.",
   "%toolbar_sync_popover_synced%": "La última sincronización finalizó.",
   "%toolbar_sync_popover_unknown%": "El estado de sincronización no está disponible en este momento.",
+  "%toolbar_sync_progress_item%": "{item} — {percent} %",
   "%toolbar_sync_status_cancelled%": "Sincronización cancelada",
   "%toolbar_sync_status_failed%": "Error de sincronización",
   "%toolbar_sync_status_synced%": "Sincronizado",

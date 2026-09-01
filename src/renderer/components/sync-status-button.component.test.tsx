@@ -46,6 +46,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_popover_idle%': 'Test no sync running',
       '%toolbar_sync_popover_synced%': 'Test last sync finished',
       '%toolbar_sync_popover_unknown%': 'Test status unavailable',
+      '%toolbar_sync_progress_item%': '{item} — {percent}%',
       '%toolbar_sync_status_cancelled%': 'Test Sync cancelled',
       '%toolbar_sync_status_failed%': 'Test Sync failed',
       '%toolbar_sync_status_unknown%': 'Test Sync status unavailable',
@@ -229,6 +230,37 @@ const mockNoSyncStateEvents = () => {
  * sync transition. Returns a fire function; calling it before render throws rather than silently
  * asserting nothing.
  */
+/**
+ * Captures the `onSyncProgress` handler the component's hook subscribes with, so a test can drive
+ * progress detail. Returns a fire function; calling it before render throws rather than silently
+ * asserting nothing.
+ */
+const captureSyncProgressEvent = () => {
+  let handler: ((detail: unknown) => void) | undefined;
+  vi.mocked(getNetworkEvent).mockImplementation(
+    // `getNetworkEvent` is generic over the event payload, so a mock returning different subscribe
+    // functions per event name cannot be expressed in its signature.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+    ((eventName: string) => {
+      if (eventName === 'paratextBibleSendReceive.onSyncProgress')
+        return vi.fn((cb: (detail: unknown) => void) => {
+          handler = cb;
+          return vi.fn();
+        });
+      return vi.fn(() => vi.fn());
+      // The assertion applies to the whole mock body above, so the directive has to sit here.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+    }) as any,
+  );
+  return (detail: unknown) => {
+    if (!handler) throw new Error('The component never subscribed to onSyncProgress');
+    const fire = handler;
+    act(() => {
+      fire(detail);
+    });
+  };
+};
+
 const captureSyncStateEvent = () => {
   let handler: ((event: { isSyncing: boolean }) => void) | undefined;
   vi.mocked(getNetworkEvent).mockImplementation(
@@ -1219,6 +1251,142 @@ describe('SyncStatusButton — sync state events', () => {
     // The event alone already proves a sync is running, so the status stands without the names.
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Test Syncing' })).toBeInTheDocument();
+    });
+  });
+});
+
+describe('SyncStatusButton — sync progress', () => {
+  // Simple mode suppresses the persistent C# toast in favour of this indicator, so whatever the
+  // toast used to carry has to be reachable here or the capability is simply lost: the project being
+  // synced, how far along it is, and — the one that matters most on a bad connection —
+  // ParatextData's "Connection to server lost. Retrying…".
+  it('shows the item and percent for determinate progress', async () => {
+    const fireProgress = captureSyncProgressEvent();
+    mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireProgress({ progressText: 'GreekNT', progressValue: 0.42 });
+
+    // Asserted in parts because the item is bidi-isolated — it is usually a project name — so the
+    // rendered text carries isolate control characters around it, as the button label does.
+    const progress = await screen.findByTestId('toolbar-sync-popover-progress');
+    expect(progress).toHaveTextContent('GreekNT');
+    expect(progress).toHaveTextContent('42%');
+  });
+
+  it('shows indeterminate progress text verbatim, with no percent', async () => {
+    // Indeterminate progress carries a complete localized sentence, so formatting it would append a
+    // percent to a full stop.
+    const fireProgress = captureSyncProgressEvent();
+    mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireProgress({ progressText: 'Connection to server lost. Retrying…' });
+
+    const progress = await screen.findByTestId('toolbar-sync-popover-progress');
+    expect(progress).toHaveTextContent('Connection to server lost. Retrying…');
+    expect(progress.textContent).not.toMatch(/%/);
+  });
+
+  it('renders no progress line before any tick arrives', async () => {
+    // A build with no Send/Receive implementation emits no progress at all, so the popover has to
+    // read correctly without it.
+    captureSyncProgressEvent();
+    mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+
+    await screen.findByTestId('toolbar-sync-cancel-button');
+    expect(screen.queryByTestId('toolbar-sync-popover-progress')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['a null payload', undefined],
+    ['an empty progressText', { progressText: '' }],
+    ['a non-string progressText', { progressText: 42 }],
+  ])('ignores %s', async (_label, payload) => {
+    const fireProgress = captureSyncProgressEvent();
+    mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    expect(() => fireProgress(payload)).not.toThrow();
+
+    expect(screen.queryByTestId('toolbar-sync-popover-progress')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['an out-of-range fraction', { progressText: 'GreekNT', progressValue: 5 }],
+    ['a negative fraction', { progressText: 'GreekNT', progressValue: -1 }],
+    ['a non-numeric fraction', { progressText: 'GreekNT', progressValue: 'half' }],
+  ])('degrades %s to indeterminate rather than dropping the message', async (_label, payload) => {
+    const fireProgress = captureSyncProgressEvent();
+    mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireProgress(payload);
+
+    const progress = await screen.findByTestId('toolbar-sync-popover-progress');
+    expect(progress).toHaveTextContent('GreekNT');
+    expect(progress.textContent).not.toMatch(/%/);
+  });
+
+  it('drops progress once the sync is no longer running', async () => {
+    // Otherwise the last tick of the previous sync sits under "The last sync finished", and is the
+    // first thing shown for the NEXT sync before its own first tick arrives.
+    let getSyncStateCalls = 0;
+    let progressHandler: ((detail: unknown) => void) | undefined;
+    let syncStateHandler: ((event: { isSyncing: boolean }) => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      // Same generic-signature constraint as the single-event helpers above.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      ((eventName: string) => {
+        if (eventName === 'paratextBibleSendReceive.onSyncProgress')
+          return vi.fn((cb: (detail: unknown) => void) => {
+            progressHandler = cb;
+            return vi.fn();
+          });
+        if (eventName === 'paratextBibleSendReceive.onSyncStateChanged')
+          return vi.fn((cb: (event: { isSyncing: boolean }) => void) => {
+            syncStateHandler = cb;
+            return vi.fn();
+          });
+        return vi.fn(() => vi.fn());
+        // The assertion applies to the whole mock body above, so the directive has to sit here.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => {
+        getSyncStateCalls += 1;
+        if (getSyncStateCalls === 1)
+          return { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] };
+        return completedState({ a: 'succeeded' });
+      },
+    });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    if (!progressHandler || !syncStateHandler) throw new Error('subscriptions were not captured');
+    const fireProgress = progressHandler;
+    const fireSyncState = syncStateHandler;
+    act(() => fireProgress({ progressText: 'GreekNT', progressValue: 0.42 }));
+    expect(await screen.findByTestId('toolbar-sync-popover-progress')).toBeInTheDocument();
+
+    act(() => fireSyncState({ isSyncing: false }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('toolbar-sync-popover-progress')).not.toBeInTheDocument();
     });
   });
 });

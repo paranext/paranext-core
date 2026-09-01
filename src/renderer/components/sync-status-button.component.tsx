@@ -72,6 +72,7 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_sync_popover_idle%',
   '%toolbar_sync_popover_synced%',
   '%toolbar_sync_popover_unknown%',
+  '%toolbar_sync_progress_item%',
   '%toolbar_sync_status_cancelled%',
   '%toolbar_sync_status_failed%',
   '%toolbar_sync_status_synced%',
@@ -99,7 +100,7 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
  */
 export function SyncStatusButton() {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
-  const { status, syncingProjects } = useSyncStatus();
+  const { status, syncingProjects, syncProgress } = useSyncStatus();
   const [isOpen, setIsOpen] = useState(false);
   const [isCancelEnabled, setIsCancelEnabled] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -535,6 +536,27 @@ export function SyncStatusButton() {
       ? `${buttonLabel} — ${unknownStatusText}`
       : undefined;
 
+  /**
+   * The progress line for the running sync, or `undefined` when there is nothing to say.
+   *
+   * Two shapes, per the `SyncProgressDetail` contract. DETERMINATE progress carries a bare item —
+   * usually a project name — which is formatted here together with the percent. INDETERMINATE
+   * progress carries a complete, already-localized sentence (ParatextData's "Connection to server
+   * lost. Retrying…" is the one that matters most to a user on a flaky connection) and is shown
+   * verbatim: formatting it would append a percent to a full sentence.
+   *
+   * The item is bidi-isolated because it is usually a project name, for the same reason the button
+   * label isolates one.
+   */
+  const syncProgressMessage = (() => {
+    if (!syncProgress) return undefined;
+    if (syncProgress.fraction === undefined) return syncProgress.text;
+    return formatReplacementString(localizedStrings['%toolbar_sync_progress_item%'], {
+      item: isolateBidi(syncProgress.text),
+      percent: Math.round(syncProgress.fraction * 100),
+    });
+  })();
+
   const popoverStatusMessage = (() => {
     if (status === 'synced') return localizedStrings['%toolbar_sync_popover_synced%'];
     if (wasCancelled) return localizedStrings['%toolbar_sync_popover_cancelled%'];
@@ -686,6 +708,25 @@ export function SyncStatusButton() {
                   </ul>
                 ) : (
                   <p className="tw:text-sm">{localizedStrings['%toolbar_sync_status_syncing%']}</p>
+                )}
+                {/*
+                 * Progress detail, when the backend is sending it. Absent is the ordinary case — a
+                 * build with no Send/Receive implementation emits no progress — so this is additive
+                 * and the popover reads correctly without it. It matters most in Simple mode, where
+                 * this indicator is the only sync surface: without it a user on a flaky connection
+                 * sees a spinner and has no way to know the sync is retrying rather than stuck.
+                 *
+                 * Not in the live region: progress ticks on every item and percent change, and
+                 * announcing each would talk over everything else the region has to say. The region
+                 * announces the STATUS; this is detail for a user who has opened the popover.
+                 */}
+                {syncProgressMessage && (
+                  <p
+                    data-testid="toolbar-sync-popover-progress"
+                    className="tw:truncate tw:text-xs tw:text-muted-foreground"
+                  >
+                    {syncProgressMessage}
+                  </p>
                 )}
                 {/*
                  * "Cancel sync", not "Cancel": inside a dismissible popover a bare "Cancel" reads as

@@ -2410,6 +2410,19 @@ step, no automation. Just a record.
     is about. And it must be STICKY, because a gate on "is syncing right now" unmounts the control in
     the same commit the closing snapshot arrives, discarding the outcome before it can be painted or
     announced and tearing down the status hook's seed loop mid-flight.
+  - **Progress detail rides the claim's own event, and is never a third authority.** Simple mode
+    suppresses the persistent C# toast in favour of this indicator, and the toast carried the project
+    being synced, its percent, and ParatextData's "Connection to server lost. Retrying…". Losing that
+    would trade one honest surface for a barer one, so `useSyncStatus` subscribes to
+    `paratextBibleSendReceive.onSyncProgress` and the popover renders it. Deliberately NOT unioned
+    into the status: progress is DETAIL about a sync something else has established is running, and
+    treating a tick as evidence of a sync would let a late or duplicated one assert a sync after it
+    ended — the reverse of the direction this hook is careful about everywhere else. It is dropped the
+    moment the status leaves `syncing`, and it is kept out of the live region, which announces the
+    status: a tick per item and per percent change would talk over everything else the region says.
+    Absent progress is the ordinary case, not an error — the event comes from the Send/Receive
+    implementation, so a build without one reports a sync with no detail and the popover reads
+    correctly without it.
   - **The two halves only compose in a real build.** The run bracket that raises the signal, and the
     toast gate, live in Studio's patch; the seam, the notifier, and the union live here. Core's union degrades cleanly to claim-only when the patch is
     absent, by the declare-it-optional pattern `adr-toolbar-sync-status-is-local` established — but the invisible-path gap and

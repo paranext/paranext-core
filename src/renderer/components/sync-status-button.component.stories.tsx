@@ -188,6 +188,38 @@ export const PopoverSyncingUnknownProjects: Story = {
   play: openPopover,
 };
 
+/**
+ * Popover during a sync the backend is reporting progress for: the current item and its percent.
+ * This is what Simple mode loses if the indicator carries no progress, since it suppresses the
+ * persistent C# toast in favour of this surface.
+ */
+export const PopoverSyncingWithProgress: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'syncing',
+      syncingProjects: SEVERAL_PROJECTS,
+      syncProgress: { text: 'GreekNT', fraction: 0.42 },
+    }),
+  ],
+  play: openPopover,
+};
+
+/**
+ * Indeterminate progress, shown verbatim with no percent. ParatextData sends a complete localized
+ * sentence here, and this is the case a user on a flaky connection most needs to see — without it a
+ * retrying sync is indistinguishable from a stuck one.
+ */
+export const PopoverSyncingReconnecting: Story = {
+  decorators: [
+    withSyncStatus({
+      status: 'syncing',
+      syncingProjects: ONE_PROJECT,
+      syncProgress: { text: 'Connection to server lost. Retrying…' },
+    }),
+  ],
+  play: openPopover,
+};
+
 /** Popover while idle: no Cancel, since there is nothing to cancel. */
 export const PopoverIdle: Story = {
   decorators: [withSyncStatus({ status: 'idle', syncingProjects: [] })],

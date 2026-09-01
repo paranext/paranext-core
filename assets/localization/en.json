@@ -487,6 +487,7 @@
   "%toolbar_sync_popover_last_sync_unfinished%": "The last sync did not finish.",
   "%toolbar_sync_popover_synced%": "The last sync finished.",
   "%toolbar_sync_popover_unknown%": "The sync status isn't available right now.",
+  "%toolbar_sync_progress_item%": "{item} — {percent}%",
   "%toolbar_sync_status_cancelled%": "Sync cancelled",
   "%toolbar_sync_status_failed%": "Sync failed",
   "%toolbar_sync_status_synced%": "Synced",
