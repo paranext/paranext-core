@@ -186,21 +186,29 @@ function checkoutRevision(repo: DevRepo): void {
   console.log(`Fetching latest in ${repo.folder}...`);
   execSync('git fetch origin --tags', { stdio: 'inherit', cwd: repoPath });
   console.log(`Checking out ${repo.revision} in ${repo.folder}...`);
-  execSync(`git checkout "${repo.revision}"`, { stdio: 'inherit', cwd: repoPath });
-  // Pull to get the latest commits if we're on a branch. Skip for detached HEADs (tags or commit hashes).
-  let isOnBranch: boolean;
+  // When the revision is a branch, check out the REMOTE-TRACKING state, detached. `platform-yalc`
+  // is routinely force-pushed (it is rebased onto main), and a `git pull` on a local branch that
+  // diverged that way fails — or quietly creates a merge commit. Detaching at origin/<branch>
+  // always builds exactly what the remote has, and never touches the checkout's local branches,
+  // which matters when the checkout is a developer's own sibling clone.
+  let isRemoteBranch: boolean;
   try {
-    execSync('git symbolic-ref --quiet HEAD', { stdio: 'pipe', cwd: repoPath });
-    isOnBranch = true;
+    execSync(`git show-ref --verify --quiet "refs/remotes/origin/${repo.revision}"`, {
+      stdio: 'pipe',
+      cwd: repoPath,
+    });
+    isRemoteBranch = true;
   } catch {
-    isOnBranch = false;
+    isRemoteBranch = false;
   }
-  if (isOnBranch) {
-    execSync('git pull', { stdio: 'inherit', cwd: repoPath });
+  if (isRemoteBranch) {
+    execSync(`git checkout --detach "origin/${repo.revision}"`, {
+      stdio: 'inherit',
+      cwd: repoPath,
+    });
   } else {
-    console.log(
-      `Detached HEAD in ${repo.folder} (tag or commit hash). Skipping pull, using checked-out revision.`,
-    );
+    // A tag or commit hash; immutable, so nothing to sync after checkout.
+    execSync(`git checkout --detach "${repo.revision}"`, { stdio: 'inherit', cwd: repoPath });
   }
 }
 
