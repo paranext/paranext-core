@@ -1,6 +1,11 @@
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
+import {
+  useData,
+  useDataProvider,
+  useDialogCallback,
+  useLocalizedStrings,
+} from '@papi/frontend/react';
 import {
   Button,
   EmptyState,
@@ -150,11 +155,22 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     [localizedStrings],
   );
 
-  // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid. The
-  // 5th tuple member is the project driving the active Scripture reference (the editor's project):
-  // follow it when opened without an explicit project — e.g. from the default layout, whose tab
-  // carries no projectId. An explicit `projectId` (e.g. a direct openWebView) takes precedence.
-  const [scrRef, setScrRef, , , activeEditorProjectId] = useWebViewScrollGroupScrRef();
+  // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid.
+  const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+
+  // The project driving BCV navigation in this window: follow it when opened without an explicit
+  // project — e.g. from the default layout, whose tab carries no projectId. An explicit `projectId`
+  // (e.g. a direct openWebView) takes precedence. Deliberately NOT scroll group 0's source project
+  // (`useWebViewScrollGroupScrRef`'s 5th tuple member): that field's only job is tagging which
+  // versification frame the current reference is in, and it changes for reasons that have nothing to
+  // do with which project is active (Back/Forward, a resource cell's own click, a click in the
+  // Comments or Checks panel) — none of those should ever change what Text Collection displays.
+  const [activeEditorProjectIdPossiblyError] = useData(
+    papi.window.dataProviderName,
+  ).ActiveEditorProjectId(undefined, undefined);
+  const activeEditorProjectId = isPlatformError(activeEditorProjectIdPossiblyError)
+    ? undefined
+    : activeEditorProjectIdPossiblyError;
   const candidateProjectId = projectId ?? activeEditorProjectId;
 
   // `effectiveProjectId` is the project whose text collection the grid shows. It starts from the
