@@ -8,10 +8,78 @@ import { GraphemeString, testingGraphemeStringUtils } from './grapheme-string';
  * ASCII fixtures. For ASCII, one grapheme cluster is exactly one code point and exactly one UTF-16
  * code unit, so `String.prototype` is a correct oracle for every method below: any difference
  * between `GraphemeString` and native on these inputs is a bug in `GraphemeString`, never a
- * consequence of grapheme awareness. Grapheme-specific behavior is covered separately further
- * down.
+ * consequence of grapheme awareness.
+ *
+ * ASCII alone cannot catch a grapheme bug, though — see {@link ASTRAL_BY_ASCII}.
  */
 const ASCII = ['', 'a', 'abc', 'abcab', 'abab', 'aaa'];
+
+/**
+ * A transliteration of the fixture alphabet into single-code-point astral characters, which is what
+ * lets the same native oracle test the grapheme layer.
+ *
+ * On ASCII, a grapheme index and a UTF-16 offset are always the same number, so `offsets`,
+ * `offsetAt`, `graphemeIndexAtOffset`, `isBoundary` and `graphemeSpan` all behave as identity
+ * functions and nothing they do can be wrong. Replace every `a` with `𐐷` — one grapheme, one code
+ * point, but _two_ code units — and grapheme indexes stop matching offsets, so that machinery has
+ * to be right for any result to come out.
+ *
+ * Native stays a correct oracle because the substitution is a bijection on graphemes: run the
+ * operation on the ASCII string, transliterate the result, and that is what the astral instance
+ * must return. Indexes and booleans carry over untouched, which is exactly the claim under test.
+ *
+ * Characters with no mapping pass through, so a mapped fixture mixes one- and two-unit graphemes —
+ * which is harder on the offset math than a uniform-width string would be.
+ */
+const ASTRAL_BY_ASCII: Readonly<Record<string, string>> = {
+  a: '𐐷',
+  b: '𐐸',
+  c: '𐐹',
+  z: '𐐺',
+  ',': '𐐻',
+  '1': '𐐼',
+  '2': '𐐽',
+};
+
+/** Transliterate a fixture or argument into the astral alphabet. */
+function toAstral(text: string): string {
+  return [...text].map((character) => ASTRAL_BY_ASCII[character] ?? character).join('');
+}
+
+/** The alphabets a parity matrix runs under. */
+const ALPHABETS = [
+  { name: 'ascii', encode: (text: string) => text },
+  { name: 'astral', encode: toAstral },
+] as const;
+
+/** Only the ASCII pass, for operations whose results cannot be transliterated. */
+const ASCII_ONLY = [ALPHABETS[0]] as const;
+
+/**
+ * Routes that produce an instance whose text is exactly the given string.
+ *
+ * The class hands derived instances a pre-computed grapheme array rather than re-segmenting, so a
+ * derived instance exercises different code from a constructed one. Building the matrix only from
+ * the constructor leaves every one of those routes untested — which is where a real defect lived:
+ * padding used to hand back an instance whose cluster array disagreed with its own text.
+ */
+const GUARD = '##';
+const SPLIT_MARK = '|';
+const FACTORIES = [
+  { name: 'new', build: (text: string) => new GraphemeString(text) },
+  {
+    name: 'slice',
+    build: (text: string) => new GraphemeString(`${GUARD}${text}${GUARD}`).slice(2, -2),
+  },
+  {
+    name: 'substring',
+    build: (text: string) => new GraphemeString(`${GUARD}${text}`).substring(2),
+  },
+  {
+    name: 'split',
+    build: (text: string) => new GraphemeString(`${text}${SPLIT_MARK}`).split(SPLIT_MARK)[0],
+  },
+] as const;
 
 /** Index arguments straddling every boundary: past both ends, both edges, and non-integers. */
 const INDEXES = [-Infinity, -6, -4, -3, -1, -0.5, 0, 0.5, 1, 2, 2.5, 3, 4, 6, Infinity, NaN];
@@ -39,35 +107,75 @@ function unwrap(value: unknown): unknown {
   return value;
 }
 
+/** Transliterate every string inside a native result, so it can be compared to the astral run. */
+function encodeResult(value: unknown, encode: (text: string) => string): unknown {
+  if (typeof value === 'string') return encode(value);
+  if (Array.isArray(value)) return value.map((entry) => encodeResult(entry, encode));
+  return value;
+}
+
 /** Every ordered pair drawn from two lists. */
 function pairs<T, U>(firsts: readonly T[], seconds: readonly U[]): [T, U][] {
   return firsts.flatMap((first) => seconds.map((second): [T, U] => [first, second]));
 }
 
 /**
- * Run a `GraphemeString` method and its native `String` counterpart over every (string, arguments)
- * combination, returning both result sets keyed by the exact call that produced them. A single
- * `expect` on the pair then reports every divergence at once — naming the input and arguments for
- * each — instead of stopping at the first.
+ * Run a `GraphemeString` method and its native `String` counterpart over every (alphabet,
+ * construction route, string, arguments) combination, returning both result sets keyed by the exact
+ * call that produced them. A single `expect` on the pair then reports every divergence at once —
+ * naming the alphabet, route, input and arguments for each — instead of stopping at the first.
+ *
+ * @param alphabets Pass {@link ASCII_ONLY} for operations whose results do not survive
+ *   transliteration: `codePointAt` returns the code point itself, and a regular-expression
+ *   separator still matches the ASCII it was written against.
  */
 function nativeParity<TArgs extends unknown[]>(
   strings: readonly string[],
   argSets: readonly TArgs[],
   graphemeOperation: (graphemeString: GraphemeString, ...args: TArgs) => unknown,
   nativeOperation: (string: string, ...args: TArgs) => unknown,
+  alphabets: readonly { name: string; encode: (text: string) => string }[] = ALPHABETS,
 ): { grapheme: Record<string, unknown>; native: Record<string, unknown> } {
   const grapheme: Record<string, unknown> = {};
   const native: Record<string, unknown> = {};
-  strings.forEach((string) => {
-    argSets.forEach((args) => {
-      const key = `${JSON.stringify(string)} (${describeArgs(args)})`;
-      grapheme[key] = unwrap(graphemeOperation(new GraphemeString(string), ...args));
-      native[key] = nativeOperation(string, ...args);
+  alphabets.forEach((alphabet) => {
+    FACTORIES.forEach((factory) => {
+      strings.forEach((string) => {
+        argSets.forEach((args) => {
+          const key = `${alphabet.name}/${factory.name} ${JSON.stringify(string)} (${describeArgs(args)})`;
+          // Mapping a tuple element-wise gives back an array, and TypeScript has no way to say
+          // "same tuple, same length, string elements still strings". The alternative is threading
+          // the encoder into all seventeen operation callbacks so each encodes its own arguments,
+          // which is noisier at every call site for the same guarantee.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          const encodedArgs = args.map((arg) =>
+            typeof arg === 'string' ? alphabet.encode(arg) : arg,
+          ) as TArgs;
+          grapheme[key] = unwrap(
+            graphemeOperation(factory.build(alphabet.encode(string)), ...encodedArgs),
+          );
+          native[key] = encodeResult(nativeOperation(string, ...args), alphabet.encode);
+        });
+      });
     });
   });
   return { grapheme, native };
 }
 
+/**
+ * What this harness still cannot see, so the gap is deliberate rather than forgotten.
+ *
+ * A native oracle can only check behavior that native shares. The one rule it can never check is
+ * the rule the class exists for: rejecting a match that does not begin and end on a cluster
+ * boundary. Native takes those matches — that is the whole divergence — so any fixture where the
+ * two differ disqualifies native as an oracle for it. Reaching that branch also requires a cluster
+ * built from several code points, which the transliterated alphabet deliberately does not have; a
+ * one-code-point-per-cluster alphabet is what keeps native valid at all.
+ *
+ * `isBoundary`'s rejection path and the `u`/`v` regex it interacts with are therefore covered by
+ * hand-written cluster tests further down, not here. Replacing `isBoundary` with `return true`
+ * fails those and leaves this matrix green, by construction.
+ */
 const singles = <T>(values: readonly T[]): [T][] => values.map((value): [T] => [value]);
 
 // #endregion
@@ -99,6 +207,8 @@ describe('native parity: point accessors', () => {
       singles(INDEXES),
       (graphemeString, index) => graphemeString.codePointAt(index),
       (str, index) => str.codePointAt(index),
+      // The result is a code point, so transliterating the fixture changes the answer.
+      ASCII_ONLY,
     );
     expect(grapheme).toEqual(native);
   });
@@ -312,6 +422,12 @@ describe('native parity: split', () => {
     /b*/,
     /(?:)/,
     /,/g,
+    // `u`/`v` change how the engine advances `lastIndex`: it rounds an index landing inside a
+    // surrogate pair back to the pair's start, so a scan that trusts `match.index` never advances.
+    /,/u,
+    /[abc]/u,
+    /(\d)/v,
+    /b*/u,
   ];
   const LIMITS = [undefined, 0, 1, 2, 3, 10, -1, NaN, 1.5];
 
@@ -326,6 +442,9 @@ describe('native parity: split', () => {
           ? graphemeString.split(separator, limit)
           : graphemeString.split(separator, limit),
       (str, separator, limit) => str.split(separator, limit),
+      // A regular-expression separator is written against ASCII and would not match a
+      // transliterated fixture. String separators get an astral pass of their own below.
+      ASCII_ONLY,
     );
     expect(grapheme).toEqual(native);
   });
@@ -339,6 +458,21 @@ describe('native parity: split', () => {
           ? graphemeString.split(separator)
           : graphemeString.split(separator),
       (str, separator) => str.split(separator),
+      // Same reason as above: the matrix includes regular-expression separators.
+      ASCII_ONLY,
+    );
+    expect(grapheme).toEqual(native);
+  });
+
+  it('string separators, transliterated', () => {
+    // The astral pass the mixed matrix above cannot take, restricted to the separators that survive
+    // transliteration. This is what puts `split`'s offset arithmetic under a real grapheme layer.
+    const STRING_SEPARATORS = SEPARATORS.filter((separator) => typeof separator === 'string');
+    const { grapheme, native } = nativeParity(
+      SPLIT_STRINGS,
+      pairs(STRING_SEPARATORS, LIMITS),
+      (graphemeString, separator, limit) => graphemeString.split(separator, limit),
+      (str, separator, limit) => str.split(separator, limit),
     );
     expect(grapheme).toEqual(native);
   });
