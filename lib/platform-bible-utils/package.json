@@ -62,8 +62,7 @@
     "@eten-tech-foundation/scripture-utilities": "~0.1.6",
     "async-mutex": "^0.5.0",
     "dompurify": "^3.4.0",
-    "jsonpath-plus": "^10.3.0",
-    "unicode-segmenter": "^0.17.3"
+    "jsonpath-plus": "^10.3.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
@@ -78,6 +77,7 @@
     "tslib": "^2.8.1",
     "typedoc": "^0.28.3",
     "typescript": "^5.8.3",
+    "unicode-segmenter": "^0.17.3",
     "vite": "^6.4.2",
     "vitest": "^3.2.7"
   },
