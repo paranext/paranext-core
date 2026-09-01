@@ -672,6 +672,121 @@ describe('handleSwitchToSimpleMode', () => {
     localStorage.clear();
   });
 
+  /** Answer `platform.getWindows` with these summaries, and this window's own id */
+  function setWindowsAndThisWindow(
+    windows: { windowId: number; label: string; isMain: boolean }[],
+    thisWindowId: number,
+  ) {
+    globalThis.windowId = String(thisWindowId);
+    sendCommandMock.mockImplementation(async (command: string) =>
+      command === 'platform.getWindows' ? windows : undefined,
+    );
+  }
+
+  it('a window that is not the primary does no switch work at all', async () => {
+    // Main closes this window as part of the same switch, and the switch writes state shared by
+    // every window — a send/receive, the shared layout apply, the recently-opened record, and a
+    // browser-storage cache under one key for all windows. Running it here duplicates all four.
+    setWindowsAndThisWindow(
+      [
+        { windowId: 1, label: '', isMain: true },
+        { windowId: 2, label: '', isMain: false },
+      ],
+      2,
+    );
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject, getLastOpenedProject } = await import(
+      '@renderer/services/last-opened-project-cache'
+    );
+    setLastOpenedProject({ id: 'proj-cached' });
+    buildSimpleLayoutForProjectMock.mockClear();
+
+    await host.handleSwitchToSimpleMode();
+
+    // The three things the switch would otherwise do, each of which is shared by every window:
+    // build and load a project-bound layout, finalize the project switch, and write the
+    // application-wide last-opened cache
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
+    expect(sendCommandMock).not.toHaveBeenCalledWith(
+      'platformScriptureEditor.finalizeProjectSwitch',
+      expect.anything(),
+    );
+    expect(getLastOpenedProject()?.id).toBe('proj-cached');
+  });
+
+  it('the primary window runs the switch', async () => {
+    setWindowsAndThisWindow([{ windowId: 1, label: '', isMain: true }], 1);
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-cached' });
+    buildSimpleLayoutForProjectMock.mockClear();
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-cached');
+  });
+
+  it('a window missing from the list does no switch work', async () => {
+    // Main records a window as closing just before it closes it, and the window list leaves out
+    // windows already recorded that way — so an absent id means this window is on its way out
+    setWindowsAndThisWindow([{ windowId: 1, label: '', isMain: true }], 2);
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-cached' });
+    buildSimpleLayoutForProjectMock.mockClear();
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
+  });
+
+  it('a question that cannot be answered runs the switch rather than refusing it', async () => {
+    globalThis.windowId = '2';
+    sendCommandMock.mockImplementation(async (command: string) => {
+      if (command === 'platform.getWindows') throw new Error('no answer');
+      return undefined;
+    });
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-cached' });
+    buildSimpleLayoutForProjectMock.mockClear();
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-cached');
+  });
+
+  it('a list naming no primary at all runs the switch', async () => {
+    // The summary reads the marked entry with no fallback of its own, while main falls back to the
+    // oldest live window when nothing holds that entry. This window cannot compute that fallback,
+    // so it must not conclude from silence that it is a secondary.
+    setWindowsAndThisWindow(
+      [
+        { windowId: 2, label: '', isMain: false },
+        { windowId: 3, label: '', isMain: false },
+      ],
+      2,
+    );
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-cached' });
+    buildSimpleLayoutForProjectMock.mockClear();
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-cached');
+  });
+
   it('fast path: builds the layout for the cached project id', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
@@ -1181,9 +1296,11 @@ describe('handleSwitchToSimpleMode', () => {
     const { getWorkspaceUpdating } = await import('@renderer/services/workspace-updating-store');
 
     const switchPromise = host.handleSwitchToSimpleMode();
-    // No await has happened yet inside handleSwitchToSimpleMode's synchronous prefix, so the
-    // overlay must already be up by the time this line runs.
-    expect(getWorkspaceUpdating()).toBe(true);
+    // Up while the switch is still running, and raised before any lookup — which is what this
+    // guards. Awaited rather than read synchronously because the switch first asks the main
+    // process whether this window is the one that should run it, and that question is a round
+    // trip; the overlay is the first thing after it, still ahead of every lookup below.
+    await vi.waitFor(() => expect(getWorkspaceUpdating()).toBe(true));
 
     await switchPromise;
     expect(getWorkspaceUpdating()).toBe(false);
@@ -1263,7 +1380,12 @@ describe('handleSwitchToSimpleMode', () => {
 
     await host.handleSwitchToSimpleMode();
 
-    expect(sendCommandMock).not.toHaveBeenCalled();
+    // Named rather than blanket: the switch asks which window should run it before it does
+    // anything, so a bare "sent no command" would now be true of a switch that finalized too
+    expect(sendCommandMock).not.toHaveBeenCalledWith(
+      'platformScriptureEditor.finalizeProjectSwitch',
+      expect.anything(),
+    );
   });
 });
 
