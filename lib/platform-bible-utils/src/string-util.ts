@@ -216,7 +216,7 @@ export function ordinalCompare(
  *   actually be added. This ceiling is lower than native's; see {@link MAX_PADDING_LENGTH}.
  */
 export function padEnd(string: string, targetLength: number, padString?: string): string {
-  return new GraphemeString(string).padEnd(targetLength, padString).toString();
+  return new GraphemeString(string).padEnd(targetLength, padString);
 }
 
 /**
@@ -235,7 +235,7 @@ export function padEnd(string: string, targetLength: number, padString?: string)
  *   actually be added. This ceiling is lower than native's; see {@link MAX_PADDING_LENGTH}.
  */
 export function padStart(string: string, targetLength: number, padString?: string): string {
-  return new GraphemeString(string).padStart(targetLength, padString).toString();
+  return new GraphemeString(string).padStart(targetLength, padString);
 }
 
 /**
