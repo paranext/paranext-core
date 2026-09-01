@@ -52,19 +52,6 @@ export function isSweepEnabled(value: string | undefined): boolean {
 }
 
 /**
- * The pids of sweepable processes running inside `root`, excluding `excludePids`.
- *
- * Every path here is POSIX. Working directories come from `/proc`, which exists only on Linux, so
- * both sides of the comparison are POSIX by construction — resolving them with the host's rules
- * would rewrite them on a platform this selector never really runs on.
- *
- * Containment is checked against the resolved path with a separator, so a sibling checkout whose
- * path merely starts with the same characters — `paranext-core-other` beside `paranext-core` — is
- * not treated as inside it. A process whose working directory could not be read is left alone:
- * unknown means "not ours", because /proc entries for another user's processes are unreadable and
- * guessing in that direction is how a neighbour's app gets killed.
- */
-/**
  * `dir` with symlinks resolved, falling back to a plain resolve when the path cannot be read.
  *
  * A working directory read from /proc is always fully resolved, so a root that still contains a
@@ -80,6 +67,19 @@ function realPathOrResolved(dir: string): string {
   }
 }
 
+/**
+ * The pids of sweepable processes running inside `root`, excluding `excludePids`.
+ *
+ * Every path here is POSIX. Working directories come from `/proc`, which exists only on Linux, so
+ * both sides of the comparison are POSIX by construction — resolving them with the host's rules
+ * would rewrite them on a platform this selector never really runs on.
+ *
+ * Containment is checked against the resolved path with a separator, so a sibling checkout whose
+ * path merely starts with the same characters — `paranext-core-other` beside `paranext-core` — is
+ * not treated as inside it. A process whose working directory could not be read is left alone:
+ * unknown means "not ours", because /proc entries for another user's processes are unreadable and
+ * guessing in that direction is how a neighbour's app gets killed.
+ */
 export function selectPidsUnderRoot(
   root: string,
   candidates: ProcessCandidate[],
