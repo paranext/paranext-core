@@ -911,6 +911,36 @@ interface SettingsBackup {
 }
 
 /**
+ * Parse a settings-shaped JSON object, or an empty object when it is absent or unreadable.
+ *
+ * Unreadable maps to empty rather than throwing: the callers below are recovery paths, and a
+ * recovery that dies on a corrupt file leaves the developer worse off than one that treats it as
+ * having nothing to preserve.
+ */
+function parseSettingsObject(raw: string | undefined): Record<string, unknown> {
+  if (raw === undefined) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || !parsed || Array.isArray(parsed)) return {};
+    // Narrowed directly above to a non-null, non-array object, which is the settings file's shape
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return parsed as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+/** Whether two settings objects hold the same keys with the same values, regardless of key order. */
+function sameSettings(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const aKeys = Object.keys(a).sort();
+  const bKeys = Object.keys(b).sort();
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every(
+    (key, index) => bKeys[index] === key && JSON.stringify(a[key]) === JSON.stringify(b[key]),
+  );
+}
+
+/**
  * Read the backup, or `undefined` when it cannot be trusted.
  *
  * All-or-nothing on purpose. A backup that does not parse, or that carries no owner, is a backup we
@@ -992,8 +1022,29 @@ export function restoreLeakedSettings(): string[] | undefined {
     );
     return undefined;
   }
-  if (backup.existed) fs.writeFileSync(settingsPath(), backup.contents ?? '');
-  else fs.rmSync(settingsPath(), { force: true });
+  // Undo the keys the pin wrote, and nothing else. The file on disk is not necessarily test
+  // residue: a run can die and then sit unrecovered for days while the developer keeps using the
+  // app, so anything outside the pinned keys is theirs and has to survive this.
+  const reconciled = parseSettingsObject(
+    fs.existsSync(settingsPath()) ? fs.readFileSync(settingsPath(), 'utf-8') : undefined,
+  );
+  const original = backup.existed ? parseSettingsObject(backup.contents) : {};
+  backup.pinnedKeys.forEach((key) => {
+    if (key in original) reconciled[key] = original[key];
+    else delete reconciled[key];
+  });
+
+  // Only remove the file if this pin is what brought it into existence and undoing the pin has left
+  // nothing behind — otherwise writing it back is what preserves the developer's own settings.
+  if (!backup.existed && Object.keys(reconciled).length === 0)
+    fs.rmSync(settingsPath(), { force: true });
+  // When undoing the pin lands exactly on what was there before, put the original bytes back rather
+  // than a re-serialized equivalent: an empty file and `{}` are different states, and re-encoding
+  // would also churn the developer's formatting for no reason.
+  else if (backup.existed && sameSettings(reconciled, original))
+    fs.writeFileSync(settingsPath(), backup.contents ?? '');
+  else fs.writeFileSync(settingsPath(), JSON.stringify(reconciled));
+
   fs.rmSync(settingsBackupPath(), { force: true });
   return leakedKeys;
 }
@@ -1046,6 +1097,16 @@ export function preConfigureSettings(overrides: Record<string, unknown>): () => 
       pinnedKeys: Object.keys(overrides),
     };
     writeFileAtomic(settingsBackupPath(), JSON.stringify(backup));
+  } else {
+    // A pin taken while an earlier one still stands writes keys the earlier backup never recorded.
+    // The earliest original stays the only correct one, but the record of WHICH keys the run wrote
+    // has to grow, or the restore below leaves this pin's keys behind as though they were the
+    // developer's.
+    const standing = readSettingsBackup();
+    if (standing !== undefined) {
+      const pinnedKeys = [...new Set([...standing.pinnedKeys, ...Object.keys(overrides)])];
+      writeFileAtomic(settingsBackupPath(), JSON.stringify({ ...standing, pinnedKeys }));
+    }
   }
   fs.writeFileSync(settingsPath(), JSON.stringify({ ...existing, ...overrides }));
 

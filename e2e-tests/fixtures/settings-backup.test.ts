@@ -184,3 +184,46 @@ describe('settings backup integrity', () => {
     expect(fs.existsSync(BACKUP_PATH)).toBe(true);
   });
 });
+
+describe('settings restore reconciles rather than assumes', () => {
+  it('keeps settings written after a killed run, undoing only the keys the pin wrote', () => {
+    // A fresh checkout: no settings file at all when the run pins. Then the run is killed, so its
+    // own restore never happens.
+    preConfigureSettings({ 'platform.interfaceMode': 'power' });
+
+    // Days pass. The developer uses the app and it writes their real settings.
+    fs.writeFileSync(
+      SETTINGS_PATH,
+      JSON.stringify({
+        'platform.interfaceLanguage': ['fr'],
+        'paratext.registrationCode': 'REAL-USER-DATA',
+        'platform.interfaceMode': 'power',
+      }),
+    );
+
+    restoreLeakedSettings();
+
+    const after = JSON.parse(readSettings() ?? '{}');
+    expect(after['paratext.registrationCode']).toBe('REAL-USER-DATA');
+    expect(after['platform.interfaceLanguage']).toEqual(['fr']);
+    // The pin, and only the pin, is undone.
+    expect(after['platform.interfaceMode']).toBeUndefined();
+  });
+
+  it('puts back the developer value for a pinned key rather than dropping it', () => {
+    fs.writeFileSync(SETTINGS_PATH, JSON.stringify({ 'platform.interfaceMode': 'simple' }));
+    preConfigureSettings({ 'platform.interfaceMode': 'power' });
+
+    restoreLeakedSettings();
+
+    expect(JSON.parse(readSettings() ?? '{}')['platform.interfaceMode']).toBe('simple');
+  });
+
+  it('removes a settings file it created, once the pinned keys are gone', () => {
+    preConfigureSettings({ 'platform.interfaceMode': 'power' });
+
+    restoreLeakedSettings();
+
+    expect(readSettings()).toBeUndefined();
+  });
+});
