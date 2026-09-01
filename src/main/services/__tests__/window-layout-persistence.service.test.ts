@@ -1415,6 +1415,24 @@ describe('the windows a power session left behind', () => {
     expect(service.getPreservedEntryIndexes()).toEqual([1]);
   });
 
+  test('a preserved entry can be read back with the placement its window is to be given', async () => {
+    const bounds = { x: 40, y: 50, width: 800, height: 600 };
+    const service = await startService();
+    await loadAndAssignAll(service, [{ isMain: true }, { bounds }], 10);
+    service.handleWindowRemoved(11, 'entry-stays');
+
+    expect(service.getEntryAtIndex(1)?.bounds).toEqual(bounds);
+  });
+
+  test('reading a position nothing occupies answers with nothing', async () => {
+    // The negative control: an accessor that answered with an empty entry rather than nothing
+    // would have a reopen create a window at default placement instead of skipping it
+    const service = await startService();
+    await loadAndAssignAll(service, [{ isMain: true }], 10);
+
+    expect(service.getEntryAtIndex(7)).toBeUndefined();
+  });
+
   test('an ordinary secondary close still takes its entry with it', async () => {
     // The negative control that makes the test above non-vacuous: an implementation that
     // preserved every entry would pass that one and resurrect windows the user closed

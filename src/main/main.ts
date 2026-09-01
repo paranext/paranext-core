@@ -115,7 +115,10 @@ import {
   loadWindowLayouts,
   markWindowPendingContent,
   isPrimaryWindow,
+  getEntryAtIndex,
+  getPreservedEntryIndexes,
   setMainWindowId,
+  setModeSwitchClosePredicate,
   setPendingContentChangeListener,
   trackLegacyWindow,
   trackNewWindow,
@@ -123,6 +126,14 @@ import {
   writeNow,
 } from '@main/services/window-layout-persistence.service';
 import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
+import {
+  clearModeSwitchClose,
+  getCachedInterfaceMode,
+  handleInterfaceModeChanged,
+  initializeModeSwitchOrchestration,
+  isAdditionalWindowRefusedInSimpleMode,
+  isClosingForModeSwitch,
+} from '@main/services/interface-mode-windows.service';
 import { summarizeWindows } from '@main/window-summary.util';
 import {
   DEFAULT_WINDOW_HEIGHT,
@@ -176,6 +187,7 @@ import {
   isPlatformError,
   serialize,
   ThemeDefinitionExpanded,
+  UnsubscriberAsync,
   UnsubscriberAsyncList,
   wait,
   waitForDuration,
@@ -686,6 +698,14 @@ async function main() {
     if (isAppShuttingDown())
       throw new Error('Cannot create a window while the application is quitting');
 
+    // Simple mode is single-window, so a second window has nowhere to be: its chrome is hidden,
+    // and nothing in that mode offers a way back to it. Thrown for the same reason as the guard
+    // above — both callers await this, and resolving with nothing would report a window that does
+    // not exist as created. Refuses nothing until the mode is known, which is what lets the
+    // startup restore create its windows before the mode read it depends on has landed.
+    if (isAdditionalWindowRefusedInSimpleMode(getCachedInterfaceMode(), getWindows().length))
+      throw new Error('Cannot create a window in simple interface mode, which is single-window');
+
     const isFirstWindow = getWindows().length === 0;
 
     // A window is being created where there were NONE, so the app is alive and whatever brought
@@ -1147,7 +1167,6 @@ async function main() {
       // of the session. On confirm the quit latch is already set by the time this resolves, which
       // is what makes every other window's handler record its layout as staying for next session.
       // Secondary windows and a primary on its own skip the question and close.
-      // TODO(PT-4286): a live switch to Simple mode must also close the secondary windows.
       isAskingAboutClose = true;
       let decision: WindowCloseDecision;
       try {
@@ -1251,6 +1270,15 @@ async function main() {
           // than run once per window — each window waits on the same run before destroying itself.
           await runShutdownTasksOnce(performShutdownTasks);
         } else {
+          // A window closing because the interface mode changed keeps its entry, so that entry has
+          // to hold where the window actually is. Its placement is captured here because the
+          // debounced capture is cancelled once the window has gone, and nothing else on this path
+          // records it — so without this a window moved just before the switch would come back at
+          // its old position.
+          if (isClosingForModeSwitch(windowId)) {
+            cancelPendingBoundsCapture();
+            updateWindowBounds(windowId, captureWindowBoundsState());
+          }
           // The app stays up, but this window's editors go with it. Only this window can say what
           // it had open, so a sync that runs after it is gone can never cover it — the fan-out asks
           // the windows that are still there. Held open for the sync for the same reason the app
@@ -1314,7 +1342,15 @@ async function main() {
       // before the unsubscribers below, which spend the network service's whole registration retry
       // failing against a renderer that is already gone.
       cancelPendingBoundsCapture();
-      handleWindowRemoved(windowId, isAppGoingDown ? 'entry-stays' : 'entry-goes-with-it');
+      // A window closed because the interface mode changed is not leaving the structure either: it
+      // is meant to come back when the user switches to power again, so its entry stays exactly as
+      // it does for a window going down with the app. A window still waiting for its content is the
+      // exception — its entry holds nothing, so keeping it would resurrect a blank window on every
+      // later switch.
+      const keepsItsEntry =
+        isAppGoingDown || (isClosingForModeSwitch(windowId) && !isWindowPendingContent(windowId));
+      handleWindowRemoved(windowId, keepsItsEntry ? 'entry-stays' : 'entry-goes-with-it');
+      clearModeSwitchClose(windowId);
       // A window told to close counts as gone from the moment it is told, and stops counting for
       // real only here — its close runs the async work above, and it is open and counted for all of
       // it. Told or not, every window passes through here, and untracked ids are ignored.
@@ -1648,6 +1684,12 @@ async function main() {
    */
   let unsubscribeMacosMenubar: (() => Promise<boolean>) | undefined;
 
+  /**
+   * Ends the one process-global interface-mode subscription. Undefined before the subscription is
+   * made and once it has been run — the quit teardown below runs it exactly once.
+   */
+  let unsubscribeInterfaceMode: UnsubscriberAsync | undefined;
+
   let isAppQuitting = false;
   app.on('will-quit', async (e) => {
     if (!isAppQuitting) {
@@ -1671,6 +1713,30 @@ async function main() {
       // Also, in the future, this should allow a "are you sure?" dialog to display.
       e.preventDefault();
       isAppQuitting = true;
+
+      // Cleared before it is run so a second pass through here cannot run it again
+      const unsubscribeMode = unsubscribeInterfaceMode;
+      unsubscribeInterfaceMode = undefined;
+      if (unsubscribeMode) {
+        // Bounded for the same reason as the menubar unsubscribe below: it is a request to the
+        // extension host, and one that has stopped answering would otherwise hold the whole quit
+        // for the request timeout. A subscription left behind in a process about to exit costs
+        // nothing.
+        const didFinishUnsubscribing = await waitForDuration(async () => {
+          try {
+            await unsubscribeMode();
+          } catch (error) {
+            logger.warn(
+              `Failed to unsubscribe from interface mode changes: ${getErrorMessage(error)}`,
+            );
+          }
+          return true;
+        }, PROCESS_CLOSE_TIME_OUT_MS);
+        if (!didFinishUnsubscribing)
+          logger.warn(
+            `The interface mode did not unsubscribe within ${PROCESS_CLOSE_TIME_OUT_MS} ms; quitting anyway`,
+          );
+      }
 
       // Cleared before it is run so a second pass through here cannot run it again
       const unsubscribeMenubar = unsubscribeMacosMenubar;
@@ -1764,6 +1830,65 @@ async function main() {
         await restoreWindows();
       } catch (e) {
         logger.error(`Failed to restore windows at startup: ${getErrorMessage(e)}`);
+      }
+
+      // Which windows the application has is the interface mode's to decide from here on: simple
+      // mode is single-window, power mode is not. Wired AFTER the restore, so the restore creates
+      // its windows against an unknown mode and is never refused by the single-window guard.
+      //
+      // Subscribed once for the session rather than per window, like the macOS menubar above: the
+      // mode is one global value, and the reaction is about the set of windows rather than about
+      // any one of them.
+      let startupInterfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+      try {
+        startupInterfaceMode = await settingsService.get('platform.interfaceMode');
+      } catch (e) {
+        // Left unknown rather than guessed. An unknown mode refuses no windows, which is the
+        // harmless direction; guessing simple would refuse a power user their windows.
+        logger.warn(
+          `Could not read the interface mode when wiring the window orchestration: ${getErrorMessage(e)}`,
+        );
+      }
+      setModeSwitchClosePredicate(isClosingForModeSwitch);
+      initializeModeSwitchOrchestration(
+        {
+          getTrackedWindowIds: () => getWindows().map((window) => window.id),
+          isPrimaryWindow,
+          isWindowClosing: isWindowMarkedClosing,
+          markWindowClosing,
+          closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+          focusWindow,
+          isAppShuttingDown,
+          getPreservedEntryIndexes,
+          createWindowForEntry: async (entryIndex) => {
+            const entry = getEntryAtIndex(entryIndex);
+            if (!entry) {
+              logger.warn(
+                `Not reopening window entry ${entryIndex}; it is no longer in the structure`,
+              );
+              return;
+            }
+            await createWindow({ kind: 'entry', entryIndex, entry });
+          },
+        },
+        startupInterfaceMode,
+      );
+      try {
+        unsubscribeInterfaceMode = await settingsService.subscribe(
+          'platform.interfaceMode',
+          async (newMode) => {
+            if (isPlatformError(newMode)) {
+              logger.warn(`Could not read the updated interface mode: ${getErrorMessage(newMode)}`);
+              return;
+            }
+            await handleInterfaceModeChanged(newMode);
+          },
+          // The initial value is already seeded above; retrieving it again here would look like a
+          // change and close the very windows the restore just created
+          { retrieveDataImmediately: false },
+        );
+      } catch (e) {
+        logger.warn(`Failed to subscribe to interface mode changes: ${getErrorMessage(e)}`);
       }
 
       // Collapse overlapping restores: 'activate' can fire again (rapid dock clicks) while a
@@ -1860,7 +1985,9 @@ async function main() {
     {
       method: {
         'x-experimental': true,
-        summary: 'Create a new application window',
+        summary:
+          'Create a new application window. Rejected in simple interface mode, which is ' +
+          'single-window',
         params: [],
         result: {
           name: 'return value',
