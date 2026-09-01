@@ -319,7 +319,9 @@ export declare const MAX_PADDING_LENGTH: number;
 /**
  * A string pre-segmented into Unicode grapheme clusters. Segmentation happens once in the
  * constructor (the expensive step); every other operation reuses it. Derived values
- * (substring/slice/etc.) reuse the parent grapheme slice and never re-segment.
+ * (substring/slice/etc.) reuse the parent grapheme slice rather than re-segmenting. The single
+ * exception is a regular expression's capture groups, whose text the parent's segmentation does not
+ * cover — a group can match across a boundary the parent never had.
  *
  * Every method mirrors its `String.prototype` counterpart exactly — including the edge cases around
  * negative, fractional, `NaN`, and out-of-range arguments — with one substitution: the unit of
@@ -461,8 +463,8 @@ export declare class GraphemeString {
 	 * @param replacers Map from key text to its replacement. A key absent from the map is replaced by
 	 *   the key text itself rather than treated as an error.
 	 * @returns The formatted parts in order. Adjacent strings are merged into one entry, so a
-	 *   non-string replacer is always its own entry. Never empty — an unmatched template yields a
-	 *   single string entry.
+	 *   non-string replacer is always its own entry. A template with no placeholders yields a single
+	 *   string entry; only the empty string yields an empty array.
 	 */
 	formatReplacementToArray<T = unknown>(replacers: {
 		[key: string | number]: T;
