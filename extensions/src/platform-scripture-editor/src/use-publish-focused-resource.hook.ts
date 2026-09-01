@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 
 /**
  * Publishes the project id of the scripture/resource a read-only reference panel is displaying into
- * that panel's web view state, under {@link FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY}.
+ * that panel's web view state, under `FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY` (see
+ * `focused-resource-state-key.const.ts`).
  *
  * A panel's web view definition `projectId` is its _container_ project, and Simple mode's default
  * layout opens these panels with no `projectId` at all — so the resource actually on screen is

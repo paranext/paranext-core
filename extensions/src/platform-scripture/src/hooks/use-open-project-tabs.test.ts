@@ -384,6 +384,48 @@ describe('useOpenProjectTabs', () => {
       expect(result.current[0].projectId).toBe('res-1');
     });
 
+    it('falls back to the container project when the focused resource is an empty string', () => {
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeFocusedResourceTabs: true }),
+      );
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        handler({
+          webView: {
+            id: 'wv-bible',
+            webViewType: BIBLE_TEXTS,
+            projectId: 'CONTAINER-1',
+            scrollGroupScrRef: 0,
+            // A panel publishes an empty string while no resource is resolved. It must not be
+            // treated as a project id, or the picker would list a nameless entry.
+            state: { focusedResourceProjectId: '' },
+          },
+        }),
+      );
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].projectId).toBe('container-1');
+    });
+
+    it('drops a panel whose focused resource is not a string and has no container project', () => {
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeFocusedResourceTabs: true }),
+      );
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        handler({
+          webView: {
+            id: 'wv-bible',
+            webViewType: BIBLE_TEXTS,
+            scrollGroupScrRef: 0,
+            // Web view state is untyped on the wire, so a non-string is possible; it is rejected
+            // rather than coerced.
+            state: { focusedResourceProjectId: 42 },
+          },
+        }),
+      );
+      expect(result.current).toEqual([]);
+    });
+
     it('drops the tab when its focused resource clears', () => {
       const { result } = renderHook(() =>
         useOpenProjectTabs(undefined, { includeFocusedResourceTabs: true }),

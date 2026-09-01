@@ -317,3 +317,55 @@ export function scrollToAnnotation(id: string): HTMLElement | undefined {
 
   return annotationElement;
 }
+
+/**
+ * Whether an incoming reference is this view's own echo — the reference it just published coming
+ * back through its scroll group.
+ *
+ * A read-only reference panel sits on scroll group 0, so a verse click inside it publishes to the
+ * group and returns immediately as a prop update. Scrolling for that echo would drag the user's own
+ * click target to the top of the viewport right after they clicked it.
+ *
+ * @param lastPublishedScrRef The reference this view last published, or `undefined` if none is
+ *   outstanding.
+ * @param scrRef The incoming reference.
+ * @returns `true` when the incoming reference is the outstanding echo and no scroll should happen.
+ */
+export function isEchoOfPublishedScrRef(
+  lastPublishedScrRef: SerializedVerseRef | undefined,
+  scrRef: SerializedVerseRef,
+): boolean {
+  return (
+    !!lastPublishedScrRef &&
+    lastPublishedScrRef.book === scrRef.book &&
+    lastPublishedScrRef.chapterNum === scrRef.chapterNum &&
+    lastPublishedScrRef.verseNum === scrRef.verseNum
+  );
+}
+
+/**
+ * Whether there is anything new to scroll to since the last scroll this view performed.
+ *
+ * Guards the bare reveal: a panel that shares a tab stack with other views is re-shown constantly,
+ * and re-scrolling every time would discard a scroll position the user set by hand before switching
+ * tabs. The chapter content is part of the identity because a reveal can beat the chapter load —
+ * when content arrives for the same reference, that IS new and does need a scroll.
+ *
+ * @param lastScrolledFor What the last performed scroll was for, or `undefined` if none yet.
+ * @param scrRef The reference to scroll to.
+ * @param usj The chapter content currently loaded, compared by identity.
+ * @returns `true` when the reference or the content differs from the last scroll.
+ */
+export function hasNewScrollTarget(
+  lastScrolledFor: { scrRef: SerializedVerseRef; usj: unknown } | undefined,
+  scrRef: SerializedVerseRef,
+  usj: unknown,
+): boolean {
+  if (!lastScrolledFor) return true;
+  return (
+    lastScrolledFor.usj !== usj ||
+    lastScrolledFor.scrRef.book !== scrRef.book ||
+    lastScrolledFor.scrRef.chapterNum !== scrRef.chapterNum ||
+    lastScrolledFor.scrRef.verseNum !== scrRef.verseNum
+  );
+}

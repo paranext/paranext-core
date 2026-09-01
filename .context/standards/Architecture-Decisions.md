@@ -1468,8 +1468,11 @@ step, no automation. Just a record.
 - **Consequences:** "Which project is this tab showing?" now has two answers for reference panels,
   and consumers must choose deliberately — the opt-in flag is what makes the choice visible. The
   state key is mirrored across two extensions (extensions cannot import each other's source), so it
-  is pinned by tests on both sides, as `SCRIPTURE_EDITOR_WEBVIEW_TYPE` already is. A panel with no
-  resolved resource publishes nothing, so the key is absent rather than null until a resource
-  resolves. Any future tab type that displays a resource must publish the key to appear in Find.
+  is pinned by a test on each side — the publishing copy and the consuming mirror — because pinning
+  only the consumer cannot catch a rename in the publisher, which is the failure that silently
+  breaks the feature. (`SCRIPTURE_EDITOR_WEBVIEW_TYPE` is pinned on its consumer side only; this key
+  does not copy that gap.) A panel with no resolved resource publishes nothing, so the key is absent
+  rather than null until a resource resolves. Any future tab type that displays a resource must
+  publish the key to appear in Find.
 - **Source:** Bug report that Find's picker omitted scripture/resources shown in the Model text,
   Bible texts, and Commentaries panels.

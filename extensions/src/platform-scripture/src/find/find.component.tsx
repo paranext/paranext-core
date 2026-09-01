@@ -94,13 +94,13 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_matchCase%',
   '%webView_find_matchContentIn%',
   '%webView_find_nextResult%',
-  '%webView_find_noOpenProjects_results%',
+  '%webView_find_noOpenProjectsOrResources_results%',
   '%webView_find_noResultsFound%',
   '%webView_find_pattern%',
   '%webView_find_preserveCase%',
   '%webView_find_preserveCase_tooltip%',
   '%webView_find_previousResult%',
-  '%webView_find_projectFilter_noOpenProjects%',
+  '%webView_find_projectFilter_noOpenProjectsOrResources%',
   '%webView_find_projectFilter_noProjectsFound%',
   '%webView_find_projectSelector_label%',
   '%webView_find_projectSelector_openTabsSectionHeading%',
@@ -807,7 +807,7 @@ export function Find({
     localizedStrings: projectSelectorLocalizedStrings,
     isLoading: isLoadingProjects,
     hideFilterMenu: true,
-    buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjects%'],
+    buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjectsOrResources%'],
     commandEmptyMessage: localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
     ariaLabel: localizedStrings['%webView_find_projectSelector_label%'],
     buttonVariant: 'outline' as const,
@@ -1190,7 +1190,7 @@ export function Find({
         {resultsAreaState === 'noOpenProjectsPrompt' && (
           <ResultsPlaceholder
             id="find-no-open-projects-placeholder"
-            message={localizedStrings['%webView_find_noOpenProjects_results%']}
+            message={localizedStrings['%webView_find_noOpenProjectsOrResources_results%']}
           />
         )}
         {/* Invalid-query placeholder: a term is present but won't run (e.g. `selectedBooks` scope

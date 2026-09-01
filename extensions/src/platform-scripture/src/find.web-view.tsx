@@ -109,12 +109,6 @@ const RESULTS_BATCH_SIZE = 100;
 const SEARCH_DEBOUNCE_DELAY_MS = 500;
 /** Delay after typing stops before the current search term is saved to history. */
 const HISTORY_DEBOUNCE_DELAY_MS = 5000;
-/**
- * Stable reference so `useOpenProjectTabs`' subscription effect doesn't tear down and resubscribe
- * on every render.
- */
-const USE_OPEN_PROJECT_TABS_OPTIONS = { includeFocusedResourceTabs: true } as const;
-
 /** Stable empty-array reference so the History data subscription's default doesn't change identity. */
 const DEFAULT_RECENT_SEARCHES: string[] = [];
 
@@ -414,7 +408,7 @@ global.webViewComponent = function FindWebView({
   const allOpenProjectTabs = useOpenProjectTabs(
     searchableWebViewFilter,
     // The reference panels report the resource they display rather than their container project.
-    USE_OPEN_PROJECT_TABS_OPTIONS,
+    { includeFocusedResourceTabs: true },
   );
   const noOpenProjects = allOpenProjectTabs.length === 0;
 
@@ -507,8 +501,6 @@ global.webViewComponent = function FindWebView({
     [projectId, selectedScrollGroupId, allOpenProjectTabs],
   );
 
-  // #endregion
-
   // Which reference panel tab a "go to result" activation should bring to the front, when the
   // selected scripture is showing in one rather than in an editor. See
   // `resolveTargetReferencePanelWebViewId`.
@@ -521,6 +513,8 @@ global.webViewComponent = function FindWebView({
       ),
     [projectId, allOpenProjectTabs],
   );
+
+  // #endregion
 
   const editorWebViewController = useWebViewController(
     SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -901,6 +895,7 @@ global.webViewComponent = function FindWebView({
       selectedScrollGroupId,
       allOpenProjectTabs,
       editorWebViewId,
+      SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     );
     if (!resolved) return;
     // `resolved.projectId` may carry `useOpenProjectTabs`'s lowercased casing when it names a
@@ -943,10 +938,11 @@ global.webViewComponent = function FindWebView({
         selectedScrollGroupId,
         allOpenProjectTabs,
         editorWebViewId,
+        SCRIPTURE_EDITOR_WEBVIEW_TYPE,
       );
       if (!resolved) {
         logger.warn(
-          `Find: ignoring project selection for ${newProjectId} — it has no open editor tab.`,
+          `Find: ignoring project selection for ${newProjectId} — it has no open editor or reference panel tab.`,
         );
         return;
       }

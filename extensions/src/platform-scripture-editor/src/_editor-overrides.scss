@@ -314,3 +314,34 @@ button {
     border-bottom: 2px solid var(--foreground);
   }
 }
+
+// Verse-arrival highlight: a brief pulse on the verse a navigation landed on. Applied by adding
+// `.highlighted` to the verse element returned by `scrollToVerse`, and removed on cleanup.
+//
+// Lives here rather than in the Scripture editor's own stylesheet because the read-only reference
+// panels need it too: Find's "go to result" scrolls those panels to the matched verse, and without
+// the pulse the user lands on a verse with nothing indicating which one matched.
+//
+// Highlight keyframes thanks to chazsolo at https://stackoverflow.com/a/55835473
+@keyframes highlight {
+  from {
+    background-color: yellow;
+  }
+}
+
+.editor-container .highlighted {
+  position: relative;
+}
+
+.editor-container .highlighted::before {
+  content: '';
+  position: absolute;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.8;
+  animation: highlight 2s;
+}

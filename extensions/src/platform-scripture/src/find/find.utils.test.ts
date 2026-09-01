@@ -591,7 +591,8 @@ describe('resolveSelectedProjectScrollGroup', () => {
     projectId: string,
     scrollGroupId: number,
     webViewId: string,
-  ): OpenScrollGroupTab => ({ projectId, scrollGroupId, webViewId });
+    webViewType?: string,
+  ): OpenScrollGroupTab => ({ projectId, scrollGroupId, webViewId, webViewType });
 
   it('keeps the current selection unchanged when its tab is still open', () => {
     const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-B', 1, 'wv-2')];
@@ -615,6 +616,48 @@ describe('resolveSelectedProjectScrollGroup', () => {
       projectId: 'PROJ-A',
       scrollGroupId: 1,
     });
+  });
+
+  // The picker lists resources open only in a reference panel, so a panel tab can now win the
+  // same-project fallback. Adopting its scroll group while an editor of the same project sits in a
+  // different group leaves `resolveTargetEditorWebViewId` with no match, which silently drops the
+  // editor's select + highlight on a result click.
+  it('prefers an editor tab over a reference panel in the same-project fallback', () => {
+    const panelTab = tab('PROJ-A', 0, 'wv-panel', 'platformScriptureEditor.bibleTexts');
+    const editorTab = tab('PROJ-A', 1, 'wv-editor', 'platformScriptureEditor.react');
+    const expected = { projectId: 'PROJ-A', scrollGroupId: 1 };
+
+    expect(
+      resolveSelectedProjectScrollGroup(
+        'PROJ-A',
+        2,
+        [panelTab, editorTab],
+        undefined,
+        'platformScriptureEditor.react',
+      ),
+    ).toEqual(expected);
+    expect(
+      resolveSelectedProjectScrollGroup(
+        'PROJ-A',
+        2,
+        [editorTab, panelTab],
+        undefined,
+        'platformScriptureEditor.react',
+      ),
+    ).toEqual(expected);
+  });
+
+  it('falls back to a reference panel when the project has no editor tab open', () => {
+    const openTabs = [tab('PROJ-A', 3, 'wv-panel', 'platformScriptureEditor.bibleTexts')];
+    expect(
+      resolveSelectedProjectScrollGroup(
+        'PROJ-A',
+        0,
+        openTabs,
+        undefined,
+        'platformScriptureEditor.react',
+      ),
+    ).toEqual({ projectId: 'PROJ-A', scrollGroupId: 3 });
   });
 
   it('prefers the tab matching preferredWebViewId over other tabs of the same project', () => {

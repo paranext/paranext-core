@@ -41,7 +41,7 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
-import { scrollToVerse } from './editor-dom.util';
+import { hasNewScrollTarget, isEchoOfPublishedScrRef, scrollToVerse } from './editor-dom.util';
 import { FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY } from './focused-resource-state-key.const';
 import { usePublishFocusedResourceProjectId } from './use-publish-focused-resource.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
@@ -183,6 +183,15 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // suppress the echo that comes back through scroll group 0 and avoid yanking the user's own click
   // target to the top of the viewport. Mirrors `model-text-panel.component.tsx`.
   const lastPublishedScrRefRef = useRef<SerializedVerseRef | undefined>(undefined);
+
+  // What the last performed scroll was for. A reveal with nothing new to show must NOT re-scroll:
+  // this panel shares its tab stack with Find in Simple mode, so switching to Find and back would
+  // otherwise discard a scroll position the user set by hand. The chapter content is part of the
+  // identity because a reveal can beat the chapter load — when the content arrives for the same
+  // reference, that IS new and does need a scroll.
+  const lastScrolledForRef = useRef<{ scrRef: SerializedVerseRef; usj: unknown } | undefined>(
+    undefined,
+  );
 
   // Records what we publish before forwarding it, so the echo is recognizable when it returns.
   const handleScrRefChange = useCallback(
@@ -571,9 +580,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // Scroll to the current verse when this tab is shown, and again once a chapter's content lands.
   //
   // `Editorial` renders the reference it is given but does not scroll to the verse — every consumer
-  // that scrolls does it by calling `scrollToVerse` (the Scripture editor and the model text panel
-  // both do; this panel did not, which is why a Find result activated here revealed the tab at
-  // whatever position it was already parked at).
+  // that scrolls does it by calling `scrollToVerse`, as the Scripture editor and the model text
+  // panel both do.
   //
   // Keyed on visibility AND on the reference: visibility covers the reveal (a tab activation carries
   // no reference change of its own), and the reference covers "go to result" landing on a panel that
@@ -582,7 +590,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // content.
   //
   // Because the reference is a dependency, this panel needs the same echo suppression the model text
-  // panel does — see the guard at the top of the effect.
+  // panel does — see the guard at the top of the effect. A second guard there skips a bare reveal
+  // (nothing changed while hidden) so tabbing away and back does not discard a manual scroll.
   useEffect(() => {
     if (!isViewVisible || !usjFromPdp) return undefined;
 
@@ -591,16 +600,13 @@ globalThis.webViewComponent = function ResourceTextPanel({
     // keyed on the reference (which is what makes "go to result" scroll a panel that is ALREADY
     // visible), so without this check that echo would scroll the user's own click target to the top
     // of the viewport right after they clicked it.
-    const lastPublished = lastPublishedScrRefRef.current;
-    if (
-      lastPublished &&
-      lastPublished.book === scrRef.book &&
-      lastPublished.chapterNum === scrRef.chapterNum &&
-      lastPublished.verseNum === scrRef.verseNum
-    ) {
+    if (isEchoOfPublishedScrRef(lastPublishedScrRefRef.current, scrRef)) {
       lastPublishedScrRefRef.current = undefined;
       return undefined;
     }
+
+    // Nothing new since the last scroll — this is a bare reveal, so leave the user's scroll alone.
+    if (!hasNewScrollTarget(lastScrolledForRef.current, scrRef, usjFromPdp)) return undefined;
 
     // Wait for the revealed pane's layout to SETTLE, then scroll exactly once.
     //
@@ -615,29 +621,38 @@ globalThis.webViewComponent = function ResourceTextPanel({
     let cancelled = false;
     const start = Date.now();
     let lastScrollHeight = -1;
+    // Pulses the verse we land on, so the match is identifiable when several share a verse or a
+    // commentary entry is long. Same treatment the Scripture editor gives an arrived verse.
+    let highlightedVerseElement: HTMLElement | undefined;
     const scrollWhenSettled = () => {
       if (cancelled) return;
 
       // Verse 0/1 targets the chapter top, which needs no settled geometry.
       if (scrRef.verseNum <= 1) {
+        lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
         scrollToVerse(scrRef);
         return;
       }
 
       const timedOut = Date.now() - start > SCROLL_MAX_WAIT_MS;
-      // `.editor-container` is the editor's own scroll container — the same element
-      // `scrollToVerse` resolves via `findScrollContainer`.
-      const scrollContainer = document.querySelector<HTMLElement>('.editor-container');
+      // `.editor-container` is sampled as a CONTENT-GROWTH PROXY, not as the scroll container.
+      // Which element actually scrolls differs by host — `_editor-overrides.scss` warns that this
+      // one is auto-height in the Scripture editor and its wrapper scrolls instead — so the scroll
+      // itself is left to `scrollToVerse`, which discovers the container via `findScrollContainer`.
+      // Only the height is read here, and that tracks the chapter laying out either way.
+      const contentElement = document.querySelector<HTMLElement>('.editor-container');
       // `querySelector` yields null, not undefined, so compare truthily — treating a missing
-      // container as "settled" would scroll against geometry that does not exist yet.
-      const scrollHeight = scrollContainer ? scrollContainer.scrollHeight : -1;
-      const isSettled = !!scrollContainer && scrollHeight === lastScrollHeight;
+      // element as "settled" would scroll against geometry that does not exist yet.
+      const scrollHeight = contentElement ? contentElement.scrollHeight : -1;
+      const isSettled = !!contentElement && scrollHeight === lastScrollHeight;
       lastScrollHeight = scrollHeight;
 
       // Scroll on a settled layout, or once out of time — a best-effort scroll beats none, and the
       // timeout is also the exit for a verse marker genuinely absent from the USJ.
       if (isSettled || timedOut) {
-        scrollToVerse(scrRef);
+        lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
+        highlightedVerseElement = scrollToVerse(scrRef);
+        highlightedVerseElement?.classList.add('highlighted');
         return;
       }
       requestAnimationFrame(scrollWhenSettled);
@@ -645,6 +660,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
     scrollWhenSettled();
     return () => {
       cancelled = true;
+      highlightedVerseElement?.classList.remove('highlighted');
     };
     // `scrollToVerse` is a stable module-level import; listing it would cause spurious re-runs.
     // Keyed on the reference's parts rather than the object so a new identity for an unchanged

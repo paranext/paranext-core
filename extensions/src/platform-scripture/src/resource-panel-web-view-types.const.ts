@@ -1,15 +1,18 @@
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
-/**
- * Web view types of the read-only scripture reference panels, as this extension sees them.
- *
- * `platform-scripture` cannot import `platform-scripture-editor`'s source, so these values are
- * mirrored here. They must equal the corresponding consts in
- * `extensions/src/platform-scripture-editor/src/main.ts`; a pinning test in
- * `resource-panel-web-view-types.const.test.ts` catches an accidental edit to these copies.
- */
+// The three consts below are the web view types of the read-only scripture reference panels, as
+// this extension sees them. `platform-scripture` cannot import `platform-scripture-editor`'s
+// source, so these values are mirrored here. They must equal the corresponding consts in
+// `extensions/src/platform-scripture-editor/src/main.ts`; a pinning test in
+// `resource-panel-web-view-types.const.test.ts` catches an accidental edit to these copies.
+
+/** Web view type of the Model text panel. Mirrored — see the note above. */
 export const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
+
+/** Web view type of the Bible texts panel. Mirrored — see the note above. */
 export const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
+
+/** Web view type of the Commentaries panel. Mirrored — see the note above. */
 export const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
 
 /**

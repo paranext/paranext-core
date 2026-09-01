@@ -17,6 +17,8 @@ import {
   BASELINE_PROBE_ATTRIBUTE,
   clampTopToVisibleArea,
   findScrollContainer,
+  hasNewScrollTarget,
+  isEchoOfPublishedScrRef,
   measureBaselineOffset,
   scrollToAnnotation,
   scrollToVerse,
@@ -492,5 +494,55 @@ describe('clampTopToVisibleArea', () => {
     // Both clamps are active and pull opposite ways. Order is the behavior being pinned: max-then-min
     // yields the bottom bound, whereas min-then-max would return the visible-area top instead.
     expect(clampTopToVisibleArea({ top: 0, bottom: 50 }, { top: 0 }, { top: 100 })).toBe(49);
+  });
+});
+
+const JHN_3_16 = { book: 'JHN', chapterNum: 3, verseNum: 16 };
+const JHN_3_17 = { book: 'JHN', chapterNum: 3, verseNum: 17 };
+const ROM_3_16 = { book: 'ROM', chapterNum: 3, verseNum: 16 };
+const USJ_A = { type: 'USJ', content: ['a'] };
+const USJ_B = { type: 'USJ', content: ['b'] };
+
+describe('isEchoOfPublishedScrRef', () => {
+  it('recognizes the reference this view just published', () => {
+    expect(isEchoOfPublishedScrRef(JHN_3_16, JHN_3_16)).toBe(true);
+  });
+
+  it('does not treat a different verse as an echo', () => {
+    // A real navigation to a neighbouring verse must still scroll.
+    expect(isEchoOfPublishedScrRef(JHN_3_16, JHN_3_17)).toBe(false);
+  });
+
+  it('compares the book too, not just the numbers', () => {
+    expect(isEchoOfPublishedScrRef(JHN_3_16, ROM_3_16)).toBe(false);
+  });
+
+  it('is not an echo when nothing is outstanding', () => {
+    expect(isEchoOfPublishedScrRef(undefined, JHN_3_16)).toBe(false);
+  });
+});
+
+describe('hasNewScrollTarget', () => {
+  it('scrolls when nothing has been scrolled to yet', () => {
+    expect(hasNewScrollTarget(undefined, JHN_3_16, USJ_A)).toBe(true);
+  });
+
+  it('skips a bare reveal, so a manual scroll survives a tab switch', () => {
+    expect(hasNewScrollTarget({ scrRef: JHN_3_16, usj: USJ_A }, JHN_3_16, USJ_A)).toBe(false);
+  });
+
+  it('scrolls when the reference moved while hidden', () => {
+    expect(hasNewScrollTarget({ scrRef: JHN_3_16, usj: USJ_A }, JHN_3_17, USJ_A)).toBe(true);
+  });
+
+  it('scrolls when the chapter content arrives for the same reference', () => {
+    // A reveal can beat the chapter load; the content landing is the cue to scroll, and the
+    // reference alone would not distinguish it.
+    expect(hasNewScrollTarget({ scrRef: JHN_3_16, usj: USJ_A }, JHN_3_16, USJ_B)).toBe(true);
+  });
+
+  it('compares content by identity, not value', () => {
+    // The panel pushes whatever object the PDP hands it; an equal-but-new object is a real update.
+    expect(hasNewScrollTarget({ scrRef: JHN_3_16, usj: USJ_A }, JHN_3_16, { ...USJ_A })).toBe(true);
   });
 });

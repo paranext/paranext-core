@@ -240,6 +240,11 @@ export function ModelTextPanel({
     getResourceChapter,
   ]);
 
+  // Hidden case (see .claude/rules/cross-view-sync-hidden-views.md): intentionally not handled.
+  // Scrolling needs layout, which an inactive pane does not have, and nothing here re-runs on
+  // activation — but this panel occupies Column 1 of the Simple layout alone and is therefore always
+  // visible, so the hidden case is unreachable there. The Bible texts and Commentaries panels DO
+  // share a stack with Find and handle it (see `resource-text-panel.web-view.tsx`).
   // Scroll to the current verse whenever the scrRef or USJ changes.
   // Using granular scrRef deps instead of the whole object avoids redundant scroll attempts
   // when scrRef identity changes but the reference itself hasn't.
