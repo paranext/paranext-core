@@ -518,6 +518,41 @@ export function setPendingContentChangeListener(listener: () => void): void {
 }
 
 /**
+ * Whether a window is closing because the interface mode changed. Injected rather than imported, so
+ * this service does not depend on the orchestration that decides it — the same shape
+ * {@link setWindowPendingContentPredicate} uses from the other direction.
+ */
+let isClosingForModeSwitch: (windowId: number) => boolean = () => false;
+
+/**
+ * Wire the predicate answering whether a window is closing because the interface mode changed.
+ *
+ * @param predicate Answers for a window id
+ */
+export function setModeSwitchClosePredicate(predicate: (windowId: number) => boolean): void {
+  isClosingForModeSwitch = predicate;
+}
+
+/**
+ * Which entries have no window living in them — the windows a switch back to power mode brings
+ * back.
+ *
+ * These are entries this session never restored (simple mode restores only the main one) and
+ * entries whose window went away while the entry stayed. Both are the same thing to a caller: a
+ * saved window with nothing on screen, which is exactly what a reopen creates a window from. This
+ * is the whole of what "the set of windows the power session had open" means — there is no separate
+ * record of it, and none is needed.
+ *
+ * @returns Indexes into the persisted structure, in file order
+ */
+export function getPreservedEntryIndexes(): number[] {
+  return fileSlots.reduce<number[]>((indexes, slot, index) => {
+    if (slot.windowId === undefined) indexes.push(index);
+    return indexes;
+  }, []);
+}
+
+/**
  * Mark a window as created-for-content: its layout get answers `pending-content` (start truly
  * empty) until the window pushes its first real layout.
  */
@@ -579,6 +614,14 @@ function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
     logger.warn(`Ignoring layout push from untracked window ${windowId}`);
     return;
   }
+  // A window closing because the mode changed is showing the mode it is leaving, so what it pushes
+  // from here on would overwrite the layout its entry is being kept for.
+  //
+  // Keyed on the mode-switch close rather than on any close in progress, deliberately: a window's
+  // close handler records the window as closing BEFORE it flushes its layout, so a guard covering
+  // every closing window would drop a layout change made just before a quit and the flush would
+  // then write the older one.
+  if (isClosingForModeSwitch(windowId)) return;
   // Reconcile on arrival so phantom content (duplicate or orphaned tabs, empty panels) cannot
   // enter the persisted structure even when a pusher skipped its own reconciliation
   slot.entry.layout = reconcileSavedLayout(layoutRecord);

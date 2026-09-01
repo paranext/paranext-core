@@ -1367,3 +1367,105 @@ describe('window layout persistence service', () => {
     expect(written.isFullScreen).toBe(false);
   });
 });
+
+describe('the windows a power session left behind', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    mocks.getPath.mockReturnValue('/mock-user-data');
+    mocks.writeFile.mockResolvedValue(undefined);
+    mocks.rename.mockResolvedValue(undefined);
+    mocks.registerRequestHandler.mockResolvedValue(async () => true);
+    seedFiles();
+  });
+
+  afterEach(() => {
+    serviceUnderTest?.handleWindowRemoved(-1, 'entry-goes-with-it');
+    serviceUnderTest = undefined;
+  });
+
+  test('entries with no live window are the ones a switch back to power reopens', async () => {
+    const service = await startService();
+    await loadAndAssignAll(service, [{ isMain: true }, {}, {}], 10);
+
+    service.handleWindowRemoved(11, 'entry-stays');
+    service.handleWindowRemoved(12, 'entry-stays');
+
+    expect(service.getPreservedEntryIndexes()).toEqual([1, 2]);
+  });
+
+  test('an entry a window is still living in is not offered for reopening', async () => {
+    // The negative control: an implementation that offered every entry would pass the test
+    // above and reopen duplicates of windows already on screen
+    const service = await startService();
+    await loadAndAssignAll(service, [{ isMain: true }, {}], 10);
+
+    expect(service.getPreservedEntryIndexes()).toEqual([]);
+  });
+
+  test('a window closing for a mode switch keeps its entry, losing only its runtime id', async () => {
+    const service = await startService();
+    await loadAndAssignAll(service, [{ isMain: true }, {}], 10);
+
+    service.handleWindowRemoved(11, 'entry-stays');
+    await service.writeNow();
+
+    expect(writtenStructure().windows).toHaveLength(2);
+    expect(writtenStructure().windows[0].isMain).toBe(true);
+    expect(service.getPreservedEntryIndexes()).toEqual([1]);
+  });
+
+  test('an ordinary secondary close still takes its entry with it', async () => {
+    // The negative control that makes the test above non-vacuous: an implementation that
+    // preserved every entry would pass that one and resurrect windows the user closed
+    const service = await startService();
+    await loadAndAssignAll(service, [{ isMain: true }, {}], 10);
+
+    service.handleWindowRemoved(11, 'entry-goes-with-it');
+    await service.writeNow();
+
+    expect(writtenStructure().windows).toHaveLength(1);
+  });
+});
+
+describe('layout pushes from a window on its way out', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    mocks.getPath.mockReturnValue('/mock-user-data');
+    mocks.writeFile.mockResolvedValue(undefined);
+    mocks.rename.mockResolvedValue(undefined);
+    mocks.registerRequestHandler.mockResolvedValue(async () => true);
+    seedFiles();
+  });
+
+  afterEach(() => {
+    serviceUnderTest?.handleWindowRemoved(-1, 'entry-goes-with-it');
+    serviceUnderTest = undefined;
+  });
+
+  test('a push from a window closing for a mode switch is ignored', async () => {
+    const service = await startService();
+    await loadAndAssignAll(service, [{ isMain: true }], 10);
+    service.setModeSwitchClosePredicate((windowId) => windowId === 10);
+
+    await registeredHandler('windowLayout:save')(10, layoutWithTab('late-simple-tab'));
+    await service.writeNow();
+
+    expect(writtenStructure().windows[0].layout).toBeUndefined();
+  });
+
+  test('a push from a window closing for a quit is still saved', async () => {
+    // The guard is keyed on the mode-switch close rather than on any close deliberately: a
+    // window's close handler marks it closing BEFORE it flushes its layout, so a guard
+    // covering every closing window would drop a layout change made just before a quit
+    const service = await startService();
+    await loadAndAssignAll(service, [{ isMain: true }], 10);
+    service.setModeSwitchClosePredicate(() => false);
+
+    await registeredHandler('windowLayout:save')(10, layoutWithTab('last-power-tab'));
+    await service.writeNow();
+
+    expect(firstTabIdOf(writtenStructure().windows[0].layout)).toBe('last-power-tab');
+  });
+});
