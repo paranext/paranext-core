@@ -74,6 +74,8 @@ export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | 
 // Data Type to initialize data provider engine with
 export type WindowDataTypes = {
   Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+  /** JSDOC DESTINATION getActiveEditorProjectId; read-only */
+  ActiveEditorProjectId: DataProviderDataType<undefined, string | undefined, never>;
 };
 
 declare module 'papi-shared-types' {
@@ -145,6 +147,46 @@ export type IWindowService = {
   subscribeFocus(
     selector: undefined,
     callback: (focusSubject: FocusSubject | PlatformError) => void,
+    options?: DataProviderSubscriberOptions,
+  ): Promise<UnsubscriberAsync>;
+  /**
+   * JSDOC SOURCE getActiveEditorProjectId
+   *
+   * Get the id of the project the active Scripture editor in this window is showing — the same
+   * project BCV navigation currently drives (the top toolbar's book/chapter/verse controls and the
+   * `platform.goTo*` commands) — or `undefined` when there is nothing to navigate. Read-only: use
+   * this to follow which project is active, not to interpret a Scripture reference's versification
+   * frame (that is what a scroll group's own source project is for).
+   *
+   * @param selector `undefined`. Does not have to be provided
+   * @returns The active project id, or `undefined`
+   * @experimental
+   */
+  getActiveEditorProjectId(selector: undefined): Promise<string | undefined>;
+  /** JSDOC DESTINATION getActiveEditorProjectId */
+  getActiveEditorProjectId(): Promise<string | undefined>;
+  /**
+   * Read-only; does nothing and always resolves `false`. Provided to match
+   * `getActiveEditorProjectId`.
+   *
+   * @returns `false`
+   * @experimental
+   */
+  setActiveEditorProjectId(): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+  /**
+   * Subscribe to run a callback function when the active Scripture editor's project changes.
+   *
+   * @param selector `undefined`. Does not have to be provided
+   * @param callback Function to run with the new active project id. If there is an error while
+   *   retrieving the updated data, the function will run with a {@link PlatformError} instead of the
+   *   data. You can call {@link isPlatformError} on this value to check if it is an error.
+   * @param options Various options to adjust how the subscriber emits updates
+   * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+   * @experimental
+   */
+  subscribeActiveEditorProjectId(
+    selector: undefined,
+    callback: (projectId: string | undefined | PlatformError) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
 } & OnDidDispose &
