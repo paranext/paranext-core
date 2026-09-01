@@ -32,3 +32,36 @@ export function writeTourDone(): void {
 export function resetTourDone(): void {
   clearBooleanFlag(ONBOARDING_TOUR_DONE_KEY);
 }
+
+/**
+ * How many times the tour has been asked to run again in this window since it loaded.
+ *
+ * A count rather than a flag, because it is also what `OnboardingTour` keys its remount on: asking
+ * a second time while the tour is already open has to restart it from stop 1, which a boolean that
+ * is already `true` cannot express. Deliberately not persisted — a replay is a thing the user asked
+ * for now, not a state the next launch should inherit.
+ */
+let tourReplayCount = 0;
+const tourReplayListeners = new Set<() => void>();
+
+/**
+ * Runs the tour again in this window, from its first stop, whether or not the user has already
+ * completed it. Called by the onboarding tour service shard on behalf of the Help menu item.
+ */
+export function requestTourReplay(): void {
+  tourReplayCount += 1;
+  tourReplayListeners.forEach((listener) => listener());
+}
+
+/** Reads the current replay count — the `useSyncExternalStore` snapshot. */
+export function getTourReplayCount(): number {
+  return tourReplayCount;
+}
+
+/** Subscribes to replay requests. Returns the unsubscriber `useSyncExternalStore` expects. */
+export function subscribeToTourReplay(listener: () => void): () => void {
+  tourReplayListeners.add(listener);
+  return () => {
+    tourReplayListeners.delete(listener);
+  };
+}
