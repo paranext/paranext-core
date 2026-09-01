@@ -5,7 +5,7 @@ import '@testing-library/jest-dom';
 import type { FirstRunStatus } from '@renderer/services/first-run-store';
 import { SIMPLE_PANEL_ID_PROJECT } from '@renderer/components/docking/simple-layout.data';
 import type { TourProps, TourStep } from './tour.component';
-import { readTourDone, writeTourDone } from './onboarding-tour.store';
+import { readTourDone, requestTourReplay, writeTourDone } from './onboarding-tour.store';
 import { OnboardingTour } from './onboarding-tour.component';
 
 // window.matchMedia — which theme.service-host.ts calls at module init, reached here via
@@ -18,6 +18,10 @@ let mockIsLocalizationLoading = false;
 
 let mockTourDone = false;
 
+// Stands in for the store's replay channel — a count plus its listeners, exactly as the real one.
+let mockReplayCount = 0;
+const mockReplayListeners = new Set<() => void>();
+
 vi.mock('@renderer/services/first-run-store', () => ({
   getFirstRunStatus: () => mockStatus,
   subscribeToFirstRun: () => () => {},
@@ -27,6 +31,17 @@ vi.mock('./onboarding-tour.store', () => ({
   readTourDone: () => mockTourDone,
   writeTourDone: () => {
     mockTourDone = true;
+  },
+  getTourReplayCount: () => mockReplayCount,
+  subscribeToTourReplay: (listener: () => void) => {
+    mockReplayListeners.add(listener);
+    return () => {
+      mockReplayListeners.delete(listener);
+    };
+  },
+  requestTourReplay: () => {
+    mockReplayCount += 1;
+    mockReplayListeners.forEach((listener) => listener());
   },
 }));
 
@@ -95,6 +110,7 @@ beforeEach(() => {
   mockIsPowerMode = false;
   mockIsLocalizationLoading = false;
   mockTourDone = false;
+  mockReplayCount = 0;
 
   layoutPanelEl = document.createElement('div');
   layoutPanelEl.setAttribute('data-dockid', SIMPLE_PANEL_ID_PROJECT);
@@ -222,6 +238,49 @@ describe('OnboardingTour', () => {
       document.body.appendChild(layoutPanelEl);
       await Promise.resolve();
     });
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('reopens a completed tour when a replay is requested (Help > Show the tour again)', () => {
+    writeTourDone();
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+
+    act(() => {
+      requestTourReplay();
+    });
+
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+  });
+
+  it('reopens on a second replay request after the first replay was finished', () => {
+    // Each request has to start a fresh showing. Without the remount, the state that closed the
+    // first replay would still be set and the tour would never come back.
+    writeTourDone();
+    render(<OnboardingTour />);
+
+    act(() => {
+      requestTourReplay();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'done' }));
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+
+    act(() => {
+      requestTourReplay();
+    });
+
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+  });
+
+  it('ignores a replay request in Power mode, where the tour has nothing to point at', () => {
+    mockIsPowerMode = true;
+    writeTourDone();
+    render(<OnboardingTour />);
+
+    act(() => {
+      requestTourReplay();
+    });
+
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
 });
