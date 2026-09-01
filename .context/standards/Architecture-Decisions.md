@@ -2357,30 +2357,33 @@ step, no automation. Just a record.
   it and is converted with `ToUint32`. Index arguments go through the spec's `ToIntegerOrInfinity`,
   so fractional and `NaN` arguments behave as native does. The single substitution is the **unit**:
   grapheme cluster instead of UTF-16 code unit, with a search additionally required to begin and end
-  on cluster boundaries. **Three behavioral exceptions are accepted deliberately.** First,
+  on cluster boundaries. **Two behavioral exceptions are accepted deliberately.** First,
   `padStart`/`padEnd` throw `RangeError` above 2**20 graphemes, where native only gives up at V8's
-  string limit (2**29 - 24). A `GraphemeString` holds one string object per grapheme rather than a
-  compact character buffer, so the native ceiling is unreachable — it exhausts the V8 heap first —
-  and the band below it is slow enough to be a trap. Padding also re-segments the result to keep the
-  grapheme array honest, so the cost is super-linear: 2**16 costs ~5ms and ~2MB, 2**18 ~12ms and
-  ~10MB, 2**20 ~38ms and ~34MB. The limit is set where that is still bounded rather than where the
-  engine finally fails, on the grounds that padding a string to a million graphemes is never a
-  deliberate act. Second, a padded result is *shorter* than `targetLength` when the pad string fuses
-  with the text at the seam — a filler ending in a combining mark, say. Padding to an exact cluster
-  count and holding `graphemes.join('') === str` with an honest segmentation cannot both be
-  satisfied there, because the fused text genuinely has fewer clusters; the segmentation wins, since
-  every index, search, and slice reads through it, and an instance whose array disagrees with its
-  own text slices clusters in half. Third, the free `split` in `string-util` substitutes `''` for a
-  capture group that did not participate, where native yields `undefined`. Native declares
-  `string[]` and then puts `undefined` in it, so `split(s, re).map((p) => p.trim())` type-checks and
-  throws; a wrapper that advertises `string[]` should deliver one. The cost is that a
-  non-participating group reads the same as one that matched empty — `GraphemeString.split` declares
-  `(GraphemeString | undefined)[]` and keeps the distinction for callers who need it. This also
-  restores a guarantee the pre-wrapper implementation had by accident: it built results from
-  `substring` and could never emit `undefined`, so no existing caller can depend on one. Two
-  additions are kept (`normalize('none')`, `ordinalCompare`), plus `toArray`. Range and padding
-  methods still return `GraphemeString` rather than `string` so derived values inherit the parent's
-  segmentation — a type-level difference, not a behavioral one. The raw text comes back from
+  string limit (2**29 - 24). Padding builds one array element per grapheme before joining rather
+  than filling a compact character buffer, so the native ceiling is unreachable — it exhausts the V8
+  heap first (2**16 costs ~2ms and ~1MB, 2**18 ~3ms and ~1MB, 2**20 ~11ms and ~9MB). The limit is
+  set where the cost is still negligible rather than where the engine finally fails, on the grounds
+  that padding a string to a million graphemes is never a deliberate act. Second, the free `split`
+  in `string-util` substitutes `''` for a capture group that did not participate, where native
+  yields `undefined`. Native declares `string[]` and then puts `undefined` in it, so `split(s,
+  re).map((p) => p.trim())` type-checks and throws; a wrapper that advertises `string[]` should
+  deliver one. The cost is that a non-participating group reads the same as one that matched empty —
+  `GraphemeString.split` declares `(GraphemeString | undefined)[]` and keeps the distinction for
+  callers who need it. This also restores a guarantee the pre-wrapper implementation had by
+  accident: it built results from `substring` and could never emit `undefined`, so no existing
+  caller can depend on one. Two additions are kept (`normalize('none')`, `ordinalCompare`), plus
+  `toArray`. Range methods still return `GraphemeString` rather than `string` so derived values
+  inherit the parent's segmentation — a type-level difference, not a behavioral one. The padding
+  methods return plain text, because they are the one pair that *adds* characters: a range only
+  removes clusters, so a range of an honest segmentation is still honest, while added padding can
+  fuse with the text it lands against (a filler ending in a combining mark joins the character
+  beside it). An instance carrying the concatenated arrays would therefore report a length its own
+  text does not have, and re-segmenting to avoid that costs a full pass on every call. Returning
+  text costs nothing to adopt: the class is introduced by this work, so no caller anywhere can hold
+  a padded `GraphemeString` yet, and in this repo nothing calls the grapheme-aware padding at all —
+  the two `padStart` call sites are native calls on hex strings. `paratext-10-studio` and
+  `paratext-bible-internal-extensions` were checked and contain no reference;
+  `paratext-bible-extensions` was not checked out to confirm. The raw text comes back from
   `toString()` rather than a `.string` getter, so an instance drops straight into a template literal
   or `String(...)`; `length` is the sole remaining getter, kept as a property precisely because that
   is what makes `gs.length` read like `str.length`. Then **`string-util`'s functions become thin

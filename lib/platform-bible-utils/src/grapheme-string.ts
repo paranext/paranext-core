@@ -8,15 +8,15 @@ const MAX_UINT32 = 2 ** 32 - 1;
  * Largest padding target the padding methods accept, in graphemes.
  *
  * This is the one place the class deliberately stops short of native. Native pads into a compact
- * character buffer and gives up only at V8's string limit (`2**29 - 24`); a `GraphemeString` holds
- * one string object per grapheme and re-segments the padded text to keep that array honest, so the
- * same target costs far more time and memory and exhausts the heap well before reaching native's
- * ceiling. Measured on the padding path: `2**16` costs ~5ms and ~2MB, `2**18` ~12ms and ~10MB, and
- * `2**20` ~38ms and ~34MB — super-linear in both, and V8's own limit cannot be reached at all.
+ * character buffer and gives up only at V8's string limit (`2**29 - 24`); padding here builds one
+ * array element per grapheme before joining, so the same target costs considerably more memory and
+ * exhausts the heap well before reaching native's ceiling. Measured on the padding path: `2**16`
+ * costs ~2ms and ~1MB, `2**18` ~3ms and ~1MB, `2**20` ~11ms and ~9MB, and V8's own limit cannot be
+ * reached at all.
  *
  * A million graphemes of padding is already far past any display or formatting use, so the limit is
- * set where the cost is still bounded rather than where the engine finally gives out. Exceeding it
- * throws `RangeError`, as native does for its own limit.
+ * set where the cost is still negligible rather than where the engine finally gives out. Exceeding
+ * it throws `RangeError`, as native does for its own limit.
  */
 export const MAX_PADDING_LENGTH = 2 ** 20;
 
@@ -109,9 +109,10 @@ const offsetsByInstance = new WeakMap<GraphemeString, number[]>();
  * `ordinalCompare` are deliberately absent, because neither reads the string as characters — they
  * live with the plain string helpers in `string-util` instead.
  *
- * Range and padding methods return a `GraphemeString` rather than a `string` so the parent's
- * segmentation carries into the result instead of being recomputed. Call `toString()` for the
- * text.
+ * Range methods return a `GraphemeString` rather than a `string` so the parent's segmentation
+ * carries into the result instead of being recomputed. Call `toString()` for the text. The padding
+ * methods return text instead, because they are the one pair that adds characters: added text can
+ * fuse with the text it lands against, so there is no segmentation to carry.
  *
  * ## Segmentation fidelity
  *
@@ -373,48 +374,46 @@ export class GraphemeString {
   }
 
   /**
-   * Mirrors `String.prototype.padStart`, padding by whole graphemes so the result is `targetLength`
-   * graphemes long. Throws `RangeError` above {@link MAX_PADDING_LENGTH} — a lower ceiling than
-   * native's, and the class's one deliberate departure from native behavior.
+   * Mirrors `String.prototype.padStart`, choosing whole graphemes as filler so the result is
+   * `targetLength` graphemes long — where native fills UTF-16 slots and can leave a broken half of
+   * a cluster at the seam. Throws `RangeError` above {@link MAX_PADDING_LENGTH}, a lower ceiling
+   * than native's and the class's one deliberate departure from native behavior.
    *
-   * The result is shorter than `targetLength` when the pad string fuses with the text at the seam —
-   * a filler ending in a combining mark, for instance. The two cannot both hold, and an honest
-   * segmentation wins: every index, search, and slice on the result depends on it.
+   * Returns text rather than a `GraphemeString`, unlike the range methods. Those only ever remove
+   * clusters, so a range of an honest segmentation is still honest and can be carried into the
+   * result for free. Padding adds text at a seam, and added text can fuse with what is already
+   * there — a filler ending in a combining mark joins the character it lands against — so there is
+   * no segmentation to carry. Constructing one here would mean either re-segmenting on every call
+   * or handing back an instance whose cluster array disagrees with its own text.
    *
    * @param targetLength Desired length in graphemes. No padding is added when it is at or below the
    *   current length.
    * @param padString Text to repeat, truncated at a grapheme boundary. Defaults to a single space;
    *   an empty string adds no padding.
-   * @returns A new padded instance, or this instance unchanged when no padding is needed. Shorter
-   *   than `targetLength` when the padding fuses with the text at the seam.
+   * @returns The padded text, or this instance's text unchanged when no padding is needed.
    * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
    *   actually be added. An empty `padString` never pads, so it never throws.
    */
-  padStart(targetLength: number, padString?: string): GraphemeString {
+  padStart(targetLength: number, padString?: string): string {
     const padding = this.buildPadding(targetLength, padString);
-    if (padding.length === 0) return this;
-    // Re-segmented rather than derived: concatenating the two grapheme arrays would be a lie
-    // whenever the padding fuses with the text at the seam, and an instance whose array disagrees
-    // with its own text reports wrong lengths and slices clusters in half.
-    return new GraphemeString(padding.join('') + this.str);
+    if (padding.length === 0) return this.str;
+    return padding.join('') + this.str;
   }
 
   /**
    * Mirrors `String.prototype.padEnd`. See {@link padStart}, including the `RangeError` ceiling and
-   * the shorter-than-`targetLength` result when the padding fuses with the text at the seam.
+   * why this returns text rather than a `GraphemeString`.
    *
    * @param targetLength Desired length in graphemes.
    * @param padString Text to repeat. Defaults to a single space.
-   * @returns A new padded instance, or this instance unchanged when no padding is needed. Shorter
-   *   than `targetLength` when the padding fuses with the text at the seam.
+   * @returns The padded text, or this instance's text unchanged when no padding is needed.
    * @throws `RangeError` when `targetLength` exceeds {@link MAX_PADDING_LENGTH} and padding would
    *   actually be added.
    */
-  padEnd(targetLength: number, padString?: string): GraphemeString {
+  padEnd(targetLength: number, padString?: string): string {
     const padding = this.buildPadding(targetLength, padString);
-    if (padding.length === 0) return this;
-    // Re-segmented rather than derived; see padStart.
-    return new GraphemeString(this.str + padding.join(''));
+    if (padding.length === 0) return this.str;
+    return this.str + padding.join('');
   }
 
   /**
