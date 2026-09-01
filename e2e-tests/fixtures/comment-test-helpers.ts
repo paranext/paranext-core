@@ -129,7 +129,19 @@ export function readCurrentParatextUserName(): string | undefined {
   const registrationFile = path.join(root, newest.name, 'RegistrationInfo.xml');
 
   const name = /<Name>([^<]*)<\/Name>/.exec(fs.readFileSync(registrationFile, 'utf8'))?.[1];
-  return name?.trim() || undefined;
+  // Decoded here because the value is scraped straight out of XML and handed to a writer that
+  // escapes it again. Without this, a registered name containing `&` arrives as `&amp;`, is
+  // re-escaped to `&amp;amp;`, and comes back out of the parser as the literal text `&amp;` — which
+  // no longer matches the name ParatextData is looking for.
+  return (
+    name
+      ?.replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, '&')
+      .trim() || undefined
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

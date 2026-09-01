@@ -180,7 +180,7 @@ export const DEFAULT_WINDOW_SIZE: WindowSize = { width: 1280, height: 800 };
 export const WINDOW_SIZE_TOLERANCE_PX = 8;
 
 /**
- * Fail loudly when the real OS window does not match what the spec declared.
+ * Fail loudly when the real OS window is SMALLER than what the spec declared.
  *
  * Reads `outerWidth`/`outerHeight`, never `innerWidth`/`innerHeight`: `setViewportSize()` on a
  * CDP-attached page applies an emulation override that sets `innerWidth`, so an inner-based check
@@ -252,15 +252,14 @@ export type RequiredInterfaceMode = 'simple' | 'power';
  * attribute has a seeded phase: `useInterfaceMode()` renders `readCachedInterfaceMode() ??
  * 'simple'` synchronously, before its own async settings round-trip resolves — so polling it for
  * `'simple'` can pass on the seed alone, before the pin could possibly have been read yet, and
- * never actually exercises the check. The `'power'` branch never had this problem (the seed only
- * ever reads `'simple'`), which is why this went unnoticed. The settings service has no equivalent
- * seeded phase to race: its data provider is registered (and thus reachable at all) only once its
- * own settings-file read has already resolved (`settings.service-host.ts`'s `initialize()`
- * constructs the engine from an already-awaited file read), so `get()` is always either unreachable
- * — handled by the same registration poll every other PAPI helper here uses — or already
- * authoritative. It is also still live, not a launch-time snapshot: `set()` updates the same
- * in-memory value `get()` reads, so a mode changed at runtime is reflected too, same as the
- * attribute was.
+ * never actually exercises the check. The `'power'` branch is not affected, because the seed only
+ * ever reads `'simple'`. The settings service has no equivalent seeded phase to race: its data
+ * provider is registered (and thus reachable at all) only once its own settings-file read has
+ * already resolved (`settings.service-host.ts`'s `initialize()` constructs the engine from an
+ * already-awaited file read), so `get()` is always either unreachable — handled by the same
+ * registration poll every other PAPI helper here uses — or already authoritative. It is also still
+ * live, not a launch-time snapshot: `set()` updates the same in-memory value `get()` reads, so a
+ * mode changed at runtime is reflected too, same as the attribute was.
  *
  * Takes no `page`: `platform.interfaceMode` is one app-wide setting, not per-window, so which
  * window's PAPI connection asks is irrelevant — every one of them would get the same answer.

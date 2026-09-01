@@ -7,7 +7,7 @@
 #                     default, and no suite needs it on FROM HERE — which is not the same as no
 #                     suite needing it: the overlay suite drives the helloRock3 web views and
 #                     requires it, but it launches its own Electron and sets its own default
-#                     (isolated.fixture defaults DEV_NOISY to 'true'). What this flag governs is the
+#                     (launchElectronApp defaults DEV_NOISY to 'true' for every fixture). What this flag governs is the
 #                     app THIS script starts, which only the CDP-attached suites use, and none of
 #                     those reference the test extensions. Turning it on adds
 #                     startup web views that shift iframe ordering (see find.fixture.ts). It is for

@@ -34,8 +34,6 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
   // into this stack (`helloRock3.html`, the React one, and `helloRock3.react2`), and the command
   // this function waits for is registered just BEFORE those calls — so the click above can land
   // while later web views are still arriving, and one of them takes the stack's active tab with it.
-  // Measured: in two of three consecutive full runs the Hello Rock3 tab was present but inactive at
-  // failure time, with "Hello Third Rock React 2" — the last of the three to open — showing instead.
   // Clicking once and then polling passively can never recover from that, because nothing clicks
   // again.
   let sawHiddenMatch = false;

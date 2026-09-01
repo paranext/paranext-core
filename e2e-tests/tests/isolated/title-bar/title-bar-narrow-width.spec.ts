@@ -85,10 +85,9 @@ async function waitForLocalizedTitleBar(mainPage: Page): Promise<void> {
  *
  * Returns nothing useful to assert on by design — the point is the wait. Electron clamps the
  * request to `minWidth`, so the settled width is read back from the window rather than assumed, and
- * the poll compares against THAT. An earlier version polled for "content row narrower than the
- * roomy width", which was already true before the resize and so waited for nothing: the test then
- * sampled the row's box and the controls' boxes from two different layout passes and reported
- * phantom clipping.
+ * the poll compares against THAT. Polling for something already true before the resize — "content
+ * row narrower than the roomy width" — waits for nothing, and the test then samples the row's box
+ * and the controls' boxes from two different layout passes and reports phantom clipping.
  */
 async function setWindowWidth(
   electronApp: ElectronApplication,

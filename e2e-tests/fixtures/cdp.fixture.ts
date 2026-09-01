@@ -35,10 +35,9 @@
  * - The fixture explicitly excludes `devtools://` URLs when finding the renderer page (so connecting
  *   to a DevTools page is impossible).
  * - The fixture asserts the real OS window is at least the size the spec declared with `test.use({
- *   requiredWindowSize })`, reading `window.outerWidth`/`outerHeight`. It deliberately does NOT
- *   call `setViewportSize()`: on a CDP-attached page that applies an emulation override which sets
- *   `innerWidth` itself, so an inner-based check reads back its own request and can never fail.
- *   Note this size check covers the small-window case only — `outerWidth` is unchanged by a docked
+ *   requiredWindowSize })`, and deliberately does not call `setViewportSize()` — see
+ *   `assertDeclaredWindowSize` in `helpers.ts` for why an emulated viewport cannot be checked. Note
+ *   this size check covers the small-window case only — `outerWidth` is unchanged by a docked
  *   DevTools panel, so the squeezed-renderer case is handled by launching with PT_NO_DEVTOOLS
  *   instead (see `.erb/scripts/refresh.sh` and `helpers.ts`).
  * - The fixture wraps `page.screenshot` to auto-validate PNG dimensions against the Full HD minimum
@@ -239,13 +238,10 @@ export const test = base.extend<CdpFixtures>({
 
     if (!page) throw new Error('No renderer page found via CDP');
 
-    // Assert the window matches what the spec declared, instead of emulating a viewport on top
-    // of it. `setViewportSize()` here applies a CDP emulation override: layout is computed at the
-    // requested size inside a window that is still whatever size it was, and `innerWidth` reports
-    // the requested value, so nothing can detect the mismatch. Measured: a 1024px-wide window
-    // reports `innerWidth` 469 before such a call and 1280 after, while `outerWidth` stays 1024.
-    // Attach mode has no main-process channel and so cannot genuinely resize the window — the
-    // honest move is to require the app to have been started at the size the spec needs.
+    // Assert the window matches what the spec declared, instead of emulating a viewport on top of
+    // it — `assertDeclaredWindowSize` in `helpers.ts` explains why an emulated viewport reads back
+    // its own request. Attach mode has no main-process channel and so cannot genuinely resize the
+    // window; requiring the app to have been started at the size the spec needs is the honest move.
     //
     // Screenshot quality is NOT enforced here. It is enforced where screenshots are written, by
     // the `page.screenshot` wrapper below calling `assertFullHdScreenshot`. Keeping the two apart

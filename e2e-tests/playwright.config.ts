@@ -63,6 +63,11 @@ const config = defineConfig({
       // command. Attach-based specs are deliberately NOT in this tree: this config's globalSetup
       // aborts when port 8876 is bound, which is exactly the state an attach spec needs, so one
       // living here could never run alongside its neighbours. They live in `tests/attached/`.
+      //
+      // `tests/attached/` is deliberately NOT a project in this config for that same reason: its
+      // globalSetup would refuse the running app those specs exist to attach to. They are collected
+      // by `playwright-cdp.config.ts`, which has no globalSetup, and run with
+      // `npm run test:e2e:attached` against an app started by ./.erb/scripts/refresh.sh.
       name: 'isolated',
       testDir: './tests/isolated',
     },
