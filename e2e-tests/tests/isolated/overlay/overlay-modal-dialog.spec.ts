@@ -1,37 +1,26 @@
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { preConfigureSettings, waitForAppReady } from '../../../fixtures/helpers';
+import { waitForAppReady } from '../../../fixtures/helpers';
 import { findHelloRock3Frame, DEFAULT_PERSON_NAME } from './overlay-helpers';
 
-test.use({
-  // The context-menu step drives a Radix submenu by pointer coordinates, so it needs the
-  // hello-rock3 web view to sit in a pane wide enough for the submenu to open beside its trigger
-  // rather than being flipped or clipped against the window edge.
-  windowSize: { width: 1280, height: 800 },
-});
-
-let restoreSettings: (() => void) | undefined;
-
-// `preConfigureSettings` MERGES into the shared dev-appdata settings file, so any key left
-// unpinned is whatever the previous app session on this checkout saved. Pin what this spec
-// depends on and restore the developer's file afterwards.
+// Seeded through the fixture's own options rather than a preConfigureSettings call in a hook: a
+// spec-level seed is overridden by the fixture's for any shared key, and is captured by the fixture
+// as the "original" it later writes back into the developer's shared settings.
 //
 // - interfaceMode: power. Simple mode squeezes the DEV_NOISY test layout's web views into one
 //   narrow side panel, where the Hello Rock3 dock tab sits under an overlapping web view iframe
 //   (its click is intercepted) and the context menu's submenu has no room to open.
 // - firstRunComplete: without it the app starts on the first-run wizard, a modal that aria-hides
 //   the rest of the app and swallows pointer events.
-// - interfaceLanguage: every string asserted below ("Delete Person", "More Actions", "Show
-//   Alert", "OK") is the English localization.
-test.beforeAll(() => {
-  restoreSettings = preConfigureSettings({
-    'platform.firstRunComplete': true,
-    'platform.interfaceLanguage': ['en'],
-    'platform.interfaceMode': 'power',
-  });
-});
-
-test.afterAll(() => {
-  restoreSettings?.();
+//
+// The English interface language every asserted string depends on ("Delete Person", "More
+// Actions", "Show Alert", "OK") is seeded by the fixture itself.
+test.use({
+  interfaceMode: 'power',
+  seedSettings: { 'platform.firstRunComplete': true },
+  // The context-menu step drives a Radix submenu by pointer coordinates, so it needs the
+  // hello-rock3 web view to sit in a pane wide enough for the submenu to open beside its trigger
+  // rather than being flipped or clipped against the window edge.
+  windowSize: { width: 1280, height: 800 },
 });
 
 test('overlay modal dialog rendering and interaction via WebView triggers', async ({

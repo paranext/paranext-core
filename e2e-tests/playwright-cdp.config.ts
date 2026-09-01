@@ -37,11 +37,13 @@ const config = defineConfig({
   fullyParallel: false,
   workers: 1,
   reporter: [
+    // FIRST on purpose. Fails the run when a test is reported skipped that nobody asked to skip —
+    // i.e. it never ran. The multiplexer applies a reporter's status override only after its
+    // `onEnd` returns, so listing this after `html`/`list` would let them write a green report for
+    // a run this one then fails. See the reporter for why that distinction matters.
+    ['./reporters/no-silent-skips.reporter.ts'],
     ['html', { outputFolder: 'playwright-report' }],
     ['list'],
-    // Fails the run when a test is reported skipped that nobody asked to skip — i.e. it never
-    // ran. See the reporter for why that distinction matters.
-    ['./reporters/no-silent-skips.reporter.ts'],
   ],
   timeout: 120_000,
   expect: { timeout: 10_000 },

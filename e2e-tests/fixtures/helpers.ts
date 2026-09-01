@@ -239,6 +239,14 @@ export type RequiredInterfaceMode = 'simple' | 'power';
 /**
  * Fail loudly when the running app is not in the interface mode the spec was written for.
  *
+ * What this asserts is that the app IS in the requested mode — which is what a spec's layout
+ * depends on — and NOT that any particular pin is what put it there. For `'power'` the two amount
+ * to the same thing, since nothing else produces it. For `'simple'` they do not: `get()` falls back
+ * to the contributed default when the key is absent (`core-settings-info.data.ts`), and that
+ * default is `'simple'`, so an app that was never pinned at all satisfies this check. That is the
+ * right answer to "can this suite's layout work here", and the wrong one to "did my seed land" — do
+ * not read a passing `'simple'` assertion as proof of the latter.
+ *
  * A launch-mode spec pins the mode before starting its own app. An attach-mode spec cannot: it
  * drives an app someone else started, whose mode is whatever the shared
  * `dev-appdata/data/settings.json` last held — and that file keeps a pin from any run that was
@@ -263,6 +271,12 @@ export type RequiredInterfaceMode = 'simple' | 'power';
  *
  * Takes no `page`: `platform.interfaceMode` is one app-wide setting, not per-window, so which
  * window's PAPI connection asks is irrelevant — every one of them would get the same answer.
+ *
+ * Called from fixture setup, BEFORE any `waitForAppReady` — the fixtures do not call that; the
+ * specs do. So this is waiting on the settings data provider in the extension host at the slowest
+ * point of a launch, which is why its default budget is sized against the other readiness waits
+ * rather than against a normal PAPI round trip. A caller that knows its machine is slow should pass
+ * a larger one rather than let this be the tightest wait in the sequence.
  */
 export async function assertInterfaceMode(
   required: RequiredInterfaceMode,

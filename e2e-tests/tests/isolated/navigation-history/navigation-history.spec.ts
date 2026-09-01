@@ -25,7 +25,6 @@
 import { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
-  preConfigureSettings,
   SAMPLE_WEB_PROJECT_ID,
   waitForAppReady,
   waitForProjectMetadata,
@@ -62,6 +61,21 @@ test.use({
   // narrower window collapses that row. 1280x800 is what the other launch suites are written
   // against.
   windowSize: { width: 1280, height: 800 },
+  // Seeded through the fixture rather than a preConfigureSettings call in a hook, which the fixture
+  // would both override and then write back into the developer's shared settings.
+  //
+  // - interfaceMode: the mode decides both what the toolbar renders around these buttons and how
+  //   the dock treats an opened editor, so the suite declares the one it drives. Power mode opens
+  //   each editor as its own dock tab.
+  // - firstRunComplete: without it the app starts on the first-run wizard, a modal that aria-hides
+  //   the rest of the app and swallows pointer events, so nothing below is reachable.
+  //
+  // The English interface language every selector depends on — book names on the BCV trigger, the
+  // "Back history"/"Forward history" accessible names — is seeded by the fixture itself. The
+  // "Genesis 1:1" labels inside the history menus do NOT depend on it: `ReferenceHistoryButtons`
+  // builds them with `formatScrRef(entry.scrRef, 'English')` and does not localize.
+  interfaceMode: 'power',
+  seedSettings: { 'platform.firstRunComplete': true },
 });
 
 /**
@@ -105,32 +119,6 @@ async function navigateToRef(mainPage: Page, refText: string, expectedRef: RegEx
 test.describe('Reference history', () => {
   // Each test pays a full app startup (up to ~180 s worst case) before it navigates anything.
   test.setTimeout(300_000);
-
-  let restoreSettings: (() => void) | undefined;
-
-  test.beforeAll(() => {
-    // Written before any launch and restored after the last test so the developer's own settings
-    // survive the suite.
-    //
-    // - firstRunComplete: without it the app starts on the first-run wizard, a modal that
-    //   aria-hides the rest of the app and swallows pointer events, so nothing below is reachable.
-    // - interfaceLanguage: every selector here is English — the book names on the BCV trigger and
-    //   the menus' "Back history"/"Forward history" accessible names. The "Genesis 1:1" labels
-    //   inside the history menus do NOT depend on it: `ReferenceHistoryButtons` builds them with
-    //   `formatScrRef(entry.scrRef, 'English')` and does not localize (see the TODO there).
-    // - interfaceMode: the mode decides both what the toolbar renders around these buttons and how
-    //   the dock treats an opened editor, so the suite declares the one it drives. Power mode is
-    //   the choice because it opens each editor as its own dock tab.
-    restoreSettings = preConfigureSettings({
-      'platform.firstRunComplete': true,
-      'platform.interfaceLanguage': ['en'],
-      'platform.interfaceMode': 'power',
-    });
-  });
-
-  test.afterAll(() => {
-    restoreSettings?.();
-  });
 
   // Setup, not reset: the isolated fixture hands every test a freshly launched app, so there is no
   // leftover layout or history to clear. What a test does need is something to navigate — the top

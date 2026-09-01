@@ -62,9 +62,14 @@ one of these.
   Power mode. A suite that pins nothing inherits it. With no pin at all the app falls back to
   `'simple'` (`src/renderer/hooks/use-interface-mode.hook.ts`).
   - Check it first when a suite behaves differently than it did yesterday: `cat dev-appdata/data/settings.json`
-  - A suite that depends on a mode should pin it AND declare `test.use({ requiredInterfaceMode })`,
-    which asserts the pin took effect instead of failing later on an element the other mode never
-    renders. It reads `platform.interfaceMode` from the settings service over PAPI, NOT from
+  - A suite that depends on a mode selects it with `test.use({ interfaceMode })`; the launch
+    fixtures seed that value and then assert the app came up in it, so there is nothing extra to
+    declare and nothing to forget. Attach-mode suites cannot seed, so `cdp.fixture` keeps an
+    assert-only `test.use({ requiredInterfaceMode })` instead. Either way the check confirms the app
+    IS in that mode — which is what the layout depends on — rather than proving a particular seed is
+    what put it there; for `'simple'` an app that was never pinned satisfies it, because that is the
+    contributed default. It reads `platform.interfaceMode` from the settings service over PAPI, NOT
+    from
     `document.body[data-interface-mode]`: that attribute renders `readCachedInterfaceMode() ??
     'simple'` synchronously, before its own settings round-trip resolves, so polling it for
     `'simple'` can pass on the seed alone and never exercise the check. See `assertInterfaceMode`

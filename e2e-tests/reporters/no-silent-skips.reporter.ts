@@ -65,9 +65,15 @@ export function findLostTests<T extends TestOutcomeLike>(tests: T[]): T[] {
  * like 22 intentionally skipped ones. A suite that fails silently rots at the rate the codebase
  * changes.
  *
- * A deliberate skip carries an annotation: `test.skip()`, `test.fixme()`, and their conditional and
- * describe-scoped forms all add one, including when called at runtime. A test that never ran
- * carries none. That difference is the whole check.
+ * The discriminator is `expectedStatus`, NOT annotations. A deliberate skip — `test.skip()`,
+ * `test.fixme()`, and their conditional and describe-scoped forms — leaves the test EXPECTING to be
+ * skipped, and Playwright's dispatcher updates that even for a skip decided at runtime. A test that
+ * never ran still expects to pass. That difference is the whole check.
+ *
+ * Register this reporter FIRST. The multiplexer runs reporters in array order and applies a
+ * reporter's status override only after its `onEnd` returns, so a reporter listed after `html` or
+ * `list` lets those write a green report for a run this one then fails — which is the same "looks
+ * like housekeeping" confusion it exists to end.
  */
 class NoSilentSkipsReporter implements Reporter {
   private rootSuite: Suite | undefined;

@@ -28,7 +28,6 @@ import {
   sendPapiCommandWhenRegistered,
   waitForHomeTab,
 } from '../../../fixtures/scripture-editor-helpers';
-import { preConfigureSettings } from '../../../fixtures/helpers';
 
 // The option fixture is named `electronLaunchOptions`, not `launchOptions` — Playwright's base
 // `test` already registers a worker-scoped `launchOptions` option fixture (browser launch
@@ -46,7 +45,22 @@ import { preConfigureSettings } from '../../../fixtures/helpers';
 // Standard view the visible `\v N` marker text lives INSIDE the verse span (no separate glyph
 // element is inserted), so the `+ span` marker/text adjacency and the click-in-verse-text gesture
 // behave the same as in the formatted view.
+// Seeded through the fixture's own options rather than a preConfigureSettings call in a hook: a
+// spec-level seed is overridden by the fixture's for any shared key, and is captured by the fixture
+// as the "original" it later writes back into the developer's shared settings.
+//
+// - interfaceMode: power. Simple mode renders no dock tabs at all (no Home tab to wait for) and
+//   shows a single project pane, while both scenarios need each opened view to become its own dock
+//   tab — scenario 2 in particular relies on the editable editor opening ALONGSIDE the read-only
+//   viewer rather than replacing it.
+// - firstRunComplete: without it the app starts on the first-run wizard, a modal that aria-hides
+//   the rest of the app and swallows pointer events.
+//
+// The English interface language the toolbar assertion depends on ("Lamentations 3:60" off the BCV
+// trigger) is seeded by the fixture itself.
 test.use({
+  interfaceMode: 'power',
+  seedSettings: { 'platform.firstRunComplete': true },
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
   // The verse-in-viewport assertions are geometry: how far down the pane Lamentations 3:66 sits,
   // and therefore whether it starts off screen, is decided by the window size. 1280x800 is the size
@@ -55,32 +69,6 @@ test.use({
 });
 
 test.describe('scroll group sync', () => {
-  let restoreSettings: (() => void) | undefined;
-
-  // `preConfigureSettings` MERGES into the shared dev-appdata settings file, so any key this suite
-  // leaves unpinned is whatever the previous app session on this checkout happened to save. Pin
-  // every setting the scenarios below depend on, and restore the developer's file afterwards.
-  //
-  // - interfaceMode: power. Simple mode renders no dock tabs at all (no Home tab to wait for) and
-  //   shows a single project pane, while both scenarios need each opened view to become its own
-  //   dock tab — scenario 2 in particular relies on the editable editor opening ALONGSIDE the
-  //   read-only viewer rather than replacing it.
-  // - firstRunComplete: without it the app starts on the first-run wizard, a modal that aria-hides
-  //   the rest of the app and swallows pointer events.
-  // - interfaceLanguage: the toolbar assertion below reads the English book name
-  //   "Lamentations 3:60" off the BCV trigger.
-  test.beforeAll(() => {
-    restoreSettings = preConfigureSettings({
-      'platform.firstRunComplete': true,
-      'platform.interfaceLanguage': ['en'],
-      'platform.interfaceMode': 'power',
-    });
-  });
-
-  test.afterAll(() => {
-    restoreSettings?.();
-  });
-
   test('an external BCV change scrolls the verse into view, and clicking a verse reports it to the scroll group (PT9-style click-follow)', async ({
     mainPage,
   }) => {
