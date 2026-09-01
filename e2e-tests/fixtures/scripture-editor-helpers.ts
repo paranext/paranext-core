@@ -218,11 +218,15 @@ function escapeForRegExp(value: string): string {
 /**
  * Navigate the main toolbar's book-chapter-verse control (drives scroll group A).
  *
- * Commits with Enter only AFTER cmdk's highlighted (`data-selected`) item is the top match for the
- * typed reference: cmdk moves its highlight asynchronously after the input changes, so an immediate
- * Enter can race it and activate the previously-highlighted book instead (observed as "typed EXO
- * 2:3, still on Genesis 1:1"). The `\b` anchor keeps a wrong-chapter highlight from false-matching
- * (e.g. "Mark 4\b" accepts "Mark 4:1" but rejects "Mark 40:1").
+ * Commits with Enter only AFTER the top-match row displays the typed reference: the control parses
+ * the input asynchronously, so an immediate Enter can race the parse and commit the previous
+ * reference (observed as "typed EXO 2:3, still on Genesis 1:1"). The `\b` anchor keeps a
+ * wrong-chapter row from false-matching (e.g. "Mark 4\b" accepts "Mark 4:1" but rejects "Mark
+ * 40:1").
+ *
+ * Deliberately NOT keyed on cmdk's `data-selected` highlight: that highlight sits on a cell of the
+ * chapter preview grid below this row, never on the row itself, and Enter submits the row's
+ * reference rather than whatever cmdk has highlighted.
  *
  * Pass `reference` with the ENGLISH book name ("Exodus 2:3", not "EXO 2:3"): the top-match item
  * renders through `formatScrRef(..., 'English')`, so a book CODE never matches its own item.
@@ -231,11 +235,10 @@ export async function navigateToolbarBcv(mainPage: Page, reference: string): Pro
   await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
   const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await input.fill(reference);
-  const highlightedTopMatch = mainPage.locator(
-    '[data-radix-popper-content-wrapper] [cmdk-item][data-selected="true"]',
-    { hasText: new RegExp(`${escapeForRegExp(reference)}\\b`, 'i') },
-  );
-  await highlightedTopMatch.waitFor({ timeout: 10_000 });
+  const topMatchRow = mainPage.locator('[data-radix-popper-content-wrapper] [cmdk-item]', {
+    hasText: new RegExp(`${escapeForRegExp(reference)}\\b`, 'i'),
+  });
+  await topMatchRow.first().waitFor({ timeout: 10_000 });
   await input.press('Enter');
   // The popover closing confirms the commit was accepted before callers assert on the outcome.
   await input.waitFor({ state: 'hidden', timeout: 10_000 });

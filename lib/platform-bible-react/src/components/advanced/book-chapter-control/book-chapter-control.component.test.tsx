@@ -1065,6 +1065,11 @@ describe('BookChapterControl selection activation', () => {
   });
 });
 
+// The heaviest block in this file: each case types a reference, renders the popover, and waits for
+// a full preview grid to settle, landing around 1.5-2s on an idle machine. That is inside vitest's
+// 5s default, but not by enough — this repo's multi-window suites already time out at that budget
+// under CI load. Raised here rather than globally so a genuinely hung test elsewhere still fails
+// fast.
 describe('BookChapterControl top-match preview', () => {
   // Every keystroke re-renders the whole picker, so these type the shortest query that still
   // resolves to a single book and move the highlight with one keypress rather than several.
@@ -1210,7 +1215,7 @@ describe('BookChapterControl top-match preview', () => {
     await user.keyboard('{ArrowDown}');
     expect(await screen.findByRole('option', { name: /Matthew 7/ })).toBeInTheDocument();
   });
-});
+}, 15_000);
 
 describe('BookChapterControl back button', () => {
   test('is labelled for returning to books while in chapters view', async () => {
@@ -1239,5 +1244,89 @@ describe('BookChapterControl back button', () => {
     await user.click(await screen.findByRole('option', { name: /Matthew/ }));
     await user.click(await screen.findByRole('option', { name: '12' }));
     expect(await screen.findByRole('button', { name: 'Back to chapters' })).toBeInTheDocument();
+  });
+
+  // Enter and Space are centralized on the Command root to activate the highlighted grid cell, so
+  // the back button — the only natively interactive element in the chapters/verses header — has to
+  // be exempted explicitly or it stops working as a button. Focus reaches it by click (it is
+  // tabIndex={-1}): clicking back from verses lands in chapters view with the button still focused,
+  // where the very next Enter or Space must go back again rather than commit a chapter.
+  async function focusBackButtonInChaptersView() {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    const backButton = await screen.findByRole('button', { name: 'Back to books' });
+    // Wait for the seeded highlight, so a failure means the guard let it through rather than that
+    // there was nothing to submit yet.
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    act(() => backButton.focus());
+    return { handleSubmit, user };
+  }
+
+  test('Enter on the focused back button goes back instead of submitting the highlighted chapter', async () => {
+    const { handleSubmit, user } = await focusBackButtonInChaptersView();
+
+    await user.keyboard('{Enter}');
+
+    expect(await screen.findByRole('option', { name: /Matthew/ })).toBeInTheDocument();
+    expect(handleSubmit).not.toHaveBeenCalled();
+  });
+
+  test('Space on the focused back button goes back instead of submitting the highlighted chapter', async () => {
+    const { handleSubmit, user } = await focusBackButtonInChaptersView();
+
+    await user.keyboard('[Space]');
+
+    expect(await screen.findByRole('option', { name: /Matthew/ })).toBeInTheDocument();
+    expect(handleSubmit).not.toHaveBeenCalled();
+  });
+
+  // The back button is deliberately out of the tab order, so Backspace is the ONLY way a keyboard
+  // user leaves a grid without committing a reference. Both levels are covered because they are
+  // separate branches with separate destinations.
+  test('Backspace returns to the book list from the chapter grid', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    expect(await screen.findByRole('button', { name: 'Back to books' })).toBeInTheDocument();
+
+    await user.keyboard('{Backspace}');
+
+    expect(await screen.findByRole('option', { name: /Matthew/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Back to books' })).not.toBeInTheDocument();
+  });
+
+  test('Backspace returns to the chapter grid from the verse grid', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+        getEndVerse={() => 30}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await user.click(await screen.findByRole('option', { name: '12' }));
+    expect(await screen.findByRole('button', { name: 'Back to chapters' })).toBeInTheDocument();
+
+    await user.keyboard('{Backspace}');
+
+    expect(await screen.findByRole('button', { name: 'Back to books' })).toBeInTheDocument();
   });
 });
