@@ -87,16 +87,19 @@ type MoveShard = {
 };
 
 /**
- * Register the shard over a dock layout stand-in that answers `getWebViewDefinition` with a fixed
- * definition (or `undefined`) regardless of the id it is asked for — matching the harness's other
- * dock-layout stand-ins (e.g. `setDetachedScrRef`'s), which don't validate call arguments either.
- * The real dock looks the id up exactly, so the stand-in is deliberately looser than what it stands
- * in for: it answers whatever definition the test set up, whichever id it is handed. That keeps the
- * capture tests about what the shard does with the definition it got back, not about lookup. It
- * also tracks `removeTabFromDock`/`addWebViewToDock` calls so capture/adopt tests can assert on
- * them.
+ * Register the shard over a dock layout stand-in holding one web view definition, or none.
+ *
+ * `getWebViewDefinition` answers only for the id that definition carries, exactly as the real dock
+ * does. A stand-in that answered for every id can only pin that a guard was reached, never that it
+ * asked about the right web view — so a test of any id-dependent behaviour would pass whether or
+ * not the code looked up the id it meant to.
+ *
+ * `setWebViewDefinition` changes what the dock holds mid-test, which is what lets a test put a web
+ * view into the dock while an adopt is parked in its provider. It also tracks
+ * `removeTabFromDock`/`addWebViewToDock` calls so capture/adopt tests can assert on them.
  */
-async function shardOverDockLayout(webViewDefinition: WebViewDefinition | undefined) {
+async function shardOverDockLayout(initialWebViewDefinition: WebViewDefinition | undefined) {
+  let webViewDefinition = initialWebViewDefinition;
   const module = await import('@renderer/services/web-view.service-shard');
   const { networkObjectService } = await import('@shared/services/network-object.service');
   const removedTabIds: string[] = [];
@@ -105,7 +108,8 @@ async function shardOverDockLayout(webViewDefinition: WebViewDefinition | undefi
     onLayoutChangeRef: { current: undefined },
     loadLayout: () => {},
     getAllWebViewDefinitions: () => [],
-    getWebViewDefinition: () => webViewDefinition,
+    getWebViewDefinition: (id: string) =>
+      webViewDefinition?.id === id ? webViewDefinition : undefined,
     removeTabFromDock: (tabId: string) => {
       removedTabIds.push(tabId);
       return true;
@@ -124,6 +128,9 @@ async function shardOverDockLayout(webViewDefinition: WebViewDefinition | undefi
     shard: shard as unknown as MoveShard,
     removedTabIds,
     addWebViewToDockCalls,
+    setWebViewDefinition: (definition: WebViewDefinition | undefined) => {
+      webViewDefinition = definition;
+    },
   };
 }
 
@@ -205,10 +212,7 @@ describe('captureAndCloseWebView', () => {
   test('capture closes the tab it captured', async () => {
     const { shard, removedTabIds } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
 
-    // Ask for the unscoped id. The dock stand-in does not validate the id it is asked for, so it
-    // still answers with the window-scoped definition; what this pins is that the close goes
-    // through the definition's own id rather than the id the caller asked with
-    await shard.captureAndCloseWebView('abc');
+    await shard.captureAndCloseWebView('abc-w2');
 
     expect(removedTabIds).toEqual(['abc-w2']);
   });
@@ -330,6 +334,41 @@ describe('adoptWebView', () => {
     await shard.adoptWebView(SAVED_DEFINITION);
 
     expect(deleteFullWebViewStateById).toHaveBeenCalledWith('moved-view');
+  });
+
+  test('a declined adopt keeps the state of a view that reached the dock while the provider ran', async () => {
+    // The refusal at the top of the adopt speaks for the moment the adopt arrived. The cleanup
+    // below runs after an unbounded wait on provider code, and the dock can gain this id during
+    // it — a second adopt of the same view landing, or a layout load re-docking the persisted
+    // layout. Deleting then would evict the state of a view this window is showing.
+    const { deleteFullWebViewStateById } = await import(
+      '@renderer/services/web-view-state.service'
+    );
+    vi.mocked(deleteFullWebViewStateById).mockClear();
+    const { shard, setWebViewDefinition } = await shardOverDockLayout(undefined);
+
+    let releaseProvider: () => void = () => {};
+    const providerParked = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    await primeProvider(async () => {
+      // Docked while the provider is still running, which is the whole window this guard covers
+      setWebViewDefinition({
+        id: 'moved-view',
+        webViewType: 'test.type',
+        contentType: 'html',
+        content: '<p>landed</p>',
+        state: { existing: true },
+      });
+      await providerParked;
+      return undefined;
+    });
+
+    const adopting = shard.adoptWebView(SAVED_DEFINITION);
+    releaseProvider();
+    await adopting;
+
+    expect(deleteFullWebViewStateById).not.toHaveBeenCalled();
   });
 
   test('adopt refuses an id this window already holds docked, without touching its state', async () => {

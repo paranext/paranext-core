@@ -3623,6 +3623,32 @@ async function captureAndCloseWebView(
   return captured;
 }
 
+/**
+ * Drop the state an adopt seeded, unless this window is showing the view it was seeded for.
+ *
+ * The dock is read here rather than reused from the check at the top of {@link adoptWebView},
+ * because every caller runs after an unbounded wait on a web view provider and the dock can gain
+ * this id during it: a second adopt of the same view can land while this one is parked, and an
+ * interface-mode change re-docks the persisted layout in every window. Deleting on either would
+ * evict the state of a view the user is looking at — the loss `openOrReloadWebView`'s catch already
+ * refuses for the same reason.
+ *
+ * A dock that cannot be read is treated as still holding the view. An orphaned state entry for a
+ * view this window does not hold is recoverable and costs nothing the user can see; gutting a live
+ * view is neither.
+ */
+async function deleteSeededStateUnlessDocked(webViewId: WebViewId): Promise<void> {
+  try {
+    if ((await getDockLayout()).getWebViewDefinition(webViewId) !== undefined) return;
+  } catch (e) {
+    logger.warn(
+      `Could not read the dock to decide whether to drop the state seeded for web view ${webViewId}; keeping it. ${getErrorMessage(e)}`,
+    );
+    return;
+  }
+  deleteFullWebViewStateById(webViewId);
+}
+
 /** See {@link WebViewServiceShard.adoptWebView} */
 async function adoptWebView(
   savedWebViewDefinition: SavedWebViewDefinition,
@@ -3690,13 +3716,14 @@ async function adoptWebView(
     );
     // A provider that declines returns no id, which is a failed adopt like any other: the seed is
     // a write this window would not otherwise have made, and it persists as soon as it is made
-    if (!adoptedId && wasStateSeeded) deleteFullWebViewStateById(savedWebViewDefinition.id);
+    if (!adoptedId && wasStateSeeded)
+      await deleteSeededStateUnlessDocked(savedWebViewDefinition.id);
     return adoptedId;
   } catch (e) {
     // The source window keeps its own copy until the move is known to have landed, and that copy
     // is what a failed move re-adopts from — so nothing is lost by dropping this one, while
     // leaving it behind would park a moved view's state under an id this window does not hold
-    if (wasStateSeeded) deleteFullWebViewStateById(savedWebViewDefinition.id);
+    if (wasStateSeeded) await deleteSeededStateUnlessDocked(savedWebViewDefinition.id);
     throw e;
   }
 }
