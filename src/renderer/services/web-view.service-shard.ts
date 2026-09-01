@@ -1659,6 +1659,45 @@ async function withTimeout<T>(
 }
 
 /**
+ * Whether this window is the one that should carry out a switch to simple mode.
+ *
+ * Simple mode is single-window, so the main process closes every other window as part of the same
+ * switch. A window on its way out must not run the switch, because the switch writes state shared
+ * by every window — it starts a send/receive, applies the administrator's shared layout, records
+ * the project as recently opened, and caches it under a browser-storage key that is one key for the
+ * whole application. Running all of that in a window nobody will see duplicates each of them, and
+ * can settle on a different project than the surviving window when the cache is cold.
+ *
+ * Asked of the main process rather than read from this window's own creation parameters: which
+ * window holds the primary role is the main process's to answer, and the parameter that names the
+ * main window at creation time governs whether to draw the top-level menu and nothing else.
+ *
+ * Answers `true` whenever it cannot establish otherwise — a question that failed, or a list naming
+ * no primary at all, which happens only when every window is still waiting for its content.
+ * Refusing the switch on either would leave the mode changed with the dock never reloaded, which is
+ * worse than the duplication this avoids; on those paths the duplication above is unchanged.
+ */
+async function isThisWindowRunningTheSwitchToSimple(): Promise<boolean> {
+  try {
+    const windows = await sendCommand('platform.getWindows');
+    // Nothing is flagged while the main process is falling back to the oldest live window, which
+    // this window has no way to work out for itself
+    if (!windows.some((summary) => summary.isMain)) return true;
+    const thisWindowId = getWindowIdOrThrow();
+    const thisWindow = windows.find((summary) => summary.windowId === thisWindowId);
+    // Absent from the list means already recorded as closing, which is what the main process does
+    // to a window just before it closes it for this very switch
+    if (!thisWindow) return false;
+    return thisWindow.isMain;
+  } catch (e) {
+    logger.warn(
+      `Could not establish whether this window should run the switch to Simple mode; running it: ${getErrorMessage(e)}`,
+    );
+    return true;
+  }
+}
+
+/**
  * Drives the power → simple transition from the renderer. The bare `simpleLayout` declares multiple
  * tabs with empty state (no `projectId`); restoring it would mount those empty webviews, fire
  * `onDidOpenWebView` for each, trigger the default-project picker, and then reload all those
@@ -1685,46 +1724,6 @@ async function withTimeout<T>(
  *   fresh one, for callers (tests) invoking this directly rather than through the
  *   `platform.interfaceMode` subscription, which starts one itself before calling this.
  */
-/**
- * Whether this window is the one that should carry out a switch to simple mode.
- *
- * Simple mode is single-window, so the main process closes every other window as part of the same
- * switch. A window on its way out must not run the switch, because the switch writes state shared
- * by every window — it starts a send/receive, applies the administrator's shared layout, records
- * the project as recently opened, and caches it under a browser-storage key that is one key for the
- * whole application. Running all of that in a window nobody will see duplicates each of them, and
- * can settle on a different project than the surviving window when the cache is cold.
- *
- * Asked of the main process rather than read from this window's own creation parameters: which
- * window holds the primary role is the main process's to answer, and the parameter that names the
- * main window at creation time governs whether to draw the top-level menu and nothing else.
- *
- * Answers `true` whenever it cannot establish otherwise — a question that failed, or a list naming
- * no primary at all, which is what the main process reports while no live window holds the marked
- * entry and it is falling back to the oldest one. Refusing the switch on either would leave the
- * mode changed with the dock never reloaded, which is worse than the duplication this avoids; on
- * those paths the duplication above is unchanged.
- */
-async function isThisWindowRunningTheSwitchToSimple(): Promise<boolean> {
-  try {
-    const windows = await sendCommand('platform.getWindows');
-    // Nothing is flagged while the main process is falling back to the oldest live window, which
-    // this window has no way to work out for itself
-    if (!windows.some((summary) => summary.isMain)) return true;
-    const thisWindowId = getWindowIdOrThrow();
-    const thisWindow = windows.find((summary) => summary.windowId === thisWindowId);
-    // Absent from the list means already recorded as closing, which is what the main process does
-    // to a window just before it closes it for this very switch
-    if (!thisWindow) return false;
-    return thisWindow.isMain;
-  } catch (e) {
-    logger.warn(
-      `Could not establish whether this window should run the switch to Simple mode; running it: ${getErrorMessage(e)}`,
-    );
-    return true;
-  }
-}
-
 export async function handleSwitchToSimpleMode(
   generation: number = startNewSwitchGeneration(),
 ): Promise<void> {
