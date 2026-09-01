@@ -26,7 +26,7 @@ Whether to fix, delete, or keep these is an open decision.
 in `playwright.config.ts`. **Do not remove that exclusion without first giving these specs a
 disposable project fixture.**
 
-Three of the four specs here write to whatever real projects the running app has, with no restore:
+All four specs here write to whatever real projects the running app has, with no restore:
 
 - `manage-books-journey.spec.ts` selects every visible book and clicks **"Replace entire books"**
   against a rotation pool of real local project short names.
@@ -36,9 +36,13 @@ Three of the four specs here write to whatever real projects the running app has
   survive a restart. Its own `ROTATION_FIXTURES_REQUIRING_MISSING_BOOK` docblock carries the manual
   cleanup procedure, including restoring each project's `Settings.xml` from its `.BAK`.
 
-The fourth, `manage-books-commands.spec.ts`, drives the same book-mutating commands against real
-projects, but only down paths that cannot mutate anything: a bogus project id that fails before
-touching disk, a permission-denied gate, or a book that is already present and gets filtered out.
+- `manage-books-commands.spec.ts` is the least obvious of the four. Its first half drives every
+  method against `__papi_verification_nonexistent__` and is safe by construction. Its remaining
+  tests discover real projects from the live app and are safe only by environment:
+  `copyCustomVersification` takes as its destination whatever real project is not the source,
+  `createBooks` runs against real `ESVUS16` relying on the requested book already being present, and
+  `copyBooks` relies on the user not being an administrator on the destination. Change any of those
+  assumptions on a given machine and the call writes.
 
 `npm run test:e2e-cdp` excludes this directory (`testIgnore` in `playwright-cdp.config.ts`).
 Without that exclusion a bare CDP run against a live app can overwrite real project data on the

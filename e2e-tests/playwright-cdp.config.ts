@@ -15,7 +15,7 @@ const config = defineConfig({
   // `npm run test:e2e:isolated`.
   // _example/ contains reference templates, not runnable tests.
   // manage-books is excluded because a bare `npm run test:e2e-cdp` would otherwise run it against
-  // whatever app is live, and three of its four specs mutate real projects with no restore.
+  // whatever app is live, and all four of its specs can mutate real projects with no restore.
   // Cited by symbol rather than line, per .claude/rules/docs-durability.md:
   // - manage-books-journey.spec.ts bulk-selects every visible book and clicks "Replace entire
   //   books" in its "Journey 4: Copy from source project" test, against the rotation pool in
@@ -25,9 +25,12 @@ const config = defineConfig({
   // - manage-books-functional-WP-002.spec.ts creates books through `manageBooks.createBooks`,
   //   writing USFM stubs that survive a restart; see `ROTATION_FIXTURES_REQUIRING_MISSING_BOOK`
   //   for the manual cleanup it requires.
+  // - manage-books-commands.spec.ts is safe only by environment. Its `BOGUS_PROJECT_ID` half
+  //   cannot mutate, but `copyCustomVersification` takes whatever real project is not the source as
+  //   its destination, `createBooks` runs against real ESVUS16 relying on the book already being
+  //   present, and `copyBooks` relies on the user not being an administrator on the destination.
   // Those projects exist on developer machines under ~/.platform.bible/projects, so this is data
-  // loss, not test noise. The fourth spec, manage-books-commands.spec.ts, drives the same commands
-  // but only down paths that cannot mutate.
+  // loss, not test noise.
   // Re-enable per-spec once the suite owns a throwaway project root (isolatedProjectRoot), the way
   // find.fixture does.
   testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**', '**/manage-books/**'],

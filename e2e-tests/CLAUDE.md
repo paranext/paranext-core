@@ -20,9 +20,11 @@ under its own Xvfb — and run those suites through `playwright-cdp.config.ts`, 
 globalSetup.
 
 `tests/manage-books/` also attaches, but is deliberately excluded from that config and is collected
-by nothing: three of its four specs mutate real project data with no restore (the fourth drives the
-same mutating commands, but only against permission-denied or already-present/no-op paths). See its
-README before removing the exclusion.
+by nothing: all four of its specs can mutate real project data with no restore. Three do so
+outright; `manage-books-commands.spec.ts` is safe only by environment, since its later tests drive
+real projects discovered from the live app and depend on assumptions (a book already present, a
+non-administrator destination) that need not hold on a given machine. See its README before removing
+the exclusion.
 
 **An attach-based spec must not live under `tests/isolated/`.** `playwright-cdp.config.ts` ignores
 that tree, and the `isolated` project's globalSetup refuses to start while an app holds port 8876 —
