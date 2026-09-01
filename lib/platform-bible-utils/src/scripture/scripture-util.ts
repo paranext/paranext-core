@@ -796,6 +796,13 @@ function isUsjContentEmpty(content: MarkerContent[] | undefined) {
 /**
  * The text of `graphemeString` with trailing whitespace graphemes removed. Scans the existing
  * segmentation for the cut point and then slices once, so it costs a single pass over the text.
+ *
+ * Not a `/\s+$/` replace, which would be faster: `isWhiteSpace` is not JavaScript's `\s`. It
+ * includes NEXT LINE (U+0085), which `\s` does not, and excludes ZWNBSP (U+FEFF), which `\s`
+ * matches — so a regex would trim a byte-order mark and leave a NEL. Working in clusters is
+ * incidental rather than load-bearing: no cluster can end in a whitespace character without being
+ * entirely whitespace, since whitespace is never an Extend, so this agrees with a character-wise
+ * scan using the same predicate on every input.
  */
 function trimEndOfGraphemes(graphemeString: GraphemeString): string {
   const { length } = graphemeString;
