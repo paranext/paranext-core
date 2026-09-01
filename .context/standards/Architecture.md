@@ -22,11 +22,11 @@ This document provides detailed architectural information for Platform.Bible (pa
 Platform.Bible uses **JSON-RPC 2.0 over WebSocket** for inter-process communication. All processes connect to the Main process which acts as the message broker.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Main Process (Electron)               │
-│  • WebSocket server on port 8876                         │
-│  • Routes messages between processes                     │
-└────────────────┬────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    Main Process (Electron)                   │
+│  • WebSocket server on port 8876                             │
+│  • Routes messages between processes                         │
+└────────────────┬─────────────────────────────────────────────┘
                  │ JSON-RPC over WebSocket (port 8876)
     ┌────────────┼─────────────┬───────────────────┐
     │            │             │                   │
@@ -37,13 +37,17 @@ Platform.Bible uses **JSON-RPC 2.0 over WebSocket** for inter-process communicat
 ```
 
 One renderer process per window, not one for the application: a window is a full renderer hosting
-its own dock layout and its own window-scoped services, and main is the only process every renderer
-connects to directly. Services that must coordinate across every open window therefore live in
-main, which outlives any individual window. Other whole-application services — settings, menus,
-theme definitions, extension lifecycle — live in the extension host, which is likewise a single
-process shared by every window (see the service tables below). Which process hosts a given service
-is worth reading out of the tables rather than inferred from what it is about: the theme
-*definitions* are extension-host data, while the theme *service* is hosted elsewhere.
+its own dock layout and its own window-scoped services. What decides where a service lives is
+lifetime, not subject matter. State that has to survive any individual window — and that two
+windows must agree on — lives in main, which outlives them all; the theme service is hosted there
+for exactly that reason. Whole-application data that no window owns — settings, menus, theme
+definitions, extension lifecycle — lives in the extension host, a single process shared by every
+window.
+
+Both of those outlive a window, so the distinction between them is not readable from what a service
+is *about*: the theme *definitions* are extension-host data while the theme *service* runs in main.
+The service tables below record where the app-global ones live; a window-scoped service is named for
+its window and lives in that window's renderer.
 
 ### Communication Patterns
 
