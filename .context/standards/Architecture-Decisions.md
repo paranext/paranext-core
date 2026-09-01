@@ -2448,38 +2448,67 @@ step, no automation. Just a record.
   deliberately not checked in — the numbers above are the durable part, and the parity suite in
   `grapheme-string.test.ts` is what guards the behavior.
 
-## adr-grapheme-segmenter-stringz: Grapheme segmentation uses `stringz`, which is emoji-aware but not UAX #29 conformant
+## adr-grapheme-segmenter-unicode-segmenter: Grapheme segmentation uses `unicode-segmenter`, the only candidate both UAX #29 conformant and as fast as `stringz`
 
-- **Date:** 2026-08-31
+- **Date:** 2026-09-01
 - **Status:** Accepted
 - **Context:** `GraphemeString` and the `string-util` wrappers describe their unit as the "grapheme
-  cluster" — what a reader would call a character. The segmenter behind that is `stringz`, and it is
-  not a UAX #29 implementation. Measured against `Intl.Segmenter`, which is conformant: `stringz`
-  correctly keeps ZWJ emoji sequences, skin-tone modifiers, regional-indicator flags, precomposed
-  Hangul syllables, and combining marks on Latin together as one cluster, but it splits four things
-  a conformant segmenter keeps whole — `\r\n` (rule GB3), Indic conjuncts formed with a virama
-  (Devanagari `क्षि` → 4, Tamil `நி` → 2, Bengali `ক্ত` → 3, all should be 1), Thai and other
-  spacing combining marks (`กำ` → 2), and Hangul written as decomposed Jamo (→ 3). Those are live
-  translation targets, and CRLF is every Windows-authored USFM file, so the divergence is not
-  theoretical.
-- **Decision:** Keep `stringz` and say plainly what it does. The class doc and the `string-util`
-  module note now name the four divergences rather than claiming conformance, and `stringLength`'s
-  doc says it overcounts for those scripts. The code is unchanged.
-- **Alternatives:** **Swap to `Intl.Segmenter`** — rejected for now on two grounds, one of which is
-  not about speed. It is ~10x slower on Latin text and 7.5x on emoji-heavy text (though only 2.1x on
-  Devanagari, where `stringz` does the most extra work), which alone would undo a large part of what
-  this module exists for. More decisively, a conformant segmenter makes `\r\n` a single cluster, and
-  this class only reports a search hit that begins and ends on a cluster boundary — so `'\n'` would
-  stop being a boundary-aligned separator and `split(text, '\n')` would return Windows-authored
-  input unsplit. `src/shared/utils/logger.utils.ts` does exactly that. The swap is a behavior change
-  to line splitting, not a drop-in correctness upgrade. **Ship a hybrid** — `Intl.Segmenter` with a
-  CRLF carve-out — rejected as premature: it reintroduces a hand-maintained deviation from the
-  standard, which is the thing the swap was supposed to fix.
-- **Consequences:** Any feature that must count or index characters correctly in Devanagari, Tamil,
-  Bengali, Thai, or decomposed Hangul cannot rely on this module today, and the docs now say so at
-  the three places a caller would look. Revisit if a translation feature needs conformant counts:
-  the work is a segmenter swap plus a decision about what `split` on `'\n'` should mean when `\r\n`
-  is one cluster, and it wants its own measurement pass rather than being folded into unrelated
-  work.
-- **Source:** PT-2626 review; divergences and timings measured directly against `Intl.Segmenter` on
-  2026-08-31.
+  cluster" — what a reader would call a character. Review flagged that the segmenter behind that,
+  `stringz`, mishandles some scripts. A dedicated evaluation found it worse than flagged: `stringz`
+  scores **65.8% on Unicode's own `GraphemeBreakTest.txt`** for Unicode 16 (28 of 56 corpus cases
+  across 30 writing systems), and it cannot count pointed Hebrew — `בְּרֵאשִׁית` (Genesis 1:1)
+  returns 11 where a reader counts 6. The root cause is structural and not patchable: `stringz`
+  delegates to `char-regex`, which hardcodes exactly five combining-mark ranges, all Latin or
+  general. Hebrew points, Arabic harakat, Devanagari marks, Thai, Khmer and Myanmar are all absent,
+  so every mark becomes its own character. That is also why `é` worked and almost nothing else did —
+  `U+0301` is in the first range. `stringz` was never a UAX #29 implementation; it is an emoji-aware
+  regex that happens to cover Latin.
+- **Decision:** Replace it with **`unicode-segmenter`** (`splitGraphemes` from
+  `unicode-segmenter/grapheme`). Pure JavaScript, zero dependencies, MIT, ~4KB gzipped, tracking
+  Unicode 17.0, 99.9% conformance and 56/56 corpus. Speed is a wash against `stringz` — 0.95x
+  geometric mean over 12 content mixes — and it is *faster* on exactly the scripts that were broken:
+  1.57x on decomposed Hangul, 1.40x on pointed Hebrew, 1.25x on Devanagari. It is slower on ASCII
+  (0.79x), CJK (0.75x) and surrogate-heavy text (0.72x); the worst case in absolute terms is +0.8ms
+  on a 100,000-character string. Only two call sites change, both taking
+  `Array.from(splitGraphemes(...))`: the constructor and the padding filler.
+- **Alternatives:** **`Intl.Segmenter`** — 100% conformant and needs no dependency, rejected at
+  0.18x (5.3x slower than the pick). **`graphemer`**, the ecosystem default at 46M downloads a week
+  — rejected: archived since September 2022, 0.07x, and it still fails every Indic conjunct. Its
+  popularity measures eslint's dependency graph, not its fitness. **The 99.4% / 51-of-56 cluster**
+  (`text-segmentation`, `graphemes`, `@stdlib`, `grapheme-breaker-mjs`) — rejected as a partial fix
+  easy to mistake for a complete one: they all predate Unicode 15.1's conjunct rule, so they fix
+  CRLF and Hangul but leave Devanagari and Bengali broken. **`@marijn/find-cluster-break`** — the
+  only faster candidate (1.13x), rejected because it breaks CRLF by design (85.5%).
+  **`cldr-segmentation`** — 100% conformant but quadratic, 8.7s at 100k. **WebAssembly** — not
+  blocked by policy (the WebView CSP already grants `'wasm-unsafe-eval'`) but structurally:
+  `GraphemeString`'s constructor is synchronous and WASM needs `await initialize()`; top-level
+  `await` is ESM-only while this package builds both ESM and CJS.
+  `@echogarden/icu-segmentation-wasm` is real ICU and 100% correct, but 31MB installed and slower
+  than the pure-JS pick at 0.62x. `intl-segmenter-polyfill-rs` is superlinear and aborts above ~50k.
+  **Native `unicode_segmentation`** — ships a single macOS-arm64 binary and will not load on Linux.
+  **Keep `stringz` and document its limits** — the earlier decision here, superseded: it framed the
+  choice as `stringz` versus `Intl.Segmenter` and concluded correctness cost ~10x, having never
+  considered a conformant non-`Intl` library.
+- **Consequences:** Counts are now correct for pointed Hebrew, vocalized Arabic and Syriac, Indic
+  conjuncts, Thai, and decomposed Hangul — the scripts this project translates into. Two behavioral
+  consequences follow from conformance, both worth knowing. **`\r\n` is a single cluster** (rule
+  GB3), and since searches only report boundary-aligned hits, `'\n'` is not findable inside it:
+  `split(text, '\n')` will not break Windows-style lines apart, and a regex matching the whole
+  terminator (`/\r?\n/`) is the correct separator. The one in-repo caller, `logger.utils.ts`, splits
+  a V8 stack trace, which is LF-separated. **ZWJ attaches to the preceding character** (rule GB9),
+  where `stringz` grouped it with the following one; a string ending in ZWJ + space therefore ends
+  in a whitespace-only cluster now, so `areUsjContentsEqualExceptWhitespace` trims that space where
+  it previously kept it. Deferred: `unicode-segmenter` exposes `countGraphemes`, which walks a
+  string without building the cluster array and would make `stringLength()` 6-8x cheaper — separable
+  from the correctness fix and not taken here. Residual risk: single maintainer and a smaller user
+  base than `graphemer`, mitigated by the library being small, dependency-free and table-driven, and
+  by every claim above being re-verifiable against the evaluation suite in one command. Note also
+  that Unicode 17 extended the Indic conjunct rule to Khmer, Myanmar, Balinese and Gujarati while
+  Node's bundled ICU 76 implements Unicode 16, so `unicode-segmenter` and `Intl.Segmenter` disagree
+  on Khmer — both correctly, for different Unicode versions.
+- **Source:** PT-2626 review follow-up. Evaluation of 14 candidates by Matthew Getgen scored two
+  independent ways — Unicode's official `GraphemeBreakTest.txt` at 15.1, 16.0 and 17.0, and a
+  56-case corpus across 30 writing systems — with timing from 100 to 1,000,000 UTF-16 code units on
+  Node 22.12 / ICU 76.1. Write-up: "Replacing stringz" artifact. Reproduction:
+  `~/repos/test/grapheme-segmentation`, `npm run all`. Memory, non-V8 engines and browser runtimes
+  were not measured.

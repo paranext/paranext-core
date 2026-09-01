@@ -529,6 +529,15 @@ describe('CRLF is a single cluster (UAX #29 GB3)', () => {
     expect(new GraphemeString('\n\n').toArray()).toEqual(['\n', '\n']);
   });
 
+  it('attaches a zero-width joiner to the character before it, not after', () => {
+    // Rule GB9. This is what makes a trailing ZWJ + space end in a whitespace-only cluster, which
+    // `areUsjContentsEqualExceptWhitespace` then trims.
+    expect(new GraphemeString('a\u200d ').toArray()).toEqual(['a\u200d', ' ']);
+    expect(new GraphemeString('a\u200d').toArray()).toEqual(['a\u200d']);
+    // A ZWJ between two pictographs still joins them into one cluster (rule GB11).
+    expect(new GraphemeString('\u{1F468}\u200d\u{1F469}').length).toEqual(1);
+  });
+
   it('does not find a bare line feed inside a CRLF, so splitting on it must use a regex', () => {
     // This is the one behavioral consequence of conformance worth pinning down: because searches
     // are boundary-aligned and `\r\n` is one cluster, `'\n'` is not a separator inside it.
