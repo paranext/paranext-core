@@ -1416,6 +1416,17 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
  * the clock on its own, independent 120 s wait on top of whatever the overall readiness budget
  * already spent getting here.
  */
+/**
+ * Matches the first-run gate's ERROR screen and nothing else.
+ *
+ * Both the error screen and a wizard step can show a `role="alert"`, so its mere presence says
+ * nothing. The difference is where it sits: the error screen puts the role on the container that
+ * WRAPS the dialog's heading, while a wizard step reporting its own problem renders the alert as a
+ * SIBLING of the shell's heading. Keying on presence alone therefore reads a stuck wizard as the
+ * error screen — which does offer a way out — and lets it pass as merely slow.
+ */
+export const TOP_LEVEL_ERROR_SELECTOR = '[role="alert"]:has(h1)';
+
 async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<void> {
   const start = Date.now();
   const firstRunDialog = page.getByTestId('first-run-dialog');
@@ -1431,7 +1442,7 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
   // it. The loading branch renders `role="status"` and no heading; the error branch renders a
   // heading AND `role="alert"`; the wizard renders a heading and neither.
   const dialogHeading = firstRunDialog.getByRole('heading', { level: 1 });
-  const errorRegion = firstRunDialog.locator('[role="alert"]');
+  const errorScreen = firstRunDialog.locator(TOP_LEVEL_ERROR_SELECTOR);
 
   // Each leg swallows its own timeout so the race reports what it SAW rather than rejecting: a
   // rejection makes the gate's ordinary loading flash a hard failure whenever the remaining budget
@@ -1451,7 +1462,7 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
       // with no alert beside it means the wizard.
       .then(
         async (): Promise<'wizard' | 'inconclusive'> =>
-          (await errorRegion.count()) === 0 ? 'wizard' : 'inconclusive',
+          (await errorScreen.count()) === 0 ? 'wizard' : 'inconclusive',
       )
       .catch(() => 'inconclusive' as const),
   ]);
