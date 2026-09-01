@@ -24,17 +24,19 @@ type SummarizableWindow = {
  * ordinal, a monitor name) is either meaningless to the user or unstable as windows open and move.
  *
  * @param windows Open windows, in the order the caller should present them
- * @param mainWindowId Window currently holding the primary role, or `undefined` if none does — the
- *   role belongs to a persisted entry, which can outlive the window that held it
+ * @param isPrimary Whether a window currently answers for the application's lifetime. Asked per
+ *   window rather than given as an id, because the answer does not always name the window the
+ *   persisted entry does: when no live window holds that entry, the role falls to one of the
+ *   windows that are open, and only the caller knows which
  * @returns One summary per window, in the order given
  */
 export function summarizeWindows(
   windows: readonly SummarizableWindow[],
-  mainWindowId: number | undefined,
+  isPrimary: (windowId: number) => boolean,
 ): WindowSummary[] {
   return windows.map((window) => ({
     windowId: window.id,
     label: window.wasEverReady ? window.getTitle() : '',
-    isMain: window.id === mainWindowId,
+    isMain: isPrimary(window.id),
   }));
 }

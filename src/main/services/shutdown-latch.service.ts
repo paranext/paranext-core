@@ -14,7 +14,6 @@
 import { areAllWindowsClosing } from '@main/services/window-state.service';
 import { AsyncVariable } from 'platform-bible-utils';
 
-let isQuitRequested = false;
 let shutdownTasksPromise: Promise<void> | undefined;
 
 /**
@@ -36,7 +35,6 @@ function makeQuitRequestedSignal(): AsyncVariable<void> {
 
 /** Record that the whole app is quitting, not just one window. Called from `before-quit`. */
 export function markQuitRequested(): void {
-  isQuitRequested = true;
   // Repeat calls are safe: settling an already-settled variable is a logged no-op, not a throw
   quitRequested.resolveToValue(undefined);
 }
@@ -55,7 +53,8 @@ export function whenQuitRequested(): Promise<void> {
  * the tracked-window count alone cannot distinguish them.
  */
 export function isAppQuitRequested(): boolean {
-  return isQuitRequested;
+  // Read from the latch rather than a flag kept beside it: one fact, so the two cannot drift
+  return quitRequested.hasSettled;
 }
 
 /**
@@ -170,7 +169,6 @@ export function runShutdownTasksOnce(performShutdownTasks: () => Promise<void>):
  * refuses to create a window during a quit for exactly this reason.
  */
 export function resetShutdownLatchesForNewSession(): void {
-  isQuitRequested = false;
   shutdownTasksPromise = undefined;
   quitRequested = makeQuitRequestedSignal();
 }

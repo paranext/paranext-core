@@ -108,7 +108,7 @@ describe('deciding what a window close means', () => {
   });
 
   describe('primary window alone', () => {
-    test('quits without asking, as it always has', async () => {
+    test('quits without asking', async () => {
       addWindow(fakeWindow(1));
       setPrimaryWindowId(1);
       const { confirm } = promptAnswering('cancel');
