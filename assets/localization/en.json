@@ -110,6 +110,7 @@
   "%mainMenu_feedbackForm_textArea%": "Submit an idea",
   "%mainMenu_file%": "File",
   "%mainMenu_help%": "Help",
+  "%mainMenu_helpInfo_showTourAgain%": "Show the tour again",
   "%mainMenu_helpInfo_visitFAQsPage%": "FAQs",
   "%mainMenu_helpInfo_visitFeatureRoadmapPage%": "Feature roadmap",
   "%mainMenu_helpInfo_visitGettingStartedPage%": "Getting started",

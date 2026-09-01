@@ -141,8 +141,8 @@ more than one window.
   which resolves the shard of whichever window a call should currently run in. There is no router
   factory: with one genuinely plain forward across the routers that have one, generating them costs
   more than it saves and gives up the free coverage the type annotation provides.
-- **A router may claim command or request names instead of a network object** — the dialog, Usersnap
-  and BookChapterControl routers do, as does the scripture navigation command module. There is no
+- **A router may claim command or request names instead of a network object** — the dialog, Usersnap,
+  BookChapterControl and onboarding tour routers do, as does the scripture navigation command module. There is no
   service interface to declare such a router as, so nothing type-checks the set of names it claims:
   each one pins that set with an exact-set test in `src/main/services/__tests__/`, and each states
   how it routes every command it claims so `assertCommandRoutingMatchesDocs`

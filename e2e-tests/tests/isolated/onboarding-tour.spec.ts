@@ -31,10 +31,12 @@
  *
  * ## Tour retrigger
  *
- * The tour only shows when `platform-bible.onboardingTourComplete` is absent from localStorage.
- * Because each test gets a fresh isolated user-data dir, localStorage starts empty — the tour
- * appears without any explicit clearing. Tests that verify the "does not show again" behaviour
- * advance all the way through the tour first to write the flag, then reload.
+ * The tour only shows _on its own_ when `platform-bible.onboardingTourComplete` is absent from
+ * localStorage. Because each test gets a fresh isolated user-data dir, localStorage starts empty —
+ * the tour appears without any explicit clearing. Tests that verify the "does not show again"
+ * behaviour advance all the way through the tour first to write the flag, then reload. Help > Show
+ * the tour again (`platform.showOnboardingTour`) is the one path that reopens it regardless of the
+ * flag.
  */
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/isolated.fixture';
@@ -231,5 +233,24 @@ test.describe('Onboarding tour', () => {
     await mainPage.reload();
     await waitForAppReadyWithTour(mainPage);
     await expect(dialog).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('Help > Show the tour again reopens the completed tour at its first stop', async ({
+    mainPage,
+  }) => {
+    await waitForAppReadyWithTour(mainPage);
+
+    const dialog = getTourDialog(mainPage);
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+    // Skipping records completion, so nothing but the menu item can bring the tour back.
+    await skipTour(mainPage);
+    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+
+    await mainPage.getByRole('menuitem', { name: /^Help$/i }).click();
+    await mainPage.getByRole('menuitem', { name: /Show the tour again/i }).click();
+
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
+    expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
   });
 });

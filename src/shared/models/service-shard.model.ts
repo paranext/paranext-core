@@ -29,6 +29,9 @@ export const USERSNAP_SERVICE_SHARD_OBJECT_TYPE = 'usersnapServiceShard';
 /** Network object type the BookChapterControl service shard registers under, one per window */
 export const BOOK_CHAPTER_CONTROL_SERVICE_SHARD_OBJECT_TYPE = 'bookChapterControlServiceShard';
 
+/** Network object type the onboarding tour service shard registers under, one per window */
+export const ONBOARDING_TOUR_SERVICE_SHARD_OBJECT_TYPE = 'onboardingTourServiceShard';
+
 /**
  * Network object type the window service shard registers under, one per window. It is a data
  * provider rather than a plain network object, which changes nothing about discovery:

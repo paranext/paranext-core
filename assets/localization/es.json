@@ -226,6 +226,7 @@
   "%mainMenu_feedbackForm_textArea%": "Enviar una idea",
   "%mainMenu_file%": "Archivo",
   "%mainMenu_help%": "Ayuda",
+  "%mainMenu_helpInfo_showTourAgain%": "Mostrar el recorrido de nuevo",
   "%mainMenu_helpInfo_visitFAQsPage%": "Preguntas frecuentes",
   "%mainMenu_helpInfo_visitFeatureRoadmapPage%": "Hoja de ruta de características",
   "%mainMenu_helpInfo_visitGettingStartedPage%": "Primeros pasos",

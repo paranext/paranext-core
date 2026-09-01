@@ -5127,6 +5127,13 @@ declare module 'papi-shared-types' {
     /** Call close function for Usersnap forms known to the application */
     'platform.closeOpenUsersnapForm': () => Promise<void>;
     /**
+     * Show the Simple-mode orientation tour again from its first stop, in the window the user is
+     * working in. Does nothing visible in Power mode, where the tour has nothing to point at.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.showOnboardingTour': () => Promise<void>;
+    /**
      * Navigate the active scroll group to the next chapter (rolls into the next book)
      *
      * @experimental This command is unstable and may change or disappear without notice
