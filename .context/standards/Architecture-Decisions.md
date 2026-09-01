@@ -2692,10 +2692,10 @@ step, no automation. Just a record.
   script is therefore plain Node importing only the standard library, since no devDependency exists
   yet. It is wired to `preinstall` so an existing checkout re-stages on every install, but a fresh
   clone needs `npm run stage-dev-packages` first: npm reads the `file:` targets' manifests from the
-  on-disk state it saw at startup, so folders created during `preinstall` come too late for that
-  same run — workspace lifecycle scripts execute before the links exist, and `extensions`'
-  `postinstall` fails resolving the editor through `platform-bible-utils`. CI workflows stage
-  explicitly; a forgotten first run stops with an instruction rather than a resolution error.
+  on-disk state it saw at startup, and in a workspace repo it runs the root's `preinstall` only
+  after the workspaces' own install scripts — so `extensions`' `postinstall` fails resolving the
+  editor through `platform-bible-utils` before staging ever runs. Every workflow stages explicitly
+  before `npm ci`.
   pnpm `workspace:` specifiers are rewritten to `file:` paths at the sibling staged package, keeping
   the whole graph on the build we just made. yalc is removed.
 - **Alternatives:** **Keep yalc, declare the editor's dependencies here** — rejected: correct, but

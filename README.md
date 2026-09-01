@@ -201,14 +201,14 @@ Running `npm install` in `paranext-core` builds development versions of the npm 
 
 This means `scripture-editors` is free to add, bump, or drop its own dependencies without this repo restating them, and nothing here resolves the editor from the npm registry.
 
-**On a brand-new clone, stage before installing:**
+**Stage before installing on a new clone:**
 
 ```bash
 npm run stage-dev-packages
 npm install
 ```
 
-npm reads the `file:` targets' manifests from the on-disk state it saw when it started, so folders created during its own `preinstall` hook arrive too late for that same run. Staging is still wired to `preinstall`, so an existing checkout re-stages on every install and you never think about this again — it just cannot bootstrap a fresh clone in one pass. If you forget, the install stops and tells you to run it again; the second run succeeds. Staging is a copy of exactly the files the package would publish rather than a link to the source folder: the source lives in a pnpm workspace whose per-package `node_modules` holds its own `react` and `lexical`, and linking straight to it would bind the editor to those copies instead of ours.
+npm reads the `file:` targets' manifests from the on-disk state it saw when it started, and in a workspace repo it runs the root's `preinstall` only after the workspaces' own install scripts — so on a fresh clone `extensions`' `postinstall` fails resolving the editor before staging ever runs. Staging is still wired to `preinstall`, so an existing checkout re-stages on every install and you never think about this again; it just cannot bootstrap a clone from nothing. If you forget, `npm install` fails with `Cannot find module '@eten-tech-foundation/scripture-utilities'` — run the two commands above and it will succeed. Staging is a copy of exactly the files the package would publish rather than a link to the source folder: the source lives in a pnpm workspace whose per-package `node_modules` holds its own `react` and `lexical`, and linking straight to it would bind the editor to those copies instead of ours.
 
 `scripture-editors` is maintained by this team at [`paranext/scripture-editors`](https://github.com/paranext/scripture-editors). It was previously developed at `eten-tech-foundation/scripture-editors`; that repository still exists and is reachable as a remote, but development happens in the paranext organization. If you have an older checkout whose `origin` still points at `eten-tech-foundation`, `npm install` will stop and tell you exactly how to re-point it — it preserves the old URL as a second remote rather than overwriting it.
 

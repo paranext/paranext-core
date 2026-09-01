@@ -7,25 +7,14 @@
  * into this repo's tree, so the editor is free to add, bump, or drop dependencies without any
  * consumer restating them.
  *
- * **Run this before `npm install`, not only as its `preinstall` hook.** npm reads the `file:`
- * targets' manifests from the on-disk state it saw at startup, so folders this script creates
- * during `preinstall` come too late for that same run: workspace lifecycle scripts execute before
- * the links are in place, and `extensions`' `postinstall` fails resolving the editor through
- * `platform-bible-utils`. It is still wired to `preinstall` so an existing checkout re-stages on
- * every install; it just cannot bootstrap a fresh one in a single pass, and says so rather than
- * letting npm fail confusingly.
- *
- * A staged copy is required rather than a `file:` pointer straight at the source package: the
- * source lives in a pnpm workspace whose per-package `node_modules` holds its own `react`,
- * `react-dom`, and `lexical`. Node resolves a linked package through its real path, so pointing at
- * the source would bind the editor to those copies instead of ours — duplicate React (invalid hook
- * calls) and duplicate Lexical (every cross-boundary `instanceof` node check fails). The staged
- * copy contains only the files `npm pack` would publish, so it has no `node_modules` and resolves
- * up into this repo's tree.
- *
- * This file is plain Node — it uses `require` and imports nothing outside the standard library —
- * because `preinstall` runs before `node_modules` exists, so `ts-node`, `tsx`, and every other
- * devDependency are unavailable. Node strips the type annotations natively.
+ * **Run this before `npm install`; do not rely on the `preinstall` hook alone.** npm reads the
+ * `file:` targets' manifests from the on-disk state it saw at startup, and in a workspace repo it
+ * runs the root's `preinstall` only after the workspaces' own install scripts — so on a fresh clone
+ * `extensions`' `postinstall` fails resolving the editor through `platform-bible-utils` before this
+ * script ever runs. The hook is still wired up because it keeps an existing checkout's staged
+ * copies current on every install; it simply cannot bootstrap one from nothing. Every workflow here
+ * stages explicitly before `npm ci`, and the README tells developers to do the same on a new
+ * clone.
  */
 
 const { execSync } = require('child_process');
@@ -292,10 +281,6 @@ function stagePackage(
 function stageDevPackages(): void {
   console.log('Staging dev packages for file: consumption...');
 
-  // npm resolved its tree before this hook ran, so if the staged folders are only appearing now,
-  // this install cannot use them — see the note at the top of this file.
-  const bootstrapping = !fs.existsSync(STAGING_ROOT);
-
   try {
     DEV_REPOS.forEach((repo) => {
       cloneRepoIfNeeded(repo);
@@ -321,13 +306,6 @@ function stageDevPackages(): void {
     });
 
     console.log('Successfully staged dev packages');
-
-    if (bootstrapping && process.env.npm_lifecycle_event === 'preinstall') {
-      console.error(
-        '\nThe dev packages were staged for the first time, but npm had already resolved its\ndependency tree without them, so this install cannot link them. Nothing is wrong —\njust run the same install command again and it will succeed.\n',
-      );
-      process.exit(1);
-    }
   } catch (error) {
     console.error('Error: Failed to stage dev packages.');
     console.error('Error object:', error);
