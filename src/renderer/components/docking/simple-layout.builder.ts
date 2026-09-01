@@ -126,7 +126,22 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
  * Scripture Editor placeholder after the layout swap (the slower path, but a valid fallback).
  */
 export function buildSimpleLayoutForProject(projectId: string): LayoutBase {
-  const cloned = deepClone(simpleLayout);
+  return applyProjectIdToTabs(simpleLayout, projectId);
+}
+
+/**
+ * Writes `projectId` into every tab's saved web-view data in `layout`, returning a clone; `layout`
+ * is never mutated.
+ *
+ * This is the bake {@link buildSimpleLayoutForProject} applies to the static {@link simpleLayout},
+ * exposed separately for the one layout the static one doesn't describe: default-layout supplement
+ * tabs come from JSON carrying no `projectId` and are merged in _after_ that bake has run, so a
+ * supplement tab would otherwise load with no project and its project-bound controls would stay
+ * inert. Re-baking the merged layout reaches them; any `projectId` already on a tab is
+ * overwritten.
+ */
+export function applyProjectIdToTabs(layout: LayoutBase, projectId: string): LayoutBase {
+  const cloned = deepClone(layout);
   visitTabs(cloned, (tab) => {
     if (!isObjectRecord(tab.data)) return;
     tab.data.projectId = projectId;

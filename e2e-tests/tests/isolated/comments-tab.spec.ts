@@ -57,9 +57,10 @@ import {
 const DEFAULT_WEBSOCKET_PORT = 8876;
 const SETTINGS_TIMEOUT_MS = 60_000;
 /**
- * `openScriptureEditor` triggers `openOrUpdateRelatedPanels`, which sequentially awaits four PAPI
- * commands. Each command opens a panel and can take several seconds; the combined response can
- * exceed the default 30 s PAPI request timeout. Use a generous timeout.
+ * `openScriptureEditor` triggers `openOrUpdateRelatedPanels`, which sequentially awaits five PAPI
+ * commands (four for a read-only resource). Each command opens a panel and can take several
+ * seconds; the combined response can exceed the default 30 s PAPI request timeout. Use a generous
+ * timeout.
  */
 const OPEN_EDITOR_TIMEOUT_MS = 150_000;
 
@@ -253,11 +254,11 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await createCommentThreads(project, ['GEN 1:1'], ['Visible comment for PT-4068 test']);
 
     // Point the panel at the test project. We call openCommentListPanel directly rather than
-    // going through openScriptureEditor/openOrUpdateRelatedPanels: the latter triggers three
-    // concurrent dock rebuilds (model text + two resource text panels) that call getWebView for
-    // the comment list panel while the sentinel is in flight, occasionally overwriting it with
-    // the previously-open developer project. Calling directly here is safe because
-    // waitForSimpleLayout already confirmed the dock is stable (overlay gone).
+    // going through openScriptureEditor/openOrUpdateRelatedPanels: the latter triggers four
+    // concurrent dock rebuilds (model text, two resource text panels, and the Scripture Text Grid)
+    // that call getWebView for the comment list panel while the sentinel is in flight,
+    // occasionally overwriting it with the previously-open developer project. Calling directly
+    // here is safe because waitForSimpleLayout already confirmed the dock is stable (overlay gone).
     await waitForPapiMethodRegistered(
       'command:legacyCommentManager.openCommentListPanel',
       DEFAULT_WEBSOCKET_PORT,

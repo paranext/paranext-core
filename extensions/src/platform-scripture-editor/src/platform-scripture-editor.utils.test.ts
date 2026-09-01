@@ -29,6 +29,7 @@ import {
   resolveAddChapterNumberClick,
   isMissingBookError,
   isMissingBookOnScreen,
+  openOrUpdateRelatedPanels,
   parseMissingBookError,
   resolveResourceContentState,
 } from './platform-scripture-editor.utils';
@@ -3265,3 +3266,115 @@ describe('formatEditorTitle', () => {
     expect(title).toBe('My Project (Read-only)');
   });
 });
+
+// #region openOrUpdateRelatedPanels
+
+/** Papi mock exposing only what `openOrUpdateRelatedPanels` touches: sendCommand and logger.warn. */
+function createRelatedPanelsMockPapi() {
+  const mockSendCommand = vi.fn().mockResolvedValue(undefined);
+  const mockWarn = vi.fn();
+  // Must cast since the mock only includes the papi properties openOrUpdateRelatedPanels uses.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const papi = {
+    commands: { sendCommand: mockSendCommand },
+    logger: { warn: mockWarn },
+  } as unknown as typeof PapiBackend;
+  return { papi, mockSendCommand, mockWarn };
+}
+
+/** The command names fired for one project switch, in the order they were sent. */
+function sentCommandNames(mockSendCommand: ReturnType<typeof vi.fn>): string[] {
+  return mockSendCommand.mock.calls.map(([commandName]) => commandName);
+}
+
+describe('openOrUpdateRelatedPanels', () => {
+  it('re-points the Scripture Text Grid at the project alongside the other related panels', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi();
+
+    await openOrUpdateRelatedPanels(papi, 'proj-1', true);
+
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.repointScriptureTextGrid',
+      'proj-1',
+    );
+  });
+
+  it('fires every related-panel command for one project switch', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi();
+
+    await openOrUpdateRelatedPanels(papi, 'proj-1', true);
+
+    expect(sentCommandNames(mockSendCommand)).toEqual(
+      expect.arrayContaining([
+        'platformScriptureEditor.openModelText',
+        'platformScriptureEditor.openResourceText',
+        'legacyCommentManager.openCommentListPanel',
+        'platformScriptureEditor.repointScriptureTextGrid',
+      ]),
+    );
+  });
+
+  it('still fires the grid command when an earlier panel command fails', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi();
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openModelText')
+        throw new Error('model text panel failed');
+    });
+
+    await openOrUpdateRelatedPanels(papi, 'proj-1', true);
+
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'platformScriptureEditor.repointScriptureTextGrid',
+      'proj-1',
+    );
+  });
+
+  it('logs a warning and keeps the other panels when the grid command fails', async () => {
+    const { papi, mockSendCommand, mockWarn } = createRelatedPanelsMockPapi();
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.repointScriptureTextGrid')
+        throw new Error('grid failed');
+    });
+
+    await expect(openOrUpdateRelatedPanels(papi, 'proj-1', true)).resolves.toBeUndefined();
+
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('grid failed'));
+    expect(sentCommandNames(mockSendCommand)).toEqual(
+      expect.arrayContaining([
+        'platformScriptureEditor.openModelText',
+        'platformScriptureEditor.openResourceText',
+        'legacyCommentManager.openCommentListPanel',
+      ]),
+    );
+  });
+
+  it('resolves without throwing when every panel command fails', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi();
+    mockSendCommand.mockRejectedValue(new Error('everything is down'));
+
+    await expect(openOrUpdateRelatedPanels(papi, 'proj-1', true)).resolves.toBeUndefined();
+  });
+
+  // A text collection is built from an editable project's settings, so opening a read-only
+  // resource in the editor column must leave the grid pointed where it was.
+  it('leaves the Scripture Text Grid alone for a read-only resource', async () => {
+    const { papi, mockSendCommand } = createRelatedPanelsMockPapi();
+
+    await openOrUpdateRelatedPanels(papi, 'resource-1', false);
+
+    expect(sentCommandNames(mockSendCommand)).not.toContain(
+      'platformScriptureEditor.repointScriptureTextGrid',
+    );
+    // The other Column 3 panels follow the editor either way, so a read-only open still re-points
+    // those.
+    expect(sentCommandNames(mockSendCommand)).toEqual(
+      expect.arrayContaining([
+        'platformScriptureEditor.openModelText',
+        'platformScriptureEditor.openResourceText',
+        'legacyCommentManager.openCommentListPanel',
+      ]),
+    );
+  });
+});
+
+// #endregion openOrUpdateRelatedPanels

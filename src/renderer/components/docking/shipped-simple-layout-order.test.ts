@@ -4,6 +4,7 @@ import { readdirSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { simpleLayout } from './simple-layout.data';
+import { applyProjectIdToTabs, buildSimpleLayoutForProject } from './simple-layout.builder';
 import defaultLayoutSupplement from './default-layout-supplement.json';
 import { mergeDefaultLayoutSupplement } from './default-layout-supplement.util';
 import { DefaultLayoutSupplementEntry } from './default-layout-supplement.model';
@@ -259,5 +260,28 @@ describe('shipped Simple-mode Column 3 order', () => {
     expect(anomalies[0]).toContain('platformScripture.findTypo');
     // Still appended — the fallback is intentional; it just is no longer silent.
     expect(columnWebViewTypes(merged, 2).at(-1)).toBe('platformScriptureEditor.scriptureTextGrid');
+  });
+
+  it('bakes the project id into the merged supplement tab, not just the static tabs', () => {
+    // Runs the bake over the entries actually shipped in `default-layout-supplement.json`, so a
+    // new entry whose tab the bake cannot reach (no `data` payload) fails here rather than in the
+    // app. The bake itself is covered by `simple-layout.builder.test.ts`.
+    const merged = mergeDefaultLayoutSupplement(
+      buildSimpleLayoutForProject('proj-1'),
+      supplementEntries,
+      'simple',
+    );
+
+    const baked = applyProjectIdToTabs(merged, 'proj-1');
+
+    columnTabs(baked, 2).forEach((tab) => {
+      // Narrow only the field we read.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((tab.data as { projectId?: string }).projectId).toBe('proj-1');
+    });
+    const gridTab = columnTabs(baked, 2).find(
+      (tab) => webViewTypeOf(tab) === 'platformScriptureEditor.scriptureTextGrid',
+    );
+    expect(gridTab).toBeDefined();
   });
 });

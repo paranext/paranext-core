@@ -1192,10 +1192,14 @@ export async function finalizeProjectSwitch(
  *
  * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for
+ * @param isProjectEditable Whether `projectId` names an editable translation project rather than a
+ *   read-only resource opened in the editor column. Only the Scripture Text Grid honors it; the
+ *   other Column 3 panels follow the editor either way.
  */
 export async function openOrUpdateRelatedPanels(
   papi: typeof PapiBackend,
   projectId: string,
+  isProjectEditable: boolean,
 ): Promise<void> {
   try {
     await papi.commands.sendCommand('platformScriptureEditor.openModelText', projectId);
@@ -1224,6 +1228,18 @@ export async function openOrUpdateRelatedPanels(
     await papi.commands.sendCommand('legacyCommentManager.openCommentListPanel', projectId);
   } catch (e) {
     papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
+  }
+  // A text collection is built from an editable project's settings, so a read-only resource opened
+  // in the editor column must not re-point it.
+  if (isProjectEditable) {
+    try {
+      await papi.commands.sendCommand(
+        'platformScriptureEditor.repointScriptureTextGrid',
+        projectId,
+      );
+    } catch (e) {
+      papi.logger.warn(`Error re-pointing scripture text grid panel: ${getErrorMessage(e)}`);
+    }
   }
 }
 

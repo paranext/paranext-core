@@ -78,9 +78,9 @@ const SCRIPTURE_EDITOR_SLOT_UUID = '3cf575f0-2cc2-464b-8765-b588f216dfce';
 const BIBLE_TEXTS_PANEL_UUID = '27616073-bf60-4f2b-9518-922d1a7d3601';
 
 /**
- * `openScriptureEditor` sequentially awaits the four `openOrUpdateRelatedPanels` commands, each of
- * which opens or re-points a Column 3 panel, so the combined response routinely exceeds the default
- * 30 s PAPI request timeout.
+ * `openScriptureEditor` sequentially awaits the `openOrUpdateRelatedPanels` commands — five for an
+ * editable project, four for a read-only resource — each of which opens or re-points a Column 3
+ * panel, so the combined response routinely exceeds the default 30 s PAPI request timeout.
  */
 const OPEN_EDITOR_TIMEOUT_MS = 150_000;
 

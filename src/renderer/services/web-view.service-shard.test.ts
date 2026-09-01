@@ -195,42 +195,53 @@ vi.mock('@renderer/services/workspace-updating-store', async (importOriginal) =>
 // matching anchor to attach the mocked supplement's `SUPPLEMENT_TAB_ID` tab to (see the merge tests
 // below) - the merge/filter logic itself is real production code, only the supplement's own
 // content is mocked.
-const { buildSimpleLayoutForProjectMock, simpleLayoutTabIdsMock, visibleSimpleLayoutTabIdsMock } =
-  vi.hoisted(() => {
-    // Mutable (not frozen empty) so individual tests can populate it to exercise logic keyed off
-    // real Simple-mode tab ids, while defaulting to empty for every other test (matching real
-    // SIMPLE_LAYOUT_TAB_IDS's/VISIBLE_SIMPLE_LAYOUT_TAB_IDS's shape without needing to know their
-    // actual values). Declared as their own explicitly-typed variables (rather than an inline
-    // `[] as string[]`) so the array's element type doesn't need a type assertion.
-    const simpleLayoutTabIds: string[] = [];
-    const visibleSimpleLayoutTabIds: string[] = [];
-    return {
-      buildSimpleLayoutForProjectMock: vi.fn((projectId: string) => ({
-        dockbox: {
-          mode: 'horizontal' as const,
-          children: [
-            {
-              mode: 'vertical' as const,
-              children: [
-                {
-                  tabs: [
-                    {
-                      id: 'bible-texts-tab',
-                      data: { webViewType: 'platformScriptureEditor.bibleTexts' },
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-        builtForProjectId: projectId,
-      })),
-      simpleLayoutTabIdsMock: simpleLayoutTabIds,
-      visibleSimpleLayoutTabIdsMock: visibleSimpleLayoutTabIds,
-    };
-  });
+const {
+  applyProjectIdToTabsMock,
+  buildSimpleLayoutForProjectMock,
+  simpleLayoutTabIdsMock,
+  visibleSimpleLayoutTabIdsMock,
+} = vi.hoisted(() => {
+  // Mutable (not frozen empty) so individual tests can populate it to exercise logic keyed off
+  // real Simple-mode tab ids, while defaulting to empty for every other test (matching real
+  // SIMPLE_LAYOUT_TAB_IDS's/VISIBLE_SIMPLE_LAYOUT_TAB_IDS's shape without needing to know their
+  // actual values). Declared as their own explicitly-typed variables (rather than an inline
+  // `[] as string[]`) so the array's element type doesn't need a type assertion.
+  const simpleLayoutTabIds: string[] = [];
+  const visibleSimpleLayoutTabIds: string[] = [];
+  return {
+    // Identity stand-in for the projectId bake. What matters at this seam is only that the shard
+    // routes the *merged* layout through it; what the bake writes is covered directly by
+    // `simple-layout.builder.test.ts`.
+    applyProjectIdToTabsMock: vi.fn<(layout: unknown, projectId: string) => unknown>(
+      (layout) => layout,
+    ),
+    buildSimpleLayoutForProjectMock: vi.fn((projectId: string) => ({
+      dockbox: {
+        mode: 'horizontal' as const,
+        children: [
+          {
+            mode: 'vertical' as const,
+            children: [
+              {
+                tabs: [
+                  {
+                    id: 'bible-texts-tab',
+                    data: { webViewType: 'platformScriptureEditor.bibleTexts' },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      builtForProjectId: projectId,
+    })),
+    simpleLayoutTabIdsMock: simpleLayoutTabIds,
+    visibleSimpleLayoutTabIdsMock: visibleSimpleLayoutTabIds,
+  };
+});
 vi.mock('@renderer/components/docking/simple-layout.builder', () => ({
+  applyProjectIdToTabs: applyProjectIdToTabsMock,
   buildSimpleLayoutForProject: buildSimpleLayoutForProjectMock,
   SIMPLE_LAYOUT_TAB_IDS: simpleLayoutTabIdsMock,
   VISIBLE_SIMPLE_LAYOUT_TAB_IDS: visibleSimpleLayoutTabIdsMock,
@@ -801,6 +812,37 @@ describe('handleSwitchToSimpleMode', () => {
     };
     const bibleTextsPanelTabs = loadedLayout.dockbox.children[0].children[0].tabs;
     expect(bibleTextsPanelTabs.map((tab) => tab.id)).toContain(SUPPLEMENT_TAB_ID);
+  });
+
+  it('fast path: bakes the project id into the layout after the supplement is merged in', async () => {
+    // The bake has to run over the merged layout, not the pre-merge one, or the supplement tab
+    // loads with no project — see `applyProjectIdToTabs`.
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    settingsGetMock.mockImplementation(async (key: string) => {
+      if (key === 'platform.interfaceMode') return 'simple';
+      if (key === SUPPLEMENT_FLAG_SETTING) return true;
+      return false;
+    });
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-supplement' });
+
+    await host.handleSwitchToSimpleMode();
+
+    const { lastCall } = applyProjectIdToTabsMock.mock;
+    expect(lastCall).toBeDefined();
+    const [bakedLayoutArg, bakedProjectId] = lastCall ?? [];
+    expect(bakedProjectId).toBe('proj-supplement');
+    // The layout handed to the bake must already contain the supplement tab. Its shape is dynamic —
+    // narrow only the fields this test reads.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const bakedLayout = bakedLayoutArg as {
+      dockbox: { children: { children: { tabs: { id: string }[] }[] }[] };
+    };
+    expect(bakedLayout.dockbox.children[0].children[0].tabs.map((tab) => tab.id)).toContain(
+      SUPPLEMENT_TAB_ID,
+    );
   });
 
   it('fast path: does not merge a disabled default-layout supplement entry', async () => {

@@ -7763,6 +7763,18 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     resourceType?: ResourceType | ResourceType[];
     /** IDs of resources already selected in the calling panel */
     selectedResourceIds?: string[];
+    /**
+     * Already-localized sentence shown above the resource list explaining something the caller knows
+     * that limits what picking a resource will do. Shown ahead of any explanation the dialog itself
+     * has for an incomplete list.
+     */
+    notice?: string;
+    /**
+     * When false, resources already installed on this computer are shown but cannot be picked. Use it
+     * when the caller can act on a resource that still needs installing but has nothing to do with
+     * one that is already on disk. Defaults to true.
+     */
+    allowSelectingInstalled?: boolean;
   };
   /**
    * Options to provide when showing the Project Picker dialog (no extra options needed)

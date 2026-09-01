@@ -106,8 +106,10 @@ test.describe('Scripture Text Grid — View Options panel', () => {
     await expect(grid.getByText('Coming soon')).toHaveCount(0);
 
     // TEXTS section header and the Get Resources button are always present (the list itself is empty
-    // without a bound project).
+    // without a bound project). Get Resources also stays enabled without one: browsing and
+    // installing resources needs no project, so only the controls that persist to a text collection
+    // are disabled.
     await expect(grid.getByText('Texts')).toBeVisible();
-    await expect(grid.getByRole('button', { name: 'Get resources…' })).toBeVisible();
+    await expect(grid.getByRole('button', { name: 'Get resources…' })).toBeEnabled();
   });
 });

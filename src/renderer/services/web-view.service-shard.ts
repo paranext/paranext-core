@@ -116,6 +116,7 @@ import withWindowScopedWebViewIds, {
 import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
+  applyProjectIdToTabs,
   buildSimpleLayoutForProject,
   SIMPLE_LAYOUT_EDITOR_TAB_ID,
   SIMPLE_LAYOUT_TAB_IDS,
@@ -1656,17 +1657,21 @@ async function runProjectBoundSimpleSwitch(projectId: string, generation: number
     // an enabled supplement tab (e.g. Scripture Text Grid) shows on a cold Simple start but
     // disappears after every Power -> Simple switch.
     const enabledEntries = await getEnabledSupplementEntries();
+    // Re-bake after the merge so supplement tabs get the project too — see `applyProjectIdToTabs`.
     const layoutToLoad =
       enabledEntries.length === 0
         ? projectBoundLayout
-        : mergeDefaultLayoutSupplement(
-            projectBoundLayout,
-            enabledEntries,
-            'simple',
-            (entry, message) =>
-              logger.warn(
-                `mergeDefaultLayoutSupplement: supplement tab '${entry.tab.id}': ${message}`,
-              ),
+        : applyProjectIdToTabs(
+            mergeDefaultLayoutSupplement(
+              projectBoundLayout,
+              enabledEntries,
+              'simple',
+              (entry, message) =>
+                logger.warn(
+                  `mergeDefaultLayoutSupplement: supplement tab '${entry.tab.id}': ${message}`,
+                ),
+            ),
+            projectId,
           );
     // Re-check right before the mutating load: a newer switch (the user changing their mind) may
     // have started and become current during the awaits above. A superseded switch must never

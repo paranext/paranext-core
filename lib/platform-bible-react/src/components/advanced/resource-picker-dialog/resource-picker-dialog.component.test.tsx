@@ -64,6 +64,33 @@ describe('ResourcePickerDialog', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it('selects an installed resource by default', () => {
+    const { onSelect } = renderDialog();
+    const esvRow = screen.getByText('ESV').closest('tr');
+    if (!esvRow) throw new Error('ESV row not found');
+    fireEvent.click(esvRow);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'installed-1' }));
+  });
+
+  it('does not select an installed resource when allowSelectingInstalled is false', () => {
+    const { onSelect } = renderDialog({ allowSelectingInstalled: false });
+    const esvRow = screen.getByText('ESV').closest('tr');
+    if (!esvRow) throw new Error('ESV row not found');
+    fireEvent.click(esvRow);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(esvRow.className).toContain('pointer-events-none');
+  });
+
+  // Only the Installed section is affected — a caller that cannot use an on-disk resource can
+  // still install a new one, which is the whole point of leaving the picker open.
+  it('still selects a downloadable resource when allowSelectingInstalled is false', () => {
+    const { onSelect } = renderDialog({ allowSelectingInstalled: false });
+    const nltRow = screen.getByText('NLT').closest('tr');
+    if (!nltRow) throw new Error('NLT row not found');
+    fireEvent.click(nltRow);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ installed: false }));
+  });
+
   it('allows selecting an already-selected resource when allowDeselect is true', () => {
     const { onSelect } = renderDialog({ allowDeselect: true });
     const nivText = screen.getByText('NIV');
@@ -161,6 +188,46 @@ describe('ResourcePickerDialog', () => {
   it('shows no Already Selected section when selectedResourceIds is empty', () => {
     renderDialog({ selectedResourceIds: [] });
     expect(screen.queryByText('Already selected')).not.toBeInTheDocument();
+  });
+
+  it('renders a notice above the resource list when one is provided', () => {
+    renderDialog({ notice: 'Only resources already on this computer are shown.' });
+    expect(
+      screen.getByText('Only resources already on this computer are shown.'),
+    ).toBeInTheDocument();
+  });
+
+  // Assistive tech announces mutations to a live region already in the accessibility tree, so the
+  // region has to outlive the notice it carries rather than appear along with it.
+  it('keeps the notice live region mounted and empty when there is no notice', () => {
+    renderDialog();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('puts the notice inside that same live region', () => {
+    renderDialog({ notice: 'Only resources already on this computer are shown.' });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Only resources already on this computer are shown.',
+    );
+    // `Alert` carries an assertive role of its own, which would nest a second live region inside
+    // the polite one and announce the notice twice.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('still renders the resource list when a notice is shown', () => {
+    renderDialog({ notice: 'Only resources already on this computer are shown.' });
+    expect(screen.getByText('ESV')).toBeInTheDocument();
+    expect(screen.getByText('Available to download')).toBeInTheDocument();
+  });
+
+  it('still renders the no-results message when a notice is shown', () => {
+    renderDialog({ notice: 'Only resources already on this computer are shown.' });
+    const searchInput = screen.getByPlaceholderText('Search resources…');
+    fireEvent.change(searchInput, { target: { value: 'zzznomatch' } });
+    expect(screen.getByText('No results found')).toBeInTheDocument();
+    expect(
+      screen.getByText('Only resources already on this computer are shown.'),
+    ).toBeInTheDocument();
   });
 
   it('renders only the first 50 "Available to Download" resources when there are more than 50', () => {

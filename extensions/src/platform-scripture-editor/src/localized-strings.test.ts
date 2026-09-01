@@ -9,6 +9,7 @@ import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.c
 import { RESOURCE_CELL_STRING_KEYS } from './scripture-text-grid/resource-cell.const';
 import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
 import { RESOURCE_PANEL_TYPED_STRING_KEYS } from './resource-panel-strings.utils';
+import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-options-notice.utils';
 
 type LocalizedStringsFile = {
   metadata?: Record<string, { fallbackKey?: string }>;
@@ -240,6 +241,22 @@ describe.each([...MODEL_TEXT_PANEL_STRING_KEYS])('model text panel label %s', (k
 // The Scripture Text Grid cell's status and action labels, likewise driven off the component's own
 // exported key list.
 describe.each([...RESOURCE_CELL_STRING_KEYS])('resource cell label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The View Options notices, which the grid web view shows outside the panel itself — in the
+// resource picker and in a notification — so they are not covered by any panel's key list.
+describe.each([...VIEW_OPTIONS_NOTICE_STRING_KEYS])('view options notice %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();
   });

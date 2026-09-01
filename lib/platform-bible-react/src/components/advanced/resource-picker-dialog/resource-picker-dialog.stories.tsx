@@ -65,6 +65,39 @@ export const EmptyAlreadySelected: Story = {
   },
 };
 
+/**
+ * `notice` explains why the list may be short — an unreachable online catalog, or something the
+ * calling panel knows. The text arrives already localized; the dialog only renders it.
+ */
+export const WithNotice: Story = {
+  args: {
+    notice:
+      "Can't reach the Digital Bible Library right now, so only resources already on this computer are shown.",
+  },
+};
+
+/** A notice sits above the list, so it stays readable when the list itself has nothing to show. */
+export const NoticeWithNoResults: Story = {
+  args: {
+    allResources: [],
+    notice:
+      "Can't load the resource list right now. Check your internet connection, then close and reopen this window.",
+  },
+};
+
+/**
+ * `allowSelectingInstalled={false}` greys out the Installed section while leaving Available to
+ * Download pickable — for a caller that can install a resource but has nothing to do with one
+ * already on disk.
+ */
+export const InstalledNotSelectable: Story = {
+  args: {
+    allowSelectingInstalled: false,
+    notice:
+      'No project is selected, so a resource you choose here will be downloaded to this computer but not added to a text collection.',
+  },
+};
+
 export const LargeResourceList: Story = {
   name: 'Large Resource List (2500 entries)',
   args: {
