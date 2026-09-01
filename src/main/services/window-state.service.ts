@@ -567,7 +567,18 @@ function announceRoutingTargetIfChanged(): void {
  * @returns The window's platform id
  */
 export function addWindow(window: BrowserWindow, existingId?: string): string {
-  const windowId = existingId ?? mintWindowId();
+  let windowId = existingId ?? mintWindowId();
+  // An id this list already holds cannot be handed to a second window: the two would share a
+  // service registration, a storage namespace, and each other's ready, focus and closing state,
+  // and the id would name whichever of them the tracker reached first. Minting instead keeps one
+  // window per id true by construction — this window opens and works, and loses only the
+  // per-window state the entry it came from was keeping.
+  if (existingId !== undefined && isWindowTracked(existingId)) {
+    windowId = mintWindowId();
+    logger.warn(
+      `Window id ${existingId} is already tracked, so this window is tracked as ${windowId} instead. Per-window state saved under ${existingId} stays with the window already holding it.`,
+    );
+  }
   trackedWindows.push({ windowId, window });
   announceRoutingTargetIfChanged();
   return windowId;
@@ -621,7 +632,9 @@ export function getWindowIdOf(window: BrowserWindow): string | undefined {
  * away between one call and the next.
  */
 export function getWindowById(windowId: string): BrowserWindow | undefined {
-  return trackedWindows.find((tracked) => tracked.windowId === windowId)?.window;
+  return trackedWindows.find(
+    (tracked) => tracked.windowId === windowId && !tracked.window.isDestroyed(),
+  )?.window;
 }
 
 /**

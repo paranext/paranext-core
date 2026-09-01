@@ -11,6 +11,7 @@ import {
   getReadyWindowIds,
   getTargetWindowId,
   getTrackedWindows,
+  getWindowById,
   getWindowCreationRank,
   getUnreachableWindowIds,
   getWindowIdOf,
@@ -277,6 +278,47 @@ describe('window state tracking', () => {
       const freshId = addWindow(fakeWindow(2));
 
       expect(freshId).not.toBe(restoredId);
+    });
+
+    test('mints a fresh id rather than tracking two windows under one id', () => {
+      // A structure file that names the same id twice — hand-edited, or written by a build that
+      // could still cross-wire a restore — must not put two windows into one identity: they would
+      // share a service registration, a storage namespace, and each other's ready and focus state.
+      const firstId = addWindow(fakeWindow(1), 'entry-durable-id');
+
+      const secondId = addWindow(fakeWindow(2), 'entry-durable-id');
+
+      expect(secondId).not.toBe(firstId);
+      expect(getTrackedWindows().map(({ windowId }) => windowId)).toEqual([firstId, secondId]);
+    });
+
+    test('says which id it refused and what the window lost when it mints over a duplicate', () => {
+      addWindow(fakeWindow(1), 'entry-durable-id');
+
+      const secondId = addWindow(fakeWindow(2), 'entry-durable-id');
+
+      const warning = mocks.loggerWarn.mock.calls.at(-1)?.[0];
+      expect(warning).toContain('entry-durable-id');
+      expect(warning).toContain(secondId);
+    });
+  });
+
+  describe('looking a window up by its platform id', () => {
+    test('answers undefined for a window Electron has already destroyed', () => {
+      // Its own doc promises `undefined` for a window that has gone away, and a caller acts on
+      // what comes back — a destroyed handle throws on every method it offers.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const destroyed = { id: 1, isDestroyed: () => true } as BrowserWindow;
+      const windowId = addWindow(destroyed);
+
+      expect(getWindowById(windowId)).toBeUndefined();
+    });
+
+    test('answers with a window that is still live', () => {
+      const live = fakeWindow(1);
+      const windowId = addWindow(live);
+
+      expect(getWindowById(windowId)).toBe(live);
     });
   });
 
