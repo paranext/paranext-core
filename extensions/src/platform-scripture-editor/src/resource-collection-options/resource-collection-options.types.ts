@@ -78,9 +78,11 @@ export interface ResourceCollectionOptionsProps {
   /** Called when the Get Resources button is clicked. */
   onGetResources: () => void;
   /**
-   * When `true`, the panel is not bound to a project/PDP yet, so no action can persist: the
-   * checkboxes, remove (✕) controls, and Get Resources button are disabled. Pair with
-   * `disabledMessage` to explain why the list is empty. Defaults to `false`.
+   * When `true`, the panel is not bound to a project/PDP yet, so the controls that act on a text
+   * collection — the checkboxes and the remove (✕) controls — are disabled because there is nothing
+   * to persist them to. The Get Resources button stays enabled: browsing and installing resources
+   * needs no bound project. Pair with `disabledMessage` to explain why the list is empty. Defaults
+   * to `false`.
    */
   disabled?: boolean;
   /**

@@ -186,7 +186,7 @@ export function ResourceCollectionOptions({
           {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.textsHeader)}
         </Label>
         {disabled && disabledMessage && (
-          <p className="tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic">{disabledMessage}</p>
+          <EmptyState className="tw:py-1 tw:italic" message={disabledMessage} />
         )}
         {!disabled && isTextsListEmpty && (
           <EmptyState
@@ -212,7 +212,8 @@ export function ResourceCollectionOptions({
         ))}
       </section>
 
-      <Button variant="outline" disabled={disabled} onClick={() => onGetResources()}>
+      {/* Deliberately not gated on `disabled` — see the prop's docs. */}
+      <Button variant="outline" onClick={() => onGetResources()}>
         {getResourcesLabel}
       </Button>
     </div>

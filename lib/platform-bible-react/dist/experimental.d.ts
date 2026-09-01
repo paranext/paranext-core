@@ -287,6 +287,19 @@ export interface ResourcePickerDialogProps {
 	/** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
 	localizedStrings: ResourcePickerDialogLocalizedStrings;
 	/**
+	 * Already-localized sentence shown above the resource list explaining why the list may be
+	 * incomplete — for example that the online catalog could not be reached. Omit when the list is
+	 * complete.
+	 */
+	notice?: string;
+	/**
+	 * When false, rows in the "Installed" section are shown but cannot be picked. Use it when the
+	 * caller can act on a resource that still needs installing but has nothing to do with one that is
+	 * already on disk, so an installed row would accept a click and then silently do nothing.
+	 * Defaults to true.
+	 */
+	allowSelectingInstalled?: boolean;
+	/**
 	 * When true, clicking an "Already Selected" row calls `onSelect` just like any other row, letting
 	 * the caller treat it as a deselect. Defaults to false (Already Selected rows stay
 	 * non-interactive, showing only a checkmark) to preserve existing consumers' behavior.
@@ -308,7 +321,7 @@ export interface ResourcePickerDialogProps {
  *
  * @param props See {@link ResourcePickerDialogProps}
  */
-export function ResourcePickerDialog({ allResources, isResourcesLoading, resourceType, selectedResourceIds, localizedStrings, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+export function ResourcePickerDialog({ allResources, isResourcesLoading, resourceType, selectedResourceIds, localizedStrings, notice, allowSelectingInstalled, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Derives the list of available, non-obsolete book IDs from the `availableBookInfo` string
  *
