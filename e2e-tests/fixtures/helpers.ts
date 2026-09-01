@@ -1423,9 +1423,16 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
   const escapeHatch = page.getByRole('button', {
     name: /continue without (finishing setup|registration)/i,
   });
-  // The wizard branch renders the setup shell's stepper and NO escape hatch, so it is the one stuck
-  // state this cannot recover from — worth telling apart rather than waiting out.
-  const wizardStep = firstRunDialog.getByRole('button', { name: /^(Next|Finish)$/i });
+  // The wizard branch renders the setup shell and NO escape hatch, so it is the one stuck state
+  // this cannot recover from — worth telling apart rather than waiting out.
+  //
+  // Told apart by what each branch always renders, never by a step control: the shell's
+  // Next/Finish button is conditional on `canProceed !== undefined`
+  // (first-run-shell.component.tsx), so any step that hides it would slip past a check looking for
+  // it. The loading branch renders `role="status"` and no heading; the error branch renders a
+  // heading AND `role="alert"`; the wizard renders a heading and neither.
+  const dialogHeading = firstRunDialog.getByRole('heading', { level: 1 });
+  const errorRegion = firstRunDialog.locator('[role="alert"]');
 
   // Each leg swallows its own timeout so the race reports what it SAW rather than rejecting: a
   // rejection makes the gate's ordinary loading flash a hard failure whenever the remaining budget
@@ -1439,9 +1446,14 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
       .waitFor({ state: 'visible', timeout })
       .then(() => 'recoverable' as const)
       .catch(() => 'inconclusive' as const),
-    wizardStep
+    dialogHeading
       .waitFor({ state: 'visible', timeout })
-      .then(() => 'wizard' as const)
+      // A heading also appears on the error screen, which DOES offer a way out, so only a heading
+      // with no alert beside it means the wizard.
+      .then(
+        async (): Promise<'wizard' | 'inconclusive'> =>
+          (await errorRegion.count()) === 0 ? 'wizard' : 'inconclusive',
+      )
       .catch(() => 'inconclusive' as const),
   ]);
 

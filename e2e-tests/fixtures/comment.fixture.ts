@@ -27,6 +27,7 @@ import {
   ConsoleMessage,
 } from '@playwright/test';
 import {
+  assertInterfaceMode,
   applyDeclaredWindowSize,
   launchElectronApp,
   ElectronAppContext,
@@ -135,6 +136,18 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
       page,
       windowSize,
       'This fixture sets this size at launch; check that the window manager is not overriding it.',
+    );
+
+    // Verify the mode this fixture pinned before launch actually took effect. Pinning without
+    // checking is how a suite ends up driving the other mode's layout and failing much later on an
+    // element that mode never renders, which reads as a timeout rather than a setup problem. The
+    // mode is not an option here: these suites are written against Simple mode's Column 3 layout,
+    // so there is nothing for a caller to choose.
+    await assertInterfaceMode(
+      'simple',
+      'This fixture pins simple mode before launch and the app did not come up in it. The pin ' +
+        'merges into the shared dev-appdata settings file, so another run holding that file can ' +
+        'stop it taking effect.',
     );
 
     console.log(`Window URL: ${page.url()}`);

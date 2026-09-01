@@ -12,7 +12,6 @@ import {
   launchElectronApp,
   LaunchElectronAppOptions,
   preConfigureSettings,
-  RequiredInterfaceMode,
   teardownElectronApp,
   WindowSize,
 } from './helpers';
@@ -81,18 +80,6 @@ export interface IsolatedFixtures {
    * height } })`. Defaults to {@link DEFAULT_WINDOW_SIZE}.
    */
   windowSize: WindowSize;
-  /**
-   * Interface mode this suite's layout is written against; set with `test.use({
-   * requiredInterfaceMode: 'power' })` alongside the `preConfigureSettings` pin that establishes
-   * it. Leave unset when the suite genuinely works in either mode.
-   *
-   * This VERIFIES the pin rather than applying it. `preConfigureSettings` writes the shared
-   * `dev-appdata/data/settings.json` before launch and merges into whatever is already there, so a
-   * pin can fail to take effect without saying so. When it does, the suite runs in the other mode's
-   * layout and fails much later on an element that mode never renders — which reads as a timeout,
-   * not as a setup problem. Declaring the mode turns that into an immediate, readable error.
-   */
-  requiredInterfaceMode: RequiredInterfaceMode | undefined;
   electronApp: ElectronApplication;
   mainPage: Page;
 }
@@ -101,7 +88,6 @@ export const test = base.extend<IsolatedFixtures>({
   // Option fixture: suites override via test.use(); default launches with no special options.
   electronLaunchOptions: [{}, { option: true }],
   windowSize: [DEFAULT_WINDOW_SIZE, { option: true }],
-  requiredInterfaceMode: [undefined, { option: true }],
 
   // Option fixture: see the IsolatedFixtures doc for why the default is 'power'.
   interfaceMode: ['power', { option: true }],
@@ -143,7 +129,7 @@ export const test = base.extend<IsolatedFixtures>({
     }
   },
 
-  mainPage: async ({ electronApp, windowSize, requiredInterfaceMode }, use, testInfo: TestInfo) => {
+  mainPage: async ({ electronApp, windowSize, interfaceMode }, use, testInfo: TestInfo) => {
     const page = await electronApp.firstWindow({ timeout: 90_000 });
 
     // Ensure the window is large enough for WebView content to be visible.
@@ -171,15 +157,19 @@ export const test = base.extend<IsolatedFixtures>({
     // Wait for React to mount
     await page.waitForSelector('#root', { state: 'attached', timeout: 30_000 });
 
-    // Verify the mode the suite pinned actually took effect, before any test runs against a layout
-    // it was not written for. Only checked when the suite declared one.
-    if (requiredInterfaceMode)
-      await assertInterfaceMode(
-        requiredInterfaceMode,
-        `This suite launched its own app, so the mode it asked for did not take: check that its ` +
-          `preConfigureSettings pin sets 'platform.interfaceMode' to '${requiredInterfaceMode}' ` +
-          `and that the pin runs before the app launches (a beforeAll, not a beforeEach).`,
-      );
+    // Verify the mode this fixture just seeded actually took effect, before any test runs against a
+    // layout it was not written for. Always checked, not opt-in: the fixture knows what it seeded,
+    // so there is nothing for a suite to declare and nothing for one to forget. The seed merges
+    // into a shared settings file and can fail quietly; when it does, the suite runs in the other
+    // mode's layout and fails much later on an element that mode never renders, which reads as a
+    // timeout rather than a setup problem.
+    await assertInterfaceMode(
+      interfaceMode,
+      `This fixture seeded '${interfaceMode}' before launch and the app did not come up in it. ` +
+        `A suite selects its mode with test.use({ interfaceMode }), never with its own ` +
+        `preConfigureSettings call — see the IsolatedFixtures doc for why a spec-level seed is ` +
+        `both overridden and leaked back into the developer's settings.`,
+    );
 
     await use(page);
 

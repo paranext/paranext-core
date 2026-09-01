@@ -12,13 +12,13 @@
  *
  * Two separate concerns, deliberately kept apart:
  *
- * - **Layout** is decided by the window size the spec declares with `test.use({ windowSize })`,
- *   asserted here against the real OS window. The fixture cannot resize a window it did not create,
- *   so it requires the app to have been started at that size.
+ * - **Layout** is decided by the window size the spec declares with `test.use({ requiredWindowSize
+ *   })`, asserted here against the real OS window. The fixture cannot resize a window it did not
+ *   create, so it requires the app to have been started at that size.
  * - **Evidence quality** is enforced where screenshots are written, by the `page.screenshot` wrapper
  *   below. Note this floor is a fixed Full HD minimum, so a spec that writes evidence screenshots
- *   must declare `windowSize: { width: 1920, height: 1080 }` — the fixture no longer emulates a
- *   viewport that would satisfy it regardless of the real window.
+ *   must declare `requiredWindowSize: { width: 1920, height: 1080 }` — the fixture no longer
+ *   emulates a viewport that would satisfy it regardless of the real window.
  *
  * Two failure modes have been observed in the past and are defended against:
  *
@@ -35,8 +35,8 @@
  * - The fixture explicitly excludes `devtools://` URLs when finding the renderer page (so connecting
  *   to a DevTools page is impossible).
  * - The fixture asserts the real OS window is at least the size the spec declared with `test.use({
- *   windowSize })`, reading `window.outerWidth`/`outerHeight`. It deliberately does NOT call
- *   `setViewportSize()`: on a CDP-attached page that applies an emulation override which sets
+ *   requiredWindowSize })`, reading `window.outerWidth`/`outerHeight`. It deliberately does NOT
+ *   call `setViewportSize()`: on a CDP-attached page that applies an emulation override which sets
  *   `innerWidth` itself, so an inner-based check reads back its own request and can never fail.
  *   Note this size check covers the small-window case only — `outerWidth` is unchanged by a docked
  *   DevTools panel, so the squeezed-renderer case is handled by launching with PT_NO_DEVTOOLS
@@ -162,20 +162,20 @@ function shouldValidateScreenshotPath(path: string): boolean {
 export interface CdpFixtures {
   mainPage: Page;
   /**
-   * Window size this suite's layout is written against; set with `test.use({ windowSize: { width,
-   * height } })`. Defaults to {@link DEFAULT_WINDOW_SIZE}.
+   * Window size this suite's layout is written against; set with `test.use({ requiredWindowSize: {
+   * width, height } })`. Defaults to {@link DEFAULT_WINDOW_SIZE}.
    *
    * Attach mode cannot resize the window — it has no main-process channel — so this is asserted
    * rather than applied. Start the app at the declared size.
    */
-  windowSize: WindowSize;
+  requiredWindowSize: WindowSize;
   /**
    * Interface mode this suite's layout is written against; set with `test.use({
    * requiredInterfaceMode: 'simple' })`. Leave unset when the spec genuinely works in either mode.
    *
-   * Asserted, not applied, for the same reason as {@link CdpFixtures.windowSize}: attach mode
-   * inherits the mode from the app you started. Declaring it converts a late, confusing timeout on
-   * an element the wrong mode never renders into an immediate, readable setup error.
+   * Asserted, not applied, for the same reason as {@link CdpFixtures.requiredWindowSize}: attach
+   * mode inherits the mode from the app you started. Declaring it converts a late, confusing
+   * timeout on an element the wrong mode never renders into an immediate, readable setup error.
    */
   requiredInterfaceMode: RequiredInterfaceMode | undefined;
 }
@@ -185,9 +185,12 @@ export const test = base.extend<CdpFixtures>({
   // evidence PNGs, and the screenshot wrapper enforces that floor at the moment one is taken —
   // mid-test, long after setup passed. Declaring it here makes an undersized window a precondition
   // failure instead, which is the whole point of the declared-size check.
-  windowSize: [{ width: MIN_SCREENSHOT_WIDTH, height: MIN_SCREENSHOT_HEIGHT }, { option: true }],
+  requiredWindowSize: [
+    { width: MIN_SCREENSHOT_WIDTH, height: MIN_SCREENSHOT_HEIGHT },
+    { option: true },
+  ],
   requiredInterfaceMode: [undefined, { option: true }],
-  mainPage: async ({ windowSize, requiredInterfaceMode }, use) => {
+  mainPage: async ({ requiredWindowSize, requiredInterfaceMode }, use) => {
     // Deadline-based connect: a refused connection fails instantly, so a fixed attempt count
     // gives only seconds of patience while the shared app can still be cold-booting (Electron +
     // dotnet on a slow box takes ~90s). Keep retrying until the deadline instead.
@@ -247,12 +250,12 @@ export const test = base.extend<CdpFixtures>({
     // Screenshot quality is NOT enforced here. It is enforced where screenshots are written, by
     // the `page.screenshot` wrapper below calling `assertFullHdScreenshot`. Keeping the two apart
     // is deliberate: window size decides layout, and a spec needing Full HD evidence declares it
-    // with `test.use({ windowSize: { width: 1920, height: 1080 } })`.
+    // with `test.use({ requiredWindowSize: { width: 1920, height: 1080 } })`.
     await assertDeclaredWindowSize(
       page,
-      windowSize,
+      requiredWindowSize,
       `Start the app at that size, e.g. MAIN_ARGS="--remote-debugging-port=9223 --window-size ` +
-        `${windowSize.width}x${windowSize.height}" npm start — or just ./.erb/scripts/refresh.sh, ` +
+        `${requiredWindowSize.width}x${requiredWindowSize.height}" npm start — or just ./.erb/scripts/refresh.sh, ` +
         `which does exactly that. --maximize is a no-op under a bare Xvfb, since nothing is there to ` +
         `honour it, and the size must be its own argv token: --window-size=WxH never matches, ` +
         `because the flag is looked up by exact token (src/node/utils/command-line.util.ts:104).`,

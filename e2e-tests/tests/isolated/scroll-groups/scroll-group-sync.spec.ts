@@ -47,10 +47,6 @@ import { preConfigureSettings } from '../../../fixtures/helpers';
 // element is inserted), so the `+ span` marker/text adjacency and the click-in-verse-text gesture
 // behave the same as in the formatted view.
 test.use({
-  // Verifies the `platform.interfaceMode` pin below actually took effect. The pin merges
-  // into a shared settings file, so it can silently fail and leave this suite driving the
-  // other mode's layout.
-  requiredInterfaceMode: 'power',
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
   // The verse-in-viewport assertions are geometry: how far down the pane Lamentations 3:66 sits,
   // and therefore whether it starts off screen, is decided by the window size. 1280x800 is the size
