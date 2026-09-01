@@ -282,7 +282,7 @@ const BOUNDS_CAPTURE_DEBOUNCE_MS = 100;
  * it is a new mid-session window that starts empty.
  */
 type WindowRestoreInfo =
-  | { kind: 'entry'; entryIndex: number; entry: WindowLayoutEntry }
+  | { kind: 'entry'; entry: WindowLayoutEntry }
   | { kind: 'legacy'; boundsState?: WindowBoundsState };
 
 /** Height of the custom title bar buttons on Windows */
@@ -1628,7 +1628,6 @@ async function main() {
     const { entries, mainEntryIndex } = plan;
     const mainWindow = await createWindow({
       kind: 'entry',
-      entryIndex: mainEntryIndex,
       entry: entries[mainEntryIndex],
     });
     setMainWindowId(mainWindow.windowId);
@@ -1653,7 +1652,7 @@ async function main() {
         // Sequential on purpose: creating windows one at a time keeps the tracked window order
         // (and so the focus fallback and save order) deterministic
         // eslint-disable-next-line no-await-in-loop
-        await createWindow({ kind: 'entry', entryIndex, entry: entries[entryIndex] });
+        await createWindow({ kind: 'entry', entry: entries[entryIndex] });
       }
     }
   };

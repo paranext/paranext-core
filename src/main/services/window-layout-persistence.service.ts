@@ -4,20 +4,20 @@
  * and is read and written ONLY by the main process — renderers get and push their layout through
  * the `windowLayout:get`/`windowLayout:save` request handlers registered here.
  *
- * Identity model: a window's position in the structure's list decides which saved entry a restoring
- * window binds to — `loadWindowLayouts`'s plan and `assignEntryToWindow` walk entries by position,
- * and a position must never silently come to mean a neighbouring entry once one before it is
- * dropped (see {@link handleWindowRemoved}). The entry's own `windowId` is the window's durable
- * platform id: minted once, handed to `addWindow` when position-matching restores it (so the id a
- * restored window is given always matches the one its entry already carries), and never reused —
- * which is also what makes it what the renderer keys its per-window storage by. Every entry has a
- * slot in that list from the moment it is created — a restored window binds to the slot it
- * restores, a window opened mid-session appends one — and the slot is the only place that window's
- * layout and bounds live. A slot with no window in it is a preserved entry: one this session never
- * restored (a power-mode secondary window while the app runs in simple mode, which restores only
- * the main window), or one whose window has gone down with the app. Either way it is written back
- * out untouched, so a session that holds fewer windows than the file holds entries can never
- * destroy the others.
+ * Identity model: the entry's own `windowId` decides which saved entry a restoring window binds to.
+ * `assignEntryToWindow` resolves the entry by that id, never by where it sits in the list, because
+ * the list shifts under a restore in progress: a window closing takes its entry out (see
+ * {@link handleWindowRemoved}) while the restore loop is still working from positions it read before
+ * it started. That id is the window's durable platform id: minted once, handed to `addWindow` when
+ * a window restores the entry (so the id a restored window is given always matches the one its
+ * entry already carries), and never reused — which is also what makes it what the renderer keys its
+ * per-window storage by. Every entry has a slot in that list from the moment it is created — a
+ * restored window binds to the slot it restores, a window opened mid-session appends one — and the
+ * slot is the only place that window's layout and bounds live. A slot with no window in it is a
+ * preserved entry: one this session never restored (a power-mode secondary window while the app
+ * runs in simple mode, which restores only the main window), or one whose window has gone down with
+ * the app. Either way it is written back out untouched, so a session that holds fewer windows than
+ * the file holds entries can never destroy the others.
  *
  * A write is that list, in order. Nothing has to be joined to anything, and there is no second
  * account of which windows exist that a departure could leave stale.
