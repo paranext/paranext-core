@@ -731,6 +731,53 @@ export async function waitForAtLeastOneProjectMetadata(
   );
 }
 
+/** Who wrote a backup, from this process's point of view. */
+type BackupOwner = 'ours' | 'orphaned' | 'live';
+
+/**
+ * Whether a process is still running.
+ *
+ * EPERM counts as ALIVE. The signal was refused, which only happens for a process that exists — on
+ * Windows, and for a pid owned by another user. Reading that as dead is the dangerous direction,
+ * because every caller uses this to decide whether destroying a developer's files is safe.
+ */
+export function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // `catch` binds `unknown`; reading `.code` is the only way to tell EPERM from ESRCH
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+/**
+ * Who owns a backup: this process, nobody (the run that wrote it is gone), or a run still going.
+ *
+ * Recovery is deliberately best-effort. A pid is the only ownership signal Node can read portably,
+ * and pids are recycled, so a backup whose owner's pid has since been reused reads as `live` and is
+ * left alone. That is the fail-closed direction: the cost is a backup the developer restores by
+ * hand, never files destroyed underneath a running app.
+ */
+export function classifyBackupOwner(ownerPid: number): BackupOwner {
+  if (ownerPid === process.pid) return 'ours';
+  return isPidAlive(ownerPid) ? 'live' : 'orphaned';
+}
+
+/**
+ * Write a file so no reader can ever observe it half-written.
+ *
+ * `writeFileSync` truncates before it writes, so an interrupt inside that window leaves a zero-byte
+ * or partial file behind. Renaming a fully-written temporary file over the target is atomic within
+ * a filesystem, so a reader sees either the previous contents or the complete new ones.
+ */
+function writeFileAtomic(filePath: string, contents: string): void {
+  const tempPath = `${filePath}.tmp`;
+  fs.writeFileSync(tempPath, contents);
+  fs.renameSync(tempPath, filePath);
+}
+
 /**
  * The settings file the app reads at startup in development.
  *
@@ -854,24 +901,45 @@ export function restoreAppGlobalState(): string[] | undefined {
  * them.
  */
 interface SettingsBackup {
+  /** The process that took the pin. See {@link classifyBackupOwner}. */
+  ownerPid: number;
+  createdAt: string;
   existed: boolean;
   contents?: string;
+  /** The keys the pin wrote, so a restore can undo exactly those and nothing else. */
+  pinnedKeys: string[];
 }
 
-/** Read the backup, tolerating one written before it carried a shape. */
-function readSettingsBackup(): SettingsBackup {
-  const raw = fs.readFileSync(settingsBackupPath(), 'utf-8');
+/**
+ * Read the backup, or `undefined` when it cannot be trusted.
+ *
+ * All-or-nothing on purpose. A backup that does not parse, or that carries no owner, is a backup we
+ * cannot reason about — a torn write, or one written before backups recorded who took them. The
+ * only safe reading of "I do not understand this file" is to change nothing: guessing at its
+ * meaning is how a truncated backup ends up written into the developer's settings verbatim.
+ */
+function readSettingsBackup(): SettingsBackup | undefined {
+  let parsed: unknown;
   try {
-    // JSON.parse returns `any`; asserting the shape this function itself writes
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const parsed = JSON.parse(raw) as SettingsBackup;
-    if (typeof parsed?.existed === 'boolean') return parsed;
+    parsed = JSON.parse(fs.readFileSync(settingsBackupPath(), 'utf-8'));
   } catch {
-    // Not our shape — fall through to the raw-contents reading below.
+    return undefined;
   }
-  // A backup left by an earlier version stored the file's contents directly, with '' meaning
-  // "there was no file". Honour that rather than discarding a developer's settings.
-  return raw === '' ? { existed: false } : { existed: true, contents: raw };
+  // JSON.parse returns `any`; this narrows the shape this function's own writer produces
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const backup = parsed as Partial<SettingsBackup> | null;
+  if (typeof backup?.ownerPid !== 'number') return undefined;
+  if (typeof backup.existed !== 'boolean') return undefined;
+  if (!Array.isArray(backup.pinnedKeys)) return undefined;
+  // Rebuilt field by field rather than asserted: the checks above narrow each one, and building the
+  // result is what makes that narrowing something the compiler can see.
+  return {
+    ownerPid: backup.ownerPid,
+    createdAt: backup.createdAt ?? '',
+    existed: backup.existed,
+    ...(backup.contents !== undefined ? { contents: backup.contents } : {}),
+    pinnedKeys: backup.pinnedKeys,
+  };
 }
 
 /**
@@ -909,6 +977,21 @@ export function restoreLeakedSettings(): string[] | undefined {
   }
 
   const backup = readSettingsBackup();
+  if (backup === undefined) {
+    console.warn(
+      `Leaving ${settingsBackupPath()} alone: it is unreadable, or predates backups recording ` +
+        'which run took them. Nothing was restored and nothing was deleted — inspect it by hand.',
+    );
+    return undefined;
+  }
+  if (classifyBackupOwner(backup.ownerPid) === 'live') {
+    console.warn(
+      `Leaving ${settingsBackupPath()} alone: process ${backup.ownerPid} still owns it, so another ` +
+        'run is using these files. To recover by hand once that run has ended, delete the backup ' +
+        'file and restore its `contents` into the settings file.',
+    );
+    return undefined;
+  }
   if (backup.existed) fs.writeFileSync(settingsPath(), backup.contents ?? '');
   else fs.rmSync(settingsPath(), { force: true });
   fs.rmSync(settingsBackupPath(), { force: true });
@@ -955,11 +1038,14 @@ export function preConfigureSettings(overrides: Record<string, unknown>): () => 
   // whoever wrote the backup is also the only one allowed to remove it.
   const createdBackup = !fs.existsSync(settingsBackupPath());
   if (createdBackup) {
-    const backup: SettingsBackup =
-      originalContents !== undefined
-        ? { existed: true, contents: originalContents }
-        : { existed: false };
-    fs.writeFileSync(settingsBackupPath(), JSON.stringify(backup));
+    const backup: SettingsBackup = {
+      ownerPid: process.pid,
+      createdAt: new Date().toISOString(),
+      existed: originalContents !== undefined,
+      ...(originalContents !== undefined ? { contents: originalContents } : {}),
+      pinnedKeys: Object.keys(overrides),
+    };
+    writeFileAtomic(settingsBackupPath(), JSON.stringify(backup));
   }
   fs.writeFileSync(settingsPath(), JSON.stringify({ ...existing, ...overrides }));
 

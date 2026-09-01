@@ -13,8 +13,13 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { preConfigureSettings, restoreLeakedSettings } from './helpers';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  classifyBackupOwner,
+  isPidAlive,
+  preConfigureSettings,
+  restoreLeakedSettings,
+} from './helpers';
 
 const SETTINGS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'pt-settings-backup-'));
 const SETTINGS_PATH = path.join(SETTINGS_DIR, 'settings.json');
@@ -92,5 +97,90 @@ describe('preConfigureSettings crash recovery', () => {
     expect(readSettings()).toBe(DEVELOPER_SETTINGS);
     expect(fs.existsSync(BACKUP_PATH)).toBe(false);
     expect(restoreLeakedSettings()).toBeUndefined();
+  });
+});
+
+describe('backup ownership', () => {
+  it('treats our own pid as alive, and as ours', () => {
+    expect(isPidAlive(process.pid)).toBe(true);
+    expect(classifyBackupOwner(process.pid)).toBe('ours');
+  });
+
+  it('treats a pid that cannot exist as orphaned', () => {
+    // Above every platform's pid_max, so it can never name a live process.
+    const impossiblePid = 2 ** 31 - 1;
+
+    expect(isPidAlive(impossiblePid)).toBe(false);
+    expect(classifyBackupOwner(impossiblePid)).toBe('orphaned');
+  });
+
+  it('treats EPERM as alive, because Windows and foreign-owned pids report it', () => {
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      const error: NodeJS.ErrnoException = new Error('operation not permitted');
+      error.code = 'EPERM';
+      throw error;
+    });
+
+    try {
+      // Refusing the signal proves the process EXISTS. Reading that as dead is the direction that
+      // destroys a live run's files.
+      expect(isPidAlive(4242)).toBe(true);
+      expect(classifyBackupOwner(4242)).toBe('live');
+    } finally {
+      kill.mockRestore();
+    }
+  });
+});
+
+describe('settings backup integrity', () => {
+  it('treats a zero-byte backup as unusable and leaves the settings file alone', () => {
+    fs.writeFileSync(SETTINGS_PATH, DEVELOPER_SETTINGS);
+    // Exactly what an interrupt inside a truncating write leaves behind.
+    fs.writeFileSync(BACKUP_PATH, '');
+
+    expect(restoreLeakedSettings()).toBeUndefined();
+    expect(readSettings()).toBe(DEVELOPER_SETTINGS);
+    // Never deleted: a backup we cannot read is a human's decision, not ours to discard.
+    expect(fs.existsSync(BACKUP_PATH)).toBe(true);
+  });
+
+  it('treats a truncated backup as unusable rather than as settings contents', () => {
+    fs.writeFileSync(SETTINGS_PATH, DEVELOPER_SETTINGS);
+    fs.writeFileSync(BACKUP_PATH, '{"existed":true,"conte');
+
+    expect(restoreLeakedSettings()).toBeUndefined();
+    expect(readSettings()).toBe(DEVELOPER_SETTINGS);
+  });
+
+  it('treats a backup with no recorded owner as unusable', () => {
+    fs.writeFileSync(SETTINGS_PATH, DEVELOPER_SETTINGS);
+    // Every other field is valid, so ONLY the missing owner can make this unusable.
+    fs.writeFileSync(
+      BACKUP_PATH,
+      JSON.stringify({ createdAt: new Date().toISOString(), existed: false, pinnedKeys: [] }),
+    );
+
+    expect(restoreLeakedSettings()).toBeUndefined();
+    expect(readSettings()).toBe(DEVELOPER_SETTINGS);
+    expect(fs.existsSync(BACKUP_PATH)).toBe(true);
+  });
+
+  it('leaves a backup owned by a still-running process completely alone', () => {
+    // The parent that spawned this test runner is alive and is not us.
+    expect(classifyBackupOwner(process.ppid)).toBe('live');
+    fs.writeFileSync(SETTINGS_PATH, DEVELOPER_SETTINGS);
+    fs.writeFileSync(
+      BACKUP_PATH,
+      JSON.stringify({
+        ownerPid: process.ppid,
+        createdAt: new Date().toISOString(),
+        existed: false,
+        pinnedKeys: ['platform.interfaceMode'],
+      }),
+    );
+
+    expect(restoreLeakedSettings()).toBeUndefined();
+    expect(readSettings()).toBe(DEVELOPER_SETTINGS);
+    expect(fs.existsSync(BACKUP_PATH)).toBe(true);
   });
 });
