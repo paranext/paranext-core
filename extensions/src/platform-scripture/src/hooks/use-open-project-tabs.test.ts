@@ -19,6 +19,10 @@ const mockUnsubOpen = vi.fn();
 const mockUnsubUpdate = vi.fn();
 const mockUnsubClose = vi.fn();
 
+// Create a wrapper object so we can access mockLoggerWarn after initialization
+const mockState = { loggerWarn: vi.fn() };
+const mockLoggerWarn = mockState.loggerWarn;
+
 vi.mock('@papi/frontend', () => ({
   default: {
     webViews: {
@@ -36,6 +40,7 @@ vi.mock('@papi/frontend', () => ({
       },
       getAllOpenWebViewDefinitions: () => mockGetAllOpenWebViewDefinitions(),
     },
+    logger: { warn: (...args: unknown[]) => mockLoggerWarn(...args) },
   },
 }));
 
@@ -48,6 +53,7 @@ beforeEach(() => {
   mockUnsubOpen.mockClear();
   mockUnsubUpdate.mockClear();
   mockUnsubClose.mockClear();
+  mockLoggerWarn.mockClear();
 });
 
 afterEach(() => {
@@ -300,26 +306,135 @@ describe('useOpenProjectTabs', () => {
     expect(result.current).toHaveLength(2);
   });
 
-  it('falls back to live events when getAllOpenWebViewDefinitions rejects', async () => {
-    mockGetAllOpenWebViewDefinitions.mockRejectedValueOnce(new Error('papi unavailable'));
-    const { result } = renderHook(() => useOpenProjectTabs());
-    // Wait one microtask flush so the rejection settles before we drive a live event.
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(result.current).toEqual([]);
-    const handler = mockOnDidOpenWebView.mock.calls[0][0];
-    act(() =>
-      handler({
-        webView: {
-          id: 'wv-live',
+  it('retries a failed seed and uses what the retry brings', async () => {
+    vi.useFakeTimers();
+    try {
+      mockGetAllOpenWebViewDefinitions.mockRejectedValueOnce(new Error('window 3 unreachable'));
+      mockGetAllOpenWebViewDefinitions.mockResolvedValueOnce([
+        {
+          id: 'wv-seeded-late',
           webViewType: 'platformScriptureEditor.react',
           projectId: 'p-1',
           scrollGroupScrRef: 0,
         },
-      }),
-    );
-    expect(result.current).toHaveLength(1);
-    expect(result.current[0].webViewId).toBe('wv-live');
+      ]);
+      const { result } = renderHook(() => useOpenProjectTabs());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].webViewId).toBe('wv-seeded-late');
+      expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('warns and still serves live events when every seed attempt fails', async () => {
+    vi.useFakeTimers();
+    try {
+      mockGetAllOpenWebViewDefinitions.mockRejectedValue(new Error('window 3 unreachable'));
+      const { result } = renderHook(() => useOpenProjectTabs());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10000);
+      });
+      expect(result.current).toEqual([]);
+      // One warning per failed attempt — the final one marks the seed as given up
+      expect(mockLoggerWarn).toHaveBeenCalledTimes(3);
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        handler({
+          webView: {
+            id: 'wv-live',
+            webViewType: 'platformScriptureEditor.react',
+            projectId: 'p-1',
+            scrollGroupScrRef: 0,
+          },
+        }),
+      );
+      expect(result.current).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps retrying long enough to outlast a sibling renderer boot', async () => {
+    vi.useFakeTimers();
+    try {
+      // The failure the seed retry exists to survive is another window starting or reloading,
+      // during which the enumeration refuses to under-report — and a renderer boot takes tens of
+      // seconds on a slow machine. Here the sibling comes up about a minute in; the seed must
+      // still be trying then rather than having given up within its first few seconds.
+      let isSiblingUp = false;
+      mockGetAllOpenWebViewDefinitions.mockImplementation(async () => {
+        if (!isSiblingUp) throw new Error('window 3 unreachable');
+        return [
+          {
+            id: 'wv-after-boot',
+            webViewType: 'platformScriptureEditor.react',
+            projectId: 'p-1',
+            scrollGroupScrRef: 0,
+          },
+        ];
+      });
+      const { result } = renderHook(() => useOpenProjectTabs());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(59_000);
+      });
+      isSiblingUp = true;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].webViewId).toBe('wv-after-boot');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('spreads its retries across a startup-scale budget before giving up', async () => {
+    vi.useFakeTimers();
+    try {
+      mockGetAllOpenWebViewDefinitions.mockRejectedValue(new Error('window 3 unreachable'));
+      renderHook(() => useOpenProjectTabs());
+      // Still trying at a minute and a half: giving up inside the window a sibling renderer needs
+      // to boot would leave every already-open tab invisible for the life of the component
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(89_000);
+      });
+      expect(mockLoggerWarn).not.toHaveBeenCalledWith(expect.stringContaining('giving up'));
+      // ...but the budget is bounded: well past it, the seed has logged that it gave up
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120_000);
+      });
+      expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('giving up'));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not issue a fetch after unmount during retry delay', async () => {
+    vi.useFakeTimers();
+    try {
+      // Reject multiple times so we have retries available
+      mockGetAllOpenWebViewDefinitions.mockRejectedValue(new Error('window 3 unreachable'));
+      const { unmount } = renderHook(() => useOpenProjectTabs());
+      // Flush the first attempt's rejection and let the 2000 ms delay get scheduled
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      // At this point, first attempt should have failed and retry delay scheduled
+      expect(mockGetAllOpenWebViewDefinitions).toHaveBeenCalledTimes(1);
+      // Unmount while the retry delay is pending (mid-delay)
+      unmount();
+      // Advance well past the delay
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      // Should still be exactly 1 (the initial attempt); no post-unmount retry attempt
+      expect(mockGetAllOpenWebViewDefinitions).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

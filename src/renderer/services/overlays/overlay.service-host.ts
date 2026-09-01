@@ -560,6 +560,31 @@ export async function showModalDialogOverlay<TReturn>(
 }
 
 /**
+ * Rejects every modal dialog overlay this window is currently showing, for a window that is going
+ * away.
+ *
+ * A modal dialog's promise is handed out by {@link showModalDialogOverlay} and lives nowhere else.
+ * It is not in the dialog service's map of live requests, so the rejection that fails this window's
+ * docked dialogs does not reach it, and the main process lifts the request timeout on `showDialog`,
+ * so nothing expires it either. A window destroyed with a modal on screen therefore leaves its
+ * requestor — usually in a process that outlives the window — waiting on an answer nobody is left
+ * to give.
+ *
+ * Deliberately narrower than the general dismissal this module does internally: the only caller is
+ * the dialog service's unload handler, and what it needs is exactly the modal dialogs this window
+ * will never answer, not an arbitrary set of overlay types.
+ *
+ * @param reason Message the requestors' promises are rejected with
+ * @internal
+ */
+export function rejectModalDialogOverlaysOnShutdown(reason: string): void {
+  getOverlays().forEach((overlay) => {
+    if (overlay.type === 'modalDialog')
+      rejectAndRemoveOverlay(overlay.id, newPlatformError(reason, ABORTED));
+  });
+}
+
+/**
  * Shows a popover overlay. Validates the request, checks visibility, translates coordinates, and
  * returns the overlay ID. Use onPopoverDismissed to wait for dismissal.
  *

@@ -3,7 +3,14 @@ import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
 import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-shard';
+import {
+  getWebViewMoveFailureDisposition,
+  WebViewMoveFailureDisposition,
+} from '@shared/models/web-view-move.model';
+import { WebViewId } from '@shared/models/web-view.model';
+import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
+import { notificationService } from '@shared/services/notification.service';
 import { windowService } from '@shared/services/window.service';
 import {
   ContextMenu,
@@ -87,6 +94,57 @@ const handleFloatTab = async (tabId: string) => {
 };
 
 /**
+ * What the user is told for each way a failed move can have left the tab. A move that did not do
+ * what was asked leaves the tab in very different places, and "could not move it" is only true of
+ * one of them: the tab that ended up in a window nobody chose DID move, and the tab that nothing
+ * could reopen is not on screen at all — telling its owner the action merely failed sends them
+ * looking for a tab that is gone.
+ *
+ * Keyed by the disposition rather than mapped inline so that adding one to
+ * {@link WebViewMoveFailureDisposition} fails to compile here until it has copy of its own.
+ */
+const MOVE_FAILURE_MESSAGE_KEYS: Record<WebViewMoveFailureDisposition, LocalizeKey> = {
+  'reopened-in-source-window': '%tab_contextMenu_moveTabToNewWindow_failed%',
+  'reopened-in-focused-window': '%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%',
+  'not-reopened': '%tab_contextMenu_moveTabToNewWindow_failedNotReopened%',
+  'possibly-closed': '%tab_contextMenu_moveTabToNewWindow_failedMayHaveClosed%',
+};
+
+/**
+ * What a failure that named no disposition is reported as. Those are the failures decided before
+ * the move touches the tab at all — an unknown window, a target on its way out, a mode that could
+ * not be read — so nothing about where the tab lives has changed. A failure from a step that does
+ * touch the tab names where it left it, including when that answer is "it may be gone".
+ */
+const MOVE_FAILURE_DEFAULT_MESSAGE_KEY: LocalizeKey = '%tab_contextMenu_moveTabToNewWindow_failed%';
+
+const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
+  try {
+    await sendCommand('platform.moveWebViewToNewWindow', webViewIdToMove);
+  } catch (error) {
+    logger.error(
+      `Failed to move web view ${webViewIdToMove} to a new window: ${getErrorMessage(error)}`,
+    );
+    // This menu item is a user action, and the move's rejection is the only signal that the tab is
+    // not where they asked, so the failure has to reach the user and not only the log — saying
+    // which failure it was, because each one calls for a different reaction
+    const disposition = getWebViewMoveFailureDisposition(error);
+    try {
+      await notificationService.send({
+        message: disposition
+          ? MOVE_FAILURE_MESSAGE_KEYS[disposition]
+          : MOVE_FAILURE_DEFAULT_MESSAGE_KEY,
+        severity: 'error',
+      });
+    } catch (notificationError) {
+      logger.warn(
+        `Could not notify the user that moving web view ${webViewIdToMove} failed: ${getErrorMessage(notificationError)}`,
+      );
+    }
+  }
+};
+
+/**
  * Custom tab title for all tabs in Platform
  *
  * @param iconUrl Url to image to show on the tab. Defaults to the software's standard logo.
@@ -115,15 +173,20 @@ export function PlatformTabTitle({
 
   const tabAria: LocalizeKey = '%tab_aria_tab%';
   const floatTabKey: LocalizeKey = '%tab_contextMenu_floatTab%';
+  const moveTabToNewWindowKey: LocalizeKey = '%tab_contextMenu_moveTabToNewWindow%';
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
-      () => (isLocalizeKey(text) ? [text, tabAria, floatTabKey] : [tabAria, floatTabKey]),
+      () =>
+        isLocalizeKey(text)
+          ? [text, tabAria, floatTabKey, moveTabToNewWindowKey]
+          : [tabAria, floatTabKey, moveTabToNewWindowKey],
       [text],
     ),
   );
   const title = isLocalizeKey(text) ? localizedStrings[text] : text;
   const tabLabel = localizedStrings[tabAria];
   const floatTabText = localizedStrings[floatTabKey];
+  const moveTabToNewWindowText = localizedStrings[moveTabToNewWindowKey];
 
   // Handle applying and removing the CSS styles for flashing
   useEffect(() => {
@@ -492,6 +555,14 @@ export function PlatformTabTitle({
       <ContextMenuTrigger>{titleWithTooltip}</ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onClick={() => handleFloatTab(id)}>{floatTabText}</ContextMenuItem>
+        {/* Windows are a Power-mode feature; Simple mode's move command path is a no-op, so the
+            item would be a dead button there. Non-WebView tabs (webViewId undefined) have nothing
+            to move. */}
+        {isPowerMode && webViewId ? (
+          <ContextMenuItem onClick={() => handleMoveTabToNewWindow(webViewId)}>
+            {moveTabToNewWindowText}
+          </ContextMenuItem>
+        ) : undefined}
       </ContextMenuContent>
     </ContextMenu>
   );

@@ -2418,3 +2418,82 @@ step, no automation. Just a record.
   exactly one case — a dock reactivation brings a window back before readiness lands — which is the
   case it was added for.
 - **Source:** PT-4386.
+
+## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
+
+- **Date:** 2026-08-11
+- **Status:** Accepted
+- **Context:** rc-dock ships a `windowbox` feature that pops a dock tab into a child browser
+  window, which looked like a shortcut to multi-window. A live spike (Power mode, tab dragged
+  out via the windowbox path) failed on four independent axes: the popup is an unmanaged
+  window (default chrome, none of the app's preload/security/window wiring); React 19 removed
+  `findDOMNode` and rc-dock's rc-util fallback crashes the host window's React root
+  (`WindowPanel`/`NewWindow` — the same crash signature later reproduced when a persisted
+  layout carrying a stray windowbox node was restored); the popped tab's content did not
+  render and could not be interacted with; and the popup booted a spurious second full app
+  renderer, registering duplicate window-scoped services. The failures are structural — the
+  feature assumes a same-origin child window sharing the parent's React tree, which
+  contradicts this app's window model (isolated renderer per window, window-scoped service
+  shards, main-process orchestration).
+- **Decision:** Every application window is a real Electron `BrowserWindow` created and
+  tracked by the main process, with its own renderer, dock layout, and window-scoped service
+  shards; cross-window placement flows through the main-process routers (window layout,
+  `targetWindowId`, the move primitive), never through rc-dock's windowbox. Layout traversal
+  code still walks the `windowbox` box shape defensively (`savedLayoutHasAnyTabs`), so foreign or legacy
+  layout nodes cannot make a non-empty dock read as empty.
+- **Alternatives:** rc-dock windowbox — rejected on the spike evidence above. Keeping the
+  single-window model — rejected; multi-window is the epic. Patching rc-dock's windowbox into
+  the app's window model — rejected; it would re-implement window management inside a docking
+  library that never owned it, against the process architecture.
+- **Consequences:** Windows are equal siblings managed by main (persistence, bounds, layout
+  each per window); popping a tab out is a routed re-open in a new `BrowserWindow`, so the
+  web view's close/open lifecycle runs on a move rather than a reparent. A windowbox node
+  appearing in a persisted layout is foreign data: restore currently renders it through
+  rc-dock's crashing code path, so stripping windowbox nodes at restore is candidate
+  hardening if such layouts recur.
+- **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
+  design doc § spike); multi-window epic architecture discussion.
+
+## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it
+
+- **Date:** 2026-08-31
+- **Status:** Accepted — capability deferred to PT-4465
+- **Context:** A window created while the user is working in another application should appear
+  without stealing the foreground, and a window the user asked for must come to the front. The
+  obvious source for that distinction is focus state, and it has been reached for multiple times
+  in this PR's review rounds. Both attempts failed on the same case. Reading `getFocusedWindowId()`
+  does not survive `removeWindow` clearing it, so on macOS — where the app stays resident with no
+  windows — closing the focused window reset the answer to the startup one and a backgrounded
+  creation took the foreground anyway. Replacing that with a never-cleared "has this app ever been
+  focused" latch cannot tell "the user is in another application" from "no window holds focus
+  because the user closed them all and is now clicking the dock icon" — and the dock-click path
+  creates a window through `app.on('activate')` → `restoreWindows()`, so it would have shown the
+  window the user just asked for unfocused and flashing.
+- **Decision:** The question is *"did a person in this app ask for this window?"*, which is the
+  caller's knowledge and nothing else's, so it is declared by the caller rather than inferred. No
+  window-creation path reads focus state to decide activation. The mechanism is PT-4465's to build:
+  an explicit user-intent flag on `createWindow`, passed by each call site (menu and
+  `platform.createWindow`, dock-click and startup restore: yes; a `{ type: 'window' }` web-view
+  open or `moveWebViewToNewWindow` arriving from an extension: no). **None of that is wired yet** —
+  `createWindow` takes `restoreInfo` and `{ pendingContent }` and nothing else, and no
+  intent flag exists in the tree — so a reader looking for it will find it on the ticket, not in
+  the code. This entry exists so the inference is not re-attempted in the meantime.
+- **Scope — this is about activating a NEW window, not about raising an existing one.** Focus state
+  remains the right input for a raise, and is used deliberately today: `isApplicationFocused()`
+  gates the cross-window open raise (`web-view.service-router.ts`) and the move raise, so an in-app
+  action never pulls the app in front of whatever the user is working in. `handleUri` in `main.ts`
+  is just as deliberately *not* gated on it, and its comment states this entry's principle for the
+  case that was already shipped: the raise runs precisely when the app does not own the foreground,
+  because the user asked by following the link. Those guards answer "is this app in front?", which
+  focus state does know. Nothing here argues against them.
+- **Alternatives:** Infer from `getFocusedWindowId()` — rejected, cleared by `removeWindow`. Infer
+  from an app-ever-focused latch — rejected, indistinguishable from the dock-click restore. Ship
+  the third variation of a focus heuristic — rejected: every variation answers a question about the
+  foreground, and the question being asked is about a person's intent.
+- **Consequences:** Until PT-4465 lands, every new window activates, including one an extension
+  creates while the user is elsewhere. That is the known cost of not guessing. When it does land,
+  withholding the constructor's `show` must stay scoped to the not-asked-for case: `did-fail-load`
+  only logs, so a window that never reaches `ready-to-show` would otherwise stay invisible, which is
+  worse than a badly-timed foreground.
+- **Source:** PR #2670 review item 6 (2026-08-25) and the review rounds that followed; PT-4465,
+  which carries the design, the call-site table and the `show` hazard in full.

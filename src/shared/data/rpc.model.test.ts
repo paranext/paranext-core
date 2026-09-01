@@ -10,6 +10,8 @@ import {
   isCleanCloseEvent,
   MAX_LOGGED_DETAIL_LENGTH,
   MAX_LOGGED_STACK_LENGTH,
+  isRequestTimedOutError,
+  JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
   MAX_REQUEST_ATTEMPTS,
   REQUEST_ATTEMPT_WAIT_TIME_MS,
   requestWithRetry,
@@ -675,5 +677,23 @@ describe('describeWebSocketErrorEvent', () => {
       },
     };
     expect(() => describeWebSocketErrorEvent(hostile)).not.toThrow();
+  });
+});
+
+describe('isRequestTimedOutError', () => {
+  test('recognizes the message doRequest builds for a client-side request timeout', () => {
+    expect(
+      isRequestTimedOutError(
+        new Error(`${JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX} command:test.thing ["arg"]`),
+      ),
+    ).toBe(true);
+  });
+
+  test('does not match other request failures or non-errors', () => {
+    expect(
+      isRequestTimedOutError(new Error("JSON-RPC Request error (-32601): 'command:x' not found")),
+    ).toBe(false);
+    expect(isRequestTimedOutError(new Error('some unrelated failure'))).toBe(false);
+    expect(isRequestTimedOutError(undefined)).toBe(false);
   });
 });

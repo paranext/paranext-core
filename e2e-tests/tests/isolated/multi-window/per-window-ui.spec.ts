@@ -56,12 +56,13 @@ import {
   captureAppOutput,
   createSecondWindow,
   createStepLogger,
-  expectWindowDockEmpty,
+  expectWindowDockHasOnlyHomeTab,
   focusWindowAndWaitForRouting,
   getWindowIdOfPage,
   homeTabTitle,
   pollUntil,
   waitForRendererRegistered,
+  widenWindowForToolbarReference,
 } from './multi-window.util';
 
 /** Fixed GUID of the bundled sample WEB project (c-sharp/assets/WEB/Settings.xml <Guid>). */
@@ -285,6 +286,9 @@ test.describe('per-window UI isolation', () => {
     await waitForAppReady(mainPage, 180_000);
     const window1Id = getWindowIdOfPage(mainPage);
     await expect(homeTabTitle(mainPage, window1Id)).toBeAttached({ timeout: 60_000 });
+    // The scroll-group section below reads references off both windows' toolbars, which show the
+    // book alone at the toolbar shrink ladder's narrowest rung.
+    await widenWindowForToolbarReference(electronApp, mainPage);
     logStep(`window ${window1Id} ready`);
 
     // ── Navigation target, baseline ────────────────────────────────────────────────────────────
@@ -295,10 +299,11 @@ test.describe('per-window UI isolation', () => {
     const page2 = await createSecondWindow(electronApp);
     const window2Id = getWindowIdOfPage(page2);
     await waitForRendererRegistered(window2Id, 120_000);
-    // The empty dock is scenario groundwork here (window 2 must have no navigable tab of its own);
-    // the empty-start behaviour itself is locked by multi-window.spec.ts.
-    await expectWindowDockEmpty(page2);
+    // The Home-only dock is scenario groundwork here (window 2 must have no navigable tab of its
+    // own — Home isn't one); the dock-Home behaviour itself is locked by multi-window.spec.ts.
+    await expectWindowDockHasOnlyHomeTab(page2);
     await expect(page2.locator(BCV_TRIGGER).first()).toBeDisabled();
+    await widenWindowForToolbarReference(electronApp, page2);
     logStep(`window ${window2Id} up; both BCV controls disabled with no navigable tabs anywhere`);
 
     // ── Navigation target follows only the OWN window's tabs ───────────────────────────────────
@@ -312,8 +317,9 @@ test.describe('per-window UI isolation', () => {
     await expect(page2.locator(`iframe[data-web-view-id="${editorId1}"]`)).toHaveCount(0);
     // Window 1 now resolves its own editor as the navigation target…
     await expect(mainPage.locator(BCV_TRIGGER).first()).toBeEnabled({ timeout: 30_000 });
-    // …and window 2 must NOT: its fallback searches only its own (empty) dock. The settle gives a
-    // wrongly cross-window-reaching resolution time to flip the control before the assertion.
+    // …and window 2 must NOT: its fallback searches only its own dock, which holds only the
+    // non-navigable Home tab. The settle gives a wrongly cross-window-reaching resolution time to
+    // flip the control before the assertion.
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 2_000);
     });
@@ -323,9 +329,9 @@ test.describe('per-window UI isolation', () => {
     // ── Web-view placement routes to the focused window ────────────────────────────────────────
     await focusWindowAndWaitForRouting(electronApp, window2Id);
     const editorId2 = await openScriptureEditorForProject(page2, SAMPLE_WEB_PROJECT_ID, {
-      // Window 2 is an empty secondary window: it has no initial iframe for the helper's
-      // loadLayout-race guard to wait on, and the empty-dock probe above already proved its
-      // initial layout finished loading.
+      // The Home-only dock probe above already proved window 2's initial loadLayout finished (its
+      // own docked Home tab only ever attaches after that), so the helper's own loadLayout-race
+      // guard would be redundant here.
       skipInitialLayoutGuard: true,
     });
     // Placement proof, mirror-image of window 1's: the iframe attached in window 2 (enforced by

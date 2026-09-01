@@ -879,6 +879,18 @@ declare module 'shared/models/web-view.model' {
      */
     existingId?: string | '?';
     /**
+     * Limit an `existingId: '?'` search to web views showing this project.
+     *
+     * Only meaningful with `existingId: '?'` — a concrete `existingId` already names one exact web
+     * view, so combining it with a project filter is contradictory and is rejected as an error.
+     * Without this, `'?'` matches any web view of the type regardless of project. Providing this
+     * without any `existingId` at all is the same contradiction — there is no `'?'` search for it to
+     * limit — and is rejected the same way.
+     *
+     * @experimental
+     */
+    existingProjectId?: string;
+    /**
      * Whether to create a WebView with a new ID if a WebView with ID `existingId` was not found. Only
      * relevant if `existingId` is provided. If `existingId` is not provided, this property is
      * ignored.
@@ -900,6 +912,21 @@ declare module 'shared/models/web-view.model' {
      * looking at.
      */
     bringToFront?: boolean;
+    /**
+     * Id of the application window to open the web view in, instead of the window the user is working
+     * in. Applies to `tab`, `panel`, and `float` layouts; combining it with a `'window'` layout
+     * (which asks for a NEW window) is an error. The open fails if no such window is serving web
+     * views — a caller that names a window wants that window, not a guess.
+     *
+     * Combining it with a 'replace-tab' layout is likewise an error — the tab being replaced already
+     * names the window.
+     *
+     * This is a runtime-only handle: window ids are reused across sessions, so never persist one. Get
+     * the current window's id via the `platform.getFocusedWindowId` command.
+     *
+     * @experimental This option is unstable and may change or disappear without notice
+     */
+    targetWindowId?: number;
   };
   /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */
   export type GetWebViewOptions = OpenWebViewOptions;
@@ -1445,6 +1472,17 @@ declare module 'shared/data/rpc.model' {
    * @experimental
    */
   export const JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX = 'JSON-RPC Request timed out:';
+  /**
+   * Whether `error` is what `network.service`'s request plumbing throws when a request expires
+   * client-side before any answer arrives (`doRequest` builds `JSON-RPC Request timed out:
+   * <requestType> <args>` when its per-request wait runs out). Matched by message substring — no
+   * richer machine-readable marker exists for this failure — deriving the format from its one
+   * producer ({@link JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX}), so a reformat there cannot silently
+   * stop this matcher from matching.
+   *
+   * @experimental
+   */
+  export function isRequestTimedOutError(error: unknown): boolean;
 }
 declare module 'shared/models/openrpc.model' {
   import type { JSONSchema7 } from 'json-schema';
@@ -4035,8 +4073,27 @@ declare module 'shared/models/docking-framework.model' {
     /** The ID of the tab to replace */
     targetTabId: string;
   }
+  /**
+   * Information about opening a tab in its own application window.
+   *
+   * In Simple mode — which is single-window by design — this degrades to `'tab'`: the web view opens
+   * as a normal tab in the window the user is working in. An interface mode that cannot be read takes
+   * the same degraded path rather than failing the open, so a caller in Power mode can get a tab
+   * instead of a window when the mode read fails.
+   *
+   * It degrades the same way for an open that also passed `existingId: '?'` whose reuse search could
+   * not be answered because some window was unreachable. Such an open goes ahead rather than failing,
+   * accepting that it may be making a second copy of a web view that already exists somewhere — and a
+   * duplicate as a tab is one the user can see and close, where a duplicate as a window takes the
+   * screen and OS focus and can hide the original behind it.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export interface WindowLayout {
+    type: 'window';
+  }
   /** Information about how a Platform.Bible tab fits into the dock layout */
-  export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
+  export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout | WindowLayout;
   /** Props that are passed to the web view tab component */
   export type WebViewTabProps = WebViewDefinition;
   /**
@@ -4072,10 +4129,16 @@ declare module 'shared/models/docking-framework.model' {
      * Find the ID of the first open web view whose `webViewType` matches the one supplied.
      *
      * @param webViewType The web view type to search for
+     * @param projectId Optionally limits the search to web views showing a given project
      * @returns The WebViewDefinition of the matching web view, or `undefined` if no web view of that
      *   type is open
+     * @experimental The optional `projectId` filter is new; the rest of this member is
+     *   long-established.
      */
-    findFirstWebViewDefinitionByType: (webViewType: string) => WebViewDefinition | undefined;
+    findFirstWebViewDefinitionByType: (
+      webViewType: string,
+      projectId?: string,
+    ) => WebViewDefinition | undefined;
     /**
      * Add or update a tab in the layout
      *
@@ -4416,7 +4479,10 @@ declare module 'shared/services/web-view.service-model' {
      * view definitions themselves. Changing properties on returned definitions does not affect the
      * actual WebView definitions.
      *
-     * @returns Saved properties of every open WebView. Empty array if no WebViews are open.
+     * @returns Saved properties of every open WebView. Empty array if no WebViews are open. A WebView
+     *   being moved between windows is included even though it is docked in neither of them for the
+     *   length of the move, so that a caller selecting from this list cannot silently miss it; treat
+     *   the result as what is open in the app, not as what is docked in some window right now.
      * @throws If any window could not be asked what it has open. Callers read this as the complete
      *   picture, and a window that could not answer is indistinguishable in the result from one with
      *   nothing open, so a short list is refused rather than passed off as the whole landscape.
@@ -5116,6 +5182,54 @@ declare module 'papi-shared-types' {
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+    /**
+     * Move a web view to a window created for it.
+     *
+     * A move closes the web view in the window that holds it and reopens it — same
+     * `useWebViewState` state — in the target window. Consumers see a close event in the source and
+     * an open event in the target, and the web view controller is disposed and re-created: a held
+     * controller reference must be re-acquired after a move. The returned id is the authoritative
+     * id of the web view after the move, and it can differ from the id passed in: a web view
+     * restored from a persisted layout carries a window-scoped id, and a move does not carry that
+     * scope along — so use the returned id for anything after the move. In Simple mode —
+     * single-window by design — there is no other window to move to, and this does nothing.
+     *
+     * A move that fails once it has taken the web view out of its window says where it left it, as
+     * a machine-readable marker at the front of the error message: `[webViewMoveFailure:<where>]`,
+     * where `<where>` is `reopened-in-source-window` (nothing about where it lives changed),
+     * `reopened-in-focused-window` (it did move, just not to the window that was asked for),
+     * `not-reopened` (it is open in no window, and only the log holds what it was), or
+     * `possibly-closed` (taking it out of its window is what failed, so where it is cannot be
+     * told). The marker rides in the message because a rejection that crosses processes reaches its
+     * caller as a code and a message and nothing else. A failure decided before the move touches
+     * the web view carries no marker. Strip the marker before showing the message to a user — it is
+     * there to be classified on, not read.
+     *
+     * @param webViewId Web view to move
+     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
+     *   see above
+     * @experimental
+     */
+    'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
+    /**
+     * Move a web view to an existing window, named by its runtime window id (see
+     * `platform.getFocusedWindowId`; window ids are reused across sessions — never persist one).
+     *
+     * Same semantics as `platform.moveWebViewToNewWindow` — including the marker a failed move
+     * carries to say where it left the web view — and: moving a web view to the window it is
+     * already in does nothing, and naming a window that does not exist is an error that leaves the
+     * web view where it is.
+     *
+     * @param webViewId Web view to move
+     * @param targetWindowId Window to move it to
+     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
+     *   see `platform.moveWebViewToNewWindow`
+     * @experimental
+     */
+    'platform.moveWebViewToWindow': (
+      webViewId: WebViewId,
+      targetWindowId: number,
+    ) => Promise<WebViewId>;
     /** Open a dialog that displays essential information about the application */
     'platform.about': () => Promise<void>;
     /** Open Usersnap feedback form to submit an idea */
@@ -11532,6 +11646,9 @@ declare module '@papi/core' {
   export type {
     DirectionFromTab,
     DirectionFromTabAdjacent,
+    FloatLayout,
+    Layout,
+    WindowLayout,
   } from 'shared/models/docking-framework.model';
   export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
   export type {
@@ -13110,6 +13227,25 @@ declare module 'renderer/services/overlays/overlay.service-host' {
     onOverlayCreated?: (overlayId: string) => void,
     webViewId?: string,
   ): Promise<TReturn | undefined>;
+  /**
+   * Rejects every modal dialog overlay this window is currently showing, for a window that is going
+   * away.
+   *
+   * A modal dialog's promise is handed out by {@link showModalDialogOverlay} and lives nowhere else.
+   * It is not in the dialog service's map of live requests, so the rejection that fails this window's
+   * docked dialogs does not reach it, and the main process lifts the request timeout on `showDialog`,
+   * so nothing expires it either. A window destroyed with a modal on screen therefore leaves its
+   * requestor — usually in a process that outlives the window — waiting on an answer nobody is left
+   * to give.
+   *
+   * Deliberately narrower than the general dismissal this module does internally: the only caller is
+   * the dialog service's unload handler, and what it needs is exactly the modal dialogs this window
+   * will never answer, not an arbitrary set of overlay types.
+   *
+   * @param reason Message the requestors' promises are rejected with
+   * @internal
+   */
+  export function rejectModalDialogOverlaysOnShutdown(reason: string): void;
   /** The overlay service instance exposed on papi */
   export const overlayService: IOverlayService;
   /**

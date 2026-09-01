@@ -123,8 +123,14 @@ import {
   GET_WINDOW_LAYOUT_REQUEST_TYPE,
   SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
   WindowLayoutGetResponse,
+  WINDOW_EMPTIED_REQUEST_TYPE,
+  WindowEmptiedReason,
+  WindowEmptiedResponse,
 } from '@shared/data/window-layout-persistence.model';
-import { reconcileSavedLayout } from '@shared/utils/saved-layout-reconciliation.util';
+import {
+  reconcileSavedLayout,
+  savedLayoutHasAnyTabs,
+} from '@shared/utils/saved-layout-reconciliation.util';
 import {
   buildLegacyColorVarsLogMessage,
   transformLegacyColorVars,
@@ -899,6 +905,75 @@ async function getEnabledSupplementEntries(): Promise<DefaultLayoutSupplementEnt
 let layoutLoadGeneration = 0;
 
 /**
+ * The layout load currently in flight, if any.
+ *
+ * A load replaces the dock's ENTIRE contents with what it read before it started, so a web view
+ * that arrives while one is in flight is wiped by it — and silently: the close events a load emits
+ * are diffed against that same pre-arrival reading, so nothing disposes the controller, the nonce
+ * and the state the arriving web view already registered. A load's own checkpoints catch this only
+ * when it began against an EMPTY dock; a reload of a window that already has content in it cannot
+ * tell what arrived during it from what it is replacing. Anything docking into this window waits
+ * here instead.
+ */
+let layoutLoadInFlight: Promise<void> | undefined;
+
+/**
+ * How long {@link waitForLayoutLoadToSettle} waits for a load in flight. A load is a settings read
+ * and one request to the main process, so this is generous for what it exists for — and a load
+ * still retrying that request outruns it, which is the better trade in both directions: waiting
+ * longer stalls a move the user is watching, and refusing to dock loses the web view outright
+ * rather than possibly.
+ */
+const LAYOUT_LOAD_SETTLE_WAIT_MS = 2_000;
+
+/**
+ * Register the load about to run as the one anything docking into this window waits for, and answer
+ * how to end that registration. See {@link layoutLoadInFlight}.
+ */
+function beginTrackedLayoutLoad(): () => void {
+  let endLoad: () => void = () => {};
+  const load = new Promise<void>((resolve) => {
+    endLoad = resolve;
+  });
+  layoutLoadInFlight = load;
+  return () => {
+    // Not when a newer load has taken over: that one is what a waiter has to wait for now
+    if (layoutLoadInFlight === load) layoutLoadInFlight = undefined;
+    endLoad();
+  };
+}
+
+/**
+ * Wait, bounded, for the layout loads in flight to finish — see {@link layoutLoadInFlight}. Loads
+ * rather than load: one superseded while this waits hands the dock to a newer one, and it is
+ * whichever load actually reaches the dock that this exists to stay out of the way of.
+ *
+ * Exported for the routed entry points that dock into this window from other modules — the dialog
+ * shard's `showDialog`. The load state this reads lives here, so the wait has to be asked for from
+ * here.
+ *
+ * @internal function; not exposed on papi
+ */
+export async function waitForLayoutLoadToSettle(): Promise<void> {
+  let loadInFlight = layoutLoadInFlight;
+  if (!loadInFlight) return;
+  logger.debug('Waiting for the layout load in flight before docking into this window');
+  const giveUp = wait(LAYOUT_LOAD_SETTLE_WAIT_MS).then(() => 'timed-out' as const);
+  while (loadInFlight) {
+    // Sequential by nature: each load in flight has to settle before the next can be waited on
+    // eslint-disable-next-line no-await-in-loop
+    const outcome = await Promise.race([loadInFlight.then(() => undefined), giveUp]);
+    if (outcome === 'timed-out') {
+      logger.warn(
+        `A layout load did not settle within ${LAYOUT_LOAD_SETTLE_WAIT_MS} ms; docking into this window anyway`,
+      );
+      return;
+    }
+    loadInFlight = layoutLoadInFlight;
+  }
+}
+
+/**
  * The {@link layoutLoadGeneration} of the load whose layout the dock actually holds. Set at each
  * point {@link loadLayout} hands a layout to the dock, so while it trails `layoutLoadGeneration` a
  * load is still on its way and the dock holds something OTHER than the layout this window should be
@@ -971,121 +1046,168 @@ async function loadLayout(
   // Capture the web views open before the load so close events can be emitted for the ones the
   // new layout drops (see `emitCloseEventsForWebViewsRemovedByLayoutLoad`)
   const webViewsBeforeLoad = dockLayoutVar.getAllWebViewDefinitions();
-  if (layout) {
-    // NOTE: this branch intentionally does NOT apply the default-layout supplement — a caller
-    // passing an explicit layout owns its full contents. A caller that wants supplement tabs
-    // merged in must do it itself before calling `loadLayout` (see `runProjectBoundSimpleSwitch`
-    // for an example, via `getEnabledSupplementEntries` + `mergeDefaultLayoutSupplement`).
-    // Cross the rc-dock / shared-model boundary with one cast at this edge so callers don't have
-    // to. Matches the convention in `platform-dock-layout.component.tsx`.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const layoutAsInfo = layout as unknown as LayoutInfo;
-    // Bumping the generation above is what lets this call cancel an in-flight no-argument load that
-    // would otherwise land on top of it — when THIS is the newer load, the checkpoint below passes
-    // and the older one drops its answer instead.
-    if (isSuperseded()) {
-      // The reverse ordering: a newer load reached the dock while this one was still awaiting it.
-      // Writing now would replace the dock with content the user has already moved past AND regress
-      // `layoutLoadGenerationInDock` below `layoutLoadGeneration`, which holds every subsequent
-      // push with nothing scheduled to reconcile the dock. The caller owning this layout does not
-      // make it current; only being the newest load does.
-      logger.debug('Dropping an explicit layout load that a newer one superseded');
+  // Anything docking into this window waits for a load that has content to lose — see
+  // `layoutLoadInFlight`. A load that began against an EMPTY dock needs no waiter: its own
+  // checkpoints below drop it rather than wipe what arrived, and a routed open or move into a
+  // brand-new window would otherwise wait on that window's own startup load every time.
+  const endTrackedLoad = webViewsBeforeLoad.length > 0 ? beginTrackedLayoutLoad() : undefined;
+  try {
+    if (layout) {
+      // NOTE: this branch intentionally does NOT apply the default-layout supplement — a caller
+      // passing an explicit layout owns its full contents. A caller that wants supplement tabs
+      // merged in must do it itself before calling `loadLayout` (see `runProjectBoundSimpleSwitch`
+      // for an example, via `getEnabledSupplementEntries` + `mergeDefaultLayoutSupplement`).
+      // Cross the rc-dock / shared-model boundary with one cast at this edge so callers don't have
+      // to. Matches the convention in `platform-dock-layout.component.tsx`.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const layoutAsInfo = layout as unknown as LayoutInfo;
+      // Bumping the generation above is what lets this call cancel an in-flight no-argument load that
+      // would otherwise land on top of it — when THIS is the newer load, the checkpoint below passes
+      // and the older one drops its answer instead.
+      if (isSuperseded()) {
+        // The reverse ordering: a newer load reached the dock while this one was still awaiting it.
+        // Writing now would replace the dock with content the user has already moved past AND regress
+        // `layoutLoadGenerationInDock` below `layoutLoadGeneration`, which holds every subsequent
+        // push with nothing scheduled to reconcile the dock. The caller owning this layout does not
+        // make it current; only being the newest load does.
+        logger.debug('Dropping an explicit layout load that a newer one superseded');
+        return;
+      }
+      dockLayoutVar.loadLayout(layoutAsInfo);
+      layoutLoadGenerationInDock = thisGeneration;
+      emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutAsInfo);
+      // `loadLayout` doesn't run `onLayoutChange` on a programmatic load, so persist manually —
+      // unless the caller explicitly opted out (see the `options.persist` doc above).
+      if (options?.persist !== false) await saveLayout(layoutAsInfo);
       return;
     }
-    dockLayoutVar.loadLayout(layoutAsInfo);
-    layoutLoadGenerationInDock = thisGeneration;
-    emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutAsInfo);
-    // `loadLayout` doesn't run `onLayoutChange` on a programmatic load, so persist manually —
-    // unless the caller explicitly opted out (see the `options.persist` doc above).
-    if (options?.persist !== false) await saveLayout(layoutAsInfo);
-    return;
-  }
 
-  // Pick the layout by interface mode (runs at startup and on every `platform.interfaceMode` change;
-  // see the subscription in `registerDockLayout`):
-  // - Power mode: this window's saved layout from the main process's window-layouts structure (see
-  //   `getPersistedLayout` for the legacy and empty fallbacks).
-  // - Simple mode: always the static `simpleLayout`. `saveLayout` no-ops in simple mode, so changes
-  //   there are ephemeral and never clobber the saved power layout.
-  const interfaceMode = await settingsService.get('platform.interfaceMode');
-  if (isSuperseded()) {
-    // A newer load owns the cache and the dock now. Seeding the cache with this reading would tell
-    // `saveLayout` the wrong mode, which either drops the user's power-mode layout changes on the
-    // floor or lets simple-mode changes clobber their saved power layout.
-    logger.debug('Dropping a layout load that a newer one superseded while it read the mode');
-    return;
-  }
-  // Seed/refresh the cache before loading so any `onLayoutChange` that the load triggers (and every
-  // subsequent `saveLayout`) sees the current mode without another settings round-trip.
-  currentInterfaceMode = interfaceMode;
-  const persistedLayout =
-    interfaceMode === 'simple'
-      ? dockLayoutVar.simpleLayout
-      : await getPersistedLayout(dockLayoutVar.testLayout, isSuperseded);
-  if (persistedLayout === undefined) {
-    // The only reason `getPersistedLayout` withholds a layout: a newer load started while it was
-    // waiting on the main process. Withholding rather than answering "empty" is what keeps this
-    // from being a dock wipe if the checkpoint below is ever moved.
-    logger.debug(
-      'Dropping a layout load that a newer one superseded while it read the saved layout',
+    // Pick the layout by interface mode (runs at startup and on every `platform.interfaceMode` change;
+    // see the subscription in `registerDockLayout`):
+    // - Power mode: this window's saved layout from the main process's window-layouts structure (see
+    //   `getPersistedLayout` for the legacy and empty fallbacks).
+    // - Simple mode: always the static `simpleLayout`. `saveLayout` no-ops in simple mode, so changes
+    //   there are ephemeral and never clobber the saved power layout.
+    const interfaceMode = await settingsService.get('platform.interfaceMode');
+    if (isSuperseded()) {
+      // A newer load owns the cache and the dock now. Seeding the cache with this reading would tell
+      // `saveLayout` the wrong mode, which either drops the user's power-mode layout changes on the
+      // floor or lets simple-mode changes clobber their saved power layout.
+      logger.debug('Dropping a layout load that a newer one superseded while it read the mode');
+      return;
+    }
+    // Seed/refresh the cache before loading so any `onLayoutChange` that the load triggers (and every
+    // subsequent `saveLayout`) sees the current mode without another settings round-trip.
+    currentInterfaceMode = interfaceMode;
+    // Simple mode never calls `getPersistedLayout` — the static `simpleLayout` never signals pending
+    // content, so this always keeps the default-layout supplement.
+    const persistedResult =
+      interfaceMode === 'simple'
+        ? { layout: dockLayoutVar.simpleLayout, isPendingContent: false }
+        : await getPersistedLayout(dockLayoutVar.testLayout, isSuperseded);
+    if (persistedResult === undefined) {
+      // The only reason `getPersistedLayout` withholds a layout: a newer load started while it was
+      // waiting on the main process. Withholding rather than answering "empty" is what keeps this
+      // from being a dock wipe if the checkpoint below is ever moved.
+      logger.debug(
+        'Dropping a layout load that a newer one superseded while it read the saved layout',
+      );
+      return;
+    }
+    const { layout: persistedLayout, isPendingContent } = persistedResult;
+    /**
+     * Whether web views arrived in the dock while this load was reading what to restore. Only a
+     * load that began against an empty dock can answer yes, and for it the answer means everything
+     * it read is stale: it asked what an empty window should start with, and a web view adopted or
+     * opened during the read (a routed move lands in a fresh window while its saved-layout request
+     * is still retrying) is in the dock but not in the answer. Applying the answer anyway would
+     * wipe that web view — with no close event, since
+     * {@link emitCloseEventsForWebViewsRemovedByLayoutLoad} only covers web views that were open
+     * when the load began.
+     */
+    const didDockGainWebViewsDuringLoad = () =>
+      webViewsBeforeLoad.length === 0 && dockLayoutVar.getAllWebViewDefinitions().length > 0;
+    // Every layout gets its web view ids scoped to this window, including one restored from
+    // persistence: a saved entry's ids carry the window id of the session that saved them (window
+    // ids are not stable across restarts), and the legacy pre-multi-window layout carries unscoped
+    // ids. Re-scoping replaces the suffix rather than stacking another one, so it is safe on both.
+    const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
+    if (isPendingContent) {
+      if (didDockGainWebViewsDuringLoad()) {
+        logger.debug(
+          'Dropping a layout load that began against an empty dock: web views arrived while it read the saved layout',
+        );
+        return;
+      }
+      // A window created to receive one specific web view, routed separately, starts with nothing
+      // else — skip the default-layout supplement entirely, without even fetching its flags.
+      dockLayoutVar.loadLayout(layoutToLoad);
+      layoutLoadGenerationInDock = thisGeneration;
+      emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
+      return;
+    }
+    // Supplement tabs join the layout below, after the scoping pass above has already run over it, so
+    // scope each supplement tab itself — its id comes from a build-baked file and would otherwise be
+    // the same in every window. Scoping here rather than re-scoping the merged layout also keeps the
+    // merge's dedup working: it matches by exact id, so an unscoped supplement id would never match
+    // the scoped copy already in a restored layout and the tab would be appended again on every load.
+    const enabledEntries = (await getEnabledSupplementEntries()).map((entry) => ({
+      ...entry,
+      tab: withWindowScopedWebViewIdInTab(entry.tab),
+    }));
+    if (isSuperseded()) {
+      // Point of no return: everything below replaces the dock's whole contents, and the saved-layout
+      // request above can take seconds. The newer load has already loaded, or is about to load, the
+      // layout that belongs there.
+      logger.debug('Dropping a layout load that a newer one superseded before it reached the dock');
+      return;
+    }
+    // Same checkpoint for content that arrived instead of a newer load — see the guard's declaration
+    if (didDockGainWebViewsDuringLoad()) {
+      logger.debug(
+        'Dropping a layout load that began against an empty dock: web views arrived while it read the saved layout',
+      );
+      return;
+    }
+    if (enabledEntries.length === 0) {
+      // Nothing to merge (the common/vanilla case) — load the base layout directly and skip the clone.
+      dockLayoutVar.loadLayout(layoutToLoad);
+      layoutLoadGenerationInDock = thisGeneration;
+      emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
+      reportIfLoadedLayoutIsEmpty(layoutToLoad);
+      return;
+    }
+    // KNOWN POWER-MODE LIMITATION (safe today — simple mode is the default and is immune): power mode
+    // persists the merged layout, so a supplement tab saved while its flag was on lingers after a
+    // flag-off run — provider-less, though closable, since the merge drops an entry's Simple-mode
+    // `isClosable: false` pin outside simple mode. (Changing a tab's id across versions likewise
+    // leaves a duplicate, since we dedup by exact id.) Fix when power mode lands: drop persisted
+    // supplement tabs whose provider is no longer registered.
+    // LayoutInfo is intentionally opaque in the shared model; cross to the concrete rc-dock shape here,
+    // mirroring platform-dock-layout.component.tsx
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const layoutToLoadAsBase = layoutToLoad as unknown as LayoutBase;
+    const supplementedLayout = mergeDefaultLayoutSupplement(
+      layoutToLoadAsBase,
+      enabledEntries,
+      // The mode this layout belongs to. Each entry describes a tab's place in simple mode's fixed
+      // columns, and this merge also runs against power mode's persisted layout, so the merge needs to
+      // be told which one it is looking at rather than assuming the entries' home mode.
+      interfaceMode,
+      (entry, message) =>
+        logger.warn(`mergeDefaultLayoutSupplement: supplement tab '${entry.tab.id}': ${message}`),
     );
-    return;
-  }
-  // Every layout gets its web view ids scoped to this window, including one restored from
-  // persistence: a saved entry's ids carry the window id of the session that saved them (window
-  // ids are not stable across restarts), and the legacy pre-multi-window layout carries unscoped
-  // ids. Re-scoping replaces the suffix rather than stacking another one, so it is safe on both.
-  const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
-  // Supplement tabs join the layout below, after the scoping pass above has already run over it, so
-  // scope each supplement tab itself — its id comes from a build-baked file and would otherwise be
-  // the same in every window. Scoping here rather than re-scoping the merged layout also keeps the
-  // merge's dedup working: it matches by exact id, so an unscoped supplement id would never match
-  // the scoped copy already in a restored layout and the tab would be appended again on every load.
-  const enabledEntries = (await getEnabledSupplementEntries()).map((entry) => ({
-    ...entry,
-    tab: withWindowScopedWebViewIdInTab(entry.tab),
-  }));
-  if (isSuperseded()) {
-    // Point of no return: everything below replaces the dock's whole contents, and the saved-layout
-    // request above can take seconds. The newer load has already loaded, or is about to load, the
-    // layout that belongs there.
-    logger.debug('Dropping a layout load that a newer one superseded before it reached the dock');
-    return;
-  }
-  if (enabledEntries.length === 0) {
-    // Nothing to merge (the common/vanilla case) — load the base layout directly and skip the clone.
-    dockLayoutVar.loadLayout(layoutToLoad);
+    // convert back to the opaque LayoutInfo the dock layout API expects
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const supplementedLayoutInfo = supplementedLayout as unknown as LayoutInfo;
+    dockLayoutVar.loadLayout(supplementedLayoutInfo);
     layoutLoadGenerationInDock = thisGeneration;
-    emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
-    return;
+    // Emit close events for pre-existing web views the (supplemented) layout dropped
+    emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, supplementedLayoutInfo);
+    reportIfLoadedLayoutIsEmpty(supplementedLayoutInfo);
+  } finally {
+    endTrackedLoad?.();
   }
-  // KNOWN POWER-MODE LIMITATION (safe today — simple mode is the default and is immune): power mode
-  // persists the merged layout, so a supplement tab saved while its flag was on lingers after a
-  // flag-off run — provider-less, though closable, since the merge drops an entry's Simple-mode
-  // `isClosable: false` pin outside simple mode. (Changing a tab's id across versions likewise
-  // leaves a duplicate, since we dedup by exact id.) Fix when power mode lands: drop persisted
-  // supplement tabs whose provider is no longer registered.
-  // LayoutInfo is intentionally opaque in the shared model; cross to the concrete rc-dock shape here,
-  // mirroring platform-dock-layout.component.tsx
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const layoutToLoadAsBase = layoutToLoad as unknown as LayoutBase;
-  const supplementedLayout = mergeDefaultLayoutSupplement(
-    layoutToLoadAsBase,
-    enabledEntries,
-    // The mode this layout belongs to. Each entry describes a tab's place in simple mode's fixed
-    // columns, and this merge also runs against power mode's persisted layout, so the merge needs to
-    // be told which one it is looking at rather than assuming the entries' home mode.
-    interfaceMode,
-    (entry, message) =>
-      logger.warn(`mergeDefaultLayoutSupplement: supplement tab '${entry.tab.id}': ${message}`),
-  );
-  // convert back to the opaque LayoutInfo the dock layout API expects
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const supplementedLayoutInfo = supplementedLayout as unknown as LayoutInfo;
-  dockLayoutVar.loadLayout(supplementedLayoutInfo);
-  layoutLoadGenerationInDock = thisGeneration;
-  // Emit close events for pre-existing web views the (supplemented) layout dropped
-  emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, supplementedLayoutInfo);
 }
 
 /**
@@ -1156,12 +1278,14 @@ let hasLoggedHeldLayoutPushes = false;
  *
  * @param defaultLayout Layout to fall back to when the legacy path has nothing
  * @param isSuperseded Whether the load this read belongs to has since been replaced by a newer one
- * @returns The layout to load, or `undefined` if this load was superseded
+ * @returns The layout to load along with whether this window is waiting for routed content (in
+ *   which case the caller skips the default-layout supplement — a window created for one specific
+ *   web view starts with nothing else), or `undefined` if this load was superseded
  */
 async function getPersistedLayout(
   defaultLayout: LayoutInfo,
   isSuperseded: () => boolean,
-): Promise<LayoutInfo | undefined> {
+): Promise<{ layout: LayoutInfo; isPendingContent: boolean } | undefined> {
   let response: WindowLayoutGetResponse | undefined;
   for (let attempt = 1; attempt <= GET_PERSISTED_LAYOUT_ATTEMPTS; attempt += 1) {
     try {
@@ -1192,12 +1316,28 @@ async function getPersistedLayout(
     logger.warn(
       `Could not get this window's saved layout after ${GET_PERSISTED_LAYOUT_ATTEMPTS} attempts; starting empty and holding layout pushes until a load succeeds`,
     );
-    return EMPTY_DOCK_LAYOUT;
+    return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false };
   }
   isRunningOnFallbackLayout = false;
-  if (response.kind === 'entry') return response.layout;
-  if (response.kind === 'empty') return EMPTY_DOCK_LAYOUT;
-  return getLegacySavedLayout(defaultLayout);
+  if (response.kind === 'entry') return { layout: response.layout, isPendingContent: false };
+  if (response.kind === 'empty') return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false };
+  if (response.kind === 'pending-content')
+    return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: true };
+  return { layout: getLegacySavedLayout(defaultLayout), isPendingContent: false };
+}
+
+/**
+ * Report a freshly loaded layout that left this window's dock with no tab in it — unless this
+ * window is running on a fallback layout, which is deliberately NOT the user's layout (see
+ * {@link isRunningOnFallbackLayout}) and whose emptiness therefore says nothing about what the user
+ * has. Docking Home into one would put a tab in a dock whose changes are held from persistence
+ * anyway, and present a window the app could not load as a window the user emptied.
+ *
+ * @param layout The layout that was just loaded into the dock
+ */
+function reportIfLoadedLayoutIsEmpty(layout: LayoutInfo): void {
+  if (isRunningOnFallbackLayout || savedLayoutHasAnyTabs(layout)) return;
+  reportDockEmptied('born-empty');
 }
 
 /**
@@ -1853,7 +1993,18 @@ export const addTab = async <TData = unknown>(
   layout: Layout,
   shouldBringToFront = true,
 ): Promise<Layout | undefined> => {
-  return (await getDockLayout()).addTabToDock(savedTabInfo, layout, shouldBringToFront);
+  await admitContentToDock(`dock a ${savedTabInfo.tabType} tab`);
+  const finalLayout = (await getDockLayout()).addTabToDock(
+    savedTabInfo,
+    layout,
+    shouldBringToFront,
+  );
+  // The dock took it. Noted here rather than at each caller because every one of them is a tab
+  // landing in this dock, which is the whole of what this records. The refusals those same callers
+  // make deliberately stay with them instead: those need an operation name and each caller's own
+  // reading of when the close was decided.
+  noteContentArrived();
+  return finalLayout;
 };
 
 /**
@@ -2320,6 +2471,108 @@ function applyAndLogLegacyColorVarTransforms(
 }
 
 /**
+ * Whether anything has been docked in this window since it last told the main process its dock was
+ * empty ({@link reportDockEmptied} resets it immediately before reporting).
+ *
+ * The main process asks this before acting on an emptiness report, because the report describes a
+ * moment that has already passed by the time it is answered: a routed open, a move's adopt, a
+ * settings tab, or a dialog can land here while the report is in flight, and closing the window
+ * then takes content the user is looking at with it.
+ *
+ * A flag rather than a live reading of the dock, because there is no moment at which the dock can
+ * be read for this. The report is sent from the layout-change handler, where
+ * `dockLayoutRef.current` still holds the layout the dock is changing FROM — so a reading taken
+ * then describes the state before the removal that emptied it, and would answer "content is here"
+ * for every emptied window in the app. Set from the two places anything is put into this dock: the
+ * open path for a web view, and {@link addTab} for everything that is not one.
+ *
+ * A retry of the same report does not reset it again: content that arrives while a report is still
+ * being retried has still arrived.
+ */
+let didContentArriveSinceEmptyReport = false;
+
+/**
+ * Record that something was put into this window's dock, so that whatever this window may have just
+ * told the main process about being empty reads as out of date — see
+ * {@link didContentArriveSinceEmptyReport}.
+ *
+ * A function rather than the assignment written out at each site because one of the two dock adds
+ * ({@link addTab}) sits above this declaration in the file, where writing to the flag directly would
+ * be a use before define. Both sites then say it the one way rather than one of them saying it
+ * differently.
+ */
+function noteContentArrived(): void {
+  didContentArriveSinceEmptyReport = true;
+}
+
+/**
+ * Whether the main process has answered one of this window's emptiness reports with `closing`.
+ *
+ * Work aimed at a window in that state is refused rather than done: an open or an adopt that lands
+ * here after the close is decided is destroyed with the window moments later, and for an adopt that
+ * means a web view the user moved is simply gone — its source tab closed before the target was
+ * asked. Refusing sends it back up the router's recovery ladder, which reopens it somewhere that
+ * will still be there.
+ *
+ * Never cleared, mirroring the main process's own record of decided closes: nothing un-decides a
+ * close, the window goes away instead. This covers only the closes this window was told about — the
+ * user clicking the window's close button, and a quit, are decided in the main process and never
+ * announced to the renderer, so the router's own reads of that record are what cover those.
+ */
+let isWindowToldToClose = false;
+
+/**
+ * Refuse work aimed at a window whose close has been decided — see {@link isWindowToldToClose}.
+ *
+ * Throws rather than answering `undefined`, which is the established "the web view provider chose
+ * not to create it" answer: a router reading that would clean up as though the open had been
+ * considered and turned down, instead of taking the web view somewhere it can live.
+ *
+ * Exported for the routed entry points that dock into this window from other modules — the dialog
+ * shard's `showDialog`. The record it reads lives here, so the refusal has to be asked for from
+ * here.
+ *
+ * @param operation What was being asked of this window, for the error message
+ * @internal function; not exposed on papi
+ */
+export function throwIfWindowIsClosing(operation: string): void {
+  if (!isWindowToldToClose) return;
+  throw new Error(
+    `web-view.service-shard: window ${globalThis.windowId} cannot ${operation}: the main process has told this window that it is closing.`,
+  );
+}
+
+/**
+ * Hold content at the edge of this window's dock until it may enter, and refuse it if it may not.
+ * Called immediately before a tab is put into this dock. The other dock write, the web view add,
+ * asks the two halves for itself: its refusal belongs inside the try that cleans up after a
+ * provider that has already run, and only the wait belongs ahead of reading the dock layout out.
+ *
+ * Both questions are asked at every entry point already, and both are asked again here, because
+ * what an entry point answers is what was true when the request arrived. What lies between there
+ * and the dock is the web view provider — a round trip into the extension host running extension
+ * code, of no bounded duration — and both answers can turn over inside it. A layout load that
+ * starts in that stretch replaces this dock with what it read before the arrival, and does it
+ * silently: the close events a load emits are diffed against that same reading, and the checkpoint
+ * that catches an arrival mid-load can only speak for a load that began against an EMPTY dock. A
+ * close is the other half — the answer that latches it can come at any moment, so the last reading
+ * that can be right about it is the one taken here.
+ *
+ * This is the last line of defence and not the only one: an entry point still needs its own guard
+ * and wait, for what it does BEFORE reaching a dock write. `openWebView` reads the dock looking for
+ * an existing web view and returns on finding one, never reaching a write site at all.
+ *
+ * A function declaration rather than an arrow, for the same reason as {@link noteContentArrived}
+ * above it: the tab add that calls it sits above this in the file.
+ *
+ * @param operation What was being asked of this window, for the refusal's error message
+ */
+async function admitContentToDock(operation: string): Promise<void> {
+  await waitForLayoutLoadToSettle();
+  throwIfWindowIsClosing(operation);
+}
+
+/**
  * Creates a new WebView or reloads an existing one based on the saved WebView definition.
  *
  * @param savedWebViewDefinition Saved WebView definition to pass to
@@ -2329,6 +2582,10 @@ function applyAndLogLegacyColorVarTransforms(
  *   tab. Does nothing on an existing WebView
  * @param optionsDefaulted Options that affect what this method does. **YOU MUST RUN
  *   {@link getWebViewOptionsDefaults} ON THIS OBJECT BEFORE PASSING IT IN!**
+ * @param isReloadOfAnOpenWebView Whether the caller found this web view in this window's dock and
+ *   is asking for it again, which is what makes the same web view's absence at the dock write
+ *   meaningful — see the check there. An open and an adopt both name an id no tab here has yet, so
+ *   there is nothing for them to have lost.
  * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
  *   not create a WebView for this request.
  *
@@ -2341,6 +2598,7 @@ export async function openOrReloadWebView(
   savedWebViewDefinition: SavedWebViewDefinition,
   layout: Layout = { type: 'tab' },
   optionsDefaulted: OpenWebViewOptions = {},
+  isReloadOfAnOpenWebView = false,
 ): Promise<WebViewId | undefined> {
   const { webViewType } = savedWebViewDefinition;
 
@@ -2732,15 +2990,87 @@ export async function openOrReloadWebView(
     allowedFrameSources,
   };
 
-  const finalLayout = (await getDockLayout()).addWebViewToDock(
-    finalWebView,
-    layout,
-    optionsDefaulted.bringToFront,
-  );
+  let finalLayout: Layout | undefined;
+  // Ahead of reading the dock layout out, not after it: a wait is exactly the stretch in which a
+  // re-register invalidates a dock layout already read into a variable (see `getDockLayout`). The
+  // close half of the same question is asked inside the try below — see `admitContentToDock` for
+  // what the two halves are for.
+  await waitForLayoutLoadToSettle();
+  const dockLayoutVar = await getDockLayout();
+  // A reload's caller read this web view out of the dock before the provider ran and before the
+  // wait above, and either stretch is long enough to lose it: a load that runs inside one takes the
+  // dock wholesale — the user switching to simple mode while a restored tab is still fetching its
+  // content is exactly that — and a tab dragged into another window leaves the same way. Whatever
+  // took it emitted the close event that disposed what backed it, so an add here would put a tab
+  // the user is rid of back in front of them with nothing behind it. The state stays: it is keyed
+  // by the web view rather than by the tab, and is what brings the view back where it lands next.
+  if (isReloadOfAnOpenWebView && !dockLayoutVar.getWebViewDefinition(webView.id)) {
+    logger.debug(
+      `Not reloading web view ${webView.id} (type ${webView.webViewType}): it left this window's dock before the reload reached it`,
+    );
+    // The nonce this call may have minted is for a web view that is not coming back — the same
+    // cleanup a provider declining to create one gets
+    deleteWebViewNonce(webView.id);
+    return undefined;
+  }
+  // Both statements in the try below throw into the same catch, and what a throw there means
+  // depends on which of them it came from — see the catch. Nothing can move between them: the add
+  // is synchronous, so the answer the refusal reads cannot turn over before it runs.
+  let didThisWindowAllowTheDockWrite = false;
+  try {
+    // Immediately before the add, and inside the try because by here the provider has already run:
+    // a controller may be registered in the extension host, a nonce minted and state persisted, and
+    // that residue is the same whether the dock turned this web view down or this window did. The
+    // catch below is what clears it, so the refusal has to land where the catch can see it.
+    throwIfWindowIsClosing(`dock web view ${webView.id}`);
+    didThisWindowAllowTheDockWrite = true;
+    finalLayout = dockLayoutVar.addWebViewToDock(
+      finalWebView,
+      layout,
+      optionsDefaulted.bringToFront,
+    );
+  } catch (e) {
+    // A throw can leave this web view's own tab in the dock: a definition its tab loader refuses
+    // surfaces as an error tab under a fresh id, and the add throws with the named web view's
+    // live tab still docked — reloading an open web view with a bad definition lands here, as does
+    // the refusal above when what it refuses is a reload. Emitting the close event and evicting
+    // state then would gut a view the user still sees, so such a failure is logged and rethrown
+    // with the dock and the state untouched.
+    if (dockLayoutVar.getWebViewDefinition(webView.id) !== undefined) {
+      // Which of the two throws it was decides how loudly this is worth saying. An add that failed
+      // leaves the user a view that answered a reload by not changing, with no account of why. A
+      // refusal is the window on its way out and says so itself: every reload in flight when a
+      // close is decided comes through here, and the caller is still handed the refusal to act on.
+      if (didThisWindowAllowTheDockWrite)
+        logger.error(
+          `Could not update webview ${webView.id} (type ${webView.webViewType}) in the dock; its existing tab is unchanged. ${getErrorMessage(e)}`,
+        );
+      else
+        logger.debug(
+          `Not reloading web view ${webView.id} (type ${webView.webViewType}); its existing tab is unchanged. ${getErrorMessage(e)}`,
+        );
+      throw e;
+    }
+    // The provider has already run: a controller may be registered in the extension host, a
+    // nonce minted, and state persisted — and no close event will ever fire for a tab that
+    // never joined the dock. Emit the close event ourselves (controller disposal and nonce
+    // cleanup both subscribe to it) and evict the state, so a failed add leaves nothing
+    // behind. A tab still in the dock was caught above, so from here the tab never existed.
+    onDidCloseWebViewBufferedEmitter.emit({
+      webView: convertWebViewDefinitionToSaved(finalWebView),
+    });
+    deleteFullWebViewStateById(webView.id);
+    throw e;
+  }
   // See `trackSimpleEditorReplaceTab`'s doc: keeps the last-opened-project cache's id tracking
   // current the instant a `replace-tab` placement lands, regardless of webview type — the function
-  // itself no-ops unless `layout.targetTabId` is already a tracked Simple editor id.
+  // itself no-ops unless `layout.targetTabId` is already a tracked Simple editor id. Below the add
+  // rather than beside it: a placement that never joined the dock is not one to track.
   trackSimpleEditorReplaceTab(layout, finalWebView.id);
+
+  // The dock took it: whatever this window may have just told the main process about being empty is
+  // now out of date
+  noteContentArrived();
 
   // If we received a layout (meaning it created a new webview instead of updating an existing one),
   // inform web view consumers that we added a new web view
@@ -2764,17 +3094,43 @@ export const openWebView = async (
   layout: Layout = { type: 'tab' },
   options: OpenWebViewOptions = {},
 ): Promise<WebViewId | undefined> => {
+  // Ahead of everything, including the provider: a window on its way out must not run a web view
+  // provider's side effects for a tab that is about to be destroyed with it
+  throwIfWindowIsClosing(`open web view ${webViewType}`);
   await waitForInitialize();
+  // A layout load in flight is about to replace this dock wholesale with what it read before this
+  // open, so docking now loses the web view — silently, since the close events that load emits are
+  // diffed against the same reading. Ahead of the existing-web-view search below as well as the
+  // dock add: that search reads a dock the load is about to replace.
+  await waitForLayoutLoadToSettle();
+  // Again, because the wait above parks for as long as a load takes and this window's close can be
+  // decided inside it: `isWindowToldToClose` latches whenever an emptiness report is answered, which
+  // can be at any moment. The guard above spoke for the moment this open arrived, not for this one.
+  throwIfWindowIsClosing(`open web view ${webViewType}`);
 
   const optionsDefaulted = getWebViewOptionsDefaults(options);
+
+  // `existingProjectId` only qualifies a '?' search; a concrete existingId already names one
+  // exact web view, and no existingId at all names no search for it to limit, so combining it
+  // with either is contradictory.
+  if (optionsDefaulted.existingProjectId !== undefined && optionsDefaulted.existingId !== '?')
+    throw new Error(
+      optionsDefaulted.existingId === undefined
+        ? "openWebView: existingProjectId requires existingId: '?'; it was not given at all."
+        : `openWebView: existingProjectId only qualifies an existingId of '?'; existingId ${JSON.stringify(optionsDefaulted.existingId)} already names an exact web view.`,
+    );
 
   // Find existing webView if one exists and handle it if it does
   if (optionsDefaulted.existingId) {
     const dockLayout = await getDockLayout();
     const existingWebView =
       optionsDefaulted.existingId === '?'
-        ? // If they provided '?', that means look for any webview with a matching webViewType
-          dockLayout.findFirstWebViewDefinitionByType(webViewType)
+        ? // If they provided '?', that means look for any webview with a matching webViewType,
+          // optionally limited to a project
+          dockLayout.findFirstWebViewDefinitionByType(
+            webViewType,
+            optionsDefaulted.existingProjectId,
+          )
         : // If they provided any other string, look for a webview with that ID
           dockLayout.getWebViewDefinition(optionsDefaulted.existingId);
 
@@ -2791,6 +3147,17 @@ export const openWebView = async (
     if (!optionsDefaulted.createNewIfNotFound) return undefined;
   }
 
+  // A `'window'` layout cannot be created by a shard — main intercepts those and routes a plain tab
+  // open into the window it made. So one reaching this point means main resolved this window as
+  // already owning the web view the caller asked to reuse, and that web view left between the
+  // resolution and this call. That is a lost race, not misrouting, and saying so matters: the dock
+  // would otherwise raise its routing-contract alarm, which sends whoever reads the log looking for
+  // a broken invariant instead of a moved tab.
+  if (layout?.type === 'window')
+    throw new LogError(
+      `Could not open web view type ${webViewType}: it was routed here to reuse a web view this window no longer holds, and creating a window is not a window's own to do.`,
+    );
+
   // We didn't find an existing web view with the ID, so we need to create a new one.
 
   // We want to create a new webview, so create a placeholder with a new ID to pass to the WebViewProvider
@@ -2806,6 +3173,158 @@ export const openWebView = async (
   });
 };
 
+/**
+ * Put Home in this window's dock, deciding nothing with the main process. A dock with no tab in it
+ * gives the user no way to open anything, so this is what fills one whenever closing the window is
+ * not the answer.
+ */
+async function dockHomeInThisWindow(): Promise<void> {
+  try {
+    await openWebView('platformGetResources.home', { type: 'tab' });
+  } catch (e) {
+    throw new Error(`web-view.service-shard error: Opening Home web view failed! ${e}`, {
+      cause: e,
+    });
+  }
+}
+
+/**
+ * Dock Home here, absorbing a failure rather than letting it out.
+ *
+ * Every caller is reached from the dock layout's change handler, which does not await what it
+ * starts — so a throw from here would surface as an unhandled rejection with nothing to attribute
+ * it to, in place of the "this window has nothing in it" problem it actually is.
+ */
+async function dockHomeInThisWindowLoggingFailure(): Promise<void> {
+  try {
+    await dockHomeInThisWindow();
+  } catch (e) {
+    logger.warn(
+      `Could not dock Home in window ${globalThis.windowId} after its dock emptied: ${getErrorMessage(e)}`,
+    );
+  }
+}
+
+/**
+ * How many times {@link reportDockEmptied} tells the main process this window's dock is empty before
+ * giving up. The main process registers the handler before it creates any window, so a failure can
+ * only be transient transport trouble — worth a few retries, the same as the saved layout this
+ * window asked for at startup.
+ */
+const REPORT_DOCK_EMPTIED_ATTEMPTS = 3;
+
+/** How long {@link reportDockEmptied} waits between attempts */
+const REPORT_DOCK_EMPTIED_RETRY_DELAY_MS = 2_000;
+
+/**
+ * Tell the main process this window's dock is empty and act on its decision: dock Home here, or
+ * nothing — the window is about to close. Only the main process knows how many windows exist, so
+ * the close-or-home decision lives there; see the window-emptiness handler.
+ *
+ * Everything this window shows from here on hangs off that one answer, so it is asked for several
+ * times before this side decides alone. A report that goes entirely unanswered ends in Home docked
+ * locally: an empty dock leaves the user with nothing to open anything from, and closing the window
+ * is the one answer only the main process may give.
+ */
+async function reportDockEmptied(reason: WindowEmptiedReason): Promise<void> {
+  // Immediately before the report goes out, so that from here on the flag answers exactly the
+  // question the main process asks with it: has anything reached this dock since it said it was
+  // empty — see `didContentArriveSinceEmptyReport`
+  didContentArriveSinceEmptyReport = false;
+  let response: WindowEmptiedResponse | undefined;
+  for (let attempt = 1; attempt <= REPORT_DOCK_EMPTIED_ATTEMPTS; attempt += 1) {
+    try {
+      const windowId = getWindowIdOrThrow();
+      logger.debug(
+        `Window ${windowId} reporting its dock emptied to main (reason: ${reason}, attempt ${attempt} of ${REPORT_DOCK_EMPTIED_ATTEMPTS})`,
+      );
+      // Sequential attempts: each one must settle before the next may start
+      // eslint-disable-next-line no-await-in-loop
+      response = await sendNetworkRequest<[number, WindowEmptiedReason], WindowEmptiedResponse>(
+        WINDOW_EMPTIED_REQUEST_TYPE,
+        windowId,
+        reason,
+      );
+      logger.debug(
+        `Window ${windowId}'s reported emptiness was answered with action: ${response.action}`,
+      );
+      break;
+    } catch (e) {
+      logger.warn(
+        `Reporting an empty dock failed (attempt ${attempt} of ${REPORT_DOCK_EMPTIED_ATTEMPTS}): ${getErrorMessage(e)}`,
+      );
+      if (attempt < REPORT_DOCK_EMPTIED_ATTEMPTS)
+        // Sequential attempts (see above)
+        // eslint-disable-next-line no-await-in-loop
+        await wait(REPORT_DOCK_EMPTIED_RETRY_DELAY_MS);
+    }
+  }
+
+  if (response) {
+    // Latched here, at the one moment this window is told its close has been decided — see
+    // `isWindowToldToClose`
+    if (response.action === 'closing') isWindowToldToClose = true;
+    if (response.action !== 'open-home') return;
+  }
+  if (!response)
+    logger.warn(
+      `An empty dock went unanswered after ${REPORT_DOCK_EMPTIED_ATTEMPTS} attempts; docking Home here rather than leaving the window blank`,
+    );
+  try {
+    await dockHomeInThisWindow();
+  } catch (e) {
+    // Reporting emptiness runs fire-and-forget from a freshly loaded layout, so a failure here has
+    // nobody to hand itself to
+    logger.warn(`Could not dock Home in the emptied window: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
+ * Act on this window's dock having just lost its last docked tab.
+ *
+ * Only a window with no tab left ANYWHERE is empty, and that is what gets reported (see
+ * {@link reportDockEmptied}) — the main process then decides whether it closes or docks Home. A tab
+ * that is floating, maximized, or in its own window has not gone away, and neither has the window
+ * holding it: reporting there would close a window with live content in it (an open dialog is a
+ * float too). The dock behind those tabs would sit empty, so Home fills it right here instead.
+ *
+ * Uses the same definition of empty as the born-empty check on a freshly loaded layout, so a window
+ * that would be closed for landing empty is exactly one that would be closed for being emptied.
+ *
+ * @param layout The layout the dock is changing to
+ */
+export async function handleDockEmptiedByRemoval(layout: LayoutInfo): Promise<void> {
+  // A fallback dock is deliberately NOT the user's layout (see isRunningOnFallbackLayout), so its
+  // emptiness says nothing about what the user has — the same guard the born-empty report applies.
+  // Reporting would let main close this window and rewrite the persisted structure without it,
+  // deleting the saved entry the held pushes exist to protect.
+  //
+  // Not reporting is not the same as doing nothing, though: this dock is empty and its user has no
+  // way left to open anything. Home fills it here, where it costs nothing — this window's layout
+  // pushes are held from persistence for as long as it runs on a fallback. The consequence, and it
+  // is deliberate: in a multi-window session this window stays alive as a Home-only window that the
+  // main process will never close, because the only way to be closed is to report, and reporting is
+  // what would destroy the saved entry.
+  if (isRunningOnFallbackLayout) {
+    logger.debug(
+      `Window ${globalThis.windowId}'s dock was emptied while running on a fallback layout; docking Home locally rather than reporting`,
+    );
+    await dockHomeInThisWindowLoggingFailure();
+    return;
+  }
+  if (!savedLayoutHasAnyTabs(layout)) {
+    logger.debug(
+      `Window ${globalThis.windowId}'s dock has no tabs left anywhere; reporting the emptiness to main`,
+    );
+    await reportDockEmptied('emptied-by-removal');
+    return;
+  }
+  logger.debug(
+    `Window ${globalThis.windowId}'s dock lost its last docked tab, but tabs remain elsewhere (float/maximized/window); docking Home locally instead of reporting`,
+  );
+  await dockHomeInThisWindowLoggingFailure();
+}
+
 /** See {@link WebViewServiceShard.reloadWebView} */
 export async function reloadWebView(
   // Keeping this parameter for the likelihood that we will add options per WebViewType sometime
@@ -2819,13 +3338,25 @@ export async function reloadWebView(
   // If the web view is not found, return undefined
   if (!existingSavedWebView) return undefined;
 
-  // If the web view is found, open it again with the same ID
-  return openOrReloadWebView(existingSavedWebView, undefined, getWebViewOptionsDefaults(options));
+  // If the web view is found, open it again with the same ID. Flagged as a reload, because this
+  // reading of the dock is taken before the provider runs and before the dock write's own wait —
+  // whether it is still true is asked again where it is acted on
+  return openOrReloadWebView(
+    existingSavedWebView,
+    undefined,
+    getWebViewOptionsDefaults(options),
+    true,
+  );
 }
 
 /** See {@link WebViewServiceShard.dockContainsTab} */
 async function dockContainsTab(tabOrTabGroupId: string): Promise<boolean> {
   return (await getDockLayout()).containsTab(tabOrTabGroupId);
+}
+
+/** See {@link WebViewServiceShard.hasContentArrivedSinceEmptyReport} */
+async function hasContentArrivedSinceEmptyReport(): Promise<boolean> {
+  return didContentArriveSinceEmptyReport;
 }
 
 // #endregion openWebView and reloadWebView
@@ -3020,9 +3551,21 @@ const papiWebViewService: WebViewServiceType = {
  * project arrives as an argument rather than being looked up here.
  */
 async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layout | undefined> {
+  // Routed here by the main process, the same as an open or an adopt, so it needs the same refusal:
+  // a tab put in a window whose close is decided is destroyed with it moments later
+  throwIfWindowIsClosing('open a settings tab');
+  // And the same wait, for the same reason and then some: a layout load in flight replaces this dock
+  // wholesale with what it read before this tab existed. A settings tab is not a web view, so it is
+  // in none of the lists a load diffs — it goes with nothing reported anywhere, leaving the user's
+  // Settings command answering with a layout for a tab that is not there.
+  await waitForLayoutLoadToSettle();
+  // Again, because the wait above parks for as long as a load takes and this window's close can be
+  // decided inside it: `isWindowToldToClose` latches whenever an emptiness report is answered, which
+  // can be at any moment. The guard above spoke for the moment this request arrived, not for this one.
+  throwIfWindowIsClosing('open a settings tab');
   const settingsTabId = newGuid();
 
-  return addTab<SettingsTabData>(
+  const layout = await addTab<SettingsTabData>(
     {
       id: settingsTabId,
       tabType: TAB_TYPE_SETTINGS_TAB,
@@ -3036,6 +3579,153 @@ async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layou
       floatSize: { height: 600, width: 1000 },
     },
   );
+  return layout;
+}
+
+/** See {@link WebViewServiceShard.captureAndCloseWebView} */
+async function captureAndCloseWebView(
+  webViewId: WebViewId,
+): Promise<SavedWebViewDefinition | undefined> {
+  if (typeof webViewId !== 'string' || !webViewId)
+    throw new Error(
+      `captureAndCloseWebView needs a web view id; got ${typeof webViewId}. This method is reachable from any process, so it checks rather than trusts.`,
+    );
+  // Ahead of reading the dock layout out, not after it: a wait is exactly the stretch in which a
+  // re-register invalidates a dock layout already read into a variable — see `getDockLayout`'s own
+  // doc, and the sibling call sites that order it the same way.
+  //
+  // The wait is needed here because the dock-entering paths all have it and this is the
+  // dock-LEAVING half of the same move, racing the same way: remove the tab while a load is still
+  // running and the finishing load can put the web view back from the entry it was loaded with
+  // while the adopt opens it in the target — one id, two windows, which is what the
+  // timed-out-adopt machinery exists to prevent. Waiting first means a load that dropped this web
+  // view leaves nothing to capture and the move fails cleanly instead.
+  await waitForLayoutLoadToSettle();
+  const dockLayout = await getDockLayout();
+  const webViewDefinition = dockLayout.getWebViewDefinition(webViewId);
+  if (!webViewDefinition) return undefined;
+
+  const captured = convertWebViewDefinitionToSaved(webViewDefinition);
+  // The definition already carries the live state, so nothing is merged into it here: a
+  // `useWebViewState` write goes through `updateWebViewDefinitionSync`, which updates the dock
+  // definition and mirrors the same value into this window's storage, and reads come from the
+  // definition. The two cannot drift apart while that is the only writer of definition state.
+  //
+  // This window's stored copy is left alone rather than deleted, but nothing depends on it: a
+  // failed move re-adopts from the captured bundle, and the adopt re-seeds storage from that. It
+  // survives only until the state service's own cleanup sweeps ids no longer open here.
+  // A window re-scopes web view ids to itself when it reloads a layout. Hand the target the
+  // minted id — the spelling a fresh open would use — so the id does not carry this window's
+  // scope into a window it does not belong to
+  captured.id = stripWindowScopeFromWebViewId(captured.id);
+
+  dockLayout.removeTabFromDock(webViewDefinition.id);
+  return captured;
+}
+
+/**
+ * Drop the state an adopt seeded, unless this window is showing the view it was seeded for.
+ *
+ * The dock is read here rather than reused from the check at the top of {@link adoptWebView},
+ * because every caller runs after an unbounded wait on a web view provider and the dock can gain
+ * this id during it: a second adopt of the same view can land while this one is parked, and an
+ * interface-mode change re-docks the persisted layout in every window. Deleting on either would
+ * evict the state of a view the user is looking at — the loss `openOrReloadWebView`'s catch already
+ * refuses for the same reason.
+ *
+ * A dock that cannot be read is treated as still holding the view. An orphaned state entry for a
+ * view this window does not hold is recoverable and costs nothing the user can see; gutting a live
+ * view is neither.
+ */
+async function deleteSeededStateUnlessDocked(webViewId: WebViewId): Promise<void> {
+  try {
+    if ((await getDockLayout()).getWebViewDefinition(webViewId) !== undefined) return;
+  } catch (e) {
+    logger.warn(
+      `Could not read the dock to decide whether to drop the state seeded for web view ${webViewId}; keeping it. ${getErrorMessage(e)}`,
+    );
+    return;
+  }
+  deleteFullWebViewStateById(webViewId);
+}
+
+/** See {@link WebViewServiceShard.adoptWebView} */
+async function adoptWebView(
+  savedWebViewDefinition: SavedWebViewDefinition,
+): Promise<WebViewId | undefined> {
+  // Ahead of the seeding below, and of anything that reads the bundle: this method is reachable
+  // from any process, so an unvalidated bundle would let an arbitrary caller write a state blob
+  // under any web view id it names — and because the seed happens before the provider runs, a
+  // bundle that fails later still leaves that blob behind. Check first, write second.
+  if (
+    !savedWebViewDefinition ||
+    typeof savedWebViewDefinition !== 'object' ||
+    typeof savedWebViewDefinition.id !== 'string' ||
+    !savedWebViewDefinition.id ||
+    typeof savedWebViewDefinition.webViewType !== 'string' ||
+    !savedWebViewDefinition.webViewType ||
+    (savedWebViewDefinition.state !== undefined &&
+      // A state bag is a plain, round-trippable object. `typeof null` and `typeof []` are both
+      // `'object'`, so neither the type check nor truthiness alone rejects what the wire can send;
+      // `isSerializable` is what the state setter itself uses for the same question
+      (typeof savedWebViewDefinition.state !== 'object' ||
+        !savedWebViewDefinition.state ||
+        Array.isArray(savedWebViewDefinition.state) ||
+        !isSerializable(savedWebViewDefinition.state)))
+  )
+    throw new Error(
+      'adoptWebView needs a web view definition carrying a non-empty id and webViewType, and state must be an object when present',
+    );
+  // Ahead of everything, including the state seeding below: a move that lands in a window on its
+  // way out loses the web view outright, since its source tab closed before this window was asked
+  throwIfWindowIsClosing(`adopt web view ${savedWebViewDefinition.id}`);
+  await waitForInitialize();
+  await waitForLayoutLoadToSettle();
+  // Again, because the wait above parks for as long as a load takes and this window's close can be
+  // decided inside it: `isWindowToldToClose` latches whenever an emptiness report is answered, which
+  // can be at any moment. The guard above spoke for the moment this adopt arrived, not for this one.
+  throwIfWindowIsClosing(`adopt web view ${savedWebViewDefinition.id}`);
+  // Checked here rather than at entry, for the same reason as the guard above: the waits park for
+  // as long as a load takes, and this has to speak for the moment the seed happens. A legitimate
+  // move never reaches this — capture removes the source tab before the destination is asked — so
+  // an id this window already holds means a bundle that did not come from one. Seeding would
+  // overwrite the live view's state, and the decline and throw paths below would then delete it,
+  // which is the loss `openOrReloadWebView`'s still-docked branch refuses for the same reason.
+  // Read out after the waits above, never before them, for the reason `getDockLayout`'s own doc
+  // gives and `captureAndCloseWebView` repeats: a wait is the stretch in which a re-register
+  // invalidates a dock layout already held in a variable.
+  const dockLayout = await getDockLayout();
+  if (dockLayout.getWebViewDefinition(savedWebViewDefinition.id) !== undefined)
+    throw new Error(
+      `Cannot adopt web view ${savedWebViewDefinition.id}: this window already has it docked, and adopting would overwrite the state of the view it is showing`,
+    );
+  // Seeded before the provider runs: the moved view's state must be in this window's storage
+  // for the view to read, including when the provider does not echo state back. A provider
+  // that returns state still wins — the open persists the provider's state after this
+  const stateToSeed =
+    savedWebViewDefinition.state && Object.keys(savedWebViewDefinition.state).length > 0
+      ? savedWebViewDefinition.state
+      : undefined;
+  const wasStateSeeded = !!stateToSeed;
+  if (stateToSeed) setFullWebViewStateById(savedWebViewDefinition.id, stateToSeed);
+  try {
+    const adoptedId = await openOrReloadWebView(
+      savedWebViewDefinition,
+      { type: 'tab' },
+      getWebViewOptionsDefaults({}),
+    );
+    // A provider that declines returns no id, which is a failed adopt like any other: the seed is
+    // a write this window would not otherwise have made, and it persists as soon as it is made
+    if (!adoptedId && wasStateSeeded)
+      await deleteSeededStateUnlessDocked(savedWebViewDefinition.id);
+    return adoptedId;
+  } catch (e) {
+    // The source window keeps its own copy until the move is known to have landed, and that copy
+    // is what a failed move re-adopts from — so nothing is lost by dropping this one, while
+    // leaving it behind would park a moved view's state under an id this window does not hold
+    if (wasStateSeeded) await deleteSeededStateUnlessDocked(savedWebViewDefinition.id);
+    throw e;
+  }
 }
 
 /** Whether a value that arrived over the wire is a Scripture reference and not a scroll group id */
@@ -3094,8 +3784,11 @@ async function setDetachedScrRef(
 const webViewServiceShard: WebViewServiceShard = {
   ...papiWebViewService,
   dockContainsTab,
+  hasContentArrivedSinceEmptyReport,
   openSettingsTab,
   setDetachedScrRef,
+  captureAndCloseWebView,
+  adoptWebView,
 };
 
 /** Register the network object that backs the PAPI webview service */
