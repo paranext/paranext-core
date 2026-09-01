@@ -68,6 +68,14 @@ export function LanguageStep({ setCanProceed }: FirstRunStepProps) {
 
   const handleChange = (tag: string) => {
     if (tag === primaryLanguage) return;
+    // A missing setter is a real runtime state, not a type formality — `useSetting` has no setter
+    // while the subscription is throttled — and this step gates first-run progress, so surface it
+    // the same way a rejected write is surfaced rather than leaving the picker silently inert.
+    if (!setInterfaceLanguage) {
+      logger.warn('LanguageStep: cannot set interface language; the setting is unavailable');
+      toast.error(strings['%firstRun_language_setFailed%']);
+      return;
+    }
     setInterfaceLanguage([tag, ...safeInterfaceLanguage.filter((l) => l !== tag)]).catch(
       (e: unknown) => {
         logger.warn(`LanguageStep: failed to set interface language: ${getErrorMessage(e)}`);

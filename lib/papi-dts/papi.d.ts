@@ -9821,8 +9821,8 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    *
    *   - `setting`: The current state of the setting, either `defaultState`, the stored value, or a
    *       `PlatformError` if loading the value fails. Use `isPlatformError()` to check.
-   *   - `setSetting`: Function that updates the setting to a new value. While the underlying subscription
-   *       is throttled it rejects with a `PlatformError` whose `code` is `RESOURCE_EXHAUSTED` — see
+   *   - `setSetting`: Function that updates the setting to a new value, or `undefined` while there is
+   *       nothing to write through — including while the underlying subscription is throttled, see
    *       {@link useData} for that state.
    *   - `resetSetting`: Function that removes the setting and resets the value to `defaultState`
    *
@@ -9835,9 +9835,11 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
     setting: SettingTypes[SettingName] | PlatformError,
-    setSetting: (
-      newData: SettingTypes[SettingName],
-    ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
+    setSetting:
+      | ((
+          newData: SettingTypes[SettingName],
+        ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>)
+      | undefined,
     resetSetting: () => void,
     isLoading: boolean,
   ];

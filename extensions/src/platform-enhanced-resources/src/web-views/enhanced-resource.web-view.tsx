@@ -2714,7 +2714,7 @@ globalThis.webViewComponent = function EnhancedResourceWebViewWiring({
     if (nextShowMarbleGuide !== showMarbleGuide) {
       // Fire-and-forget: setting writes return a DataProviderUpdateInstructions promise we don't
       // need to await — the inner Dialog has already closed visually by the time this resolves.
-      Promise.resolve(setShowMarbleGuide(nextShowMarbleGuide)).catch((err) => {
+      Promise.resolve(setShowMarbleGuide?.(nextShowMarbleGuide)).catch((err) => {
         logger.warn(
           `Failed to persist platformEnhancedResources.showMarbleGuide: ${
             err instanceof Error ? err.message : String(err)
