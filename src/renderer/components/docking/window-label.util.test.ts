@@ -96,6 +96,20 @@ describe('getWindowLabel', () => {
     expect(getWindowLabel(layout, lookUpIn({}))).toBe(EMPTY_WINDOW_LABEL_KEY);
   });
 
+  test('still finds a nested tab under a node that carries both tabs and children', () => {
+    // A well-formed node is a panel or a box, never both — but a corrupted or hand-edited saved
+    // layout can carry both, and `loadLayout` feeds a persisted layout straight into the live one.
+    // `simple-layout.builder.ts` guards the mirror image of this case deliberately: dropping half
+    // of such a node silently loses whatever it held.
+    const layout = {
+      dockbox: {
+        children: [{ activeId: undefined, tabs: [], children: [panel('nested', 'nested')] }],
+      },
+    };
+
+    expect(getWindowLabel(layout, lookUpIn({ nested: 'Biblical Terms' }))).toBe('Biblical Terms');
+  });
+
   test('falls back when the layout holds nothing at all', () => {
     expect(getWindowLabel({}, lookUpIn({}))).toBe(EMPTY_WINDOW_LABEL_KEY);
   });

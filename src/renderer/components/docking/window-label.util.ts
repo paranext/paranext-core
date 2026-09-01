@@ -42,11 +42,15 @@ function isPanel(node: unknown): node is PanelLike {
 
 /** Every docked panel, depth first, in the order the layout declares them */
 function collectPanels(node: unknown): PanelLike[] {
-  if (isPanel(node)) return [node];
   if (!isRecord(node)) return [];
+  // Not an either/or: a well-formed node holds tabs or children, but a corrupted or hand-edited
+  // saved layout can carry both, and returning at the panel branch would drop everything nested
+  // under such a node. `visitPanels` in simple-layout.builder.ts guards the mirror image of this
+  // for the same reason, and a persisted layout reaches here through `loadLayout` unexamined.
+  const panels = isPanel(node) ? [node] : [];
   const { children } = node;
-  if (!Array.isArray(children)) return [];
-  return children.flatMap(collectPanels);
+  if (!Array.isArray(children)) return panels;
+  return [...panels, ...children.flatMap(collectPanels)];
 }
 
 /** A panel's tab ids with its active tab first, since that is the one the user is looking at */
