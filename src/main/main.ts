@@ -67,11 +67,13 @@ import {
   startWindowServiceRouter,
 } from '@main/services/window.service-router';
 import {
+  canStartupSyncFireNow,
   isAppQuitRequested,
   isAppShuttingDown,
   markQuitRequested,
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
+  shouldWindowCloseAbortReadinessWait,
 } from '@main/services/shutdown-latch.service';
 import { setAppShutdownSignal } from '@main/services/rpc-server';
 import { startWebViewServiceRouter } from '@main/services/web-view.service-router';
@@ -403,11 +405,20 @@ async function main() {
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
 
-  // Signals for the fire-and-forget startup tasks: an abort controller so the Power-mode boot-race
-  // retry loop stops the moment the app begins quitting (wired below), and a window-interactive
-  // clock so a startup sync that only registers late isn't fired onto an editor the user is already
-  // using (see performStartupTasks / STARTUP_SYNC_FRESHNESS_WINDOW_MS).
+  // Signals for the fire-and-forget startup tasks:
+  //
+  // - `startupTasksAbort` stops the startup tasks the moment the app starts going down by either
+  //   route, quit or last-window close. This is the long-standing behavior and is what Power mode's
+  //   boot-race retry loop runs on; nothing about the Simple-mode readiness gate changes it.
+  // - `startupReadinessAbort` stops only Simple mode's readiness wait, and is deliberately NOT
+  //   aborted by a macOS last-window close: there the app stays resident, the startup tasks run once
+  //   per process, and a dock reactivation still wants that session's startup sync. Kept separate so
+  //   that exception cannot leak into Power mode's loop.
+  // - a window-interactive clock, so a Power-mode startup sync that only registers late isn't fired
+  //   onto an editor the user is already using (see performStartupTasks /
+  //   STARTUP_SYNC_FRESHNESS_WINDOW_MS).
   const startupTasksAbort = new AbortController();
+  const startupReadinessAbort = new AbortController();
   let mainWindowInteractiveAt: number | undefined;
 
   /**
@@ -428,6 +439,13 @@ async function main() {
     try {
       await performStartupTasks({
         abortSignal: startupTasksAbort.signal,
+        readinessAbortSignal: startupReadinessAbort.signal,
+        // Answers the state neither abort signal can describe: resident, not quitting, no windows —
+        // where macOS leaves the app after its last window closes. `getWindows` already filters out
+        // destroyed windows, so a window mid-teardown does not keep this true; the latch is what
+        // keeps "no window YET" (the app still coming up) from reading as "went windowless".
+        canFireStartupSync: () =>
+          canStartupSyncFireNow(getWindows().length, hasCreatedWindowThisProcess),
         getWindowInteractiveElapsedMs: () =>
           mainWindowInteractiveAt === undefined
             ? undefined
@@ -1010,10 +1028,19 @@ async function main() {
         isAppGoingDown = isAppShuttingDown();
 
         if (isAppGoingDown) {
-          // The app is on its way down: stop the startup boot-race retry loop so it can't fire a
-          // startup sync after this shutdown sync, or reach a network connection that is about to
-          // be torn down.
+          // The app is on its way down: stop the startup tasks so they can't fire a startup sync
+          // after this shutdown sync, or reach a network connection that is about to be torn down.
+          // Unconditional, as it has always been — Power mode's boot-race retry loop in particular
+          // must stop here on every platform.
           startupTasksAbort.abort();
+
+          // Simple mode's readiness wait is the one thing that may outlive this close: on macOS the
+          // app stays resident and the startup tasks run once per PROCESS, so aborting here would
+          // drop the startup sync for good even though a dock reactivation still wants it. The
+          // predicate explains why the platform, and not the quit flag alone, has to decide. A wait
+          // that does survive still cannot fire into a windowless app — `canFireStartupSync` above
+          // is re-checked immediately before the sync goes out.
+          if (shouldWindowCloseAbortReadinessWait(process.platform)) startupReadinessAbort.abort();
 
           // Flush the window-layouts structure with every still-tracked window in it, before any
           // `closed` handler trims the list — a window that is not live at save time is not
@@ -1425,6 +1452,10 @@ async function main() {
       // Stop the startup boot-race retry loop before networkService.shutdown() tears down the
       // connection, so a late retry can't resurrect it (a no-op if the window close already aborted).
       startupTasksAbort.abort();
+      // A real quit ends the Simple-mode readiness wait too, including the macOS last-window-close
+      // case the window handler deliberately let through — that exception exists for an app that
+      // stays resident, and this one is not.
+      startupReadinessAbort.abort();
 
       // Prevent closing before graceful shutdown is complete.
       // Also, in the future, this should allow a "are you sure?" dialog to display.

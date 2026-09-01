@@ -2332,3 +2332,89 @@ step, no automation. Just a record.
   writing it is deferred rather than done.
 - **Source:** PT-2626 review (PR #2727), finding 7 — "the current standard tells the next author to
   do the opposite of what this PR establishes."
+
+## adr-startup-sync-readiness-gate: Core owns startup-sync ordering and gates it on project-data-provider readiness
+
+- **Date:** 2026-08-16
+- **Status:** Accepted
+- **Context:** In Simple mode, `performStartupTasks` fired `paratextBibleSendReceive.syncProjects`
+  ("sync every locally-known shared project") as soon as its settings gates passed
+  (`src/main/startup-tasks.ts`). In Paratext 10 Studio that command is served by the .NET data
+  provider; its Mercurial and DBL work saturates that process before the scripture PDP factories
+  finish initializing. Because extensions activate strictly sequentially (the awaited loop inside
+  `activateExtensions` in `src/extension-host/services/extension.service.ts`), any extension awaiting
+  the busy provider stalls `platform-scripture` behind it — and `platform-scripture` registers the Scripture
+  Extender layering PDPF, the only factory advertising `platformScripture.USJ_Chapter`, which the
+  project picker waits on. The picker's wait timed out and it stayed locked. The Power-mode path was
+  already gated, but on a different signal — the S/R command's registration, plus a freshness window
+  — never on project-data-provider readiness; the Simple-mode branch had no ordering gate of any kind.
+- **Decision:** Core keeps ownership of the startup-sync trigger and gates it on workspace
+  readiness, in the main process. `src/main/startup-readiness.util.ts` waits — bounded by
+  `STARTUP_SYNC_READINESS_BUDGET_MS` (120 s) — first for the scripture PDP factory network object to
+  register, then for a scripture-metadata probe to answer non-empty, and only then fires the sync.
+  On timeout it fires anyway (delayed, never suppressed); on abort it skips.
+- **Alternatives:** **Have the Send/Receive extension self-trigger at the end of its own
+  activation** (the shape PT-4386 named as preferred, and the one sketched in `startup-tasks.ts`'s
+  own TSDoc) — rejected: sequential activation gives no guarantee that
+  `paratextBibleSendReceive` activates *after* `platform-scripture`, so if it goes first its
+  self-trigger starves the same factory — the identical bug, relocated into a repo core cannot test.
+  Paratext 10 Studio also *removed* its own `Task.Run(SyncProjects)` self-trigger precisely so core
+  would be the single trigger owner; self-triggering would undo that. The evidence is in the
+  `paranext/paratext-10-studio` repo at `repo-patches/paranext-core.patch` (lines 5334–5336 as of
+  commit `f779810`), in the hunk that patches
+  `c-sharp/Projects/SendReceive/ParatextProjectSendReceiveService.cs`: *"NOTE: startup auto-sync is
+  triggered by paranext-core itself (src/main/startup-tasks.ts, "Conditional autosync on startup"),
+  which calls the syncProjects papi command — so the patch no longer kicks off its own
+  Task.Run(SyncProjects) here (that would double-sync)."* **Defer until an existing
+  "workspace ready" signal** — rejected: none exists. `all-extensions-activated` is a performance
+  mark emitted only under `PT_STARTUP_MARKS`, at the end of `activateExtensions` in
+  `src/extension-host/services/extension.service.ts`, not a network event.
+  **Gate on factory registration alone** — rejected as insufficient: the Scripture Extender is a
+  layering factory whose `getAvailableProjects` fans out to the .NET base factories, so it can be
+  registered while still unable to answer; hence the second, metadata-probe phase.
+  **Treat any phase-1 rejection as the end of the gate** — rejected: `waitForNetworkObject` rejects
+  both when the budget it was given expires (genuine exhaustion) and when the status service is
+  unreachable, and the latter can land with nearly the whole budget unspent. Ending there would
+  collapse a 120 s gate into seconds and fire the sync early — the original bug, reintroduced
+  invisibly, since the cause is logged only at debug while the caller warns "syncing anyway". A
+  non-exhaustion rejection therefore falls through to phase 2, which tests the stronger condition
+  and already tolerates throws; with no factory registered it sees empty results and polls to the
+  deadline, so the worst case degrades to the same `'timed-out'`. This is insurance, not a fix for
+  an observed failure: from main the path is currently unreachable (the status service is hosted in
+  main, `startNetworkObjectStatusService()` is awaited long before the startup tasks run, and a
+  same-process `get` returns the local proxy, making the call a synchronous in-memory read). It is
+  written this way so the guarantee does not silently depend on that arrangement holding.
+- **Consequences:** Core is the single owner of startup-sync ordering, and the gate is
+  mechanism-agnostic — it holds regardless of which contention inside the .NET provider is
+  responsible, which matters because that contention is not fully pinned down (the obvious
+  read-loop-blocking explanation was real but was already fixed in Studio, verified 2026-08-16). The
+  startup sync can now be delayed by up to 120 s on a pathological boot. **Power mode is knowingly
+  left ungated** and retains the same latent race: its freshness window is anchored to
+  window-interactive time, so charging a readiness wait against it could silently *drop* a legitimate
+  startup sync — trading a visible bug for an invisible one. Revisit when the freshness anchor is
+  reworked. Because the wait can park for up to 120 s, the three Simple-mode settings gates
+  (interface mode, first-run, sync-on-startup) are re-read and re-evaluated immediately after it, not
+  just before — a setting changed mid-wait now re-gates the sync rather than firing on stale
+  settings. On a real quit (`isAppQuitRequested()`) the wait is aborted and the sync is skipped; a
+  macOS last-window close that leaves the app resident deliberately does NOT abort it, since the app
+  is still going to want its startup sync. That exception is carried on its own abort signal
+  (`startupReadinessAbort` in `main.ts`, `StartupTasksSignals.readinessAbortSignal`) rather than on
+  the shared one, so it applies to the Simple readiness wait ALONE — Power mode's boot-race retry
+  loop keeps aborting on every shutdown, on every platform, exactly as before. The Simple path then
+  has to run on that signal *throughout*, including its post-wait abort check: a last-window close
+  makes `isAppShuttingDown()` true via `areAllWindowsClosing()`, so the shared signal aborts on
+  precisely the close the carve-out exists to survive, and re-checking it after the wait would make
+  the carve-out unreachable — the wait would outlive the close only to be discarded as "quitting".
+  Simple mode's hard stop is therefore the live predicate rather than a latched signal, which is
+  strictly better anyway: it is evaluated at fire time and covers both ways the app can be
+  un-syncable (shutting down, and resident but windowless). A surviving wait is
+  still not licence to fire: `canStartupSyncFireNow` is re-checked immediately before the command
+  goes out and skips when the app is resident but windowless, which is the state a macOS last-window
+  close leaves behind. It distinguishes that from having no window YET — the app still coming up —
+  which stays allowed, since treating it as disqualifying would silently drop the sync on any boot
+  whose readiness landed before the first window did. Without the check a wait parked for the full
+  budget could resolve minutes later and run a whole-workspace Send/Receive after the shutdown sync
+  already ran, with no UI to report progress or failure into. The exception therefore pays off in
+  exactly one case — a dock reactivation brings a window back before readiness lands — which is the
+  case it was added for.
+- **Source:** PT-4386.
