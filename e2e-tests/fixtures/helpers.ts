@@ -828,9 +828,55 @@ function mainLocalStorageBackupDir(): string {
   return `${mainLocalStorageDir()}.e2e-backup`;
 }
 
-/** Names of the keys currently stored, or an empty array when the store does not exist yet. */
+/**
+ * Names of the keys currently stored, or an empty array when the store does not exist yet.
+ *
+ * Files only. A directory here would make `copyFileSync` throw part-way through a backup that has
+ * already been created, and every later run would then treat that half-copied backup as complete.
+ */
 function storedKeyNames(dir: string): string[] {
-  return fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name);
+}
+
+/** Where {@link pinAppGlobalState} records who took the pin and what it parked. */
+function mainLocalStorageBackupManifestPath(): string {
+  return `${mainLocalStorageDir()}.e2e-backup.json`;
+}
+
+/**
+ * What the app-global backup records. Kept beside the backup directory rather than inside it, so
+ * the directory holds nothing but parked keys.
+ */
+interface AppGlobalBackup {
+  ownerPid: number;
+  createdAt: string;
+  /** The keys parked. Empty is meaningful: it says the store was empty when the pin was taken. */
+  pinnedKeys: string[];
+}
+
+/** Read the manifest, or `undefined` when it is absent, unreadable, or predates this format. */
+function readAppGlobalBackup(): AppGlobalBackup | undefined {
+  if (!fs.existsSync(mainLocalStorageBackupManifestPath())) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fs.readFileSync(mainLocalStorageBackupManifestPath(), 'utf-8'));
+  } catch {
+    return undefined;
+  }
+  // JSON.parse returns `any`; this narrows the shape this file's own writer produces
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const manifest = parsed as Partial<AppGlobalBackup> | null;
+  if (typeof manifest?.ownerPid !== 'number') return undefined;
+  if (!Array.isArray(manifest.pinnedKeys)) return undefined;
+  return {
+    ownerPid: manifest.ownerPid,
+    createdAt: manifest.createdAt ?? '',
+    pinnedKeys: manifest.pinnedKeys,
+  };
 }
 
 /**
@@ -851,16 +897,32 @@ export function pinAppGlobalState(): () => void {
   const liveDir = mainLocalStorageDir();
   const backupDir = mainLocalStorageBackupDir();
 
-  if (!fs.existsSync(backupDir)) {
+  const createdBackup = !fs.existsSync(backupDir);
+  if (createdBackup) {
     fs.mkdirSync(backupDir, { recursive: true });
-    storedKeyNames(liveDir).forEach((key) => {
+    const parked = storedKeyNames(liveDir);
+    parked.forEach((key) => {
       fs.copyFileSync(path.join(liveDir, key), path.join(backupDir, key));
     });
+    // The manifest is what makes an empty backup meaningful. Without it, "the store was empty when
+    // we pinned" and "there is no backup" are the same empty directory, and the second reading
+    // empties the store for real.
+    writeFileAtomic(
+      mainLocalStorageBackupManifestPath(),
+      JSON.stringify({
+        ownerPid: process.pid,
+        createdAt: new Date().toISOString(),
+        pinnedKeys: parked,
+      }),
+    );
   }
   storedKeyNames(liveDir).forEach((key) => fs.rmSync(path.join(liveDir, key), { force: true }));
 
   return () => {
-    restoreAppGlobalState();
+    // Only the call that wrote the backup may undo it. A relaunch chain pins more than once, and a
+    // later launch's teardown restoring the standing pin would hand the chain's next launch a
+    // restored store with nothing left to undo what it writes.
+    if (createdBackup) restoreAppGlobalState();
   };
 }
 
@@ -880,16 +942,46 @@ export function pinAppGlobalState(): () => void {
 export function restoreAppGlobalState(): string[] | undefined {
   const liveDir = mainLocalStorageDir();
   const backupDir = mainLocalStorageBackupDir();
-  if (!fs.existsSync(backupDir)) return undefined;
+  if (!fs.existsSync(backupDir) && !fs.existsSync(mainLocalStorageBackupManifestPath()))
+    return undefined;
 
-  storedKeyNames(liveDir).forEach((key) => fs.rmSync(path.join(liveDir, key), { force: true }));
-  const recovered = storedKeyNames(backupDir);
-  if (recovered.length > 0) fs.mkdirSync(liveDir, { recursive: true });
-  recovered.forEach((key) => {
+  const manifest = readAppGlobalBackup();
+  if (manifest === undefined) {
+    console.warn(
+      `Leaving ${backupDir} alone: it has no readable record of which run took it. Nothing was ` +
+        'restored and nothing was deleted — inspect it by hand.',
+    );
+    return undefined;
+  }
+  if (classifyBackupOwner(manifest.ownerPid) === 'live') {
+    console.warn(
+      `Leaving ${backupDir} alone: process ${manifest.ownerPid} still owns it, so another run is ` +
+        'using these files. To recover by hand once that run has ended, move the files in that ' +
+        'directory back beside it and delete the directory.',
+    );
+    return undefined;
+  }
+
+  // Read what goes back BEFORE emptying anything, so a backup that turns out to hold nothing cannot
+  // cost the developer the store it was supposed to protect.
+  const parked = storedKeyNames(backupDir);
+
+  // Clearing what is live is only safe when THIS process pinned: then the extra keys are its own
+  // run's output. For a backup recovered from a run that has died, keys accumulated since cannot be
+  // told from run output, and the developer's are the ones at stake — so restore over the top and
+  // leave the rest, which is untidy but never destructive.
+  if (classifyBackupOwner(manifest.ownerPid) === 'ours')
+    storedKeyNames(liveDir).forEach((key) => fs.rmSync(path.join(liveDir, key), { force: true }));
+
+  if (parked.length > 0) fs.mkdirSync(liveDir, { recursive: true });
+  parked.forEach((key) => {
     fs.copyFileSync(path.join(backupDir, key), path.join(liveDir, key));
   });
   fs.rmSync(backupDir, { recursive: true, force: true });
-  return recovered.length > 0 ? recovered : undefined;
+  fs.rmSync(mainLocalStorageBackupManifestPath(), { force: true });
+  // The parked names, even when empty: an empty pin is a recovery that restored nothing, which is a
+  // different thing from having found no backup, and global setup reports them differently.
+  return manifest.pinnedKeys;
 }
 
 /**

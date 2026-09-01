@@ -29,6 +29,18 @@ function readKey(key: string): string | undefined {
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : undefined;
 }
 
+/**
+ * Re-point the standing backup at a process that cannot be running, which is the state a killed run
+ * leaves behind. Recovery of someone else's dead pin is a different path from a normal teardown,
+ * and only this makes a single-process test able to reach it.
+ */
+function orphanTheBackup(): void {
+  const manifestPath = `${LIVE_DIR}.e2e-backup.json`;
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+  // Above every platform's pid_max, so it can never name a live process.
+  fs.writeFileSync(manifestPath, JSON.stringify({ ...manifest, ownerPid: 2 ** 31 - 1 }));
+}
+
 function writeKey(key: string, value: string): void {
   fs.mkdirSync(LIVE_DIR, { recursive: true });
   fs.writeFileSync(path.join(LIVE_DIR, key), value);
@@ -105,5 +117,59 @@ describe('app-global state pin', () => {
     restore();
 
     expect(readKey(SCR_REFS_KEY)).toBeUndefined();
+  });
+});
+
+describe('app-global state recovery is not destructive', () => {
+  it('does not wipe the developer state when an empty backup is left behind', () => {
+    // A fresh checkout has no store at all, so the pin backs up nothing — and then the run is
+    // killed, leaving that empty backup standing.
+    pinAppGlobalState();
+    orphanTheBackup();
+
+    // Weeks of the developer's own state accumulate afterwards.
+    writeKey(THEME_KEY, '"dark"');
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+
+    const recovered = restoreAppGlobalState();
+
+    expect(readKey(THEME_KEY)).toBe('"dark"');
+    expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
+    // An empty pin is a real recovery with nothing in it, not "there was no backup" — global setup
+    // has to be able to say so rather than printing nothing.
+    expect(recovered).toEqual([]);
+  });
+
+  it('reports an empty pin differently from no backup at all', () => {
+    pinAppGlobalState();
+
+    expect(restoreAppGlobalState()).toEqual([]);
+    expect(restoreAppGlobalState()).toBeUndefined();
+  });
+
+  it('ignores a subdirectory in the store instead of throwing part-way through the backup', () => {
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+    fs.mkdirSync(path.join(LIVE_DIR, 'some-subdir'), { recursive: true });
+
+    expect(() => pinAppGlobalState()).not.toThrow();
+
+    // The pin still did its job, and the backup is complete rather than half-copied.
+    expect(readKey(SCR_REFS_KEY)).toBeUndefined();
+    expect(restoreAppGlobalState()).toEqual([SCR_REFS_KEY]);
+    expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
+  });
+
+  it('does not restore from a backup the caller did not create', () => {
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+    pinAppGlobalState();
+    const restoreB = pinAppGlobalState();
+    writeKey(SCR_REFS_KEY, '{"0":{"book":"REV","chapterNum":1,"verseNum":1}}');
+
+    // Launch B never wrote the backup, so its teardown must leave the standing pin alone —
+    // otherwise the chain's next launch writes test values onto restored state with nothing left
+    // to undo it.
+    restoreB();
+
+    expect(fs.existsSync(BACKUP_DIR)).toBe(true);
   });
 });
