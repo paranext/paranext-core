@@ -2283,7 +2283,9 @@ step, no automation. Just a record.
 - **Decision:** (1) Count **deliveries and subscribe attempts**, never renders. (2) A trip degrades:
   the subscription is dropped, `[PlatformError, undefined, true]` is returned, and the error carries
   the `RESOURCE_EXHAUSTED` code. (3) A trip **expires** after a cooldown, then re-arms and
-  resubscribes.
+  resubscribes. (4) Every hook in the family reports the dropped setter the same way — as
+  `undefined`. `useData` and `useProjectSetting` already did; `useSetting` is widened to match
+  rather than fabricating a substitute setter to keep its published type non-optional.
 - **Alternatives:**
   - *Keep counting renders* — rejected: a consumer can re-render rapidly for reasons unrelated to
     this data (a busy parent, a cold-start storm, fast typing), and stopping a healthy subscription
@@ -2326,23 +2328,23 @@ step, no automation. Just a record.
   - *Re-arm on selector or data provider change* — rejected as actively harmful: an unstable
     selector, the very mistake being reported, gets a new identity every render, so this would reset
     the counter every render and disarm the guard entirely. Re-arming must be time-based.
-  - *Widen `useSetting`'s returned setter to `| undefined`, the way `useProjectSetting` already
-    declares it* — rejected, and this is why the two sibling hooks disagree about the same
-    condition. `useProjectSetting` has always declared `setSetting` optional, so its call sites
-    already null-check it. `useSetting` is exported through `papi.d.ts` with a non-optional setter
-    and its call sites — in this repo and in extensions — call it directly, so widening the tuple
-    would be a breaking type change for every one of them in order to describe a state that lasts
-    five seconds. The fabricated rejecting setter keeps the published type honest at the cost of one
-    stub; it rejects with the same `RESOURCE_EXHAUSTED` code the throttled value carries, so a
-    `.catch` can still tell throttling from any other write failure.
+  - *Fabricate a rejecting setter inside `useSetting` so its published tuple can keep promising a
+    callable setter* — rejected. It buys call sites the right to skip a null check by making the
+    published type disagree with the value `useData` actually hands back, and it leaves the three
+    hooks in the family describing the same condition three different ways. Widening the tuple is a
+    breaking type change for every `useSetting` setter call site, in this repo and in extensions,
+    but the break is a compile error at exactly the sites that have a decision to make, and
+    `setSetting?.(…)` is already the established shape at `useProjectSetting` call sites.
   - *Keep the setter live while tripped* — rejected as destructive: consumers substitute a default
     value for a `PlatformError`, so a live setter lets the first keystroke overwrite real content
     with that default.
 - **Consequences:** Consumers of `useData`/`useProjectData`/`useSetting` may now observe a
   `RESOURCE_EXHAUSTED` error, a temporarily `undefined` setter, and a `true` `isLoading` that later
-  resolves. Hooks that assert a non-optional setter must supply their own fallback (`useSetting`
-  does). A genuine loop is bounded to one burst per cooldown rather than stopped outright, which is
-  a deliberate trade of absolute containment for self-healing.
+  resolves. `useSetting`'s published setter type is now optional, so every setter call site guards
+  it — either `setSetting?.(…)` or an explicit branch that says the control is unavailable, which is
+  what the user-facing ones (the profile popover, the first-run language step) do rather than
+  letting a click land on nothing. A genuine loop is bounded to one burst per cooldown rather than
+  stopped outright, which is a deliberate trade of absolute containment for self-healing.
 
   **A repeatedly-tripping consumer cycles, and nothing tells the user.** For a transient burst the
   cost is one cooldown, bounded and singular. For a consumer that is genuinely stuck — an unstable

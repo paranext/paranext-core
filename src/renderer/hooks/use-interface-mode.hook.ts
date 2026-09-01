@@ -48,10 +48,15 @@ function writeCachedInterfaceMode(mode: InterfaceMode): void {
  *
  * On startup the initial value is seeded from a `localStorage` cache of the last resolved mode so
  * mode-gated UI doesn't flash the wrong layout before `useSetting` resolves the real value.
+ *
+ * `setMode` is `undefined` whenever {@link useSetting} has nothing to write through — call it as
+ * `setMode?.(…)`.
  */
 export function useInterfaceMode(): [
   mode: InterfaceMode,
-  setMode: (newMode: InterfaceMode) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
+  setMode:
+    | ((newMode: InterfaceMode) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>)
+    | undefined,
 ] {
   const [modePossiblyError, setMode] = useSetting(
     'platform.interfaceMode',

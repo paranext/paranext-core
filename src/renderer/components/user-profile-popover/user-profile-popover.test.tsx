@@ -27,9 +27,9 @@ beforeAll(() => {
 // behavior between cases without any `as` assertions.
 type MockState = {
   interfaceMode: 'simple' | 'power';
-  setInterfaceMode: ReturnType<typeof vi.fn>;
+  setInterfaceMode: ReturnType<typeof vi.fn> | undefined;
   interfaceLanguage: string[];
-  setInterfaceLanguage: ReturnType<typeof vi.fn>;
+  setInterfaceLanguage: ReturnType<typeof vi.fn> | undefined;
   availableLanguages: Record<string, { autonym: string }>;
   themeType: 'light' | 'dark';
   setTheme: ReturnType<typeof vi.fn> | undefined;
@@ -228,6 +228,17 @@ describe('UserProfilePopover interface mode', () => {
     fireEvent.click(screen.getByTestId('user-profile-interface-mode-simple'));
     expect(mockState.setInterfaceMode).not.toHaveBeenCalled();
   });
+
+  test('clicking a mode while the setting setter is dropped warns instead of doing nothing', () => {
+    // `useSetting` has no setter while its runaway guard is throttled. The click cannot be honored,
+    // but it must not look honored either — a silent no-op leaves the user clicking a dead control
+    // with nothing in the log to explain it.
+    setMockSetting('setInterfaceMode', undefined);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(screen.getByTestId('user-profile-interface-mode-power'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
+  });
 });
 
 describe('UserProfilePopover action rows', () => {
@@ -270,6 +281,15 @@ describe('UserProfilePopover language picker', () => {
     // 'en' is selectable but already primary - select 'es' instead
     fireEvent.click(await screen.findByTestId('user-profile-language-es'));
     expect(mockState.setInterfaceLanguage).toHaveBeenCalledWith(['es', 'en']);
+  });
+
+  test('clicking a language while the setting setter is dropped warns instead of doing nothing', async () => {
+    setMockSetting('interfaceLanguage', ['en', 'es']);
+    setMockSetting('setInterfaceLanguage', undefined);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-es'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
   });
 
   test('clicking the already-primary language is a no-op (deselect attempt ignored)', async () => {
