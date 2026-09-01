@@ -15,7 +15,11 @@ import {
   type TabMenuContext,
 } from '@renderer/components/docking/tab-menu.util';
 import { EMPTY_WINDOW_LABEL_KEY } from '@renderer/components/docking/window-label.util';
-import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
+import {
+  collectContextMenuKeys,
+  localizeContextMenuItems,
+  type OverlayContextMenuItem,
+} from '@renderer/components/overlays/overlay-context-menu.component';
 import { menuDataService } from '@shared/services/menu-data.service';
 import type { WindowSummary } from '@shared/services/window.service-model';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
@@ -247,25 +251,39 @@ export function PlatformTabTitle({
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const containerRef = useRef<HTMLDivElement>(undefined!);
 
+  /**
+   * The contributed tab menu, converted for rendering. Empty until the read below lands, and for a
+   * tab whose read failed.
+   */
+  const [contributedItems, setContributedItems] = useState<OverlayContextMenuItem[]>([]);
+
   const tabAria: LocalizeKey = '%tab_aria_tab%';
+  // The contributed items' own keys are resolved here rather than in a second hook, so a tab asks
+  // for everything it needs to render in one round trip. They arrive unresolved whenever the menu
+  // data provider is serving its combiner's raw output — before the extension host's first
+  // contribution resync — and the tab menu is read once, so a label left raw would stay raw
+  const contributedKeys = useMemo(
+    () => collectContextMenuKeys(contributedItems),
+    [contributedItems],
+  );
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
       () =>
         isLocalizeKey(text)
-          ? [text, tabAria, EMPTY_WINDOW_LABEL_KEY]
-          : [tabAria, EMPTY_WINDOW_LABEL_KEY],
-      [text],
+          ? [text, tabAria, EMPTY_WINDOW_LABEL_KEY, ...contributedKeys]
+          : [tabAria, EMPTY_WINDOW_LABEL_KEY, ...contributedKeys],
+      [text, contributedKeys],
     ),
   );
   const title = isLocalizeKey(text) ? localizedStrings[text] : text;
   const tabLabel = localizedStrings[tabAria];
   const emptyWindowLabel = localizedStrings[EMPTY_WINDOW_LABEL_KEY];
 
-  /**
-   * The contributed tab menu, converted for rendering. Empty until the read below lands, and for a
-   * tab whose read failed.
-   */
-  const [contributedItems, setContributedItems] = useState<OverlayContextMenuItem[]>([]);
+  /** The contributed items with their labels resolved, ready to render */
+  const localizedContributedItems = useMemo(
+    () => localizeContextMenuItems(contributedItems, localizedStrings),
+    [contributedItems, localizedStrings],
+  );
 
   // Read once when the tab mounts, rather than subscribed to. The platform's own items are a fixed
   // contribution, and the two things that do change while a tab lives — which windows are open, and
@@ -835,7 +853,7 @@ export function PlatformTabTitle({
     handleMenuCommand({ command: itemId } as Parameters<typeof handleMenuCommand>[0], id);
   };
 
-  const tabMenuItems = buildTabMenuItems(contributedItems, menuContext, emptyWindowLabel);
+  const tabMenuItems = buildTabMenuItems(localizedContributedItems, menuContext, emptyWindowLabel);
 
   // Rendering the menu with nothing in it puts an empty styled popup on screen, since the content
   // opens whatever its children are. A tab with nothing to offer — its read has not landed, or
