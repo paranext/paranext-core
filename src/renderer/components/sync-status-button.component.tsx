@@ -145,11 +145,31 @@ export function SyncStatusButton() {
    * Mirrors `status` for {@link handleCancel}, which must not re-create itself when the status
    * changes — a new handler identity mid-click is exactly what the single-shot guard is
    * protecting.
+   *
+   * Written during RENDER, deliberately, and unlike the effect-written refs below. React schedules
+   * the passive-effect flush as its own task after commit, i.e. after pending microtasks — so a
+   * `cancelSync` rejection delivered between the commit that moved `status` to `failed` and that
+   * flush would read an effect-written ref as still `syncing`, and toast "Couldn't cancel the sync"
+   * beside a popover saying the sync finished. That is precisely what the guard exists to suppress.
+   * A render-phase write cannot lag the commit it belongs to, and for a SUPPRESSION guard being
+   * marginally ahead is the safe direction: it errs toward staying quiet.
    */
   const statusRef = useRef(status);
-  useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
+  statusRef.current = status;
+
+  /**
+   * Identifies the sync episode a cancel request belongs to. Bumped when a cancel is sent, and
+   * again whenever the status leaves `syncing` (see the settle effect below) — so an episode
+   * boundary invalidates any request still in flight across it.
+   *
+   * `cancelSync` can reject long after it was sent (an unregistered handler rejects only after the
+   * RPC layer's ~10s retry budget), by which time the sync it targeted may have ended and another
+   * begun. Without this, sync A's rejection re-enables Cancel and toasts "Couldn't cancel the sync"
+   * against sync B — and if the user had already cancelled B, it reverts B's "Cancelling…" while
+   * B's own request is still in flight, defeating the single-shot guard the whole handler is built
+   * around.
+   */
+  const cancelGenerationRef = useRef(0);
 
   const handleCancel = useCallback(async () => {
     // The editor's sync-blocked banner (`extensions/src/platform-scripture-editor/`) offers the
@@ -164,6 +184,8 @@ export function SyncStatusButton() {
     // reporting `syncing` for a while yet. Saying "Cancelling…" is what distinguishes a request that
     // was accepted from a button that has merely gone dim.
     setIsCancelling(true);
+    cancelGenerationRef.current += 1;
+    const generation = cancelGenerationRef.current;
     try {
       // No `notificationId` argument: the contract's optional parameter exists so a caller that
       // RAISED a sync notification can prove the cancel targets that same sync, and this button
@@ -175,6 +197,10 @@ export function SyncStatusButton() {
       await sendCommand('paratextBibleSendReceive.cancelSync');
     } catch (e) {
       logger.warn(`Toolbar could not cancel the running sync: ${getErrorMessage(e)}`);
+      // The sync this request was for is over, and everything below would land on a later one's
+      // state. Nothing to re-enable and nothing to report: whatever is showing now describes the
+      // episode that is actually running.
+      if (generation !== cancelGenerationRef.current) return;
       setIsCancelEnabled(true);
       setIsCancelling(false);
       // A rejected cancel does NOT prove the sync is still running — the declaration guarantees
@@ -275,6 +301,8 @@ export function SyncStatusButton() {
     setWasCancelRequested(isCancellingRef.current);
     setIsCancelling(false);
     setIsCancelEnabled(true);
+    // This episode is over, so a cancel request still in flight from it must not reach the next one.
+    cancelGenerationRef.current += 1;
   }, [status]);
 
   /**
@@ -397,25 +425,67 @@ export function SyncStatusButton() {
    * `localizedStrings` is a fresh object each time — without this it would immediately recompute
    * `unknown` with itself as the previous status and blank the announcement it had just made.
    *
-   * Every value the announcement is computed from belongs in this key, `wasCancelled` included. The
-   * guard runs before the effect's dependencies are consulted, so a value left out of it is one the
-   * region can never be corrected for — the dep array still fires, and the guard still returns.
+   * Every value the announcement is computed from belongs in this key: the status, `wasCancelled`,
+   * and the TEXTS themselves. The guard runs before the effect's dependencies are consulted, so a
+   * value left out of it is one the region can never be corrected for — the dep array still fires,
+   * and the guard still returns. The texts are keyed by content rather than by `localizedStrings`'s
+   * identity, which is a fresh object per render and would defeat the guard entirely; keying on
+   * content is what lets a LOCALE SWITCH through, instead of leaving the previous language's
+   * sentence sitting in `role="status"`.
    */
   const lastAnnouncedForRef = useRef<
-    { status: SyncStatus; areStringsLoaded: boolean; wasCancelled: boolean } | undefined
+    { status: SyncStatus; wasCancelled: boolean; stringsKey: string } | undefined
   >(undefined);
+  /**
+   * The status this effect last saw, updated on EVERY run — including runs that say nothing because
+   * the strings have not loaded. Separate from {@link lastAnnouncedForRef}, which records what was
+   * last SPOKEN: transitions have to be tracked through the silent window, or a status that moves
+   * twice while the strings load is indistinguishable from one that never moved.
+   */
+  const lastSeenStatusRef = useRef<SyncStatus | undefined>(undefined);
+  /**
+   * Set when a sync the user was watching ended in "we cannot tell" while the region could not
+   * speak. Without it that transition is simply lost: by the time the strings load, `status` and
+   * the previous status are both `unknown`, which is indistinguishable from an `unknown` nobody was
+   * waiting on — the one case this region deliberately stays quiet about.
+   */
+  const hasUnspokenSyncEndedUnknownRef = useRef(false);
+
+  // Names every string the announcement can be built from, so a locale change is a change to this
+  // key. Not memoized: it is a join of five strings, and the effect below reads it on every render
+  // anyway.
+  const announcementStringsKey = [
+    localizedStrings['%toolbar_sync_status_syncing%'],
+    localizedStrings['%toolbar_sync_status_synced%'],
+    localizedStrings['%toolbar_sync_status_cancelled%'],
+    localizedStrings['%toolbar_sync_status_failed%'],
+    localizedStrings['%toolbar_sync_status_unknown%'],
+  ].join('\u0000');
+
   useEffect(() => {
+    const previousStatus = lastSeenStatusRef.current;
+    lastSeenStatusRef.current = status;
+    // A sync the user was watching ending in "we cannot tell" IS worth saying; `idle`, and an
+    // `unknown` nobody was waiting on, are not transitions worth interrupting a screen reader for.
+    // Recorded whether or not it can be spoken yet.
+    if (status === 'unknown' && previousStatus === 'syncing')
+      hasUnspokenSyncEndedUnknownRef.current = true;
+    if (status !== 'unknown') hasUnspokenSyncEndedUnknownRef.current = false;
+
+    // Silent until the strings load, so the region can never speak a raw `%key%`. No announcement
+    // state is recorded either: nothing was said, so there is nothing to compare a later run against.
+    if (!areStringsLoaded) return;
+
     const lastAnnouncedFor = lastAnnouncedForRef.current;
     if (
       lastAnnouncedFor &&
       lastAnnouncedFor.status === status &&
-      lastAnnouncedFor.areStringsLoaded === areStringsLoaded &&
-      lastAnnouncedFor.wasCancelled === wasCancelled
+      lastAnnouncedFor.wasCancelled === wasCancelled &&
+      lastAnnouncedFor.stringsKey === announcementStringsKey
     )
       return;
-    const previousStatus = lastAnnouncedFor?.status;
-    lastAnnouncedForRef.current = { status, areStringsLoaded, wasCancelled };
-    if (!areStringsLoaded) return;
+    lastAnnouncedForRef.current = { status, wasCancelled, stringsKey: announcementStringsKey };
+
     if (status === 'syncing') {
       setAnnouncement(localizedStrings['%toolbar_sync_status_syncing%']);
       return;
@@ -432,24 +502,37 @@ export function SyncStatusButton() {
       setAnnouncement(localizedStrings['%toolbar_sync_status_failed%']);
       return;
     }
-    // A sync the user was watching ending in "we cannot tell" IS worth saying; `idle`, and an
-    // `unknown` nobody was waiting on, are not transitions worth interrupting a screen reader for.
-    if (status === 'unknown' && previousStatus === 'syncing') {
+    if (status === 'unknown' && hasUnspokenSyncEndedUnknownRef.current) {
       setAnnouncement(localizedStrings['%toolbar_sync_status_unknown%']);
       return;
     }
     setAnnouncement('');
-  }, [status, areStringsLoaded, wasCancelled, localizedStrings]);
+  }, [status, areStringsLoaded, wasCancelled, localizedStrings, announcementStringsKey]);
 
   /**
-   * The button's accessible name. `idle` and `unknown` share one visible label — the label is
-   * capped and truncates, so it names the control rather than the status — which would otherwise
-   * leave the difference between them carried only by an `aria-hidden` icon, and a screen-reader
-   * user hearing "Sync, button" for both. That collapses the very distinction `unknown` exists to
-   * draw.
+   * The button's accessible name, supplied only for `unknown`. `idle` and `unknown` share one
+   * visible label — the label is capped and truncates, so it names the control rather than the
+   * status — which would otherwise leave the difference between them carried only by an
+   * `aria-hidden` icon, and a screen-reader user hearing "Sync, button" for both. That collapses
+   * the very distinction `unknown` exists to draw.
+   *
+   * The visible label is KEPT as the first half rather than replaced. An `aria-label` overrides the
+   * accessible name wholesale, so naming the button only for its status leaves no overlap between
+   * what a speech-control user sees and what they must say to activate it — WCAG 2.5.3 Label in
+   * Name. In English "Sync status unavailable" happens to start with "Sync" and passes by accident;
+   * in Spanish "Sincronizar" and "Estado de sincronización no disponible" share nothing.
+   *
+   * `undefined` until the strings load, so the name can never be a raw `%key%`. `claimStatus`
+   * starts at `unknown`, so `status` is `unknown` on the very first render — exactly when
+   * `useLocalizedStrings` is still seeding every value with its own key — and a screen reader
+   * focusing the toolbar in that window would otherwise announce "percent toolbar underscore sync
+   * underscore status underscore unknown percent, button". The live region beside it is explicitly
+   * guarded against the same thing.
    */
   const buttonAccessibleName =
-    status === 'unknown' ? localizedStrings['%toolbar_sync_status_unknown%'] : undefined;
+    status === 'unknown' && areStringsLoaded
+      ? `${buttonLabel} — ${localizedStrings['%toolbar_sync_status_unknown%']}`
+      : undefined;
 
   const popoverStatusMessage = (() => {
     if (status === 'synced') return localizedStrings['%toolbar_sync_popover_synced%'];
@@ -565,7 +648,9 @@ export function SyncStatusButton() {
         <PopoverContent
           align="end"
           ref={popoverContentRef}
-          aria-label={localizedStrings['%toolbar_sync_open_status%']}
+          // Withheld until the strings load, for the same reason as `buttonAccessibleName`: an
+          // `aria-label` of `%toolbar_sync_open_status%` would be spoken verbatim.
+          aria-label={areStringsLoaded ? localizedStrings['%toolbar_sync_open_status%'] : undefined}
         >
           <PopoverHeader className="tw:gap-0 tw:px-2">
             <PopoverTitle className="tw:text-xs tw:font-bold">

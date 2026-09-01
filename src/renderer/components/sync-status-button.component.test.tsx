@@ -26,6 +26,14 @@ import {
   SYNC_SEED_RETRY_WINDOW_MS,
 } from '../hooks/use-sync-status.hook';
 
+/**
+ * The button's accessible name in the `unknown` state. Composed, not replaced: an `aria-label`
+ * overrides the accessible name wholesale, so it has to keep the VISIBLE label as its first half or
+ * a speech-control user has nothing in common between what they see and what they must say — WCAG
+ * 2.5.3 Label in Name.
+ */
+const UNKNOWN_ACCESSIBLE_NAME = 'Sync — Test Sync status unavailable';
+
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
@@ -372,7 +380,7 @@ describe('SyncStatusButton — startup state', () => {
     mockSyncStateSequence([seed.promise]);
 
     render(<SyncStatusButton />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Test Sync status unavailable' }));
+    fireEvent.click(await screen.findByRole('button', { name: UNKNOWN_ACCESSIBLE_NAME }));
 
     await waitFor(() => {
       expect(screen.getByTestId('toolbar-sync-popover-status')).toHaveTextContent(
@@ -419,7 +427,7 @@ describe('SyncStatusButton — startup read retries', () => {
     render(<SyncStatusButton />);
 
     // Nothing is known yet, so the button names itself `unknown` rather than `idle`.
-    await screen.findByRole('button', { name: 'Test Sync status unavailable' });
+    await screen.findByRole('button', { name: UNKNOWN_ACCESSIBLE_NAME });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS * 3);
@@ -442,7 +450,7 @@ describe('SyncStatusButton — startup read retries', () => {
 
     // Named for the unreadable status, not "Sync": the accessible name is what distinguishes this
     // state from `idle`, whose icon is the only other difference and is `aria-hidden`.
-    fireEvent.click(await screen.findByRole('button', { name: 'Test Sync status unavailable' }));
+    fireEvent.click(await screen.findByRole('button', { name: UNKNOWN_ACCESSIBLE_NAME }));
 
     // "No sync is running" would be a positive claim resting on a read that never answered.
     await waitFor(() => {
@@ -465,7 +473,7 @@ describe('SyncStatusButton — startup read retries', () => {
     const fireSyncStateChanged = captureSyncStateEvent();
     mockSyncStateSequence([new Error('not registered yet')]);
     render(<SyncStatusButton />);
-    await screen.findByRole('button', { name: 'Test Sync status unavailable' });
+    await screen.findByRole('button', { name: UNKNOWN_ACCESSIBLE_NAME });
     const callsBeforeEvent = countSyncStateCalls();
 
     fireSyncStateChanged(true);
@@ -494,9 +502,7 @@ describe('SyncStatusButton — startup read retries', () => {
       await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_WINDOW_MS + SYNC_SEED_RETRY_INTERVAL_MS);
     });
 
-    expect(
-      screen.getByRole('button', { name: 'Test Sync status unavailable' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: UNKNOWN_ACCESSIBLE_NAME })).toBeInTheDocument();
   });
 
   // The retry window runs during startup, when the wall clock can be stepped (NTP). A wall-clock
@@ -521,7 +527,7 @@ describe('SyncStatusButton — startup read retries', () => {
     mockProjectNames({ 'proj-hnf': 'HNF' });
 
     render(<SyncStatusButton />);
-    await screen.findByRole('button', { name: 'Test Sync status unavailable' });
+    await screen.findByRole('button', { name: UNKNOWN_ACCESSIBLE_NAME });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS * 2);
@@ -629,9 +635,7 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
     render(<SyncStatusButton />);
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Test Sync status unavailable' }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: UNKNOWN_ACCESSIBLE_NAME })).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: 'Test Synced' })).not.toBeInTheDocument();
   });
@@ -684,9 +688,7 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
 
     // Not "Synced": nothing came back to justify a success claim.
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Test Sync status unavailable' }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: UNKNOWN_ACCESSIBLE_NAME })).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: 'Test Synced' })).not.toBeInTheDocument();
   });
@@ -848,9 +850,7 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
     render(<SyncStatusButton />);
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Test Sync status unavailable' }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: UNKNOWN_ACCESSIBLE_NAME })).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: 'Test Synced' })).not.toBeInTheDocument();
   });
@@ -1414,6 +1414,66 @@ describe('SyncStatusButton — popover and cancel', () => {
       );
     });
     expect(vi.mocked(notificationService.send)).not.toHaveBeenCalled();
+  });
+
+  // `cancelSync` can reject long after it was sent — an unregistered handler rejects only after the
+  // RPC layer's retry budget — by which time the sync it targeted may have ended and another begun.
+  it('does not let a cancel rejected after its sync ended disturb the next sync', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    let getSyncStateCalls = 0;
+    let rejectCancel: ((reason: Error) => void) | undefined;
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => {
+        getSyncStateCalls += 1;
+        // Sync A running, then A finished, then sync B running.
+        if (getSyncStateCalls === 1)
+          return { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] };
+        if (getSyncStateCalls === 2) return completedState({ a: 'succeeded' });
+        return { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['b'] };
+      },
+      'paratextBibleSendReceive.cancelSync': () =>
+        new Promise((_resolve, reject) => {
+          rejectCancel = reject;
+        }),
+    });
+    mockProjectNames({ a: 'AAA', b: 'BBB' });
+    render(<SyncStatusButton />);
+
+    // Cancel sync A; its request never settles yet.
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+    if (!rejectCancel) throw new Error('cancelSync was never called');
+    const rejectSyncACancel = rejectCancel;
+
+    // A ends, B begins.
+    fireSyncStateChanged(false);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Synced' })).toBeInTheDocument();
+    });
+    fireSyncStateChanged(true);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('BBB');
+    });
+
+    // Only now does A's cancel come back rejected.
+    rejectSyncACancel(new Error('there is no sync to cancel'));
+    await waitFor(() => {
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+        expect.stringContaining('could not cancel'),
+      );
+    });
+
+    // It must not report a failure for a sync that already ended...
+    expect(vi.mocked(notificationService.send)).not.toHaveBeenCalled();
+    // ...and B's Cancel must still be armed for B, not left in A's rejected state. The popover is
+    // still open from the click that cancelled A, so this reads the live control rather than
+    // reopening it.
+    const cancel = await screen.findByTestId('toolbar-sync-cancel-button');
+    expect(cancel).toHaveTextContent('Test Cancel sync');
+    expect(cancel).toHaveAttribute('aria-disabled', 'false');
   });
 
   // A greyed-out button reads as "unavailable", not "your click was taken". The sync keeps reporting
@@ -2002,6 +2062,123 @@ describe('SyncStatusButton — accessibility', () => {
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 
+  // The live region is guarded against speaking a raw `%key%`; the button's own accessible name has
+  // to be too. `claimStatus` starts at `unknown`, so `status` is `unknown` on the very first render —
+  // exactly the window where every localized value is still its own key — and a screen reader
+  // focusing the toolbar then would announce "percent toolbar underscore sync underscore status
+  // underscore unknown percent, button".
+  it('gives the button no accessible name of its own until the strings have loaded', async () => {
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    const unloadedStrings = Object.fromEntries(LOCALIZED_STRING_KEYS.map((key) => [key, key]));
+    vi.mocked(useLocalizedStrings).mockReturnValue([unloadedStrings, true]);
+    // Never answers, so the status stays `unknown` — the state that supplies an accessible name.
+    mockSyncState(new Error('not registered yet'));
+
+    render(<SyncStatusButton />);
+
+    const button = await screen.findByTestId('toolbar-sync-button');
+    expect(button.getAttribute('aria-label') ?? '').not.toMatch(/%/);
+    // Positive control: the label really is in its unloaded, key-for-value state, so the assertion
+    // above had something it could have caught.
+    expect(button).toHaveTextContent('%toolbar_sync%');
+  });
+
+  // An `aria-label` replaces the accessible name wholesale, so naming the button only for its status
+  // leaves a speech-control user nothing in common between what they see and what they must say.
+  // English passes by accident ("Sync status unavailable" starts with "Sync"); Spanish
+  // ("Sincronizar" vs "Estado de sincronización no disponible") shares nothing.
+  it('keeps the visible label inside the accessible name when the status is unknown', async () => {
+    mockSyncState(new Error('not registered yet'));
+
+    render(<SyncStatusButton />);
+
+    const button = await screen.findByRole('button', { name: UNKNOWN_ACCESSIBLE_NAME });
+    // The visible label is a substring of the accessible name, which is what WCAG 2.5.3 requires.
+    expect(button.textContent).toBeTruthy();
+    expect(button.getAttribute('aria-label')).toContain('Sync');
+  });
+
+  // The region holds text, so a locale switch that leaves it alone leaves the previous language's
+  // sentence sitting in `role="status"` for a screen reader to read.
+  it('re-announces in the new language after a locale switch', async () => {
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: [] });
+
+    const { rerender } = render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing');
+    });
+
+    const spanishStrings = Object.fromEntries(
+      LOCALIZED_STRING_KEYS.map((key) => {
+        if (key === '%toolbar_sync_status_syncing%') return [key, 'Sincronizando'];
+        // `areStringsLoaded` is derived from this key, so leaving it as its own key would make the
+        // component correctly silent and the assertion below vacuous.
+        if (key === '%toolbar_sync%') return [key, 'Sincronizar'];
+        return [key, key];
+      }),
+    );
+    vi.mocked(useLocalizedStrings).mockReturnValue([spanishStrings, false]);
+    rerender(<SyncStatusButton />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Sincronizando');
+    });
+  });
+
+  // A sync the user was watching ending in "we cannot tell" is worth saying. If it happens while the
+  // strings are still loading, by the time the region can speak both the current and previous status
+  // are `unknown` — indistinguishable from an `unknown` nobody was waiting on, which this region
+  // deliberately stays quiet about — so the transition has to be remembered across the silence.
+  it('announces a sync that ended unreadably while the strings were still loading', async () => {
+    const { useLocalizedStrings } = await import('@renderer/hooks/papi-hooks');
+    const loadedStrings = Object.fromEntries(
+      LOCALIZED_STRING_KEYS.map((key) => {
+        // `areStringsLoaded` is derived from this key.
+        if (key === '%toolbar_sync%') return [key, 'Sync'];
+        if (key === '%toolbar_sync_status_unknown%') return [key, 'Test Sync status unavailable'];
+        return [key, key];
+      }),
+    );
+    const unloadedStrings = Object.fromEntries(LOCALIZED_STRING_KEYS.map((key) => [key, key]));
+    vi.mocked(useLocalizedStrings).mockReturnValue([unloadedStrings, true]);
+
+    const fireSyncStateChanged = captureSyncStateEvent();
+    let getSyncStateCalls = 0;
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => {
+        getSyncStateCalls += 1;
+        if (getSyncStateCalls === 1)
+          return { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: [] };
+        // The sync ended, but its outcome is unreadable.
+        throw new Error('cannot read the outcome');
+      },
+    });
+
+    const { rerender } = render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent(
+        '%toolbar_sync_status_syncing%',
+      );
+    });
+    // Silent throughout, because a raw `%key%` must never be spoken.
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+
+    fireSyncStateChanged(false);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('%toolbar_sync%');
+    });
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+
+    // Now the strings arrive.
+    vi.mocked(useLocalizedStrings).mockReturnValue([loadedStrings, false]);
+    rerender(<SyncStatusButton />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Sync status unavailable');
+    });
+  });
+
   // Tailwind's reset strips list semantics in Safari, so VoiceOver stops announcing the list.
   it('keeps list semantics on the syncing-project list', async () => {
     mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] });
@@ -2088,7 +2265,7 @@ describe('SyncStatusButton — accessibility', () => {
     mockSyncState(new Error('send/receive is not available'));
     render(<SyncStatusButton />);
 
-    await screen.findByRole('button', { name: 'Test Sync status unavailable' });
+    await screen.findByRole('button', { name: UNKNOWN_ACCESSIBLE_NAME });
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 });
