@@ -18,7 +18,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataProviderDataType } from '@shared/models/data-provider.model';
 import { IDataProvider } from '@shared/models/data-provider.interface';
 import { logger } from '@shared/services/logger.service';
-import { createUseDataHook } from '@renderer/hooks/hook-generators/create-use-data-hook.util';
+import {
+  createUseDataHook,
+  RUNAWAY_COOLDOWN_MS,
+  RUNAWAY_EVENTS_PER_WINDOW,
+  RUNAWAY_WINDOW_MS,
+} from '@renderer/hooks/hook-generators/create-use-data-hook.util';
 
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), debug: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -76,8 +81,11 @@ function createTestDataProviderHarness() {
   return { provider, setStuff, subscriptions };
 }
 
-/** Mirrors the guard's own threshold in the hook under test */
-const RUNAWAY_THRESHOLD = 100;
+/**
+ * Paces events far enough apart that the rolling window never holds enough of them to trip, however
+ * many are delivered.
+ */
+const OUTSIDE_WINDOW_GAP_MS = RUNAWAY_WINDOW_MS / 50;
 
 const selectorGen1: TestSelector = { book: 'GEN', chapterNum: 1 };
 const selectorExo1: TestSelector = { book: 'EXO', chapterNum: 1 };
@@ -314,10 +322,10 @@ describe('createUseDataHook runaway-loop guard', () => {
 
     // No `resolveSubscribe` anywhere: every subscribe stays in flight, exactly as it would over
     // the network, so not one delivery ever lands
-    for (let i = 0; i < RUNAWAY_THRESHOLD + 1; i += 1) rerender();
+    for (let i = 0; i < RUNAWAY_EVENTS_PER_WINDOW + 1; i += 1) rerender();
 
     // Capped rather than one subscription per render: the storm is stopped, not just reported
-    expect(harness.subscriptions.length).toBeLessThan(RUNAWAY_THRESHOLD);
+    expect(harness.subscriptions.length).toBeLessThan(RUNAWAY_EVENTS_PER_WINDOW);
     expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
       expect.stringContaining('was subscribed to'),
     );
@@ -328,9 +336,10 @@ describe('createUseDataHook runaway-loop guard', () => {
     const { result } = renderUseStuff(selectorGen1);
     await act(async () => harness.subscriptions[0].resolveSubscribe());
 
-    deliverTimes(harness.subscriptions[0], RUNAWAY_THRESHOLD - 1);
+    const deliveryCount = RUNAWAY_EVENTS_PER_WINDOW - 1;
+    deliverTimes(harness.subscriptions[0], deliveryCount);
 
-    expect(result.current[0]).toBe('value 98');
+    expect(result.current[0]).toBe(`value ${deliveryCount - 1}`);
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
@@ -338,7 +347,7 @@ describe('createUseDataHook runaway-loop guard', () => {
     const { result } = renderUseStuff(selectorGen1);
     await act(async () => harness.subscriptions[0].resolveSubscribe());
 
-    deliverTimes(harness.subscriptions[0], RUNAWAY_THRESHOLD + 1);
+    deliverTimes(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 1);
 
     const [data, setData, isLoading] = result.current;
     // A type guard rather than an assertion so the failure message shows the unexpected value
@@ -359,13 +368,36 @@ describe('createUseDataHook runaway-loop guard', () => {
     expect(harness.subscriptions[0].getUnsubscribeCallCount()).toBe(1);
   });
 
+  it('contains a trip to the offending hook instance, leaving a sibling healthy', async () => {
+    // Containment is the whole point of guarding per subscription rather than globally: one broken
+    // pane must not throttle every other pane in the window. The two instances share a data
+    // provider and even the same generated hook function — only their React state and refs differ,
+    // which is exactly what has to keep them apart.
+    const broken = renderUseStuff(selectorGen1);
+    const healthy = renderUseStuff(selectorExo1);
+    await act(async () => {
+      harness.subscriptions[0].resolveSubscribe();
+      harness.subscriptions[1].resolveSubscribe();
+    });
+
+    deliverTimes(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 1);
+    expect(isPlatformError(broken.result.current[0])).toBe(true);
+
+    act(() => harness.subscriptions[1].deliver('exodus 1'));
+
+    expect(healthy.result.current[0]).toBe('exodus 1');
+    // Its setter survives too — containment that left the sibling read-only would not be containment
+    expect(healthy.result.current[1]).toBeDefined();
+    expect(healthy.result.current[2]).toBe(false);
+  });
+
   it('does not trip on renders alone, however many the consumer does', async () => {
     const { result, rerender } = renderUseStuff(selectorGen1);
     await act(async () => harness.subscriptions[0].resolveSubscribe());
 
     // A busy consumer re-rendering hard is not a data-update loop. Reusing the same selector keeps
     // the subscription in place, so nothing here is a delivery.
-    for (let i = 0; i < RUNAWAY_THRESHOLD + 1; i += 1) rerender({ selector: selectorGen1 });
+    for (let i = 0; i < RUNAWAY_EVENTS_PER_WINDOW + 1; i += 1) rerender({ selector: selectorGen1 });
 
     act(() => harness.subscriptions[0].deliver('genesis 1'));
 
@@ -380,7 +412,7 @@ describe('createUseDataHook runaway-loop guard', () => {
     // One `act`, so React cannot re-render and drop the subscription part-way: every delivery
     // past the threshold reaches the guard's already-tripped branch, which is the only thing that
     // can warn more than once
-    deliverBurstInOneAct(harness.subscriptions[0], RUNAWAY_THRESHOLD + 30);
+    deliverBurstInOneAct(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 30);
 
     expect(logger.warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('was updated'));
     expect(isPlatformError(result.current[0])).toBe(true);
@@ -392,9 +424,9 @@ describe('createUseDataHook runaway-loop guard', () => {
     );
 
     // Well past the count threshold, but paced out — churn this slow is a busy consumer, not a loop
-    for (let i = 0; i < RUNAWAY_THRESHOLD + 50; i += 1) {
+    for (let i = 0; i < RUNAWAY_EVENTS_PER_WINDOW + 50; i += 1) {
       rerender();
-      currentTimeMs += 20;
+      currentTimeMs += OUTSIDE_WINDOW_GAP_MS;
     }
 
     expect(isPlatformError(result.current[0])).toBe(false);
@@ -406,7 +438,7 @@ describe('createUseDataHook runaway-loop guard', () => {
     try {
       const { result, unmount } = renderUseStuff(selectorGen1);
       await act(async () => harness.subscriptions[0].resolveSubscribe());
-      deliverTimes(harness.subscriptions[0], RUNAWAY_THRESHOLD + 1);
+      deliverTimes(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 1);
       expect(isPlatformError(result.current[0])).toBe(true);
       expect(vi.getTimerCount()).toBe(1);
 
@@ -424,14 +456,15 @@ describe('createUseDataHook runaway-loop guard', () => {
     try {
       const { result } = renderUseStuff(selectorGen1);
       await act(async () => harness.subscriptions[0].resolveSubscribe());
-      deliverTimes(harness.subscriptions[0], RUNAWAY_THRESHOLD + 1);
+      deliverTimes(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 1);
       expect(isPlatformError(result.current[0])).toBe(true);
       const subscriptionsWhileTripped = harness.subscriptions.length;
 
       // The provider has gone quiet; advance past the cooldown
-      currentTimeMs += 10000;
+      const pastCooldownMs = RUNAWAY_COOLDOWN_MS * 2;
+      currentTimeMs += pastCooldownMs;
       await act(async () => {
-        vi.advanceTimersByTime(10000);
+        vi.advanceTimersByTime(pastCooldownMs);
       });
 
       // A fresh subscription is opened and normal delivery resumes
@@ -454,7 +487,7 @@ describe('createUseDataHook runaway-loop guard', () => {
   it('stays tripped while still within the cooldown, rather than re-arming per selector', async () => {
     const { result, rerender } = renderUseStuff(selectorGen1);
     await act(async () => harness.subscriptions[0].resolveSubscribe());
-    deliverTimes(harness.subscriptions[0], RUNAWAY_THRESHOLD + 1);
+    deliverTimes(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 1);
     expect(isPlatformError(result.current[0])).toBe(true);
 
     // Resetting on selector change would disarm the guard entirely: an unmemoized selector — the
@@ -471,10 +504,11 @@ describe('createUseDataHook runaway-loop guard', () => {
     const { result } = renderUseStuff(selectorGen1);
     await act(async () => harness.subscriptions[0].resolveSubscribe());
 
-    // Well past the count threshold, but 20ms apart — a busy provider, not a runaway loop
-    deliverTimes(harness.subscriptions[0], RUNAWAY_THRESHOLD + 50, 20);
+    // Well past the count threshold, but paced out — a busy provider, not a runaway loop
+    const deliveryCount = RUNAWAY_EVENTS_PER_WINDOW + 50;
+    deliverTimes(harness.subscriptions[0], deliveryCount, OUTSIDE_WINDOW_GAP_MS);
 
-    expect(result.current[0]).toBe('value 149');
+    expect(result.current[0]).toBe(`value ${deliveryCount - 1}`);
     expect(logger.warn).not.toHaveBeenCalled();
   });
 });

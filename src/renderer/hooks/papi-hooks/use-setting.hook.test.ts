@@ -1,4 +1,5 @@
 import { renderHook } from '@testing-library/react';
+import { isPlatformError, RESOURCE_EXHAUSTED } from 'platform-bible-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { logger } from '@shared/services/logger.service';
 import { useData } from '@renderer/hooks/papi-hooks/use-data.hook';
@@ -51,7 +52,19 @@ describe('useSetting', () => {
     const { result } = renderHook(() => useSetting('platform.interfaceLanguage', ['en']));
 
     expect(typeof result.current[1]).toBe('function');
-    await expect(result.current[1](['fr'])).rejects.toThrow(/throttled/);
+
+    // The rejection carries the same machine-readable code the throttled `useData` value carries,
+    // so a `.catch` can tell "throttled" from any other write failure without matching on the
+    // message text — which is the reason the code exists at all.
+    const rejection: unknown = await result.current[1](['fr']).then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    if (!isPlatformError(rejection))
+      throw new Error(`Expected a PlatformError but got ${String(rejection)}`);
+    expect(rejection.code).toBe(RESOURCE_EXHAUSTED);
+    expect(rejection.message).toContain('platform.interfaceLanguage');
+
     expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
       expect.stringContaining('platform.interfaceLanguage'),
     );

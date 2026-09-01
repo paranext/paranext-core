@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { logger } from '@shared/services/logger.service';
 import { sendCommand } from '@shared/services/command.service';
 import { UserProfilePopover } from './user-profile-popover.component';
 
@@ -31,10 +32,19 @@ type MockState = {
   setInterfaceLanguage: ReturnType<typeof vi.fn>;
   availableLanguages: Record<string, { autonym: string }>;
   themeType: 'light' | 'dark';
-  setTheme: ReturnType<typeof vi.fn>;
+  setTheme: ReturnType<typeof vi.fn> | undefined;
   shouldMatchSystem: boolean;
   setShouldMatchSystem: ReturnType<typeof vi.fn>;
 };
+
+/**
+ * Stands in for a setting/data setter. These MUST return a promise: the real `useSetting` and
+ * `useData` setters are asynchronous, and the component attaches `.catch` to what they return, so a
+ * bare `vi.fn()` returning `undefined` makes every handler throw `Cannot read properties of
+ * undefined` — an unhandled error vitest reports separately from test results, which is easy to
+ * miss.
+ */
+const mockSetter = () => vi.fn(async () => true);
 
 const DEFAULT_AVAILABLE_LANGUAGES: Record<string, { autonym: string }> = {
   en: { autonym: 'English' },
@@ -44,14 +54,14 @@ const DEFAULT_AVAILABLE_LANGUAGES: Record<string, { autonym: string }> = {
 
 const mockState: MockState = {
   interfaceMode: 'simple',
-  setInterfaceMode: vi.fn(),
+  setInterfaceMode: mockSetter(),
   interfaceLanguage: ['en'],
-  setInterfaceLanguage: vi.fn(),
+  setInterfaceLanguage: mockSetter(),
   availableLanguages: DEFAULT_AVAILABLE_LANGUAGES,
   themeType: 'light',
-  setTheme: vi.fn(),
+  setTheme: mockSetter(),
   shouldMatchSystem: false,
-  setShouldMatchSystem: vi.fn(),
+  setShouldMatchSystem: mockSetter(),
 };
 
 const setMockSetting = <K extends keyof MockState>(key: K, value: MockState[K]) => {
@@ -85,7 +95,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       return [mockState.interfaceMode, mockState.setInterfaceMode, vi.fn(), false];
     if (key === 'platform.interfaceLanguage')
       return [mockState.interfaceLanguage, mockState.setInterfaceLanguage, vi.fn(), false];
-    return [undefined, vi.fn(), vi.fn(), false];
+    return [undefined, mockSetter(), vi.fn(), false];
   }),
   useData: vi.fn(() => ({
     CurrentTheme: vi.fn(() => [
@@ -115,15 +125,16 @@ vi.mock('@shared/services/logger.service', () => ({
 // Reset mock state and call history between tests so each test starts from a known baseline.
 beforeEach(() => {
   setMockSetting('interfaceMode', 'simple');
-  setMockSetting('setInterfaceMode', vi.fn());
+  setMockSetting('setInterfaceMode', mockSetter());
   setMockSetting('interfaceLanguage', ['en']);
-  setMockSetting('setInterfaceLanguage', vi.fn());
+  setMockSetting('setInterfaceLanguage', mockSetter());
   setMockSetting('availableLanguages', DEFAULT_AVAILABLE_LANGUAGES);
   setMockSetting('themeType', 'light');
-  setMockSetting('setTheme', vi.fn());
+  setMockSetting('setTheme', mockSetter());
   setMockSetting('shouldMatchSystem', false);
-  setMockSetting('setShouldMatchSystem', vi.fn());
+  setMockSetting('setShouldMatchSystem', mockSetter());
   vi.mocked(sendCommand).mockClear();
+  vi.mocked(logger.warn).mockClear();
 });
 
 describe('UserProfilePopover', () => {
@@ -331,6 +342,19 @@ describe('UserProfilePopover appearance', () => {
     fireEvent.click(await screen.findByTestId('user-profile-appearance-dark'));
     expect(mockState.setShouldMatchSystem).not.toHaveBeenCalled();
     expect(mockState.setTheme).toHaveBeenCalledWith({ type: 'dark' });
+  });
+
+  test('clicking a theme while the theme setter is dropped warns instead of doing nothing', async () => {
+    // `useData` returns `undefined` for its setter while its runaway guard is throttled. The click
+    // cannot be honored, but it must not look honored either — a silent no-op leaves the user
+    // clicking a dead control with nothing in the log to explain it.
+    setMockSetting('themeType', 'light');
+    setMockSetting('shouldMatchSystem', false);
+    setMockSetting('setTheme', undefined);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-appearance-dark'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
   });
 
   test('clicking System calls setShouldMatchSystem(true)', async () => {
