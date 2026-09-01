@@ -1,4 +1,4 @@
-import { PlatformError } from 'platform-bible-utils';
+import { newPlatformError, PlatformError, RESOURCE_EXHAUSTED } from 'platform-bible-utils';
 import { useData } from '@renderer/hooks/papi-hooks/use-data.hook';
 import {
   DataProviderSubscriberOptions,
@@ -29,8 +29,9 @@ import { useCallback } from 'react';
  *
  *   - `setting`: The current state of the setting, either `defaultState`, the stored value, or a
  *       `PlatformError` if loading the value fails. Use `isPlatformError()` to check.
- *   - `setSetting`: Function that updates the setting to a new value. Rejects while the underlying
- *       subscription is throttled — see {@link useData} for that state.
+ *   - `setSetting`: Function that updates the setting to a new value. While the underlying subscription
+ *       is throttled it rejects with a `PlatformError` whose `code` is `RESOURCE_EXHAUSTED` — see
+ *       {@link useData} for that state.
  *   - `resetSetting`: Function that removes the setting and resets the value to `defaultState`
  *
  * @throws When subscription callback function is called with an update that has an unexpected
@@ -83,9 +84,13 @@ export const useSetting = <SettingName extends SettingNames>(
   const safeSetSetting = useCallback(
     async (newData: SettingTypes[SettingName]) => {
       if (setSetting) return setSetting(newData);
+      // Rejects with the same `RESOURCE_EXHAUSTED` code `useData` puts on its throttled value, so a
+      // `.catch` can recognize the throttled state with `isPlatformError(e) && e.code ===
+      // RESOURCE_EXHAUSTED` instead of matching the message text. The message itself is
+      // developer-facing English, not localized — see {@link useData}.
       const message = `Cannot set setting ${key}: its data subscription is temporarily throttled. It will retry on its own shortly.`;
       logger.warn(message);
-      throw new Error(message);
+      throw newPlatformError(message, RESOURCE_EXHAUSTED);
     },
     [key, setSetting],
   );

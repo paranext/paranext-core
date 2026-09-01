@@ -2269,7 +2269,7 @@ step, no automation. Just a record.
   fallback.
 - **Source:** PT-4412, review of #2714.
 
-## ADR-runaway-data-hook-guard: `useData`'s runaway guard counts subscribes and deliveries, degrades rather than throws, and expires
+## adr-runaway-data-hook-guard: `useData`'s runaway guard counts subscribes and deliveries, degrades rather than throws, and expires
 
 - **Date:** 2026-08-28
 - **Status:** Accepted
@@ -2322,10 +2322,19 @@ step, no automation. Just a record.
   - *Escalating backoff* (5s, 10s, 20s…) — deferred, not rejected. It converges on permanent for a
     truly stuck consumer while staying cheap for a burst, and is the natural answer to "can we have
     both?". Not done here because the fixed cooldown already captures the ~50x reduction and backoff
-    adds state that has to be reasoned about and tested. A reasonable follow-up.
+    adds state that has to be reasoned about and tested. Tracked as `PT-4502`.
   - *Re-arm on selector or data provider change* — rejected as actively harmful: an unstable
     selector, the very mistake being reported, gets a new identity every render, so this would reset
     the counter every render and disarm the guard entirely. Re-arming must be time-based.
+  - *Widen `useSetting`'s returned setter to `| undefined`, the way `useProjectSetting` already
+    declares it* — rejected, and this is why the two sibling hooks disagree about the same
+    condition. `useProjectSetting` has always declared `setSetting` optional, so its call sites
+    already null-check it. `useSetting` is exported through `papi.d.ts` with a non-optional setter
+    and its call sites — in this repo and in extensions — call it directly, so widening the tuple
+    would be a breaking type change for every one of them in order to describe a state that lasts
+    five seconds. The fabricated rejecting setter keeps the published type honest at the cost of one
+    stub; it rejects with the same `RESOURCE_EXHAUSTED` code the throttled value carries, so a
+    `.catch` can still tell throttling from any other write failure.
   - *Keep the setter live while tripped* — rejected as destructive: consumers substitute a default
     value for a `PlatformError`, so a live setter lets the first keystroke overwrite real content
     with that default.
@@ -2333,11 +2342,25 @@ step, no automation. Just a record.
   `RESOURCE_EXHAUSTED` error, a temporarily `undefined` setter, and a `true` `isLoading` that later
   resolves. Hooks that assert a non-optional setter must supply their own fallback (`useSetting`
   does). A genuine loop is bounded to one burst per cooldown rather than stopped outright, which is
-  a deliberate trade of absolute containment for self-healing. The known limit: re-arming bounds
-  *rate*, not *total*. If a stuck consumer accumulates something a trip does not release — memory,
+  a deliberate trade of absolute containment for self-healing.
+
+  **A repeatedly-tripping consumer cycles, and nothing tells the user.** For a transient burst the
+  cost is one cooldown, bounded and singular. For a consumer that is genuinely stuck — an unstable
+  `selector`, the mistake the warning names — it is not an episode but a cycle: trip → cooldown →
+  re-arm → ~100 subscribes → trip, for as long as the view stays open. Concretely, in
+  `platform-scripture-editor.web-view.tsx` a tripped `platform.interfaceMode` subscription means
+  `isInterfaceModeLoading` never resolves to `false`, so the editor renders its spinner branch
+  indefinitely, while `isPowerMode` falls back to `false` on every cycle — a Power user's editor
+  flips between Simple and Power every five seconds. There is no message and no way out but closing
+  the tab. This is the same unpaid bill charged against latching above, paid in flicker rather than
+  in stillness; what still separates them is that a self-expiring trip lets a FALSE positive recover
+  on its own, which a latch cannot. Bounding the cycle is `PT-4502` (escalating backoff), which also
+  carries the option of surfacing a repeated trip to the user.
+
+  The known limit: re-arming bounds *rate*, not *total*. If a stuck consumer accumulates something a trip does not release — memory,
   subscriptions, IPC backlog — throttling to ~2% moves the wall out rather than removing it. The
   bet is that a warning appearing in the console every 5s gets the consumer fixed in the session it
   appears in; a named accumulation that survives a trip would be a real argument for latching (or
-  for the deferred backoff). Revisit if the thresholds prove wrong in the field — they remain
+  for `PT-4502`). Revisit if the thresholds prove wrong in the field — they remain
   arbitrary, inherited from PT-1561.
 - **Source:** PT-4421; resubscribe-storm and burst behavior measured during review of this change.

@@ -8626,6 +8626,21 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
   import { PlatformError } from 'platform-bible-utils';
   import { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
   /**
+   * Events of one kind within {@link RUNAWAY_WINDOW_MS} that trip the runaway guard. The threshold is
+   * arbitrary, chosen by observing a dev environment; the guard trips ON this many events, so this
+   * many is one more than it tolerates.
+   */
+  export const RUNAWAY_EVENTS_PER_WINDOW = 100;
+  /** Rolling window the runaway guard measures over */
+  export const RUNAWAY_WINDOW_MS = 1000;
+  /**
+   * How long the guard stays tripped before it re-arms and resubscribes. Long enough that a genuine
+   * loop is throttled to a small fraction of its free-running rate, short enough that a legitimate
+   * burst — a Send/Receive or bulk import — heals without the user closing the tab. See
+   * `adr-runaway-data-hook-guard` for why the trip expires rather than latching.
+   */
+  export const RUNAWAY_COOLDOWN_MS = 5000;
+  /**
    * The final function called as part of the `useData` hook that is the actual React hook
    *
    * This is the `.Greeting(...)` part of `useData('helloSomeone.people').Greeting(...)`
@@ -8794,7 +8809,9 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    * `undefined`, and `isLoading` as `true`, and it logs a warning naming the data type. Handle it as
    * you would any other unresolved state; the usual cause is a `selector` or `dataProviderSource`
    * that is rebuilt every render instead of being memoized. (`subscriberOptions` is held as a ref and
-   * cannot cause this.)
+   * cannot cause this.) The error's `message` is developer-facing English and is not localized —
+   * branch on the `RESOURCE_EXHAUSTED` code and supply your own localized text rather than rendering
+   * `message` to users.
    */
   export const useData: UseDataHook;
   export default useData;
@@ -9584,8 +9601,9 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    *
    *   - `setting`: The current state of the setting, either `defaultState`, the stored value, or a
    *       `PlatformError` if loading the value fails. Use `isPlatformError()` to check.
-   *   - `setSetting`: Function that updates the setting to a new value. Rejects while the underlying
-   *       subscription is throttled — see {@link useData} for that state.
+   *   - `setSetting`: Function that updates the setting to a new value. While the underlying subscription
+   *       is throttled it rejects with a `PlatformError` whose `code` is `RESOURCE_EXHAUSTED` — see
+   *       {@link useData} for that state.
    *   - `resetSetting`: Function that removes the setting and resets the value to `defaultState`
    *
    * @throws When subscription callback function is called with an update that has an unexpected
