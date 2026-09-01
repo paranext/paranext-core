@@ -322,7 +322,14 @@ export interface RecentSearchesProps<T> {
 	renderItem?: (item: T) => string;
 	/** Function to create a unique key for each item */
 	getItemKey?: (item: T) => string;
-	/** Aria label for the recent searches button */
+	/**
+	 * Accessible name for the trigger button, which is also rendered as the button's visible tooltip
+	 * text. Write it as user-visible microcopy (sentence case), not as a screen-reader-only phrase.
+	 *
+	 * Passing an empty string suppresses the tooltip AND leaves the icon-only button without an
+	 * accessible name, so prefer omitting the prop — which falls back to a sensible default — over
+	 * passing `''`.
+	 */
 	ariaLabel?: string;
 	/** Heading text for the recent searches group */
 	groupHeading?: string;
@@ -4034,8 +4041,17 @@ export declare const Z_INDEX_ABOVE_DOCK = 600;
  */
 export declare const Z_INDEX_ABOVE_POPOVER = 650;
 /**
- * Z-index for the renderer's in-page overlay service (`src/renderer/components/overlays/`) and the
- * character-marker bar.
+ * Z-index for in-page overlays that sit above ordinary page content but BELOW modal content — the
+ * renderer's overlay service (`src/renderer/components/overlays/`) plus a handful of
+ * component-level overlays across `lib/` and `extensions/`.
+ *
+ * Deliberately the lowest tier in the scale: anything that must clear a modal, a popover, or the
+ * dock belongs on {@link Z_INDEX_ABOVE_DOCK} instead. No ordering test covers this tier.
+ *
+ * Consumers are deliberately not listed here — an enumerated list in this comment went stale once
+ * already and sent a menu to 400 underneath its own 600-tier host. Grep for the constant to find
+ * them; the `adr-z-index-ordering-invariants` entry in
+ * `.context/standards/Architecture-Decisions.md` records why this tier was left alone.
  */
 export declare const Z_INDEX_OVERLAY = 400;
 /** Z-index for the semi-transparent backdrop behind modal dialogs */

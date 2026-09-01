@@ -122,8 +122,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Book Chapter Control popover',
     keys: {
       macOS: '↑ / ↓ / ← / →',
-      windows: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
-      linux: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
+      windows: '↑ / ↓ / ← / →',
+      linux: '↑ / ↓ / ← / →',
     },
     locations: [
       'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
@@ -133,12 +133,24 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'book-chapter-control-activate-grid-item',
     purpose:
-      'Go to the highlighted chapter or verse in the Book Chapter Control grid (in the books view, which has no dedicated grid page, Enter alone submits the top-match reference — Space is only handled in the chapters and verses views)',
+      'Go to the highlighted chapter or verse in the Book Chapter Control grid — in the books view, which has no grid, Enter submits the top-match reference instead',
     category: 'Navigation',
     context: 'Book Chapter Control popover',
     keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+    ],
+  },
+  {
+    id: 'book-chapter-control-pick-highlighted-book',
+    purpose:
+      'Go to the highlighted book in the Book Chapter Control while the search box is still empty — once anything is typed Space is an ordinary character, so names like “1 Samuel” stay searchable',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+      'lib/platform-bible-react/src/components/shadcn-ui/command.tsx',
     ],
   },
   {
@@ -152,12 +164,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
     ],
   },
-  // Escape closing the popover is intentionally not catalogued here: there is no explicit
-  // `Escape` branch in book-chapter-control.component.tsx (Radix's PopoverContent dismissable
-  // layer owns it — see the `handleOpenChange` comment, which confirms any Radix-initiated
-  // dismiss always closes the whole control rather than stepping back one view). With no
-  // app-specific handling to document, this falls under keyboard-shortcuts.mdx's "Not
-  // catalogued" policy for plain Escape-to-dismiss as standard within-widget interaction.
+  // Escape on the Book Chapter Control popover is deliberately absent from this catalog; the
+  // reasoning is recorded once, under "Not catalogued" in keyboard-shortcuts.mdx.
   {
     id: 'reference-history-back',
     purpose: 'Go back one Scripture reference in the active scroll group’s history',
@@ -462,8 +470,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Scripture Text Grid web view',
     keys: {
       macOS: '↑ / ↓ / ← / →',
-      windows: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
-      linux: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
+      windows: '↑ / ↓ / ← / →',
+      linux: '↑ / ↓ / ← / →',
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
