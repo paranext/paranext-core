@@ -2688,8 +2688,14 @@ step, no automation. Just a record.
   `dev-packages/staging/<stagingFolder>`. Every `package.json` here depends on that folder with a
   `file:` specifier. npm reads the staged manifest and installs the package's own dependencies into
   this repo's tree, so the editor's dependency set is authoritative and no consumer restates it.
-  Staging must run in `preinstall` because the staged folders are the resolution targets; the script
-  is therefore plain Node importing only the standard library, since no devDependency exists yet.
+  Staging must run before npm resolves, because the staged folders are the resolution targets; the
+  script is therefore plain Node importing only the standard library, since no devDependency exists
+  yet. It is wired to `preinstall` so an existing checkout re-stages on every install, but a fresh
+  clone needs `npm run stage-dev-packages` first: npm reads the `file:` targets' manifests from the
+  on-disk state it saw at startup, so folders created during `preinstall` come too late for that
+  same run — workspace lifecycle scripts execute before the links exist, and `extensions`'
+  `postinstall` fails resolving the editor through `platform-bible-utils`. CI workflows stage
+  explicitly; a forgotten first run stops with an instruction rather than a resolution error.
   pnpm `workspace:` specifiers are rewritten to `file:` paths at the sibling staged package, keeping
   the whole graph on the build we just made. yalc is removed.
 - **Alternatives:** **Keep yalc, declare the editor's dependencies here** — rejected: correct, but

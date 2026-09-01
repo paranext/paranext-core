@@ -2,10 +2,18 @@
  * Stages each package listed in `dev-packages.json` into `dev-packages/staging/<stagingFolder>` so
  * this repo can depend on it with a `file:` specifier.
  *
- * This runs as `preinstall`, before npm resolves the dependency tree, because those staged folders
- * are the resolution targets for the `@eten-tech-foundation/*` entries in our `package.json` files.
- * npm reads each staged package's own manifest and installs its dependencies into this repo's tree,
- * so the editor is free to add, bump, or drop dependencies without any consumer restating them.
+ * Those staged folders are the resolution targets for the `@eten-tech-foundation/*` entries in our
+ * `package.json` files. npm reads each staged package's own manifest and installs its dependencies
+ * into this repo's tree, so the editor is free to add, bump, or drop dependencies without any
+ * consumer restating them.
+ *
+ * **Run this before `npm install`, not only as its `preinstall` hook.** npm reads the `file:`
+ * targets' manifests from the on-disk state it saw at startup, so folders this script creates
+ * during `preinstall` come too late for that same run: workspace lifecycle scripts execute before
+ * the links are in place, and `extensions`' `postinstall` fails resolving the editor through
+ * `platform-bible-utils`. It is still wired to `preinstall` so an existing checkout re-stages on
+ * every install; it just cannot bootstrap a fresh one in a single pass, and says so rather than
+ * letting npm fail confusingly.
  *
  * A staged copy is required rather than a `file:` pointer straight at the source package: the
  * source lives in a pnpm workspace whose per-package `node_modules` holds its own `react`,
@@ -284,6 +292,10 @@ function stagePackage(
 function stageDevPackages(): void {
   console.log('Staging dev packages for file: consumption...');
 
+  // npm resolved its tree before this hook ran, so if the staged folders are only appearing now,
+  // this install cannot use them — see the note at the top of this file.
+  const bootstrapping = !fs.existsSync(STAGING_ROOT);
+
   try {
     DEV_REPOS.forEach((repo) => {
       cloneRepoIfNeeded(repo);
@@ -309,6 +321,13 @@ function stageDevPackages(): void {
     });
 
     console.log('Successfully staged dev packages');
+
+    if (bootstrapping && process.env.npm_lifecycle_event === 'preinstall') {
+      console.error(
+        '\nThe dev packages were staged for the first time, but npm had already resolved its\ndependency tree without them, so this install cannot link them. Nothing is wrong —\njust run the same install command again and it will succeed.\n',
+      );
+      process.exit(1);
+    }
   } catch (error) {
     console.error('Error: Failed to stage dev packages.');
     console.error('Error object:', error);
