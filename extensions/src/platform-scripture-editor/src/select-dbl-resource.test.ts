@@ -114,11 +114,15 @@ describe('selectDblResource', () => {
       );
     });
 
-    it('calls onSelect with the dblEntryUid after writing', async () => {
+    it('calls onSelect with the reference it wrote', async () => {
       const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
       await selectTextConnection(RESOURCE_A, getUserList, setUserList, undefined, onSelect);
 
-      expect(onSelect).toHaveBeenCalledWith('uid-a');
+      expect(onSelect).toHaveBeenCalledWith({
+        type: 'dblResource',
+        name: 'Resource A',
+        id: 'uid-a',
+      });
     });
   });
 
@@ -164,7 +168,7 @@ describe('selectDblResource', () => {
       });
     });
 
-    it('calls onSelect with the projectId (which equals dblEntryUid)', async () => {
+    it('calls onSelect with the ProjectReference it wrote', async () => {
       const setUserList = vi.fn().mockResolvedValue(undefined);
       const onSelect = vi.fn();
       await selectTextConnection(
@@ -174,7 +178,7 @@ describe('selectDblResource', () => {
         undefined,
         onSelect,
       );
-      expect(onSelect).toHaveBeenCalledWith('VULGP83');
+      expect(onSelect).toHaveBeenCalledWith({ type: 'project', name: 'VULGP83', id: 'VULGP83' });
     });
   });
 
@@ -202,7 +206,7 @@ describe('selectDblResource', () => {
 
       expect(installResource).not.toHaveBeenCalled();
       expect(setUserList).toHaveBeenCalled();
-      expect(onSelect).toHaveBeenCalledWith('uid-a');
+      expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'uid-a' }));
     });
 
     it('calls installResource with the dblEntryUid before writing settings when not installed', async () => {
@@ -251,7 +255,7 @@ describe('selectDblResource', () => {
       );
 
       expect(setUserList).toHaveBeenCalled();
-      expect(onSelect).toHaveBeenCalledWith('uid-b');
+      expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'uid-b' }));
     });
   });
 });

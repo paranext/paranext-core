@@ -69,3 +69,31 @@ export function getRefLabel(ref: ResourceReference, dblResourcesList: DblResourc
   }
   return '';
 }
+
+/**
+ * A stable identity for a resource reference, for use as a React key, a radio-group value, or a
+ * persisted selection. Namespaced by reference kind because a DBL entry UID and a project ID are
+ * drawn from different spaces and could otherwise collide.
+ *
+ * @param reference The resource reference to identify
+ * @returns The namespaced row id
+ */
+export function getResourceReferenceRowId(reference: ResourceReference): string {
+  if (isDblResourceReference(reference)) return `dbl:${reference.id}`;
+  if (isProjectReference(reference)) return `project:${reference.id}`;
+  const name = 'name' in reference && reference.name ? reference.name : '';
+  return `${reference.type}:${name}`;
+}
+
+/**
+ * The bare id a reference is identified by within its own kind — the DBL entry UID or the project
+ * id. Used to recognize a selection persisted before ids were namespaced by kind; prefer
+ * {@link getResourceReferenceRowId} everywhere else.
+ *
+ * @param reference The resource reference to read
+ * @returns The un-namespaced id, or `undefined` for a kind that has none
+ */
+export function getResourceReferenceBareId(reference: ResourceReference): string | undefined {
+  if (isDblResourceReference(reference) || isProjectReference(reference)) return reference.id;
+  return undefined;
+}

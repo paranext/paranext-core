@@ -90,9 +90,10 @@ declare module 'papi-shared-types' {
      * Callers (e.g. `selectTextConnection`) detect this and create a `ProjectReference` instead of
      * a `DblResourceReference` so the resource is loadable without a catalog entry.
      *
-     * @returns Synthetic resource entries for locally-installed non-DBL resources. Returns `[]` if
-     *   the DBL catalog is not yet loaded, the C# data provider is unavailable, or an error
-     *   occurs.
+     * @returns Synthetic resource entries for locally-installed non-DBL resources. Also returns
+     *   `[]` when the C# data provider has not registered its projects yet or the lookup threw —
+     *   callers cannot distinguish those from a genuine "no local non-DBL resources" result, so a
+     *   caller that needs a retry or loading affordance must get that signal from elsewhere.
      */
     'platformGetResources.getLocalNonDblResources': () => Promise<DblResourceData[]>;
 

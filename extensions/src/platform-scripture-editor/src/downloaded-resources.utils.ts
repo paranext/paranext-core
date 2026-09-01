@@ -1,6 +1,6 @@
 import papi, { logger } from '@papi/frontend';
 import type { DblResourceData, ResourceType } from 'platform-bible-utils';
-import { getErrorMessage } from 'platform-bible-utils';
+import { doesCatalogRowCoverProject, getErrorMessage } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -95,6 +95,8 @@ function resolveReferenced(
   const isAdminLocked =
     (isProjectReference(item) || isDblResourceReference(item)) && !!item.isInTextCollection;
   if (isDblResourceReference(item)) {
+    // No catalog row means nothing can be said about the reference's type or local project, and a
+    // guessed type would leak it into a type-filtered view as a blank row.
     const dbl = dblResources.find((r) => r.dblEntryUid === item.id);
     if (!dbl) return undefined;
     return {
@@ -106,20 +108,25 @@ function resolveReferenced(
       projectId: dbl.installed ? dbl.projectId : undefined,
     };
   }
-  // ProjectReference — look up type in the combined DBL + local-non-DBL catalog. Returning
-  // undefined when there is no match keeps unresolvable references from leaking into a
-  // type-filtered view with a guessed type, symmetric with the DblResourceReference branch above.
-  const isProject = isProjectReference(item);
-  const dblByProjectId = isProject ? dblResources.find((r) => r.projectId === item.id) : undefined;
-  if (isProject && !dblByProjectId) return undefined;
-  return {
-    reference: item,
-    source: item.source,
-    isAdminLocked,
-    type: dblByProjectId?.type ?? 'ScriptureResource',
-    installed: isProject,
-    projectId: isProject ? item.id : undefined,
-  };
+  if (isProjectReference(item)) {
+    // A project reference carries its own local project id and display name, so it resolves without
+    // the catalog. The catalog is consulted only to refine the type; any Paratext project the admin
+    // shared — including an ordinary editable one, which is in no resource catalog — is a Bible text
+    // by default rather than a row that disappears.
+    const dblByProjectId = dblResources.find((r) => r.projectId === item.id);
+    return {
+      reference: item,
+      source: item.source,
+      isAdminLocked,
+      type: dblByProjectId?.type ?? 'ScriptureResource',
+      installed: true,
+      projectId: item.id,
+    };
+  }
+  // Every other reference kind (enhancedResource, xmlResource, sourceLanguageResource, and unknown
+  // kinds preserved for round-trip) identifies its resource by name only. There is no local project
+  // to render and no type to filter on, so it is not a picker row at all.
+  return undefined;
 }
 
 /** Map a downloaded project (not already referenced) to a picker row. */
@@ -127,17 +134,9 @@ function downloadedToRow(
   project: DownloadedResource,
   dblResources: DblResourceData[],
 ): PickerResource {
-  const dbl = dblResources.find(
-    (r) =>
-      (r.installed && r.projectId === project.projectId) ||
-      // The second branch matches a DBL entry whose cache row is not yet flagged installed (e.g.
-      // the flag lags an update), but the local project exists on disk — installed: true is still
-      // correct because the local project file is present. The installed || projectId !== '' guard
-      // prevents a stale cache row with projectId:'' (reassigned UID) from matching a real project.
-      ((r.installed || r.projectId !== '') &&
-        r.dblEntryUid !== '' &&
-        project.projectId.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
-  );
+  // A catalog row can cover this project while its `installed` flag still lags; the `installed: true`
+  // below is decided by the local project file being present, not by the flag.
+  const dbl = dblResources.find((r) => doesCatalogRowCoverProject(r, project.projectId));
   if (dbl && !isNonDblResource(dbl)) {
     const reference: DblResourceReference = {
       type: 'dblResource',

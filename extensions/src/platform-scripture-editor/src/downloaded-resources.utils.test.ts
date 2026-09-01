@@ -110,9 +110,16 @@ describe('buildPickerResources', () => {
     });
   });
 
-  it('filters out ProjectReferences not present in the DBL catalog', () => {
+  it('keeps a ProjectReference the DBL catalog does not know about', () => {
+    // A project reference carries its own local project id and name, so it renders without the
+    // catalog — an admin-shared ordinary project is in no resource catalog and must not vanish.
     const rows = buildPickerResources(effective, [], []);
-    expect(rows).toHaveLength(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      installed: true,
+      type: 'ScriptureResource',
+      projectId: 'proj-web',
+    });
   });
 
   it('appends downloaded projects not already referenced as scripture ProjectReferences', () => {
@@ -151,18 +158,17 @@ describe('buildPickerResources', () => {
     expect(rows).toHaveLength(0);
   });
 
-  it('marks an enhancedResource reference (name-only, no id) as not installed', () => {
+  it('drops a reference kind that has no local project to render (enhancedResource)', () => {
+    // enhancedResource / xmlResource / sourceLanguageResource are identified by name only. With no
+    // project id there is nothing to display and no catalog type to filter on, so such a reference
+    // must not become a blank, unusable row in a type-filtered panel.
     const enhancedRef: EffectiveResourceReference = {
       type: 'enhancedResource',
       name: 'MyEnhanced',
       source: 'user',
     };
     const rows = buildPickerResources([enhancedRef], [], []);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      installed: false,
-      type: 'ScriptureResource',
-    });
+    expect(rows).toHaveLength(0);
   });
 
   it('adopts DBL type when a downloaded project matches a whitelisted dbl resource', () => {

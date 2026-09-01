@@ -8,7 +8,7 @@ import {
   WebViewDefinition,
 } from '@papi/core';
 import type { DblResourceData } from 'platform-bible-utils';
-import { getErrorMessage, isString, Mutex, wait } from 'platform-bible-utils';
+import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-utils';
 import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
@@ -54,64 +54,85 @@ async function startBackgroundFetchResources(): Promise<void> {
   if (hasFetchStarted) return;
   hasFetchStarted = true;
   await fetchMutex.runExclusive(async () => {
-    for (let attempt = 0; attempt < 10; attempt++) {
-      // Sequential retry delay requires awaiting inside the loop
-      // eslint-disable-next-line no-await-in-loop
-      if (attempt > 0) await wait(1000);
-
-      try {
-        // Need to have these await statements inside the loop to retry 10 times
-        // eslint-disable-next-line no-await-in-loop
-        const result = await fetchAndCacheResources();
-        if (result !== undefined) return;
-      } catch (e) {
-        logger.debug(`Background resource fetch attempt ${attempt + 1} failed: ${e}`);
-      }
-    }
-    logger.warn('Background DBL resources fetch failed after 10 attempts');
+    const result = await retryUntil(
+      async (attemptNumber) => {
+        try {
+          return await fetchAndCacheResources();
+        } catch (e) {
+          logger.debug(`Background resource fetch attempt ${attemptNumber} failed: ${e}`);
+          return undefined;
+        }
+      },
+      (resources) => resources !== undefined,
+      { maxAttempts: 10, delayMs: 1000 },
+    );
+    if (result === undefined)
+      logger.warn('Background DBL resources fetch failed after 10 attempts');
   });
+}
+
+/**
+ * Whether any C# resource project has been seen this session. The Paratext PDPF registers its
+ * projects after activation, and a metadata read that resolves first sees none — indistinguishable
+ * from a machine that genuinely has no read-only projects. Remembering the answer lets the retry
+ * below run when it can still discover something and stay out of the way afterwards.
+ */
+let haveLocalResourceProjectsAppeared = false;
+/** Whether the full wait below has already been spent without any resource project appearing. */
+let hasWaitedForLocalResourceProjects = false;
+
+const RESOURCE_PROJECT_WAIT_ATTEMPTS = 5;
+const RESOURCE_PROJECT_WAIT_DELAY_MS = 500;
+
+/**
+ * Reads local project metadata, waiting for the C# Paratext PDPF to register its resource projects.
+ *
+ * The wait is what makes a newly-installed resource visible: a read that resolves before the
+ * factory registers returns only the TypeScript PDPFs, and a caller that trusts it concludes
+ * nothing is installed. It is spent at most once per session — once a resource project has been
+ * seen the factory is up and no wait is needed, and if the full budget passes with none seen the
+ * machine has none to find, so later calls return the first read immediately.
+ *
+ * @returns The project metadata, and whether any read-only (resource) project was in it
+ */
+async function getLocalProjectMetadata(): Promise<{
+  metadata: Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>;
+  hasResourceProjects: boolean;
+}> {
+  const readMetadata = () =>
+    papi.projectLookup.getMetadataForAllProjects({ includeProjectInterfaces: ['platform.base'] });
+  const hasResourceProject = (
+    metadata: Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>,
+  ) => metadata.some((m) => m.isEditable === false);
+
+  const shouldWait = !haveLocalResourceProjectsAppeared && !hasWaitedForLocalResourceProjects;
+  const metadata = shouldWait
+    ? await retryUntil(readMetadata, hasResourceProject, {
+        maxAttempts: RESOURCE_PROJECT_WAIT_ATTEMPTS,
+        delayMs: RESOURCE_PROJECT_WAIT_DELAY_MS,
+      })
+    : await readMetadata();
+
+  const hasResourceProjects = hasResourceProject(metadata);
+  if (hasResourceProjects) haveLocalResourceProjectsAppeared = true;
+  else if (shouldWait) hasWaitedForLocalResourceProjects = true;
+
+  return { metadata, hasResourceProjects };
 }
 
 /**
  * Syncs installed flags on `cachedResources` against live project metadata from C#. Runs in the
  * background so it never blocks a dialog open. Updates `cachedResources` and writes to storage when
  * flags change.
- *
- * Waits for the C# Paratext PDPF to register resource projects before syncing — without this retry,
- * a call that resolves before the factory finishes would see no isEditable=false projects and
- * incorrectly mark installed resources as not-installed.
  */
 async function syncInstalledFlags(): Promise<void> {
   if (cachedResources === undefined) return;
   try {
-    let localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-      includeProjectInterfaces: ['platform.base'],
-    });
-    // Only retry while waiting for C# to register its projects when the cache shows installed
-    // resources. If nothing in the cache is marked installed, the predicate
-    // `isEditable === false` can never be satisfied — the retry would burn all 5 attempts for
-    // a sync that will be a no-op regardless.
-    if (cachedResources.some((r) => r.installed)) {
-      const MAX_RETRIES = 5;
-      for (
-        let attempt = 0;
-        attempt < MAX_RETRIES && !localProjectMetadata.some((m) => m.isEditable === false);
-        attempt++
-      ) {
-        // Sequential retry: each attempt must wait for the previous result before retrying.
-        // eslint-disable-next-line no-await-in-loop
-        await wait(500);
-        // Sequential retry: each attempt must use the result of the previous fetch.
-        // eslint-disable-next-line no-await-in-loop
-        localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-          includeProjectInterfaces: ['platform.base'],
-        });
-      }
-      // If the retry loop exhausted without finding any isEditable=false project, C# hasn't
-      // registered yet. Skip the sync entirely — syncing against an empty project list would
-      // incorrectly mark all installed resources as not-installed and corrupt the cache.
-      if (!localProjectMetadata.some((m) => m.isEditable === false)) return;
-    }
+    const { metadata: localProjectMetadata, hasResourceProjects } = await getLocalProjectMetadata();
+    // No read-only project in the list means either C# has not registered yet or the machine has
+    // none. Syncing against it would mark every installed resource not-installed and persist that,
+    // and it can never mark anything installed, so there is nothing to gain by continuing.
+    if (!hasResourceProjects) return;
 
     // Wrap the read-modify-write in fetchMutex so a concurrent fetchAndCacheResources call cannot
     // overwrite cachedResources between our map() and our assignment.
@@ -159,19 +180,29 @@ async function syncInstalledFlags(): Promise<void> {
   }
 }
 
+/**
+ * Starts the installed-flag sync if one is not already running, and returns the promise for it.
+ * Callers that only need the catalog let it run in the background; callers whose answer depends on
+ * the flags being current await it and re-read `cachedResources` afterwards.
+ */
+function ensureInstalledFlagsSynced(): Promise<void> {
+  if (!syncInFlight) {
+    syncInFlight = syncInstalledFlags()
+      .catch((e) => logger.warn(`Background installed-flag sync failed: ${getErrorMessage(e)}`))
+      .finally(() => {
+        syncInFlight = undefined;
+      });
+  }
+  return syncInFlight;
+}
+
 async function getCachedResources(): Promise<DblResourceData[] | undefined> {
   if (cachedResources !== undefined) {
     // Run the installed-flag sync in the background so the dialog open is never blocked by
     // getMetadataForAllProjects retries (which can exceed the 30-second JSON-RPC timeout when
     // the C# PDPF is still initializing). The next dialog open picks up the updated flags.
-    // The in-flight guard prevents concurrent calls from spawning duplicate syncs.
-    if (!syncInFlight) {
-      syncInFlight = syncInstalledFlags()
-        .catch((e) => logger.warn(`Background installed-flag sync failed: ${getErrorMessage(e)}`))
-        .finally(() => {
-          syncInFlight = undefined;
-        });
-    }
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    ensureInstalledFlagsSynced();
     return cachedResources;
   }
 
@@ -197,39 +228,19 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
  */
 async function getLocalNonDblResources(): Promise<DblResourceData[]> {
   try {
-    // Ensure the DBL catalog is loaded before filtering. Reading `cachedResources` directly risks
-    // an empty list during startup, which would let DBL-catalog resources slip through the exclusion
-    // filter and appear as duplicates in the picker alongside their catalog entry.
-    const dblCatalog = await getCachedResources();
-    // Return early rather than passing an empty exclusion list — if the catalog is unavailable
-    // (offline / C# not yet ready), every read-only project would appear as a non-DBL resource,
-    // creating duplicates alongside their real catalog entries once the catalog loads.
-    if (!dblCatalog) return [];
+    await getCachedResources();
+    // The exclusion below is only as good as the catalog's `installed`/`projectId` flags, and
+    // `getCachedResources` returns before its background sync finishes. Wait for that sync and read
+    // `cachedResources` afterwards, so a resource already on disk is excluded as a DBL entry rather
+    // than emitted a second time as a synthetic non-DBL one.
+    await ensureInstalledFlagsSynced();
+    // An absent catalog means one has never been fetched on this profile (a fetched catalog is
+    // persisted and reloaded on activation), so there is nothing for these projects to duplicate
+    // and no reason to withhold them. Suppressing them here would hide side-loaded resources from
+    // exactly the offline, never-connected users most likely to have them.
+    const dblCatalog = cachedResources ?? [];
 
-    // Retry until at least one isEditable=false project appears — mirrors the reasoning in
-    // fetchDownloadedResources (frontend): a call that resolves before the C# Paratext factory has
-    // registered returns only TypeScript-only PDPFs and misses all C# resource projects. Capped at
-    // 2 attempts (1 s total) to stay well under the 30-second JSON-RPC timeout; if C# still hasn't
-    // registered after 1 s, return an empty list rather than risk a timeout.
-    let allMetadata = await papi.projectLookup.getMetadataForAllProjects({
-      includeProjectInterfaces: ['platform.base'],
-    });
-    const MAX_RETRIES = 2;
-    for (
-      let attempt = 0;
-      attempt < MAX_RETRIES && !allMetadata.some((m) => m.isEditable === false);
-      attempt++
-    ) {
-      // Sequential retry: each attempt must wait for the previous result before retrying.
-      // eslint-disable-next-line no-await-in-loop
-      await wait(500);
-      // Sequential retry: each attempt must use the result of the previous fetch.
-      // eslint-disable-next-line no-await-in-loop
-      allMetadata = await papi.projectLookup.getMetadataForAllProjects({
-        includeProjectInterfaces: ['platform.base'],
-      });
-    }
-
+    const { metadata: allMetadata } = await getLocalProjectMetadata();
     return buildLocalNonDblResources(allMetadata, dblCatalog);
   } catch (error: unknown) {
     logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);

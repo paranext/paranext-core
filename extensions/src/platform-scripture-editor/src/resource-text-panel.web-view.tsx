@@ -55,6 +55,8 @@ import {
   isDblResourceReference,
   isProjectReference,
   getRefLabel,
+  getResourceReferenceBareId,
+  getResourceReferenceRowId,
 } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
@@ -117,18 +119,6 @@ const COMMENTARIES_ICON_URLS: TabIconUrls = {
 // collection, so its rows are the union of both.
 const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
 
-/**
- * A stable identity for a picker row. Namespaced by reference kind because a DBL entry UID and a
- * project ID are drawn from different spaces and could otherwise collide.
- */
-function pickerRowId(row: PickerResource): string {
-  const { reference } = row;
-  if (isDblResourceReference(reference)) return `dbl:${reference.id}`;
-  if (isProjectReference(reference)) return `project:${reference.id}`;
-  const name = 'name' in reference && reference.name ? reference.name : '';
-  return `${reference.type}:${name || row.projectId || ''}`;
-}
-
 type ResourceSelectorDropdownProps = {
   filteredResources: PickerResource[];
   selectedRef: PickerResource | undefined;
@@ -162,11 +152,14 @@ function ResourceSelectorDropdown({
         </DropdownMenuTrigger>
         <DropdownMenuContent className="tw:w-72">
           {filteredResources.map((ref) => {
-            const refId = pickerRowId(ref);
+            const refId = getResourceReferenceRowId(ref.reference);
             return (
               <DropdownMenuCheckboxItem
                 key={refId}
-                checked={refId === (selectedRef ? pickerRowId(selectedRef) : undefined)}
+                checked={
+                  refId ===
+                  (selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined)
+                }
                 onCheckedChange={() => {
                   onSelectResource(refId);
                 }}
@@ -274,6 +267,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
     projectId,
     RESOURCE_PICKER_OPTIONS,
     dblResources,
+    isCatalogReady || hasCatalogError,
   );
   const getUserResourceTexts = useCallback(
     async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
@@ -326,36 +320,58 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Selection management
 
-  // Holds the ID of a resource just selected from the picker while it propagates through the
+  // Holds the row id of a resource just selected from the picker while it propagates through the
   // reactive settings chain and into filteredResources. Prevents the auto-correct below from
-  // resetting the selection before the new resource has arrived in the list.
+  // resetting the selection before the new resource has arrived in the list. Written from the
+  // reference `selectTextConnection` actually stored, so it is comparable to the row ids below.
   const [pendingResourceId, setPendingResourceId] = useState<string | undefined>(undefined);
+
+  // Matches a row against the persisted selection. Selections persisted before row ids were
+  // namespaced by reference kind hold a bare DBL entry UID or project id; accept those too so an
+  // existing selection survives instead of silently resetting to the first row.
+  const matchesSelectedResourceId = useCallback(
+    (row: PickerResource) =>
+      getResourceReferenceRowId(row.reference) === selectedResourceId ||
+      getResourceReferenceBareId(row.reference) === selectedResourceId,
+    [selectedResourceId],
+  );
 
   // Once the pending resource appears in filteredResources, commit it as the active selection.
   useEffect(() => {
     if (!pendingResourceId) return;
-    const found = filteredResources.find((r) => pickerRowId(r) === pendingResourceId);
+    const found = filteredResources.find(
+      (r) => getResourceReferenceRowId(r.reference) === pendingResourceId,
+    );
     if (found) {
       setSelectedResourceId(pendingResourceId);
       setPendingResourceId(undefined);
     }
   }, [filteredResources, pendingResourceId, setSelectedResourceId]);
 
-  // Auto-correct selectedResourceId when the selected item leaves the filtered list.
+  // Auto-correct selectedResourceId when the selected item leaves the filtered list, and rewrite a
+  // bare id persisted before namespacing into its namespaced form.
   // Skipped while a pending selection is in-flight to avoid overriding it prematurely.
   useEffect(() => {
     if (filteredResources.length === 0) return;
     if (pendingResourceId) return;
-    const currentId = filteredResources.find((r) => pickerRowId(r) === selectedResourceId);
-    if (!currentId) {
-      // A row with no `projectId` has nothing to display, so selecting it would spin forever.
-      const firstUsable = filteredResources.find((r) => r.projectId !== undefined);
-      if (firstUsable) setSelectedResourceId(pickerRowId(firstUsable));
+    const current = filteredResources.find(matchesSelectedResourceId);
+    if (current) {
+      const rowId = getResourceReferenceRowId(current.reference);
+      if (rowId !== selectedResourceId) setSelectedResourceId(rowId);
+      return;
     }
-  }, [filteredResources, selectedResourceId, setSelectedResourceId, pendingResourceId]);
+    // A row with no `projectId` has nothing to display, so selecting it would spin forever.
+    const firstUsable = filteredResources.find((r) => r.projectId !== undefined);
+    if (firstUsable) setSelectedResourceId(getResourceReferenceRowId(firstUsable.reference));
+  }, [
+    filteredResources,
+    matchesSelectedResourceId,
+    selectedResourceId,
+    setSelectedResourceId,
+    pendingResourceId,
+  ]);
 
-  const selectedRef =
-    filteredResources.find((r) => pickerRowId(r) === selectedResourceId) ?? filteredResources[0];
+  const selectedRef = filteredResources.find(matchesSelectedResourceId) ?? filteredResources[0];
 
   const [isSelecting, setIsSelecting] = useState(false);
 
@@ -393,7 +409,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
   usePublishNavigableProjectIds(
     useWebViewState,
     resourceProjectId ? [resourceProjectId] : [],
-    canPublishResourcePanelProjectIds(effectiveResourcesState, isCatalogReady),
+    canPublishResourcePanelProjectIds(
+      effectiveResourcesState,
+      isCatalogReady,
+      pickerResources !== undefined,
+    ),
   );
 
   // #endregion
@@ -569,7 +589,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
               throw e;
             }
           },
-          (dblEntryUid: string) => setPendingResourceId(dblEntryUid),
+          (writtenReference) => setPendingResourceId(getResourceReferenceRowId(writtenReference)),
         );
       } finally {
         setIsSelecting(false);
