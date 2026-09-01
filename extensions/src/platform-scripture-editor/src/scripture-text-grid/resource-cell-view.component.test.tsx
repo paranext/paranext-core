@@ -53,7 +53,7 @@ const localizedStrings = {
   [UNAVAILABLE_KEY]: 'Resource unavailable',
   [NOT_INSTALLED_KEY]: 'Resource not installed',
   [LOADING_KEY]: 'Resource is loading…',
-  [FAILED_KEY]: 'No content for this reference',
+  [FAILED_KEY]: 'Download failed',
   [EMPTY_KEY]: 'No text for this verse',
   [BOOK_NOT_AVAILABLE_KEY]: 'Book not in this text',
 };
@@ -101,7 +101,7 @@ describe('ResourceCellView row smoke', () => {
 
     // Content renders per state.
     expect(screen.getByText('Blessed are the poor in spirit')).toBeInTheDocument();
-    expect(screen.getByText('No content for this reference')).toBeInTheDocument();
+    expect(screen.getByText('Download failed')).toBeInTheDocument();
     expect(screen.getByText('Resource is loading…')).toBeInTheDocument();
     // Only the failed cell shows "Resource unavailable"; the downloading cell shows the loading text.
     expect(screen.getAllByText('Resource unavailable')).toHaveLength(1);
@@ -109,7 +109,7 @@ describe('ResourceCellView row smoke', () => {
     expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
   });
 
-  it('unavailable: shows "Resource not installed" — no spinner, no "No content for this reference", no editor', () => {
+  it('unavailable: shows "Resource not installed" — no spinner, no "Download failed", no editor', () => {
     renderCells(
       <ResourceCellView
         state="unavailable"
@@ -121,7 +121,7 @@ describe('ResourceCellView row smoke', () => {
     );
     expect(screen.getByText('Resource not installed')).toBeInTheDocument();
     expect(screen.queryByText('Resource is loading…')).not.toBeInTheDocument();
-    expect(screen.queryByText('No content for this reference')).not.toBeInTheDocument();
+    expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
     expect(screen.queryByText('Resource unavailable')).not.toBeInTheDocument();
   });
 
@@ -266,7 +266,7 @@ describe('ResourceCellView name display', () => {
       />,
     );
     expect(screen.getByText('ASV')).toBeInTheDocument();
-    expect(screen.getByText('No content for this reference')).toBeInTheDocument();
+    expect(screen.getByText('Download failed')).toBeInTheDocument();
   });
 
   it('inline mode still shows the name for an empty verse', () => {
@@ -329,7 +329,7 @@ describe('ResourceCellView name display', () => {
 const zoomLabels = {
   [UNAVAILABLE_KEY]: 'Resource unavailable',
   [LOADING_KEY]: 'Resource is loading…',
-  [FAILED_KEY]: 'No content for this reference',
+  [FAILED_KEY]: 'Download failed',
   [ZOOM_IN_KEY]: 'Zoom In',
   [ZOOM_OUT_KEY]: 'Zoom Out',
   [RESET_ZOOM_KEY]: 'Reset Zoom',

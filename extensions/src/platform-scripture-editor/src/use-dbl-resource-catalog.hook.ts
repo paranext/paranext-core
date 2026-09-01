@@ -13,11 +13,17 @@ export type DblResourceCatalog = {
    * Whether the catalog has finished loading AND delivered a real answer. Distinct from
    * `!isLoadingResources`: `dblResources` coerces a missing catalog to `[]`, which is
    * indistinguishable from a genuinely empty one. A failed fetch is not "ready" either — the catch
-   * below resolves to `[]` to clear the loading flag, so without folding in `hasCatalogError` a
-   * consumer reading this alone would treat a failure as a genuinely empty catalog.
+   * below resolves to the locally-installed rows to clear the loading flag, so without folding in
+   * `hasCatalogError` a consumer reading this alone would treat a failure as a genuinely empty
+   * catalog.
    */
   isCatalogReady: boolean;
-  /** Whether the last fetch failed. Recoverable — call {@link DblResourceCatalog.refetchCatalog}. */
+  /**
+   * Whether the DBL half of the fetch failed or resolved without an answer (offline, provider
+   * unavailable). Recoverable — call {@link DblResourceCatalog.refetchCatalog}. `dblResources` still
+   * carries any locally-installed resources that loaded, so a panel can show those alongside the
+   * retry.
+   */
   hasCatalogError: boolean;
   /** Re-runs the fetch, clearing any previous error. */
   refetchCatalog: () => void;
@@ -29,10 +35,9 @@ export type DblResourceCatalog = {
  * them apart with `isNonDblResource`. Panels resolve references of both kinds against this one
  * list, so they must be fetched together.
  *
- * Both the Model Text and Resource panels need the same catalog and the same "has it arrived?"
- * distinction, and previously derived it with identical copy-pasted blocks. That distinction is
- * what the premature-empty-state fix hinges on (see `getResourcePanelReadiness`), so it lives in
- * one place.
+ * The Model Text and Resource panels need the same catalog and the same "has it arrived?"
+ * distinction. Panel readiness turns on that distinction (see `getResourcePanelReadiness`), so it
+ * is decided here once rather than per panel.
  *
  * A rejected fetch is caught deliberately. `usePromise` has no rejection path — an uncaught
  * rejection never reaches its `setIsLoading(false)`, so the panel would spin forever with no
@@ -83,11 +88,16 @@ export function useDblResourceCatalog(): DblResourceCatalog {
         return localNonDblResources;
       }
 
-      if (generation === fetchGenerationRef.current) setHasCatalogError(false);
+      // A resolved-but-undefined catalog is the offline / provider-unavailable answer, not an empty
+      // one. Report it as an error so the panel offers the retry that can re-drive the fetch instead
+      // of spinning on a fetch that has already finished — and keep the locally-installed rows,
+      // which loaded fine and are the only resources such a user has.
+      if (dblResult.value === undefined) {
+        if (generation === fetchGenerationRef.current) setHasCatalogError(true);
+        return localNonDblResources;
+      }
 
-      // A `undefined` catalog means the fetch resolved without an answer; preserve that so
-      // `isCatalogReady` still reports "not arrived" rather than "genuinely empty".
-      if (dblResult.value === undefined) return undefined;
+      if (generation === fetchGenerationRef.current) setHasCatalogError(false);
 
       return [...dblResult.value, ...localNonDblResources];
     }, [fetchResources]),

@@ -1,4 +1,5 @@
 import type { DblResourceData } from 'platform-bible-utils';
+import { doesCatalogRowCoverProject } from 'platform-bible-utils';
 
 /** Subset of ProjectMetadata fields consumed by {@link buildLocalNonDblResources}. */
 type ProjectInfo = {
@@ -38,12 +39,11 @@ export const LOCAL_COMMENTARY_UIDS: ReadonlySet<string> = new Set([
  * Converts project metadata for locally-installed non-DBL projects into synthetic
  * {@link DblResourceData} entries suitable for the resource picker.
  *
- * Filters out editable projects and any project already represented in the DBL catalog (by exact
- * `projectId` match or by the `startsWith(dblEntryUid)` convention — guarded by `installed ||
- * projectId !== ''` to avoid false exclusions when a UID has been reassigned to a different
- * resource and the cache row is stale with `projectId: ''`). Maps the remaining metadata to
- * {@link DblResourceData} with `dblEntryUid === projectId` as a synthetic marker so callers can
- * create a {@link ProjectReference} instead of a {@link DblResourceReference}.
+ * Filters out editable projects and any project a DBL catalog row already covers — that rule lives
+ * in {@link doesCatalogRowCoverProject}, shared with the picker's downloaded-project mapper so the
+ * two cannot drift. Maps the remaining metadata to {@link DblResourceData} with `dblEntryUid ===
+ * projectId` as a synthetic marker so callers can create a `ProjectReference` instead of a
+ * `DblResourceReference`.
  *
  * @param allMetadata All project metadata (from `papi.projectLookup.getMetadataForAllProjects`)
  * @param dblEntries Current DBL catalog entries; pass `[]` if the catalog is not yet loaded
@@ -55,17 +55,7 @@ export function buildLocalNonDblResources(
 ): DblResourceData[] {
   const nonDblMetadata = allMetadata.filter((m) => {
     if (m.isEditable !== false) return false;
-    const matchingDblEntry = dblEntries.find(
-      (r) =>
-        (r.projectId !== '' && r.projectId === m.id) ||
-        // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
-        // Guard installed || projectId !== '': a stale cache row (installed:false, projectId:'')
-        // for a reassigned UID must not exclude a local project whose real UID still matches.
-        ((r.installed || r.projectId !== '') &&
-          r.dblEntryUid !== '' &&
-          m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
-    );
-    return matchingDblEntry === undefined;
+    return !dblEntries.some((r) => doesCatalogRowCoverProject(r, m.id));
   });
 
   return nonDblMetadata.map(

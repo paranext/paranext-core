@@ -15,6 +15,7 @@ import {
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.utils';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 import { resolveDisplayVerseNum, sliceUsjToVerse } from './verse-display.utils';
+import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
@@ -69,6 +70,12 @@ export function ResourceCell({
   onReorderKeyDown,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
+
+  // The grid's picker offers commentaries, so a cell can be rendering handbook/notes markers. Load
+  // that resource's marker stylesheet the same way the resource panel does; without it the markers
+  // render unstyled. A no-op for any project that is not a supported commentary, and each cell owns
+  // the `<style>` element it injects, so cells showing different commentaries do not fight.
+  useCommentaryMarkerStyles(resourceRef.projectId);
 
   // #region Chapter fetch — data method returns [data, setData, isLoading]; isLoading is index 2.
   // `projectId` may be undefined for unavailable resources; both hooks must still be called

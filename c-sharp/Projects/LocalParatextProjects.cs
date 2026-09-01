@@ -595,9 +595,19 @@ internal class LocalParatextProjects : IDisposable
             return [];
         // Snapshot under the ScrTextArbitrator lock and materialize before returning — same
         // pattern as GetScrTexts() to avoid racing the background watcher's RefreshScrTexts.
-        // AllAccessible (not ScriptureOnly) is required so that locally-installed non-DBL
-        // resources such as TNN and VULGP83 (.p8z bundles) are included; ScriptureOnly
-        // silently omits them.
+        //
+        // AllAccessible (not ScriptureOnly) is required. ScriptureOnly carries the Resources bit, so
+        // it already enumerates .p8z resource bundles whose project type IS scripture; what it omits
+        // is the NonScripture bit, and the UBS Translator's Notes/Handbook resources (TNN, TND, HBK)
+        // are note-typed, not scripture-typed. Enumerating with ScriptureOnly drops them from both
+        // the Get Resources dialog and the text collection — confirmed by manual test on a machine
+        // with TNN installed.
+        //
+        // The NonScripture bit also admits resources this factory cannot serve — XML dictionaries,
+        // MARBLE resources, Global Consultant and Anthropology Notes — which reach the resource
+        // picker typed as Bible texts and render blank. Narrowing this to the note types we do
+        // support needs a project-type test verified on a machine that has them installed; nothing
+        // downstream distinguishes them, so widening this enum widens what the picker offers.
         using (ScrTextArbitrator.GetLock())
             return ScrTextCollection
                 .ScrTexts(IncludeProjects.AllAccessible)

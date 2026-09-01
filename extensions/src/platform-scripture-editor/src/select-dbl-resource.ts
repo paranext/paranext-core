@@ -22,15 +22,17 @@ import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const
  * @param getUserTextConnections Function to retrieve the local user's text connections
  * @param setUserTextConnections Function to set the local user's text connections
  * @param installResource Optional function to install the resource first if it is not installed
- * @param onSelect Optional callback invoked with the resource's `dblEntryUid` after a successful
- *   write
+ * @param onSelect Optional callback invoked after a successful write with the reference that was
+ *   written — a `ProjectReference` for a locally-installed non-DBL resource, a
+ *   `DblResourceReference` otherwise. Callers key their UI off the written reference; the
+ *   `dblEntryUid` does not identify the stored item in the local-only case
  */
 export async function selectTextConnection(
   resource: DblResourceData,
   getUserTextConnections: () => Promise<ResourceReferenceList | undefined>,
   setUserTextConnections: (list: ResourceReferenceList) => Promise<unknown>,
   installResource?: (dblEntryUid: string) => Promise<void>,
-  onSelect?: (dblEntryUid: string) => void,
+  onSelect?: (reference: DblResourceReference | ProjectReference) => void,
 ): Promise<void> {
   if (!resource.installed && installResource) {
     try {
@@ -59,5 +61,5 @@ export async function selectTextConnection(
     ],
   });
 
-  onSelect?.(resource.dblEntryUid);
+  onSelect?.(newRef);
 }
