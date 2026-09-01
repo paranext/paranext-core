@@ -164,15 +164,18 @@ export function doesBookMatchQuery(
   const englishName = Canon.bookIdToEnglishName(bookId);
   const localizedBook = localizedBookNames?.get(bookId);
 
-  // Check English name and ID
+  // Check English name and ID. Native `includes`, not the grapheme-aware helper: every English book
+  // name and canon ID is ASCII, so each grapheme cluster is one code unit and the two index spaces
+  // coincide — a non-ASCII query cannot match either way. This runs per book, per keystroke.
   const matchesEnglishNameOrId =
-    includes(englishName.toLowerCase(), normalizedQuery) ||
-    includes(bookId.toLowerCase(), normalizedQuery);
+    englishName.toLowerCase().includes(normalizedQuery) ||
+    bookId.toLowerCase().includes(normalizedQuery);
 
   if (matchesEnglishNameOrId) return true;
 
-  // Check localized name and ID if available
-
+  // Check localized name and ID if available. These stay grapheme-aware: the haystack is a
+  // user-facing localized name, which is exactly the case that argument does not cover — a query
+  // ending mid-cluster must not match.
   const matchesLocalizedNameOrId = localizedBook
     ? includes(localizedBook.localizedName.toLowerCase(), normalizedQuery) ||
       includes(localizedBook.localizedId.toLowerCase(), normalizedQuery)

@@ -5,7 +5,11 @@ import { createUuid } from '@node/utils/crypto-util';
 import { getAppDir } from '@node/utils/util';
 import { ExecutionToken } from '@node/models/execution-token.model';
 import { executionTokenService } from '@node/services/execution-token.service';
-import { extensionStorageService, setExtensionUris } from './extension-storage.service';
+import {
+  buildExtensionUriFromPath,
+  extensionStorageService,
+  setExtensionUris,
+} from './extension-storage.service';
 
 vi.mock('@node/utils/util', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@node/utils/util')>();
@@ -83,4 +87,29 @@ test('erasing user data works', async () => {
   await extensionStorageService.writeUserData(token, key, testData);
   await extensionStorageService.deleteUserData(token, key);
   await expect(extensionStorageService.readUserData(token, key)).rejects.toBeTruthy();
+});
+
+describe('buildExtensionUriFromPath traversal guard', () => {
+  test('rejects a path containing ".."', () => {
+    expect(() => buildExtensionUriFromPath(extensionName, '../../secret.txt')).toThrow();
+  });
+
+  // Extensions reach this across the network, so the declared `string` is not a guarantee. Both
+  // guards are string operations that quietly coerce: `Array.prototype.includes` compares elements
+  // rather than searching text, and the name regex stringifies its argument. Asserting the guard's
+  // own message rather than just `toThrow()` is what makes these falsifiable — a non-string that
+  // slips past both guards still throws, but from `joinUriPaths` further down, and that incidental
+  // `TypeError` would satisfy a bare `toThrow()` while the traversal check did nothing.
+  test.each([
+    ['an array holding a traversal path', ['../../secret.txt']],
+    ['an object whose string form traverses', { toString: () => '../../secret.txt' }],
+    ['a number', 42],
+    ['a boolean', true],
+  ])('rejects %s at the guard, not incidentally downstream', (_name, filePath) => {
+    // The assertion is that a caller lying about the type is rejected, so the lie has to be written
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    expect(() => buildExtensionUriFromPath(extensionName, filePath as string)).toThrow(
+      /Invalid file name/,
+    );
+  });
 });

@@ -14,12 +14,10 @@ import {
 } from '@shared/models/project-data-provider-factory.interface';
 import {
   deepClone,
-  endsWith,
   ensureArray,
   escapeStringRegexp,
   getErrorMessage,
   normalizeProjectId,
-  slice,
   transformAndEnsureRegExpArray,
   transformAndEnsureRegExpRegExpArray,
   wait,
@@ -42,7 +40,7 @@ const PDP_FACTORY_LABEL = '-pdpf';
  * @returns Id for the network object for this pdp factory
  */
 export function getPDPFactoryNetworkObjectNameFromId(pdpFactoryId: string) {
-  return endsWith(pdpFactoryId, PDP_FACTORY_LABEL)
+  return pdpFactoryId.endsWith(PDP_FACTORY_LABEL)
     ? pdpFactoryId
     : `${pdpFactoryId}${PDP_FACTORY_LABEL}`;
 }
@@ -54,8 +52,8 @@ export function getPDPFactoryNetworkObjectNameFromId(pdpFactoryId: string) {
  * @returns Id extensions use to identify this pdp factory
  */
 export function getPDPFactoryIdFromNetworkObjectName(pdpFactoryNetworkObjectName: string) {
-  return endsWith(pdpFactoryNetworkObjectName, PDP_FACTORY_LABEL)
-    ? slice(pdpFactoryNetworkObjectName, 0, -PDP_FACTORY_LABEL.length)
+  return pdpFactoryNetworkObjectName.endsWith(PDP_FACTORY_LABEL)
+    ? pdpFactoryNetworkObjectName.slice(0, -PDP_FACTORY_LABEL.length)
     : pdpFactoryNetworkObjectName;
 }
 

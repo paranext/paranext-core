@@ -1409,6 +1409,35 @@ declare module 'shared/data/rpc.model' {
    */
   export function getJsonRpcRequestErrorMessagePrefix(code: number): string;
   /**
+   * Whether `error` is what `networkService`'s request plumbing (`doRequest` in `network.service.ts`)
+   * throws for a JSON-RPC "method not found" response — i.e. no handler for the requested method has
+   * registered anywhere on the network.
+   *
+   * Callers that want to treat "nobody is listening" as a benign outcome must key off the JSON-RPC
+   * error _code_, never off the human-readable text that follows it. The two producers of a
+   * method-not-found response word that text differently (`'<method>' not found` in `rpc-server.ts`,
+   * `No handler found for <method>` in `rpc-websocket-listener.ts`), and matching the text alone also
+   * matches an unrelated failure from a handler that _did_ run and threw a message with the same
+   * words in it — turning "no validator, allow it" into "the validator rejected this, allow it
+   * anyway". The code is the only part that distinguishes the two.
+   *
+   * The code has to be read back out of the message because `doRequest` flattens every RPC-level
+   * error — method-not-found and a handler throwing alike — into a thrown value whose `message` is
+   * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker (the richer
+   * `platformErrorCode` field is populated only for C# `PlatformErrorCodes.WithCode` throws, which a
+   * "no handler yet" response never carries — it has no `error.data` at all). Deriving the format
+   * from {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
+   * with, keeps this matcher in lockstep with any reformat there.
+   *
+   * @param error Error thrown by a `networkService` request
+   * @param requestType If provided, additionally require the error to name this request type, so a
+   *   method-not-found response for some _other_ request cannot be mistaken for this one's. Both
+   *   producers embed the raw request type in their message.
+   * @returns Whether `error` is a method-not-found response (for `requestType`, when given)
+   * @experimental
+   */
+  export function isJsonRpcMethodNotFoundError(error: unknown, requestType?: string): boolean;
+  /**
    * Prefix that `network.service`'s `doRequest` embeds in the message it throws when a request times
    * out client-side before any response arrives. Exported for the same drift-prevention reason as
    * {@link getJsonRpcRequestErrorMessagePrefix}.

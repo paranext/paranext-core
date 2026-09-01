@@ -2285,6 +2285,55 @@ step, no automation. Just a record.
 - **Consequences (the shutdown signal is injected, not imported):** `RpcServer` reads whether the app is coming down through `setAppShutdownSignal`, wired from `src/main/main.ts`, rather than importing `shutdown-latch.service` directly. Every module `rpc-server` imports is reachable from `papi.d.ts`'s entry points, so the direct import published the shutdown latch and the window-state service it depends on — `resetForTesting()` included — as extension-facing API on the generated surface and the TypeDoc site. Any future main-process-only state a shared or client-reachable module needs should come in through the same kind of seam.
 - **Source:** PT-4434; diagnosed on macOS 2026-08-26. Reviewed in PR #2731, which is where the severity, unreachable-4000 and third-peer consequences above were established.
 
+## adr-native-string-when-ascii-by-construction: `string-util`'s grapheme-aware helpers are a deliberate choice, not the default
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** `platform-bible-utils`' `string-util.ts` exports grapheme-aware replacements for
+  methods `String` already has (`includes`, `indexOf`, `startsWith`, `endsWith`, `slice`, `split`,
+  `substring`, `stringLength`, ...). Every one segments its input into grapheme clusters, and
+  segmenting is the whole cost — native `String` never segments and is several times faster than
+  even a reused `GraphemeString`. A sweep for PT-2626 found 86 call sites across 32 files, most
+  passing machine-generated identifiers, request types, property names, or markup through a
+  segmenter that could not change the answer. The web view `<head>` splice alone segmented an
+  entire HTML document four times per web view: 36 ms at 100 KB, 186 ms at 500 KB, 1023 ms at 2 MB,
+  against ~0 ms native. Web views inline their bundled app, so 1–2 MB is ordinary.
+
+  The standing guidance pointed the other way. `Code-Style-Guide.md`'s decision framework said
+  "Check `platform-bible-utils` first … `string-util.ts` — string manipulation. If it exists, use
+  it", and a grep of `.context/standards/**` and `.claude/rules/**` for
+  `grapheme|GraphemeString|stringz` returned that line and nothing else.
+- **Decision:** Grapheme awareness is opt-in per call site, qualified by a stated rule: **native
+  `String` only when both the needle and the haystack are ASCII by construction.** The rule, the
+  index-space discipline it depends on (convert whole expressions, never single calls), the
+  non-string-argument trap, and the `dist/` publishing requirement live in
+  [`.claude/rules/code-quality/native-string-vs-grapheme-helpers.md`](../../.claude/rules/code-quality/native-string-vs-grapheme-helpers.md);
+  the Code Style Guide's decision framework now defers to it rather than contradicting it.
+- **Alternatives:**
+  - **Leave the rule in the plan document** (`.context/plans/pt-2626-native-string-call-sites.md`)
+    — rejected. That document is the record of *why* this sweep was done and is explicitly frozen;
+    a rule only agents and reviewers do not read is a rule that gets partially reverted on the next
+    feature.
+  - **An ASCII fast path inside the helpers themselves** — attractive and still open: an ASCII
+    haystack means the index spaces coincide, so the helper could skip segmentation and every
+    unconverted site would benefit, with the correctness argument checked by code rather than
+    asserted by a human rule. Not taken here because it changes a shared library's hot path for
+    every consumer and deserves its own change with its own benchmarks; the per-site rule is what
+    the sweep could verify.
+  - **Convert everything to native and drop the helpers** — rejected. The helpers exist for real
+    cases: searching localized book names, truncating arbitrary text for a log line, and any limit
+    a user reads as "characters".
+- **Consequences:** Reviewers of any diff touching these functions have one question to ask — is
+  the haystack ASCII by construction? — and one thing to check: that the call's index-space partner
+  was converted with it. The rule is stated at a scope narrow enough to be checkable, which means
+  some hot sites keep segmenting; those want a reused `GraphemeString` instance, tracked separately.
+  A residual asymmetry: `.claude/rules/` has no mechanical enforcement, so nothing prevents a future
+  edit from reintroducing a helper call on an ASCII path or, worse, a native call on a localized
+  one. `lib/eslint-plugin-paranext/` already hosts custom rules and is the obvious home for one, but
+  writing it is deferred rather than done.
+- **Source:** PT-2626 review (PR #2727), finding 7 — "the current standard tells the next author to
+  do the opposite of what this PR establishes."
+
 ## adr-sync-surface-per-interface-mode: One sync surface per interface mode, closed by a run-marker signal rather than the gate
 
 - **Date:** 2026-08-20
