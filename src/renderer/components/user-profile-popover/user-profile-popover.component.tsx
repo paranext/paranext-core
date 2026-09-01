@@ -180,19 +180,30 @@ export function UserProfilePopover() {
   const handleAppearanceChange = (value: string) => {
     if (value === '') return;
     if (value !== 'light' && value !== 'dark' && value !== 'system') return;
-    try {
-      if (value === 'system') {
-        if (shouldMatchSystemUsable && shouldMatchSystem) return;
-        setShouldMatchSystem?.(true);
-        return;
-      }
-      if (shouldMatchSystemUsable && shouldMatchSystem) {
-        setShouldMatchSystem?.(false);
-      }
-      setTheme?.({ type: value });
-    } catch (e: unknown) {
+    // Theme writes are asynchronous, so a failure arrives as a rejection: a synchronous try/catch
+    // around these calls cannot see it. A missing setter is a real runtime state, not a type
+    // formality — `useData` drops its setter while the theme subscription is throttled — so say so
+    // rather than letting the click do nothing silently.
+    const reportFailure = (e: unknown) => {
       logger.warn(`UserProfilePopover: failed to set appearance: ${getErrorMessage(e)}`);
+    };
+    const reportUnavailable = () => {
+      logger.warn(
+        'UserProfilePopover: cannot set appearance; the theme subscription is unavailable',
+      );
+    };
+    if (value === 'system') {
+      if (shouldMatchSystemUsable && shouldMatchSystem) return;
+      if (setShouldMatchSystem) setShouldMatchSystem(true).catch(reportFailure);
+      else reportUnavailable();
+      return;
     }
+    if (shouldMatchSystemUsable && shouldMatchSystem) {
+      if (setShouldMatchSystem) setShouldMatchSystem(false).catch(reportFailure);
+      else reportUnavailable();
+    }
+    if (setTheme) setTheme({ type: value }).catch(reportFailure);
+    else reportUnavailable();
   };
 
   useEffect(() => {
