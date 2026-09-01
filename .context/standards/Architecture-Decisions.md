@@ -2542,9 +2542,9 @@ step, no automation. Just a record.
 
 - **Date:** 2026-08-27
 - **Status:** Accepted
-- **Context:** Windows were ruled equal siblings (2026-08-24): no hierarchy, no "main window" in
-  API or UX language, and a `primary` role flag allowed only as a reassignable marker for which
-  persisted entry restores first. But the quit decision was still `window-all-closed`, a pure
+- **Context:** Windows were ruled equal siblings: no hierarchy, no "main window" in API or UX
+  language, and a `primary` role flag allowed only as a reassignable marker for which persisted
+  entry restores first. But the quit decision was still `window-all-closed`, a pure
   window count that keyed on nothing. Closing the primary window while a secondary was open left
   the app running on the secondary and spliced the primary's entry out of the persisted
   structure, so the user's main layout did not return next launch — the NN-6 hole PT-4286's
@@ -2588,9 +2588,9 @@ step, no automation. Just a record.
   of PT-4286 (a live switch to Simple must close the secondaries) is out of this decision's scope; PT-4286
   carries it. Linux behaviour of the native dialog is best-effort and unverified on real
   hardware at the time of writing.
-  The renderer learns whether it is the primary window from a URL parameter fixed at window
-  creation (`isMainWindow`), and reads it for one purpose: whether to draw the top-level menu.
-  No lifecycle, routing or persistence decision consults it, and it cannot describe a window that
+  PR #2702 has the renderer learn whether it is the primary window from a URL parameter fixed at
+  window creation (`isMainWindow`), read for one purpose: whether to draw the top-level menu. No
+  lifecycle, routing or persistence decision consults it, and it cannot describe a window that
   becomes primary later — PT-4278's window-manager service is the durable answer for that.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.

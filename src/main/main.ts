@@ -113,7 +113,6 @@ import {
 import { decideWindowClose } from '@main/services/window-close-decision.service';
 import {
   assignEntryToWindow,
-  getMainWindowId,
   handleWindowRemoved,
   initializeWindowLayoutPersistence,
   isWindowPendingContent,
@@ -443,8 +442,8 @@ async function main() {
     hasContentArrivedSinceEmptyReport: async (windowId) => {
       // A window that is not serving requests cannot be asked, and waiting on one that will never
       // answer would hold up every window's decision behind it. `false` is what the handler reads
-      // as "could not tell", which closes the window — the report was its own word about its own
-      // dock.
+      // as "could not tell" — the same answer as "still empty," since either way the report
+      // stands: it was the window's own word about its own dock.
       if (!isWindowReady(windowId)) return false;
       const shard = await getWebViewShard(windowId);
       if (!shard) return false;
@@ -1162,7 +1161,7 @@ async function main() {
       // at all, and a window latched as closing that then stays open would be inert for the rest
       // of the session. On confirm the quit latch is already set by the time this resolves, which
       // is what makes every other window's handler record its layout as staying for next session.
-      // Secondary windows and a primary on its own skip the question and close as they always did.
+      // Secondary windows and a primary on its own skip the question and close.
       // TODO(PT-4286): a live switch to Simple mode must also close the secondary windows.
       isAskingAboutClose = true;
       let decision: WindowCloseDecision;
@@ -1578,23 +1577,12 @@ async function main() {
     createPendingContentWindow: async () =>
       (await createWindow(undefined, { pendingContent: true })).id,
     closeWindow: (windowId) => {
-      // Rolling back an open that never delivered must not put the close-all question on screen.
-      // The window closed here is one the router created for content that never arrived, which is
-      // not the primary in ordinary use — but `isPrimaryWindow` falls back to the oldest live
-      // window when none holds the marked entry, and on macOS the app stays resident with no
-      // windows, so a window created into that gap IS the primary. Closing it would ask the user
-      // whether to close the whole application, to undo an open they never saw start — and the
-      // router does not await this, so a cancelled close would leave it reporting success while
-      // the window stands.
-      //
-      // The other programmatic close on this path declines the primary the same way: the emptiness
-      // handler is handed `isPrimaryWindow` and answers `open-home` rather than closing it.
-      if (isPrimaryWindow(windowId)) {
-        logger.warn(
-          `Not closing window ${windowId} after its content never arrived: it is the primary window`,
-        );
-        return;
-      }
+      // Rolling back an open that never delivered must not put the close-all question on screen,
+      // and it cannot: a window still waiting for its content never answers for the application, so
+      // this close is never read as the primary's. That exclusion is what makes the rollback safe to
+      // do without asking, and it is the reason no guard stands here — one would only ever refuse a
+      // close the router does not await, leaving a blank window standing while the caller is told
+      // the rollback succeeded.
       BrowserWindow.fromId(windowId)?.close();
     },
   });
@@ -1667,18 +1655,18 @@ async function main() {
     // `LocalizeKey` widens them to the template `%${string}%`, which turns the record below into a
     // pattern index signature — and then a mistyped key reads back `undefined` with no error, and
     // goes into the dialog as a missing title or a blank button.
-    const titleKey = '%closeApp_confirm_title%' satisfies LocalizeKey;
     const messageKey = '%closeApp_confirm_message%' satisfies LocalizeKey;
+    const detailKey = '%closeApp_confirm_detail%' satisfies LocalizeKey;
     const closeAllKey = '%closeApp_confirm_closeAll%' satisfies LocalizeKey;
     // The shared cancel string rather than one of this dialog's own: the localization guide forbids
     // duplicating a generic string that already exists, and this button says exactly what it says
     const cancelKey = '%general_cancel%' satisfies LocalizeKey;
     const fallbackStrings: Record<
-      typeof titleKey | typeof messageKey | typeof closeAllKey | typeof cancelKey,
+      typeof messageKey | typeof detailKey | typeof closeAllKey | typeof cancelKey,
       string
     > = {
-      [titleKey]: 'Close the application?',
-      [messageKey]:
+      [messageKey]: 'Close the application?',
+      [detailKey]:
         'All windows will close. They will be restored the next time you open the application.',
       [closeAllKey]: 'Close all windows',
       [cancelKey]: 'Cancel',
@@ -1699,7 +1687,7 @@ async function main() {
         ...fallbackStrings,
         ...(await Promise.race([
           localizationService.getLocalizedStrings({
-            localizeKeys: [titleKey, messageKey, closeAllKey, cancelKey],
+            localizeKeys: [messageKey, detailKey, closeAllKey, cancelKey],
           }),
           wait(CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS).then<never>(() => {
             throw new Error(`no answer within ${CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS} ms`);
@@ -1732,8 +1720,8 @@ async function main() {
       signal: dismissOnQuit.signal,
       type: 'question',
       // No `title`: macOS hides it, and on Windows and Linux it would print the question twice
-      message: strings[titleKey],
-      detail: strings[messageKey],
+      message: strings[messageKey],
+      detail: strings[detailKey],
       buttons: [strings[closeAllKey], strings[cancelKey]],
       // The safe choice is what Enter takes: this question exists to interrupt a click whose reach
       // is wider than expected, so the wide-reaching button must not also be the one a reflex press
@@ -2025,7 +2013,7 @@ async function main() {
           getTitle: () => window.getTitle(),
           wasEverReady: wasWindowEverReady(window.id),
         }));
-      return summarizeWindows(availableWindows, getMainWindowId());
+      return summarizeWindows(availableWindows, isPrimaryWindow);
     },
     {
       method: {

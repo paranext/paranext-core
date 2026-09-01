@@ -27,9 +27,9 @@ export type TabMenuContext = {
    * window would then build an identical window and take this one down with it.
    *
    * Main decides a window's fate on emptying by counting the windows that could be the last one,
-   * and never by which window holds the primary role — a window empties into Home when nothing else
-   * would remain, and closes when something would. So the question here is whether another window
-   * is standing, not whether this one is the primary.
+   * with one window exempt: the one answering for the application docks Home rather than closing,
+   * however many others are standing. So the question here is both — whether another window is
+   * standing, and whether this one is the window that would survive anyway.
    */
   isOnlyTabInWindowThatWouldClose: boolean;
 };

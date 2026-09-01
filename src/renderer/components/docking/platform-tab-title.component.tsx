@@ -422,6 +422,7 @@ export function PlatformTabTitle({
     }
 
     const otherWindows = windows.filter((window) => `${window.windowId}` !== globalThis.windowId);
+    const thisWindow = windows.find((window) => `${window.windowId}` === globalThis.windowId);
 
     // Counting this window's tabs is guarded separately because it can fail for reasons that say
     // nothing about the windows — it throws before the dock layout registers. Folding it into the
@@ -434,15 +435,20 @@ export function PlatformTabTitle({
     // apart; an actually-empty window would build an identical one and lose this one, which is the
     // no-op Paratext 9 hides its float item for.
     //
-    // Whether emptying closes this window is decided by whether another window is standing, which
-    // is the rule main applies — it counts the windows that could be the last one and never reads
-    // which window holds the primary role. One class of window divides the two lists: a window
-    // still waiting for its content is offered as a move target here but does not count toward
-    // main's arithmetic, so while one is starting up this errs toward hiding an action that would
-    // in fact have been safe.
+    // Whether emptying closes this window is decided the way main decides it: a window goes when
+    // another could be the last one standing, except the window answering for the application,
+    // which docks Home instead and so never closes for having been emptied. The window list already
+    // says which one that is, so the tab count alone does not settle the question. Compared against
+    // `true` rather than negated, because a window missing from its own list is not evidence that
+    // it survives: the older answer — treat it as closing, and hide an action that might have been
+    // safe — is the one to keep there. One class of window divides the two lists: a window still
+    // waiting for its content is offered as a move target here but does not count toward main's
+    // arithmetic, so while one is starting up this errs toward hiding an action that would in fact
+    // have been safe.
     let isOnlyTabInWindowThatWouldClose = false;
     try {
-      isOnlyTabInWindowThatWouldClose = otherWindows.length > 0 && getOpenTabCountSync() <= 1;
+      isOnlyTabInWindowThatWouldClose =
+        thisWindow?.isMain !== true && otherWindows.length > 0 && getOpenTabCountSync() <= 1;
     } catch (error) {
       // Offering the action is the safe way to be wrong: at worst the user makes a window they did
       // not want, which they can close
