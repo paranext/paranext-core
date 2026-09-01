@@ -300,5 +300,14 @@ describe('withWindowScopedWebViewIdInTab', () => {
       // to end that way keeps it.
       expect(stripWindowScopeFromWebViewId('some-widget')).toBe('some-widget');
     });
+
+    test('takes a `-w<digits>` ending it cannot tell from a scope suffix', () => {
+      // The cost of accepting the numeric shape, pinned rather than left to prose: an id that ends
+      // in `-w` and digits is indistinguishable from one this module scoped, so it is stripped.
+      // Accepted because ids are minted as GUIDs and the only ones shaped this way in practice are
+      // the scope suffixes older builds wrote — but it is the trade the alternation makes, and a
+      // future id scheme that can end this way has to know it.
+      expect(stripWindowScopeFromWebViewId('release-w2')).toBe('release');
+    });
   });
 });

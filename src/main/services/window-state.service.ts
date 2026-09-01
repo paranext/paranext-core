@@ -568,12 +568,23 @@ function announceRoutingTargetIfChanged(): void {
  */
 export function addWindow(window: BrowserWindow, existingId?: string): string {
   let windowId = existingId ?? mintWindowId();
-  // An id this list already holds cannot be handed to a second window: the two would share a
+  // An id a LIVE window already holds cannot be handed to a second one: the two would share a
   // service registration, a storage namespace, and each other's ready, focus and closing state,
   // and the id would name whichever of them the tracker reached first. Minting instead keeps one
   // window per id true by construction — this window opens and works, and loses only the
   // per-window state the entry it came from was keeping.
-  if (existingId !== undefined && isWindowTracked(existingId)) {
+  //
+  // Liveness rather than {@link isWindowTracked}, which answers whether the tracker holds the id
+  // at all and so still says yes for a window Electron has destroyed whose `closed` handler has
+  // not yet reached {@link removeWindow}. A window restoring that entry inside that gap is
+  // entitled to its own id: refusing it there would detach it from its persisted state over a
+  // conflict with a window that no longer exists.
+  if (
+    existingId !== undefined &&
+    trackedWindows.some(
+      (tracked) => tracked.windowId === existingId && !tracked.window.isDestroyed(),
+    )
+  ) {
     windowId = mintWindowId();
     logger.warn(
       `Window id ${existingId} is already tracked, so this window is tracked as ${windowId} instead. Per-window state saved under ${existingId} stays with the window already holding it.`,
