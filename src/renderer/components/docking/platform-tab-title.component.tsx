@@ -136,12 +136,31 @@ function renderTabMenuItems(
   onSelect: (itemId: string) => void,
   keyPrefix = '',
 ): ReactNode[] {
+  const timesIdSeen = new Map<string, number>();
   return items.map((item, index) => {
     // Keyed by the item's own id where it has one, so an item keeps its identity when the list
     // around it changes — the move items come and go as the window read lands. A separator never
-    // has one and a submenu's is optional, so position remains the only key available for those
+    // has one and a submenu's is optional, so position remains the only key available for those.
+    //
+    // An id is not unique, though: an item's id is its command, and nothing enforces that two items
+    // carry different ones. Duplicate-order checking rejects only a repeated group-and-order pair,
+    // new-item checking looks at a contributed item's id rather than its command, and a group may
+    // be extensible — so a second item bearing the same command can arrive in the platform's own
+    // group. Repeats are numbered rather than left to collide.
+    //
+    // The two forms carry different prefixes so that a position can never be mistaken for an id.
+    // Nothing can currently produce that collision — a contributed id must match
+    // `^[\w\-]+\.[\w\-]+$`, so it always holds a dot and is never a bare number — which is why
+    // no test covers it; the prefixes keep the schema from being the only thing preventing it.
     const itemId = item.type === 'separator' ? undefined : item.id;
-    const key = itemId === undefined ? `${keyPrefix}${index}` : `${keyPrefix}${itemId}`;
+    let key: string;
+    if (itemId === undefined) {
+      key = `${keyPrefix}position-${index}`;
+    } else {
+      const timesSeen = timesIdSeen.get(itemId) ?? 0;
+      timesIdSeen.set(itemId, timesSeen + 1);
+      key = timesSeen === 0 ? `${keyPrefix}id-${itemId}` : `${keyPrefix}id-${itemId}-${timesSeen}`;
+    }
     if (item.type === 'separator') return <ContextMenuSeparator key={key} />;
     if (item.type === 'submenu')
       return (

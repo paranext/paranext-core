@@ -139,7 +139,7 @@ describe('Dock Layout Component', () => {
      * narrower filter than `Filter.AnyTab` visits nothing; and it stops walking the moment the
      * callback returns truthy, so a callback that returns `true` counts one item and halts. A stub
      * that ignores the filter and discards the callback's answer reports the same number either
-     * way, which is what let both of those regress unnoticed.
+     * way.
      *
      * The top-level box is offered first, the way `findInBox` does because of rc-dock #253 — that
      * is the whole reason the implementation's `isTab` guard exists.
@@ -161,6 +161,10 @@ describe('Dock Layout Component', () => {
 
     it('counts every tab regardless of type, not only web views', () => {
       whenFindWalks({ id: 'root', children: [] }, TABS);
+
+      // Also what pins the walk running to the end: returning true from the callback would halt
+      // rc-dock at the first item, and the stub honours that, so a callback that stops early
+      // reports fewer tabs than the layout holds
       expect(getOpenTabCount(instance(localMockDockLayout))).toBe(3);
     });
 
@@ -171,14 +175,6 @@ describe('Dock Layout Component', () => {
       // Filter.Tab alone enters no box at all, so the count would silently be 0 everywhere
       const [, filter] = capture(localMockDockLayout.find).last();
       expect(filter).toBe(Filter.AnyTab);
-    });
-
-    it('keeps walking past the first tab instead of stopping at it', () => {
-      whenFindWalks({ id: 'root', children: [] }, TABS);
-
-      // Returning true from the callback would halt rc-dock's walk. The stub honours that, so a
-      // callback that stops early can no longer report the full count
-      expect(getOpenTabCount(instance(localMockDockLayout))).toBe(TABS.length);
     });
 
     it('returns zero when the layout holds no tabs', () => {

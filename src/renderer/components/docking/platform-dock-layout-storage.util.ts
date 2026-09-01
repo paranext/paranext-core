@@ -659,7 +659,8 @@ export function getOpenTabCount(dockLayout: DockLayout): number {
   let tabCount = 0;
 
   // Always return false from the callback so rc-dock visits every tab instead of stopping at the
-  // first match. Filter.AnyTab traverses both docked and floated panels.
+  // first match. Filter.AnyTab is Tab|Docked|Floated|Windowed|Max, so the walk enters every box
+  // the layout has, not only the docked and floating ones.
   dockLayout.find((item) => {
     // Still have to check isTab because of a bug https://github.com/ticlo/rc-dock/pull/253
     if (isTab(item)) tabCount += 1;
