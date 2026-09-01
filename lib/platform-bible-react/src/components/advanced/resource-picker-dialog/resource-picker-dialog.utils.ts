@@ -24,12 +24,16 @@ export function matchesResourceType(
  *
  * Languages are returned alphabetically, never in catalogue order — a DBL catalogue arrives in an
  * arbitrary order that has nothing to do with what the user is likely to want. Languages that
- * already have an installed resource are `starred`, which
- * {@link MultiSelectComboBoxEntry | MultiSelectComboBox} promotes to the top of the list when its
- * `sortSelected` prop is set. Each entry carries its resource count as `secondaryLabel`.
+ * already have an installed resource are `starred`, which `MultiSelectComboBox` promotes to the top
+ * of the list when its `sortSelected` prop is set. Each entry carries its resource count as
+ * `secondaryLabel`.
  *
  * Only languages with at least one resource of `resourceType` are offered, so selecting a language
  * can never produce an empty result list.
+ *
+ * Note that a consumer passing `sortSelected` re-sorts these entries itself, so the rendered order
+ * is that component's (starred first, then selected, then alphabetical) rather than the plain
+ * alphabetical order returned here.
  *
  * @param resources The full catalogue.
  * @param resourceType If provided, restricts both the offered languages and their counts to this
@@ -56,7 +60,7 @@ export function buildLanguageFilterOptions(
       label: language,
       value: language,
       starred: installedLanguages.has(language),
-      secondaryLabel: count.toString(),
+      secondaryLabel: count.toLocaleString(),
     }));
 }
 
