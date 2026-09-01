@@ -65,6 +65,27 @@ internal class ParatextProjectSendReceiveService(
     public SyncActivityState GetSyncActivity() => new(false, Array.Empty<string>());
 
     /// <summary>
+    /// Whether the persistent C# Send/Receive toast should be shown for a sync starting now.
+    /// <para>
+    /// Scaffolding for the Paratext 10 Studio patch, which owns the toast
+    /// (<c>RunWithSyncNotification</c>) and overrides this to suppress it in Simple mode, where
+    /// core's toolbar sync indicator is the single surface instead. The decision hook lives here
+    /// rather than in the patch because it reads a public platform setting
+    /// (<see cref="Settings.INTERFACE_MODE"/>) through public core helpers — no secret, no
+    /// <c>ParatextData.dll</c> — so by the patch's own criteria it is public-by-default, and keeping
+    /// it here removes one more standing conflict against a public file.
+    /// </para>
+    /// <para>
+    /// Returns <see langword="true"/> here, and that default is load-bearing rather than arbitrary:
+    /// core must keep showing whatever sync feedback it shows today. The suppressing override MUST
+    /// NOT ship before the sync-activity signal it hands off to, or Simple mode goes from one sync
+    /// surface to ZERO for the startup sync — the toast gone and no indicator raised in its place.
+    /// If the Studio work is split across PRs, the signal merges first.
+    /// </para>
+    /// </summary>
+    protected virtual bool ShouldShowPersistentSyncToast() => true;
+
+    /// <summary>
     /// Raises <see cref="SyncActivityChanged"/> with <paramref name="snapshot"/>, invoking each
     /// subscriber under its own try/catch.
     /// <para>

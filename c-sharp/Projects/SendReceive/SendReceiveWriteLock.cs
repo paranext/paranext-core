@@ -365,7 +365,10 @@ internal static class SendReceiveWriteLock
     {
         ArgumentNullException.ThrowIfNull(projectIds);
         return projectIds
-            .Where(projectId => !string.IsNullOrEmpty(projectId))
+            // IsNullOrWhiteSpace, not IsNullOrEmpty: a whitespace-only id is no more usable than an
+            // empty one, and it survives all the way to the sync popover as a blank row — the exact
+            // outcome this normalization exists to prevent.
+            .Where(projectId => !string.IsNullOrWhiteSpace(projectId))
             .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
     }
 

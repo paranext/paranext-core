@@ -1,3 +1,8 @@
+// The registration, baseline-emit and forwarding mechanics of
+// SendReceiveSnapshotNotifierService<TSnapshot> are covered once, in
+// SendReceiveBlockNotifierServiceTests — the first service built on it. This suite covers only what
+// is specific to sync activity: its wire names, its OpenRPC docs, its payload shape, and the
+// snapshot its own service reports.
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
@@ -56,31 +61,6 @@ namespace TestParanextDataProvider.Projects.SendReceive
             );
         }
 
-        [Test]
-        public void InitializeAsync_RegistersTheEventWithTheCentralRegistry()
-        {
-            Assert.That(
-                Client.SentRequestCount,
-                Is.EqualTo(1),
-                "InitializeAsync must register the event with main's central event registry"
-            );
-            var (requestType, requestContents) = Client.NextSentRequest;
-            Assert.Multiple(() =>
-            {
-                Assert.That(requestType, Is.EqualTo("network:registerEvent"));
-                Assert.That(
-                    requestContents![0],
-                    Is.EqualTo(SyncActivityChangedEvent),
-                    "the registration must name the onSyncActivityChanged event"
-                );
-                var documentation = (OpenRpcSingleNotificationDocumentation)requestContents[1]!;
-                Assert.That(
-                    documentation.Notification.Experimental,
-                    Is.True,
-                    "the event is @experimental at the TS seam, so it carries x-experimental"
-                );
-            });
-        }
 
         [Test]
         public void InitializeAsync_RegistersGetSyncActivityWithExperimentalDocs()
@@ -119,131 +99,8 @@ namespace TestParanextDataProvider.Projects.SendReceive
             });
         }
 
-        [Test]
-        public async Task InitializeAsync_RegistryRejectsEventRegistration_LogsAndStillEmits()
-        {
-            // Best-effort contract: if main's central registry rejects the event registration
-            // (returns false), InitializeAsync must warn and continue — the service still registers
-            // its command handler and still pushes sync-activity transitions. Build a fresh
-            // client + service so only the notifier under test here is subscribed (the base SetUp
-            // already initialized on the happy path).
-            using var client = new DummyPapiClient { RegisterEventResponse = () => false };
-            var service = CreateSendReceiveService(client);
-            var notifier = new SyncActivityNotifierService(client, service);
 
-            using var consoleError = new StringWriter();
-            var originalError = Console.Error;
-            Console.SetError(consoleError);
-            try
-            {
-                await notifier.InitializeAsync();
-            }
-            finally
-            {
-                Console.SetError(originalError);
-            }
-            // Drain the init-time current-snapshot emit so the assertions below see only the
-            // transition push.
-            _ = client.NextSentEvent;
 
-            Assert.Multiple(() =>
-            {
-                Assert.That(
-                    consoleError.ToString(),
-                    Does.Contain(SyncActivityChangedEvent),
-                    "a rejected registration must be logged, naming the event"
-                );
-                Assert.That(
-                    client.IsHandlerRegistered(GetSyncActivityCommand),
-                    Is.True,
-                    "a rejected registration must not stop the command handler from registering"
-                );
-            });
-        }
-
-        [Test]
-        public async Task InitializeAsync_EventRegistrationThrows_IsCaughtAndStillEmits()
-        {
-            // Best-effort contract: if the registration request itself fails (throws), InitializeAsync
-            // must catch it, log it, and continue — a registry hiccup must never break backend
-            // startup. Fresh client + service, as above.
-            using var client = new DummyPapiClient
-            {
-                RegisterEventResponse = () =>
-                    throw new InvalidOperationException("registry offline"),
-            };
-            var service = CreateSendReceiveService(client);
-            var notifier = new SyncActivityNotifierService(client, service);
-
-            using var consoleError = new StringWriter();
-            var originalError = Console.Error;
-            Console.SetError(consoleError);
-            try
-            {
-                // Must not throw: the registration failure is caught internally.
-                await notifier.InitializeAsync();
-            }
-            finally
-            {
-                Console.SetError(originalError);
-            }
-            // Drain the init-time current-snapshot emit so the assertions below see only the
-            // transition push.
-            _ = client.NextSentEvent;
-
-            Assert.Multiple(() =>
-            {
-                var log = consoleError.ToString();
-                Assert.That(
-                    log,
-                    Does.Contain(SyncActivityChangedEvent),
-                    "a thrown registration must be caught and logged, naming the event"
-                );
-                Assert.That(
-                    log,
-                    Does.Contain("registry offline"),
-                    "the caught exception detail must be logged"
-                );
-                Assert.That(
-                    client.IsHandlerRegistered(GetSyncActivityCommand),
-                    Is.True,
-                    "a thrown registration must not stop the command handler from registering"
-                );
-            });
-        }
-
-        [Test]
-        public async Task InitializeAsync_EmitsTheCurrentSnapshotOnce()
-        {
-            // Restart re-baseline emit: after initialization the service pushes the current
-            // sync-activity snapshot once, so a subscriber that was already listening across a
-            // backend restart converges on the fresh process's state instead of keeping its stale
-            // last-seen state. Fresh client + service so only the notifier under test here is
-            // subscribed (the base SetUp already initialized and drained its own init emit).
-            using var client = new DummyPapiClient();
-            var service = CreateSendReceiveService(client);
-            var notifier = new SyncActivityNotifierService(client, service);
-
-            await notifier.InitializeAsync();
-
-            Assert.That(
-                client.SentEventCount,
-                Is.EqualTo(1),
-                "InitializeAsync must emit the current snapshot exactly once"
-            );
-            var (eventType, payload) = client.NextSentEvent;
-            Assert.That(eventType, Is.EqualTo(SyncActivityChangedEvent));
-            var state = (SyncActivityState)payload!;
-            Assert.Multiple(() =>
-            {
-                Assert.That(
-                    state.IsSyncing,
-                    Is.False,
-                    "an idle service re-baselines as not syncing"
-                );
-                Assert.That(state.ProjectIds, Is.Empty);
-            });
-        }
 
         [Test]
         public async Task SyncActivityChanged_ForwardsTheSnapshotToThePapi()

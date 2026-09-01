@@ -31,4 +31,39 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 public readonly record struct SyncActivityState(
     bool IsSyncing,
     IReadOnlyCollection<string> ProjectIds
-);
+)
+{
+    /// <summary>
+    /// Compares by VALUE, including the contents of <see cref="ProjectIds"/>.
+    /// <para>
+    /// The synthesized equality a record struct would give this compares
+    /// <see cref="IReadOnlyCollection{T}"/> with the default comparer, i.e. by REFERENCE — so two
+    /// snapshots naming exactly the same projects would compare unequal whenever they were built as
+    /// separate collections, which is every time. The natural dedupe at a publisher
+    /// (<c>if (snapshot == _last) return;</c>) would then silently never dedupe, and every publisher
+    /// would have to know that. Order is ignored because the ids are a normalized set, not a
+    /// sequence.
+    /// </para>
+    /// </summary>
+    public bool Equals(SyncActivityState other)
+    {
+        if (IsSyncing != other.IsSyncing)
+            return false;
+        if (ProjectIds.Count != other.ProjectIds.Count)
+            return false;
+        return ProjectIds.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(other.ProjectIds);
+    }
+
+    /// <summary>
+    /// Hashes the same values <see cref="Equals(SyncActivityState)"/> compares, order-insensitively
+    /// so two equal snapshots cannot hash differently.
+    /// </summary>
+    public override int GetHashCode()
+    {
+        int idsHash = 0;
+        foreach (string projectId in ProjectIds)
+            // XOR: commutative, so the hash does not depend on enumeration order.
+            idsHash ^= StringComparer.OrdinalIgnoreCase.GetHashCode(projectId);
+        return HashCode.Combine(IsSyncing, ProjectIds.Count, idsHash);
+    }
+}

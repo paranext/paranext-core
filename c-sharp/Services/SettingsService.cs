@@ -85,20 +85,39 @@ internal static class SettingsService
         }
     }
 
+    /// <summary>
+    /// Counts refreshes started, so a slower one cannot apply its answer over a newer one's.
+    /// Incremented on entry to <see cref="RefreshRequestTimeoutAsync"/>.
+    /// </summary>
+    private static int s_requestTimeoutRefreshGeneration;
+
+    /// <summary>
+    /// Reads the request-timeout setting and applies it to the papi client.
+    /// <para>
+    /// Deliberately does NOT catch: the caller hands this to
+    /// <see cref="ThreadingUtils.ObserveTaskLoggingErrorsToStderr"/>, whose whole job is to report a
+    /// fault at error level on stderr. Catching here would complete the task successfully, so that
+    /// continuation would never run and the failure would go out on stdout instead — the wrapper
+    /// present but inert.
+    /// </para>
+    /// <para>
+    /// Answers are applied LATEST-WINS rather than in completion order. Each announcement starts its
+    /// own task and they are not serialized against each other, so two quick writes (60 then 5) can
+    /// return out of order and leave the backend on the value the user replaced. The generation check
+    /// makes a superseded answer a no-op instead.
+    /// </para>
+    /// </summary>
     private static async Task RefreshRequestTimeoutAsync(PapiClient papiClient)
     {
-        try
-        {
-            int requestTimeoutSeconds = await GetSettingAsync<int>(
-                papiClient,
-                Settings.REQUEST_TIMEOUT
-            );
-            papiClient.SetRequestTimeout(new TimeSpan(0, 0, requestTimeoutSeconds));
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error updating request timeout: {ex}");
-        }
+        int generation = Interlocked.Increment(ref s_requestTimeoutRefreshGeneration);
+        int requestTimeoutSeconds = await GetSettingAsync<int>(
+            papiClient,
+            Settings.REQUEST_TIMEOUT
+        );
+        // A later refresh started while this one was in flight, so its answer describes a newer value.
+        if (generation != Volatile.Read(ref s_requestTimeoutRefreshGeneration))
+            return;
+        papiClient.SetRequestTimeout(new TimeSpan(0, 0, requestTimeoutSeconds));
     }
 
     /// <summary>
