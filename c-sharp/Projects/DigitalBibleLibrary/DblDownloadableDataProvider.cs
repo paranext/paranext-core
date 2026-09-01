@@ -73,6 +73,13 @@ internal class DblResourcesDataProvider(
 
     private const int DBL_NETWORK_TIMEOUT = 0; // Don't timeout DBL network requests
 
+    // The update-status recheck runs on the front end's list-refresh path, where several web views
+    // can refresh at once. Long enough to outlast a *sibling recheck* (a few ms of in-memory work),
+    // so two views mounting together don't leave one of them silently holding stale flags; short
+    // enough that when a catalog download, install, or uninstall holds the gate — all of which run
+    // for seconds — the refresh gives up promptly and reports nothing instead of stalling.
+    private const int UPDATE_STATUS_GATE_TIMEOUT_MS = 250;
+
     public const string DBL_RESOURCES = "DblResources";
 
     // Node.js services match this exact text (platform-bible-utils `isErrorMessageAboutRegistryAuthFailure`
@@ -88,12 +95,13 @@ internal class DblResourcesDataProvider(
     private bool _hasFetchedResources;
 
     // Guards every access to shared state so only one DBL operation touches it at a time:
-    //   • _resources — reassigned by FetchResourcesCore, read by FindResource
+    //   • _resources — reassigned by FetchResourcesCore, read by FindResource and by
+    //     RecomputeDblResourcesUpdateStatus
     //   • the Paratext ScrTextCollection — mutated by install/uninstall, read by the fetch's projection
     //   • the process-global Trace.Listeners 401-detection bracket in FetchResourcesCore
-    // GetDblResources/InstallDblResource/UninstallDblResource do their blocking work inside Task.Run
-    // and take this lock there — never on the JSON-RPC reading thread — so the reading loop stays
-    // responsive while an operation runs. See PT-4222.
+    // GetDblResources/InstallDblResource/UninstallDblResource/RecomputeDblResourcesUpdateStatus do
+    // their blocking work inside Task.Run and take this lock there — never on the JSON-RPC reading
+    // thread — so the reading loop stays responsive while an operation runs. See PT-4222.
     private readonly object _providerGate = new();
 
     #endregion
@@ -105,6 +113,7 @@ internal class DblResourcesDataProvider(
         return
         [
             ("getDblResources", GetDblResources),
+            ("recomputeDblResourcesUpdateStatus", RecomputeDblResourcesUpdateStatus),
             ("installDblResource", InstallDblResource),
             ("uninstallDblResource", UninstallDblResource),
             ("isGetDblResourcesAvailable", IsGetDblResourcesAvailable),
@@ -232,6 +241,45 @@ internal class DblResourcesDataProvider(
                             ?? ""
                     ))
                     .ToList();
+            }
+        });
+
+    /// <summary>
+    /// Recompute, for each resource in the already-loaded catalog, whether the DBL has a newer
+    /// version than the copy installed locally.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately never loads the catalog, unlike every other method here: this serves the front
+    /// end's list refresh, and <see cref="FetchResourcesCore"/> is an unbounded network download.
+    /// Skipping it is sound because the DBL-side revision is the half we want held fixed — it is the
+    /// locally installed revision that changes after an install, and ParatextData reads that from
+    /// the installed resource on every call rather than caching it.
+    /// </remarks>
+    /// <returns>
+    /// Whether an update is available, keyed by DBL entry uid. Empty when the catalog has not loaded
+    /// yet or when another DBL operation holds the gate; callers then keep the values they have.
+    /// </returns>
+    internal Task<Dictionary<string, bool>> RecomputeDblResourcesUpdateStatus() =>
+        Task.Run(() =>
+        {
+            var updateStatus = new Dictionary<string, bool>();
+            bool gateTaken = false;
+            try
+            {
+                Monitor.TryEnter(_providerGate, UPDATE_STATUS_GATE_TIMEOUT_MS, ref gateTaken);
+                if (!gateTaken || !_hasFetchedResources)
+                    return updateStatus;
+
+                foreach (var resource in _resources)
+                    updateStatus[resource.DBLEntryUid.Id] =
+                        resource.IsNewerThanCurrentlyInstalled();
+
+                return updateStatus;
+            }
+            finally
+            {
+                if (gateTaken)
+                    Monitor.Exit(_providerGate);
             }
         });
 

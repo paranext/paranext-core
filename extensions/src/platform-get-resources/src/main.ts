@@ -7,11 +7,13 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
+import type { DblResourceUpdateStatus } from 'platform-get-resources';
 import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, wait } from 'platform-bible-utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
+import { reconcileCachedResources } from './resources-cache.util';
 import tailwindStyles from './tailwind.css?inline';
 
 const GET_RESOURCES_WEB_VIEW_TYPE = 'platformGetResources.getResources';
@@ -73,33 +75,31 @@ async function startBackgroundFetchResources(): Promise<void> {
 async function getCachedResources(): Promise<DblResourceData[] | undefined> {
   if (cachedResources !== undefined) {
     try {
-      // Checks to make sure all the `installed` flags are accurate
-      let isChanged = false;
+      // Checks to make sure all the `installed` and `updateAvailable` flags are accurate
       const localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
       });
-      const newCachedResources = cachedResources.map((resource) => {
-        const matchingLocalProject = localProjectMetadata.find((localProject) =>
-          // If the `projectId` is defined then tries to use that
-          resource.projectId
-            ? resource.projectId === localProject.id
-            : // Otherwise uses the `dblEntryUid` which contains the first part of the project id
-              localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
-        );
 
-        const isInstalled = matchingLocalProject !== undefined;
-        if (isInstalled !== resource.installed) {
-          isChanged = true;
-          return {
-            ...resource,
-            installed: isInstalled,
-            updateAvailable: false,
-            projectId: matchingLocalProject?.id ?? '',
-          };
-        }
+      // `installed` can be derived here from the local projects, but `updateAvailable` compares
+      // revisions only the backend can see, so ask it. It answers from the catalog already in
+      // memory without contacting the DBL.
+      //
+      // Kept in its own `try` so a backend failure costs only the `updateAvailable` refresh: an
+      // undefined status leaves those flags at their cached values, while `installed` and
+      // `projectId` still reconcile against the local projects.
+      let updateStatus: DblResourceUpdateStatus | undefined;
+      try {
+        const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
+        updateStatus = await provider?.recomputeDblResourcesUpdateStatus();
+      } catch (error: unknown) {
+        logger.warn(`Could not recompute DBL resource update status: ${getErrorMessage(error)}`);
+      }
 
-        return resource;
-      });
+      const { resources: newCachedResources, isChanged } = reconcileCachedResources(
+        cachedResources,
+        localProjectMetadata.map((localProject) => localProject.id),
+        updateStatus,
+      );
 
       // If a change was detected updates the cache
       if (isChanged) {

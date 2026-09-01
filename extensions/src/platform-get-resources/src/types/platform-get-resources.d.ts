@@ -8,7 +8,30 @@ declare module 'platform-get-resources' {
     DblResources: DataProviderDataType<undefined, DblResourceData[], never>;
   };
 
+  /**
+   * Whether a newer version of each resource is available from the DBL, keyed by DBL Entry UID.
+   *
+   * Only the backend can determine this — it compares the revision of the locally installed
+   * resource against the revision in the DBL catalog — so a resource missing from the map means
+   * "unknown", and callers should keep whatever value they already have rather than guessing.
+   */
+  export type DblResourceUpdateStatus = { [dblEntryUid: string]: boolean | undefined };
+
   export type IDblResourcesProvider = IDataProvider<GetResourcesDataTypes> & {
+    /**
+     * Recomputes whether a newer version of each known resource is available from the DBL,
+     * comparing the locally installed revision against the revision in the DBL catalog already in
+     * memory.
+     *
+     * Never contacts the DBL and never waits, so it is cheap enough to call on a UI refresh. In
+     * exchange it answers for only what it already knows: the result is empty if the catalog has
+     * not been fetched yet this session, or if another DBL operation (a fetch, install, or
+     * uninstall) currently holds the provider. Treat a resource missing from the result as
+     * "unknown" and keep whatever value you have.
+     *
+     * @returns Whether an update is available, keyed by DBL Entry UID.
+     */
+    recomputeDblResourcesUpdateStatus: () => Promise<DblResourceUpdateStatus>;
     /**
      * Installs or updates a DBL resource to the local filesystem
      *

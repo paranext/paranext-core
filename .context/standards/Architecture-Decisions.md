@@ -2332,3 +2332,67 @@ step, no automation. Just a record.
   writing it is deferred rather than done.
 - **Source:** PT-2626 review (PR #2727), finding 7 — "the current standard tells the next author to
   do the opposite of what this PR establishes."
+
+## adr-dbl-cache-recompute-on-read: The DBL resource cache recomputes derived flags on read, not on write
+
+- **Date:** 2026-09-01
+- **Status:** Accepted
+- **Context:** `platformGetResources.getCachedResources` is the only source the Get Resources page,
+  Home, and the resource picker read. It reconciled `installed` against local project metadata on
+  every call but never recomputed `updateAvailable`, and its one rewrite branch fired only when
+  `installed` flipped — so updating an already-installed resource left the row reading "Update" for
+  the rest of the session. The C# provider does fire `SendDataUpdateEvent(DBL_RESOURCES, …)` after an
+  install, but nothing has subscribed to that data type since the cache replaced the front end's
+  `useData` subscription (zero `.DblResources(` call sites repo-wide), so the event refreshes nothing.
+  `updateAvailable` cannot be derived in TypeScript: it compares the installed resource's DBL
+  revision against the catalog's, and neither number is reachable there. The DBL side is dropped when
+  C# projects `InstallableResource` into `DblResourceData`; the installed side is an entry name under
+  `.dbl/revision/` inside the password-protected `.p8z` bundle, read through ParatextData's zip file
+  manager — no project setting or metadata field exposes it, and `Revision` appears nowhere in
+  `c-sharp/`.
+- **Decision:** Extend the read-path reconciliation rather than adding a write-path invalidation. A
+  new no-network provider function, `recomputeDblResourcesUpdateStatus`, re-evaluates
+  `InstallableResource.IsNewerThanCurrentlyInstalled()` over the already-loaded catalog snapshot, and
+  `getCachedResources` applies it on every call alongside the `installed` check. Resources absent from
+  the result keep their cached value, so a not-yet-loaded catalog or a busy provider gate degrades to
+  the previous behavior instead of guessing. Skipping the catalog fetch is sound because the DBL-side
+  revision is the half that should stay fixed; ParatextData re-reads the *installed* revision on each
+  call (`ExistingScrText` is a live `ScrTextCollection` lookup, and `InternalInstall` nulls the
+  ScrText's FileManager before overwriting the `.p8z`, so `DBLResourceSettings` is rebuilt from the
+  new file).
+- **Alternatives:**
+  - **Patch the cache entry after a successful install** — rejected, but not because the install is
+    unverified: `InstallDblResourceCore`'s `ScrTextCollection.IsPresent(InstalledScrText)` guard
+    inspects `InstalledScrText`, which `InstallableResource.InternalInstall` assigns only as its last
+    statement, so a failed install leaves it null and the guard throws rather than reporting success.
+    Rejected instead because the patch would have to be applied by every caller that installs — the
+    Get Resources web view, `platform-scripture-editor`'s install util, and the Send/Receive path
+    that `adr`-adjacent ticket PT-4268 describes, which cannot reach the provider at all — and
+    because it only corrects the one resource this client just installed, leaving flags that changed
+    for any other reason stale. Recomputing on read asks the source of truth instead of inferring
+    from an action.
+  - **Re-fetch the catalog on install** — rejected: `FetchResourcesCore` is an unbounded network
+    download and would stall the list refresh.
+  - **Clear the flag optimistically in the web view** — rejected: leaves the cache wrong for Home and
+    the resource picker, and adds a second "caller must remember to notify" seam of exactly the kind
+    PT-4268 documents.
+  - **Send both revisions to TypeScript and compare there** — rejected: the installed half still
+    requires a C# call to read it out of the encrypted bundle, so it removes no round trip while
+    adding ~10 fields to the contract and a TypeScript copy of
+    `IsNewerThanCurrentlyInstalled`'s five-branch precedence chain (name, language,
+    `IsResourceProject`, `RequiresDBLCheck`, then revision / permissions checksum / manifest checksum
+    plus timestamp). That copy would drift silently when the ParatextData pin moves.
+- **Consequences:** Reads are authoritative for both derived flags, which makes the `DBL_RESOURCES`
+  data-update event dead weight rather than a missing link — PT-4268's stated premise ("the provider's
+  install path fires the event so the Get Resources UI refreshes") is already false, and whoever picks
+  it up should re-scope it against this decision. The recheck costs a live `ScrTextCollection` scan per
+  catalog entry on each `getCachedResources` call; that is strictly less work than the
+  `getDblResources` projection the front end called on every update event before the cache existed.
+  The provider gate is taken with a non-waiting `Monitor.TryEnter`, so a refresh never queues behind a
+  catalog download or an install: everything holding that gate runs far longer than a refresh should
+  block, so waiting could only delay the same empty answer. Left alone: a failed install surfaces as a
+  `NullReferenceException` from `IsPresent(null)` instead of the localized
+  `%getResources_errorInstallResource_installationFailed%` message, which is reachable only when
+  `InstalledScrText` is non-null but missing from the collection. Failures are reported, just poorly —
+  error-message quality, not a correctness hole in this decision.
+- **Source:** Bug report that Get Resources keeps showing "Update" after a resource is updated.
