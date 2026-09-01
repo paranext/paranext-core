@@ -1621,12 +1621,12 @@ async function main() {
    * Runs at startup and again on macOS re-activation after the last window closed (the quit-like
    * close path flushed the structure when that window went down).
    */
-  const restoreWindows = async () => {
+  const restoreWindows = async (): Promise<SettingTypes['platform.interfaceMode'] | undefined> => {
     const plan = await loadWindowLayouts();
     if (plan.kind === 'legacy') {
       const legacyWindow = await createWindow({ kind: 'legacy', boundsState: plan.boundsState });
       setMainWindowId(legacyWindow.id);
-      return;
+      return undefined;
     }
 
     // The main entry's window is created first — before the interface-mode read below, which can
@@ -1639,7 +1639,7 @@ async function main() {
       entry: entries[mainEntryIndex],
     });
     setMainWindowId(mainWindow.id);
-    if (entries.length <= 1) return;
+    if (entries.length <= 1) return undefined;
 
     // Simple mode is single-window: restore only the main window no matter how many entries the
     // structure holds. Same when the mode cannot be read — restoring too few is recoverable
@@ -1653,7 +1653,7 @@ async function main() {
         `Could not read platform.interfaceMode; restoring only the main window: ${getErrorMessage(e)}`,
       );
     }
-    if (interfaceMode !== 'power') return;
+    if (interfaceMode !== 'power') return interfaceMode;
 
     for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
       if (entryIndex !== mainEntryIndex) {
@@ -1663,6 +1663,7 @@ async function main() {
         await createWindow({ kind: 'entry', entryIndex, entry: entries[entryIndex] });
       }
     }
+    return interfaceMode;
   };
 
   app.on('window-all-closed', () => {
@@ -1824,8 +1825,14 @@ async function main() {
       // quit and the restore reads from disk, so this can fail — and a rejection would skip the
       // `activate` registration below, which is the only thing that brings windows back on macOS
       // after the last one closes.
+      let startupInterfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
       try {
-        await restoreWindows();
+        // The mode the restore ACTED on, rather than a second read of the same setting. Two reads
+        // with an await between them can disagree — the user can change the mode while the restore
+        // is still creating windows — and seeding the orchestration with the later one would leave
+        // it recording a mode whose window set was never built, which the same-value guard below
+        // would then never correct.
+        startupInterfaceMode = await restoreWindows();
       } catch (e) {
         logger.error(`Failed to restore windows at startup: ${getErrorMessage(e)}`);
       }
@@ -1837,16 +1844,6 @@ async function main() {
       // Subscribed once for the session rather than per window, like the macOS menubar above: the
       // mode is one global value, and the reaction is about the set of windows rather than about
       // any one of them.
-      let startupInterfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
-      try {
-        startupInterfaceMode = await settingsService.get('platform.interfaceMode');
-      } catch (e) {
-        // Left unknown rather than guessed. An unknown mode refuses no windows, which is the
-        // harmless direction; guessing simple would refuse a power user their windows.
-        logger.warn(
-          `Could not read the interface mode when wiring the window orchestration: ${getErrorMessage(e)}`,
-        );
-      }
       setModeSwitchClosePredicate(isClosingForModeSwitch);
       initializeModeSwitchOrchestration(
         {
@@ -1881,9 +1878,11 @@ async function main() {
             }
             await handleInterfaceModeChanged(newMode);
           },
-          // The initial value is already seeded above; retrieving it again here would look like a
-          // change and close the very windows the restore just created
-          { retrieveDataImmediately: false },
+          // Retrieved immediately, so a change made while the restore was still creating windows
+          // — after it read the mode, before this subscription existed — is caught and acted on
+          // rather than missed for the rest of the session. A value matching the seed costs
+          // nothing: the reaction returns at once when the mode has not changed.
+          { retrieveDataImmediately: true },
         );
       } catch (e) {
         logger.warn(`Failed to subscribe to interface mode changes: ${getErrorMessage(e)}`);
@@ -1894,7 +1893,9 @@ async function main() {
       // no-windows guard below does not catch that. A second concurrent restoreWindows run would
       // reset the layout persistence tracking mid-restore and create duplicate windows, so late
       // callers await the in-flight run instead of starting their own.
-      let restoreWindowsInFlight: Promise<void> | undefined;
+      let restoreWindowsInFlight:
+        | Promise<SettingTypes['platform.interfaceMode'] | undefined>
+        | undefined;
       app.on('activate', async () => {
         // On macOS it's common to re-create windows in the app when the
         // dock icon is clicked and there are no other windows open.

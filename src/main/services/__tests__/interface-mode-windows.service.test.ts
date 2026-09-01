@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
+  clearModeSwitchClose,
   getCachedInterfaceMode,
   handleInterfaceModeChanged,
   initializeModeSwitchOrchestration,
@@ -86,6 +87,19 @@ describe('reacting to an interface-mode change', () => {
 
     expect(isClosingForModeSwitch(2)).toBe(true);
     expect(isClosingForModeSwitch(1)).toBe(false);
+  });
+
+  test('a window that has gone is forgotten, so the set never outlives its windows', async () => {
+    initializeModeSwitchOrchestration(makeDeps(), 'power');
+    await handleInterfaceModeChanged('simple');
+    expect(isClosingForModeSwitch(2)).toBe(true);
+
+    clearModeSwitchClose(2);
+
+    expect(isClosingForModeSwitch(2)).toBe(false);
+    // The other window closed by the same switch is untouched: the set is cleared one window at a
+    // time, as each actually goes away
+    expect(isClosingForModeSwitch(3)).toBe(true);
   });
 
   test('with only the primary open, switching to simple closes nothing', async () => {
