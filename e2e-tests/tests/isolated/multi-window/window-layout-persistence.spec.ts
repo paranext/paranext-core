@@ -665,6 +665,11 @@ test.describe('window layout persistence', () => {
           height: Math.min(560, workArea.height - 220),
         },
       ];
+      // On a work area narrow enough that the clamp above collapses two or more widths onto
+      // WINDOW_MIN_WIDTH, the comment's premise fails silently and only the heights would still
+      // tell the entries apart. Fail loud instead.
+      const widths = sizes.map((size) => size.width);
+      expect(new Set(widths).size).toBe(widths.length);
 
       await placeWindowAndSettle(ctx.electronApp, mainId1, {
         x: workArea.x + 40,

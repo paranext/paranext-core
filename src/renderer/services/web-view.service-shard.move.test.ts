@@ -191,11 +191,10 @@ describe('captureAndCloseWebView', () => {
     expect(captured?.state).toEqual({ existing: true });
   });
 
-  test("capture leaves this window's stored state in place for a failed move to recover from", async () => {
-    const { getFullWebViewStateById, deleteFullWebViewStateById } = await import(
+  test("capture leaves this window's stored state in place", async () => {
+    const { deleteFullWebViewStateById } = await import(
       '@renderer/services/web-view-state.service'
     );
-    vi.mocked(getFullWebViewStateById).mockReturnValue({ existing: true });
     const { shard } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
 
     await shard.captureAndCloseWebView('abc-w2');
@@ -204,8 +203,6 @@ describe('captureAndCloseWebView', () => {
   });
 
   test('capture closes the tab it captured', async () => {
-    const { getFullWebViewStateById } = await import('@renderer/services/web-view-state.service');
-    vi.mocked(getFullWebViewStateById).mockReturnValue({});
     const { shard, removedTabIds } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
 
     // Ask for the unscoped id. The dock stand-in does not validate the id it is asked for, so it
@@ -217,8 +214,6 @@ describe('captureAndCloseWebView', () => {
   });
 
   test('capture strips the window scope off the captured id', async () => {
-    const { getFullWebViewStateById } = await import('@renderer/services/web-view-state.service');
-    vi.mocked(getFullWebViewStateById).mockReturnValue({});
     const { shard } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
 
     const captured = await shard.captureAndCloseWebView('abc-w2');

@@ -3676,10 +3676,12 @@ async function adoptWebView(
   // Seeded before the provider runs: the moved view's state must be in this window's storage
   // for the view to read, including when the provider does not echo state back. A provider
   // that returns state still wins — the open persists the provider's state after this
-  const stateToSeed = savedWebViewDefinition.state;
-  const wasStateSeeded = !!stateToSeed && Object.keys(stateToSeed).length > 0;
-  if (stateToSeed && wasStateSeeded)
-    setFullWebViewStateById(savedWebViewDefinition.id, stateToSeed);
+  const stateToSeed =
+    savedWebViewDefinition.state && Object.keys(savedWebViewDefinition.state).length > 0
+      ? savedWebViewDefinition.state
+      : undefined;
+  const wasStateSeeded = !!stateToSeed;
+  if (stateToSeed) setFullWebViewStateById(savedWebViewDefinition.id, stateToSeed);
   try {
     const adoptedId = await openOrReloadWebView(
       savedWebViewDefinition,

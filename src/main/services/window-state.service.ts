@@ -222,7 +222,6 @@ export function countWindowsThatCouldBeTheLastOne(): number {
   ).length;
 }
 
-/** Whether a window's renderer has registered its window service, so routing to it can succeed */
 /**
  * Whether this id names a window the tracker is holding.
  *
@@ -234,6 +233,7 @@ export function isWindowTracked(windowId: number): boolean {
   return trackedWindows.some((tracked) => tracked.windowId === windowId);
 }
 
+/** Whether a window's renderer has registered its window service, so routing to it can succeed */
 export function isWindowReady(windowId: number): boolean {
   return readyWindowIds.has(windowId);
 }
@@ -636,7 +636,7 @@ export function markWindowReady(windowId: number): void {
  * @param windowId Window that is on its way out
  */
 export function markWindowClosing(windowId: number): void {
-  if (!trackedWindows.some((tracked) => tracked.windowId === windowId)) {
+  if (!isWindowTracked(windowId)) {
     logger.warn(`Ignoring a closing mark for window ${windowId}, which is not tracked`);
     return;
   }
