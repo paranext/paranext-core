@@ -4564,21 +4564,37 @@ declare module 'shared/services/window.service-model' {
   import { DirectionFromTab } from 'shared/models/docking-framework.model';
   /**
    *
-   * This name identifies the window data provider on the papi. Each window registers a provider of
-   * its own under a window-scoped name, and this unscoped name resolves to a proxy that forwards to
-   * whichever window currently has focus. So finding the data provider by this name — with the
-   * useData hook, for instance — answers for the focused window, which is not necessarily the
-   * window you are in. Use `papi.window` to reach the caller's own window.
+   * This name identifies the window data provider on the papi. Every window registers a provider of
+   * its own under a window-scoped name — this name with the window's id appended — and what you get
+   * from this property depends on where you read it.
+   *
+   * From a renderer or a web view, it is that window's own scoped name, so the provider found by it
+   * — with the useData hook, for instance — both reports and changes the focus of the window you
+   * are in. Read it from `papi.window` and use it as it comes.
+   *
+   * From the extension host, which runs in no window, it is the bare unscoped name. That name
+   * resolves to whichever window the router is currently targeting, so two reads can answer for
+   * different windows. The bare {@link windowServiceProviderName} constant behaves the same way
+   * wherever it is imported. To act on one particular window from there,
+   * `platform.getFocusedWindowId` reports which window has focus.
    */
   export const windowServiceProviderName = 'platform.windowServiceDataProvider';
   export const windowServiceObjectToProxy: Readonly<{
     /**
      *
-     * This name identifies the window data provider on the papi. Each window registers a provider of
-     * its own under a window-scoped name, and this unscoped name resolves to a proxy that forwards to
-     * whichever window currently has focus. So finding the data provider by this name — with the
-     * useData hook, for instance — answers for the focused window, which is not necessarily the
-     * window you are in. Use `papi.window` to reach the caller's own window.
+     * This name identifies the window data provider on the papi. Every window registers a provider of
+     * its own under a window-scoped name — this name with the window's id appended — and what you get
+     * from this property depends on where you read it.
+     *
+     * From a renderer or a web view, it is that window's own scoped name, so the provider found by it
+     * — with the useData hook, for instance — both reports and changes the focus of the window you
+     * are in. Read it from `papi.window` and use it as it comes.
+     *
+     * From the extension host, which runs in no window, it is the bare unscoped name. That name
+     * resolves to whichever window the router is currently targeting, so two reads can answer for
+     * different windows. The bare {@link windowServiceProviderName} constant behaves the same way
+     * wherever it is imported. To act on one particular window from there,
+     * `platform.getFocusedWindowId` reports which window has focus.
      */
     dataProviderName: 'platform.windowServiceDataProvider';
   }>;
@@ -4677,7 +4693,13 @@ declare module 'shared/services/window.service-model' {
    *
    * Service for interacting with an application window. Every window hosts its own, so a call from a
    * renderer acts on the window it runs in. The extension host is in no window, so a call made there
-   * acts on whichever window has focus at that moment, which can differ between two calls.
+   * acts on whichever window the router is targeting at that moment, which can differ between two
+   * calls.
+   *
+   * The routing target is usually the focused window, but not always: a window that has taken OS
+   * focus does not become the target until it is ready and not closing, so a newly opened window can
+   * hold focus while calls still act on the previous one. `platform.getFocusedWindowId` is what
+   * tracks focus itself.
    */
   export type IWindowService = {
     /**
@@ -4732,10 +4754,10 @@ declare module 'shared/services/window.service-model' {
      * Subscribe to run a callback function when the current window's subject of focus is changed
      *
      * @param selector `undefined`. Does not have to be provided
-     * @param callback Function to run with the updated localized menuContent for this selector. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
+     * @param callback Function to run with the window's updated subject of focus. If there is an
+     *   error while retrieving the updated data, the function will run with a {@link PlatformError}
+     *   instead of the data. You can call {@link isPlatformError} on this value to check if it is an
+     *   error.
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
@@ -12728,7 +12750,13 @@ declare module '@papi/backend' {
      *
      * Service for interacting with an application window. Every window hosts its own, so a call from a
      * renderer acts on the window it runs in. The extension host is in no window, so a call made there
-     * acts on whichever window has focus at that moment, which can differ between two calls.
+     * acts on whichever window the router is targeting at that moment, which can differ between two
+     * calls.
+     *
+     * The routing target is usually the focused window, but not always: a window that has taken OS
+     * focus does not become the target until it is ready and not closing, so a newly opened window can
+     * hold focus while calls still act on the previous one. `platform.getFocusedWindowId` is what
+     * tracks focus itself.
      */
     window: IWindowService;
   };
@@ -12988,7 +13016,13 @@ declare module '@papi/backend' {
    *
    * Service for interacting with an application window. Every window hosts its own, so a call from a
    * renderer acts on the window it runs in. The extension host is in no window, so a call made there
-   * acts on whichever window has focus at that moment, which can differ between two calls.
+   * acts on whichever window the router is targeting at that moment, which can differ between two
+   * calls.
+   *
+   * The routing target is usually the focused window, but not always: a window that has taken OS
+   * focus does not become the target until it is ready and not closing, so a newly opened window can
+   * hold focus while calls still act on the previous one. `platform.getFocusedWindowId` is what
+   * tracks focus itself.
    */
   export const window: IWindowService;
 }
@@ -13593,7 +13627,13 @@ declare module '@papi/frontend' {
      *
      * Service for interacting with an application window. Every window hosts its own, so a call from a
      * renderer acts on the window it runs in. The extension host is in no window, so a call made there
-     * acts on whichever window has focus at that moment, which can differ between two calls.
+     * acts on whichever window the router is targeting at that moment, which can differ between two
+     * calls.
+     *
+     * The routing target is usually the focused window, but not always: a window that has taken OS
+     * focus does not become the target until it is ready and not closing, so a newly opened window can
+     * hold focus while calls still act on the previous one. `platform.getFocusedWindowId` is what
+     * tracks focus itself.
      */
     window: IWindowService;
     /**
@@ -13764,7 +13804,13 @@ declare module '@papi/frontend' {
    *
    * Service for interacting with an application window. Every window hosts its own, so a call from a
    * renderer acts on the window it runs in. The extension host is in no window, so a call made there
-   * acts on whichever window has focus at that moment, which can differ between two calls.
+   * acts on whichever window the router is targeting at that moment, which can differ between two
+   * calls.
+   *
+   * The routing target is usually the focused window, but not always: a window that has taken OS
+   * focus does not become the target until it is ready and not closing, so a newly opened window can
+   * hold focus while calls still act on the previous one. `platform.getFocusedWindowId` is what
+   * tracks focus itself.
    */
   export const window: IWindowService;
   /**
