@@ -137,6 +137,7 @@ import { createWindowEmptinessHandler } from '@main/services/window-emptiness.ut
 import {
   clearModeSwitchClose,
   getCachedInterfaceMode,
+  getSwitchGeneration,
   handleInterfaceModeChanged,
   initializeModeSwitchOrchestration,
   isAdditionalWindowRefusedInSimpleMode,
@@ -1645,16 +1646,6 @@ async function main() {
   });
 
   /**
-   * Create the app's windows from the persisted window-layouts structure: one window per saved
-   * entry, in entry order — except in simple interface mode, which is single-window, so only the
-   * main entry's window is created and the other entries stay preserved in the structure. With no
-   * usable structure (first run, or an upgrade from the single-window keeper), one legacy window is
-   * created whose renderer falls back to the pre-multi-window saved layout.
-   *
-   * Runs at startup and again on macOS re-activation after the last window closed (the quit-like
-   * close path flushed the structure when that window went down).
-   */
-  /**
    * The interface mode, read once a window exists to show the user something.
    *
    * Every path through the restore reports what it read, because the mode the restore ACTED on is
@@ -1676,6 +1667,16 @@ async function main() {
     }
   };
 
+  /**
+   * Create the app's windows from the persisted window-layouts structure: one window per saved
+   * entry, in entry order — except in simple interface mode, which is single-window, so only the
+   * main entry's window is created and the other entries stay preserved in the structure. With no
+   * usable structure (first run, or an upgrade from the single-window keeper), one legacy window is
+   * created whose renderer falls back to the pre-multi-window saved layout.
+   *
+   * Runs at startup and again on macOS re-activation after the last window closed (the quit-like
+   * close path flushed the structure when that window went down).
+   */
   const restoreWindows = async (): Promise<SettingTypes['platform.interfaceMode'] | undefined> => {
     const plan = await loadWindowLayouts();
     if (plan.kind === 'legacy') {
@@ -1948,6 +1949,10 @@ async function main() {
       let restoreWindowsInFlight:
         | Promise<SettingTypes['platform.interfaceMode'] | undefined>
         | undefined;
+      // The switch generation as of the moment the in-flight restore started reading the mode.
+      // Seeding below compares against it, so a real switch delivered while the restore was
+      // running is not clobbered by the restore's now-stale reading once it finishes.
+      let restoreGeneration = 0;
       app.on('activate', async () => {
         // On macOS it's common to re-create windows in the app when the
         // dock icon is clicked and there are no other windows open.
@@ -1959,13 +1964,15 @@ async function main() {
         // failure to restore windows is what this avoids.
         if (getWindows().length !== 0 || isAppShuttingDown()) return;
         try {
-          if (!restoreWindowsInFlight)
+          if (!restoreWindowsInFlight) {
+            restoreGeneration = getSwitchGeneration();
             restoreWindowsInFlight = restoreWindows().finally(() => {
               restoreWindowsInFlight = undefined;
             });
+          }
           // Seeded from this restore too. A session that reactivates with no windows reads the mode
           // again, and the orchestration has to agree with the window set this restore just built.
-          seedInterfaceMode(await restoreWindowsInFlight);
+          seedInterfaceMode(await restoreWindowsInFlight, restoreGeneration);
         } catch (e) {
           logger.error(`Failed to restore windows on activate: ${getErrorMessage(e)}`);
         }

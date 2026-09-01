@@ -566,7 +566,7 @@ export function setModeSwitchClosePredicate(predicate: (windowId: number) => boo
  * is the whole of what "the set of windows the power session had open" means — there is no separate
  * record of it, and none is needed.
  *
- * @returns Indexes into the persisted structure, in file order
+ * @returns Slot ids with no live window, in file order
  */
 export function getPreservedEntrySlotIds(): number[] {
   return fileSlots.filter((slot) => slot.windowId === undefined).map((slot) => slot.slotId);

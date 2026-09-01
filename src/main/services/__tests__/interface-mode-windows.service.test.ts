@@ -3,6 +3,7 @@ import { logger } from '@shared/services/logger.service';
 import {
   clearModeSwitchClose,
   getCachedInterfaceMode,
+  getSwitchGeneration,
   seedInterfaceMode,
   handleInterfaceModeChanged,
   initializeModeSwitchOrchestration,
@@ -85,6 +86,32 @@ describe('reacting to an interface-mode change', () => {
     // …and a real change away from the seeded mode is still acted on
     await handleInterfaceModeChanged('simple');
     expect(deps.closeWindow).toHaveBeenCalled();
+  });
+
+  test('a stale seed does not clobber a real switch that ran while it was in flight', async () => {
+    // The race this guards: a restore reads the mode, a genuine change arrives and is acted on
+    // before the restore's read is seeded, and the seed must not then overwrite what the real
+    // switch just recorded with its now-stale reading.
+    const deps = makeDeps({ getTrackedWindowIds: () => [1] });
+    initializeModeSwitchOrchestration(deps, 'power');
+    const generationBeforeRestore = getSwitchGeneration();
+
+    await handleInterfaceModeChanged('simple');
+    expect(getCachedInterfaceMode()).toBe('simple');
+
+    seedInterfaceMode('power', generationBeforeRestore);
+
+    expect(getCachedInterfaceMode()).toBe('simple');
+  });
+
+  test('a seed still applies when no switch ran since it was captured', async () => {
+    const deps = makeDeps({ getTrackedWindowIds: () => [1] });
+    initializeModeSwitchOrchestration(deps, undefined);
+    const generationBeforeRestore = getSwitchGeneration();
+
+    seedInterfaceMode('power', generationBeforeRestore);
+
+    expect(getCachedInterfaceMode()).toBe('power');
   });
 
   test('switching to simple closes every window but the primary', async () => {
@@ -177,6 +204,25 @@ describe('reacting to an interface-mode change', () => {
 
     expect(isClosingForModeSwitch(2)).toBe(false);
     expect(isClosingForModeSwitch(3)).toBe(true);
+  });
+
+  test('a window that fails to close does not take the rest of the batch with it', async () => {
+    // Window 2 comes before window 3 in the tracked order; if closing 2 throws, 3 must still be
+    // marked, hidden and asked to close rather than being left fully visible.
+    const deps = makeDeps({
+      closeWindow: vi.fn((windowId: number) => {
+        if (windowId === 2) throw new Error('window vanished');
+        return true;
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(deps.markWindowClosing).toHaveBeenCalledWith(3);
+    expect(deps.hideWindow).toHaveBeenCalledWith(3);
+    expect(deps.closeWindow).toHaveBeenCalledWith(3);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('2'));
   });
 
   test('a window is taken off screen as it is marked, before its close is requested', async () => {

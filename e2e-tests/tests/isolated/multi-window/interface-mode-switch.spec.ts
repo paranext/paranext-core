@@ -33,7 +33,6 @@
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   LaunchElectronAppOptions,
-  preConfigureSettings,
   sendPapiRequestOnce,
   waitForAppReady,
 } from '../../../fixtures/helpers';
@@ -123,29 +122,18 @@ async function getWindowSummaries(): Promise<WindowSummary[]> {
   );
 }
 
-test.use({ electronLaunchOptions: BASE_LAUNCH_OPTIONS });
+test.use({
+  electronLaunchOptions: BASE_LAUNCH_OPTIONS,
+  // Power mode is the starting point for every test here, and the startup restore recreates
+  // secondary windows only in Power mode.
+  interfaceMode: 'power',
+  seedSettings: { 'platform.firstRunComplete': true },
+});
 
 test.describe('switching interface mode', () => {
   // Every test flips the mode and waits for windows to close or be built again, which is a whole
   // renderer start per window — well past the default budget
   test.setTimeout(900_000);
-
-  let restoreSettings: (() => void) | undefined;
-
-  test.beforeAll(() => {
-    // Power mode is the starting point for every test here, and the startup restore recreates
-    // secondary windows only in Power mode. Restored afterwards so the developer's own settings
-    // survive the suite.
-    restoreSettings = preConfigureSettings({
-      'platform.firstRunComplete': true,
-      'platform.interfaceLanguage': ['en'],
-      'platform.interfaceMode': 'power',
-    });
-  });
-
-  test.afterAll(() => {
-    restoreSettings?.();
-  });
 
   test('switching to simple with two windows open leaves exactly the primary', async ({
     electronApp,
