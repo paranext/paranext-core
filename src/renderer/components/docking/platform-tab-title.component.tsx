@@ -15,11 +15,11 @@ import {
   type TabMenuContext,
 } from '@renderer/components/docking/tab-menu.util';
 import { EMPTY_WINDOW_LABEL_KEY } from '@renderer/components/docking/window-label.util';
+import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 import {
   collectContextMenuKeys,
   localizeContextMenuItems,
-  type OverlayContextMenuItem,
-} from '@renderer/components/overlays/overlay-context-menu.component';
+} from '@renderer/components/overlays/overlay-context-menu-localization.util';
 import { menuDataService } from '@shared/services/menu-data.service';
 import type { WindowSummary } from '@shared/services/window.service-model';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';

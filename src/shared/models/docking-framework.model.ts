@@ -376,7 +376,7 @@ export type PapiDockLayout = {
    * Used to tell whether moving a tab out of a window would leave that window with nothing at all,
    * which depends on every tab it holds, not only on its web views.
    *
-   * @returns The number of tabs open anywhere in the layout, docked or floated
+   * @returns The number of tabs open anywhere in the layout, whatever its docking state
    * @experimental
    */
   getOpenTabCount: () => number;

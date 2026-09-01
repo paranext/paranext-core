@@ -32,7 +32,11 @@ import {
   useRef,
   useState,
 } from 'react';
-import { isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { LocalizeKey } from 'platform-bible-utils';
+import {
+  collectContextMenuKeys,
+  localizeContextMenuItems,
+} from '@renderer/components/overlays/overlay-context-menu-localization.util';
 
 // ── Public Types ──
 
@@ -290,43 +294,6 @@ export function OverlayContextMenuPresentational({
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-// ── Localization Helpers ──
-
-/**
- * Recursively collects all LocalizeKey values from context menu items.
- *
- * Exported for the tab menu, which renders the same item union through its own ContextMenu
- * primitives and so has to resolve the same keys before it renders them.
- */
-export function collectContextMenuKeys(items: OverlayContextMenuItem[]): LocalizeKey[] {
-  return items.reduce<LocalizeKey[]>((keys, item) => {
-    if (item.type === 'separator') return keys;
-    if (isLocalizeKey(item.label)) keys.push(item.label);
-    if (item.type === 'submenu') keys.push(...collectContextMenuKeys(item.items));
-    return keys;
-  }, []);
-}
-
-/**
- * Recursively resolves LocalizeKey labels in context menu items using localized strings.
- *
- * Exported alongside {@link collectContextMenuKeys}; the two are used as a pair.
- */
-export function localizeContextMenuItems(
-  items: OverlayContextMenuItem[],
-  localizedStrings: LanguageStrings,
-): OverlayContextMenuItem[] {
-  return items.map((item) => {
-    if (item.type === 'separator') return item;
-    const label = isLocalizeKey(item.label)
-      ? (localizedStrings[item.label] ?? item.label)
-      : item.label;
-    if (item.type === 'submenu')
-      return { ...item, label, items: localizeContextMenuItems(item.items, localizedStrings) };
-    return { ...item, label };
-  });
 }
 
 // ── Store-Connected Component ──
