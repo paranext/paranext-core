@@ -293,6 +293,21 @@ describe('window state tracking', () => {
       expect(getTrackedWindows().map(({ windowId }) => windowId)).toEqual([firstId, secondId]);
     });
 
+    test('still hands back a durable id whose window is destroyed but not yet swept', () => {
+      // `removeWindow` runs from the `closed` handler, so a destroyed window stays in the tracked
+      // list for a moment after it is gone. A window restoring that entry in the gap must get its
+      // own id back: refusing it there would mint a fresh one and quietly detach the window from
+      // the per-window state its entry was keeping, over a conflict with a window that no longer
+      // exists.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const destroyed = { id: 1, isDestroyed: () => true } as BrowserWindow;
+      addWindow(destroyed, 'entry-durable-id');
+
+      const restoredId = addWindow(fakeWindow(2), 'entry-durable-id');
+
+      expect(restoredId).toBe('entry-durable-id');
+    });
+
     test('says which id it refused and what the window lost when it mints over a duplicate', () => {
       addWindow(fakeWindow(1), 'entry-durable-id');
 
