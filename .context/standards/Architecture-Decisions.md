@@ -3046,3 +3046,52 @@ step, no automation. Just a record.
   becomes primary later — PT-4278's window-manager service is the durable answer for that.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
+## adr-interface-mode-decides-the-window-set: The interface mode decides how many windows exist, and the persisted entry list is that set
+
+- **Date:** 2026-09-02
+- **Status:** Accepted
+- **Context:** Simple mode is single-window and power mode is not, but nothing in the main process
+  reacted to the mode changing: its only settings subscription was `platform.zoomFactor`, and every
+  `platform.interfaceMode` read there was one-shot. A live switch therefore reloaded each open
+  window's own dock independently and did nothing to the set of windows — so switching to simple
+  left secondary windows open in a mode whose chrome cannot reach them, and switching back brought
+  nothing back. The requirement is that switching to simple saves the power layout including
+  secondaries, closes them, and loads simple in one window, and that switching back reopens them.
+- **Decision:** The mode owns the window set, and the set needs no new record. `window-layouts.json`
+  already holds one entry per window, `handleWindowRemoved` can keep an entry while dropping its
+  runtime id, and a write emits every entry whether or not a window lives in it — so a preserved
+  entry IS a saved window with nothing on screen, and "the windows the power session had open" is
+  exactly the entries with no live window. Main subscribes to the mode once for the session and, on
+  a switch to simple, closes every window but the primary with its entry kept; on a switch back to
+  power, creates a window from each entry left behind. The primary is the survivor and its role does
+  not move, so the surviving window and the entry simple mode restores at startup are the same one
+  by construction. Simple mode also refuses to create a further window, so the mode cannot come to
+  hold windows it has no way to show. Only the primary window runs the renderer-side switch at all:
+  that switch starts a send/receive, applies the administrator's shared layout, records a
+  recently-opened project and writes an application-wide browser-storage cache, all of which a
+  window being closed by the same switch would duplicate — and could resolve to a different project
+  than the survivor when the cache is cold.
+- **Alternatives:** A new session-scoped record of "the power window set" — rejected: the entry list
+  already is it, and a second account of which windows exist is the thing that goes stale. Reusing
+  the quit latch to make the secondaries keep their entries, as the window-close rule does —
+  rejected: the application is not quitting, and setting that latch would both make window creation
+  refuse (breaking the switch back) and run the application's shutdown tasks. Having a renderer ask
+  main to close the other windows — rejected: which renderer, and what if two ask. Reading the
+  renderer's `isMainWindow` creation parameter for the primary check — rejected by
+  `adr-primary-window-owns-app-lifetime`, which reserves it for drawing the top-level menu. Making
+  the renderer switch idempotent in the extension host instead of gating it — rejected as a second
+  mechanism for one problem, and it would not have covered the cold-cache case.
+- **Consequences:** Closing secondaries on a switch to simple makes the colliding-web-view-id
+  precondition true rather than assumed: the simple-mode fast path loads a static layout whose tab
+  ids are identical in every window and are never window-scoped, and only single-window simple mode
+  keeps two windows from holding them at once. Two residuals are deliberate. The primary question
+  fails open — a question that cannot be answered, or a window list naming no primary at all, which
+  is what main reports while it falls back to the oldest live window — and on those paths the
+  duplicate side effects above are unchanged, because refusing the switch would leave the mode
+  changed with the dock never reloaded. And the layout-push refusal is scoped to windows closing for
+  a mode switch rather than to any closing window: a window is recorded as closing before it flushes
+  its layout, so the wider guard would lose a layout change made just before a quit. The
+  simple-to-power overwrite defect in the renderer's own save guards is out of scope and unchanged.
+- **Source:** PT-4286 "Interface-mode switching"; design spec in the PRD folder
+  (`2026-09-02-pt-4286-mode-switch-spec.md`); amends nothing in
+  `adr-primary-window-owns-app-lifetime`, which it depends on for the primary role.
