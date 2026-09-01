@@ -48,12 +48,15 @@ export type ModeSwitchDependencies = {
 let dependencies: ModeSwitchDependencies | undefined;
 
 /**
- * The mode as this process last saw it.
+ * The mode as this process last saw it, or `undefined` before the mode has been read at all.
  *
- * Seeded from the read the window restore already performs, so the first notification to arrive is
- * compared against a real value rather than treated as a change.
+ * Undefined is a real state rather than a placeholder: the window restore deliberately creates its
+ * first window BEFORE reading the mode, because that read can block on the extension host early in
+ * startup. Until the read lands, nothing here may claim the application is in simple mode — see
+ * {@link isAdditionalWindowRefusedInSimpleMode}, which would otherwise refuse the very windows the
+ * restore is creating.
  */
-let cachedInterfaceMode: InterfaceMode = 'simple';
+let cachedInterfaceMode: InterfaceMode | undefined;
 
 /**
  * Bumped once per switch, so a switch superseded by the user changing their mind stops rather than
@@ -79,18 +82,20 @@ const modeSwitchClosingWindowIds = new Set<number>();
  * has read the mode, so the seed is the value the restore acted on.
  *
  * @param deps Collaborators from the rest of the main process
- * @param initialMode Mode the window restore read
+ * @param initialMode Mode the startup read found, or `undefined` when it could not be read — in
+ *   which case the mode stays unknown until the first change arrives, and nothing is refused
+ *   meanwhile
  */
 export function initializeModeSwitchOrchestration(
   deps: ModeSwitchDependencies,
-  initialMode: InterfaceMode,
+  initialMode: InterfaceMode | undefined,
 ): void {
   dependencies = deps;
   cachedInterfaceMode = initialMode;
 }
 
-/** The mode as this process last saw it */
-export function getCachedInterfaceMode(): InterfaceMode {
+/** The mode as this process last saw it, or `undefined` if it has never been read */
+export function getCachedInterfaceMode(): InterfaceMode | undefined {
   return cachedInterfaceMode;
 }
 
@@ -122,11 +127,15 @@ export function clearModeSwitchClose(windowId: number): void {
  * the application with no window at all. A switch back to power is likewise never refused, because
  * it moves the cached mode before it creates anything.
  *
- * @param mode Mode the application is in
+ * A mode that is not yet known refuses nothing. The startup restore creates windows before the mode
+ * read it depends on can land, so treating an unread mode as simple would refuse a power session
+ * its own secondary windows — the one failure here that costs the user something.
+ *
+ * @param mode Mode the application is in, or `undefined` if it has not been read yet
  * @param liveWindowCount How many windows are already open
  */
 export function isAdditionalWindowRefusedInSimpleMode(
-  mode: InterfaceMode,
+  mode: InterfaceMode | undefined,
   liveWindowCount: number,
 ): boolean {
   return mode === 'simple' && liveWindowCount > 0;
@@ -221,7 +230,7 @@ export async function handleInterfaceModeChanged(newMode: InterfaceMode): Promis
  */
 export function resetForTesting(): void {
   dependencies = undefined;
-  cachedInterfaceMode = 'simple';
+  cachedInterfaceMode = undefined;
   switchGeneration = 0;
   modeSwitchClosingWindowIds.clear();
 }
