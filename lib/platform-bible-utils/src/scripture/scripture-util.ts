@@ -874,16 +874,16 @@ function areUsjContentsEqualExceptWhitespaceInternal(
       if (!isAtEndOfBlockMarker(b, bParent)) return false;
 
       // Trim the end of each string
-      // TODO: The worst segmentation cost left in this library, and it belongs with the
-      // construct-once `GraphemeString` work rather than here. `at` and `slice` each re-segment the
-      // whole string and the loop calls both per character removed, so trimming n characters costs
-      // 2n segmentations — ~256 ms per call on a 10,000-character string with 200 trailing spaces.
-      // Hoisting one `GraphemeString` across both loops fixes it; segmenting once with `toArray`
-      // and popping trailing white space clusters is equivalent and nearly as fast (~0.24 ms).
-      // Native `String` is not the fix. The trim compares whole clusters, and `stringz` groups a
-      // zero-width joiner with the character after it, so a trailing ZWJ+space is a single cluster
-      // that is not entirely white space and must survive — a `/\s+$/` replace trims it. Whether
-      // any caller can reach that difference is unproven: the guard above returns early on it.
+      // TODO: Delete this comment along with these loops when the construct-once `GraphemeString`
+      // work lands — its `trimEndOfGraphemes` already replaces them with a single segmentation.
+      // Kept until then only to record what it costs: `at` and `slice` each re-segment the whole
+      // string and the loop calls both per character removed, so trimming n characters costs 2n
+      // segmentations — ~256 ms per call on a 10,000-character string with 200 trailing spaces.
+      // Whatever replaces this must keep comparing whole clusters. `stringz` groups a zero-width
+      // joiner with the character after it, so a trailing ZWJ+space is one cluster that is not
+      // entirely white space and does not get trimmed; native `String` or a `/\s+$/` replace would
+      // trim it. (Whether a caller can reach that difference is unproven — the guard above returns
+      // early on those shapes.)
       let aTrimmed = aNormalized;
       while (isWhiteSpace(at(aTrimmed, -1) ?? '')) aTrimmed = slice(aTrimmed, 0, -1);
       let bTrimmed = bNormalized;
