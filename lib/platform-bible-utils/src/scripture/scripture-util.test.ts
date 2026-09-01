@@ -67,6 +67,7 @@ describe('getLocalizedIdFromBookNumber', () => {
   it('drops a chinese hyphenated suffix', async () => {
     const result = await getLocalizedIdFromBookNumber(1, 'zh-mo', mockGetLocalizedString);
     expect(result).toEqual('創世記');
+  });
 
   it('with chinese keeps only the part before a hyphen', async () => {
     const result = await getLocalizedIdFromBookNumber(40, 'zh-hans', mockGetLocalizedString);

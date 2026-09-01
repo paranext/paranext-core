@@ -6,7 +6,7 @@ import {
   USJ_TYPE,
 } from '@eten-tech-foundation/scripture-utilities';
 import { BookInfo, ScrollGroupId } from './scripture.model';
-import { isWhiteSpace, startsWith } from '../string-util';
+import { isWhiteSpace } from '../string-util';
 import { GraphemeString } from '../grapheme-string';
 import { LocalizeKey } from '../extension-contributions/menus.model';
 import { isString } from '../util';
