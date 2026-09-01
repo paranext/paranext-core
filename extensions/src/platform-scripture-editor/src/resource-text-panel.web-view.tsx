@@ -24,12 +24,9 @@ import { canPublishResourcePanelProjectIds } from './resource-panel-readiness.ut
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
-import {
-  filterResourcesByType,
-  resolveSelectedResource,
-  ResourceTextPanel,
-  RESOURCE_PANEL_STRING_KEYS,
-} from './resource-text-panel.component';
+import { filterResourcesByType, resolveSelectedResource } from './resource-reference.utils';
+import { ResourceTextPanel } from './resource-text-panel.component';
+import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -60,7 +57,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
-  const [localizedStrings] = useLocalizedStrings(RESOURCE_PANEL_STRING_KEYS);
+  const [localizedStrings] = useLocalizedStrings([...RESOURCE_PANEL_STRING_KEYS]);
 
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
@@ -273,7 +270,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   return (
     <ResourceTextPanel
       localizedStrings={localizedStrings}
-      hasProject={projectId !== undefined}
+      hasProject={!!projectId}
       resourceType={resourceType}
       effectiveResourcesState={effectiveResourcesState}
       dblResources={dblResources}

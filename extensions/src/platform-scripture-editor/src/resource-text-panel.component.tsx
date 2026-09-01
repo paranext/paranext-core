@@ -1,7 +1,5 @@
 import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
-// `Canon` is a RUNTIME value and `platform-bible-utils` re-exports it as a type only, so importing
-// it from there typechecks, builds, and is `undefined` at render.
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
@@ -18,8 +16,6 @@ import {
   DblResourceData,
   getErrorMessage,
   isPlatformError,
-  LocalizeKey,
-  LocalizedStringValue,
   PlatformError,
   ResourceType,
 } from 'platform-bible-utils';
@@ -31,11 +27,11 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import {
+  filterResourcesByType,
+  getRefId,
   getRefLabel,
-  isDblResourceReference,
-  isProjectReference,
+  resolveSelectedResource,
 } from './resource-reference.utils';
-import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import { LoadingView, RetryableErrorView } from './panel-state-views.component';
@@ -47,55 +43,30 @@ import {
   isMissingBookError,
   resolveResourceContentState,
 } from './platform-scripture-editor.utils';
-import {
-  RESOURCE_PANEL_TYPED_STRING_KEYS,
-  resolveResourcePanelStringKeys,
-} from './resource-panel-strings.utils';
+import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
+import type {
+  ResourcePanelLocalizedStringKey,
+  ResourcePanelLocalizedStrings,
+} from './resource-text-panel.const';
 import { selectTextConnection } from './select-dbl-resource';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 
-/**
- * Object containing all keys used for localization in the resource text panel. Pass these keys into
- * the Platform's localization hook (in the app) or `getLocalizedStrings` (in Storybook) and pass
- * the resulting localized strings into the `localizedStrings` prop.
- *
- * The per-resource-type keys come from `RESOURCE_PANEL_TYPED_STRING_KEYS` rather than being listed
- * again here. `useLocalizedStrings` seeds key-to-key defaults only for the keys in the array it is
- * given, so a hand-maintained second list is a silent hole: add a field to
- * `ResourcePanelStringKeys`, forget the array, and the render site reads `undefined` and announces
- * an empty message.
- */
-export const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
-  // Shared with the model text panel's blank-chapter branch. Distinct from the editable
-  // `..._emptyChapter_message%`, which sits beside an "Add chapter number" action these read-only
-  // panels must not offer. The missing-book wording is per resource type and comes from
-  // `RESOURCE_PANEL_TYPED_STRING_KEYS` below; a blank chapter reads the same either way.
-  '%webView_platformScriptureEditor_emptyChapter_messageResource%',
-  '%webView_resourcePanel_noProject%',
-  '%webView_resourcePanel_installing%',
-  '%webView_resourcePanel_selecting%',
-  '%webView_resourcePanel_installFailed%',
-  '%webView_resourcePanel_installFailedOffline%',
-  '%webView_resourcePanel_retry%',
-  '%webView_resourcePanel_settingsUnavailable%',
-  '%webView_resourcePanel_loading%',
-  '%webView_resourcePanel_catalogUnavailable%',
-  '%webView_resourcePanel_downloadResources%',
-  '%webView_resourcePanel_textUnavailable%',
-  ...RESOURCE_PANEL_TYPED_STRING_KEYS,
-];
-
-export type ResourcePanelLocalizedStrings = Partial<Record<LocalizeKey, LocalizedStringValue>>;
+export {
+  RESOURCE_PANEL_STRING_KEYS,
+  type ResourcePanelLocalizedStringKey,
+  type ResourcePanelLocalizedStrings,
+} from './resource-text-panel.const';
 
 /**
  * Falls back to the key itself, matching the idiom in `model-text-panel.component.tsx`. Falling
  * back to `''` instead would render an empty message region — a blank panel, which is the exact
  * failure these messages exist to remove.
  */
-const localize = (strings: ResourcePanelLocalizedStrings, key: LocalizeKey) => strings[key] ?? key;
+const localize = (strings: ResourcePanelLocalizedStrings, key: ResourcePanelLocalizedStringKey) =>
+  strings[key] ?? key;
 
 /**
  * Identifies the wrapper around `Editorial`. The wrapper, not the editor, is what a message or
@@ -103,83 +74,6 @@ const localize = (strings: ResourcePanelLocalizedStrings, key: LocalizeKey) => s
  * address this element.
  */
 export const RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID = 'resource-text-editor-container';
-
-/** Returns the `id` field for reference types that have one, or `undefined` for others. */
-export function getRefId(ref: EffectiveResourceReference | undefined): string | undefined {
-  if (ref && (isDblResourceReference(ref) || isProjectReference(ref))) {
-    return ref.id;
-  }
-  return undefined;
-}
-
-/**
- * The references this panel can show, given the kind of resource it was opened for.
- *
- * Pure so that the web view can reach the same answer this component renders from: the web view
- * needs the resolved resource for its own PAPI-side concerns (the chapter subscription, the tab
- * title, Ctrl+F, and publishing navigable project ids), and this is the first half of reaching it.
- */
-export function filterResourcesByType(
-  effectiveResources: EffectiveResourceReference[] | undefined,
-  dblResources: DblResourceData[],
-  resourceType: ResourceType,
-): EffectiveResourceReference[] {
-  if (!effectiveResources) return [];
-  return effectiveResources.filter((ref) => {
-    if (isDblResourceReference(ref)) {
-      return dblResources.find((r) => r.dblEntryUid === ref.id)?.type === resourceType;
-    }
-    if (isProjectReference(ref)) {
-      // ProjectReferences only appear in the Bible Texts tab
-      return resourceType === 'ScriptureResource';
-    }
-    return false;
-  });
-}
-
-/** What the panel is showing, resolved from the selection against the DBL catalog. */
-export type SelectedResource = {
-  /** The chosen reference, or the first available one when the selection names nothing present. */
-  selectedRef: EffectiveResourceReference | undefined;
-  /** The catalog entry backing `selectedRef`, when it is a DBL resource. */
-  dblMatch: DblResourceData | undefined;
-  /**
-   * The project of the resource this panel DISPLAYS — not the panel's own `projectId`, which is the
-   * container project whose reference list is shown. `undefined` until a DBL resource is
-   * installed.
-   */
-  resourceProjectId: string | undefined;
-  /** Display name of the resolved resource, for the tab title. */
-  resourceShortName: string | undefined;
-};
-
-/**
- * Resolves the selection to the resource actually on screen. Pure, and the second half of what the
- * web view needs — see {@link filterResourcesByType}.
- */
-export function resolveSelectedResource(
-  filteredResources: EffectiveResourceReference[],
-  selectedResourceId: string | undefined,
-  dblResources: DblResourceData[],
-): SelectedResource {
-  const selectedRef =
-    filteredResources.find((r) => getRefId(r) === selectedResourceId) ?? filteredResources[0];
-
-  let dblMatch: DblResourceData | undefined;
-  let resourceProjectId: string | undefined;
-  let resourceShortName: string | undefined;
-
-  if (isDblResourceReference(selectedRef)) {
-    dblMatch = findCachedDblResource(selectedRef, dblResources);
-    resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
-    if (dblMatch?.installed) resourceShortName = dblMatch.displayName;
-  } else if (isProjectReference(selectedRef)) {
-    resourceProjectId = selectedRef.id;
-    resourceShortName = selectedRef.name;
-  }
-
-  return { selectedRef, dblMatch, resourceProjectId, resourceShortName };
-}
 
 type ResourceSelectorDropdownProps = {
   filteredResources: EffectiveResourceReference[];
@@ -277,10 +171,10 @@ export type ResourceTextPanelProps = {
   /** Records a new selection. */
   onSelectResource: (id: string | undefined) => void;
   /**
-   * The chapter read for {@link SelectedResource.resourceProjectId}, exactly as the data layer
-   * returned it — USJ, a `PlatformError`, or `undefined` before anything has arrived. Which message
-   * that implies is derived here rather than by the caller, so the app and Storybook share one
-   * answer.
+   * The chapter read for the `resourceProjectId` {@link resolveSelectedResource} returns, exactly as
+   * the data layer returned it — USJ, a `PlatformError`, or `undefined` before anything has
+   * arrived. Which message that implies is derived here rather than by the caller, so the app and
+   * Storybook share one answer.
    */
   usjPossiblyError: Usj | PlatformError | undefined;
   /**
