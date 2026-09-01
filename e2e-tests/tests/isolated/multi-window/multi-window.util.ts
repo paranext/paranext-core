@@ -439,14 +439,7 @@ export async function closeWindowLikeAUser(
 ): Promise<void> {
   const windowId = getWindowIdOfPage(page);
   const pageClosed = page.waitForEvent('close', { timeout: 30_000 });
-  await electronApp.evaluate(
-    ({ BrowserWindow }, { id }) => {
-      const win = BrowserWindow.fromId(id);
-      if (!win) throw new Error(`No BrowserWindow with id ${id}`);
-      win.close();
-    },
-    { id: windowId },
-  );
+  await withPlatformWindow(electronApp, windowId, (win) => win.close());
   await pageClosed;
 }
 

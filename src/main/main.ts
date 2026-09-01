@@ -577,9 +577,8 @@ async function main() {
     // asks where routed calls go, which is the window the user was last working in; the oldest
     // tracked window would be an arbitrary choice that also repoints routing there by focusing it.
     // Translated through the tracker rather than read off the window: `getFocusedWindow()` answers
-    // with a BrowserWindow, whose `id` is Electron's and means nothing to `focusWindow`. Both are
-    // numbers, so passing it straight through would raise whichever window happened to hold the
-    // platform id that Electron's number collides with — or none at all.
+    // with a BrowserWindow, whose `id` is Electron's own and names nothing the platform knows.
+    // `focusWindow` takes a platform id, and the two are different values for the same window.
     const focusedWindow = BrowserWindow.getFocusedWindow();
     const windowIdToRaise =
       (focusedWindow ? getWindowIdOf(focusedWindow) : undefined) ?? getTargetWindowId();

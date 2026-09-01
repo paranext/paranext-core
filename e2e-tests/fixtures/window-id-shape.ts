@@ -7,9 +7,10 @@
  * imported because the e2e project resolves none of the app's path aliases;
  * `src/shared/utils/window-id-shape.test.ts` fails if the copy ever drifts from the original.
  *
- * Hex groups only, and deliberately NOT RFC-4122-strict: `newGuid()` produces this shape without
- * constraining the variant nibble, and ids of its making are already on disk, so an RFC-strict
- * pattern would silently stop matching real window ids.
+ * Hex groups only, and deliberately NOT RFC-4122-strict: the first builds to persist a window id
+ * minted it with `newGuid()`, which produces this shape without constraining the variant nibble,
+ * and profiles carrying those ids are in use — so an RFC-strict pattern would silently stop
+ * matching about half of what they hold.
  *
  * This lives in its own module, importing nothing, so that the drift guard can read it without
  * pulling Playwright into the unit test suite's module graph.

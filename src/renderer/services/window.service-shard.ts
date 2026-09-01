@@ -1,8 +1,9 @@
 /**
  * Window service shard — the window service implementation for THIS window. Registered as a data
- * provider under a window-scoped name (e.g. "platform.windowServiceDataProvider-1") so several
- * windows can coexist; the main process's `window.service-router.ts` publishes the generic name and
- * relays reads and updates from whichever window is the current routing target.
+ * provider under a window-scoped name (e.g.
+ * "platform.windowServiceDataProvider-f81d4fae-7dec-11d0-a765-00a0c91e6bf6") so several windows can
+ * coexist; the main process's `window.service-router.ts` publishes the generic name and relays
+ * reads and updates from whichever window is the current routing target.
  *
  * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
  * service shard".
@@ -590,9 +591,9 @@ export async function initialize(): Promise<void> {
           const shardAttributes = getServiceShardAttributes(windowId);
 
           // Register this window's shard under a window-scoped name (e.g.
-          // "platform.windowServiceDataProvider-1") so multiple renderers can coexist. The main
-          // process's window service router registers the generic name and relays from whichever
-          // window is the current routing target.
+          // "platform.windowServiceDataProvider-f81d4fae-7dec-11d0-a765-00a0c91e6bf6") so multiple
+          // renderers can coexist. The main process's window service router registers the generic
+          // name and relays from whichever window is the current routing target.
           //
           // The object type and window id are how the router finds this shard, so the
           // window-scoped name stays an internal detail of the registration.

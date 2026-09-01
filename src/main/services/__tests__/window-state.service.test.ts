@@ -183,9 +183,10 @@ describe('window state tracking', () => {
   });
 
   describe('where a window falls in creation order', () => {
-    // The router's two owner tie-breaks read this instead of comparing ids, because a GUID carries
-    // no order. Both call sites fall back with `?? 0`, so "untracked answers undefined" is part of
-    // the contract rather than an implementation detail.
+    // The router's owner tie-break reads this instead of comparing ids, because a GUID carries no
+    // order. It falls back with `?? Number.MAX_SAFE_INTEGER`, sorting a window the tracker no
+    // longer knows last rather than first, so "untracked answers undefined" is part of the
+    // contract rather than an implementation detail.
     test('orders windows by when they were added, and forgets one that is removed', () => {
       const first = fakeWindow(1);
       const firstId = addWindow(first);

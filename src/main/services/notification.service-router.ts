@@ -1,9 +1,10 @@
 /**
  * Service router for the notification service. Registers under the generic "NotificationService"
  * network object name and routes calls to a window's notification service shard (e.g.
- * "NotificationService-1"). A new notification goes to the focused window, so one raised by a
- * background task appears where the user is looking rather than in whichever renderer happened to
- * start first; dismissing one goes to the window that is actually showing it.
+ * "NotificationService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6"). A new notification goes to the
+ * focused window, so one raised by a background task appears where the user is looking rather than
+ * in whichever renderer happened to start first; dismissing one goes to the window that is actually
+ * showing it.
  *
  * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
  * service shard".

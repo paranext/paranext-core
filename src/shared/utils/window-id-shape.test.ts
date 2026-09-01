@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'vitest';
 import { WINDOW_ID_SHAPE_PATTERN_SOURCE } from './util';
-// The e2e project cannot resolve `@shared/*` (it has no path aliases and does not import from
-// `src`), so it hand-mirrors this pattern as `WINDOW_ID_SHAPE_SOURCE`. Importing that mirror here
-// (by relative path, since it lives outside `src`) is what lets this test catch it drifting from
-// the source it copies. Read from the mirror's own import-free module rather than from
-// `fixtures/helpers`, which would pull Playwright into this suite's module graph to compare a string.
+// The e2e project hand-mirrors this pattern as `WINDOW_ID_SHAPE_SOURCE` because it cannot import
+// the original at all: its tsconfig declares no path aliases, and reaching the source by relative
+// path would not help either, since `util.ts` itself imports `@shared/global-this.model` and that
+// alias is what fails to resolve. Importing the mirror here (by relative path, since it lives
+// outside `src`) is what lets this test catch it drifting from the source it copies. Read from the
+// mirror's own import-free module rather than from `fixtures/helpers`, which would pull Playwright
+// into this suite's module graph to compare a string.
 import { WINDOW_ID_SHAPE_SOURCE } from '../../../e2e-tests/fixtures/window-id-shape';
 
 describe('window id shape mirror', () => {

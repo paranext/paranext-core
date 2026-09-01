@@ -25,12 +25,15 @@ const mocks = vi.hoisted(() => {
   const shardAnnouncementListeners: ShardAnnouncementListeners = { create: [], dispose: [] };
   return {
     getTargetWindowId: vi.fn(),
-    // Ids are minted from a numeric counter (stringified) in this slice, so a numeric comparison
-    // recovers the creation-order ranking the real function reads from the tracked list. A vi.fn so
-    // a test can make it answer `undefined`, which is what the real one does for an untracked id.
-    getWindowCreationRank: vi.fn<(windowId: string) => number | undefined>((windowId: string) =>
-      Number(windowId),
-    ),
+    // This slice names its windows with stringified counters, so a numeric comparison recovers the
+    // creation-order ranking the real function reads from the tracked list. Anything else is a
+    // window this double does not know, and answers `undefined` exactly as the real one does for
+    // an untracked id — never `NaN`, which compares false against everything and would leave a
+    // sort silently doing nothing. A vi.fn so a test can override it.
+    getWindowCreationRank: vi.fn<(windowId: string) => number | undefined>((windowId: string) => {
+      const rank = Number(windowId);
+      return Number.isNaN(rank) ? undefined : rank;
+    }),
     getReadyWindowIds: vi.fn(),
     getUnreachableWindowIds: vi.fn(),
     getAbandonedWindowIds: vi.fn(),
