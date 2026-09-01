@@ -159,11 +159,8 @@ class MenuDataDataProviderEngine
     return true;
   }
 
-  /** Apply the interface-mode filter to a tab menu, leaving an absent one absent */
-  #filteredTabMenu(
-    tabMenu: Localized<SingleColumnMenu> | undefined,
-  ): Localized<SingleColumnMenu> | undefined {
-    if (!tabMenu) return undefined;
+  /** Apply the interface-mode filter to a tab menu */
+  #filteredTabMenu(tabMenu: Localized<SingleColumnMenu>): Localized<SingleColumnMenu> {
     return { ...tabMenu, items: filterItemsForInterfaceMode(tabMenu.items, this.currentMode) };
   }
 

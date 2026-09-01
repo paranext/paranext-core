@@ -987,3 +987,36 @@ test('Tab menu defaults reach a web view that opted out of the other defaults', 
   // this is the tab channel behaving differently rather than includeDefaults being ignored
   expect(optOutMenu.contextMenu).toBeUndefined();
 });
+
+test('a base document with no default tab menu still folds, rather than losing the contribution', () => {
+  // `defaultWebViewTabMenu` is optional in the schema, and menus.model.test.ts pins that a document
+  // omitting it is legal. When it is absent and the web view contributes no tab menu of its own,
+  // the fold has nothing on either side — and an empty tab menu is `{ groups: {}, items: [] }`,
+  // the shape menu-data.service-host.ts already falls back to. `{}` fails the output schema's
+  // `required: ['groups', 'items']`, which rolls the whole contribution back: the extension would
+  // lose its main menu and every other channel with it, and contribution.service swallows the
+  // throw, so nothing on screen would explain it.
+  const docWithoutDefaultTabMenu = {
+    mainMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewContextMenu: { groups: {}, items: [] },
+    webViewMenus: {},
+  };
+
+  const menuCombiner = new MenuDocumentCombiner(docWithoutDefaultTabMenu);
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('someExtension', {
+      webViewMenus: { 'someExtension.someWebView': { includeDefaults: false } },
+    }),
+  ).not.toThrow();
+
+  // The combiner's output type is intentionally opaque; read the one entry this asserts on
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const output = menuCombiner.rawOutput as unknown as {
+    webViewMenus: Record<string, { tabMenu?: unknown }>;
+  };
+  expect(output.webViewMenus['someExtension.someWebView'].tabMenu).toEqual({
+    groups: {},
+    items: [],
+  });
+});

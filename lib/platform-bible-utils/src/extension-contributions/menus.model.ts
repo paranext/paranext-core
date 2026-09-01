@@ -147,7 +147,14 @@ export type MultiColumnMenu = {
 
 /** Menus for one single web view */
 export type WebViewMenu = {
-  /** Indicates whether the platform default menus should be included for this webview */
+  /**
+   * Indicates whether the platform default top and context menus should be included for this web
+   * view.
+   *
+   * This does not govern the tab menu. Its items act on the tab frame rather than on the web view's
+   * contents, so the platform's tab items are included whatever this says — see
+   * {@link WebViewMenu.tabMenu}.
+   */
   includeDefaults: boolean | undefined;
   /** Menu that opens when you click on the top left corner of a tab */
   topMenu: MultiColumnMenu | undefined;
@@ -164,6 +171,11 @@ export type WebViewMenu = {
    * itself rather than a registered PAPI command — `platform.floatTab` moves the tab into a float
    * panel within its own window, which never leaves the renderer. Treat a `command` here as the
    * name of the action, not as something to invoke through the command service.
+   *
+   * The platform's own group here sits at order 100, so choose another order for yours. A
+   * single-column menu buckets every group together for the duplicate-order check, so a second
+   * group at 100 throws — and because a failed contribution is rolled back whole, that would cost
+   * this extension its entire `menus.json`, not just its tab items.
    *
    * @experimental This menu is unstable and may change or disappear without notice
    */
