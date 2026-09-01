@@ -1,4 +1,3 @@
-import { includes } from 'platform-bible-utils';
 import {
   ERROR_STRINGS,
   MULTI_TEMPLATE_NAME,
@@ -7,6 +6,11 @@ import {
   SINGLE_TEMPLATE_URL,
   execCommand,
 } from './git.util';
+
+// This script runs as `extensions`' postinstall, before the repo's dependency tree is guaranteed
+// complete. Do not import `platform-bible-utils` (or anything that loads it) here: its entry point
+// requires `@eten-tech-foundation/scripture-utilities`, whose staged folder may not exist yet on a
+// fresh clone — the import would abort the whole install. Node built-ins and plain code only.
 
 (async () => {
   let exitCode = 0;
@@ -17,7 +21,7 @@ import {
       await execCommand(`git remote add ${name} ${url}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
-        if (includes(error.message.toLowerCase(), errorString.toLowerCase())) {
+        if (error.message.toLowerCase().includes(errorString.toLowerCase())) {
           console.log(`Remote ${name} already exists. This is likely not a problem.`);
         } else {
           console.error(`Error on adding remote ${name}: ${error.message}`);

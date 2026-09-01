@@ -118,7 +118,6 @@ jobs:
 
       - name: Install packages and build
         run: |
-          npm run stage-dev-packages
           npm ci
           npm run build
 

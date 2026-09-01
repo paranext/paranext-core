@@ -7,14 +7,25 @@
  * into this repo's tree, so the editor is free to add, bump, or drop dependencies without any
  * consumer restating them.
  *
- * **Run this before `npm install`; do not rely on the `preinstall` hook alone.** npm reads the
- * `file:` targets' manifests from the on-disk state it saw at startup, and in a workspace repo it
- * runs the root's `preinstall` only after the workspaces' own install scripts — so on a fresh clone
- * `extensions`' `postinstall` fails resolving the editor through `platform-bible-utils` before this
- * script ever runs. The hook is still wired up because it keeps an existing checkout's staged
- * copies current on every install; it simply cannot bootstrap one from nothing. Every workflow here
- * stages explicitly before `npm ci`, and the README tells developers to do the same on a new
- * clone.
+ * This runs as the root `preinstall` to keep the staged copies current on every install. It cannot
+ * make the staged packages resolvable within the same run that first creates them — npm resolves
+ * the dependency tree from the on-disk state it saw at startup — but nothing here needs to handle
+ * that: `npm ci` installs the closure recorded in `package-lock.json` regardless, and for `npm
+ * install` on a fresh clone the root postinstall (`postinstall.ts`) detects the gap and re-runs the
+ * install once.
+ *
+ * Staging is skipped when the staged output is already current — each staged folder carries a
+ * `.staged-from` marker naming the source commit it was built from — so repeat installs don't pay
+ * for a pnpm install and build. The marker is local state, never committed (`dev-packages/` is
+ * gitignored); deleting it just makes the next run rebuild.
+ *
+ * Modes:
+ *
+ * - Default: fetch and check out the revision pinned in `dev-packages.json` (refusing to touch a
+ *   checkout with uncommitted changes), then build and stage if the marker is stale.
+ * - `--local`: build and stage whatever is currently checked out, working changes and all, skipping
+ *   the origin/revision handling and the freshness marker. This is the inner loop for editor
+ *   development (`npm run build:editor`).
  */
 
 const { execSync } = require('child_process');
@@ -23,6 +34,12 @@ const path = require('path');
 
 const REPO_ROOT: string = path.resolve(__dirname, '..', '..');
 const STAGING_ROOT: string = path.resolve(REPO_ROOT, 'dev-packages', 'staging');
+
+/** File inside each staged folder recording the source commit the staged copy was built from. */
+const STAGED_FROM_MARKER = '.staged-from';
+
+/** Build from the current checkout state instead of the pinned revision; always rebuild. */
+const isLocalMode: boolean = process.argv.includes('--local');
 
 // #region Types — keep in sync with dev-packages.schema.json (both must be updated together)
 
@@ -87,7 +104,10 @@ function devRepoEnv() {
   // command here inherits it — and Volta's pnpm shim then refuses to resolve Node at all ("Node is
   // not available"). Dropping it lets pnpm run directly instead of falling back to `volta run`,
   // which would nest Volta inside Volta and crash the nx build outright.
-  delete env._VOLTA_TOOL_RECURSION;
+  // Bracket access because the name is Volta's, not an identifier of ours — dot access trips
+  // no-underscore-dangle, and there is no third spelling.
+  // eslint-disable-next-line dot-notation
+  delete env['_VOLTA_TOOL_RECURSION'];
   return env;
 }
 
@@ -159,7 +179,7 @@ function checkoutRevision(repo: DevRepo): void {
   const status = execSync('git status --porcelain', { cwd: repoPath, encoding: 'utf8' });
   if (status.trim().length > 0) {
     throw new Error(
-      `The ${repo.folder} repo has working changes:\n${status}\nWe don't want to accidentally overwrite any changes. Please go handle your changes and try again when there are no more working changes.`,
+      `The ${repo.folder} repo has working changes:\n${status}\nWe don't want to accidentally overwrite any changes. Please go handle your changes and try again when there are no more working changes.\n\nIf you are actively developing ${repo.folder}, build your working state with \`npm run build:editor\` instead.`,
     );
   }
 
@@ -182,6 +202,30 @@ function checkoutRevision(repo: DevRepo): void {
       `Detached HEAD in ${repo.folder} (tag or commit hash). Skipping pull, using checked-out revision.`,
     );
   }
+}
+
+/**
+ * Identifies what a staged copy would be built from right now: the source HEAD commit, with a
+ * `-dirty` suffix when the working tree has uncommitted changes so a locally built copy never
+ * passes as a clean one.
+ */
+function getSourceStamp(repoPath: string): string {
+  const head = execSync('git rev-parse HEAD', { cwd: repoPath, encoding: 'utf8' }).trim();
+  const status = execSync('git status --porcelain', { cwd: repoPath, encoding: 'utf8' });
+  return status.trim().length > 0 ? `${head}-dirty` : head;
+}
+
+/**
+ * Whether every package of this repo is already staged from exactly the currently checked-out
+ * commit. A dirty source tree never matches, so `--local` builds are always superseded by the next
+ * regular run.
+ */
+function isStagingCurrent(repo: DevRepo, sourceStamp: string): boolean {
+  if (sourceStamp.endsWith('-dirty')) return false;
+  return repo.devPackages.every((devPackage) => {
+    const markerPath = path.resolve(STAGING_ROOT, devPackage.stagingFolder, STAGED_FROM_MARKER);
+    return fs.existsSync(markerPath) && fs.readFileSync(markerPath, 'utf8').trim() === sourceStamp;
+  });
 }
 
 /**
@@ -247,16 +291,20 @@ function resolveWorkspaceSpecifiers(
  * The build runs through the package's own `prepublishOnly` script so the staged copy matches what
  * the package would publish. That script also rewrites the package's `package.json` in place — most
  * importantly dropping the `development` conditional export, which points at raw TypeScript source
- * that our bundlers cannot consume — so it is restored afterward, exactly as the package's own
- * `postpublish` script does.
+ * that our bundlers cannot consume — so its exact prior content is restored afterward. A byte
+ * snapshot rather than `git restore`, because in `--local` mode the developer may have their own
+ * uncommitted edits to that manifest, which a git restore would wipe along with the script's.
  */
 function stagePackage(
   repo: DevRepo,
   devPackage: DevPackage,
   stagingFolderByName: Map<string, string>,
+  sourceStamp: string,
 ): void {
   const packageDir = path.resolve(getDevRepoPath(repo.folder), devPackage.packagePath);
   const stagingDir = path.resolve(STAGING_ROOT, devPackage.stagingFolder);
+  const manifestPath = path.resolve(packageDir, 'package.json');
+  const manifestSnapshot = fs.readFileSync(manifestPath);
 
   console.log(`Building ${devPackage.nxProject}...`);
   try {
@@ -271,38 +319,52 @@ function stagePackage(
       fs.copyFileSync(path.resolve(packageDir, file), destination);
     });
     resolveWorkspaceSpecifiers(stagingDir, stagingFolderByName);
+    fs.writeFileSync(path.resolve(stagingDir, STAGED_FROM_MARKER), `${sourceStamp}\n`);
   } finally {
     // Restore the manifest `prepublishOnly` rewrote, whether or not staging succeeded, so the dev
-    // repo is never left with working changes (which would block the next run's checkout).
-    execSync('git restore package.json', { stdio: 'inherit', cwd: packageDir });
+    // repo is never left with stray changes (which would block the next run's checkout).
+    fs.writeFileSync(manifestPath, manifestSnapshot);
   }
 }
 
 function stageDevPackages(): void {
-  console.log('Staging dev packages for file: consumption...');
+  console.log(`Staging dev packages for file: consumption${isLocalMode ? ' (local mode)' : ''}...`);
 
   try {
     DEV_REPOS.forEach((repo) => {
-      cloneRepoIfNeeded(repo);
-      checkoutRevision(repo);
+      if (isLocalMode) {
+        if (!fs.existsSync(getDevRepoPath(repo.folder)))
+          throw new Error(
+            `--local requires an existing ${repo.folder} checkout (in dev-packages/ or as a sibling of this repo), but none was found. Run a regular install first to clone it.`,
+          );
+      } else {
+        cloneRepoIfNeeded(repo);
+        checkoutRevision(repo);
+      }
+
+      const repoPath = getDevRepoPath(repo.folder);
+      const sourceStamp = getSourceStamp(repoPath);
+
+      if (!isLocalMode && isStagingCurrent(repo, sourceStamp)) {
+        console.log(`${repo.folder} is already staged from ${sourceStamp}; skipping build.`);
+        return;
+      }
 
       console.log(`Running pnpm install in ${repo.folder}...`);
-      runPnpm('install', getDevRepoPath(repo.folder));
+      runPnpm('install', repoPath);
 
       // Map every staged package's npm name to its staging folder so a package that depends on a
       // sibling in the same repo can be pointed at that sibling's staged copy.
       const stagingFolderByName = new Map<string, string>(
         repo.devPackages.map((devPackage) => {
-          const manifestPath = path.resolve(
-            getDevRepoPath(repo.folder),
-            devPackage.packagePath,
-            'package.json',
-          );
+          const manifestPath = path.resolve(repoPath, devPackage.packagePath, 'package.json');
           return [JSON.parse(fs.readFileSync(manifestPath, 'utf8')).name, devPackage.stagingFolder];
         }),
       );
 
-      repo.devPackages.forEach((devPackage) => stagePackage(repo, devPackage, stagingFolderByName));
+      repo.devPackages.forEach((devPackage) =>
+        stagePackage(repo, devPackage, stagingFolderByName, sourceStamp),
+      );
     });
 
     console.log('Successfully staged dev packages');

@@ -48,7 +48,6 @@ jobs:
 
       - name: Install packages
         run: |
-          npm run stage-dev-packages
           npm ci
 
       - name: Bump repo versions

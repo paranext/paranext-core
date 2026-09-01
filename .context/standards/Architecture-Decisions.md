@@ -2690,12 +2690,18 @@ step, no automation. Just a record.
   this repo's tree, so the editor's dependency set is authoritative and no consumer restates it.
   Staging must run before npm resolves, because the staged folders are the resolution targets; the
   script is therefore plain Node importing only the standard library, since no devDependency exists
-  yet. It is wired to `preinstall` so an existing checkout re-stages on every install, but a fresh
-  clone needs `npm run stage-dev-packages` first: npm reads the `file:` targets' manifests from the
-  on-disk state it saw at startup, and in a workspace repo it runs the root's `preinstall` only
-  after the workspaces' own install scripts — so `extensions`' `postinstall` fails resolving the
-  editor through `platform-bible-utils` before staging ever runs. Every workflow stages explicitly
-  before `npm ci`.
+  yet. It is wired to `preinstall` so an existing checkout re-stages on every install (skipping
+  the build when a `.staged-from` marker shows the staged copy already matches the source commit).
+  npm resolves the tree from the on-disk state it saw at startup, so the run that first creates the
+  staged folders cannot also install their dependencies; the root postinstall (`postinstall.ts`)
+  closes that gap by detecting the incomplete closure and re-running the install once, guarded
+  against recursion. `npm ci` needs no re-run: it installs the closure recorded in
+  `package-lock.json`. The complement: when the editor's own dependencies change, core's lockfile
+  must be refreshed (`npm install` + commit) — `npm ci` fails loudly on the mismatch when staging
+  is present, and the postinstall check fails with instructions when it is not. Install-path
+  scripts (workspace lifecycle scripts, which run before the root's) must not import
+  `platform-bible-utils` or anything else that loads the editor packages, since those may not
+  exist yet mid-install.
   pnpm `workspace:` specifiers are rewritten to `file:` paths at the sibling staged package, keeping
   the whole graph on the build we just made. yalc is removed.
 - **Alternatives:** **Keep yalc, declare the editor's dependencies here** — rejected: correct, but
