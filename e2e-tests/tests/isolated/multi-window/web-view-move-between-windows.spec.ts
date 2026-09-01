@@ -360,13 +360,9 @@ test.describe('moving a web view between windows', () => {
     );
     logStep(`window ${window1Id} no longer holds ${webViewIdBeforeMove}`);
 
-    // The window it left has nothing of its own to show, and it is the PRIMARY — so it docks Home
-    // rather than closing, whatever else is open: moving its last tab out does the same thing as
-    // closing that tab. Its own freshly minted Home, whose id can be neither the moved web view's
-    // nor the one the fallback layout used.
-    //
-    // The last-window-standing branch is covered by `window-emptiness.util.test.ts`; an e2e case
-    // for it would need a non-primary source window.
+    // The window it left has nothing of its own to show. It docks Home rather than closing,
+    // whatever else is open, showing its own freshly minted Home tab — an id that is neither the
+    // moved web view's nor the one the fallback layout used.
     await expectWindowDockHasOnlyHomeTab(mainPage);
     const [dockedHomeWebViewId] = await getHeldWebViewIds(mainPage);
     expect(dockedHomeWebViewId).toBeDefined();

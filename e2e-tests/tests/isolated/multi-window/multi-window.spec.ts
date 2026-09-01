@@ -582,9 +582,9 @@ test.describe('multi-window lifecycle', () => {
     // Close a SECONDARY window the way a user does. It hosts neither app-global service — both live
     // in main — so nothing about this close should be special.
     //
-    // Not the primary, which this used to close: closing the primary while other windows are open
-    // now asks whether to close the whole application, so "the primary goes and the others stay" is
-    // no longer a state the app can reach. `window-close-rule.spec.ts` owns that path.
+    // Not the primary: closing the primary while other windows are open asks whether to close the
+    // whole application, so "the primary goes and the others stay" is not a state the app can
+    // reach. `window-close-rule.spec.ts` owns that path.
     const beforeWindowCloseMark = output.mark();
     await closeWindowLikeAUser(electronApp, page3);
     logStep('window 3 closed');
