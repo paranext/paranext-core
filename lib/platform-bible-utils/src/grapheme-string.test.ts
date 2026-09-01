@@ -435,12 +435,7 @@ describe('native parity: split', () => {
     const { grapheme, native } = nativeParity(
       SPLIT_STRINGS,
       pairs(SEPARATORS, LIMITS),
-      // `split` is overloaded so a literal separator never yields `undefined` entries; a caller
-      // holding a `string | RegExp` union has to pick the overload explicitly.
-      (graphemeString, separator, limit) =>
-        separator instanceof RegExp
-          ? graphemeString.split(separator, limit)
-          : graphemeString.split(separator, limit),
+      (graphemeString, separator, limit) => graphemeString.split(separator, limit),
       (str, separator, limit) => str.split(separator, limit),
       // A regular-expression separator is written against ASCII and would not match a
       // transliterated fixture. String separators get an astral pass of their own below.
@@ -453,10 +448,7 @@ describe('native parity: split', () => {
     const { grapheme, native } = nativeParity(
       SPLIT_STRINGS,
       singles(SEPARATORS),
-      (graphemeString, separator) =>
-        separator instanceof RegExp
-          ? graphemeString.split(separator)
-          : graphemeString.split(separator),
+      (graphemeString, separator) => graphemeString.split(separator),
       (str, separator) => str.split(separator),
       // Same reason as above: the matrix includes regular-expression separators.
       ASCII_ONLY,
@@ -842,6 +834,26 @@ describe('derived values keep the parent segmentation', () => {
     // padding is not on this list: it returns text, so there is no child to carry segmentation
   });
 
+  it('accepts a GraphemeString as a split separator', () => {
+    // The overload advertises it, so pin it: the separator's own segmentation is irrelevant, only
+    // its text is, and the result must match splitting on that text.
+    const mixed = new GraphemeString(MIXED);
+    expect(mixed.split(new GraphemeString('𐐷')).map(String)).toEqual(mixed.split('𐐷').map(String));
+    expect(new GraphemeString('a,b,c').split(new GraphemeString(',')).map(String)).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+    // A separator that is itself a derived instance carries a parent's cluster array.
+    const derivedComma = new GraphemeString('x,y').slice(1, 2);
+    expect(new GraphemeString('a,b').split(derivedComma).map(String)).toEqual(['a', 'b']);
+    // And the limit still applies.
+    expect(new GraphemeString('a,b,c').split(new GraphemeString(','), 2).map(String)).toEqual([
+      'a',
+      'b',
+    ]);
+  });
+
   it('accepts a GraphemeString as a search needle', () => {
     const graphemeString = new GraphemeString(MIXED);
     expect(graphemeString.indexOf(new GraphemeString('At'))).toEqual(5);
@@ -857,17 +869,13 @@ describe('derived values keep the parent segmentation', () => {
 describe('indexOfClosestClosingCurlyBrace', () => {
   const { indexOfClosestClosingCurlyBrace } = testingGraphemeStringUtils;
   it('finds an unescaped closing brace', () =>
-    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('a{b}c'), 0, false)).toEqual(3));
+    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('a{b}c'), 0)).toEqual(3));
   it('skips an escaped brace when searching for an unescaped one', () =>
-    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('a\\}b}c'), 0, false)).toEqual(4));
+    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('a\\}b}c'), 0)).toEqual(4));
   it('returns -1 when no unescaped brace exists', () =>
-    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('abc'), 0, false)).toEqual(-1));
+    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('abc'), 0)).toEqual(-1));
   it('returns -1 for a negative index', () =>
-    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('a{b}c'), -1, false)).toEqual(-1));
-  it('finds an escaped brace and returns the brace index (not the backslash)', () =>
-    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('a\\}c'), 0, true)).toEqual(2));
-  it('returns the escaped brace when starting exactly on it', () =>
-    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('a\\}c'), 2, true)).toEqual(2));
+    expect(indexOfClosestClosingCurlyBrace(new GraphemeString('a{b}c'), -1)).toEqual(-1));
 
   describe('over a string mixing escapes and graphemes', () => {
     const curlyString =
@@ -876,62 +884,31 @@ describe('indexOfClosestClosingCurlyBrace', () => {
       'Thi\\{s👮🏽‍♀️{is}👨‍👩‍👧‍👦\\}a {stri\\}ng}!';
     const curly = new GraphemeString(curlyString);
 
-    it('gets the closest un-escaped curly brace', () => {
-      let result = indexOfClosestClosingCurlyBrace(curly, 0, false);
-      expect(result).toBe(10);
-      result = indexOfClosestClosingCurlyBrace(curly, 4, false);
-      expect(result).toBe(10);
-      result = indexOfClosestClosingCurlyBrace(curly, 10, false);
-      expect(result).toBe(10);
-      result = indexOfClosestClosingCurlyBrace(curly, 11, false);
-      expect(result).toBe(25);
-      result = indexOfClosestClosingCurlyBrace(curly, 16, false);
-      expect(result).toBe(25);
-      result = indexOfClosestClosingCurlyBrace(curly, 23, false);
-      expect(result).toBe(25);
-      result = indexOfClosestClosingCurlyBrace(curly, 25, false);
-      expect(result).toBe(25);
+    it('finds the closest unescaped brace from any starting point', () => {
+      // Indexes are graphemes, so the emoji count as one each — that is what makes 10 and 25 the
+      // answers rather than their UTF-16 offsets.
+      expect(indexOfClosestClosingCurlyBrace(curly, 0)).toBe(10);
+      expect(indexOfClosestClosingCurlyBrace(curly, 4)).toBe(10);
+      expect(indexOfClosestClosingCurlyBrace(curly, 10)).toBe(10);
+      expect(indexOfClosestClosingCurlyBrace(curly, 11)).toBe(25);
+      expect(indexOfClosestClosingCurlyBrace(curly, 16)).toBe(25);
+      expect(indexOfClosestClosingCurlyBrace(curly, 23)).toBe(25);
+      expect(indexOfClosestClosingCurlyBrace(curly, 25)).toBe(25);
     });
 
-    it('gets the closest escaped curly brace', () => {
-      let result = indexOfClosestClosingCurlyBrace(curly, 0, true);
-      expect(result).toBe(13);
-      result = indexOfClosestClosingCurlyBrace(curly, 4, true);
-      expect(result).toBe(13);
-      result = indexOfClosestClosingCurlyBrace(curly, 10, true);
-      expect(result).toBe(13);
-      result = indexOfClosestClosingCurlyBrace(curly, 11, true);
-      expect(result).toBe(13);
-      result = indexOfClosestClosingCurlyBrace(curly, 13, true);
-      expect(result).toBe(13);
-      result = indexOfClosestClosingCurlyBrace(curly, 16, true);
-      expect(result).toBe(22);
-      result = indexOfClosestClosingCurlyBrace(curly, 22, true);
-      expect(result).toBe(22);
+    it('steps over the escaped braces at 13 and 22 rather than reporting them', () => {
+      // `\\}` at grapheme 13 and 22 are escapes the caller wants preserved, not terminators.
+      expect(indexOfClosestClosingCurlyBrace(curly, 13)).toBe(25);
+      expect(indexOfClosestClosingCurlyBrace(curly, 22)).toBe(25);
     });
 
-    it('returns -1 when out of bounds or no more curly braces are found', () => {
+    it('returns -1 when out of bounds or no more unescaped braces are found', () => {
       const strLength = curly.length;
-      let result = indexOfClosestClosingCurlyBrace(curly, -1, true);
-      expect(result).toBe(-1);
-      result = indexOfClosestClosingCurlyBrace(curly, -1, false);
-      expect(result).toBe(-1);
-      result = indexOfClosestClosingCurlyBrace(curly, -10, true);
-      expect(result).toBe(-1);
-      result = indexOfClosestClosingCurlyBrace(curly, -10, false);
-      expect(result).toBe(-1);
-      result = indexOfClosestClosingCurlyBrace(curly, strLength, true);
-      expect(result).toBe(-1);
-      result = indexOfClosestClosingCurlyBrace(curly, strLength, false);
-      expect(result).toBe(-1);
-      result = indexOfClosestClosingCurlyBrace(curly, strLength + 5, true);
-      expect(result).toBe(-1);
-      result = indexOfClosestClosingCurlyBrace(curly, strLength + 5, false);
-      expect(result).toBe(-1);
-      result = indexOfClosestClosingCurlyBrace(curly, 26, false);
-      expect(result).toBe(-1);
-      result = indexOfClosestClosingCurlyBrace(curly, 23, true);
-      expect(result).toBe(-1);
+      expect(indexOfClosestClosingCurlyBrace(curly, -1)).toBe(-1);
+      expect(indexOfClosestClosingCurlyBrace(curly, -10)).toBe(-1);
+      expect(indexOfClosestClosingCurlyBrace(curly, strLength)).toBe(-1);
+      expect(indexOfClosestClosingCurlyBrace(curly, strLength + 5)).toBe(-1);
+      expect(indexOfClosestClosingCurlyBrace(curly, 26)).toBe(-1);
     });
   });
 });

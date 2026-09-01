@@ -547,6 +547,21 @@ export class GraphemeString {
    *   participate in its match, as native does.
    */
   split(separator: RegExp, splitLimit?: number): (GraphemeString | undefined)[];
+  /**
+   * Splitting on a separator whose kind is not known statically — a `string | RegExp` union, which
+   * is what the free `split` in `string-util` declares. TypeScript matches a union argument against
+   * one overload at a time rather than distributing it, so without this a caller holding that union
+   * gets `TS2769` and has to narrow at every call.
+   *
+   * @param separator Literal string, GraphemeString, or regular expression to split on.
+   * @param splitLimit Maximum number of entries to return, converted with `ToUint32`.
+   * @returns The pieces in order. An entry can be `undefined` only when the separator turns out to
+   *   be a regular expression with a capture group that did not participate.
+   */
+  split(
+    separator: string | GraphemeString | RegExp,
+    splitLimit?: number,
+  ): (GraphemeString | undefined)[];
   split(
     separator?: string | GraphemeString | RegExp,
     splitLimit?: number,
@@ -818,22 +833,12 @@ function rawNeedle(searchString: string | GraphemeString): string {
 }
 
 /**
- * Index of the closest closing curly brace at/after `index`, or -1. When `escaped`, targets `\}`
- * and returns the index of the brace (not the backslash).
+ * Index of the closest _unescaped_ closing curly brace at or after `index`, or -1. A brace preceded
+ * by a backslash is skipped, since that is an escape the caller wants preserved rather than a
+ * placeholder terminator.
  */
-function indexOfClosestClosingCurlyBrace(
-  graphemeString: GraphemeString,
-  index: number,
-  escaped: boolean,
-): number {
+function indexOfClosestClosingCurlyBrace(graphemeString: GraphemeString, index: number): number {
   if (index < 0) return -1;
-  if (escaped) {
-    if (graphemeString.charAt(index) === '}' && graphemeString.charAt(index - 1) === '\\')
-      return index;
-    const closeIndex = graphemeString.indexOf('\\}', index);
-    return closeIndex >= 0 ? closeIndex + 1 : closeIndex;
-  }
-
   let i = index;
   const len = graphemeString.length;
   while (i < len) {
@@ -886,7 +891,7 @@ function buildReplacementParts<T = unknown>(
     switch (graphemeString.charAt(i)) {
       case '{':
         if (prev !== '\\') {
-          const closeCurlyBraceIndex = indexOfClosestClosingCurlyBrace(graphemeString, i, false);
+          const closeCurlyBraceIndex = indexOfClosestClosingCurlyBrace(graphemeString, i);
           if (closeCurlyBraceIndex >= 0) {
             const replacerKey = graphemeString.slice(i + 1, closeCurlyBraceIndex).toString();
             // Own properties only. `in` would walk the prototype chain, so `{toString}` in a
