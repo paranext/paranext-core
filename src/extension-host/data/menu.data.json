@@ -73,6 +73,14 @@
         "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
       },
       {
+        "label": "%mainMenu_helpInfo_showTourAgain%",
+        "localizeNotes": "Application main menu > Help > Show the tour again",
+        "group": "platform.helpInfo",
+        "order": 4,
+        "command": "platform.showOnboardingTour",
+        "hiddenInterfaceModes": ["power"]
+      },
+      {
         "label": "%mainMenu_feedbackForm_textArea%",
         "localizeNotes": "Application main menu > Help > Submit an idea",
         "group": "platform.helpFeedback",
