@@ -472,6 +472,78 @@ describe('graphemes are the unit, not UTF-16 code units', () => {
   });
 });
 
+describe('UAX #29 clusters across writing systems', () => {
+  /**
+   * Each case is [description, text, expected clusters]. These are the scripts where a reader's
+   * idea of "a character" and a naive code-point walk disagree, so they are what a conformant
+   * segmenter buys over an emoji-aware regex.
+   */
+  const CASES: [string, string, string[]][] = [
+    ['pointed Hebrew', 'בְּרֵאשִׁית', ['בְּ', 'רֵ', 'א', 'שִׁ', 'י', 'ת']],
+    ['Hebrew shin/sin dots', 'שׁשׂ', ['שׁ', 'שׂ']],
+    ['Arabic with harakat', 'مَرْحَبً', ['مَ', 'رْ', 'حَ', 'بً']],
+    ['Syriac with vowel points', 'ܣܰܘܪ', ['ܣܰ', 'ܘ', 'ܪ']],
+    ['polytonic Greek (NFD)', 'ἄν'.normalize('NFD'), ['ἄ'.normalize('NFD'), 'ν']],
+    ['Devanagari conjunct', 'हिन्दी', ['हि', 'न्दी']],
+    ['Devanagari ksha ligature', 'क्षि', ['क्षि']],
+    ['Bengali conjunct', 'ক্ষ', ['ক্ষ']],
+    ['Thai base with vowel and tone mark', 'กุ๊', ['กุ๊']],
+    ['Thai leading vowel stays its own character', 'ไทย', ['ไ', 'ท', 'ย']],
+    [
+      'decomposed Hangul jamo',
+      '한국'.normalize('NFD'),
+      ['한'.normalize('NFD'), '국'.normalize('NFD')],
+    ],
+    ['Latin with stacked combining marks', 'à́̂̃̄̅', ['à́̂̃̄̅']],
+  ];
+
+  it.each(CASES)('segments %s', (_description, text, expected) => {
+    expect(new GraphemeString(text).toArray()).toEqual(expected);
+    expect(new GraphemeString(text).length).toEqual(expected.length);
+  });
+
+  it('never cuts a combining mark off its base', () => {
+    // Slicing pointed Hebrew must carry each consonant's points along with it.
+    const bereshit = new GraphemeString('בְּרֵאשִׁית');
+    expect(bereshit.slice(0, 2).toString()).toEqual('בְּרֵ');
+    expect(bereshit.slice(-1).toString()).toEqual('ת');
+    expect(bereshit.at(3)).toEqual('שִׁ');
+  });
+
+  it('reports search hits only on cluster boundaries', () => {
+    // The bare consonant shin appears inside 'שִׁ' but not as a whole cluster, so it is not a hit.
+    const bereshit = new GraphemeString('בְּרֵאשִׁית');
+    expect(bereshit.indexOf('שׁ')).toEqual(-1);
+    expect(bereshit.indexOf('שִׁ')).toEqual(3);
+  });
+});
+
+describe('CRLF is a single cluster (UAX #29 GB3)', () => {
+  it('counts a Windows line ending as one character', () => {
+    expect(new GraphemeString('\r\n').toArray()).toEqual(['\r\n']);
+    expect(new GraphemeString('a\r\nb').toArray()).toEqual(['a', '\r\n', 'b']);
+  });
+
+  it('keeps a lone CR and a lone LF separate from what follows', () => {
+    expect(new GraphemeString('\ra').toArray()).toEqual(['\r', 'a']);
+    expect(new GraphemeString('\n\n').toArray()).toEqual(['\n', '\n']);
+  });
+
+  it('does not find a bare line feed inside a CRLF, so splitting on it must use a regex', () => {
+    // This is the one behavioral consequence of conformance worth pinning down: because searches
+    // are boundary-aligned and `\r\n` is one cluster, `'\n'` is not a separator inside it.
+    const windowsText = new GraphemeString('one\r\ntwo\r\nthree');
+    expect(windowsText.indexOf('\n')).toEqual(-1);
+    expect(windowsText.split('\n').map(String)).toEqual(['one\r\ntwo\r\nthree']);
+
+    // A regex matching the whole terminator is the correct way to split lines.
+    expect(windowsText.split(/\r?\n/).map(String)).toEqual(['one', 'two', 'three']);
+
+    // Unix-style text is unaffected either way.
+    expect(new GraphemeString('one\ntwo').split('\n').map(String)).toEqual(['one', 'two']);
+  });
+});
+
 describe('hostile and cross-realm arguments', () => {
   it('a `u`-flagged separator that snaps back into a surrogate pair still terminates', () => {
     // A `u`/`v` regex rounds a `lastIndex` landing inside a surrogate pair back to the pair's

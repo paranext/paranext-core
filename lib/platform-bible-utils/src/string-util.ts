@@ -8,10 +8,10 @@ import { GraphemeString, toUint32 } from './grapheme-string';
  * out-of-range arguments — but counts and indexes by Unicode grapheme cluster (what a reader would
  * call a character) rather than by UTF-16 code unit.
  *
- * "Grapheme cluster" here means what `stringz` produces, which is emoji-aware but not UAX #29
- * conformant: it splits `\r\n`, Indic conjuncts, Thai spacing marks, and decomposed Hangul Jamo
- * where a conformant segmenter would not. See {@link GraphemeString} for the full list and for why
- * the faster, less correct segmenter is the deliberate choice.
+ * "Grapheme cluster" here means UAX #29 extended grapheme clusters, as `unicode-segmenter`
+ * implements them. Note that `\r\n` is one cluster, so `split(text, '\n')` will not break
+ * Windows-style lines apart — use a regex matching the whole terminator. See {@link GraphemeString}
+ * for the details.
  *
  * Each one segments its input on every call, because a bare string is all it is given. Doing more
  * than one operation on the same string? Construct a single `GraphemeString` and call its methods:

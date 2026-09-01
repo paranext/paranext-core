@@ -1,4 +1,4 @@
-import { toArray as stringzToArray } from 'stringz';
+import { splitGraphemes } from 'unicode-segmenter/grapheme';
 import { isString } from './util';
 
 /** Largest value `ToUint32` can produce — the limit native `String.prototype.split` uses by default. */
@@ -116,21 +116,16 @@ const offsetsByInstance = new WeakMap<GraphemeString, number[]>();
  *
  * ## Segmentation fidelity
  *
- * Clusters come from `stringz`, which is emoji-aware rather than UAX #29 conformant. It correctly
- * keeps ZWJ sequences, skin-tone modifiers, regional-indicator flags, precomposed Hangul, and
- * combining marks on Latin together as one cluster. It splits four things a conformant segmenter
- * would keep whole:
+ * Clusters come from `unicode-segmenter`, which implements UAX #29 extended grapheme clusters
+ * against Unicode 17. `length` counts what a literate reader of the script would call characters —
+ * for emoji and Latin, and equally for pointed Hebrew, vocalized Arabic and Syriac, Indic
+ * conjuncts, Thai, and Hangul written as decomposed Jamo.
  *
- * - `\r\n`, which UAX #29 rule GB3 makes a single cluster
- * - Indic conjuncts formed with a virama — Devanagari `क्षि`, Tamil `நி`, Bengali `ক্ত`
- * - Thai and other spacing combining marks — `กำ`
- * - Hangul written as decomposed Jamo rather than precomposed syllables
- *
- * So `length` counts what a reader would call characters for Latin and emoji, and overcounts for
- * the scripts above. `Intl.Segmenter` is conformant and is the obvious swap, but it is ~10x slower
- * on Latin text and, more importantly, it makes `\r\n` one cluster — which would stop `'\n'` from
- * being a boundary-aligned separator and silently break line splitting on any Windows-authored
- * file. Changing segmenters is therefore a behavioral decision, not a drop-in upgrade.
+ * One consequence deserves attention, because it is the one place a conformant segmenter changes
+ * the answer a caller might be relying on: **`\r\n` is a single cluster** (UAX #29 rule GB3). Since
+ * searches only report boundary-aligned hits, `'\n'` is therefore NOT findable inside a `\r\n`, and
+ * {@link split} on `'\n'` will not break Windows-style lines apart. Split lines with a regex that
+ * matches the whole terminator (`/\r?\n/`) rather than the bare line feed.
  *
  * @example
  *
@@ -166,9 +161,9 @@ export class GraphemeString {
    */
   constructor(string: string) {
     this.str = string;
-    // PERF: stringz segmentation is the one expensive step, and the empty string never needs it.
-    // This also makes the seed instance in `fromSegmented` free.
-    this.graphemes = string === '' ? [] : stringzToArray(string);
+    // PERF: segmentation is the one expensive step, and the empty string never needs it. This also
+    // makes the seed instance in `fromSegmented` free.
+    this.graphemes = string === '' ? [] : Array.from(splitGraphemes(string));
   }
 
   /**
@@ -181,8 +176,8 @@ export class GraphemeString {
   }
 
   /**
-   * Build an instance from text plus its already-computed segmentation, skipping stringz entirely.
-   * This is how derived instances avoid re-parsing.
+   * Build an instance from text plus its already-computed segmentation, skipping the segmenter
+   * entirely. This is how derived instances avoid re-parsing.
    *
    * Private on purpose: the two arguments carry an invariant that nothing validates —
    * `graphemes.join('') === string`. A mismatched pair yields an instance whose `length`, offsets,
@@ -690,13 +685,13 @@ export class GraphemeString {
   private buildPadding(targetLength: number, padString?: string): string[] {
     const maxLength = toLength(targetLength);
     if (maxLength <= this.graphemes.length) return [];
-    // A non-string filler is coerced exactly as native's `ToString` does, before it reaches stringz
+    // A non-string filler is coerced exactly as native's `ToString` does, before it is segmented
     // — which otherwise throws a bare "A string is expected as input" naming neither method nor
     // argument.
     const filler = padString === undefined ? ' ' : `${padString}`;
     // The pad string is segmented here rather than taken pre-segmented: it is tiny and never a
     // hot-loop culprit, so accepting a raw string is the ergonomic choice.
-    const fillGraphemes = stringzToArray(filler);
+    const fillGraphemes = Array.from(splitGraphemes(filler));
     // An empty filler pads nothing at any target, as native's `StringPad` does. Answered before the
     // ceiling below, which exists to bound an allocation this path never makes.
     if (fillGraphemes.length === 0) return [];

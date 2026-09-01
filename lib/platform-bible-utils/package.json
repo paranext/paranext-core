@@ -63,7 +63,7 @@
     "async-mutex": "^0.5.0",
     "dompurify": "^3.4.0",
     "jsonpath-plus": "^10.3.0",
-    "stringz": "^2.1.0"
+    "unicode-segmenter": "^0.17.3"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
