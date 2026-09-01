@@ -60,8 +60,14 @@ export function useInterfaceMode(): [
   const mode: InterfaceMode = isPlatformError(modePossiblyError) ? 'simple' : modePossiblyError;
 
   useEffect(() => {
+    // Cache only a mode the setting actually resolved to. `mode` reports 'simple' whenever the read
+    // is a `PlatformError` — including while `useData`'s runaway guard is throttled — and that
+    // fallback is meant to last as long as the error does. Persisting it outlives the error: this
+    // cache is the startup seed `computeInitialStatus` reads, so a Power user would be routed
+    // through the first-run gate on the next launch.
+    if (isPlatformError(modePossiblyError)) return;
     writeCachedInterfaceMode(mode);
-  }, [mode]);
+  }, [mode, modePossiblyError]);
 
   return [mode, setMode];
 }

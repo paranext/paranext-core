@@ -1,3 +1,8 @@
+// Two functions here — `useRunawayLoopGuard` and the generated `useDataForDataProvider` — are
+// covered by `react-hooks/rules-of-hooks` only because of their names: the rule analyzes functions
+// named `use*` or PascalCase and ignores everything else. Renaming either, or replacing it with an
+// anonymous arrow, silently turns hook-order linting off for its body, which is the class of bug
+// `adr-runaway-data-hook-guard` records.
 import {
   DataProviderSetter,
   DataProviderSubscriber,
@@ -25,16 +30,16 @@ import { logger } from '@shared/services/logger.service';
  * arbitrary, chosen by observing a dev environment; the guard trips ON this many events, so this
  * many is one more than it tolerates.
  */
-const RUNAWAY_EVENTS_PER_WINDOW = 100;
+export const RUNAWAY_EVENTS_PER_WINDOW = 100;
 /** Rolling window the runaway guard measures over */
-const RUNAWAY_WINDOW_MS = 1000;
+export const RUNAWAY_WINDOW_MS = 1000;
 /**
  * How long the guard stays tripped before it re-arms and resubscribes. Long enough that a genuine
  * loop is throttled to a small fraction of its free-running rate, short enough that a legitimate
  * burst — a Send/Receive or bulk import — heals without the user closing the tab. See
- * `ADR-runaway-data-hook-guard` for why the trip expires rather than latching.
+ * `adr-runaway-data-hook-guard` for why the trip expires rather than latching.
  */
-const RUNAWAY_COOLDOWN_MS = 5000;
+export const RUNAWAY_COOLDOWN_MS = 5000;
 
 /** The two loop shapes {@link useRunawayLoopGuard} watches, counted independently */
 type RunawayCounters = {
@@ -57,8 +62,14 @@ type RunawayCounters = {
  * Renders are deliberately NOT counted — a busy consumer is not a broken one. A trip lasts
  * {@link RUNAWAY_COOLDOWN_MS} and then re-arms, on a timer rather than on selector or data provider
  * change: an unstable selector, the very mistake being reported, gets a new identity every render,
- * so re-arming on it would disarm the guard entirely. `ADR-runaway-data-hook-guard` records the
+ * so re-arming on it would disarm the guard entirely. `adr-runaway-data-hook-guard` records the
  * alternatives behind both choices.
+ *
+ * The warning text and the `PlatformError` message it produces are developer-facing English and are
+ * deliberately NOT localized: they name a data type and prescribe a code fix (memoize the
+ * parameters) for whoever is debugging the loop. Do not send them to translators, and do not render
+ * them to users as-is — a consumer that wants to say something to the user should recognize the
+ * error by its `RESOURCE_EXHAUSTED` code and supply its own localized text.
  *
  * @param dataType Data type name, used to name the offending hook in the warning
  * @returns `recordDelivery` and `recordSubscribe`, each called once per event of that kind and
@@ -226,9 +237,8 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
     dataType: keyof ExtractDataProviderDataTypes<TDataProvider>,
     ...args: TUseDataProviderParams
   ): UseDataFunctionWithProviderType<TDataProvider, typeof dataType> {
-    // Named (rather than an anonymous arrow) so `react-hooks/rules-of-hooks` recognizes this as a
-    // hook and enforces its rules on the body below. The rule only analyzes functions named `use*`
-    // or PascalCase, so an anonymous function here would be invisible to it.
+    // Named, not an anonymous arrow, so `react-hooks/rules-of-hooks` enforces its rules on the
+    // body below — see the note at the top of this file.
     function useDataForDataProvider<
       TDataTypes extends ExtractDataProviderDataTypes<TDataProvider>,
       TDataType extends typeof dataType,
@@ -361,8 +371,7 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
       );
 
       // Every hook above runs on every render, so both paths below render the same hooks in the
-      // same order. Returning before a hook instead would change the hook count between renders,
-      // which makes React throw mid-render and unmount the whole web view root.
+      // same order. Any hook added to this function must go ABOVE this line.
       // `isLoading` stays true while tripped because the guard re-arms and resubscribes: the value
       // genuinely has not resolved yet. Reporting `false` would tell every consumer that gates on
       // loading that this IS the answer — painting an empty chapter over real text, resolving a
