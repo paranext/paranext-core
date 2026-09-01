@@ -26,7 +26,14 @@ export interface RecentSearchesProps<T> {
   renderItem?: (item: T) => string;
   /** Function to create a unique key for each item */
   getItemKey?: (item: T) => string;
-  /** Aria label for the recent searches button */
+  /**
+   * Accessible name for the trigger button, which is also rendered as the button's visible tooltip
+   * text. Write it as user-visible microcopy (sentence case), not as a screen-reader-only phrase.
+   *
+   * Passing an empty string suppresses the tooltip AND leaves the icon-only button without an
+   * accessible name, so prefer omitting the prop — which falls back to a sensible default — over
+   * passing `''`.
+   */
   ariaLabel?: string;
   /** Heading text for the recent searches group */
   groupHeading?: string;

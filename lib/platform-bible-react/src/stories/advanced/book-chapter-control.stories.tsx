@@ -645,7 +645,7 @@ export const KeyboardNavigation: Story = {
       verseNum: 1,
     },
   },
-  play: async ({ canvas, userEvent, step }) => {
+  play: async ({ canvas, userEvent, step, args }) => {
     await step('Open component with Matthew reference', async () => {
       const trigger = canvas.getByRole(TRIGGER_ROLE);
       await userEvent.click(trigger);
@@ -664,40 +664,49 @@ export const KeyboardNavigation: Story = {
       await userEvent.click(matthewItem);
     });
 
-    await step('Verify chapter 15 button exists in chapter grid', async () => {
-      const dropdownContent = getDropdown();
-      const chapter15 = await within(dropdownContent).findByRole(CHAPTER_BUTTON_ROLE, {
-        name: '15',
+    // Assert on the `data-selected` highlight itself. Checking only that the popover is still
+    // visible after a keypress would pass even if the arrow keys moved nothing at all, which is
+    // exactly the behaviour these steps exist to demonstrate.
+    const expectChapterHighlighted = async (chapter: string) => {
+      await waitFor(async () => {
+        await expect(
+          within(getDropdown()).getByRole(CHAPTER_BUTTON_ROLE, { name: chapter }),
+        ).toHaveAttribute('data-selected', 'true');
       });
-      await expect(chapter15).toBeInTheDocument();
+    };
+
+    await step('Verify the grid opens with the current chapter highlighted', async () => {
+      await expectChapterHighlighted('15');
     });
 
-    await step('Test right arrow key navigation', async () => {
+    // Matthew has 28 chapters in a 6-column grid, so from 15: right 16, down 22, left 21, up 15.
+    await step('Right arrow moves the highlight to the next chapter', async () => {
       await userEvent.keyboard('{ArrowRight}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      await expectChapterHighlighted('16');
     });
 
-    await step('Test down arrow key navigation', async () => {
+    await step('Down arrow moves the highlight one full row', async () => {
       await userEvent.keyboard('{ArrowDown}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      await expectChapterHighlighted('22');
     });
 
-    await step('Test left arrow key navigation', async () => {
+    await step('Left arrow moves the highlight to the previous chapter', async () => {
       await userEvent.keyboard('{ArrowLeft}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      await expectChapterHighlighted('21');
     });
 
-    await step('Test up arrow key navigation', async () => {
+    await step('Up arrow moves the highlight back one full row', async () => {
       await userEvent.keyboard('{ArrowUp}');
-      const dropdownContent = getDropdown();
-      await expect(dropdownContent).toBeVisible();
+      await expectChapterHighlighted('15');
     });
 
-    await step('Test Enter key to select focused chapter', async () => {
+    await step('Enter submits the highlighted chapter', async () => {
       await userEvent.keyboard('{Enter}');
+      await expect(args.handleSubmit).toHaveBeenCalledWith({
+        book: 'MAT',
+        chapterNum: 15,
+        verseNum: 1,
+      });
     });
 
     await step('Verify component closes after Enter key selection', async () => {
@@ -716,13 +725,16 @@ This interactive test demonstrates:
 1. Opening the component with a multi-chapter book (Matthew)
 2. Verifying the book appears in the dropdown
 3. Clicking the book to enter chapter view
-4. Confirming the current chapter button exists in the grid
-5. Testing right arrow key navigation
-6. Testing down arrow key navigation
-7. Testing left arrow key navigation
-8. Testing up arrow key navigation
-9. Using Enter key to select the focused chapter
+4. Confirming the grid opens with the current chapter (15) already highlighted
+5. Right arrow moving the highlight to chapter 16
+6. Down arrow moving the highlight one full row, to chapter 22
+7. Left arrow moving the highlight back to chapter 21
+8. Up arrow moving the highlight one full row back, to chapter 15
+9. Enter submitting the highlighted chapter
 10. Verifying the component closes after keyboard selection
+
+Each arrow step asserts which cell carries the \`data-selected\` highlight, so the grid arithmetic
+is actually exercised rather than only checking that the popover stayed open.
         `,
       },
     },

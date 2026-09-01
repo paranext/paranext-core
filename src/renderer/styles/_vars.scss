@@ -17,7 +17,7 @@ $space--md: 16px;
 $space--lg: 36px;
 
 /* Z-INDEX — canonical scale lives in platform-bible-react/src/components/z-index.ts.
-   Kept in agreement by `z-index.test.ts`, which reads this file: these two drifted for months
+   Kept in agreement by `z-index.test.tsx`, which reads this file: these two drifted for months
    after one side was changed alone. */
 $z-index--above-dock: 600;
 $z-index--above-popover: 650;

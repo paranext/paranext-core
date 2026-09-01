@@ -136,11 +136,19 @@ function DropdownMenuContent({
           'pr-twp tw:max-h-(--radix-dropdown-menu-content-available-height) tw:min-w-32 tw:origin-(--radix-dropdown-menu-content-transform-origin) tw:overflow-x-hidden tw:overflow-y-auto tw:rounded-lg tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-[state=closed]:overflow-hidden tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 tw:animate-none! tw:bg-popover/70 tw:before:-z-1 tw:**:data-[slot$=-item]:focus:bg-foreground/10 tw:**:data-[slot$=-item]:data-highlighted:bg-foreground/10 tw:**:data-[slot$=-separator]:bg-foreground/5 tw:**:data-[slot$=-trigger]:focus:bg-foreground/10 tw:**:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! tw:**:data-[variant=destructive]:focus:bg-foreground/10! tw:**:data-[variant=destructive]:text-accent-foreground! tw:**:data-[variant=destructive]:**:text-accent-foreground! tw:relative tw:before:pointer-events-none tw:before:absolute tw:before:inset-0 tw:before:rounded-[inherit] tw:before:backdrop-blur-2xl tw:before:backdrop-saturate-150',
           className,
         )}
-        // CUSTOM: Set the shared overlay z-index instead of a stock z-class, matching every other
-        // shadcn overlay (popover, select, context-menu). A menu is routinely opened from inside
-        // a popover or a dialog and must render above its host, and leaving that to each caller
-        // makes it a per-consumer decision instead of a property of the component. `...style`
-        // merges after, so a caller can still override. Ordering is pinned by z-index.test.tsx.
+        // CUSTOM: Set the shared overlay z-index instead of a stock z-class, matching the other
+        // shadcn overlays on this tier (popover, select, context-menu). A menu is routinely opened
+        // from inside a popover or a dialog, and leaving its stacking to each caller makes it a
+        // per-consumer decision instead of a property of the component.
+        //
+        // This clears the dock and any dialog (Z_INDEX_MODAL, below this tier) outright. Against a
+        // popover it TIES rather than wins: both sit on Z_INDEX_ABOVE_DOCK, and the menu comes out
+        // on top only because Radix portals it to the end of `<body>`, later in document order than
+        // its host. Content that must clear a popover deterministically — regardless of portal
+        // order — uses Z_INDEX_ABOVE_POPOVER instead.
+        //
+        // `...style` merges after, so a caller can still override. Ordering is pinned by
+        // z-index.test.tsx.
         style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
         {...props}
       >
