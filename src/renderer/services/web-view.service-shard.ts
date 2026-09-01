@@ -1134,12 +1134,18 @@ async function loadLayout(
      */
     const didDockGainWebViewsDuringLoad = () =>
       webViewsBeforeLoad.length === 0 && dockLayoutVar.getAllWebViewDefinitions().length > 0;
-    // Every layout gets its web view ids scoped to this window, including one restored from
-    // persistence. Re-scoping is idempotent — it replaces any existing `-w<id>` suffix rather than
-    // stacking another one — so it is correct whichever ids the layout carries: this window's own
-    // id (the ordinary restore case, now that a window's id is durable and comes back with it),
-    // another window's id (a layout that came from elsewhere), or no scope at all (the legacy
-    // pre-multi-window layout).
+    // Layouts loaded here get their web view ids scoped to this window, including one restored
+    // from persistence. Re-scoping is idempotent — it replaces any existing `-w<id>` suffix
+    // rather than stacking another one — so it is correct whichever ids the layout carries: this
+    // window's own id (the ordinary restore case, now that a window's id is durable and comes
+    // back with it), another window's id (a layout that came from elsewhere), or no scope at all
+    // (the legacy pre-multi-window layout).
+    //
+    // Not every layout, though: the explicit-layout branch above loads what its caller passed
+    // exactly as written and never comes through here, so the ids of a shared static layout — the
+    // Simple-mode fast path's, which are the same in every window — reach the dock unscoped. Two
+    // windows loading it at once would hold the same ids; what keeps that from happening is that
+    // Simple mode is single-window and every other window is closed as it begins.
     const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
     if (isPendingContent) {
       if (didDockGainWebViewsDuringLoad()) {
