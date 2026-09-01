@@ -97,6 +97,17 @@ namespace TestParanextDataProvider
         private static string EnsureNonEmptyHomeDirectory(string homeDirectory, string id) =>
             string.IsNullOrEmpty(homeDirectory) ? "testDirectory_" + id : homeDirectory;
 
+        /// <summary>
+        /// Replaces the stylesheet served for non-canonical (front/back matter) books.
+        /// The constructor points the front/back cache at the same
+        /// <see cref="DummyScrStylesheet"/> as the default cache, so per-book stylesheet
+        /// resolution in <c>ScrText.ScrStylesheet(bookNum)</c> is invisible until a test
+        /// installs a distinct stylesheet here. Canonical books keep resolving to
+        /// <see cref="ScrText.DefaultStylesheet"/>.
+        /// </summary>
+        public void SetFrontBackStylesheet(ScrStylesheet stylesheet) =>
+            cachedFrontBackStylesheet.Set(stylesheet);
+
         protected override void Load(bool ignoreLoadErrors = false)
         {
             // Nothing to do
@@ -201,7 +212,30 @@ namespace TestParanextDataProvider
                 string? relDirPath = null
             )
             {
-                return Enumerable.Empty<string>();
+                // Derive directories from the stored file keys, mirroring ProjectFiles' glob
+                // handling, so code that scans directories and then their files works against the
+                // in-memory store.
+                var regex = new Regex(
+                    "^"
+                        + Regex.Escape(searchPattern).Replace("\\*", ".*").Replace("\\?", ".")
+                        + "$",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+                );
+                string dir = relDirPath ?? "";
+                return _fileSystem
+                    .Keys.ToList()
+                    .Select(key => Path.GetDirectoryName(key) ?? "")
+                    .Where(parent =>
+                        parent != ""
+                        && string.Equals(
+                            Path.GetDirectoryName(parent) ?? "",
+                            dir,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                        && regex.IsMatch(Path.GetFileName(parent))
+                    )
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
             }
 
             public override void WriteFileCreatingBackup(

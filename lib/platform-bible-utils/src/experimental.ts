@@ -9,6 +9,7 @@
 // as separate, independent API surfaces with different support levels.
 
 export {
+  ALL_BOOK_IDS,
   BOOKS_PRESENT_DEFAULT,
   DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
   getBookIdsFromBooksPresent,
@@ -24,3 +25,15 @@ export {
   type ScriptureBounds,
 } from './scripture/scripture-navigation.util';
 export { resolveReferenceHistoryDirection } from './reference-history-direction.util';
+// `PaletteItem` is deliberately NOT here: the renderer's `CommandPaletteItem` (a stable
+// `@papi/core` type) extends it, and a stable type must not inherit from the no-guarantees tier.
+// It is exported from `index.ts` instead. `PaletteDriver` has no such stable dependent.
+export type {
+  ForwardedPaletteKeyEvent,
+  PaletteDriver,
+  PaletteKeyForwarding,
+} from './palette.types';
+export {
+  isNavigableProjectIds,
+  NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
+} from './navigable-project-ids';

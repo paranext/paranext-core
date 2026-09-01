@@ -1,4 +1,5 @@
-import { PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils';
+import { getErrorMessage, PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils';
+import { logger } from '@shared/services/logger.service';
 
 /**
  * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription
@@ -37,6 +38,44 @@ export class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
   };
 
   /**
+   * Sends the event to the other processes and runs this process's subscriptions for it, keeping
+   * each of those subscribers' failures to itself. See {@link PlatformEventEmitter.emitIsolated}.
+   *
+   * @param event Event data to provide to subscribed callbacks
+   * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+   *   position in the subscription order. Must not throw. Only local subscribers are reported here;
+   *   a failure to reach the network is reported where the network callback was supplied.
+   * @experimental
+   */
+  override emitIsolated = (
+    event: T,
+    handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+  ) => {
+    // Emitting on a disposed emitter is the caller's bug, not a subscriber's, and `dispose` already
+    // dropped the subscriptions, so there is nobody left to isolate anything from. Asserted before
+    // the network send so a disposed emitter cannot still put an event on the network.
+    this.assertNotDisposed();
+
+    // The network hop and the local fan-out are independent: local subscribers are told from this
+    // process's own subscription list and do not need the event to have reached anyone else. Left
+    // unisolated, a network callback that threw would cost every local subscriber the one and only
+    // announcement they get — the very failure mode `emitIsolated` exists to prevent, reintroduced
+    // one layer up. The callback is supposed to report its own failures (see
+    // `createNetworkEventEmitter`, which logs there and names the event), so a throw out of it is a
+    // bug in that callback rather than news about a subscriber; log it here instead of handing it
+    // to `handleSubscriberError`, which is documented as being about subscribers.
+    try {
+      if (this.networkSubscriber) this.networkSubscriber(event);
+    } catch (error) {
+      logger.error(
+        `A network event emitter's network callback threw instead of reporting its own failure, so this event reached no other process; the local subscribers were still told: ${getErrorMessage(error)}`,
+      );
+    }
+
+    this.emitLocalIsolated(event, handleSubscriberError);
+  };
+
+  /**
    * Runs only the subscriptions for the event that are on this process. Does not send over network
    *
    * @param event Event data to provide to subscribed callbacks
@@ -45,6 +84,24 @@ export class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
     this.assertNotDisposed();
 
     super.emitFn(event);
+  }
+
+  /**
+   * Runs only the subscriptions for the event that are on this process, keeping each subscriber's
+   * failure to itself. Does not send over network. See {@link PlatformEventEmitter.emitIsolated}.
+   *
+   * @param event Event data to provide to subscribed callbacks
+   * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+   *   position in the subscription order. Must not throw.
+   * @experimental
+   */
+  emitLocalIsolated(
+    event: T,
+    handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+  ) {
+    this.assertNotDisposed();
+
+    super.emitIsolatedFn(event, handleSubscriberError);
   }
 
   override dispose = () => {

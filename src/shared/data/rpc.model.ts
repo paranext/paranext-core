@@ -114,6 +114,215 @@ export function createErrorResponse(
   return { jsonrpc: JSONRPC, id: requestId, error: { code: errorCode, message: errorMessage } };
 }
 
+/**
+ * Maximum characters retained from a single logged detail that can originate from a remote peer (a
+ * close `reason`, an error `message`)
+ */
+export const MAX_LOGGED_DETAIL_LENGTH = 200;
+
+/**
+ * Maximum characters retained from a logged stack trace.
+ *
+ * Far more generous than {@link MAX_LOGGED_DETAIL_LENGTH} because a stack is generated locally
+ * rather than supplied by a peer, so the flood-protection rationale does not apply — and because a
+ * stack bounded to a couple of hundred characters is one or two frames, which is rarely the frame
+ * that explains a disconnect.
+ */
+export const MAX_LOGGED_STACK_LENGTH = 4000;
+
+/**
+ * Close code used when we close a PAPI socket on purpose (shutdown, teardown). The WebSocket spec
+ * reserves 3000-4999 for application use, so carrying intent in the code itself lets a close
+ * handler tell a deliberate shutdown from a connection that died, with no extra state to keep in
+ * sync.
+ */
+export const INTENTIONAL_CLOSE_CODE = 4000;
+
+/**
+ * Whether a WebSocket close `code` represents a clean, expected shutdown rather than a connection
+ * that died.
+ *
+ * Clean codes: 1000 (normal), 1001 (going away — a page or window navigating away or closing), 1005
+ * (no status code was present in the close frame, which a plain `close()` with no arguments
+ * produces), and {@link INTENTIONAL_CLOSE_CODE}, this codebase's own marker for a close we initiated
+ * on purpose. What all four have in common is that a closing handshake completed. The code that
+ * matters is 1006: no close frame was ever received, the fingerprint of a connection that died
+ * rather than being closed — the shape a suspend produces.
+ *
+ * Shared so the client and server close handlers cannot independently drift on which codes count as
+ * clean. {@link isCleanCloseEvent} is the predicate to use where the event itself is in hand.
+ *
+ * @param code `code` from a WebSocket `close` event
+ * @returns `true` if the code indicates a completed closing handshake, `false` otherwise (including
+ *   for a non-numeric code)
+ */
+export function isCleanCloseCode(code: unknown): boolean {
+  return code === 1000 || code === 1001 || code === 1005 || code === INTENTIONAL_CLOSE_CODE;
+}
+
+/**
+ * Read a property without trusting the source object. Returns `undefined` if the property is absent
+ * or if reading it throws — a hostile or exotic accessor must not turn a logged disconnect into an
+ * unhandled exception inside a close handler.
+ */
+function readEventProperty(source: object, key: string): unknown {
+  try {
+    return Reflect.get(source, key);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Collapse characters that would break line-oriented log parsing and bound the length, so a single
+ * event cannot flood a log line. Values here can originate from a remote peer.
+ *
+ * The character class covers every C0/C1 control (so `\f`, `\v`, NUL, ESC and U+0085 as well as
+ * `\r\n\t`) plus the Unicode line and paragraph separators U+2028/U+2029, which are not control
+ * characters but do render as line breaks in JavaScript-based log viewers.
+ *
+ * @param value Text to make safe for a single log line
+ * @param maxLength Characters to retain. Defaults to {@link MAX_LOGGED_DETAIL_LENGTH}; pass
+ *   {@link MAX_LOGGED_STACK_LENGTH} for a locally generated stack.
+ * @returns The collapsed text, suffixed with an ellipsis if it had to be truncated
+ */
+function sanitizeForLog(value: string, maxLength: number = MAX_LOGGED_DETAIL_LENGTH): string {
+  const collapsed = value.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ');
+  return collapsed.length > maxLength ? `${collapsed.slice(0, maxLength)}…` : collapsed;
+}
+
+/**
+ * Whether a close event's already-read fields represent an orderly shutdown rather than a
+ * connection that died.
+ *
+ * Takes the values rather than the event so a caller needing both the verdict and the values reads
+ * each property exactly once. Two independent reads of the same accessor can disagree — precisely
+ * the hostile case these formatters are tested against — which would let a printed code contradict
+ * the `abnormal` marker derived from it.
+ */
+function isCleanFromCloseParts(wasClean: unknown, code: unknown): boolean {
+  if (typeof wasClean === 'boolean') return wasClean;
+  return isCleanCloseCode(code);
+}
+
+/**
+ * Whether a close event represents an orderly shutdown rather than a connection that died.
+ *
+ * `wasClean` is the authoritative answer — it reports whether a closing handshake completed — so it
+ * wins whenever the event carries it. Both Chromium and the `ws` library always set it; the
+ * {@link isCleanCloseCode} fallback covers a partial or foreign event shape that does not.
+ *
+ * Deciding on the code alone would misreport a close frame that carried no status: that arrives as
+ * 1005 with `wasClean` true, which a plain `close()` produces on every window close and page
+ * reload. Marking those abnormal would bury a genuine socket death under routine noise.
+ *
+ * @param ev A WebSocket `close` event, or anything at all — a non-event is reported as not clean
+ * @returns Whether a closing handshake completed
+ */
+export function isCleanCloseEvent(ev: unknown): boolean {
+  if (typeof ev !== 'object' || !ev) return false;
+  return isCleanFromCloseParts(readEventProperty(ev, 'wasClean'), readEventProperty(ev, 'code'));
+}
+
+/**
+ * Describe a WebSocket `close` event for a log line.
+ *
+ * Chromium and the `ws` library deliver structurally different close events, and both keep
+ * `code`/`reason`/`wasClean` as accessors on the prototype rather than own properties — so
+ * `JSON.stringify` on one yields `{}`. Read the fields explicitly instead.
+ *
+ * `code` is the single most diagnostic field: 1006 (no close frame) means the connection died
+ * rather than being closed politely. A reader should not need the WebSocket code table memorized to
+ * see that, so an event that {@link isCleanCloseEvent} rejects also carries an `abnormal=true` pair.
+ * The marker is its own pair rather than a parenthetical inside `code=` so the whole detail stays a
+ * sequence of space-separated `key=value` pairs.
+ *
+ * @param ev A WebSocket `close` event, or anything at all
+ * @returns Space-separated `key=value` pairs — `code`, `abnormal` (only when the connection died),
+ *   `reason` (JSON-quoted, so a reason containing a quote or a bracket cannot forge the surrounding
+ *   log line) and `wasClean`. A field that cannot be read is reported as `n/a`, so a non-event
+ *   yields `code=n/a reason=n/a wasClean=n/a` rather than throwing.
+ */
+export function describeWebSocketCloseEvent(ev: unknown): string {
+  if (typeof ev !== 'object' || !ev) return 'code=n/a reason=n/a wasClean=n/a';
+
+  // Read each field exactly once; see isCleanFromCloseParts for why that matters here.
+  const rawCode = readEventProperty(ev, 'code');
+  const rawWasClean = readEventProperty(ev, 'wasClean');
+  const rawReason = readEventProperty(ev, 'reason');
+
+  const isClean = isCleanFromCloseParts(rawWasClean, rawCode);
+  const code = typeof rawCode === 'number' ? `${rawCode}` : 'n/a';
+  // Only claim a close was abnormal when there is a code to attribute it to; with no readable code
+  // the `wasClean` pair is the whole story and a bare `abnormal=true` would overstate it.
+  const abnormal = typeof rawCode === 'number' && !isClean ? ' abnormal=true' : '';
+  const reason = typeof rawReason === 'string' ? JSON.stringify(sanitizeForLog(rawReason)) : 'n/a';
+  const wasClean = typeof rawWasClean === 'boolean' ? `${rawWasClean}` : 'n/a';
+
+  return `code=${code}${abnormal} reason=${reason} wasClean=${wasClean}`;
+}
+
+/**
+ * Describe a WebSocket `error` event for a log line.
+ *
+ * The `ws` library's `ErrorEvent` keeps `message` and `error` as accessors on the prototype, so
+ * `JSON.stringify` on the event yields `{}` — only own properties are serialized. Read the fields
+ * explicitly.
+ *
+ * Note a browser `WebSocket` fires a plain `Event` on error, carrying no detail at all by
+ * specification, so `message=unknown` is the expected result on the renderer end.
+ *
+ * @param ev A WebSocket `error` event, or anything at all
+ * @returns A single log line holding `message=`, `code=` and, when the error carried one, a
+ *   `stack:` section. Never contains a line break, so an error keeps the one-record-per-line shape
+ *   every other line here has; a field that cannot be read is reported as `unknown`/`n/a` rather
+ *   than throwing.
+ */
+export function describeWebSocketErrorEvent(ev: unknown): string {
+  let message = 'unknown';
+  let code = 'n/a';
+  let stack = '';
+  let cause = '';
+
+  if (typeof ev === 'object' && ev) {
+    const rawMessage = readEventProperty(ev, 'message');
+    if (typeof rawMessage === 'string' && rawMessage) message = sanitizeForLog(rawMessage);
+
+    const error = readEventProperty(ev, 'error');
+    // A thrown non-Error is very often a bare string, and then it is the only detail the event
+    // carries — dropping it for want of an object would report `message=unknown` over real text.
+    if (typeof error === 'string' && error) message = sanitizeForLog(error);
+    else if (typeof error === 'object' && error) {
+      // Duck-type rather than `instanceof Error`: Electron main and renderer are separate
+      // realms, so a genuine Error from the other side fails an instanceof check.
+      const errorMessage = readEventProperty(error, 'message');
+      // Require a non-empty string: an error whose own message is empty must not blank out a
+      // populated outer message, which is the more informative of the two.
+      if (typeof errorMessage === 'string' && errorMessage) message = sanitizeForLog(errorMessage);
+
+      const errorCode = readEventProperty(error, 'code');
+      if (typeof errorCode === 'string' || typeof errorCode === 'number')
+        code = sanitizeForLog(`${errorCode}`);
+
+      const errorStack = readEventProperty(error, 'stack');
+      if (typeof errorStack === 'string')
+        stack = sanitizeForLog(errorStack, MAX_LOGGED_STACK_LENGTH);
+
+      const errorCause = readEventProperty(error, 'cause');
+      if (typeof errorCause === 'object' && errorCause) {
+        const causeMessage = readEventProperty(errorCause, 'message');
+        if (typeof causeMessage === 'string' && causeMessage) cause = sanitizeForLog(causeMessage);
+      }
+    }
+  }
+
+  // Bound the composed value as a whole. Bounding the message and the cause separately lets the
+  // pair run to twice MAX_LOGGED_DETAIL_LENGTH while the constant claims one.
+  const describedMessage = cause ? sanitizeForLog(`${message} (cause: ${cause})`) : message;
+
+  return `message=${describedMessage} code=${code}${stack ? ` stack: ${stack}` : ''}`;
+}
+
 /** Serialize a payload, if needed, and send it over the provided WebSocket */
 export function sendPayloadToWebSocket(ws: WebSocket | undefined, payload: unknown): void {
   if (!ws) throw new Error(`Tried to send payload while not connected`);
@@ -243,6 +452,13 @@ export const REGISTER_METHOD = 'network:registerMethod';
  * your request handler.
  */
 export const UNREGISTER_METHOD = 'network:unregisterMethod';
+
+/**
+ * Tell main which peer is on the other end of this socket, so main's connection log lines can be
+ * joined to the client's own. Main labels each socket with an incrementing id, which appears
+ * nowhere in the client's logs; the client labels itself with a name it alone knows.
+ */
+export const ANNOUNCE_PEER = 'network:announcePeer';
 
 /**
  * Register a network event emitter with the main process so that the event is tracked centrally.

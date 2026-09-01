@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
-import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
+import {
+  canPublishResourcePanelProjectIds,
+  getResourcePanelReadiness,
+} from './resource-panel-readiness.utils';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 
 /** A `ready` state carrying `count` configured items. */
@@ -115,5 +118,30 @@ describe('getResourcePanelReadiness', () => {
         hasCatalogError: true,
       }),
     ).toBe('error');
+  });
+});
+
+describe('canPublishResourcePanelProjectIds', () => {
+  it('allows publishing once the list and the catalog have both arrived', () => {
+    expect(canPublishResourcePanelProjectIds(readyWith(1), true)).toBe(true);
+  });
+
+  it('allows publishing a resolved but empty list', () => {
+    // Nothing configured is a real answer: the panel displays no project, and saying so is correct.
+    expect(canPublishResourcePanelProjectIds(readyWith(0), true)).toBe(true);
+  });
+
+  it('withholds publishing while the list is still resolving', () => {
+    expect(canPublishResourcePanelProjectIds({ status: 'loading' }, true)).toBe(false);
+  });
+
+  it('withholds publishing while the catalog has not arrived', () => {
+    // The configured resource cannot be resolved to a project id yet, so "nothing displayed" and
+    // "not known yet" are indistinguishable — publishing would wipe a correct persisted list.
+    expect(canPublishResourcePanelProjectIds(readyWith(1), false)).toBe(false);
+  });
+
+  it('withholds publishing when the list could not be read', () => {
+    expect(canPublishResourcePanelProjectIds({ status: 'error' }, true)).toBe(false);
   });
 });

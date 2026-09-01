@@ -5,7 +5,7 @@ import * as networkService from '@shared/services/network.service';
 import {
   getAllOpenWebViewDefinitionsWithReachability,
   getOpenWebViewDefinitionsForWindow,
-} from '@main/services/web-view-routing.service';
+} from '@main/services/web-view.service-router';
 import { logger } from '@shared/services/logger.service';
 import { performShutdownTasks, performWindowCloseTasks } from './shutdown-tasks';
 
@@ -17,7 +17,7 @@ vi.mock('@shared/services/network.service', () => ({
   requestNoRetry: vi.fn(),
 }));
 
-vi.mock('@main/services/web-view-routing.service', () => ({
+vi.mock('@main/services/web-view.service-router', () => ({
   getAllOpenWebViewDefinitionsWithReachability: vi.fn(),
   getOpenWebViewDefinitionsForWindow: vi.fn(),
 }));
@@ -38,14 +38,19 @@ const mockLoggerWarn = vi.mocked(logger.warn);
 const mockLoggerError = vi.mocked(logger.error);
 
 /**
- * What the WebView fan-out answers: the definitions the windows that answered reported, and the
- * windows that could not be asked (whose editors are therefore missing from the list).
+ * What the WebView fan-out answers: the definitions the windows that answered reported, the windows
+ * that could not be asked, and the windows nothing will ever run in again (whose editors are
+ * therefore missing from the list either way).
  */
-function openWebViews(definitions: object[], unreachableWindowIds: number[] = []) {
+function openWebViews(
+  definitions: object[],
+  unreachableWindowIds: number[] = [],
+  abandonedWindowIds: number[] = [],
+) {
   // The fan-out's real definitions are `SavedWebViewDefinition`s; these fixtures carry only the
   // three fields the shutdown selection reads
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return { definitions, unreachableWindowIds } as Awaited<
+  return { definitions, unreachableWindowIds, abandonedWindowIds } as Awaited<
     ReturnType<typeof getAllOpenWebViewDefinitionsWithReachability>
   >;
 }
@@ -173,7 +178,7 @@ describe('performShutdownTasks', () => {
 
   it('syncs every distinct writable editor project when several windows are open', async () => {
     mockSettingsGet.mockResolvedValue('simple');
-    // The main-process WebView service proxy fans getAllOpenWebViewDefinitions out across every
+    // The main-process WebView service router fans getAllOpenWebViewDefinitions out across every
     // window and merges the results, so this one list represents two windows' editors.
     mockGetOpenWebViews.mockResolvedValue(
       openWebViews([
@@ -283,7 +288,10 @@ describe('performShutdownTasks', () => {
     expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
   });
 
-  it('warns when the window that did not answer was the only one that could have had editors', async () => {
+  it('records partial coverage, not a skip, when the window that did not answer was the only one that could have had editors', async () => {
+    // Nothing was selected, so nothing syncs — but "nothing writable was open" was never
+    // established, and a debug-only skip is the quietest line in the log on precisely the run most
+    // likely to have dropped a user's unsynced work
     mockSettingsGet.mockResolvedValue('simple');
     mockGetOpenWebViews.mockResolvedValue(openWebViews([], [1]));
     await performShutdownTasks();
@@ -291,6 +299,58 @@ describe('performShutdownTasks', () => {
       expect.stringContaining('sendReceiveProjects'),
     );
     expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('1'));
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('only the part of the app that could be read'),
+    );
+    expect(mockLoggerDebug).not.toHaveBeenCalledWith(expect.stringContaining('skipped'));
+  });
+
+  it('records partial coverage when the only window that could have had editors was given up on', async () => {
+    // A window whose renderer died for good takes its editors' unsynced work with it just as
+    // surely as one that merely failed to answer — more so, since nothing is coming back to sync
+    // them later. Reporting that run as a clean skip would put the quietest line in the log on the
+    // session most likely to have lost the user's work.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([], [], [4]));
+
+    await performShutdownTasks();
+
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+      expect.stringContaining('sendReceiveProjects'),
+    );
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('4'));
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('only the part of the app that could be read'),
+    );
+    expect(mockLoggerDebug).not.toHaveBeenCalledWith(expect.stringContaining('skipped'));
+  });
+
+  it('does not report a sync that ran alongside a given-up window as complete', async () => {
+    // The projects that did surface still go out — some coverage beats none while the app is
+    // closing — but "Sync on shutdown complete" would claim the app's whole picture was covered
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews(
+        [
+          {
+            webViewType: 'platformScriptureEditor.react',
+            state: { isReadOnly: false },
+            projectId: 'answered-project',
+          },
+        ],
+        [],
+        [4],
+      ),
+    );
+
+    await performShutdownTasks();
+
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['answered-project'],
+    );
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('4'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
   });
 
   it('says so rather than exiting silently when it cannot establish what was open', async () => {

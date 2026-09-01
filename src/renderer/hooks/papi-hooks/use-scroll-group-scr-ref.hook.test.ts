@@ -6,10 +6,11 @@ const convertedRef = { book: 'PSA', chapterNum: 146, verseNum: 1, versificationS
 
 const getScrRefForProject = vi.fn();
 const getScrRefForProjectSync = vi.fn<(...args: unknown[]) => typeof rawRef>(() => rawRef);
-vi.mock('@renderer/services/scroll-group.service-host', () => ({
+const setScrRefSync = vi.fn<(...args: unknown[]) => boolean>(() => true);
+vi.mock('@renderer/services/scroll-group.service', () => ({
   getScrRefSync: () => rawRef,
   getScrRefSourceProjectIdSync: () => 'sourceProj',
-  setScrRefSync: vi.fn(() => true),
+  setScrRefSync: (...args: unknown[]) => setScrRefSync(...args),
   onDidUpdateScrRef: 'evt:onDidUpdateScrRef',
   onDidChangeVersification: 'evt:onDidChangeVersification',
   getScrRefForProject: (...args: unknown[]) => getScrRefForProject(...args),
@@ -419,5 +420,50 @@ describe('useScrollGroupScrRef versification conversion', () => {
     // On failure, fall back to the raw NEW verse (best-effort) — not stuck on the stale lingered one.
     act(() => rejectConv(new Error('boom')));
     await waitFor(() => expect(result.current[0]).toEqual(newRawVerse));
+  });
+});
+
+// A web view that is NOT synced to a numbered scroll group carries its own reference in its web view
+// definition. That reference is per view by design and has nothing to do with the app-global scroll
+// group state, so nothing about it may reach the scroll group service.
+describe('useScrollGroupScrRef on a detached (independent-ref) view', () => {
+  it('writes the new reference back to the view, never to a scroll group', async () => {
+    const ownRef = { book: 'JHN', chapterNum: 3, verseNum: 16 };
+    const newOwnRef = { book: 'JHN', chapterNum: 3, verseNum: 17 };
+    setScrRefSync.mockClear();
+    const setScrollGroupScrRef = vi.fn(() => true);
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() =>
+      useScrollGroupScrRef(ownRef, setScrollGroupScrRef, 'targetProj'),
+    );
+    expect(result.current[0]).toEqual(ownRef);
+    // No scroll group to follow, so no group id is reported
+    expect(result.current[2]).toBeUndefined();
+
+    act(() => result.current[1](newOwnRef));
+
+    expect(setScrollGroupScrRef).toHaveBeenCalledWith(newOwnRef);
+    expect(setScrRefSync).not.toHaveBeenCalled();
+  });
+
+  it('ignores a scroll group update', async () => {
+    const ownRef = { book: 'JHN', chapterNum: 3, verseNum: 16 };
+    const { useScrollGroupScrRef } = await import(
+      '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook'
+    );
+
+    const { result } = renderHook(() => useScrollGroupScrRef(ownRef, () => true, 'targetProj'));
+    act(() =>
+      lastScrRefUpdateHandler?.({
+        scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 },
+        scrollGroupId: 0,
+        sourceProjectId: 'sourceProj',
+      }),
+    );
+
+    expect(result.current[0]).toEqual(ownRef);
   });
 });

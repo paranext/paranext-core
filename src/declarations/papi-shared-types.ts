@@ -30,6 +30,7 @@ declare module 'papi-shared-types' {
     OpenWebViewEvent,
     UpdateWebViewEvent,
   } from '@shared/services/web-view.service-model';
+  import type { AppWindowInputEvent } from '@shared/services/window.service-model';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { WebViewFactory } from '@shared/models/web-view-factory.model';
@@ -113,7 +114,7 @@ declare module 'papi-shared-types' {
      */
     'platform.openWindow': (url: string) => Promise<void>;
 
-    // These commands are provided in `web-view.service-host.ts`
+    // These commands are provided in `web-view.service-shard.ts`
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
@@ -130,7 +131,7 @@ declare module 'papi-shared-types' {
     /** Call close function for Usersnap forms known to the application */
     'platform.closeOpenUsersnapForm': () => Promise<void>;
 
-    // These commands are provided in `scroll-group-navigation.commands.ts` (renderer)
+    // These commands are provided in `scroll-group-navigation.commands.ts` (main)
     /**
      * Navigate the active scroll group to the next chapter (rolls into the next book)
      *
@@ -177,28 +178,34 @@ declare module 'papi-shared-types' {
     /**
      * Navigate the reference history in the physical "left" direction. Acts on the same scroll
      * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
-     * and the on-screen history buttons can never disagree. The renderer resolves the physical
-     * direction to a logical one for the current UI layout direction: left = back in LTR, forward
-     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
-     * dispatches this directly so it never needs to know the UI direction or the active scroll
-     * group.
+     * and the on-screen history buttons can never disagree. The window supplies its UI layout
+     * direction and the physical direction is resolved to a logical one against it: left = back in
+     * LTR, forward in RTL (the pair swaps, physical-direction preserving). The main-process
+     * keyboard handler dispatches this directly so it never needs to know the UI direction or the
+     * active scroll group.
      *
      * @returns `true` if navigation happened; `false` when there is no history in that direction or
      *   the active web view has no scroll group (a detached ref)
+     * @throws If there is no window to navigate in, or the window could not say what to navigate.
+     *   `false` reports only that there was nowhere to move to, never that the command could not be
+     *   run.
      * @experimental
      */
     'platform.navigateLeftInReferenceHistory': () => Promise<boolean>;
     /**
      * Navigate the reference history in the physical "right" direction. Acts on the same scroll
      * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
-     * and the on-screen history buttons can never disagree. The renderer resolves the physical
-     * direction to a logical one for the current UI layout direction: right = forward in LTR, back
-     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
-     * dispatches this directly so it never needs to know the UI direction or the active scroll
-     * group.
+     * and the on-screen history buttons can never disagree. The window supplies its UI layout
+     * direction and the physical direction is resolved to a logical one against it: right = forward
+     * in LTR, back in RTL (the pair swaps, physical-direction preserving). The main-process
+     * keyboard handler dispatches this directly so it never needs to know the UI direction or the
+     * active scroll group.
      *
      * @returns `true` if navigation happened; `false` when there is no history in that direction or
      *   the active web view has no scroll group (a detached ref)
+     * @throws If there is no window to navigate in, or the window could not say what to navigate.
+     *   `false` reports only that there was nowhere to move to, never that the command could not be
+     *   run.
      * @experimental
      */
     'platform.navigateRightInReferenceHistory': () => Promise<boolean>;
@@ -961,6 +968,14 @@ declare module 'papi-shared-types' {
   export interface NetworkEvents extends MultiSourceNetworkEvents {
     /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
     'platform.onDidReloadExtensions': boolean;
+    /**
+     * Emitted by the main process for every mouse-down and every Escape key-down anywhere in the
+     * app window, including inside WebView iframes. Transient overlays (context menus, command
+     * palettes, dismissable popovers) dismiss on it.
+     *
+     * @experimental
+     */
+    'platform.onDidAppWindowInput': AppWindowInputEvent;
   }
 
   /** Union of all known network event names (keys of {@link NetworkEvents}). */

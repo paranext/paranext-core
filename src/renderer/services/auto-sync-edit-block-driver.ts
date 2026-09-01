@@ -39,7 +39,7 @@ import {
   onDidOpenWebView,
   onDidUpdateWebView,
   updateWebViewDefinitionSync,
-} from '@renderer/services/web-view.service-host';
+} from '@renderer/services/web-view.service-shard';
 
 /**
  * Web view types this driver edit-blocks while their project is syncing.

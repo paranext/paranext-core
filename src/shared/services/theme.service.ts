@@ -2,7 +2,6 @@ import { dataProviderService } from '@shared/services/data-provider.service';
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import {
   IThemeService,
-  createReattachingSubscribeCurrentTheme,
   themeServiceDataProviderName,
   themeServiceObjectToProxy,
 } from '@shared/services/theme.service-model';
@@ -11,41 +10,29 @@ import { createCachedInitializer } from '@shared/utils/cached-initializer';
 let dataProvider: IThemeService | undefined;
 
 /**
- * Cached resolution of the theme provider, re-armed when that provider goes away.
+ * Cached resolution of the theme data provider.
  *
- * Exactly one renderer hosts the theme engine (see `theme.service-host.ts`), and when that window
- * closes another window takes the name over. Consumers here — the main process's title bar theming
- * and every extension's `papi.themes` — would otherwise hold the provider from the closed window
- * for the rest of the session, so re-arm on disposal and resolve the new host on the next call.
- *
- * A closing window drops its RPC connection without disposing anything, so the disposal this relies
- * on is the one `networkObjectService.forgetUnreachableRemoteObjects` raises for objects the
- * network can no longer reach. Every process runs that cleanup when the main process announces a
- * window closing, which is what keeps this re-arm alive in the main and extension host processes as
- * well as the renderers.
+ * Main hosts the provider (`main/services/theme.service-host.ts`) and registers it before any
+ * window is created, so it is there for as long as the app is, and there is nothing to re-arm for:
+ * no window closing can take it away. `createCachedInitializer` still retries a FAILED resolution,
+ * which is the case that remains — a consumer that asks before the provider has been announced.
  */
-let initialize = createCachedInitializer(initializeThemeService);
+const initialize = createCachedInitializer(initializeThemeService);
 
 async function initializeThemeService(): Promise<void> {
   const provider = await dataProviderService.get(themeServiceDataProviderName);
   if (!provider) throw new Error('Theme service undefined');
   dataProvider = provider;
-  provider.onDidDispose(() => {
-    dataProvider = undefined;
-    initialize = createCachedInitializer(initializeThemeService);
-  });
 }
 
-/** The theme provider this process should be talking to right now, resolving it if needed */
+/** The theme provider this process should be talking to, resolving it if needed */
 async function getThemeProvider(): Promise<IThemeService> {
   await initialize();
   if (!dataProvider) throw new Error('Theme service undefined');
   return dataProvider;
 }
 
-export const themeService = createSyncProxyForAsyncObject<IThemeService>(getThemeProvider, {
-  ...themeServiceObjectToProxy,
-  // Served here rather than passed through to the provider so a subscription made before a window
-  // handover keeps delivering afterwards. See `createReattachingSubscribeCurrentTheme`.
-  subscribeCurrentTheme: createReattachingSubscribeCurrentTheme(getThemeProvider),
-});
+export const themeService = createSyncProxyForAsyncObject<IThemeService>(
+  getThemeProvider,
+  themeServiceObjectToProxy,
+);

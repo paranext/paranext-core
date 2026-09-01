@@ -5,7 +5,7 @@ import {
   getDefaultViewOptions,
 } from '@eten-tech-foundation/platform-editor';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
   Tooltip,
@@ -14,8 +14,9 @@ import {
   TooltipTrigger,
   useExtraValidMarkers,
   useTruncationTooltip,
+  Spinner,
 } from 'platform-bible-react';
-import { type DblResourceData, type LocalizedStringValue } from 'platform-bible-utils';
+import { getErrorMessage, type DblResourceData } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -32,8 +33,27 @@ import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { scrollToVerse } from './editor-dom.util';
+import { ResourceBookNotAvailable } from './resource-book-not-available.component';
+import { ResourceBlankChapter } from './resource-blank-chapter.component';
+import { ResourceTextUnavailable } from './resource-text-unavailable.component';
+import {
+  isBlankChapterOnScreen,
+  isMissingBookError,
+  isMissingBookOnScreen,
+} from './platform-scripture-editor.utils';
+import type {
+  ModelTextPanelLocalizedStringKey,
+  ModelTextPanelLocalizedStrings,
+} from './model-text-panel.const';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
+
+/**
+ * Identifies the wrapper around `Editorial`. The wrapper, not the editor, is what carries the
+ * hidden/shown state, so a test asserting that a message or spinner replaced the text on screen —
+ * without the editor being torn down and rebuilt — has to address this element.
+ */
+export const MODEL_TEXT_EDITOR_CONTAINER_TEST_ID = 'model-text-editor-container';
 
 // The editor's default view options never change, so build them once at module scope. Rebuilding a
 // fresh `view` object inside the `options` memo would give `options` a new identity on every fetch,
@@ -44,32 +64,19 @@ const VIEW_OPTIONS = getDefaultViewOptions();
 /** Max ms to retry scrolling via rAF before giving up (e.g. verse marker missing from USJ) */
 const SCROLL_MAX_WAIT_MS = 2000;
 
-/**
- * Object containing all keys used for localization in this component. Pass these keys into the
- * Platform's localization hook and pass the resulting localized strings into the `localizedStrings`
- * prop.
- */
-export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
-  // Shown while an auto-installing (not user-picked) resource downloads.
-  '%webView_modelTextPanel_installing%',
-  // Shown while a user-picked resource is being selected/installed.
-  '%webView_modelTextPanel_selecting%',
-  '%webView_modelTextPanel_noProject%',
-  '%webView_modelTextPanel_pickModelText%',
-  '%webView_modelTextPanel_unknownResource%',
-  '%webView_modelTextPanel_installFailed%',
-  '%webView_modelTextPanel_installFailedOffline%',
-  '%webView_modelTextPanel_retry%',
-  '%webView_modelTextPanel_emptyState_prompt%',
-  '%webView_modelTextPanel_settingsUnavailable%',
-  '%webView_modelTextPanel_loading%',
-  '%webView_modelTextPanel_catalogUnavailable%',
-] as const);
+export {
+  MODEL_TEXT_PANEL_STRING_KEYS,
+  type ModelTextPanelLocalizedStringKey,
+  type ModelTextPanelLocalizedStrings,
+} from './model-text-panel.const';
 
-type ModelTextPanelLocalizedStringKey = (typeof MODEL_TEXT_PANEL_STRING_KEYS)[number];
-type ModelTextPanelLocalizedStrings = {
-  [key in ModelTextPanelLocalizedStringKey]?: LocalizedStringValue;
-};
+/**
+ * Falls back to the key itself, matching the idiom in `book-not-available-view.component.tsx` and
+ * `empty-chapter-view.component.tsx`. Falling back to `''` instead would render an empty message
+ * region — a blank panel, which is the exact failure this panel's message exists to remove.
+ */
+const localize = (strings: ModelTextPanelLocalizedStrings, key: ModelTextPanelLocalizedStringKey) =>
+  strings[key] ?? key;
 
 const DEFAULT_SCR_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
 
@@ -204,6 +211,20 @@ export function ModelTextPanel({
   const [textDirection, setTextDirection] = useState<string>(DEFAULT_TEXT_DIRECTION);
   // `undefined` means "not yet fetched" so we can show the loading state, matching the original.
   const [isUsjLoading, setIsUsjLoading] = useState(false);
+  // The rejection itself is kept, not a boolean derived from it. `isMissingBookOnScreen` then decides
+  // in the render body whether the failure still describes the book and model text on screen, so
+  // navigating to a book this text does have cannot commit one frame still asserting the message.
+  const [fetchError, setFetchError] = useState<unknown>(undefined);
+  // WHICH request `usj`/`fetchError` are the answer to. Every state above survives a navigation —
+  // `usj` still holds the previous chapter, `fetchError` the previous rejection — and the effect
+  // that clears them runs after the commit, so the first render pairing a new reference with the
+  // previous answer would otherwise read as an answer about the new one. That frame is what made a
+  // step into a book the model text lacks paint "this chapter is empty" first. Comparing this key
+  // against the reference being rendered makes the mismatched pairing unrepresentable instead of
+  // merely brief.
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | undefined>(undefined);
+
+  const requestKey = `${resourceProjectId ?? ''}:${scrRef.book}:${scrRef.chapterNum}:${scrRef.versificationStr}`;
 
   useEffect(() => {
     if (!resourceProjectId) {
@@ -212,6 +233,8 @@ export function ModelTextPanel({
     }
     let isActive = true;
     setIsUsjLoading(true);
+    setFetchError(undefined);
+    const keyForThisLoad = requestKey;
     const load = async () => {
       const { usj: nextUsj, textDirection: nextTextDirection } = await getResourceChapter(
         resourceProjectId,
@@ -220,17 +243,32 @@ export function ModelTextPanel({
       if (!isActive) return;
       setUsj(nextUsj);
       setTextDirection(nextTextDirection || DEFAULT_TEXT_DIRECTION);
+      setLoadedRequestKey(keyForThisLoad);
       setIsUsjLoading(false);
     };
-    load().catch(() => {
+    load().catch((e) => {
       if (!isActive) return;
       setUsj(undefined);
+      setFetchError(e);
+      setLoadedRequestKey(keyForThisLoad);
       setIsUsjLoading(false);
+      // A missing book is ordinary navigation, not a fault, and it is already explained on screen —
+      // so `debug`, which packaged builds drop entirely (`global-this.model.ts` runs at `info` when
+      // packaged). That is deliberate rather than a gap: this fires once per resource per navigation
+      // and the Scripture Text Grid can hit it for many cells at once, so `info` would be noise. It
+      // is also safe, because the quiet path is the CORRECT one — if detection ever broke, the same
+      // failure would fall to the `error` branch below and be loud in production, not silent.
+      if (isMissingBookError(e))
+        logger?.debug(`Book not found in model text: ${getErrorMessage(e)}`);
+      else logger?.error(`Error getting model text chapter USJ: ${getErrorMessage(e)}`);
     });
     return () => {
       isActive = false;
     };
-    // Intentionally excludes scrRef.verseNum: chapter data only changes with book or chapter, not verse.
+    // Intentionally excludes scrRef.verseNum: chapter data only changes with book or chapter, not
+    // verse. Also excludes `logger`, used in the catch above: it is a stable module object, so
+    // including it would only add a dep that never changes, and `requestKey`, which is built from
+    // the four listed deps and so never changes independently of them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     resourceProjectId,
@@ -284,6 +322,45 @@ export function ModelTextPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usj, isUsjLoading, scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
 
+  // Whether `usj`/`fetchError` answer the reference currently being rendered. Everything below that
+  // makes a claim about the model text is gated on this.
+  const isAnswerCurrent = loadedRequestKey === requestKey;
+
+  // A chapter the resource HAS but with nothing in it. Gated on the answer in hand being for this
+  // reference, because `usj` keeps the previous chapter's content until the new fetch lands —
+  // deriving this from stale content would paint the message over a chapter that is still arriving,
+  // or over a book the model text does not have at all.
+  //
+  // Chapter 0 is front matter rather than a chapter; `isBlankChapterOnScreen` has that rationale.
+  const isBlankChapter = useMemo(
+    () => isAnswerCurrent && !isUsjLoading && isBlankChapterOnScreen(usj, scrRef.chapterNum),
+    [isAnswerCurrent, usj, isUsjLoading, scrRef.chapterNum],
+  );
+
+  // Whether the failure in hand still describes what this panel is showing. Derived rather than
+  // latched in the `catch` so it is accurate for the render it is used in.
+  const isBookMissing =
+    isAnswerCurrent &&
+    isMissingBookOnScreen({
+      error: fetchError,
+      currentBookNum: Canon.bookIdToNumber(scrRef.book),
+      projectId: resourceProjectId,
+    });
+
+  // A failure that is not a missing book in the text on screen: an unreadable project, a permissions
+  // failure, a data provider that cannot open the resource. Terminal, because the fetch already
+  // rejected and nothing retries it until the reference or the model text changes — so a spinner
+  // would claim progress that never arrives.
+  //
+  // A missing-book rejection naming some OTHER book or model text is excluded rather than treated as
+  // a fault: that is the previous reference's answer, and `isAnswerCurrent` will clear it as soon as
+  // the current fetch lands.
+  const isTextUnavailable =
+    isAnswerCurrent &&
+    fetchError !== undefined &&
+    !isBookMissing &&
+    !isMissingBookError(fetchError);
+
   // --- Editor ---
 
   // EditorRef requires null initial value per React ref convention
@@ -310,7 +387,10 @@ export function ModelTextPanel({
     [textDirection, extraValidMarkers],
   );
 
-  // Read-only: push incoming USJ directly into the editor whenever it changes.
+  // Read-only: push incoming USJ directly into the editor whenever it changes. This effect is the
+  // editor's only feed, and `renderContent` below hides `Editorial` rather than unmounting it, so
+  // one instance is fed for the panel's lifetime — a message or a spinner taking the content area
+  // never costs the editor its content.
   useEffect(() => {
     if (usj) editorRef.current?.setUsj(usj);
   }, [usj]);
@@ -373,9 +453,9 @@ export function ModelTextPanel({
   // recover rather than being stranded.
   const notFoundState = (
     <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-      <p>{localizedStrings['%webView_modelTextPanel_unknownResource%']}</p>
+      <p>{localize(localizedStrings, '%webView_modelTextPanel_unknownResource%')}</p>
       <Button onClick={() => handlePickModelText()}>
-        {localizedStrings['%webView_modelTextPanel_pickModelText%']}
+        {localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
       </Button>
     </div>
   );
@@ -384,7 +464,7 @@ export function ModelTextPanel({
   if (!hasProject) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <p>{localizedStrings['%webView_modelTextPanel_noProject%']}</p>
+        <p>{localize(localizedStrings, '%webView_modelTextPanel_noProject%')}</p>
       </div>
     );
   }
@@ -405,12 +485,15 @@ export function ModelTextPanel({
     return (
       <PanelReadinessView
         readiness={readiness}
-        errorMessage={localizedStrings['%webView_modelTextPanel_settingsUnavailable%']}
-        catalogErrorMessage={localizedStrings['%webView_modelTextPanel_catalogUnavailable%']}
-        loadingLabel={localizedStrings['%webView_modelTextPanel_loading%']}
-        emptyPrompt={localizedStrings['%webView_modelTextPanel_emptyState_prompt%']}
-        pickLabel={localizedStrings['%webView_modelTextPanel_pickModelText%']}
-        retryLabel={localizedStrings['%webView_modelTextPanel_retry%']}
+        errorMessage={localize(localizedStrings, '%webView_modelTextPanel_settingsUnavailable%')}
+        catalogErrorMessage={localize(
+          localizedStrings,
+          '%webView_modelTextPanel_catalogUnavailable%',
+        )}
+        loadingLabel={localize(localizedStrings, '%webView_modelTextPanel_loading%')}
+        emptyPrompt={localize(localizedStrings, '%webView_modelTextPanel_emptyState_prompt%')}
+        pickLabel={localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
+        retryLabel={localize(localizedStrings, '%webView_modelTextPanel_retry%')}
         onPick={() => handlePickModelText()}
         onRetryCatalog={onRetryCatalog}
       />
@@ -430,14 +513,13 @@ export function ModelTextPanel({
   if (installFailed) {
     return (
       <RetryableErrorView
-        message={
-          localizedStrings[
-            isOnline
-              ? '%webView_modelTextPanel_installFailed%'
-              : '%webView_modelTextPanel_installFailedOffline%'
-          ]
-        }
-        retryLabel={localizedStrings['%webView_modelTextPanel_retry%']}
+        message={localize(
+          localizedStrings,
+          isOnline
+            ? '%webView_modelTextPanel_installFailed%'
+            : '%webView_modelTextPanel_installFailedOffline%',
+        )}
+        retryLabel={localize(localizedStrings, '%webView_modelTextPanel_retry%')}
         onRetry={retryInstall}
       />
     );
@@ -450,13 +532,12 @@ export function ModelTextPanel({
   if (isSelecting || isInstalling) {
     return (
       <LoadingView
-        label={
-          localizedStrings[
-            isSelecting
-              ? '%webView_modelTextPanel_selecting%'
-              : '%webView_modelTextPanel_installing%'
-          ]
-        }
+        label={localize(
+          localizedStrings,
+          isSelecting
+            ? '%webView_modelTextPanel_selecting%'
+            : '%webView_modelTextPanel_installing%',
+        )}
       />
     );
   }
@@ -469,10 +550,94 @@ export function ModelTextPanel({
     return notFoundState;
   }
 
-  // Loading: USJ not yet fetched for the resolved resource.
-  if (usj === undefined && isUsjLoading) {
-    return <LoadingView label={localizedStrings['%webView_modelTextPanel_loading%']} />;
-  }
+  // The model text, or the reason there is none. These are the panel's CONTENT area only: the label
+  // header stays mounted above all of them, including the spinner, so the message is attributed to a
+  // named text rather than floating in an anonymous panel and does not blink away on every chapter
+  // step. Unlike the Bible texts panel there is no in-panel selector to preserve — this panel
+  // surfaces its picker only in the zero and not-found states — so this panel's message has to name
+  // the remedy in words instead: a different model text, or a book this one covers.
+  //
+  // A blank chapter is one the model text HAS but with nothing in it. It is invisible to
+  // `isBookMissing`, which keys off the fetch rejecting, so it needs its own check; the missing book
+  // is tested first because it is the more specific claim. Without the blank-chapter arm the
+  // read-only editor renders with nothing set and shows `Editorial`'s "enter some Scripture" prompt
+  // — an edit invitation in a text the reader cannot edit.
+  //
+  // Only the editor gets `dir`. That is the RESOURCE's text direction, and the messages are app
+  // chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the model
+  // text is RTL.
+  const renderContent = () => {
+    const message = (() => {
+      if (isBookMissing)
+        return (
+          <ResourceBookNotAvailable
+            message={localize(localizedStrings, '%webView_modelTextPanel_bookNotAvailable%')}
+            announcementKey={`${resourceProjectId}:${scrRef.book}`}
+          />
+        );
+
+      if (isBlankChapter)
+        return (
+          <ResourceBlankChapter
+            message={localize(
+              localizedStrings,
+              '%webView_platformScriptureEditor_emptyChapter_messageResource%',
+            )}
+            announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+          />
+        );
+
+      if (isTextUnavailable)
+        return (
+          <ResourceTextUnavailable
+            message={localize(localizedStrings, '%webView_resourcePanel_textUnavailable%')}
+            announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+          />
+        );
+
+      return undefined;
+    })();
+
+    // Nothing to say and nothing in hand yet: the fetch for this reference is still out.
+    const isWaiting = !message && (!isAnswerCurrent || isUsjLoading || usj === undefined);
+
+    return (
+      <>
+        {message && <div className="tw:flex-1 tw:overflow-auto">{message}</div>}
+        {isWaiting && (
+          <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+            <Spinner />
+          </div>
+        )}
+        {/*
+          `Editorial` is HIDDEN rather than unmounted whenever something else occupies the content
+          area. Unmounting it disposes the whole `LexicalComposer` — plugins and nodes deregister,
+          the DOM is torn down — and bringing it back costs a full rebuild plus a whole-chapter
+          `setUsj`. `isWaiting` is true from the instant the reference changes until the round trip
+          completes, so unmounting on it would pay that price on every chapter step, the panel's
+          primary interaction. Hiding keeps one editor instance for the panel's lifetime; the main
+          editor hides its subtree the same way behind `EmptyChapterView`.
+
+          `tw:hidden` is `display: none`, which also takes the editor out of the accessibility tree
+          and the tab order while a message is showing — wanted here, since the message is the thing
+          to read and this panel is read-only, so there is nothing in the editor to reach.
+        */}
+        <div
+          data-testid={MODEL_TEXT_EDITOR_CONTAINER_TEST_ID}
+          className={message || isWaiting ? 'tw:hidden' : 'tw:flex-1 tw:overflow-auto'}
+          dir={options.textDirection}
+        >
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={handleScrRefChange}
+            options={options}
+            logger={logger}
+          />
+        </div>
+      </>
+    );
+  };
 
   // Active: read-only editor showing the model text.
   // This panel is Simple-mode-only, so `editor-container-simple` (flattens .editor-container's
@@ -523,15 +688,7 @@ export function ModelTextPanel({
           </Tooltip>
         </TooltipProvider>
       )}
-      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={handleScrRefChange}
-          options={options}
-          logger={logger}
-        />
-      </div>
+      {renderContent()}
     </div>
   );
 }

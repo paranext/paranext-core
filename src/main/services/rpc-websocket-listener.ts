@@ -14,7 +14,11 @@ import {
   UNREGISTER_METHOD,
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
-import { IRpcMethodRegistrar, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
+import {
+  IRpcMethodRegistrar,
+  RegisteredRpcMethodDetails,
+  RpcClientDisconnectEvent,
+} from '@shared/models/rpc.interface';
 import {
   createEmptyOpenRpc,
   getEmptyMethodDocs,
@@ -26,7 +30,7 @@ import {
   withExperimentalPrefix,
   withNotificationPrefix,
 } from '@shared/models/openrpc.model';
-import { getErrorMessage, Mutex } from 'platform-bible-utils';
+import { getErrorMessage, Mutex, PlatformEvent, PlatformEventEmitter } from 'platform-bible-utils';
 import { WebSocketServer } from 'ws';
 import { logger } from '@shared/services/logger.service';
 import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
@@ -50,6 +54,15 @@ export { RpcEventRegistry };
  */
 export class RpcWebSocketListener implements IRpcMethodRegistrar {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
+  /**
+   * Event that fires when a connected process goes away, carrying the method names its departure
+   * removed from the registry. Local to this process: it is announced as part of tearing the
+   * connection down, so it cannot outrun the teardown the way anything the departing process sent
+   * can.
+   *
+   * @experimental
+   */
+  readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
   private localEventHandler: EventHandler | undefined;
   private webSocketServer: WebSocketServer | undefined;
   private nextSocketNumber = 1;
@@ -69,9 +82,11 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
    * single-source event. Deduped for the same reason as {@link warnedUnregisteredAnnouncements}.
    */
   private readonly warnedForeignAnnouncements = new Set<string>();
+  private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
 
   constructor() {
     bindClassMethods.call(this);
+    this.onDidDisconnectClient = this.clientDisconnectEmitter.event;
   }
 
   get nextSocketId(): string {
@@ -481,12 +496,27 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       this.propagateEvent,
       this.rpcMethodDetailsByMethodName,
       this.rpcEventDetailsByEventName,
+      this.announceClientDisconnect,
     );
     rpcServer.connect();
     this.rpcServerBySocket.set(webSocket, rpcServer);
     // Note: `webSocket.url` is always undefined for server-side sockets, so log the socket id
     logger.info(`Websocket client ${socketId} connected`);
     webSocket.addEventListener('close', this.onClientDisconnect);
+  }
+
+  // Run by an RpcServer once it has removed its client's methods from the registry
+  private announceClientDisconnect(removedMethodNames: string[]): void {
+    // This is the only time subscribers are told a process went away — nothing replays it and
+    // nothing reconciles afterwards — and it runs inside a socket's close handler, so a subscriber
+    // that throws must cost only itself, not the rest of the subscribers or the rest of the
+    // teardown. Name what was lost too: "a subscriber threw" alone leaves whoever reads the log
+    // unable to tell which process died or which of its methods went with it.
+    this.clientDisconnectEmitter.emitIsolated({ removedMethodNames }, (error, subscriberIndex) => {
+      logger.error(
+        `Subscriber ${subscriberIndex} threw while being told a client disconnected, taking ${removedMethodNames.length} methods with it (${removedMethodNames.join(', ')}); the rest were still told: ${getErrorMessage(error)}`,
+      );
+    });
   }
 
   private onClientDisconnect(ev: CloseEvent): void {

@@ -89,3 +89,52 @@ describe('RpcEventRegistry — checkAnnouncement', () => {
     expect(reg.checkAnnouncement(fakeB, 'object:onDidCreateNetworkObject')).toBe('ok');
   });
 });
+
+/**
+ * A client that goes away takes its network event registrations down with it — the socket's close
+ * handler calls `unregisterAll` for that client. The same names come back afterwards: a reloaded
+ * window replays the URL carrying its own `windowId`, so it re-registers the very same
+ * window-scoped event names, and `platform.restartExtensionHost` registers the extension host's on
+ * a fresh process. So the cleanup has to leave those names genuinely free rather than merely
+ * empty.
+ */
+describe('RpcEventRegistry — re-registration after a client socket closes', () => {
+  const departedClient = { id: 'departed' };
+  const survivingClient = { id: 'surviving' };
+
+  let reg: RpcEventRegistry;
+  beforeEach(() => {
+    reg = new RpcEventRegistry();
+  });
+
+  it('frees a single-source event name so another process can register it', () => {
+    expect(reg.tryRegister(departedClient, 'platform.themeServiceDataProvider:onDidUpdate')).toBe(
+      true,
+    );
+    // Taken while its registrant is alive, whoever asks
+    expect(reg.tryRegister(survivingClient, 'platform.themeServiceDataProvider:onDidUpdate')).toBe(
+      false,
+    );
+
+    reg.unregisterAll(departedClient);
+
+    expect(reg.has('platform.themeServiceDataProvider:onDidUpdate')).toBe(false);
+    expect(reg.tryRegister(survivingClient, 'platform.themeServiceDataProvider:onDidUpdate')).toBe(
+      true,
+    );
+    expect(
+      reg.checkAnnouncement(survivingClient, 'platform.themeServiceDataProvider:onDidUpdate'),
+    ).toBe('ok');
+  });
+
+  it('leaves the other registrants of a multi-source event registered', () => {
+    reg.tryRegister(departedClient, 'object:onDidDisposeNetworkObject');
+    reg.tryRegister(survivingClient, 'object:onDidDisposeNetworkObject');
+
+    reg.unregisterAll(departedClient);
+
+    expect(reg.has('object:onDidDisposeNetworkObject')).toBe(true);
+    // The departed client's slot is gone, so it could register again if it ever came back
+    expect(reg.tryRegister(departedClient, 'object:onDidDisposeNetworkObject')).toBe(true);
+  });
+});

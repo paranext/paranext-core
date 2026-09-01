@@ -491,10 +491,40 @@ export declare class PlatformEventEmitter<T> implements Dispose {
 	 */
 	emit: (event: T) => void;
 	/**
+	 * Runs the subscriptions for the event, keeping each subscriber's failure to itself: a subscriber
+	 * that throws hands its error to `handleSubscriberError` and the remaining subscribers still
+	 * run.
+	 *
+	 * Use this where the emit is the only time subscribers are told about something that has already
+	 * happened and will not be reported again — one broken subscriber must not cost the rest the
+	 * news. Prefer {@link emit} everywhere else: a caller that can still act on a throw should see
+	 * it.
+	 *
+	 * This does not await `async` subscribers. It routes their rejections — a subscriber whose
+	 * promise rejects reaches `handleSubscriberError` the same way a synchronous throw does — but it
+	 * does not sequence them: this returns as soon as every subscriber has been _started_, with any
+	 * async subscriber still suspended at its first `await`. An emitter that tears something down
+	 * right after emitting therefore tears it down out from under those subscribers.
+	 *
+	 * @param event Event data to provide to subscribed callbacks
+	 * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+	 *   position in the subscription order. Must not throw; a throw from it stops the remaining
+	 *   subscribers, which is the very thing this is here to prevent.
+	 * @experimental
+	 */
+	emitIsolated: (event: T, handleSubscriberError: (error: unknown, subscriberIndex: number) => void) => void;
+	/**
 	 * Function that runs the subscriptions for the event. Added here so children can override emit
 	 * and still call the base functionality. See NetworkEventEmitter.emit for example
 	 */
 	protected emitFn(event: T): void;
+	/**
+	 * Function that runs the subscriptions for the event in isolation from each other. Added here so
+	 * children can override {@link emitIsolated} and still call the base functionality.
+	 *
+	 * @experimental
+	 */
+	protected emitIsolatedFn(event: T, handleSubscriberError: (error: unknown, subscriberIndex: number) => void): void;
 	/** Check to make sure this emitter is not disposed. Throw if it is */
 	protected assertNotDisposed(): void;
 	/**
@@ -502,6 +532,12 @@ export declare class PlatformEventEmitter<T> implements Dispose {
 	 * override emit and still call the base functionality.
 	 */
 	protected disposeFn(): Promise<boolean>;
+	/**
+	 * Run something for each current subscription. Clones the subscriptions array before iterating
+	 * over the callbacks so the callback index doesn't get messed up if someone subscribes or
+	 * unsubscribes inside one of the callbacks
+	 */
+	private forEachSubscription;
 }
 /**
  * Class that allows you to chain promises for a given key. This is useful when:
@@ -969,7 +1005,8 @@ export declare function deepClone<T>(obj: T): T;
  */
 export declare const DEBOUNCE_CANCELED_ERROR_MESSAGE = "Debounced function invocation was canceled";
 /**
- * A debounced function with a `cancel` method to abandon any pending invocation.
+ * A debounced function with `cancel` and `flush` methods to abandon or immediately run any pending
+ * invocation (lodash-style lifecycle controls).
  *
  * @template TFunc - The type of the function being debounced.
  */
@@ -985,6 +1022,19 @@ export type DebouncedFunction<TFunc extends (...args: any[]) => any> = ((...args
 	 * rejection when `cancel()` runs.
 	 */
 	cancel: () => void;
+	/**
+	 * Run the pending debounced invocation NOW (synchronously, with the most recently passed
+	 * arguments) instead of waiting out the remaining delay, and clear the timer so it does not fire
+	 * a second time.
+	 *
+	 * Useful at lifecycle boundaries where the trailing window would otherwise lose the final
+	 * invocation (unmount, blur, pagehide) or run it against changed context (see the
+	 * platform-scripture-editor extension's debounced PDP save).
+	 *
+	 * @returns The same promise the pending calls received (resolving/rejecting with the flushed
+	 *   invocation's outcome), or `undefined` when nothing was pending (in which case nothing runs).
+	 */
+	flush: () => Promise<ReturnType<TFunc>> | undefined;
 };
 /**
  * Get a function that reduces calls to the function passed in
@@ -995,9 +1045,10 @@ export type DebouncedFunction<TFunc extends (...args: any[]) => any> = ((...args
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
  * @returns Function that, when called, only calls the function passed in at maximum every delay ms.
- *   The returned function also has a `cancel` method to abandon any pending invocation; canceling
+ *   The returned function also has a `cancel` method to abandon any pending invocation (canceling
  *   makes the pending invocation's promise reject with an error whose message is
- *   {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}.
+ *   {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}) and a `flush` method to run the pending invocation
+ *   immediately instead of waiting out the delay.
  */
 export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFunc, delay?: number): DebouncedFunction<TFunc>;
 /**
@@ -4389,6 +4440,35 @@ export declare const localizedStringsDocumentSchema: {
 		};
 	};
 };
+/**
+ * One selectable item in a command/marker palette. The dependency-free shared shape consumed by
+ * every layer that handles palette items — the renderer overlay service's `CommandPaletteItem`
+ * extends it, `platform-bible-react`'s `FootnoteEditor` marker palette uses it directly, and
+ * extensions build items in this shape — so the item contract exists exactly once.
+ *
+ * Note for passive palettes (driven by forwarded keystrokes rather than their own input): filter
+ * matching runs on the RAW `label`, so passive-palette items must use plain-string labels — a
+ * `LocalizeKey` label would make the on-screen (localized) filtering diverge from the host's commit
+ * resolution.
+ */
+export interface PaletteItem {
+	/** Unique identifier returned when this item is selected */
+	id: string;
+	/** Primary display text (e.g. a marker code like "ft" or a command name) */
+	label: string | LocalizeKey;
+	/** Secondary description text displayed below the label */
+	description?: string | LocalizeKey;
+	/** Optional badge text (e.g. "Deprecated", "End"). Localized when given as a `LocalizeKey`. */
+	badge?: string | LocalizeKey;
+	/** Whether the item is grayed out and non-selectable. Defaults to false. */
+	disabled?: boolean;
+	/**
+	 * Whether the item's text is rendered de-emphasized (reduced opacity) while remaining fully
+	 * selectable — e.g. PT9's grey cue for non-basic markers. Unlike {@link PaletteItem.disabled}, a
+	 * muted item can still be highlighted and selected. Defaults to false.
+	 */
+	muted?: boolean;
+}
 export type ResourceType = "ScriptureResource" | "CommentaryResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
 export type DblResourceData = {
 	dblEntryUid: string;

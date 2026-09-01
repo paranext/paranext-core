@@ -22,11 +22,11 @@ import {
   aggregateUnsubscribers,
   formatReplacementString,
   getErrorMessage,
-  isBlockMarker,
   isLocalizeKey,
   isPlatformError,
   LanguageStrings,
   LocalizeKey,
+  normalizeProjectId,
   serialize,
   Unsubscriber,
   USFM_MARKERS_MAP_PARATEXT_3_0,
@@ -35,14 +35,62 @@ import {
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import type { ScriptureRange } from 'platform-scripture-editor';
+import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import type { MutableRefObject } from 'react';
+// import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
+// import from the editor package drags its React-bundling dist into the main bundle, breaking
+// extension activation. See platform-scripture-editor.web-view.utils.ts's header.
 import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+
+/**
+ * Resolves the view type the editor is allowed to show under the current `platform.interfaceMode`.
+ * Standard view is a power-mode-only surface: its PT9-parity editing affordances (the `\`/Enter
+ * marker palettes, paragraph-marker editing) assume paragraph markers can be edited, but simple
+ * mode pairs with structure protection, which intentionally blocks paragraph-marker edits — so a
+ * simple-mode user must never land in standard view (e.g. via a `viewType` persisted during a
+ * power-mode session). Coerces 'standard' to 'formatted' (the simple-mode default view) when not in
+ * power mode; every other combination passes through unchanged.
+ *
+ * @param viewType The current (requested or persisted) view type
+ * @param isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @returns The view type that should actually be shown
+ */
+export function resolveViewTypeForInterfaceMode(
+  viewType: ScriptureEditorViewType,
+  isPowerMode: boolean,
+): ScriptureEditorViewType {
+  if (viewType === 'standard' && !isPowerMode) return 'formatted';
+  return viewType;
+}
+
+/**
+ * Computes the next view type for the view-cycling affordance (the `changeScriptureView` command).
+ * Power mode cycles formatted -> standard -> markers -> formatted; simple mode skips 'standard'
+ * entirely (see {@link resolveViewTypeForInterfaceMode}), cycling formatted <-> markers.
+ *
+ * Cycles on the view type rather than `ViewOptions.markerMode`: in non-power mode both 'formatted'
+ * and 'markers' resolve to markerMode 'hidden' (the non-power markers view overrides only
+ * noteMode), so a markerMode-based cycle would orphan 'formatted'.
+ *
+ * @param viewType The current view type (resolved for mode first, so a lingering 'standard' in
+ *   simple mode advances as if it were already coerced)
+ * @param isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @returns The next view type in the mode-appropriate cycle
+ */
+export function getNextViewTypeInCycle(
+  viewType: ScriptureEditorViewType,
+  isPowerMode: boolean,
+): ScriptureEditorViewType {
+  const current = resolveViewTypeForInterfaceMode(viewType, isPowerMode);
+  if (current === 'formatted') return isPowerMode ? 'standard' : 'markers';
+  if (current === 'standard') return 'markers';
+  return 'formatted';
+}
 
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
@@ -82,6 +130,92 @@ export function correctEditorUsjVersion(editorUsj: Usj): Usj {
   // well right now
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
+}
+
+/** Snapshot of the state a collapsed-note caller click decides against. */
+export interface NoteCallerClickState {
+  /**
+   * Whether the clicked note is collapsed (expanded notes are edited in place, not via click).
+   * `undefined` (the adaptor could not tell) is treated as not collapsed, matching the original
+   * `noteCallerOnClick` guard.
+   */
+  isCollapsed: boolean | undefined;
+  /** The note key of an in-progress footnote-editor session, if any. */
+  editingNoteKey: string | undefined;
+  /** Whether the footnote-editor popover is actually shown right now. */
+  popoverShown: boolean;
+  /** Whether the footnotes pane's visibility TOGGLE is on (it may still lack data to render). */
+  paneVisible: boolean;
+  /** Whether the footnotes pane is actually rendered (visible toggle AND data loaded). */
+  paneRendered: boolean;
+  /** Whether the footnotes pane's auto-show behavior is enabled. */
+  isAutoShowEnabled: boolean;
+}
+
+/** What a collapsed-note caller click should do — see {@link decideNoteCallerClickAction}. */
+export interface NoteCallerClickDecision {
+  /**
+   * True when `editingNoteKey` belongs to a session whose popover is no longer shown — orphaned
+   * bookkeeping that would otherwise dead-end every future caller click; clearing it keeps the
+   * failure benign. The caller must clear the editing-session refs before acting.
+   */
+  clearStaleEditingSession: boolean;
+  /**
+   * What the caller click resolves to:
+   *
+   * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
+   * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored.
+   * - `open-popover` — open the footnote-editor popover for the clicked note. The popover always
+   *   opens on a routed click, because it is the only surface that can EDIT a note today; the pane
+   *   flags below are navigation alongside it, never a substitute for it.
+   */
+  action: 'ignore-expanded' | 'ignore-popover-open' | 'open-popover';
+  /**
+   * Also select/highlight/scroll to the clicked note in the footnotes pane (PT9 navigate-to-note).
+   * True when the pane is rendered — or is being shown by this very click ({@link showPane}); the
+   * pane's focus-request machinery retries a request that arrives before its data mounts.
+   */
+  sendPaneFocusRequest: boolean;
+  /** Also show the footnotes pane: it is currently toggled off and auto-show is enabled. */
+  showPane: boolean;
+}
+
+/**
+ * Decides what a click on a note caller does. Pure decision logic extracted from
+ * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests:
+ *
+ * - An expanded note's caller does nothing (the note is edited in place).
+ * - While a footnote-editor popover is really shown, clicks are ignored (one session at a time).
+ * - An editing-session key without a shown popover is STALE — it must not block the click.
+ * - Otherwise the popover OPENS — always, in every view, because it is the only surface that can edit
+ *   a note today. Alongside it, the pane highlights the clicked note when it is rendered, and a
+ *   click also SHOWS the pane when it is toggled off and auto-show is enabled.
+ */
+export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
+  if (!state.isCollapsed)
+    return {
+      clearStaleEditingSession: false,
+      action: 'ignore-expanded',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    };
+  // A truthy editingNoteKey marks an editing session (matches the original inline guard's
+  // truthiness check; an empty-string key is never a live session).
+  if (state.editingNoteKey && state.popoverShown)
+    return {
+      clearStaleEditingSession: false,
+      action: 'ignore-popover-open',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    };
+  const clearStaleEditingSession = !!state.editingNoteKey;
+  const showPane = state.isAutoShowEnabled && !state.paneVisible;
+  return {
+    clearStaleEditingSession,
+    action: 'open-popover',
+    sendPaneFocusRequest: state.paneRendered || showPane,
+    showPane,
+  };
 }
 
 // #region Editor Title Formatting
@@ -398,6 +532,15 @@ export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
  *   paragraph
  * @param notifyStructureProtected Callback to invoke when the user attempts a paragraph format
  *   while structure is protected
+ * @param restoreSelection Callback invoked immediately before `formatPara` to put the caret back
+ *   where the user last had it. Opening the dropdown's popover moves focus off the editor input,
+ *   and Lexical's blur processing can null the live selection outright — `formatPara` then has no
+ *   paragraph to retag and the pick silently does nothing. The caller supplies this rather than
+ *   this module doing the restore itself: the restore needs `restoreSelectionIfLost` and the
+ *   focus-out selection capture, both of which live in web-view-only code this
+ *   extension-host-reachable module may not import (see the note at the bottom of this file).
+ *   Omitting it leaves the retag exposed to the lost-caret failure, so callers that can lose focus
+ *   to the menu should always pass it.
  * @returns List of marker menu items to be used for the paragraph menu
  */
 export function generateParagraphMenuListItems(
@@ -405,6 +548,7 @@ export function generateParagraphMenuListItems(
   localizedStrings: LanguageStrings,
   isStructureProtected: boolean,
   notifyStructureProtected: () => void,
+  restoreSelection?: () => void,
 ): MarkerMenuItem[] {
   return Object.entries(blockMarkerToBlockNames).map(([marker, title]) => {
     // The trailing detail column would otherwise sit empty for exactly the menu this feature is
@@ -425,6 +569,11 @@ export function generateParagraphMenuListItems(
           notifyStructureProtected();
           return;
         }
+        // Restore the caret BEFORE applying, exactly as the `\` and Enter marker palettes do
+        // before their applies: this menu opens in a popover that takes focus off the editor
+        // input, so by the time an item is picked the live selection may already be gone, and
+        // `formatPara` refuses when there is no selection.
+        restoreSelection?.();
         editorRef.current?.formatPara(marker);
       },
     };
@@ -432,63 +581,11 @@ export function generateParagraphMenuListItems(
   });
 }
 
-/**
- * Function that generates the inline marker menu items that will update as the cursor location
- * changes. In the future this function will take data from an `.sty` file so that users can define
- * their own markers.
- *
- * @param editorRef The ref for the editor component to be able to insert markers
- * @param closeMarkersMenu Callback to close the markers menu after an action
- * @param localizedStrings The localized strings to use to localize the marker titles
- * @param isStructureProtected Whether the project's paragraph structure is currently protected;
- *   when `true`, block-level markers will be disallowed and their action will call
- *   `notifyStructureProtected` instead of inserting
- * @param notifyStructureProtected Callback to invoke when the user attempts to insert a block-level
- *   marker while structure is protected
- * @param parentMarker The current parent marker which is used to determine which markers to include
- * @returns The list of inline marker menu items
- */
-export function generateInlineMarkerMenuListItems(
-  editorRef: MutableRefObject<EditorRef | null>,
-  closeMarkersMenu: () => void,
-  localizedStrings: LanguageStrings,
-  isStructureProtected: boolean,
-  notifyStructureProtected: () => void,
-  parentMarker?: string,
-): MarkerMenuItem[] {
-  if (!parentMarker) return [];
-
-  const markerDetails = usfmMarkers[parentMarker];
-  if (!markerDetails?.children) return [];
-
-  const markerMenuItems: MarkerMenuItem[] = [];
-  Object.entries(markerDetails.children).forEach(([, markers]) => {
-    markerMenuItems.push(
-      ...markers.map((marker): MarkerMenuItem => {
-        const isDisallowed = isStructureProtected && isBlockMarker(marker);
-        return {
-          marker,
-          title:
-            localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
-          isDisallowed,
-          action: () => {
-            // Defense-in-depth: unreachable while the menu renders `isDisallowed` items as disabled
-            // `CommandItem`s (a disabled cmdk item never fires `onSelect`). Kept as a second layer of
-            // protection in case that disabled rendering is ever loosened or the menu wiring changes.
-            if (isDisallowed) {
-              notifyStructureProtected();
-              closeMarkersMenu();
-              return;
-            }
-            editorRef.current?.insertMarker(marker);
-            closeMarkersMenu();
-          },
-        };
-      }),
-    );
-  });
-  return markerMenuItems.sort((a, b) => (a.marker ?? a.title).localeCompare(b.marker ?? b.title));
-}
+// NOTE: the stylesheet-driven inline marker menu generator and the command-palette helpers live in
+// `platform-scripture-editor.web-view.utils.ts`, NOT here — they import runtime values from
+// `@eten-tech-foundation/platform-editor`, whose React-bundling dist must never reach the
+// extension-host (`main.ts`) bundle this module is part of. This module is restricted to
+// `import type` from that package. See that file's header for the full activation-failure story.
 
 // #region Open Editor Dispatch
 
@@ -1037,6 +1134,56 @@ export async function syncOnProjectSwitch(
 
 // #endregion Project-Switch Sync
 
+// #region Finalize Project Switch
+
+/**
+ * Replays the project-switch side effects that `open()`'s replace-tab dispatch normally performs
+ * (S/R sync, admin's shared layout auto-apply, recording recently-opened) — for callers that
+ * already know the target project's Scripture Editor tab is showing correctly, where `open()`'s own
+ * dispatch resolves to `{ kind: 'focus-existing' }` and returns before any of that runs (see
+ * `resolveOpenEditorDispatch`). Used by Platform.Bible core's Power -> Simple mode switch, which
+ * bakes `projectId` directly into a cloned layout instead of routing through `open()`.
+ *
+ * Called non-blocking, well after the switch's overlay has already released (see the caller in
+ * `web-view.service-host.ts`), so by the time this actually runs the user may have already switched
+ * back to Power mode. Mirrors `open()`'s own `needsOverlay` block (main.ts): the sync is
+ * fire-and-forget (`syncOnProjectSwitch` already catches its own errors, and awaiting it here would
+ * delay the shared-layout apply and `recordProjectOpened` by however long a deep Send/Receive
+ * takes, with `recordProjectOpened` never running at all if the user quits mid-sync); and
+ * `applyForProject` re-checks `platform.interfaceMode` fresh immediately before running, since
+ * applying while no longer in Simple mode would wrongly manipulate the Power layout instead of
+ * being a no-op.
+ *
+ * @param papi Backend PAPI instance.
+ * @param projectId The project now showing in the Scripture Editor.
+ * @param applyForProject Callback invoking `SharedLayoutReceiver.applyForProject`. Injected rather
+ *   than imported directly, since the receiver is a stateful instance owned by main.ts.
+ */
+export async function finalizeProjectSwitch(
+  papi: typeof PapiBackend,
+  projectId: string,
+  applyForProject: ((projectId: string) => Promise<void>) | undefined,
+): Promise<void> {
+  // There's no outgoing project here since this replaces the whole Simple layout, not one editor
+  // tab within it.
+  syncOnProjectSwitch(papi, projectId, undefined);
+  if ((await papi.settings.get('platform.interfaceMode')) === 'simple') {
+    await applyForProject?.(projectId);
+  }
+  try {
+    const recentlyOpenedProjects = await papi.dataProviders.get(
+      'platformScripture.recentlyOpenedProjects',
+    );
+    await recentlyOpenedProjects?.recordProjectOpened(projectId);
+  } catch (e) {
+    papi.logger.warn(
+      `finalizeProjectSwitch: failed to record recently-opened project ${projectId}: ${getErrorMessage(e)}`,
+    );
+  }
+}
+
+// #endregion Finalize Project Switch
+
 // #region Text Connection Panels
 
 /**
@@ -1141,6 +1288,26 @@ export function isChapterBlank(usj: Usj): boolean {
 }
 
 /**
+ * Whether a resource panel should say the chapter on screen is empty.
+ *
+ * Chapter 0 is excluded because it is not a chapter. It addresses the book's front matter — `\id`,
+ * `\h`, `\toc`, `\mt`, `\ip` — which carries neither a chapter nor a verse node, so
+ * {@link isChapterBlank} reports it blank and the message would replace real content the reader can
+ * see. It is reachable rather than theoretical: `calculateTopMatch('GEN 0')` yields `chapterNum: 0`
+ * and `handleTopMatchSelect` passes it through with `?? 1`, which a 0 survives.
+ *
+ * Psalm superscriptions and chapter introductions are NOT affected: a chapter carrying a `\d` still
+ * carries its `\c` marker, so {@link isChapterBlank} answers `false` on its own.
+ *
+ * @param usj The chapter-scoped USJ in hand, or `undefined` if none has arrived for this reference.
+ * @param chapterNum The chapter number the panel is displaying.
+ * @returns `true` only when the panel is showing a real chapter and that chapter is empty.
+ */
+export function isBlankChapterOnScreen(usj: Usj | undefined, chapterNum: number): boolean {
+  return chapterNum > 0 && usj !== undefined && isChapterBlank(usj);
+}
+
+/**
  * Builds the Delta operations that insert a blank `\c` + `\v 1..N` scaffold — one chapter marker
  * followed by one verse marker per verse, each with empty text content. Intended for
  * `EditorRef.applyUpdate` when reinstating a chapter number in an effectively-blank chapter.
@@ -1200,3 +1367,259 @@ export function resolveAddChapterNumberClick(
 }
 
 // #endregion Chapter Scaffold Helpers
+
+// #region Missing Book Detection
+// TODO(PT-4416): Move this region to its own module; this file is a grab-bag of unrelated helpers.
+
+/**
+ * Matches the message thrown by C#'s `MissingBookException` (`c-sharp/MissingBookException.cs`),
+ * which formats as `Book number {bookNum} not found in project {projectId}.` Unanchored because the
+ * PDP layer prefixes its own context onto the message before it reaches a web view.
+ *
+ * Message matching is the only signal available: the error crosses the PAPI boundary as a
+ * `PlatformError`/rejected promise carrying a string, with no structured code to key off. Keep this
+ * in lockstep with the C# exception — if that message is ever reworded, every consumer of
+ * {@link isMissingBookError} silently starts reporting "book present".
+ * `c-sharp-tests/MissingBookExceptionTests.cs` pins the exact wording so the two sides cannot drift
+ * apart unnoticed.
+ *
+ * Deliberately matches on the invariant part of the sentence only, so it still succeeds on a
+ * message whose two identities {@link MISSING_BOOK_IDENTITY_REGEX} cannot parse. That is what lets
+ * callers with no neutral outcome degrade safely: the main editor's gate is the identity
+ * comparison, and an unparseable message would otherwise leave it treating the failure as "book
+ * exists" and waiting for USJ that never arrives, so it falls back to this pattern instead.
+ * Detection also decides log level (ordinary navigation vs. a real fault) and tells a stale
+ * missing-book failure from a genuine error.
+ */
+const MISSING_BOOK_MESSAGE_REGEX = /Book number \d+ not found in project/;
+
+/**
+ * Captures which book and which project a missing-book message names, so a caller can tell "the
+ * resource I am showing lacks the book I am showing" from a leftover error about somewhere the user
+ * has already navigated away from.
+ *
+ * The project group is greedy up to the final period because the C# message always terminates with
+ * one, so the id runs to the LAST period rather than the first — a project id containing a period
+ * survives intact instead of being truncated into an id that compares unequal.
+ */
+const MISSING_BOOK_IDENTITY_REGEX = /Book number (\d+) not found in project (.+)\./;
+
+/**
+ * Reads a PDP failure's message, or `''` for anything that is not one.
+ *
+ * Structural gate for both predicates below rather than for their callers. `getErrorMessage` falls
+ * back to `JSON.stringify` for any object without a string `message`, so handing it a success value
+ * serializes the entire chapter USJ on every render and then matches the regex against the
+ * scripture text itself. Guarding here means no caller can reach that by passing a raw hook value.
+ */
+function getMissingBookCandidateMessage(error: unknown): string {
+  if (!isPlatformError(error) && !(error instanceof Error) && typeof error !== 'string') return '';
+  return getErrorMessage(error);
+}
+
+/** The book and project a `MissingBookException` names. */
+export type MissingBookErrorInfo = {
+  /** The 1-based book number that was not found. */
+  bookNum: number;
+  /** The id of the project or resource the book was not found in. */
+  projectId: string;
+};
+
+/**
+ * Reads the book and project out of a missing-book failure, or `undefined` if the failure is
+ * something else or the message does not carry both identities.
+ *
+ * Prefer this over {@link isMissingBookError} wherever the caller knows what it is currently
+ * displaying: a bare boolean cannot distinguish a live failure from a stale one, because a data
+ * hook keeps serving the previous selector's result until the new subscription's first update
+ * lands.
+ *
+ * @param error The error or `PlatformError` to inspect.
+ * @returns The book number and project id, or `undefined` for any other failure.
+ */
+export function parseMissingBookError(error: unknown): MissingBookErrorInfo | undefined {
+  const match = MISSING_BOOK_IDENTITY_REGEX.exec(getMissingBookCandidateMessage(error));
+  if (!match) return undefined;
+  return { bookNum: Number(match[1]), projectId: match[2] };
+}
+
+/**
+ * Whether a failure from a USJ project data provider means "this book is not in this project or
+ * resource" as opposed to a genuine error. Callers use it to swap in a book-not-available view
+ * instead of surfacing a failure or, worse, rendering a silently blank editor.
+ *
+ * Accepts `unknown` so both shapes the error arrives in are covered: a `PlatformError` read off
+ * `useProjectData` and a rejection thrown by an imperative `getChapterUSJ` call.
+ *
+ * This answers only "is it that kind of failure", and answers it for every missing-book message
+ * including one whose identities cannot be parsed. A caller that renders a message about the book
+ * it is currently showing should use {@link parseMissingBookError} and compare, so a leftover error
+ * cannot be attributed to the wrong book.
+ *
+ * @param error The error or `PlatformError` to inspect.
+ * @returns `true` only when the message identifies a missing book; `false` for every other failure,
+ *   including no error at all.
+ */
+export function isMissingBookError(error: unknown): boolean {
+  return MISSING_BOOK_MESSAGE_REGEX.test(getMissingBookCandidateMessage(error));
+}
+
+/**
+ * Whether a failure describes the book AND project a view is displaying right now, and so may be
+ * reported to the user as "this book is not in this text".
+ *
+ * This is the comparison every missing-book surface needs, and the reason a boolean latched when
+ * the failure arrived is not good enough. A flag set from an effect or a `catch` is always one
+ * render behind: the render that first pairs a new book (or a new project) with the previous result
+ * commits before the effect that would clear the flag runs, so that render asserts the message
+ * about a book the text does have. Deriving the answer from the failure's own identities makes the
+ * wrong frame unrepresentable rather than merely unlikely.
+ *
+ * Project ids are compared case-insensitively. C# canonicalizes them to uppercase and reports that
+ * form in the exception, while a view's own id arrives verbatim from a resource reference or web
+ * view state; the PDP lookup folds case, so a casing mismatch is invisible on the data path and
+ * would surface only here.
+ *
+ * @param options.error The value or rejection received from a scripture PDP.
+ * @param options.currentBookNum The book number the view is displaying. 0 or less means the view
+ *   has no book it can name, so no claim is made about one.
+ * @param options.projectId The project or resource id the view is reading from.
+ * @returns `true` only when the failure names both the book and the project currently on screen.
+ */
+export function isMissingBookOnScreen({
+  error,
+  currentBookNum,
+  projectId,
+}: {
+  error: unknown;
+  currentBookNum: number;
+  projectId: string | undefined;
+}): boolean {
+  return isMissingBookInfoOnScreen({
+    missingBook: parseMissingBookError(error),
+    currentBookNum,
+    projectId,
+  });
+}
+
+/**
+ * The comparison half of {@link isMissingBookOnScreen}, for a caller that has already parsed the
+ * failure. Use it when the same message would otherwise be parsed more than once for one decision —
+ * for example alongside {@link isMissingBookError}, or when the parsed identities are also needed
+ * for diagnostics.
+ *
+ * @param options.missingBook The identities {@link parseMissingBookError} read out of the failure,
+ *   or `undefined` if it read none.
+ * @param options.currentBookNum The book number the view is displaying. 0 or less means the view
+ *   has no book it can name, so no claim is made about one.
+ * @param options.projectId The project or resource id the view is reading from.
+ * @returns `true` only when the identities name both the book and the project currently on screen.
+ */
+export function isMissingBookInfoOnScreen({
+  missingBook,
+  currentBookNum,
+  projectId,
+}: {
+  missingBook: MissingBookErrorInfo | undefined;
+  currentBookNum: number;
+  projectId: string | undefined;
+}): boolean {
+  if (!projectId || currentBookNum <= 0) return false;
+  return (
+    !!missingBook &&
+    missingBook.bookNum === currentBookNum &&
+    normalizeProjectId(missingBook.projectId) === normalizeProjectId(projectId)
+  );
+}
+
+/**
+ * Whether a parsed project id looks like the on-screen one with extra text swept up after it.
+ *
+ * The identity capture runs greedily to the terminal period so that project ids containing `.`
+ * survive intact, which means a trailing sentence on the same line lands inside the capture (`"ABC.
+ * See logs"` for project `ABC`). That leaves a missing-book failure looking like one about a
+ * DIFFERENT project — indistinguishable, by comparison alone, from the ordinary case of an error
+ * left over from a resource the user just switched away from. This separates the two: only a
+ * mis-parse yields a captured id that STARTS with the real one.
+ *
+ * @param parsedProjectId The project id read out of the message.
+ * @param projectId The project id the view is reading from.
+ * @returns `true` when the parse looks like an over-run of `projectId` rather than a different
+ *   project.
+ */
+export function isOverrunProjectIdParse(
+  parsedProjectId: string,
+  projectId: string | undefined,
+): boolean {
+  if (!projectId) return false;
+  const parsed = normalizeProjectId(parsedProjectId);
+  const actual = normalizeProjectId(projectId);
+  return parsed !== actual && parsed.startsWith(actual);
+}
+
+/** What a resource panel (Model text, Bible texts, Commentaries) should show in its content area. */
+export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'failed' | 'ready';
+
+/**
+ * Decides whether a resource panel shows a spinner, the book-not-available message, a terminal
+ * failure message, or its editor.
+ *
+ * The message is shown only when the failure names BOTH the book and the project the panel is
+ * currently displaying. That identity check, rather than any timing signal, is what keeps a stale
+ * error from being misattributed: a data hook does not reset to its default when the selector
+ * changes — it keeps serving the PREVIOUS selector's result until the new subscription's first
+ * update lands — so an error in hand may describe the book the user just left or the resource they
+ * just switched away from. Reading it as current would flash "this book is not in this text" on the
+ * way INTO a book the text does have, and on the way OUT of one it does not.
+ *
+ * The hook's `isLoading` flag cannot stand in for the comparison. It is raised by an effect keyed
+ * on the data provider and selector (`create-use-data-hook.util.ts`), and effects run after the
+ * commit, so the render that first pairs a new selector with the previous result still sees
+ * `isLoading` false. Comparing identities has no such edge and needs no bookkeeping.
+ *
+ * Project ids are compared case-insensitively. C# canonicalizes them to uppercase and reports that
+ * form in the exception, while a panel's own id arrives verbatim from a resource reference; the PDP
+ * lookup folds case, so a casing mismatch is invisible on the data path and would surface only
+ * here.
+ *
+ * @param options.resourceProjectId The project id the panel is reading from, or `undefined` if a
+ *   resource has not resolved to one yet.
+ * @param options.usjPossiblyError The chapter USJ, a `PlatformError`, or `undefined` if none yet. A
+ *   caller that seeds its data hook with a default (the Bible texts panel passes `EMPTY_USJ`) never
+ *   passes `undefined`; for those, `resourceProjectId` not having resolved yet is what produces
+ *   `'loading'`.
+ * @param options.currentBookNum The book number the panel is currently displaying. A value of 0 or
+ *   less means the panel has no book it can name, so no claim is made about one.
+ * @returns Which of the four content states to render.
+ */
+export function resolveResourceContentState({
+  resourceProjectId,
+  usjPossiblyError,
+  currentBookNum,
+}: {
+  resourceProjectId: string | undefined;
+  usjPossiblyError: unknown;
+  currentBookNum: number;
+}): ResourceContentState {
+  if (!resourceProjectId || usjPossiblyError === undefined) return 'loading';
+  if (!isPlatformError(usjPossiblyError)) return 'ready';
+
+  // Parsed once and compared, rather than calling `isMissingBookOnScreen` and then
+  // `isMissingBookError`: one decision should not match the same message against both regexes twice.
+  const missingBook = parseMissingBookError(usjPossiblyError);
+  if (isMissingBookInfoOnScreen({ missingBook, currentBookNum, projectId: resourceProjectId }))
+    return 'bookNotAvailable';
+
+  // A missing-book failure naming some other book or resource is the previous selector's result,
+  // held while the new subscription's first update is in flight — a spinner, not a fault. This is
+  // the same ordering `deriveCellState` uses for the Scripture Text Grid, so the two surfaces cannot
+  // give opposite answers about one error.
+  if (missingBook || isMissingBookError(usjPossiblyError)) return 'loading';
+
+  // Any other failure is terminal: the value in hand is an error rather than USJ, and nothing
+  // re-emits until the data provider does. Naming it beats both a spinner that never resolves and an
+  // editor with no scripture in it.
+  return 'failed';
+}
+
+// #endregion Missing Book Detection
