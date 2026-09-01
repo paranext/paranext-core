@@ -350,9 +350,15 @@ test.describe('moving a web view between windows', () => {
     );
     logStep(`window ${window1Id} no longer holds ${webViewIdBeforeMove}`);
 
-    // The window it left has nothing of its own to show. It docks Home rather than closing,
-    // whatever else is open, showing its own freshly minted Home tab — an id that is neither the
-    // moved web view's nor the one the fallback layout used.
+    // The window it left has nothing of its own to show, and it docks Home rather than closing:
+    // its own freshly minted Home tab, an id that is neither the moved web view's nor the one the
+    // fallback layout used.
+    //
+    // Which rule produces that is not observable from here, and this test is not evidence for
+    // either. This window is the only one standing — the window the move created is still waiting
+    // for its content, so it does not count — and it is also the one answering for the application.
+    // Last-one-standing and the primary's exemption both answer Home, so the two are
+    // indistinguishable in this scenario.
     await expectWindowDockHasOnlyHomeTab(mainPage);
     const [dockedHomeWebViewId] = await getHeldWebViewIds(mainPage);
     expect(dockedHomeWebViewId).toBeDefined();

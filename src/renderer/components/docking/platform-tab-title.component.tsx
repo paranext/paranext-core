@@ -443,10 +443,11 @@ export function PlatformTabTitle({
     // Whether emptying closes this window is decided the way main decides it: a window goes when
     // another could be the last one standing, except the window answering for the application,
     // which docks Home instead and so never closes for having been emptied. The window list already
-    // says which one that is, so the tab count alone does not settle the question. Compared against
-    // `true` rather than negated, because a window missing from its own list is not evidence that
-    // it survives: the older answer — treat it as closing, and hide an action that might have been
-    // safe — is the one to keep there. One class of window divides the two lists: a window still
+    // says which one that is, so the tab count alone does not settle the question. The optional
+    // chain is what decides the case where this window is absent from its own list: the read is
+    // then undefined, which is not `true`, so the window is treated as one that would close and the
+    // action is hidden — the conservative half of a question that cannot be answered. One class of
+    // window divides the two lists: a window still
     // waiting for its content is offered as a move target here but does not count toward main's
     // arithmetic, so while one is starting up this errs toward hiding an action that would in fact
     // have been safe.
