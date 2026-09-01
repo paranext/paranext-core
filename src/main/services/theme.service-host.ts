@@ -154,7 +154,7 @@ function mergeUserThemesWithBuiltIns(userThemes: ThemeFamiliesById | undefined):
   return {
     ...Object.fromEntries(
       Object.entries(THEMES_DATA_OBJECT).filter(([themeFamilyId]) =>
-        startsWith(themeFamilyId, USER_THEME_FAMILY_PREFIX),
+        themeFamilyId.startsWith(USER_THEME_FAMILY_PREFIX),
       ),
     ),
     ...(userThemes ?? {}),
@@ -668,7 +668,7 @@ class ThemeDataProviderEngine
     // Reject if changing anything but user-defined families
     if (
       Object.keys(newUserThemes).some(
-        (themeFamilyId) => !startsWith(themeFamilyId, USER_THEME_FAMILY_PREFIX),
+        (themeFamilyId) => !themeFamilyId.startsWith(USER_THEME_FAMILY_PREFIX),
       )
     )
       throw new Error(

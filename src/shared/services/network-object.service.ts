@@ -475,8 +475,9 @@ const createRemoteProxy = (
       if (key === 'then' || key in target) return target[key as keyof typeof target];
       // If the prop requested is a symbol, that doesn't work over the network. Reject
       if (!isString(key)) return undefined;
-      // Don't create remote proxies for events
-      if (startsWith(key, 'on')) return undefined;
+      // Don't create remote proxies for events. Native `startsWith` for the same reason as the
+      // data provider proxy traps — ASCII both sides, fresh key per access, nothing to reuse.
+      if (key.startsWith('on')) return undefined;
 
       // If the local network object doesn't have the property, build a request for it
       const requestFunction = (...args: unknown[]) =>
@@ -522,7 +523,7 @@ const createLocalProxy = (
       if (key === 'constructor' || key === 'dispose') return undefined;
       // Don't proxy events except "onDidDispose" since that's the only way for callers to
       // register functions to run when the object is going away
-      if (isString(key) && startsWith(key, 'on') && key !== 'onDidDispose') return undefined;
+      if (isString(key) && key.startsWith('on') && key !== 'onDidDispose') return undefined;
 
       const property = Reflect.get(target, key, objectBeingSet);
 
@@ -548,7 +549,7 @@ function createNetworkObjectDetails(
   objectFunctionNames.delete('dispose');
   objectFunctionNames.forEach((functionName) => {
     // If we come up with some better way to identify events, we can remove this and related checks
-    if (startsWith(functionName, 'on')) objectFunctionNames.delete(functionName);
+    if (functionName.startsWith('on')) objectFunctionNames.delete(functionName);
   });
   return {
     id,

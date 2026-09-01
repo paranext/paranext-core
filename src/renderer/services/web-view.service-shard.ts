@@ -20,6 +20,7 @@ import {
   type SettingsTabData,
   TAB_TYPE_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
+import { spliceIntoWebViewHead } from '@renderer/services/web-view-head.util';
 import { localThemeService } from '@renderer/services/theme.service';
 import {
   deleteFullWebViewStateById,
@@ -96,14 +97,10 @@ import {
   deserialize,
   getErrorMessage,
   getStylesheetForTheme,
-  indexOf,
   isPlatformError,
   isSerializable,
   isString,
   newGuid,
-  split,
-  startsWith,
-  substring,
   THEME_STYLE_ELEMENT_ID,
   Unsubscriber,
   UnsubscriberAsync,
@@ -536,7 +533,7 @@ function removeNodeIfForbidden(node: Node) {
         removeElement(`iframe with a non-string sandbox value ${sandbox.value}`);
         return;
       }
-      const sandboxValues = split(sandbox.value, ' ');
+      const sandboxValues = sandbox.value.split(' ');
       const src = currentElement.attributes.getNamedItem('src');
       // If the iframe has `src`, only allow `src` sandbox values because browsers that do not
       // support `srcdoc` fall back to `src` so we should be more strict
@@ -2386,9 +2383,9 @@ export async function openOrReloadWebView(
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL && allowedFrameSources)
     allowedFrameSources = allowedFrameSources.filter(
       (hostValue) =>
-        startsWith(hostValue, 'https:') ||
-        startsWith(hostValue, 'papi-extension:') ||
-        startsWith(hostValue, 'http://localhost:'),
+        hostValue.startsWith('https:') ||
+        hostValue.startsWith('papi-extension:') ||
+        hostValue.startsWith('http://localhost:'),
     );
 
   // Validate the WebViewDefinition to make sure it is acceptable
@@ -2704,15 +2701,14 @@ export async function openOrReloadWebView(
       form-action 'self';
     ">`;
 
-  // Add some elements at the start of the head to give access to papi, CSP, styles, etc.
-  const headStart = indexOf(webViewContent, '<head');
-  const headEnd = indexOf(webViewContent, '>', headStart);
-
-  // Inject the CSP, styles, and import scripts into the html if it is not a URL iframe
+  // Add some elements at the start of the head to give access to papi, CSP, styles, etc. if it is
+  // not a URL iframe
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL) {
     const themeStylesheet = `<style nonce="${srcNonce}" id="${THEME_STYLE_ELEMENT_ID}" data-theme-id="${theme.id}">${getStylesheetForTheme(theme)}</style>`;
 
-    webViewContent = `${substring(webViewContent, 0, headEnd + 1)}
+    webViewContent = spliceIntoWebViewHead(
+      webViewContent,
+      `
     ${contentSecurityPolicy}
     <script nonce="${srcNonce}">
     ${imports}
@@ -2723,7 +2719,8 @@ export async function openOrReloadWebView(
     <style nonce="${srcNonce}">
       ${SCROLLBAR_STYLES_RAW}
     </style>
-    ${themeStylesheet}${substring(webViewContent, headEnd + 1)}`;
+    ${themeStylesheet}`,
+    );
   }
 
   const finalWebView: WebViewTabProps = {
