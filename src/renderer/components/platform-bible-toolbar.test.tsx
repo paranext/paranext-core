@@ -13,6 +13,7 @@ import { useOpenProjectBookIds } from '@renderer/hooks/use-open-project-book-ids
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
+import { resetSyncActivity, setSyncActivity } from '@renderer/services/sync-activity-store';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { menuDataService } from '@shared/services/menu-data.service';
@@ -297,6 +298,8 @@ describe('PlatformBibleToolbar — Sync button', () => {
     // deviation from that.
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
+    // The backend sync-activity signal is a module-level store, so it outlives a test unless reset.
+    resetSyncActivity();
   });
 
   it('is not rendered when send/receive is unavailable', async () => {
@@ -312,26 +315,11 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
-  it('is rendered despite unavailable send/receive once the backend reports a live sync', async () => {
+  it('is rendered despite unavailable send/receive once the backend reports a sync', async () => {
     // Syncs also start from paths that never touch the send/receive extension — `startup-tasks.ts`
     // calls the dotnet `syncProjects` command directly. In Simple mode the persistent toast is
     // suppressed in favour of this indicator, so hiding it on a settled `false` would leave a real,
     // multi-minute sync with no surface and no way to cancel.
-    let capturedActivityCallback: ((arg: { isSyncing: boolean }) => void) | undefined;
-    vi.mocked(getNetworkEvent).mockImplementation(
-      // getNetworkEvent has a complex generic signature; cast is required for the mock implementation
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      ((eventName: string) => {
-        if (eventName === 'paratextBibleSendReceive.onSyncActivityChanged')
-          return vi.fn((cb: (arg: { isSyncing: boolean }) => void) => {
-            capturedActivityCallback = cb;
-            return vi.fn();
-          });
-        return vi.fn(() => vi.fn());
-        // getNetworkEvent has a complex generic signature; cast is required for the mock implementation
-        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      }) as any,
-    );
     vi.mocked(useSendReceiveAvailability).mockReturnValue(false);
     mockSendCommand(false);
     render(<PlatformBibleToolbar />);
@@ -343,12 +331,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
       ).not.toBeInTheDocument();
     });
 
-    expect(capturedActivityCallback).toBeDefined();
-    if (!capturedActivityCallback) throw new Error('capturedActivityCallback was not set by mock');
-    const activityCallback = capturedActivityCallback;
-    act(() => {
-      activityCallback({ isSyncing: true });
-    });
+    act(() => setSyncActivity({ isSyncing: true, projectIds: [] }));
 
     await waitFor(() => {
       expect(
@@ -357,6 +340,26 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
+  it('keeps the indicator mounted after the sync finishes', async () => {
+    // The gate is sticky, not live. Driving it from "is syncing right now" unmounts the control in
+    // the same commit the closing snapshot arrives, so the outcome the user was waiting for is never
+    // painted, the live region never announces it, and the status hook's seed loop is torn down
+    // mid-flight.
+    vi.mocked(useSendReceiveAvailability).mockReturnValue(false);
+    mockSendCommand(false);
+    render(<PlatformBibleToolbar />);
+
+    act(() => setSyncActivity({ isSyncing: true, projectIds: [] }));
+    await waitFor(() => {
+      expect(
+        document.querySelector('button[data-testid="toolbar-sync-button"]'),
+      ).toBeInTheDocument();
+    });
+
+    act(() => setSyncActivity({ isSyncing: false, projectIds: [] }));
+
+    expect(document.querySelector('button[data-testid="toolbar-sync-button"]')).toBeInTheDocument();
+  });
   it('is visible and interactive while send/receive availability is unknown (fail-open)', async () => {
     // Availability is unknown while the extension host is busy or send/receive is still activating.
     // The button must stay visible through that — only a settled `false` hides it.

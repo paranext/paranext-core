@@ -1,86 +1,83 @@
 import { renderHook, act } from '@testing-library/react';
-import { vi } from 'vitest';
-import { getNetworkEvent } from '@shared/services/network.service';
+import {
+  resetSyncActivity,
+  setSyncActivity,
+  setSyncActivityUnknown,
+} from '@renderer/services/sync-activity-store';
 import { useBackendSyncActivity } from './use-backend-sync-activity.hook';
-
-vi.mock('@shared/services/network.service', () => ({
-  getNetworkEvent: vi.fn(() => vi.fn(() => vi.fn())),
-}));
-
-/**
- * Captures the callback the hook subscribes to `onSyncActivityChanged` with so tests can fire it.
- * Must be installed before `renderHook`.
- */
-function captureActivityCallback() {
-  let callback: ((payload: unknown) => void) | undefined;
-  vi.mocked(getNetworkEvent).mockImplementation(
-    (eventName: string) =>
-      // getNetworkEvent returns PlatformEvent, whose generic signature (parameterized per event
-      // name) is incompatible with a single vi.fn implementation shared across every event name.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      vi.fn((cb: (payload: unknown) => void) => {
-        if (eventName === 'paratextBibleSendReceive.onSyncActivityChanged') callback = cb;
-        return vi.fn();
-      }) as never,
-  );
-  return (payload: unknown) => {
-    if (!callback) throw new Error('onSyncActivityChanged callback was not captured');
-    const emit = callback;
-    act(() => emit(payload));
-  };
-}
 
 describe('useBackendSyncActivity', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    resetSyncActivity();
   });
 
-  it('reports not syncing before any event arrives', () => {
-    captureActivityCallback();
-
+  it('reports no sync activity before any snapshot arrives', () => {
     const { result } = renderHook(() => useBackendSyncActivity());
 
     expect(result.current).toBe(false);
   });
 
-  it('sends no commands — it is subscription-only', () => {
-    const emit = captureActivityCallback();
+  it('reports a sync the store already held when it mounts', () => {
+    // The startup service seeds the store, so a renderer that comes up mid-sync has the answer
+    // before this hook ever renders. `useSyncExternalStore` re-reads on subscribe, so a snapshot
+    // that landed between the first render and the subscription cannot be missed either.
+    setSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] });
 
-    renderHook(() => useBackendSyncActivity());
-    emit({ isSyncing: true, projectIds: [] });
-
-    // The one thing that makes this hook cheap enough to mount unconditionally: it subscribes to
-    // exactly one event and never issues a request, so a build with no send/receive backend pays
-    // nothing for it.
-    expect(vi.mocked(getNetworkEvent).mock.calls.map(([name]) => name)).toEqual([
-      'paratextBibleSendReceive.onSyncActivityChanged',
-    ]);
-  });
-
-  it('follows the backend from syncing to idle', () => {
-    const emit = captureActivityCallback();
     const { result } = renderHook(() => useBackendSyncActivity());
 
-    emit({ isSyncing: true, projectIds: ['PROJ1'] });
+    expect(result.current).toBe(true);
+  });
+
+  it('reports a sync that starts while it is mounted', () => {
+    const { result } = renderHook(() => useBackendSyncActivity());
+
+    act(() => setSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] }));
+
+    expect(result.current).toBe(true);
+  });
+
+  it('stays true after the sync finishes, so the indicator survives to report the outcome', () => {
+    // The latch. A gate on the live flag unmounts the sync indicator in the same commit the sync
+    // ends: the terminal state is never painted, the live region never announces it, and the status
+    // hook's seed loop is torn down mid-flight.
+    const { result } = renderHook(() => useBackendSyncActivity());
+
+    act(() => setSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] }));
     expect(result.current).toBe(true);
 
-    emit({ isSyncing: false, projectIds: [] });
+    act(() => setSyncActivity({ isSyncing: false, projectIds: [] }));
+
+    expect(result.current).toBe(true);
+  });
+
+  it('stays true when the signal stops being able to answer mid-sync', () => {
+    // "Could not tell" is not evidence the sync ended, and its outcome is exactly what the indicator
+    // still has to report.
+    const { result } = renderHook(() => useBackendSyncActivity());
+
+    act(() => setSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] }));
+    act(() => setSyncActivityUnknown());
+
+    expect(result.current).toBe(true);
+  });
+
+  it('stays false for a session whose backend never reports a sync', () => {
+    // Plain Platform.Bible: the backend emits one idle baseline per start and nothing else, so the
+    // indicator must not appear on the strength of that.
+    const { result } = renderHook(() => useBackendSyncActivity());
+
+    act(() => setSyncActivity({ isSyncing: false, projectIds: [] }));
+    act(() => setSyncActivityUnknown());
+
     expect(result.current).toBe(false);
   });
 
-  it.each([
-    ['a missing payload', undefined],
-    ['a null payload', undefined],
-    ['a non-boolean isSyncing', { isSyncing: 'yes' }],
-    ['an absent isSyncing', { projectIds: ['PROJ1'] }],
-  ])('does not report syncing for %s', (_label, payload) => {
-    // The payload crosses a process boundary from C#, so a malformed one must not be coerced into
-    // `true` by truthiness — this hook can only ever reveal the indicator, so a false positive
-    // would show a sync surface with no sync behind it.
-    const emit = captureActivityCallback();
-    const { result } = renderHook(() => useBackendSyncActivity());
+  it('unsubscribes on unmount', () => {
+    const { result, unmount } = renderHook(() => useBackendSyncActivity());
+    unmount();
 
-    emit(payload);
+    // Nothing should throw, and the unmounted hook keeps its last value rather than tracking on.
+    act(() => setSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] }));
 
     expect(result.current).toBe(false);
   });

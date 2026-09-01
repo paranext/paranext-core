@@ -1,40 +1,35 @@
-import { getNetworkEvent } from '@shared/services/network.service';
-import { useEvent } from 'platform-bible-react';
-import type { SyncActivitySnapshot } from 'paratext-bible-send-receive';
-import { useCallback, useMemo, useState } from 'react';
+import {
+  hasObservedSyncRun,
+  subscribeToSyncActivity,
+} from '@renderer/services/sync-activity-store';
+import { useSyncExternalStore } from 'react';
 
 /**
- * Whether the backend currently reports a Send/Receive run in progress.
+ * Whether the backend has reported a Send/Receive run at any point in this renderer's life.
  *
- * Deliberately the cheapest possible read of that signal: it subscribes to
- * `paratextBibleSendReceive.onSyncActivityChanged` and nothing else — no pull command, no seed
- * retries, no availability probing. In a build with no Send/Receive backend the event simply never
- * fires and this stays `false`, at the cost of one subscription.
+ * This answers the question _upstream_ of the sync status itself: whether to mount the sync
+ * indicator at all. Without it, a settled "Send/Receive is not available" answer hides the
+ * indicator even while the backend is genuinely mid-sync — which is exactly when the user most
+ * needs to see one. {@link useSyncStatus} answers what the status IS; this only decides whether
+ * anything is there to show it.
  *
- * That cheapness is the point. {@link useSyncStatus} answers the same question far better (it seeds
- * on mount, unions the extension's claim with the backend signal, and tracks outcomes), but it is
- * expensive enough that the toolbar only mounts its consumer once Send/Receive looks present. This
- * hook exists for the decision _upstream_ of that: whether to mount the indicator at all. Without
- * it, a settled "Send/Receive is not available" answer hides the indicator even while the backend
- * is genuinely mid-sync — which is exactly when the user most needs to see one.
+ * STICKY, and that is the point. The live flag would unmount the indicator in the same commit the
+ * sync finishes: the terminal state would never be rendered or announced, and the status hook's
+ * seed loops would be torn down mid-flight. Once a sync has been seen, the surface that reports on
+ * it stays for the session. So this can only ever cause the indicator to be SHOWN, never to be
+ * hidden.
  *
- * Returns `false` until an event says otherwise, so it can only ever cause the indicator to be
- * shown, never to be hidden.
+ * The signal is seeded, not merely subscribed — see `initSyncActivityService`, which reads
+ * `getSyncActivity` on startup so a sync already running when the renderer comes up is reported
+ * immediately rather than at its closing transition. Reading a shared store rather than holding its
+ * own subscription keeps one validator and one delivery of each snapshot for both consumers, and
+ * keeps a sync tick from re-rendering the whole toolbar in Power mode, where nothing reads it.
  */
 export function useBackendSyncActivity(): boolean {
-  const [isBackendSyncing, setIsBackendSyncing] = useState(false);
-
-  const handleSyncActivityChanged = useCallback((activity: SyncActivitySnapshot) => {
-    // Defensive: the payload crosses a process boundary from C#, and a malformed one must not be
-    // coerced into `true` by truthiness.
-    setIsBackendSyncing(activity?.isSyncing === true);
-  }, []);
-
-  const onSyncActivityChanged = useMemo(
-    () => getNetworkEvent('paratextBibleSendReceive.onSyncActivityChanged'),
-    [],
-  );
-  useEvent(onSyncActivityChanged, handleSyncActivityChanged);
-
-  return isBackendSyncing;
+  // `subscribeToSyncActivity` already matches the `useSyncExternalStore` subscribe signature and is
+  // a stable module-level reference, so it can be passed directly (no wrapper needed). The snapshot
+  // is a primitive boolean (compared by value), so it never triggers the infinite-loop guard.
+  return useSyncExternalStore(subscribeToSyncActivity, hasObservedSyncRun);
 }
+
+export default useBackendSyncActivity;

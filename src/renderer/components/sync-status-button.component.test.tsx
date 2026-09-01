@@ -8,6 +8,7 @@ import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { notificationService } from '@shared/services/notification.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
+import { resetSyncActivity, setSyncActivity } from '@renderer/services/sync-activity-store';
 import type {
   ResultInfo,
   ResultStatus,
@@ -157,39 +158,21 @@ const mockSyncState = (state: SyncState | Error | undefined) => {
 const mockSyncStateAndActivity = (state: SyncState, activity: SyncActivitySnapshot) => {
   mockCommands({
     'paratextBibleSendReceive.getSyncState': () => state,
-    'paratextBibleSendReceive.getSyncActivity': () => activity,
   });
+  // The activity signal reaches the hook through a shared store that `initSyncActivityService` seeds
+  // at startup, not through a command this component reads. Seeding the store here stands in for
+  // that, and keeps this suite asserting the component's behaviour rather than the service's.
+  setSyncActivity(activity);
 };
 
 /**
- * Captures the `onSyncActivityChanged` handler the component subscribes with, so a test can drive
- * the activity-only path — the Simple-mode startup sync, which has no claim behind it. Returns a
- * fire function; calling it before render throws rather than silently asserting nothing.
+ * Pushes a later activity snapshot into the shared store while the component is mounted, driving
+ * the activity-only path — the Simple-mode startup sync, which has no claim behind it.
  */
-const captureSyncActivityEvent = () => {
-  let handler: ((activity: SyncActivitySnapshot) => void) | undefined;
-  vi.mocked(getNetworkEvent).mockImplementation(
-    // `getNetworkEvent` is generic over the event payload, so a mock returning different subscribe
-    // functions per event name cannot be expressed in its signature.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-    ((eventName: string) => {
-      if (eventName === 'paratextBibleSendReceive.onSyncActivityChanged')
-        return vi.fn((cb: (activity: SyncActivitySnapshot) => void) => {
-          handler = cb;
-          return vi.fn();
-        });
-      return vi.fn(() => vi.fn());
-      // The assertion applies to the whole mock body above, so the directive has to sit here.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-    }) as any,
-  );
-  return (activity: SyncActivitySnapshot) => {
-    if (!handler) throw new Error('The component never subscribed to onSyncActivityChanged');
-    const fire = handler;
-    act(() => {
-      fire(activity);
-    });
-  };
+const captureSyncActivityEvent = () => (activity: SyncActivitySnapshot) => {
+  act(() => {
+    setSyncActivity(activity);
+  });
 };
 
 /**
@@ -315,6 +298,9 @@ beforeAll(() => {
 beforeEach(() => {
   vi.resetAllMocks();
   mockNoSyncStateEvents();
+  // The backend sync-activity signal lives in a module-level store, so it outlives a test unless
+  // reset — a snapshot one test seeds would otherwise still be standing in the next.
+  resetSyncActivity();
   vi.mocked(notificationService.send).mockResolvedValue('notification-id');
   vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([]);
 });

@@ -3,11 +3,12 @@ import { vi } from 'vitest';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
-import type {
-  SyncActivitySnapshot,
-  SyncProgressEvent,
-  SyncState,
-} from 'paratext-bible-send-receive';
+import {
+  resetSyncActivity,
+  setSyncActivity,
+  setSyncActivityUnknown,
+} from '@renderer/services/sync-activity-store';
+import type { SyncProgressEvent, SyncState } from 'paratext-bible-send-receive';
 import {
   SYNC_SEED_RETRY_INTERVAL_MS,
   SYNC_SEED_RETRY_WINDOW_MS,
@@ -50,11 +51,6 @@ function captureEventCallbacks() {
     emitSyncStateChanged: (payload: SyncProgressEvent) => {
       const cb = callbacks.get('paratextBibleSendReceive.onSyncStateChanged');
       if (!cb) throw new Error('onSyncStateChanged callback was not captured');
-      act(() => cb(payload));
-    },
-    emitSyncActivityChanged: (payload: SyncActivitySnapshot) => {
-      const cb = callbacks.get('paratextBibleSendReceive.onSyncActivityChanged');
-      if (!cb) throw new Error('onSyncActivityChanged callback was not captured');
       act(() => cb(payload));
     },
     emitExtensionsReloaded: () => {
@@ -115,16 +111,10 @@ function mockCommands() {
   return {
     mockGetSyncState: (...answers: (Partial<SyncState> | DelayedAnswer | Error)[]) =>
       queues.set('paratextBibleSendReceive.getSyncState', answers),
-    mockGetSyncActivity: (...answers: (unknown | Error)[]) =>
-      queues.set('paratextBibleSendReceive.getSyncActivity', answers),
     countGetSyncStateCalls: () =>
       vi
         .mocked(sendCommand)
         .mock.calls.filter((call) => call[0] === 'paratextBibleSendReceive.getSyncState').length,
-    countGetSyncActivityCalls: () =>
-      vi
-        .mocked(sendCommand)
-        .mock.calls.filter((call) => call[0] === 'paratextBibleSendReceive.getSyncActivity').length,
   };
 }
 
@@ -170,17 +160,41 @@ function completedStateFor(statusByProjectId: Record<string, string>): Partial<S
   );
 }
 
+/**
+ * Pre-seeds the shared sync-activity store, standing in for `initSyncActivityService` having
+ * already seeded it before this hook renders. Called BEFORE `renderHook`.
+ *
+ * The activity signal is no longer this hook's to fetch: one startup service owns the subscription,
+ * the seed and its retries, and every consumer reads the store. So these tests supply that input
+ * directly, and the seeding/retry/validation behaviour is covered in
+ * `src/renderer/services/sync-activity-service.test.ts`.
+ */
+function seedActivity(snapshot: { isSyncing: boolean; projectIds?: readonly string[] }) {
+  setSyncActivity(snapshot);
+}
+
+/** Pushes a later activity snapshot while the hook is mounted. */
+function pushActivity(snapshot: { isSyncing: boolean; projectIds?: readonly string[] }) {
+  act(() => setSyncActivity(snapshot));
+}
+
+/** Puts the activity signal back to "could not tell". */
+function pushActivityUnknown() {
+  act(() => setSyncActivityUnknown());
+}
+
 describe('useSyncStatus', () => {
   let commands: ReturnType<typeof mockCommands>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    resetSyncActivity();
     commands = mockCommands();
-    // Default both commands to a quiet baseline so a test that only sets up one of them doesn't
-    // hang forever waiting on the other's unmocked queue.
+    // Quiet baseline so a test that only sets up the claim doesn't hang on an unmocked queue, and so
+    // the activity signal contributes nothing unless a test says otherwise.
     commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
-    commands.mockGetSyncActivity({ isSyncing: false, projectIds: [] });
+    seedActivity({ isSyncing: false, projectIds: [] });
   });
 
   afterEach(() => {
@@ -192,7 +206,7 @@ describe('useSyncStatus', () => {
     // startup-tasks.ts calls the dotnet command directly, so the extension raises no claim and
     // getSyncState answers isSyncing: false. Without the activity union this reports idle.
     commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
-    commands.mockGetSyncActivity({ isSyncing: true, projectIds: [] });
+    seedActivity({ isSyncing: true, projectIds: [] });
 
     const { result } = renderHook(() => useSyncStatus());
     await act(async () => {
@@ -205,9 +219,9 @@ describe('useSyncStatus', () => {
 
   it('names projects once the backend resolves its merge set', async () => {
     commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
-    commands.mockGetSyncActivity({ isSyncing: true, projectIds: [] });
+    seedActivity({ isSyncing: true, projectIds: [] });
     mockProjectName('PROJ1', 'HNF');
-    const { emitSyncActivityChanged } = captureEventCallbacks();
+    captureEventCallbacks();
 
     const { result } = renderHook(() => useSyncStatus());
     await act(async () => {
@@ -215,7 +229,7 @@ describe('useSyncStatus', () => {
     });
     expect(result.current.status).toBe('syncing');
 
-    emitSyncActivityChanged({ isSyncing: true, projectIds: ['PROJ1'] });
+    pushActivity({ isSyncing: true, projectIds: ['PROJ1'] });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -229,8 +243,8 @@ describe('useSyncStatus', () => {
       syncingProjectIds: ['PROJ1'],
       lastRequestedProjectIds: [],
     });
-    commands.mockGetSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] });
-    const { emitSyncActivityChanged } = captureEventCallbacks();
+    seedActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    captureEventCallbacks();
 
     const { result } = renderHook(() => useSyncStatus());
     await act(async () => {
@@ -239,7 +253,7 @@ describe('useSyncStatus', () => {
     expect(result.current.status).toBe('syncing');
 
     // The backend clears first; the extension claim has not released yet.
-    emitSyncActivityChanged({ isSyncing: false, projectIds: [] });
+    pushActivity({ isSyncing: false, projectIds: [] });
 
     expect(result.current.status).toBe('syncing');
   });
@@ -253,7 +267,7 @@ describe('useSyncStatus', () => {
       syncingProjectIds: ['PROJ1'],
       lastRequestedProjectIds: [],
     });
-    commands.mockGetSyncActivity(new Error('method not found'));
+    // No activity snapshot at all: the store's initial "could not tell".
 
     const { result } = renderHook(() => useSyncStatus());
     await act(async () => {
@@ -261,20 +275,6 @@ describe('useSyncStatus', () => {
     });
 
     expect(result.current.status).toBe('syncing');
-  });
-
-  it('ignores an activity payload in an unexpected shape', async () => {
-    // Regression guard: a malformed snapshot from an untrusted cross-process boundary must be
-    // dropped by isValidSyncActivity rather than crash the hook or fabricate a status.
-    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
-    commands.mockGetSyncActivity({ isSyncing: 'yes' });
-
-    const { result } = renderHook(() => useSyncStatus());
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-
-    expect(result.current.status).toBe('idle');
   });
 
   it('keeps activity-derived project ids through a claim event that clears the claim set', async () => {
@@ -288,7 +288,7 @@ describe('useSyncStatus', () => {
       // from here on can only come from the activity signal's own state.
       { isSyncing: false, lastRequestedProjectIds: [] },
     );
-    commands.mockGetSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    seedActivity({ isSyncing: true, projectIds: ['PROJ1'] });
     mockProjectName('PROJ1', 'HNF');
     const { emitSyncStateChanged } = captureEventCallbacks();
 
@@ -321,7 +321,7 @@ describe('useSyncStatus', () => {
         slowReadMs,
       ),
     );
-    commands.mockGetSyncActivity({ isSyncing: true, projectIds: ['PROJ1', 'PROJ2'] });
+    seedActivity({ isSyncing: true, projectIds: ['PROJ1', 'PROJ2'] });
     mockProjectNames({ PROJ1: 'HNF', PROJ2: 'XYZ' });
     const { emitSyncStateChanged } = captureEventCallbacks();
 
@@ -356,7 +356,7 @@ describe('useSyncStatus', () => {
     // Regression guard: `unknown` means "the claim could not tell", not "nothing is syncing". The
     // union must win over an `unknown` claim just as it wins over `idle`.
     commands.mockGetSyncState(new Error('extension host not ready'));
-    commands.mockGetSyncActivity({ isSyncing: true, projectIds: [] });
+    seedActivity({ isSyncing: true, projectIds: [] });
 
     const { result } = renderHook(() => useSyncStatus());
     await act(async () => {
@@ -371,7 +371,7 @@ describe('useSyncStatus', () => {
     // of retry budget must be reported as `unknown`, and must never fall back to `idle` — that
     // would claim nothing has synced on the strength of a read that never succeeded.
     commands.mockGetSyncState(new Error('extension host not ready'));
-    commands.mockGetSyncActivity({ isSyncing: false, projectIds: [] });
+    seedActivity({ isSyncing: false, projectIds: [] });
 
     const { result } = renderHook(() => useSyncStatus());
     const readsAfterFirstAttempt = commands.countGetSyncStateCalls();
@@ -390,39 +390,12 @@ describe('useSyncStatus', () => {
     expect(result.current.status).toBe('unknown');
   });
 
-  it('retries the activity seed and recovers once a later attempt answers', async () => {
-    // Regression guard for the case this feature exists for: the renderer can mount while the
-    // dotnet backend has not registered getSyncActivity yet (the startup race). A single
-    // non-retrying read would reject once and show idle for the rest of the sync, since the next
-    // transition event may not arrive until the sync ends.
-    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
-    commands.mockGetSyncActivity(new Error('method not found'), {
-      isSyncing: true,
-      projectIds: [],
-    });
-
-    const { result } = renderHook(() => useSyncStatus());
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    expect(result.current.status).toBe('idle');
-    expect(commands.countGetSyncActivityCalls()).toBe(1);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS);
-    });
-
-    expect(commands.countGetSyncActivityCalls()).toBe(2);
-    expect(result.current.status).toBe('syncing');
-  });
-
   it('stops the claim seed on unmount, both its pending retry and its in-flight read', async () => {
     // Both halves of the seed's teardown. A pending retry that outlives the hook keeps reading for
     // the rest of the retry window, and a read still in flight at unmount comes back to schedule
     // the next retry — and to set state on a hook that no longer exists — unless its run is
     // recognised as abandoned.
     commands.mockGetSyncState(new Error('extension host not ready'));
-    commands.mockGetSyncActivity(new Error('method not found'));
 
     const withPendingRetry = renderHook(() => useSyncStatus());
     await act(async () => {
@@ -447,39 +420,9 @@ describe('useSyncStatus', () => {
     expect(commands.countGetSyncStateCalls()).toBe(1);
   });
 
-  it('stops the activity seed on unmount, both its pending retry and its in-flight read', async () => {
-    // Same teardown, on the activity seed's own effect, refs and retry budget — see the claim-seed
-    // test above.
-    commands.mockGetSyncState(new Error('extension host not ready'));
-    commands.mockGetSyncActivity(new Error('method not found'));
-
-    const withPendingRetry = renderHook(() => useSyncStatus());
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    expect(commands.countGetSyncActivityCalls()).toBe(1);
-
-    withPendingRetry.unmount();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS * 3);
-    });
-    expect(commands.countGetSyncActivityCalls()).toBe(1);
-
-    vi.mocked(sendCommand).mockClear();
-    const withReadInFlight = renderHook(() => useSyncStatus());
-    withReadInFlight.unmount();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS * 3);
-    });
-
-    expect(commands.countGetSyncActivityCalls()).toBe(1);
-  });
-
-  // --- Claim-signal behavior, with the activity signal reporting no sync of its own ---
-
   it('reports idle when nothing has synced and neither signal says otherwise', async () => {
     commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
-    commands.mockGetSyncActivity({ isSyncing: false, projectIds: [] });
+    seedActivity({ isSyncing: false, projectIds: [] });
 
     const { result } = renderHook(() => useSyncStatus());
     await act(async () => {
@@ -499,7 +442,7 @@ describe('useSyncStatus', () => {
       syncingProjectIds: ['proj1'],
       lastRequestedProjectIds: [],
     });
-    commands.mockGetSyncActivity({ isSyncing: false, projectIds: [] });
+    seedActivity({ isSyncing: false, projectIds: [] });
     mockProjectName('PROJ1', 'HNF');
 
     const { result } = renderHook(() => useSyncStatus());
@@ -515,9 +458,9 @@ describe('useSyncStatus', () => {
     // A casing flip is not a set change: reporting one would re-run the whole metadata lookup and
     // re-render for projects that never changed.
     commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
-    commands.mockGetSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    seedActivity({ isSyncing: true, projectIds: ['PROJ1'] });
     mockProjectName('PROJ1', 'HNF');
-    const { emitSyncActivityChanged } = captureEventCallbacks();
+    captureEventCallbacks();
 
     const { result } = renderHook(() => useSyncStatus());
     await act(async () => {
@@ -527,7 +470,7 @@ describe('useSyncStatus', () => {
     expect(projectsBefore).toEqual([{ projectId: 'PROJ1', name: 'HNF' }]);
 
     // The same project, reported in the other casing.
-    emitSyncActivityChanged({ isSyncing: true, projectIds: ['proj1'] });
+    pushActivity({ isSyncing: true, projectIds: ['proj1'] });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -542,7 +485,7 @@ describe('useSyncStatus', () => {
       syncingProjectIds: ['PROJ1'],
       lastRequestedProjectIds: [],
     });
-    commands.mockGetSyncActivity({ isSyncing: false, projectIds: [] });
+    seedActivity({ isSyncing: false, projectIds: [] });
     mockProjectName('PROJ1', 'HNF');
 
     const { result } = renderHook(() => useSyncStatus());
@@ -634,8 +577,8 @@ describe('useSyncStatus', () => {
     // check — and would do so even if this sync had failed. The activity signal reports only that a
     // sync is running, never how one finished, so `unknown` is the whole of what is knowable.
     commands.mockGetSyncState(completedStateFor({ PROJ1: 'succeeded' }));
-    commands.mockGetSyncActivity({ isSyncing: false, projectIds: [] });
-    const { emitSyncActivityChanged } = captureEventCallbacks();
+    seedActivity({ isSyncing: false, projectIds: [] });
+    captureEventCallbacks();
 
     const { result } = renderHook(() => useSyncStatus());
     await act(async () => {
@@ -643,13 +586,13 @@ describe('useSyncStatus', () => {
     });
     expect(result.current.status).toBe('synced');
 
-    emitSyncActivityChanged({ isSyncing: true, projectIds: [] });
+    pushActivity({ isSyncing: true, projectIds: [] });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
     expect(result.current.status).toBe('syncing');
 
-    emitSyncActivityChanged({ isSyncing: false, projectIds: [] });
+    pushActivity({ isSyncing: false, projectIds: [] });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -664,8 +607,8 @@ describe('useSyncStatus', () => {
       { isSyncing: true, syncingProjectIds: ['PROJ1'], lastRequestedProjectIds: [] },
       completedStateFor({ PROJ1: 'succeeded' }),
     );
-    commands.mockGetSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] });
-    const { emitSyncStateChanged, emitSyncActivityChanged } = captureEventCallbacks();
+    seedActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    const { emitSyncStateChanged } = captureEventCallbacks();
 
     const { result } = renderHook(() => useSyncStatus());
     await act(async () => {
@@ -674,7 +617,7 @@ describe('useSyncStatus', () => {
     expect(result.current.status).toBe('syncing');
 
     emitSyncStateChanged({ isSyncing: false });
-    emitSyncActivityChanged({ isSyncing: false, projectIds: [] });
+    pushActivity({ isSyncing: false, projectIds: [] });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -684,11 +627,11 @@ describe('useSyncStatus', () => {
 
   // --- Recovering from a read that could not answer ---
 
-  it('keeps the claim seed retrying after an event whose own read failed', async () => {
+  it('recovers a real answer after an event whose own follow-up read failed', async () => {
     // The event applied nothing: its read failed, so the `unknown` it produced came from the failure
-    // rather than from a snapshot. Ending the seed there — which treating the event's ARRIVAL as
-    // "state applied" does — strands that `unknown` for the session while the seed still had budget
-    // to get a real answer.
+    // rather than from a snapshot. The mount seed is retired by then — the handler retires it on
+    // entry, which is what stops a snapshot read BEFORE the sync ended from resurrecting it — so the
+    // retry has to come from the event path, or that `unknown` is the session's final answer.
     commands.mockGetSyncState(
       new Error('extension host not ready'),
       new Error('extension host not ready'),
@@ -705,15 +648,39 @@ describe('useSyncStatus', () => {
 
     emitSyncStateChanged({ isSyncing: false });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    expect(result.current.status).toBe('unknown');
-
-    await act(async () => {
       await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS);
     });
 
     expect(result.current.status).toBe('idle');
+  });
+
+  it('does not let a slow seed read resurrect a sync that has already ended', async () => {
+    // The failure the event-entry retirement exists for. On a cold start the seed's `getSyncState` can
+    // still be in flight when the sync ends: the closing event arrives, its own follow-up read fails,
+    // and then the seed's original read resolves carrying `isSyncing: true`. Applying it puts the
+    // indicator back to "Syncing PROJ1" — with a live Cancel over a finished sync — and nothing
+    // arrives later to correct it, so it stands until the renderer reloads.
+    commands.mockGetSyncState(
+      // The seed's read: slow, and describing the sync as still running.
+      delayedAnswer(
+        { isSyncing: true, syncingProjectIds: ['PROJ1'], lastRequestedProjectIds: [] },
+        5000,
+      ),
+      // The closing event's follow-up read: unreadable.
+      new Error('extension host not ready'),
+      new Error('extension host not ready'),
+    );
+    mockProjectName('PROJ1', 'HNF');
+    const { emitSyncStateChanged } = captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    emitSyncStateChanged({ isSyncing: false });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+
+    expect(result.current.status).not.toBe('syncing');
+    expect(result.current.syncingProjects).toEqual([]);
   });
 
   it('re-seeds when extensions reload, so an exhausted retry window is not permanent', async () => {
@@ -749,7 +716,7 @@ describe('useSyncStatus', () => {
     // `isSyncing: true` would otherwise pin the union at `syncing`, spinner and live Cancel included,
     // for the life of the renderer.
     commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
-    commands.mockGetSyncActivity({ isSyncing: true, projectIds: [] });
+    seedActivity({ isSyncing: true, projectIds: [] });
     const { emitExtensionsReloaded } = captureEventCallbacks();
 
     const { result } = renderHook(() => useSyncStatus());
@@ -758,8 +725,11 @@ describe('useSyncStatus', () => {
     });
     expect(result.current.status).toBe('syncing');
 
-    // Send/receive is gone after the reload: every read from here on rejects.
-    commands.mockGetSyncActivity(new Error('method not found'));
+    // Send/receive is gone after the reload: the claim's reads reject, and the activity signal can
+    // no longer tell either. Its service reports that as UNKNOWN rather than idle, and the union has
+    // to stop claiming a sync on the strength of a snapshot nothing can still confirm.
+    commands.mockGetSyncState(new Error('method not found'));
+    pushActivityUnknown();
     emitExtensionsReloaded();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_WINDOW_MS + SYNC_SEED_RETRY_INTERVAL_MS);
@@ -777,7 +747,7 @@ describe('useSyncStatus', () => {
     commands.mockGetSyncState(
       JSON.parse('{"isSyncing":true,"syncingProjectIds":null,"lastRequestedProjectIds":[]}'),
     );
-    commands.mockGetSyncActivity({ isSyncing: false, projectIds: [] });
+    seedActivity({ isSyncing: false, projectIds: [] });
 
     const { result } = renderHook(() => useSyncStatus());
     await act(async () => {
