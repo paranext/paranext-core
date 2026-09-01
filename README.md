@@ -201,16 +201,20 @@ Running `npm install` in `paranext-core` builds development versions of the npm 
 
 This means `scripture-editors` is free to add, bump, or drop its own dependencies without this repo restating them, and nothing here resolves the editor from the npm registry.
 
-**Stage before installing on a new clone:**
+**Fresh clones just work:** on the very first `npm install`, the staged packages are created
+during the install itself — after npm has already resolved the dependency tree — so the install
+automatically runs a second pass to pick up their dependencies. You will see a message about this;
+no action is needed. (`npm ci` doesn't need the second pass at all: it installs the staged
+packages' dependencies from `package-lock.json`.) Repeat installs skip the editor build entirely
+when the staged copy is already current, so this cost is paid only when `scripture-editors`
+actually changed.
 
-```bash
-npm run stage-dev-packages
-npm install
-```
-
-npm reads the `file:` targets' manifests from the on-disk state it saw when it started, and in a workspace repo it runs the root's `preinstall` only after the workspaces' own install scripts — so on a fresh clone `extensions`' `postinstall` fails resolving the editor before staging ever runs. Staging is still wired to `preinstall`, so an existing checkout re-stages on every install and you never think about this again; it just cannot bootstrap a clone from nothing. If you forget, `npm install` fails with `Cannot find module '@eten-tech-foundation/scripture-utilities'` — run the two commands above and it will succeed. Staging is a copy of exactly the files the package would publish rather than a link to the source folder: the source lives in a pnpm workspace whose per-package `node_modules` holds its own `react` and `lexical`, and linking straight to it would bind the editor to those copies instead of ours.
-
-`scripture-editors` is maintained by this team at [`paranext/scripture-editors`](https://github.com/paranext/scripture-editors). It was previously developed at `eten-tech-foundation/scripture-editors`; that repository still exists and is reachable as a remote, but development happens in the paranext organization. If you have an older checkout whose `origin` still points at `eten-tech-foundation`, `npm install` will stop and tell you exactly how to re-point it — it preserves the old URL as a second remote rather than overwriting it.
+**When `scripture-editors`' own dependencies change** (its `package.json`, not ours), this repo's
+`package-lock.json` must be refreshed to match: run `npm install` here and commit the lockfile
+change. Until that lands, `npm ci` and CI builds fail with a message pointing at exactly this
+paragraph's fix — loudly, not with stale packages. The check on `scripture-editors`'
+`platform-yalc` branch watches for this so the person updating that branch is reminded to open the
+core PR.
 
 Note: `npm install` will check out the revision of `scripture-editors` specified in [`dev-packages.json`](./dev-packages.json) (it will throw and ask you to do something with your working changes if you have any so your changes don't get messed up). However, the general expectation is that this revision for the `scripture-editors` repository is the branch named `platform-yalc` when this repo is on `main` and `release-prep` when this repo is on `release-prep`. `platform-yalc` exists so a breaking change can land on `scripture-editors`' `main` before build servers pick it up; move it forward only once this repo is ready for it. To make your local development and build servers use changes from `scripture-editors/main`, rebase that branch onto `main` and force-push. Example:
 
@@ -252,9 +256,9 @@ After editing `scripture-editors`, rebuild and re-stage it with:
 npm run build:editor
 ```
 
-That re-stages the packages and rebuilds the webpack DLL. **Both halves matter for the running dev app**: the dev renderer serves `@eten-tech-foundation/platform-editor` out of the DLL, so re-staging alone leaves the app running the old editor while your tests and lint pass against the new one. Restart the dev server afterward to pick it up.
+That builds **whatever your `scripture-editors` checkout currently contains — uncommitted changes included** — stages it, and rebuilds the webpack DLL. **Both halves matter for the running dev app**: the dev renderer serves `@eten-tech-foundation/platform-editor` out of the DLL, so re-staging alone leaves the app running the old editor while your tests and lint pass against the new one. Restart the dev server afterward to pick it up.
 
-If you only need the staged copy refreshed — for tests, typecheck, or a production build — `npm run stage-dev-packages` does that part alone.
+If you only need the staged copy refreshed — for tests, typecheck, or a production build — `npm run stage-dev-packages -- --local` does that part alone. (Without `--local`, `stage-dev-packages` builds the _pinned revision_, refusing to run while your checkout has uncommitted changes.)
 
 Run `npm install` as well if your change **added, removed, or bumped one of `scripture-editors`' own dependencies**, so npm updates this repo's tree and `package-lock.json` to match. Nothing here restates those dependencies; the staged package's own manifest is what npm reads.
 
