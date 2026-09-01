@@ -1,10 +1,9 @@
-import { newPlatformError, PlatformError, RESOURCE_EXHAUSTED } from 'platform-bible-utils';
+import { PlatformError } from 'platform-bible-utils';
 import { useData } from '@renderer/hooks/papi-hooks/use-data.hook';
 import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
-import { logger } from '@shared/services/logger.service';
 import { settingsService } from '@shared/services/settings.service';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
@@ -29,8 +28,8 @@ import { useCallback } from 'react';
  *
  *   - `setting`: The current state of the setting, either `defaultState`, the stored value, or a
  *       `PlatformError` if loading the value fails. Use `isPlatformError()` to check.
- *   - `setSetting`: Function that updates the setting to a new value. While the underlying subscription
- *       is throttled it rejects with a `PlatformError` whose `code` is `RESOURCE_EXHAUSTED` — see
+ *   - `setSetting`: Function that updates the setting to a new value, or `undefined` while there is
+ *       nothing to write through — including while the underlying subscription is throttled, see
  *       {@link useData} for that state.
  *   - `resetSetting`: Function that removes the setting and resets the value to `defaultState`
  *
@@ -43,9 +42,11 @@ export const useSetting = <SettingName extends SettingNames>(
   subscriberOptions?: DataProviderSubscriberOptions,
 ): [
   setting: SettingTypes[SettingName] | PlatformError,
-  setSetting: (
-    newData: SettingTypes[SettingName],
-  ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
+  setSetting:
+    | ((
+        newData: SettingTypes[SettingName],
+      ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>)
+    | undefined,
   resetSetting: () => void,
   isLoading: boolean,
 ] => {
@@ -61,8 +62,6 @@ export const useSetting = <SettingName extends SettingNames>(
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
         setting: SettingTypes[SettingName] | PlatformError,
-        // `useData` drops its setter while its runaway guard is throttled, so this really can be
-        // `undefined` — asserting otherwise would make the guard below look like dead code
         setSetting:
           | ((
               newData: SettingTypes[SettingName],
@@ -78,23 +77,6 @@ export const useSetting = <SettingName extends SettingNames>(
     settingsService.reset(key);
   }, [key]);
 
-  // `useData` drops its setter when its runaway guard trips. This hook's returned type promises a
-  // callable setter, so call sites do not null-check it — substitute one that rejects rather than
-  // letting `setSetting is not a function` throw synchronously out of an event handler.
-  const safeSetSetting = useCallback(
-    async (newData: SettingTypes[SettingName]) => {
-      if (setSetting) return setSetting(newData);
-      // Rejects with the same `RESOURCE_EXHAUSTED` code `useData` puts on its throttled value, so a
-      // `.catch` can recognize the throttled state with `isPlatformError(e) && e.code ===
-      // RESOURCE_EXHAUSTED` instead of matching the message text. The message itself is
-      // developer-facing English, not localized — see {@link useData}.
-      const message = `Cannot set setting ${key}: its data subscription is temporarily throttled. It will retry on its own shortly.`;
-      logger.warn(message);
-      throw newPlatformError(message, RESOURCE_EXHAUSTED);
-    },
-    [key, setSetting],
-  );
-
-  return [setting, safeSetSetting, resetSetting, isLoading];
+  return [setting, setSetting, resetSetting, isLoading];
 };
 export default useSetting;

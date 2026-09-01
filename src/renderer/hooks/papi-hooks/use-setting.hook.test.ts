@@ -1,13 +1,7 @@
 import { renderHook } from '@testing-library/react';
-import { isPlatformError, RESOURCE_EXHAUSTED } from 'platform-bible-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { logger } from '@shared/services/logger.service';
+import { describe, expect, it, vi } from 'vitest';
 import { useData } from '@renderer/hooks/papi-hooks/use-data.hook';
 import { useSetting } from '@renderer/hooks/papi-hooks/use-setting.hook';
-
-vi.mock('@shared/services/logger.service', () => ({
-  logger: { warn: vi.fn(), debug: vi.fn(), error: vi.fn(), info: vi.fn() },
-}));
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { reset: vi.fn() },
@@ -27,46 +21,26 @@ function mockUseDataReturning(tuple: [unknown, unknown, boolean]) {
   vi.mocked(useData).mockReturnValue({ '': () => tuple } as unknown as ReturnType<typeof useData>);
 }
 
-beforeEach(() => {
-  vi.mocked(logger.warn).mockClear();
-});
-
 describe('useSetting', () => {
   it('delegates to the setter the data hook supplied', async () => {
     const setSetting = vi.fn(async () => true);
     mockUseDataReturning(['a value', setSetting, false]);
 
     const { result } = renderHook(() => useSetting('platform.interfaceLanguage', ['en']));
-    await result.current[1](['fr']);
+    await result.current[1]?.(['fr']);
 
     expect(setSetting).toHaveBeenCalledExactlyOnceWith(['fr']);
-    expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  it('rejects instead of throwing when the data hook has dropped its setter', async () => {
-    // `useData` returns `undefined` here while its runaway guard is throttled. The declared tuple
-    // type promises a callable setter, so call sites do not null-check it: calling `undefined`
-    // would throw `is not a function` synchronously, escaping any `.catch` the caller attached.
+  it('passes the dropped setter through as undefined so call sites can see it', () => {
+    // `useData` returns `undefined` here while its runaway guard is throttled. Substituting a
+    // callable stand-in would hide that state from the type, so consumers must call the setter
+    // optionally — the same contract `useProjectSetting` and `useData` itself declare.
     mockUseDataReturning(['a value', undefined, true]);
 
     const { result } = renderHook(() => useSetting('platform.interfaceLanguage', ['en']));
 
-    expect(typeof result.current[1]).toBe('function');
-
-    // The rejection carries the same machine-readable code the throttled `useData` value carries,
-    // so a `.catch` can tell "throttled" from any other write failure without matching on the
-    // message text — which is the reason the code exists at all.
-    const rejection: unknown = await result.current[1](['fr']).then(
-      () => undefined,
-      (e: unknown) => e,
-    );
-    if (!isPlatformError(rejection))
-      throw new Error(`Expected a PlatformError but got ${String(rejection)}`);
-    expect(rejection.code).toBe(RESOURCE_EXHAUSTED);
-    expect(rejection.message).toContain('platform.interfaceLanguage');
-
-    expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining('platform.interfaceLanguage'),
-    );
+    expect(result.current[1]).toBeUndefined();
+    expect(result.current[3]).toBe(true);
   });
 });

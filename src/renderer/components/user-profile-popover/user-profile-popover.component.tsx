@@ -106,7 +106,13 @@ export function UserProfilePopover() {
     if (value === '') return;
     if (value !== 'simple' && value !== 'power') return;
     // Setting writes are asynchronous, so the failure arrives as a rejection: a synchronous
-    // try/catch around this call cannot see it.
+    // try/catch around this call cannot see it. A missing setter is a real runtime state, not a
+    // type formality — `useSetting` has no setter while the subscription is throttled — so say so
+    // rather than letting the click do nothing silently.
+    if (!setInterfaceMode) {
+      logger.warn('UserProfilePopover: cannot set interface mode; the setting is unavailable');
+      return;
+    }
     setInterfaceMode(value).catch((e: unknown) => {
       logger.warn(`UserProfilePopover: failed to set interface mode: ${getErrorMessage(e)}`);
     });
@@ -154,7 +160,13 @@ export function UserProfilePopover() {
     if (value === primaryLanguage) return;
     const next = [value, ...safeInterfaceLanguage.filter((l) => l !== value)];
     // Setting writes are asynchronous, so the failure arrives as a rejection: a synchronous
-    // try/catch around this call cannot see it.
+    // try/catch around this call cannot see it. A missing setter is a real runtime state, not a
+    // type formality — `useSetting` has no setter while the subscription is throttled — so say so
+    // rather than letting the click do nothing silently.
+    if (!setInterfaceLanguage) {
+      logger.warn('UserProfilePopover: cannot set interface language; the setting is unavailable');
+      return;
+    }
     setInterfaceLanguage(next).catch((e: unknown) => {
       logger.warn(`UserProfilePopover: failed to set interface language: ${getErrorMessage(e)}`);
     });
