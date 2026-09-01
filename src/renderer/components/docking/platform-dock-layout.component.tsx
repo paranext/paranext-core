@@ -152,7 +152,11 @@ export function PlatformDockLayout() {
       simpleLayout: simpleLayout as unknown as LayoutInfo,
     });
 
-    // Name the window from whatever it renders first, before any layout change has happened
+    // Name the window from whatever it renders first, before any layout change has happened. No
+    // `defaultLayout` is passed, so this always resolves the empty-window key and always costs one
+    // localization request. It stays because it is the only cover for `loadLayout` failing or
+    // returning early, which would otherwise leave the boilerplate document title on screen; a
+    // later real title replaces it, and `latestRequestedLabel` keeps this one from overwriting it.
     refreshWindowTitle();
 
     return () => {
@@ -250,8 +254,13 @@ export function PlatformDockLayout() {
         }
 
         // What this window is called follows what it is showing, so it is recomputed whenever the
-        // layout moves: a tab switch, or a tab opening, closing or moving between windows. It does
-        // not change on navigation or typing, so this stays cheap.
+        // layout moves: a tab switch, or a tab opening, closing or moving between windows.
+        //
+        // It also runs on changes that alter no title at all. `updateWebViewDefinition` ends in
+        // rc-dock's `updateTab`, which always reports a layout change, so a detached view's verse
+        // move and any `useWebViewState` write arrive here too. That is cheap when the resulting
+        // label is a plain tab title, and one cross-process localization request when it is a
+        // LocalizeKey — which is the Simple-mode case, whose first docked panel is titled by key.
         //
         // Deferred a microtask because this callback runs BEFORE the dock adopts the new layout, so
         // both the layout the dock reports and the tabs it can find are still the previous ones. A

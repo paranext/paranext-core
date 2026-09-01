@@ -2,7 +2,7 @@ import type { OverlayContextMenuItem } from '@renderer/components/overlays/overl
 import type { WindowSummary } from '@shared/services/window.service-model';
 
 /** Contributed id of the submenu whose targets are only known when the menu opens */
-export const MOVE_TO_WINDOW_ITEM_ID = 'platform.moveTabToWindow';
+const MOVE_TO_WINDOW_ITEM_ID = 'platform.moveTabToWindow';
 
 /** Contributed command that floats the tab within its own window */
 export const FLOAT_TAB_COMMAND = 'platform.floatTab';
@@ -37,8 +37,11 @@ export type TabMenuContext = {
 /** Reads the target window id back out of a generated submenu entry, if that is what was selected */
 export function getMoveTargetWindowId(itemId: string): number | undefined {
   if (!itemId.startsWith(MOVE_TO_WINDOW_TARGET_ID_PREFIX)) return undefined;
-  const windowId = Number(itemId.slice(MOVE_TO_WINDOW_TARGET_ID_PREFIX.length));
-  return Number.isNaN(windowId) ? undefined : windowId;
+  const suffix = itemId.slice(MOVE_TO_WINDOW_TARGET_ID_PREFIX.length);
+  // Digits only, checked before converting: `Number` reads '' as 0, and accepts whitespace, hex and
+  // exponent forms, so a suffix that is not a window id at all would otherwise name window 0
+  if (!/^\d+$/.test(suffix)) return undefined;
+  return Number(suffix);
 }
 
 /** Whether a contributed item is one this tab cannot currently act on */

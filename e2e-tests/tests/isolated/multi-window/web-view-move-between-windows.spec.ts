@@ -287,7 +287,8 @@ test.use({
 
 test.describe('moving a web view between windows', () => {
   // Each test pays full app startup (up to ~180 s worst case) plus one or two extra window
-  // startups — a move to a new window contains a whole cold renderer start of its own.
+  // startups — a move to a new window contains a whole cold renderer start of its own — and the
+  // second test adds a third move and a window close on top of that.
   test.setTimeout(480_000);
 
   let restoreSettings: (() => void) | undefined;
@@ -532,7 +533,7 @@ test.describe('moving a web view between windows', () => {
     // Electron instance rather than paying for another launch.
     //
     // Each window is named after the tab it is showing, which is what gives it its own OS switcher
-    // entry (NN-3) and what the submenu names its targets by. BOTH windows here show a Home tab, so
+    // entry and what the submenu names its targets by. BOTH windows here show a Home tab, so
     // both are called "Home": the design tolerates that collision deliberately, since nothing
     // disambiguates two windows showing the same thing. So this asserts each window is named after
     // its content — never that the two names differ, which would contradict the rule.
@@ -603,6 +604,6 @@ test.describe('moving a web view between windows', () => {
     // A real quit after all of that: the app must still go down cleanly, and the epilogue sweeps
     // everything captured — both moves included — for faults and duplicate registrations, with the
     // quit line itself as the positive control that the corpus is not empty.
-    await quitAndExpectCleanExit(electronApp, output, logStep, 'quit after two moves');
+    await quitAndExpectCleanExit(electronApp, output, logStep, 'quit after three moves');
   });
 });
