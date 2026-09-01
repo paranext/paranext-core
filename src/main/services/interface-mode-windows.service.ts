@@ -141,10 +141,14 @@ export function isAdditionalWindowRefusedInSimpleMode(
   return mode === 'simple' && liveWindowCount > 0;
 }
 
-/** Close every window but the primary, keeping each one's entry for the way back */
-function closeSecondaryWindows(deps: ModeSwitchDependencies, generation: number): void {
+/**
+ * Close every window but the primary, keeping each one's entry for the way back.
+ *
+ * Synchronous throughout, so no switch can start while it runs and it needs no generation check of
+ * its own — unlike the reopen, which awaits a window at a time and can be overtaken.
+ */
+function closeSecondaryWindows(deps: ModeSwitchDependencies): void {
   deps.getTrackedWindowIds().forEach((windowId) => {
-    if (generation !== switchGeneration) return;
     if (deps.isPrimaryWindow(windowId)) return;
     // A window already on its way out has a close handler mid-flight; telling it to close again
     // reaches the escape hatch that abandons the work that close started
@@ -210,7 +214,7 @@ export async function handleInterfaceModeChanged(newMode: InterfaceMode): Promis
   const generation = switchGeneration;
 
   if (newMode === 'simple') {
-    closeSecondaryWindows(deps, generation);
+    closeSecondaryWindows(deps);
     // The window the user was working in may be one of the ones just closed — the mode switcher is
     // reachable from every window — so the survivor is brought forward rather than leaving the user
     // looking at whatever was behind it
