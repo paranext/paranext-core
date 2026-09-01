@@ -371,8 +371,8 @@ export async function widenWindowForToolbarReference(
       if (!win) throw new Error(`No BrowserWindow with id ${id}`);
       // An unmapped window reports stale bounds and ignores the resize.
       if (win.isMinimized()) win.restore();
+      const { workArea } = screen.getPrimaryDisplay();
       const { height, y } = win.getBounds();
-      const { workArea } = screen.getDisplayMatching(win.getBounds());
       win.setBounds({ x: workArea.x, y, width: workArea.width, height });
     },
     { id: windowId },
