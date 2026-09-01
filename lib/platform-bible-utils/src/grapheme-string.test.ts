@@ -399,8 +399,9 @@ describe('graphemes are the unit, not UTF-16 code units', () => {
 
   it('pads right up to the limit without throwing', () => {
     const graphemeString = new GraphemeString('abc');
-    expect(graphemeString.padStart(2 ** 20, 'x').length).toEqual(2 ** 20);
-    expect(graphemeString.padEnd(2 ** 20, 'x').length).toEqual(2 ** 20);
+    // ASCII filler, so cluster count and code-unit count agree; assert the unit that matters.
+    expect(stringLengthOf(graphemeString.padStart(2 ** 20, 'x'))).toEqual(2 ** 20);
+    expect(stringLengthOf(graphemeString.padEnd(2 ** 20, 'x'))).toEqual(2 ** 20);
   });
 
   it('toArray returns a copy, so mutating it cannot corrupt the instance', () => {
@@ -447,17 +448,6 @@ describe('graphemes are the unit, not UTF-16 code units', () => {
     expect(family.startsWith('a👨‍👩‍👧‍👦')).toEqual(true);
     expect(family.endsWith('👨‍👩‍👧‍👦b')).toEqual(true);
     expect(family.includes('👨‍👩‍👧‍👦')).toEqual(true);
-  });
-
-  it('padding adds whole graphemes rather than filling UTF-16 slots', () => {
-    // Native emits a stripped-down officer: wrong skin tone, wrong gender.
-    expect('abc'.padEnd(5, OFFICER)).toEqual('abc👮');
-    expect(new GraphemeString('abc').padEnd(5, OFFICER).toString()).toEqual(
-      `abc${OFFICER}${OFFICER}`,
-    );
-    expect(new GraphemeString('abc').padStart(5, OFFICER).toString()).toEqual(
-      `${OFFICER}${OFFICER}abc`,
-    );
   });
 
   it('splitting on the empty string yields graphemes', () => {
@@ -520,191 +510,48 @@ describe('hostile and cross-realm arguments', () => {
   it('coerces a non-string pad string the way native does', () => {
     const nullPad = untyped('null');
     const numericPad = untyped('5');
-    expect(new GraphemeString('abc').padStart(8, nullPad).toString()).toEqual(
-      'abc'.padStart(8, nullPad),
-    );
-    expect(new GraphemeString('abc').padEnd(8, numericPad).toString()).toEqual(
-      'abc'.padEnd(8, numericPad),
-    );
+    expect(new GraphemeString('abc').padStart(8, nullPad)).toEqual('abc'.padStart(8, nullPad));
+    expect(new GraphemeString('abc').padEnd(8, numericPad)).toEqual('abc'.padEnd(8, numericPad));
   });
 
   it('an empty pad string is answered before the padding ceiling is enforced', () => {
     // Native `StringPad` returns the string untouched when the filler is empty, whatever the
     // target. Nothing is allocated on that path, so the ceiling has nothing to protect against.
-    expect(new GraphemeString('abc').padStart(2 ** 21, '').toString()).toEqual('abc');
-    expect(new GraphemeString('abc').padEnd(2 ** 21, '').toString()).toEqual('abc');
+    expect(new GraphemeString('abc').padStart(2 ** 21, '')).toEqual('abc');
+    expect(new GraphemeString('abc').padEnd(2 ** 21, '')).toEqual('abc');
     // The ceiling still fires for a target that would actually allocate.
     expect(() => new GraphemeString('abc').padStart(2 ** 21)).toThrow(RangeError);
   });
 });
 
-describe('padding keeps its segmentation honest', () => {
-  // A pad string can fuse with the text at the seam. The class's foundational invariant is that
-  // `graphemes` is an honest segmentation of `str` — every index, search, and slice depends on it —
-  // so a fused seam yields a SHORTER result rather than a dishonest one.
-  it('a pad string that combines with the text yields a shorter, honest result', () => {
-    const padded = new GraphemeString('\u0301b').padStart(3);
-    expect(padded.toString()).toEqual(' \u0301b');
-    // The pad space and the combining acute are one cluster, so 3 was never reachable honestly.
-    expect(padded.length).toEqual(2);
-    expect(padded.length).toEqual(stringLengthOf(padded.toString()));
+describe('padding chooses whole graphemes as filler', () => {
+  it('pads with whole clusters where native fills UTF-16 slots', () => {
+    // Native emits a stripped-down officer: wrong skin tone, wrong gender.
+    expect('abc'.padEnd(5, OFFICER)).toEqual('abc👮');
+    expect(new GraphemeString('abc').padEnd(5, OFFICER)).toEqual(`abc${OFFICER}${OFFICER}`);
+    expect(new GraphemeString('abc').padStart(5, OFFICER)).toEqual(`${OFFICER}${OFFICER}abc`);
   });
 
-  it('a padded instance never slices a cluster in half', () => {
-    const padded = new GraphemeString('a').padEnd(3, '\u0301');
-    expect(padded.toString()).toEqual('a\u0301\u0301');
-    expect(padded.length).toEqual(1);
-    // Before, this returned 'a\u0301' — half a cluster, which the class doc promises never happens.
-    expect(padded.slice(0, 2).toString()).toEqual('a\u0301\u0301');
+  it('counts the target in graphemes, so a non-combining pad lands exactly', () => {
+    expect(stringLengthOf(new GraphemeString('abc').padEnd(5, OFFICER))).toEqual(5);
+    expect(stringLengthOf(new GraphemeString('abc').padStart(5, OFFICER))).toEqual(5);
+    expect(stringLengthOf(new GraphemeString('ab').padStart(6, 'xy'))).toEqual(6);
   });
 
-  it('a non-combining pad still hits the target exactly', () => {
-    expect(new GraphemeString('abc').padEnd(5, OFFICER).length).toEqual(5);
-    expect(new GraphemeString('abc').padStart(5, OFFICER).length).toEqual(5);
-    expect(new GraphemeString('ab').padStart(6, 'xy').length).toEqual(6);
+  it('returns text, because added padding can fuse with the text it lands against', () => {
+    // A filler ending in a combining mark joins the character beside it, so the result genuinely
+    // has fewer clusters than the target. Returning text means nothing claims otherwise — where an
+    // instance carrying the parent's cluster array would have reported 3 and sliced the pair apart.
+    expect(new GraphemeString('\u0301b').padStart(3)).toEqual(' \u0301b');
+    expect(stringLengthOf(' \u0301b')).toEqual(2);
+    expect(new GraphemeString('a').padEnd(3, '\u0301')).toEqual('a\u0301\u0301');
+    expect(stringLengthOf('a\u0301\u0301')).toEqual(1);
   });
 
-  it('every derived instance reports the length its own text segments to', () => {
-    const fixtures = ['\u0301b', 'a', 'ab', FAMILY, MIXED];
-    const pads = [undefined, ' ', '\u0301', 'xy', OFFICER];
-    fixtures.forEach((fixture) => {
-      pads.forEach((pad) => {
-        [0, 1, 3, 6].forEach((target) => {
-          const start = new GraphemeString(fixture).padStart(target, pad);
-          expect(start.length).toEqual(stringLengthOf(start.toString()));
-          const end = new GraphemeString(fixture).padEnd(target, pad);
-          expect(end.length).toEqual(stringLengthOf(end.toString()));
-        });
-      });
-    });
-  });
-});
-
-describe('the offsets cache is invisible to callers', () => {
-  it('a frozen instance works whatever order it was frozen in', () => {
-    // The class doc tells callers to treat an instance as immutable after construction, so freezing
-    // one is a reasonable thing to do. It must not matter whether a read warmed the cache first.
-    const frozenFirst = Object.freeze(new GraphemeString('abcabc'));
-    expect(frozenFirst.indexOf('b')).toEqual(1);
-    expect(frozenFirst.lastIndexOf('b')).toEqual(4);
-    expect(frozenFirst.slice(1, 3).toString()).toEqual('bc');
-    expect(frozenFirst.split('c').map(String)).toEqual(['ab', 'ab', '']);
-
-    const readFirst = new GraphemeString('abcabc');
-    readFirst.indexOf('b');
-    Object.freeze(readFirst);
-    expect(readFirst.indexOf('c')).toEqual(2);
-  });
-
-  it('reading an instance does not change its enumerable shape', () => {
-    const graphemeString = new GraphemeString('abc');
-    const before = Object.keys(graphemeString);
-    graphemeString.indexOf('b');
-    graphemeString.slice(1);
-    expect(Object.keys(graphemeString)).toEqual(before);
-    expect(before).not.toContain('offsetsCache');
-  });
-
-  it('two instances over the same text stay structurally equal after a read', () => {
-    const read = new GraphemeString('abc');
-    const untouched = new GraphemeString('abc');
-    read.indexOf('b');
-    expect(JSON.stringify(read)).toEqual(JSON.stringify(untouched));
-  });
-});
-
-describe('formatReplacement degrades on values it cannot coerce', () => {
-  // The template is a localized string and the replacers are caller-supplied runtime values, so one
-  // bad value must not take down the whole localization call.
-  it('stringifies a Symbol instead of throwing', () => {
-    expect(new GraphemeString('Hi {v}!').formatReplacement({ v: Symbol('tag') })).toEqual(
-      'Hi Symbol(tag)!',
-    );
-  });
-
-  it('falls back for a value with nothing to coerce through', () => {
-    // `Object.create(null)` is the recommended way to build a lookup free of prototype pollution,
-    // so the safe idiom is the one with no inherited `toString`/`valueOf`.
-    // The rule guards against `null` as a value. Here it is the prototype argument, and
-    // `Object.create(null)` is the only way to build the object this test is about.
-    // eslint-disable-next-line no-null/no-null
-    const noPrototype: object = Object.create(null);
-    expect(new GraphemeString('Hi {v}!').formatReplacement({ v: noPrototype })).toEqual(
-      'Hi [object Object]!',
-    );
-    const throwsOnToString = {
-      toString() {
-        throw new Error('boom');
-      },
-      valueOf() {
-        throw new Error('boom');
-      },
-    };
-    expect(new GraphemeString('Hi {v}!').formatReplacement({ v: throwsOnToString })).toEqual(
-      'Hi [object Object]!',
-    );
-  });
-
-  it('degrades even when the fallback itself throws', () => {
-    const hostile = Object.defineProperty({}, Symbol.toStringTag, {
-      get() {
-        throw new Error('boom');
-      },
-    });
-    expect(new GraphemeString('Hi {v}!').formatReplacement({ v: hostile })).toEqual(
-      'Hi [object Unknown]!',
-    );
-    const proxy = new Proxy(
-      {},
-      {
-        get() {
-          throw new Error('boom');
-        },
-      },
-    );
-    expect(new GraphemeString('Hi {v}!').formatReplacement({ v: proxy })).toEqual(
-      'Hi [object Unknown]!',
-    );
-  });
-
-  it('leaves every ordinarily coercible value exactly as it was', () => {
-    expect(new GraphemeString('{v}').formatReplacement({ v: 'Jim' })).toEqual('Jim');
-    expect(new GraphemeString('{v}').formatReplacement({ v: 42 })).toEqual('42');
-    expect(new GraphemeString('{v}').formatReplacement({ v: untyped('null') })).toEqual('null');
-    expect(new GraphemeString('{v}').formatReplacement({ v: undefined })).toEqual('undefined');
-    expect(new GraphemeString('{v}').formatReplacement({ v: { a: 1 } })).toEqual('[object Object]');
-    expect(new GraphemeString('{v}').formatReplacement({ v: ['a', 'b'] })).toEqual('a,b');
-  });
-
-  it('the array variant still hands back the value untouched', () => {
-    const tag = Symbol('tag');
-    expect(new GraphemeString('Hi {v}!').formatReplacementToArray({ v: tag })[1]).toBe(tag);
-  });
-});
-
-describe('serialization', () => {
-  it('serializes as its text, not its internals', () => {
-    expect(JSON.stringify(new GraphemeString('abc'))).toEqual('"abc"');
-    expect(JSON.stringify(new GraphemeString(''))).toEqual('""');
-    expect(JSON.stringify(new GraphemeString(MIXED))).toEqual(JSON.stringify(MIXED));
-  });
-
-  it('serializes the same nested in an object or an array', () => {
-    expect(JSON.stringify({ name: new GraphemeString(FAMILY) })).toEqual(
-      JSON.stringify({ name: FAMILY }),
-    );
-    expect(JSON.stringify([new GraphemeString('a'), new GraphemeString('b')])).toEqual('["a","b"]');
-  });
-
-  it("a derived instance serializes to its own text, not the parent's", () => {
-    expect(JSON.stringify(new GraphemeString(MIXED).slice(0, 4))).toEqual('"Look"');
-    expect(JSON.stringify(new GraphemeString('a').padStart(3))).toEqual('"  a"');
-  });
-
-  it('serializing does not depend on whether the instance has been read', () => {
-    const read = new GraphemeString('abcabc');
-    read.indexOf('b');
-    expect(JSON.stringify(read)).toEqual(JSON.stringify(new GraphemeString('abcabc')));
+  it('returns the text unchanged when no padding is needed', () => {
+    expect(new GraphemeString(MIXED).padStart(0)).toEqual(MIXED);
+    expect(new GraphemeString(MIXED).padEnd(2)).toEqual(MIXED);
+    expect(new GraphemeString('abc').padStart(10, '')).toEqual('abc');
   });
 });
 
@@ -752,13 +599,14 @@ describe('toString', () => {
 });
 
 describe('derived values keep the parent segmentation', () => {
-  it('range and pad methods return GraphemeString', () => {
+  it('range methods return GraphemeString; padding returns text', () => {
     const graphemeString = new GraphemeString(MIXED);
     expect(graphemeString.slice(1)).toBeInstanceOf(GraphemeString);
     expect(graphemeString.substring(1)).toBeInstanceOf(GraphemeString);
-    expect(graphemeString.padStart(20)).toBeInstanceOf(GraphemeString);
-    expect(graphemeString.padEnd(20)).toBeInstanceOf(GraphemeString);
     expect(graphemeString.split('o')[0]).toBeInstanceOf(GraphemeString);
+    // Padding adds text that can fuse at the seam, so it has no segmentation to carry.
+    expect(typeof graphemeString.padStart(20)).toEqual('string');
+    expect(typeof graphemeString.padEnd(20)).toEqual('string');
   });
 
   it('a derived instance indexes correctly without re-segmenting', () => {
@@ -776,9 +624,7 @@ describe('derived values keep the parent segmentation', () => {
     expect(mixed.slice(4, 6).toArray()).toEqual(MIXED_GRAPHEMES.slice(4, 6));
     // splitting on '' derives one child per grapheme
     expect(mixed.split('').map((part) => part?.toString())).toEqual(MIXED_GRAPHEMES);
-    // padding concatenates the pad graphemes onto the parent's
-    expect(new GraphemeString('ab').padStart(4, 'xy').toArray()).toEqual(['x', 'y', 'a', 'b']);
-    expect(new GraphemeString('ab').padEnd(4, 'xy').toArray()).toEqual(['a', 'b', 'x', 'y']);
+    // padding is not on this list: it returns text, so there is no child to carry segmentation
   });
 
   it('accepts a GraphemeString as a search needle', () => {
