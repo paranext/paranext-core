@@ -64,9 +64,9 @@ import * as fs from 'fs';
 import {
   assertDeclaredWindowSize,
   assertInterfaceMode,
-  DEFAULT_WINDOW_SIZE,
   RequiredInterfaceMode,
   WindowSize,
+  WINDOW_SIZE_TOLERANCE_PX,
 } from './helpers';
 
 export { expect } from '@playwright/test';
@@ -133,13 +133,15 @@ export function assertFullHdScreenshot(filePath: string): void {
       `Likely cause: the renderer window is smaller than 1920x1080 OR DevTools is docked, ` +
       `cropping the renderer area. Resize the Electron window OR close DevTools and re-run. ` +
       `Tiny screenshots always FAIL — no matter how nice the partial UI looks.`,
-  ).toBeGreaterThanOrEqual(MIN_SCREENSHOT_WIDTH);
+    // Same tolerance the window-size check uses: a window asked for NxM under a bare Xvfb comes
+    // back as (N-1)x(M-1), so an exact floor rejects a correctly-sized window by one pixel.
+  ).toBeGreaterThanOrEqual(MIN_SCREENSHOT_WIDTH - WINDOW_SIZE_TOLERANCE_PX);
   baseExpect(
     height,
     `Screenshot ${filePath} height ${height}px is below the ${MIN_SCREENSHOT_HEIGHT}px minimum. ` +
       `Likely cause: the renderer window is smaller than 1920x1080 OR DevTools is docked. ` +
       `Resize the Electron window OR close DevTools and re-run. Tiny screenshots always FAIL.`,
-  ).toBeGreaterThanOrEqual(MIN_SCREENSHOT_HEIGHT);
+  ).toBeGreaterThanOrEqual(MIN_SCREENSHOT_HEIGHT - WINDOW_SIZE_TOLERANCE_PX);
 }
 
 /**
@@ -179,7 +181,11 @@ export interface CdpFixtures {
 }
 
 export const test = base.extend<CdpFixtures>({
-  windowSize: [DEFAULT_WINDOW_SIZE, { option: true }],
+  // Defaults to the screenshot floor, not DEFAULT_WINDOW_SIZE: any spec on this fixture may write
+  // evidence PNGs, and the screenshot wrapper enforces that floor at the moment one is taken —
+  // mid-test, long after setup passed. Declaring it here makes an undersized window a precondition
+  // failure instead, which is the whole point of the declared-size check.
+  windowSize: [{ width: MIN_SCREENSHOT_WIDTH, height: MIN_SCREENSHOT_HEIGHT }, { option: true }],
   requiredInterfaceMode: [undefined, { option: true }],
   mainPage: async ({ windowSize, requiredInterfaceMode }, use) => {
     // Deadline-based connect: a refused connection fails instantly, so a fixed attempt count

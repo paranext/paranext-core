@@ -28,7 +28,7 @@ import {
   preConfigureSettings,
   SAMPLE_WEB_PROJECT_ID,
   waitForAppReady,
-  waitForAtLeastOneProjectMetadata,
+  waitForProjectMetadata,
 } from '../../../fixtures/helpers';
 import { openScriptureEditorForProject } from '../../../fixtures/scripture-editor-helpers';
 
@@ -143,7 +143,12 @@ test.describe('Reference history', () => {
   // none on its own.
   test.beforeEach(async ({ mainPage }) => {
     await waitForAppReady(mainPage, 180_000);
-    await waitForAtLeastOneProjectMetadata(WEBSOCKET_PORT, 60_000);
+    await waitForProjectMetadata(
+      (project) => project.id?.toLowerCase() === SAMPLE_WEB_PROJECT_ID,
+      'the bundled sample WEB project',
+      WEBSOCKET_PORT,
+      60_000,
+    );
     await openScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     // The open editor becomes the navigation target, so the control MUST enable. A hard
     // expectation, not a skip-if-disabled, so a regression fails loudly.

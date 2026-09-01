@@ -45,7 +45,7 @@ import {
   preConfigureSettings,
   sendPapiRequestOnce,
   waitForAppReady,
-  waitForAtLeastOneProjectMetadata,
+  waitForProjectMetadata,
   waitForPapiMethodRegistered,
 } from '../../../fixtures/helpers';
 import { openScriptureEditorForProject } from '../../../fixtures/scripture-editor-helpers';
@@ -306,7 +306,12 @@ test.describe('per-window UI isolation', () => {
 
     // ── Navigation target follows only the OWN window's tabs ───────────────────────────────────
     // Open an editor in window 1 (the generic web-view command routes to the focused window).
-    await waitForAtLeastOneProjectMetadata(WEBSOCKET_PORT, 60_000);
+    await waitForProjectMetadata(
+      (project) => project.id?.toLowerCase() === SAMPLE_WEB_PROJECT_ID,
+      'the bundled sample WEB project',
+      WEBSOCKET_PORT,
+      60_000,
+    );
     await focusWindowAndWaitForRouting(electronApp, window1Id);
     const editorId1 = await openScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     // Placement proof: the new editor's iframe attached in window 1 (the helper waits for it

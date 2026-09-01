@@ -94,8 +94,13 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
         `[findHelloRock3Frame] Hello Rock3 pane was not active; re-clicking its tab (attempt ${reclicks}).`,
       );
       // Polling loop: the re-click must finish before the next read, or the read would race it.
+      // The explicit timeout leaves the deadline to the loop. Without it the click inherits
+      // Playwright's 30s default, which is this loop's whole budget — so an intercepted click
+      // throws its own generic timeout instead of letting the message below name interception as
+      // the likely cause. `use: { actionTimeout }` would not help: it is applied in
+      // `browser.newContext`, which an Electron launch never goes through.
       // eslint-disable-next-line no-await-in-loop
-      await tab.first().click();
+      await tab.first().click({ timeout: 5_000 });
     }
 
     // Polling loop: wait between attempts must be sequential

@@ -316,7 +316,11 @@ export async function findScriptureEditorFrame(page: Page, timeout = 30_000): Pr
         const acc = await accPromise;
         if (acc) return acc;
         try {
-          const isVisible = await frame.locator(EDITOR_HAMBURGER_SELECTOR).isVisible();
+          // `.first()` because `isVisible()` runs in strict mode: two matches — a Radix portal
+          // duplicating the trigger while a menu is open, say — would throw rather than answer, and
+          // the catch below would read that as "not the editor frame" and skip the frame that
+          // actually had it, every poll, until the helper reported the opposite of what happened.
+          const isVisible = await frame.locator(EDITOR_HAMBURGER_SELECTOR).first().isVisible();
           if (isVisible) return frame;
         } catch {
           // Frame may not be accessible yet — keep polling

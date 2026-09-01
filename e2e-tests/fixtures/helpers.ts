@@ -719,6 +719,26 @@ export async function waitForAtLeastOneProjectMetadata(
   port: number = DEFAULT_WEBSOCKET_PORT,
   timeoutMs = 60_000,
 ): Promise<void> {
+  return waitForProjectMetadata(() => true, 'any project', port, timeoutMs);
+}
+
+/**
+ * Wait until project lookup reports a project the caller can name.
+ *
+ * "At least one project" is not the same precondition as "the project this spec is about". Projects
+ * register in whatever order their PDP factories come up, and a non-scripture project routinely
+ * registers first — so a spec that waits for a non-empty list and then opens a SPECIFIC project by
+ * id can proceed before that project exists, and fails later on something that looks unrelated.
+ *
+ * @param matches Predicate identifying the project the caller needs.
+ * @param description How to name that project if it never arrives, e.g. "the sample WEB project".
+ */
+export async function waitForProjectMetadata(
+  matches: (project: { id?: string }) => boolean,
+  description: string,
+  port: number = DEFAULT_WEBSOCKET_PORT,
+  timeoutMs = 60_000,
+): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const remaining = timeoutMs - (Date.now() - start);
@@ -726,13 +746,13 @@ export async function waitForAtLeastOneProjectMetadata(
       // Sequential polling: each attempt must finish (or time out) before the next;
       // parallelizing would defeat the retry/backoff.
       // eslint-disable-next-line no-await-in-loop
-      const result = await sendPapiRequestOnce<unknown[]>(
+      const result = await sendPapiRequestOnce<({ id?: string } | undefined)[]>(
         PROJECT_LOOKUP_GET_ALL_PROJECTS_METHOD,
         [],
         port,
         Math.min(10_000, Math.max(1000, remaining)),
       );
-      if (Array.isArray(result) && result.length > 0) return;
+      if (Array.isArray(result) && result.some((project) => matches(project ?? {}))) return;
     } catch {
       /* PDP factories or network object not ready yet */
     }
@@ -746,7 +766,7 @@ export async function waitForAtLeastOneProjectMetadata(
     });
   }
   throw new Error(
-    `Project lookup returned no projects within ${timeoutMs}ms (PDP factories may not be registered).`,
+    `Project lookup did not report ${description} within ${timeoutMs}ms (PDP factories may not be registered).`,
   );
 }
 

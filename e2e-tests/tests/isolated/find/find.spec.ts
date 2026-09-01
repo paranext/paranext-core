@@ -464,17 +464,23 @@ test.beforeAll(async ({ electronApp }) => {
       p.id === preferredProjectId ||
       p.projectInterfaces?.some((iface) => iface.startsWith('platformScripture.')) === true,
   );
+  // No `?? projects[0]` fallback. `waitForProjects` returns whatever it has when it times out
+  // rather than throwing, so on a slow machine that list can hold some OTHER project entirely —
+  // and this suite writes to whatever it opens, through `clearFindPersistedState`, whose guard
+  // rejects only a falsy id and not a wrong one. Failing here names the cause; falling back
+  // silently edits a project the suite does not own.
   const scriptureProject =
     projects.find((p) => p.id === preferredProjectId) ??
     projects.find((p) =>
       p.projectInterfaces?.some((iface) => iface.startsWith('platformScripture.')),
-    ) ??
-    projects[0];
+    );
 
   if (!scriptureProject) {
     throw new Error(
-      'No projects found. The find tests require at least one scripture project accessible to Platform.Bible.\n' +
-        'Please create or register a Paratext project before running these tests.',
+      `No scripture project was available after 90 s. These tests clear persisted Find state on ` +
+        `the project they open, so they will not fall back to an unrelated one. Wanted ` +
+        `${preferredProjectId} or any platformScripture.* project; found: ` +
+        `${projects.map((p) => p.id).join(', ') || '(none)'}`,
     );
   }
 
