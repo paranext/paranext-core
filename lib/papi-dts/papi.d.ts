@@ -4198,7 +4198,7 @@ declare module 'shared/models/docking-framework.model' {
      * Used to tell whether moving a tab out of a window would leave that window with nothing at all,
      * which depends on every tab it holds, not only on its web views.
      *
-     * @returns The number of tabs open anywhere in the layout, docked or floated
+     * @returns The number of tabs open anywhere in the layout, whatever its docking state
      * @experimental
      */
     getOpenTabCount: () => number;
@@ -10424,6 +10424,38 @@ declare module 'renderer/services/overlays/overlay-store' {
       itemCount: number;
     },
   ): boolean;
+}
+declare module 'renderer/components/overlays/overlay-context-menu-localization.util' {
+  import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+  import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
+  /**
+   * Recursively collects every LocalizeKey label in a tree of context menu items.
+   *
+   * Shared rather than owned by the overlay context menu because the tab menu renders the same item
+   * union through its own ContextMenu primitives, and both have to resolve their labels before
+   * rendering them — a contributed menu can arrive carrying raw keys.
+   *
+   * @param items Context menu items to walk, submenus included
+   * @returns Every LocalizeKey found, in the order encountered
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function collectContextMenuKeys(items: OverlayContextMenuItem[]): LocalizeKey[];
+  /**
+   * Recursively resolves LocalizeKey labels in context menu items using localized strings.
+   *
+   * Used as a pair with {@link collectContextMenuKeys}: collect the keys, resolve them through
+   * `useLocalizedStrings`, then map the items through this. A label with no resolution is left as it
+   * is, so a missing string shows the key rather than nothing.
+   *
+   * @param items Context menu items to resolve, submenus included
+   * @param localizedStrings Resolved strings, keyed by LocalizeKey
+   * @returns The items with their labels resolved
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function localizeContextMenuItems(
+    items: OverlayContextMenuItem[],
+    localizedStrings: LanguageStrings,
+  ): OverlayContextMenuItem[];
 }
 declare module 'renderer/components/overlays/overlay-context-menu.component' {
   import { OverlayEntry } from 'renderer/services/overlays/overlay.service-model';
