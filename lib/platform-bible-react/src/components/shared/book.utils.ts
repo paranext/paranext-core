@@ -185,14 +185,3 @@ export function doesBookMatchQuery(
 
   return false;
 }
-
-/**
- * Tailwind classes for the keyboard focus ring on the currently highlighted list or grid item.
- *
- * Uses shadcn's standard focus-ring tokens, but triggers on `data-selected` rather than
- * `:focus-visible`: cmdk list items are never DOM-focused (the list container owns focus and items
- * only carry `data-selected`), so `:focus-visible` can never match them. `ring-inset` keeps the
- * ring from being clipped by the scrolling list.
- */
-export const LIST_ITEM_KEYBOARD_FOCUS_RING =
-  'tw:data-selected:ring-2 tw:data-selected:ring-ring/50 tw:data-selected:ring-inset';

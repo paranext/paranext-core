@@ -2556,10 +2556,12 @@ step, no automation. Just a record.
   combobox-in-a-modal fix. That silently put every tooltip (550 at the time) behind every popover,
   select, context menu, and the menubar, which all sit on `Z_INDEX_ABOVE_DOCK`. Nothing failed: no
   test asserted the relative order between tiers, only their existence. Separately,
-  `Z_INDEX_OVERLAY`'s doc comment claimed the shadcn popovers used it, when in fact every shadcn
-  overlay (`dropdown-menu.tsx`, `tooltip.tsx`, `select.tsx`, `popover.tsx`, `dialog.tsx`,
-  `context-menu.tsx`) sets `Z_INDEX_ABOVE_DOCK`, not `Z_INDEX_OVERLAY` — a stale comment that is
-  what led PR #2229 to place a menu at `Z_INDEX_OVERLAY` (400) underneath its own 600-tier host.
+  `Z_INDEX_OVERLAY`'s doc comment claimed the shadcn popovers used it, when in fact no shadcn
+  overlay does: each sets a constant from this scale that matches its own tier —
+  `dropdown-menu.tsx`, `select.tsx`, `popover.tsx` and `context-menu.tsx` on `Z_INDEX_ABOVE_DOCK`,
+  `tooltip.tsx` on `Z_INDEX_TOOLTIP`, `dialog.tsx` on `Z_INDEX_MODAL`/`Z_INDEX_MODAL_BACKDROP`.
+  That stale comment is what led PR #2229 to place a menu at `Z_INDEX_OVERLAY` (400) underneath its
+  own 600-tier host.
 - **Decision:** Define the scale by **ordering invariants**, not the individual numbers:
   backdrop (`Z_INDEX_MODAL_BACKDROP`, 450) < modal (`Z_INDEX_MODAL`, 500) < overlay content
   (`Z_INDEX_ABOVE_DOCK`, 600) < content portalled out of a popover (`Z_INDEX_ABOVE_POPOVER`, 650) <
@@ -2568,8 +2570,8 @@ step, no automation. Just a record.
   `expect(Z_INDEX_TOOLTIP).toBeGreaterThan(Z_INDEX_ABOVE_POPOVER)`), plus rendered-stacking tests that
   render a tooltip inside a popover and a dropdown menu on its own, and assert the resulting
   `style.zIndex` values. Overlay components own their own z-index — every shadcn overlay sets the
-  shared `Z_INDEX_ABOVE_DOCK` constant itself — rather than leaving each consumer to pick a value,
-  closing the PR #2229 failure mode. Overlays nested inside other overlays (a tooltip inside a
+  constant for its own tier itself — rather than leaving each consumer to pick a value, closing the
+  PR #2229 failure mode. Overlays nested inside other overlays (a tooltip inside a
   popover, a menu inside a dialog) share the overlay tier and resolve by DOM/paint document order
   rather than getting a tier of their own.
 - **Alternatives:** (a) **a dedicated numeric tier per nesting level** — rejected: does not compose
@@ -2599,3 +2601,42 @@ step, no automation. Just a record.
   drift left by PR #2365 (silently raised `Z_INDEX_ABOVE_DOCK` 250 → 600, burying every tooltip) and
   PR #2229 (placed a menu at `Z_INDEX_OVERLAY` underneath its own `Z_INDEX_ABOVE_DOCK` host) by
   adding the ordering tests in `z-index.test.tsx` and this decision record.
+
+## adr-recent-searches-menu-semantics: RecentSearches is a menu, not a listbox
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** `RecentSearches`
+  (`lib/platform-bible-react/src/components/advanced/recent-searches.component.tsx`) was built on
+  `Popover` + cmdk's `Command`/`CommandItem`. Inside the BCV control that nesting misbehaved twice
+  over: cmdk items are never DOM-focused (the list container owns focus and items only carry
+  `data-selected`), so the inner list competed with the outer picker's own cmdk instance for arrow
+  keys and highlight state; and a popover-in-a-popover left the recent-searches list on the same
+  stacking tier as its host. The component is exported from
+  `lib/platform-bible-react/src/index.ts`, so the roles it renders are public API.
+- **Decision:** Rebuild it on Radix `DropdownMenu` + `DropdownMenuItem`, with `modal={false}`. A
+  list of past references that you pick one item from is a menu, and menu semantics
+  (`role="menu"` / `role="menuitem"`, roving DOM focus, type-ahead, Escape-to-close) are what
+  Radix already implements correctly. `modal={false}` is required rather than cosmetic: Radix menus
+  default to modal, which traps focus and sets `pointer-events: none` on `<body>` for as long as
+  the menu is open — this list opens beside a search input the user is still typing in, usually
+  inside another popover, so the surrounding controls must stay clickable. The component carries
+  its own `TooltipProvider` because it is exported standalone and cannot assume a host tree has
+  one.
+- **Alternatives:** (a) **keep `Popover` + `Command` and coordinate the two cmdk instances** —
+  rejected: two cmdk roots sharing a keyboard surface means arbitrating `data-selected` between
+  them on every keystroke, which is the bug, not a fix for it. (b) **keep listbox semantics and
+  hand-roll roving focus on the items** — rejected: reimplements what Radix ships, and listbox is
+  the wrong role for a pick-one-action-and-close list. (c) **ship the role change undocumented** —
+  rejected: it silently breaks any consumer querying `role="option"`, which is exactly the class of
+  drift this log exists to catch.
+- **Consequences:** This is a **breaking accessibility-contract change** for consumers outside this
+  repo: `getByRole('option')` / `listbox` queries against `RecentSearches` no longer match, and
+  screen readers announce a menu rather than a listbox. In-repo the only consumers are
+  `BookChapterControl` and its story, so nothing here needed updating — which is precisely why the
+  change needed pinning. `recent-searches.component.test.tsx` now asserts both halves (menu
+  semantics present, listbox semantics absent), so a swap back fails a test rather than a
+  consumer. The `ariaLabel` prop additionally became the button's visible tooltip text, so it is
+  now user-visible microcopy and its TSDoc says so.
+- **Source:** PT-4345 (BCV styling/keyboard-nav epic), where the nested-cmdk keyboard conflict
+  surfaced while rebuilding the picker's arrow-key navigation.

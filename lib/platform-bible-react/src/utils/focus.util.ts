@@ -37,3 +37,22 @@ export function getFocusableElements(
     (el) => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden') && isVisible(el),
   );
 }
+
+/**
+ * Tailwind classes for the keyboard focus ring on the currently highlighted list or grid item.
+ *
+ * Uses shadcn's standard focus-ring color token (`ring-ring/50`), but triggers on `data-selected`
+ * rather than `:focus-visible`: cmdk list items are never DOM-focused (the list container owns
+ * focus and items only carry `data-selected`), so `:focus-visible` can never match them.
+ * `ring-inset` keeps the ring from being clipped by the scrolling list.
+ *
+ * `ring-2` rather than the heavier `ring-3` some controls use: these items sit in a dense grid of
+ * 32px cells separated by a 4px gap, where a 3px ring on adjacent cells reads as a merged block
+ * rather than a highlight on one cell.
+ *
+ * Consumers rendering the item on a filled background (e.g. `bg-primary` for a current chapter)
+ * should override the ring color with one that contrasts against that fill — `cn` merges the later
+ * `ring-*` color and drops this one, so argument order decides rather than CSS output order.
+ */
+export const LIST_ITEM_KEYBOARD_FOCUS_RING =
+  'tw:data-selected:ring-2 tw:data-selected:ring-ring/50 tw:data-selected:ring-inset';
