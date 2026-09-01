@@ -308,7 +308,7 @@ export declare class EventRollingTimeCounter {
  * character buffer and gives up only at V8's string limit (`2**29 - 24`); padding here builds one
  * array element per grapheme before joining, so the same target costs considerably more memory and
  * exhausts the heap well before reaching native's ceiling. Measured on the padding path: `2**16`
- * costs ~2ms and ~1MB, `2**18` ~3ms and ~1MB, `2**20` ~11ms and ~9MB, and V8's own limit cannot be
+ * costs ~2ms and ~1MB, `2**18` ~3ms and ~1MB, `2**20` ~9ms and ~9MB, and V8's own limit cannot be
  * reached at all.
  *
  * A million graphemes of padding is already far past any display or formatting use, so the limit is
@@ -344,11 +344,17 @@ export declare const MAX_PADDING_LENGTH: number;
  * for emoji and Latin, and equally for pointed Hebrew, vocalized Arabic and Syriac, Indic
  * conjuncts, Thai, and Hangul written as decomposed Jamo.
  *
- * One consequence deserves attention, because it is the one place a conformant segmenter changes
- * the answer a caller might be relying on: **`\r\n` is a single cluster** (UAX #29 rule GB3). Since
- * searches only report boundary-aligned hits, `'\n'` is therefore NOT findable inside a `\r\n`, and
- * {@link split} on `'\n'` will not break Windows-style lines apart. Split lines with a regex that
- * matches the whole terminator (`/\r?\n/`) rather than the bare line feed.
+ * Two consequences deserve attention, because they are where a conformant segmenter changes an
+ * answer a caller might be relying on.
+ *
+ * **`\r\n` is a single cluster** (rule GB3). Since searches only report boundary-aligned hits,
+ * `'\n'` is therefore NOT findable inside a `\r\n`, and {@link split} on `'\n'` will not break
+ * Windows-style lines apart. Split lines with a regex that matches the whole terminator (`/\r?\n/`)
+ * rather than the bare line feed.
+ *
+ * **A zero-width joiner attaches to the character before it** (rule GB9), not the one after. So
+ * `'a\u200d '` is two clusters — `'a\u200d'` and a space — and that trailing space is a cluster
+ * that is entirely whitespace.
  *
  * @example
  *
