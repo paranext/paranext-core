@@ -19,6 +19,7 @@ import {
 } from '@renderer/services/theme.service';
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
 import { startUsersnapServiceShard } from '@renderer/services/usersnap.service-shard';
+import { startOnboardingTourServiceShard } from '@renderer/services/onboarding-tour.service-shard';
 import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
 import { startWebViewServiceShard } from '@renderer/services/web-view.service-shard';
 import { initialize as initializeWindowService } from '@renderer/services/window.service-shard';
@@ -115,6 +116,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       startNotificationServiceShard(),
       startUsersnapServiceShard(),
       startBookChapterControlServiceShard(),
+      startOnboardingTourServiceShard(),
       startOverlayService(),
       startThemeService(),
       initializeWindowService(),
