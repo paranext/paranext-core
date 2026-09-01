@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, within } from 'storybook/test';
+import { expect, waitFor, within } from 'storybook/test';
 import { Dialog } from '@/components/shadcn-ui/dialog';
 import ResourcePickerDialog, {
   ResourcePickerDialogLocalizedStrings,
@@ -59,6 +59,20 @@ function getLanguageList(doc: Document): HTMLElement {
   const list = doc.querySelector<HTMLElement>('[data-slot="command-list"]');
   if (!list) throw new Error('The language filter list did not render');
   return list;
+}
+
+/**
+ * The language labels currently offered, in render order.
+ *
+ * Reads the rows with a DOM query rather than `findAllByRole('option')`: the catalogue stories
+ * render ~130 rows, and computing the accessibility tree for each one makes the play slow enough to
+ * push the whole browser-mode suite toward its timeout.
+ */
+function getOfferedLanguages(doc: Document): string[] {
+  return [...getLanguageList(doc).querySelectorAll('[role="option"]')].map((option) =>
+    // Each row renders the language then its resource count; keep the language.
+    (option.textContent ?? '').replace(/\d+$/, '').trim(),
+  );
 }
 
 export const Default: Story = {
@@ -164,11 +178,10 @@ export const ManyLanguages: Story = {
     });
 
     await step('Languages with installed resources come first, alphabetically', async () => {
-      const options = await body.findAllByRole('option');
-      const leadingLabels = options
-        .slice(0, MANY_LANGUAGE_INSTALLED_LANGUAGES.length)
-        // Each row renders the language then its resource count; keep the language.
-        .map((option) => option.textContent?.replace(/\d+$/, '').trim());
+      const leadingLabels = getOfferedLanguages(canvasElement.ownerDocument).slice(
+        0,
+        MANY_LANGUAGE_INSTALLED_LANGUAGES.length,
+      );
 
       await expect(leadingLabels).toEqual(
         [...MANY_LANGUAGE_INSTALLED_LANGUAGES].sort((a, b) => a.localeCompare(b)),
@@ -188,6 +201,41 @@ export const ManyLanguages: Story = {
         canvasElement.ownerDocument.querySelector('[data-slot="command-list-scroll-cue"]'),
       ).not.toBeNull();
     });
+
+    await step('Scrolling to the end retires the cue', async () => {
+      const list = getLanguageList(canvasElement.ownerDocument);
+      list.scrollTop = list.scrollHeight;
+
+      // Covers the hook's `scroll` listener: without it the cue would stay drawn at the bottom of
+      // a list the user has already reached the end of.
+      await waitFor(async () => {
+        await expect(
+          canvasElement.ownerDocument.querySelector('[data-slot="command-list-scroll-cue"]'),
+        ).toBeNull();
+      });
+      list.scrollTop = 0;
+    });
+
+    await step('Filtering to a short list retires the cue and re-measures', async () => {
+      const searchBox = await body.findByPlaceholderText('Search languages…');
+      await userEvent.type(searchBox, 'Amhar');
+
+      // Covers the hook's MutationObserver: the scroller's own box never changes size, only its
+      // content does, so a resize observer alone would leave the cue drawn over a 1-row list.
+      await waitFor(async () => {
+        await expect(
+          canvasElement.ownerDocument.querySelector('[data-slot="command-list-scroll-cue"]'),
+        ).toBeNull();
+      });
+    });
+
+    await step('A query matching no language shows the localized empty message', async () => {
+      const searchBox = await body.findByPlaceholderText('Search languages…');
+      await userEvent.clear(searchBox);
+      await userEvent.type(searchBox, 'zzzznotalanguage');
+
+      await expect(await body.findByText('No languages found')).toBeInTheDocument();
+    });
   },
 };
 
@@ -201,5 +249,35 @@ export const ManyLanguagesScopedToScripture: Story = {
     allResources: MANY_LANGUAGE_RESOURCES,
     selectedResourceIds: [],
     resourceType: 'ScriptureResource',
+  },
+  play: async ({ canvasElement, userEvent, step }) => {
+    const body = within(canvasElement.ownerDocument.body);
+
+    await step('Open the language filter', async () => {
+      await userEvent.click(body.getByRole('combobox'));
+    });
+
+    await step('Every offered language has at least one Scripture resource', async () => {
+      const offered = new Set(getOfferedLanguages(canvasElement.ownerDocument));
+
+      // Pins the `resourceType` argument at the call site: without it every language in the
+      // catalogue is offered, and selecting one of these lands on an empty list. Derived from the
+      // fixture rather than hardcoded, so it stays honest if the fixture changes.
+      const scriptureLanguages = new Set(
+        MANY_LANGUAGE_RESOURCES.filter((r) => r.type === 'ScriptureResource').map(
+          (r) => r.bestLanguageName,
+        ),
+      );
+      const languagesWithoutScripture = [
+        ...new Set(MANY_LANGUAGE_RESOURCES.map((r) => r.bestLanguageName)),
+      ].filter((language) => !scriptureLanguages.has(language));
+
+      await expect(languagesWithoutScripture.length).toBeGreaterThan(0);
+      languagesWithoutScripture.forEach((language) => {
+        expect(offered.has(language)).toBe(false);
+      });
+      // ...and the scoping is not just hiding everything.
+      await expect(offered.size).toBeGreaterThan(0);
+    });
   },
 };

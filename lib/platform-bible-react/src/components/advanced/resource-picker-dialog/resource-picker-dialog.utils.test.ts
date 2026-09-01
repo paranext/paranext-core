@@ -205,4 +205,19 @@ describe('buildLanguageFilterOptions', () => {
       expect(labels).not.toContain(language);
     });
   });
+
+  it('offers exactly the languages that have a Scripture resource, in both directions', () => {
+    const labels = buildLanguageFilterOptions(MANY_LANGUAGE_RESOURCES, 'ScriptureResource').map(
+      (o) => o.label,
+    );
+    const withScripture = new Set(
+      MANY_LANGUAGE_RESOURCES.filter((r) => r.type === 'ScriptureResource').map(
+        (r) => r.bestLanguageName,
+      ),
+    );
+
+    // The one-directional assertion above passes even if the filter lets extra languages through.
+    // Comparing both directions is what makes "no offered language can dead-end" checkable.
+    expect([...labels].sort()).toEqual([...withScripture].sort());
+  });
 });

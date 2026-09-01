@@ -28,6 +28,12 @@ declare const buttonVariants: (props?: ({
 interface ButtonProps extends React$1.ComponentProps<"button">, VariantProps<typeof buttonVariants> {
 	asChild?: boolean;
 }
+type MultiSelectComboBoxEntry = {
+	value: string;
+	label: string;
+	secondaryLabel?: string;
+	starred?: boolean;
+};
 type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 /** Same as `Scope` plus a verse-range option. Used by `ScopeSelector` when range mode is enabled. */
 export type ScopeWithRange = Scope | "range";
@@ -324,6 +330,28 @@ export interface ResourcePickerDialogProps {
  * @param props See {@link ResourcePickerDialogProps}
  */
 export function ResourcePickerDialog({ allResources, isResourcesLoading, resourceType, selectedResourceIds, localizedStrings, notice, allowSelectingInstalled, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Builds the language filter's options from a resource catalogue.
+ *
+ * Languages are returned alphabetically, never in catalogue order — a DBL catalogue arrives in an
+ * arbitrary order that has nothing to do with what the user is likely to want. Languages that
+ * already have an installed resource are `starred`, which `MultiSelectComboBox` promotes to the top
+ * of the list when its `sortSelected` prop is set. Each entry carries its resource count as
+ * `secondaryLabel`.
+ *
+ * Only languages with at least one resource of `resourceType` are offered, so selecting a language
+ * can never produce an empty result list.
+ *
+ * Note that a consumer passing `sortSelected` re-sorts these entries itself, so the rendered order
+ * is that component's (starred first, then selected, then alphabetical) rather than the plain
+ * alphabetical order returned here.
+ *
+ * @param resources The full catalogue.
+ * @param resourceType If provided, restricts both the offered languages and their counts to this
+ *   type, or to any of these types.
+ * @returns Alphabetically ordered entries, ready for `MultiSelectComboBox`.
+ */
+export declare function buildLanguageFilterOptions(resources: DblResourceData[], resourceType?: ResourceType | ResourceType[]): MultiSelectComboBoxEntry[];
 /**
  * Derives the list of available, non-obsolete book IDs from the `availableBookInfo` string
  *

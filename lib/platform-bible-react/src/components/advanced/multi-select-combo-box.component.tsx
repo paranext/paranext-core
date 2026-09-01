@@ -10,52 +10,9 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Check, ChevronsUpDown, Star } from 'lucide-react';
-import { ReactNode, RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { type VariantProps } from 'class-variance-authority';
-
-/**
- * Tracks whether the scrollable element matching `selector` inside `containerRef` still has content
- * below the fold.
- *
- * A long option list clipped flush at a row boundary looks complete, and the scrollbar alone is a
- * weak signal — with a few hundred options the thumb is only a few pixels tall, and on platforms
- * with overlay scrollbars it reserves no width at all. Callers use this to draw an explicit cue.
- *
- * Resolves the scroller by query rather than by holding a ref to it directly, because the scroller
- * is a vendored component whose ref forwarding is not ours to rely on.
- */
-function useHasContentBelow(containerRef: RefObject<HTMLElement | null>, selector: string) {
-  const [hasContentBelow, setHasContentBelow] = useState(false);
-
-  useEffect(() => {
-    const element = containerRef.current?.querySelector<HTMLElement>(selector);
-    if (!element) {
-      setHasContentBelow(false);
-      return undefined;
-    }
-    const update = () => {
-      // Sub-pixel layout can leave a fractional remainder at the very bottom; 1px of slack keeps
-      // the cue from lingering once the user has actually reached the end.
-      setHasContentBelow(element.scrollTop + element.clientHeight < element.scrollHeight - 1);
-    };
-    update();
-    element.addEventListener('scroll', update);
-    // The scroller's own box never changes (its height is capped), so a resize observer on it only
-    // catches viewport-driven changes. Filtering the list changes the CONTENT height instead, which
-    // is why the mutation observer below is needed as well.
-    const resizeObserver = new ResizeObserver(update);
-    resizeObserver.observe(element);
-    const mutationObserver = new MutationObserver(update);
-    mutationObserver.observe(element, { childList: true, subtree: true });
-    return () => {
-      element.removeEventListener('scroll', update);
-      resizeObserver.disconnect();
-      mutationObserver.disconnect();
-    };
-  }, [containerRef, selector]);
-
-  return hasContentBelow;
-}
+import useHasContentBelow from '@/hooks/use-has-content-below.hook';
 
 /**
  * Wraps the option list and draws a fade at its bottom edge while more options remain below the
@@ -79,7 +36,9 @@ function OptionListScrollCue({ children }: { children: ReactNode }) {
         <div
           data-slot="command-list-scroll-cue"
           aria-hidden
-          className="tw:pointer-events-none tw:absolute tw:inset-x-0 tw:bottom-0 tw:h-6 tw:bg-gradient-to-t tw:from-popover tw:to-transparent"
+          // Kept shorter than a row (rows are ~32px) so the fade reads as "more below" without
+          // dimming the last row's text or washing out its hover/highlight background.
+          className="tw:pointer-events-none tw:absolute tw:inset-x-0 tw:bottom-0 tw:h-3 tw:bg-gradient-to-t tw:from-popover tw:to-transparent"
         />
       )}
     </div>

@@ -25,6 +25,7 @@ export {
   type ResourcePickerDialogLocalizedStrings,
   RESOURCE_PICKER_DIALOG_STRING_KEYS,
 } from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
+export { buildLanguageFilterOptions } from './components/advanced/resource-picker-dialog/resource-picker-dialog.utils';
 export type { ScopeSelectorVariant } from './components/advanced/scope-selector/scope-selector.component';
 export {
   getAvailableBookIds,

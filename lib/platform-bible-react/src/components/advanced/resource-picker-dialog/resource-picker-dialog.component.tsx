@@ -187,15 +187,36 @@ export default function ResourcePickerDialog({
   const [searchText, setSearchText] = useState('');
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
 
+  const languageOptions: MultiSelectComboBoxEntry[] = useMemo(
+    () => buildLanguageFilterOptions(allResources, resourceType),
+    [allResources, resourceType],
+  );
+
+  /**
+   * The selection with any language the filter no longer offers dropped.
+   *
+   * A language picked under one `resourceType` survives in state when the prop changes, but its row
+   * is gone from the options, so there is nothing left to un-toggle — and this dialog does not
+   * enable the combo box's clear-all button. Filtering the rows on the raw selection would strand
+   * the user on an empty list with no way back.
+   *
+   * This is also what the combo box is handed as its selection, so the next toggle rebuilds the
+   * selection from the offered languages and the stranded entry drops out of state for good.
+   */
+  const effectiveLanguages = useMemo(
+    () => selectedLanguages.filter((language) => languageOptions.some((o) => o.value === language)),
+    [selectedLanguages, languageOptions],
+  );
+
   const filteredResources = useMemo(
     () =>
       allResources
         .filter((r) => matchesResourceType(r, resourceType))
         .filter((r) => matchesSearch(r, searchText))
         .filter(
-          (r) => selectedLanguages.length === 0 || selectedLanguages.includes(r.bestLanguageName),
+          (r) => effectiveLanguages.length === 0 || effectiveLanguages.includes(r.bestLanguageName),
         ),
-    [allResources, resourceType, searchText, selectedLanguages],
+    [allResources, resourceType, searchText, effectiveLanguages],
   );
 
   const alreadySelected = useMemo(
@@ -218,11 +239,6 @@ export default function ResourcePickerDialog({
   );
 
   const { visibleItems: visibleToDownload, sentinelRef, hasMore } = useProgressiveList(toDownload);
-
-  const languageOptions: MultiSelectComboBoxEntry[] = useMemo(
-    () => buildLanguageFilterOptions(allResources, resourceType),
-    [allResources, resourceType],
-  );
 
   const hasNoResults =
     alreadySelected.length === 0 && installed.length === 0 && toDownload.length === 0;
@@ -251,21 +267,21 @@ export default function ResourcePickerDialog({
   const showingCountTemplate = localizeString(localizedStrings, '%resourcePicker_showing_count%');
 
   const customLanguageSelectText = useMemo(() => {
-    if (selectedLanguages.length === languageOptions.length || selectedLanguages.length === 0)
+    if (effectiveLanguages.length === languageOptions.length || effectiveLanguages.length === 0)
       return anyLanguageText;
-    if (selectedLanguages.length === 1) {
-      const matchingType = languageOptions.find((type) => type.value === selectedLanguages[0]);
+    if (effectiveLanguages.length === 1) {
+      const matchingType = languageOptions.find((type) => type.value === effectiveLanguages[0]);
       if (matchingType) return matchingType.label;
     }
     return formatReplacementString(
       localizeString(localizedStrings, '%resourcePicker_language_filter_multipleSelected%'),
       {
-        selectCount: selectedLanguages.length,
+        selectCount: effectiveLanguages.length,
       },
     );
-  }, [selectedLanguages, languageOptions, anyLanguageText, localizedStrings]);
+  }, [effectiveLanguages, languageOptions, anyLanguageText, localizedStrings]);
 
-  const isFiltered = searchText.length > 0 || selectedLanguages.length > 0;
+  const isFiltered = searchText.length > 0 || effectiveLanguages.length > 0;
 
   return (
     <>
@@ -281,7 +297,7 @@ export default function ResourcePickerDialog({
         />
         <MultiSelectComboBox
           entries={languageOptions}
-          selected={selectedLanguages}
+          selected={effectiveLanguages}
           onChange={setSelectedLanguages}
           customSelectedText={customLanguageSelectText}
           placeholder={anyLanguageText}
@@ -309,7 +325,9 @@ export default function ResourcePickerDialog({
         <p className="tw:px-4 tw:pb-1 tw:text-right tw:text-xs tw:text-muted-foreground">
           {formatReplacementString(showingCountTemplate, {
             filtered: filteredResources.length,
-            total: allResources.length,
+            // Counted against the resources this picker could ever offer, not the whole catalogue:
+            // a type-scoped picker reporting "5 of 300" measures against rows it never shows.
+            total: allResources.filter((r) => matchesResourceType(r, resourceType)).length,
           })}
         </p>
       )}

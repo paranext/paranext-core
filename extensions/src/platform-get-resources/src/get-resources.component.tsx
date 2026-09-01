@@ -36,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
+import { buildLanguageFilterOptions } from 'platform-bible-react/experimental';
 import type { DblResourceData, LocalizedStringValue } from 'platform-bible-utils';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
@@ -60,6 +61,7 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_installed%',
   '%resources_language%',
   '%resources_languages%',
+  '%resources_languages_searchPlaceholder%',
   '%resources_noResults%',
   '%resources_noResultsError%',
   '%resources_open%',
@@ -69,6 +71,7 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_size%',
   '%resources_type%',
   '%resources_types%',
+  '%resources_types_searchPlaceholder%',
   '%resources_type_Scripture%',
   '%resources_type_Commentary%',
   '%resources_type_ER%',
@@ -91,44 +94,6 @@ type SortConfig = {
 };
 
 const emptyResources: DblResourceData[] = [];
-
-const getLanguageOptions = (
-  resources: DblResourceData[],
-  selectedLanguages: string[],
-): MultiSelectComboBoxEntry[] => {
-  const allLanguages: string[] = Array.from(
-    new Set(resources.map((resource) => resource.bestLanguageName)),
-  );
-
-  const starredLanguages = new Set(
-    resources.filter((resource) => resource.installed).map((resource) => resource.bestLanguageName),
-  );
-
-  const prioritizedLanguages = new Set(selectedLanguages.concat(Array.from(starredLanguages)));
-
-  const sortedLanguages = allLanguages.sort((a, b) => {
-    const aIsPrioritized = prioritizedLanguages.has(a);
-    const bIsPrioritized = prioritizedLanguages.has(b);
-
-    if (aIsPrioritized && bIsPrioritized) {
-      return a.localeCompare(b);
-    }
-    if (aIsPrioritized) return -1;
-    if (bIsPrioritized) return 1;
-
-    return a.localeCompare(b);
-  });
-
-  return sortedLanguages.map((language) => {
-    const count = resources.filter((resource) => resource.bestLanguageName === language).length;
-    return {
-      label: language,
-      value: language,
-      starred: starredLanguages.has(language),
-      secondaryLabel: count.toString(),
-    };
-  });
-};
 
 const getActionButtonContent = (
   resource: DblResourceData,
@@ -246,6 +211,9 @@ export function GetResources({
   const installedText: string = getLocalizedString('%resources_installed%');
   const languageText: string = getLocalizedString('%resources_language%');
   const languagesText: string = getLocalizedString('%resources_languages%');
+  const languagesSearchPlaceholder: string = getLocalizedString(
+    '%resources_languages_searchPlaceholder%',
+  );
   const noResultsText: string = getLocalizedString('%resources_noResults%');
   const noResultsErrorText: string = getLocalizedString('%resources_noResultsError%');
   const openText: string = getLocalizedString('%resources_open%');
@@ -255,6 +223,7 @@ export function GetResources({
   const sizeText: string = getLocalizedString('%resources_size%');
   const typeText: string = getLocalizedString('%resources_type%');
   const typesText: string = getLocalizedString('%resources_types%');
+  const typesSearchPlaceholder: string = getLocalizedString('%resources_types_searchPlaceholder%');
   const typeScriptureText: string = getLocalizedString('%resources_type_Scripture%');
   const typeCommentaryText: string = getLocalizedString('%resources_type_Commentary%');
   const typeErText: string = getLocalizedString('%resources_type_ER%');
@@ -288,6 +257,13 @@ export function GetResources({
       );
     });
   }, [resources, textFilter]);
+
+  // `sortSelected` on the language Filter re-sorts these (starred first, then selected, then
+  // alphabetical), so the plain alphabetical order returned here is what reaches the user.
+  const languageOptions: MultiSelectComboBoxEntry[] = useMemo(
+    () => buildLanguageFilterOptions(resources),
+    [resources],
+  );
 
   const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
     const getTypeCount = (type: string): string =>
@@ -409,16 +385,18 @@ export function GetResources({
                 selected={selectedTypes}
                 onChange={onSelectedTypesChange}
                 placeholder={typesText}
+                searchPlaceholder={typesSearchPlaceholder}
                 icon={<Shapes />}
                 badgesPlaceholder={anyType}
                 isDisabled={isLoadingResources}
               />
 
               <Filter
-                entries={getLanguageOptions(resources, selectedLanguages)}
+                entries={languageOptions}
                 selected={selectedLanguages}
                 onChange={onSelectedLanguagesChange}
                 placeholder={languagesText}
+                searchPlaceholder={languagesSearchPlaceholder}
                 sortSelected
                 icon={<Globe />}
                 badgesPlaceholder={anyLanguage}

@@ -3834,6 +3834,22 @@ export declare const useViewVisibility: () => boolean;
  *   effect re-firing on every visibility flip.
  */
 export declare function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void;
+/**
+ * Tracks whether the scrollable element matching `selector` inside `containerRef` still has content
+ * below the fold.
+ *
+ * A long option list clipped flush at a row boundary looks complete, and the scrollbar alone is a
+ * weak signal — with a few hundred options the thumb is only a few pixels tall, and on platforms
+ * with overlay scrollbars it reserves no width at all. Callers use this to draw an explicit cue.
+ *
+ * Resolves the scroller by query rather than by holding a ref to it directly, so it works against a
+ * vendored component whose ref forwarding is not ours to rely on.
+ *
+ * @param containerRef Ref to an element containing the scroller.
+ * @param selector CSS selector matching the scroller within that container.
+ * @returns Whether the scroller currently has content below its visible area.
+ */
+export function useHasContentBelow(containerRef: React$1.RefObject<HTMLElement | null>, selector: string): boolean;
 /** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
 export type TabIconUrls = {
 	/** Dark theme (any selection). */
