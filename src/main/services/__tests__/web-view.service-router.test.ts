@@ -1016,6 +1016,24 @@ describe('web view service router', () => {
       expect(named.openWebView).not.toHaveBeenCalled();
     });
 
+    test('refuses a window no open window has even when a reusable web view could take the open', async () => {
+      // Reuse decides which window serves the open, but it does not excuse the caller from naming
+      // a window that exists: the contract is that naming one means wanting that one, so a name
+      // nothing answers to is a caller error however the open would otherwise have been satisfied.
+      const existingOwner = windowShard(['existing-view']);
+      withWindows({ 1: windowShard([]), 2: existingOwner });
+      const router = await getRouter();
+
+      await expect(
+        router.openWebView(
+          'someType',
+          { type: 'tab' },
+          { existingId: 'existing-view', targetWindowId: '42' },
+        ),
+      ).rejects.toThrow(/window id 42, which no open window has/);
+      expect(existingOwner.openWebView).not.toHaveBeenCalled();
+    });
+
     test('a named window whose close is already decided fails the open before anything opens', async () => {
       // Same rule the move commands apply to their target: a window whose close has been decided
       // is a stale target the caller cannot know about — opening into it would report success and
