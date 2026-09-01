@@ -16,12 +16,17 @@ import {
   RegisteredRpcMethodDetails,
 } from '@shared/models/rpc.interface';
 import {
+  ANNOUNCE_PEER,
   ConnectionStatus,
   createErrorResponse,
   createRequest,
   createSuccessResponse,
   deserializeMessage,
+  describeWebSocketCloseEvent,
+  describeWebSocketErrorEvent,
+  INTENTIONAL_CLOSE_CODE,
   InternalRequestHandler,
+  isCleanCloseEvent,
   REGISTER_EVENT,
   REGISTER_METHOD,
   RequestParams,
@@ -37,6 +42,29 @@ import {
 } from '@shared/models/openrpc.model';
 import { getErrorMessage } from 'platform-bible-utils';
 
+/**
+ * Whether the app is on its way down, as {@link RpcServer.onWebSocketClose} needs to know to
+ * classify a handshake-less close. Defaults to "not shutting down", so a process that never
+ * supplies it reports every socket death as a fault.
+ *
+ * Injected rather than imported from the main-process shutdown latch that answers it, because every
+ * module this one imports lands in the generated `papi.d.ts`: importing the latch published it and
+ * the window-state service it depends on — `resetForTesting()` included — as extension-facing API.
+ */
+let isAppShuttingDown: () => boolean = () => false;
+
+/**
+ * Tell socket-close severity how to ask whether the app is shutting down.
+ *
+ * Called once by the process that owns the answer, before the network starts. See
+ * {@link isAppShuttingDown} for why this is wired in rather than imported.
+ *
+ * @param signal Returns whether the app is currently coming down
+ */
+export function setAppShutdownSignal(signal: () => boolean): void {
+  isAppShuttingDown = signal;
+}
+
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
 
 /** Called by an RpcServer with the method names its client's departure removed from the registry */
@@ -51,10 +79,27 @@ type AnnounceClientDisconnectMethod = (removedMethodNames: string[]) => void;
  */
 export class RpcServer implements IRpcHandler {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
+  /**
+   * Whether {@link onWebSocketClose} has already run for the current socket.
+   *
+   * A closed socket's listener is already removed, but a caller holding a stale reference to the
+   * bound handler could still invoke it directly; this makes a second call a no-op rather than
+   * double-logging and re-running teardown. Deliberately its own field rather than a read of
+   * `connectionStatus`, which is public and mutable: keyed off that, the natural future edit of
+   * setting `Disconnected` in `disconnect()` would skip teardown for the close that follows and
+   * permanently leak everything the socket had registered.
+   */
+  private hasCompletedTeardown = false;
   private ws: WebSocket | undefined;
   private requestId: number = 1;
   /** Only used for logging to differentiate from other RpcServer objects */
   private readonly name: string;
+  /**
+   * How the peer on the other end of this socket labels itself in its own logs, once it has said so
+   * (see {@link ANNOUNCE_PEER}). Undefined until then, and for a peer that never announces — the
+   * .NET data provider does not.
+   */
+  private peerName: string | undefined;
   /** Refers to the main process */
   private readonly jsonRpcServer: JSONRPCServer;
   /** Refers to any process that connected to main over the websocket */
@@ -101,22 +146,30 @@ export class RpcServer implements IRpcHandler {
     this.addMethodToRpcServer(UNREGISTER_METHOD, this.unregisterRemoteMethod);
     this.addMethodToRpcServer(REGISTER_EVENT, this.registerRemoteEvent);
     this.addMethodToRpcServer(UNREGISTER_EVENT, this.unregisterRemoteEvent);
+    this.addMethodToRpcServer(ANNOUNCE_PEER, this.setPeerName);
   }
 
   async connect(): Promise<boolean> {
     if (this.connectionStatus === ConnectionStatus.Connected) return false;
+    this.hasCompletedTeardown = false;
     this.addEventListenersToWebSocket();
     this.connectionStatus = ConnectionStatus.Connected;
     return true;
   }
 
+  // TODO(PT-4435): Nothing calls this. `RpcWebSocketListener.disconnect()` closes the WebSocket
+  // server without iterating its `RpcServer`s, so live client sockets are never closed and
+  // `IRpcHandler.disconnect`'s documented "on servers: disconnects from all clients" is unmet —
+  // which is also why `INTENTIONAL_CLOSE_CODE` never leaves main. Fixing it means changing what
+  // shutdown does to live sockets, so it belongs with the reconnect/teardown work rather than in a
+  // diagnosis-only change.
   async disconnect(): Promise<void> {
     if (this.connectionStatus === ConnectionStatus.Disconnected) return;
     if (!this.ws) {
       logger.warn(`Server connected but websocket is not set`);
       return;
     }
-    this.ws.close();
+    this.ws.close(INTENTIONAL_CLOSE_CODE, 'server shutdown');
   }
 
   async request(
@@ -190,6 +243,30 @@ export class RpcServer implements IRpcHandler {
     return this.rpcEventDetailsByEventName.tryUnregister(this, eventName);
   }
 
+  /**
+   * Record how the peer on the other end labels itself, so this socket's log lines can be joined to
+   * that process's own. Called remotely by a connecting client; see {@link ANNOUNCE_PEER}.
+   *
+   * A socket gets to say this once. Accepting later announcements would let a peer relabel itself
+   * mid-session — so log lines already attributed to one name could be continued under another —
+   * and would let it re-log this line as often as it liked.
+   *
+   * @param peerName The peer's label for itself
+   * @returns Whether a usable label was recorded
+   */
+  setPeerName(peerName: string): boolean {
+    if (this.peerName) return false;
+    if (typeof peerName !== 'string') return false;
+    // Peer-supplied text going straight into log lines, so allowlist rather than sanitize: the
+    // label a client generates is `<processType>#<discriminator>`, and nothing outside that shape
+    // belongs in a log line at all.
+    const safePeerName = peerName.replace(/[^\w#.:-]/g, '').slice(0, 60);
+    if (!safePeerName) return false;
+    this.peerName = safePeerName;
+    logger.info(`Websocket ${this.name} is ${safePeerName}`);
+    return true;
+  }
+
   private createNextRequestId(): number {
     const retVal = this.requestId;
     this.requestId += 1;
@@ -202,8 +279,18 @@ export class RpcServer implements IRpcHandler {
 
   private handleError(message: string, data: unknown): void {
     logger.error(
-      `Websocket ${this.name} ${message}: ${typeof data === 'string' ? data : JSON.stringify(data)}`,
+      `Websocket ${this.describePeer()} ${message}: ${typeof data === 'string' ? data : JSON.stringify(data)}`,
     );
+  }
+
+  /**
+   * How to name this socket in a log line: main's own incrementing id, plus the peer's self-applied
+   * label once it has announced one. Both halves are needed — the id is what main's other lines
+   * use, and the label is the only thing that ties a line here to the same disconnect as reported
+   * by the process that owns the other end.
+   */
+  private describePeer(): string {
+    return this.peerName ? `${this.name} (${this.peerName})` : this.name;
   }
 
   private addEventListenersToWebSocket() {
@@ -223,8 +310,26 @@ export class RpcServer implements IRpcHandler {
     }
   }
 
-  private onWebSocketClose(): void {
+  private onWebSocketClose(ev: CloseEvent): void {
+    if (this.hasCompletedTeardown) return;
+    this.hasCompletedTeardown = true;
+
     this.jsonRpcClient.rejectAllPendingRequests(`Web socket ${this.name} has closed`);
+    const detail = describeWebSocketCloseEvent(ev);
+    const isClean = isCleanCloseEvent(ev);
+    // A close with no completed handshake is the fingerprint this ticket exists to make greppable —
+    // but on the way down it is also the ordinary case, not a fault. Main's server is still
+    // listening while the extension host calls `process.exit()` and each renderer process is torn
+    // down, so every peer's socket dies with 1006 on a normal quit. Reporting those at `warn` would
+    // fire on every shutdown and bury the signal under the routine.
+    const diedDuringShutdown = !isClean && isAppShuttingDown();
+    const shutdownNote = diedDuringShutdown ? ', expected during app shutdown' : '';
+    // No method count here on purpose: the number that belongs on a close line is what this socket
+    // actually took with it, and that is only known once the removal loop below has run — which
+    // logs it.
+    const summary = `Websocket ${this.describePeer()} closed (${detail}${shutdownNote})`;
+    if (isClean || diedDuringShutdown) logger.info(summary);
+    else logger.warn(summary);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
     const removedMethodNames: string[] = [];
@@ -237,7 +342,9 @@ export class RpcServer implements IRpcHandler {
     });
     // The registry is shared by every connected process, so count what this socket actually took
     // with it rather than what is in the registry
-    logger.info(`Websocket ${this.name} closed. Removed ${removedMethodNames.length} methods`);
+    logger.info(
+      `Websocket ${this.describePeer()} closed. Removed ${removedMethodNames.length} methods`,
+    );
     this.rpcEventDetailsByEventName.unregisterAll(this);
     // Announced only after the registry no longer holds any of this client's methods, so a
     // subscriber acting on the news can never be told about a death that has not happened yet. That
@@ -257,21 +364,8 @@ export class RpcServer implements IRpcHandler {
   }
 
   private onWebSocketError(ev: Event): void {
-    // The ws `ErrorEvent` carries the real reason on `.error` / `.message`; `JSON.stringify(ev)`
-    // collapses to "{}" because those properties are non-enumerable. Surface them explicitly so
-    // the actual transport failure (invalid UTF-8 frame, max-payload, ECONNRESET, ...) is logged.
-    // Narrow with `in`/`instanceof` (no type assertions) since `Event` does not declare these.
-    let message = 'unknown';
-    let code = 'n/a';
-    let stack = '';
-    if ('message' in ev && typeof ev.message === 'string') message = ev.message;
-    if ('error' in ev && ev.error instanceof Error) {
-      message = ev.error.message;
-      stack = ev.error.stack ?? '';
-      if ('code' in ev.error && typeof ev.error.code === 'string') code = ev.error.code;
-    }
-    const detail = `message=${message} code=${code}${stack ? `\nstack: ${stack}` : ''}`;
-    this.handleError(`Server websocket error event occurred: ${detail}`, detail);
+    const detail = describeWebSocketErrorEvent(ev);
+    this.handleError('Server websocket error event occurred', detail);
   }
 
   private async onMessageReceivedByWebSocket(ev: MessageEvent) {

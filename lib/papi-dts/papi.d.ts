@@ -1230,6 +1230,98 @@ declare module 'shared/data/rpc.model' {
     errorCode?: JSONRPCErrorCode,
     requestId?: RequestId,
   ): JSONRPCErrorResponse;
+  /**
+   * Maximum characters retained from a single logged detail that can originate from a remote peer (a
+   * close `reason`, an error `message`)
+   */
+  export const MAX_LOGGED_DETAIL_LENGTH = 200;
+  /**
+   * Maximum characters retained from a logged stack trace.
+   *
+   * Far more generous than {@link MAX_LOGGED_DETAIL_LENGTH} because a stack is generated locally
+   * rather than supplied by a peer, so the flood-protection rationale does not apply — and because a
+   * stack bounded to a couple of hundred characters is one or two frames, which is rarely the frame
+   * that explains a disconnect.
+   */
+  export const MAX_LOGGED_STACK_LENGTH = 4000;
+  /**
+   * Close code used when we close a PAPI socket on purpose (shutdown, teardown). The WebSocket spec
+   * reserves 3000-4999 for application use, so carrying intent in the code itself lets a close
+   * handler tell a deliberate shutdown from a connection that died, with no extra state to keep in
+   * sync.
+   */
+  export const INTENTIONAL_CLOSE_CODE = 4000;
+  /**
+   * Whether a WebSocket close `code` represents a clean, expected shutdown rather than a connection
+   * that died.
+   *
+   * Clean codes: 1000 (normal), 1001 (going away — a page or window navigating away or closing), 1005
+   * (no status code was present in the close frame, which a plain `close()` with no arguments
+   * produces), and {@link INTENTIONAL_CLOSE_CODE}, this codebase's own marker for a close we initiated
+   * on purpose. What all four have in common is that a closing handshake completed. The code that
+   * matters is 1006: no close frame was ever received, the fingerprint of a connection that died
+   * rather than being closed — the shape a suspend produces.
+   *
+   * Shared so the client and server close handlers cannot independently drift on which codes count as
+   * clean. {@link isCleanCloseEvent} is the predicate to use where the event itself is in hand.
+   *
+   * @param code `code` from a WebSocket `close` event
+   * @returns `true` if the code indicates a completed closing handshake, `false` otherwise (including
+   *   for a non-numeric code)
+   */
+  export function isCleanCloseCode(code: unknown): boolean;
+  /**
+   * Whether a close event represents an orderly shutdown rather than a connection that died.
+   *
+   * `wasClean` is the authoritative answer — it reports whether a closing handshake completed — so it
+   * wins whenever the event carries it. Both Chromium and the `ws` library always set it; the
+   * {@link isCleanCloseCode} fallback covers a partial or foreign event shape that does not.
+   *
+   * Deciding on the code alone would misreport a close frame that carried no status: that arrives as
+   * 1005 with `wasClean` true, which a plain `close()` produces on every window close and page
+   * reload. Marking those abnormal would bury a genuine socket death under routine noise.
+   *
+   * @param ev A WebSocket `close` event, or anything at all — a non-event is reported as not clean
+   * @returns Whether a closing handshake completed
+   */
+  export function isCleanCloseEvent(ev: unknown): boolean;
+  /**
+   * Describe a WebSocket `close` event for a log line.
+   *
+   * Chromium and the `ws` library deliver structurally different close events, and both keep
+   * `code`/`reason`/`wasClean` as accessors on the prototype rather than own properties — so
+   * `JSON.stringify` on one yields `{}`. Read the fields explicitly instead.
+   *
+   * `code` is the single most diagnostic field: 1006 (no close frame) means the connection died
+   * rather than being closed politely. A reader should not need the WebSocket code table memorized to
+   * see that, so an event that {@link isCleanCloseEvent} rejects also carries an `abnormal=true` pair.
+   * The marker is its own pair rather than a parenthetical inside `code=` so the whole detail stays a
+   * sequence of space-separated `key=value` pairs.
+   *
+   * @param ev A WebSocket `close` event, or anything at all
+   * @returns Space-separated `key=value` pairs — `code`, `abnormal` (only when the connection died),
+   *   `reason` (JSON-quoted, so a reason containing a quote or a bracket cannot forge the surrounding
+   *   log line) and `wasClean`. A field that cannot be read is reported as `n/a`, so a non-event
+   *   yields `code=n/a reason=n/a wasClean=n/a` rather than throwing.
+   */
+  export function describeWebSocketCloseEvent(ev: unknown): string;
+  /**
+   * Describe a WebSocket `error` event for a log line.
+   *
+   * The `ws` library's `ErrorEvent` keeps `message` and `error` as accessors on the prototype, so
+   * `JSON.stringify` on the event yields `{}` — only own properties are serialized. Read the fields
+   * explicitly.
+   *
+   * Note a browser `WebSocket` fires a plain `Event` on error, carrying no detail at all by
+   * specification, so `message=unknown` is the expected result on the renderer end.
+   *
+   * @param ev A WebSocket `error` event, or anything at all
+   * @returns A single log line holding `message=`, `code=` and, when the error carried one, a
+   *   `stack:` section. Never contains a line break, so an error keeps the one-record-per-line shape
+   *   every other line here has; a field that cannot be read is reported as `unknown`/`n/a` rather
+   *   than throwing.
+   */
+  export function describeWebSocketErrorEvent(ev: unknown): string;
   /** Serialize a payload, if needed, and send it over the provided WebSocket */
   export function sendPayloadToWebSocket(ws: WebSocket | undefined, payload: unknown): void;
   /**
@@ -1276,6 +1368,12 @@ declare module 'shared/data/rpc.model' {
    * your request handler.
    */
   export const UNREGISTER_METHOD = 'network:unregisterMethod';
+  /**
+   * Tell main which peer is on the other end of this socket, so main's connection log lines can be
+   * joined to the client's own. Main labels each socket with an incrementing id, which appears
+   * nowhere in the client's logs; the client labels itself with a name it alone knows.
+   */
+  export const ANNOUNCE_PEER = 'network:announcePeer';
   /**
    * Register a network event emitter with the main process so that the event is tracked centrally.
    * Multi-source vs. single-source semantics are determined by looking up the event name in
@@ -2065,6 +2163,17 @@ declare module 'client/services/rpc-client' {
      * @experimental
      */
     readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+    /**
+     * Whether {@link onWebSocketClose} has already run for the current socket.
+     *
+     * A closed socket's listener is already removed, but a caller holding a stale reference to the
+     * bound handler could still invoke it directly; this makes a second call a no-op rather than
+     * double-logging and re-running teardown. Deliberately its own field rather than a read of
+     * `connectionStatus`, which is public and mutable: keyed off that, the natural future edit of
+     * setting `Disconnected` in `disconnect()` would skip teardown for the close that follows and
+     * permanently leak everything the socket had registered.
+     */
+    private hasCompletedTeardown;
     private ws;
     private requestId;
     /** Refers to the current process that created this object (i.e., not main) */
@@ -2076,9 +2185,30 @@ declare module 'client/services/rpc-client' {
     private readonly registrationMutexMap;
     private readonly connectionComplete;
     private readonly clientDisconnectEmitter;
-    constructor();
+    /**
+     * Label identifying this process in connection log lines, so multi-window logs stay readable.
+     *
+     * The logger already prefixes every line with a per-process-type tag (`[rend]`/`[exth]`), so
+     * `peerName` alone (e.g. plain `'renderer'`) would add nothing. Each `BrowserWindow` is its own
+     * renderer process, so two windows would otherwise emit identical lines; a per-instance
+     * discriminator is appended so they can be told apart.
+     */
+    private readonly peerName;
+    constructor(peerName?: string);
     private static handleError;
-    private static onError;
+    /**
+     * A discriminator distinguishing this client from another of the same type, for the `peerName`
+     * label.
+     *
+     * Prefers `globalThis.windowId`, the id main assigns each `BrowserWindow` and passes in by query
+     * parameter, because it is the only one of the three that is STABLE: it survives a reload, so
+     * "the same window reconnected" reads differently from "a second window appeared". The renderer
+     * has no access to `process` (see `identifyCaller` in `logger.utils.ts`), so a pid would never be
+     * reached there anyway; it is kept for the extension host, which has a pid and no window. The
+     * random id is a last resort so the label never reads `undefined`; being per-instance, it cannot
+     * be correlated across a reload.
+     */
+    private static getPeerDiscriminator;
     connect(localEventHandler: EventHandler): Promise<boolean>;
     disconnect(): Promise<void>;
     request(
@@ -2100,6 +2230,22 @@ declare module 'client/services/rpc-client' {
     private createNextRequestId;
     private addEventListenersToWebSocket;
     private removeEventListenersFromWebSocket;
+    /**
+     * Tell main which peer owns this socket. Main labels sockets with an incrementing id that appears
+     * nowhere in this process's logs, so without this a close line on each end cannot be joined to
+     * the other.
+     *
+     * Deliberately not awaited: this is diagnostic metadata, so neither a slow response nor a peer
+     * that does not implement the method may delay or fail a connection that is already up.
+     */
+    private announcePeerToServer;
+    /**
+     * An error event is usually the FIRST symptom of a socket going bad, so it needs the peer label
+     * as much as the close line does — in the renderer the event carries no detail at all by
+     * specification, leaving the peer as the only thing separating one window's error from another's.
+     * An instance method (bound by `bindClassMethods`) rather than a static one for that reason.
+     */
+    private onError;
     private onWebSocketOpen;
     private onWebSocketClose;
     private onMessageReceivedByWebSocket;
@@ -2119,6 +2265,15 @@ declare module 'main/services/rpc-server' {
     SingleMethodDocumentation,
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
+  /**
+   * Tell socket-close severity how to ask whether the app is shutting down.
+   *
+   * Called once by the process that owns the answer, before the network starts. See
+   * {@link isAppShuttingDown} for why this is wired in rather than imported.
+   *
+   * @param signal Returns whether the app is currently coming down
+   */
+  export function setAppShutdownSignal(signal: () => boolean): void;
   type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
   /** Called by an RpcServer with the method names its client's departure removed from the registry */
   type AnnounceClientDisconnectMethod = (removedMethodNames: string[]) => void;
@@ -2131,10 +2286,27 @@ declare module 'main/services/rpc-server' {
    */
   export class RpcServer implements IRpcHandler {
     connectionStatus: ConnectionStatus;
+    /**
+     * Whether {@link onWebSocketClose} has already run for the current socket.
+     *
+     * A closed socket's listener is already removed, but a caller holding a stale reference to the
+     * bound handler could still invoke it directly; this makes a second call a no-op rather than
+     * double-logging and re-running teardown. Deliberately its own field rather than a read of
+     * `connectionStatus`, which is public and mutable: keyed off that, the natural future edit of
+     * setting `Disconnected` in `disconnect()` would skip teardown for the close that follows and
+     * permanently leak everything the socket had registered.
+     */
+    private hasCompletedTeardown;
     private ws;
     private requestId;
     /** Only used for logging to differentiate from other RpcServer objects */
     private readonly name;
+    /**
+     * How the peer on the other end of this socket labels itself in its own logs, once it has said so
+     * (see {@link ANNOUNCE_PEER}). Undefined until then, and for a peer that never announces — the
+     * .NET data provider does not.
+     */
+    private peerName;
     /** Refers to the main process */
     private readonly jsonRpcServer;
     /** Refers to any process that connected to main over the websocket */
@@ -2168,9 +2340,28 @@ declare module 'main/services/rpc-server' {
       documentation?: SingleNotificationDocumentation,
     ): boolean;
     unregisterRemoteEvent(eventName: string): boolean;
+    /**
+     * Record how the peer on the other end labels itself, so this socket's log lines can be joined to
+     * that process's own. Called remotely by a connecting client; see {@link ANNOUNCE_PEER}.
+     *
+     * A socket gets to say this once. Accepting later announcements would let a peer relabel itself
+     * mid-session — so log lines already attributed to one name could be continued under another —
+     * and would let it re-log this line as often as it liked.
+     *
+     * @param peerName The peer's label for itself
+     * @returns Whether a usable label was recorded
+     */
+    setPeerName(peerName: string): boolean;
     private createNextRequestId;
     private addMethodToRpcServer;
     private handleError;
+    /**
+     * How to name this socket in a log line: main's own incrementing id, plus the peer's self-applied
+     * label once it has announced one. Both halves are needed — the id is what main's other lines
+     * use, and the label is the only thing that ties a line here to the same disconnect as reported
+     * by the process that owns the other end.
+     */
+    private describePeer;
     private addEventListenersToWebSocket;
     private removeEventListenersFromWebSocket;
     private onWebSocketClose;
