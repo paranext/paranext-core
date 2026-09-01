@@ -409,9 +409,13 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       // rather than on the web view's contents, so they apply to a tab whatever the web view
       // contributes — a web view opting out of platform menus is saying something about its own
       // toolbar and content menu, not about whether its tab can be moved.
-      const startingTabMenu = webViewMenu.tabMenu ?? {};
+      // Both sides fall back to a menu with nothing in it rather than to `{}`: the output schema
+      // requires `groups` and `items`, so folding two bare objects together produces a tab menu that
+      // fails validation and takes the contributing extension's whole menus.json down with it
+      const emptyTabMenu = { groups: {}, items: [] };
+      const startingTabMenu = webViewMenu.tabMenu ?? emptyTabMenu;
       const tabMenuCombiner = new NonValidatingDocumentCombiner(startingTabMenu, options);
-      tabMenuCombiner.addOrUpdateContribution('', retVal.defaultWebViewTabMenu ?? {});
+      tabMenuCombiner.addOrUpdateContribution('', retVal.defaultWebViewTabMenu ?? emptyTabMenu);
       // Assert the type that schema validation should have already sorted out
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       webViewMenu.tabMenu = tabMenuCombiner.output as SingleColumnMenu | undefined;
