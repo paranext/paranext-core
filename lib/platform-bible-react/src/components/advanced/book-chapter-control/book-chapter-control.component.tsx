@@ -1,5 +1,6 @@
 import { BookItem } from '@/components/shared/book-item.component';
 import { Button } from '@/components/shadcn-ui/button';
+import { ButtonGroup, ButtonGroupSeparator } from '@/components/shadcn-ui/button-group';
 import {
   Command,
   CommandGroup,
@@ -34,6 +35,7 @@ import {
   doesBookMatchQuery,
 } from '@/components/shared/book.utils';
 import {
+  Fragment,
   KeyboardEvent,
   useCallback,
   useEffect,
@@ -720,6 +722,11 @@ export function BookChapterControl({
         // searches list: it portals out of this popover but stays a React child, so its keystrokes
         // still reach this capture-phase handler, and its items are focusable `div`s rather than
         // buttons.
+        //
+        // Excluding the search box is load-bearing, not a special case: it is itself an `input`, so
+        // without this it would match the selector below and Enter — the normal way to commit a
+        // typed reference — would never submit anything. The chapters/verses branch above needs no
+        // such exclusion because the search box is not rendered in those views.
         const isTargetInteractive =
           target !== commandInputRef.current &&
           !!target?.closest(
@@ -743,26 +750,15 @@ export function BookChapterControl({
         return;
       }
 
-      // Handle keypresses in chapter viewmode
-      if (viewMode === 'chapters') {
-        // Handle backspace for going back to books
-        if (event.key === 'Backspace') {
-          event.preventDefault();
-          event.stopPropagation();
-          handleBackToBooks();
-          return;
-        }
-      }
-
-      // Handle keypresses in verse viewmode
-      if (viewMode === 'verses') {
-        // Handle backspace for going back to chapters
-        if (event.key === 'Backspace') {
-          event.preventDefault();
-          event.stopPropagation();
-          handleBackToChapters();
-          return;
-        }
+      // Backspace steps back one level: verses to chapters, chapters to books. This is the
+      // keyboard counterpart to the header's back button, which is deliberately out of the tab
+      // order, so it is the only way a keyboard user leaves a grid without committing a reference.
+      if (event.key === 'Backspace' && (viewMode === 'chapters' || viewMode === 'verses')) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (viewMode === 'verses') handleBackToChapters();
+        else handleBackToBooks();
+        return;
       }
 
       // Narrows `event.key` to `ArrowKey` for `computeTargetGridItem` below, and leaves every
@@ -1275,16 +1271,24 @@ export function BookChapterControl({
                     />
                   )}
                 </div>
-                {/* Navigation buttons for previous/next chapter/verse */}
-                <div className="tw:flex tw:translate-y-px tw:items-center tw:gap-1 tw:pe-2">
+                {/* Navigation buttons for previous/next chapter/verse. `ButtonGroup` (rather than a
+                    plain flex row) supplies the `role="group"` that names these four as one control
+                    and matches NavigationHistoryButtons, the neighbouring toolbar control. `gap-1`
+                    overrides the group's default flush-edge packing, which would run the ghost
+                    buttons together. A separator marks each change of `group`, so chapter and verse
+                    controls stay visually distinct. */}
+                {/* `h-8.5` on the buttons and `translate-y-px` here are tuned against the
+                    `CommandInput` beside them, which InputGroup fixes at `h-8`, in this `items-end`
+                    row — change them together if that height changes. */}
+                <ButtonGroup className="tw:translate-y-px tw:gap-1 tw:pe-2">
                   {quickNavButtons.map(
                     (
                       { onClick, disabled: isQuickNavDisabled, title, icon: Icon, group },
                       index,
                     ) => (
-                      <div key={title} className="tw:flex tw:items-center">
+                      <Fragment key={title}>
                         {index > 0 && group !== quickNavButtons[index - 1].group && (
-                          <div className="tw:mx-1 tw:h-5 tw:w-px tw:bg-border" aria-hidden="true" />
+                          <ButtonGroupSeparator />
                         )}
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -1305,10 +1309,10 @@ export function BookChapterControl({
                           </TooltipTrigger>
                           <TooltipContent>{title}</TooltipContent>
                         </Tooltip>
-                      </div>
+                      </Fragment>
                     ),
                   )}
-                </div>
+                </ButtonGroup>
               </div>
             ) : (
               <div className="tw:flex tw:items-center tw:border-b tw:px-3 tw:py-1">
@@ -1319,6 +1323,13 @@ export function BookChapterControl({
                       size="sm"
                       onClick={viewMode === 'verses' ? handleBackToChapters : handleBackToBooks}
                       className="tw:me-2 tw:h-6 tw:w-6 tw:p-0"
+                      // Out of the tab order on purpose: the popover keeps focus on the cmdk
+                      // surface that owns arrow-key navigation, and a tab stop here would drop the
+                      // user out of it between every level. Backspace is the keyboard route back
+                      // (catalogued as `book-chapter-control-back`), so this button is a pointer
+                      // affordance rather than the only way out. It stays programmatically
+                      // focusable, and a click does focus it — which is why the Enter/Space handler
+                      // explicitly yields to a focused button.
                       tabIndex={-1}
                       aria-label={backLabel}
                     >
@@ -1413,9 +1424,12 @@ export function BookChapterControl({
                           }
                           // The preview grid keeps the cmdk highlight, so `data-selected` never
                           // lands here; a hover rule of its own gives the row pointer feedback.
+                          // Full `bg-muted`, matching the book rows and grid cells it shares the
+                          // popover with — the `/50` wash is this design system's treatment for
+                          // large surfaces (table rows, cards), not for list items.
                           // Hiding CommandItem's trailing check icon keeps this row's book-id
                           // column aligned with the book rows below, which hide it too.
-                          className="tw:font-semibold tw:text-primary tw:hover:bg-muted/50 tw:[&>svg:last-child]:hidden"
+                          className="tw:font-semibold tw:text-primary tw:hover:bg-muted tw:[&>svg:last-child]:hidden"
                         >
                           <span className="tw:min-w-0 tw:flex-1">
                             {formatScrRef(

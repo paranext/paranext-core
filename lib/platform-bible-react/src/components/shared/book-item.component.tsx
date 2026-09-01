@@ -1,9 +1,6 @@
 import { CommandItem } from '@/components/shadcn-ui/command';
-import {
-  getLocalizedBookId,
-  getLocalizedBookName,
-  LIST_ITEM_KEYBOARD_FOCUS_RING,
-} from '@/components/shared/book.utils';
+import { getLocalizedBookId, getLocalizedBookName } from '@/components/shared/book.utils';
+import { LIST_ITEM_KEYBOARD_FOCUS_RING } from '@/utils/focus.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon } from '@sillsdev/scripture';
 import { Check } from 'lucide-react';
