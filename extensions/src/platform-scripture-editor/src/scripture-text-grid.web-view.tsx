@@ -106,6 +106,24 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
 // The Scripture Text Grid shows Bible-text resources.
 const GRID_RESOURCE_TYPE = 'ScriptureResource';
 
+// Stable identity so a build with no DBL catalog does not hand the name/id lookups a new array
+// every render.
+const EMPTY_DBL_RESOURCES: DblResourceData[] = [];
+
+/**
+ * Tells the user that an action could not be applied because the state backing it has not resolved
+ * yet.
+ *
+ * Every handler here reads `sourcesRef.current` and the text-connection PDP, both of which are
+ * transiently absent while a subscription re-resolves — notably across the seconds-to-minutes await
+ * of a resource install. Returning silently in that window closes the UI over an unchanged grid and
+ * leaves the user unable to tell a slow save from one that never happened.
+ */
+function reportActionNotApplied(action: string, reason: string) {
+  papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+  logger.warn(`Ignoring ${action}: ${reason}`);
+}
+
 // Theme-adaptive tab icon: the platform paints the tab icon as a static CSS background-image, so a
 // `currentColor` SVG can't follow the theme. We swap the `iconUrl` based on both the current theme
 // and the tab's selected state (light theme: white when selected, near-black when unselected,
@@ -223,7 +241,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // also supplies the DBL `fullName` shown as the long name in the View Options list.
   // Re-fetched on `refreshCounter` bumps so a newly-installed resource's `installed` flag is
   // current when `toGridResources` resolves it.
-  const [cachedResources, isLoadingCachedResources] = usePromise(
+  const [catalog, isLoadingCachedResources] = usePromise(
     useCallback(
       () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
       // refreshCounter is a refresh-trigger counter: the factory doesn't use its value, but each
@@ -235,11 +253,18 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     undefined,
   );
 
+  // This grid only ever reads the catalog to resolve names and installed project ids, so a build
+  // that cannot download DBL resources is simply a catalog with nothing in it.
+  const cachedResources = useMemo(
+    () => (catalog?.status === 'available' ? catalog.resources : EMPTY_DBL_RESOURCES),
+    [catalog],
+  );
+
   const { top, bottom } = useMemo(
     () =>
       sources
         ? getViewOptionsTexts(sources, (reference) =>
-            resolveDblLongName(reference, cachedResources ?? []),
+            resolveDblLongName(reference, cachedResources),
           )
         : { top: [], bottom: [] },
     [sources, cachedResources],
@@ -250,10 +275,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // already-filtered, ordered Bible-text refs.
   const resources = useMemo<GridResource[]>(
     () =>
-      toGridResources(
-        sources ? getOrderedScriptureTextGridContents(sources) : [],
-        cachedResources ?? [],
-      ),
+      toGridResources(sources ? getOrderedScriptureTextGridContents(sources) : [], cachedResources),
     [sources, cachedResources],
   );
 
@@ -354,7 +376,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const handleCheckedChange = useCallback(
     (resourceId: string, checked: boolean) => {
       const { current } = sourcesRef;
-      if (!current || !textConnectionPdp) return;
+      if (!current || !textConnectionPdp) {
+        reportActionNotApplied('a show/hide change', 'the Text Collection state has not resolved');
+        return;
+      }
       const writes = persistUserDisplay(textConnectionPdp, resourceId, checked, current);
       // `Promise.all` rejects on the first failed write, so a failed toggle notifies once (not once
       // per underlying list/overlay write).
@@ -369,7 +394,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const handleRemoveFromList = useCallback(
     (resourceId: string) => {
       const { current } = sourcesRef;
-      if (!current || !textConnectionPdp) return;
+      if (!current || !textConnectionPdp) {
+        reportActionNotApplied('a resource removal', 'the Text Collection state has not resolved');
+        return;
+      }
       persistUserRemoval(textConnectionPdp, resourceId, current.userReferenced)?.catch((e) => {
         papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
         logger.warn(`Failed to persist removal: ${getErrorMessage(e)}`);
@@ -381,7 +409,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const handleReorder = useCallback(
     (newShownIdSequence: string[]) => {
       const { current } = sourcesRef;
-      if (!current || !textConnectionPdp) return;
+      if (!current || !textConnectionPdp) {
+        reportActionNotApplied('a resource reorder', 'the Text Collection state has not resolved');
+        return;
+      }
       const nextOrder = reorderShownIds(current.order, newShownIdSequence);
       persistCellOrder(textConnectionPdp, nextOrder).catch((e) => {
         papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
@@ -445,7 +476,16 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
       // Re-read after the await: the subscription may have advanced during the install.
       const { current } = sourcesRef;
-      if (!current) return;
+      // The costliest of these to hit: the install above is a real download, so the user has
+      // already waited out a progress row before this point. Losing the pick silently here reads as
+      // the download itself having failed.
+      if (!current) {
+        reportActionNotApplied(
+          `adding ${resource.displayName}`,
+          'the Text Collection sources re-resolved while the resource was installing',
+        );
+        return;
+      }
       const reference: DblResourceReference = {
         type: 'dblResource',
         name: resource.displayName,

@@ -58,12 +58,14 @@ export function useDblResourceCatalog(): DblResourceCatalog {
       const generation = fetchGenerationRef.current;
 
       try {
-        const resources = await papi.commands.sendCommand(
-          'platformGetResources.getCachedResources',
-        );
+        const catalog = await papi.commands.sendCommand('platformGetResources.getCachedResources');
         if (generation === fetchGenerationRef.current) setHasCatalogError(false);
 
-        return resources;
+        // A build that cannot download DBL resources has ARRIVED at its answer — there is no
+        // catalog and there never will be. Returning `undefined` here would leave `isCatalogReady`
+        // false forever, and the panels read that as "still loading": a spinner with no message and
+        // no retry, in exactly the offline/no-credentials case this hook exists to explain.
+        return catalog.status === 'available' ? catalog.resources : [];
       } catch (error) {
         logger.warn(`Failed to load the DBL resource catalog: ${getErrorMessage(error)}`);
         if (generation === fetchGenerationRef.current) setHasCatalogError(true);

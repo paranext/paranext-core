@@ -42,6 +42,10 @@ const RESOURCE_PICKER_STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_language_filter_any%': 'Any language',
   '%resourcePicker_language_filter_multipleSelected%': '{selectCount} languages',
   '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
+  '%resourcePicker_load_error%': "Couldn't load the list of available resources.",
+  '%resourcePicker_retry%': 'Try again',
+  '%resourcePicker_no_results_filtered%': 'No resources match the current filters.',
+  '%resourcePicker_clear_filters%': 'Clear filters',
 };
 
 const ESV: ResourceReference = {

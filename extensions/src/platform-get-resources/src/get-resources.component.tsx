@@ -284,6 +284,15 @@ export function GetResources({
     }
   };
 
+  // Clearing the stale action error is this button's job because the error state REPLACES the
+  // table, and a row action is the only other thing that clears it. Without this, a failed install
+  // followed by a failed catalog refresh pins its alert above a list that recovers fine, with no
+  // interaction left that can dismiss it.
+  const handleRetryResources = () => {
+    setActionError(undefined);
+    onRetryResources?.();
+  };
+
   const [textFilter, setTextFilter] = useState<string>('');
 
   const textFilteredResources = useMemo(() => {
@@ -454,10 +463,10 @@ export function GetResources({
             /* eslint-disable no-nested-ternary */
             <div>
               {isResourcesError ? (
-                <div className="tw:m-4 tw:flex tw:flex-col tw:items-center tw:gap-3">
+                <div className="tw:m-4 tw:flex tw:flex-col tw:items-center tw:gap-3" role="alert">
                   <Label>{noResultsErrorText}</Label>
                   {onRetryResources && (
-                    <Button variant="outline" size="sm" onClick={onRetryResources}>
+                    <Button variant="outline" size="sm" onClick={handleRetryResources}>
                       {retryText}
                     </Button>
                   )}

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePromise } from './use-promise.hook';
 
 /** What {@link useRetryablePromise} reports about the fetch it is driving. */
@@ -21,7 +21,20 @@ export type RetryablePromiseState<T> = {
    * Recoverable — call {@link RetryablePromiseState.refetch}.
    */
   hasError: boolean;
-  /** Clears any error and re-runs the fetch. */
+  /**
+   * Whether a fetch has completed since the last supersession — resolved or rejected.
+   *
+   * Read this rather than inferring "finished" from `!isLoading`. `isLoading` is `false` both
+   * before the first fetch starts and for the render between a `refetch` and the effect that
+   * restarts it, so a caller deriving state from `!isLoading` alone paints a settled-looking state
+   * during a fetch that has not run yet — most visibly a flash of the error state on the very click
+   * meant to clear it.
+   */
+  hasSettled: boolean;
+  /**
+   * Clears any error and re-runs the fetch. A no-op when there is no fetch to run, so it never
+   * presents itself as a recovery that cannot happen.
+   */
   refetch: () => void;
 };
 
@@ -47,45 +60,72 @@ export type RetryablePromiseState<T> = {
 export const useRetryablePromise = <T>(
   promiseFactoryCallback: (() => Promise<T>) | undefined,
 ): RetryablePromiseState<T> => {
-  // Bumped by `refetch`. It gives the wrapped fetch a new identity (which is what re-drives
-  // `usePromise`) and doubles as the generation that decides which fetch owns the error flag.
-  const [fetchGeneration, setFetchGeneration] = useState(0);
   const [hasError, setHasError] = useState(false);
+  const [hasSettled, setHasSettled] = useState(false);
 
-  // Written during render so an in-flight fetch can compare the generation it captured against the
-  // current one. `usePromise` guards only the state it owns, so a superseded invocation still runs
-  // to completion and would otherwise clear an error raised by a newer one.
-  const latestFetchGenerationRef = useRef(fetchGeneration);
-  latestFetchGenerationRef.current = fetchGeneration;
+  // Which fetch currently owns the error flag. Bumped SYNCHRONOUSLY at every point a fetch is
+  // superseded — both ways that can happen — so an in-flight invocation can tell whether its result
+  // is still wanted. `usePromise` guards only the state it owns; the flags below are ours.
+  //
+  // Bumping a ref beats deriving the generation from state: state lands a render later, leaving a
+  // window in which an already-superseded fetch still compares equal and can resurrect the error
+  // `refetch` just cleared.
+  const fetchGenerationRef = useRef(0);
 
-  const trackedFetch = useMemo(() => {
-    if (!promiseFactoryCallback) return undefined;
+  // Re-created on every supersession so `usePromise` sees a new identity and re-drives. Capturing
+  // the generation at creation time is what lets a late result recognise that it has been replaced.
+  const [trackedFetch, setTrackedFetch] = useState<(() => Promise<T | undefined>) | undefined>(
+    undefined,
+  );
 
-    const generation = fetchGeneration;
+  const wrapFetch = useCallback((factory: () => Promise<T>) => {
+    fetchGenerationRef.current += 1;
+    const generation = fetchGenerationRef.current;
     return async () => {
       try {
-        const result = await promiseFactoryCallback();
-        if (generation === latestFetchGenerationRef.current) setHasError(false);
+        const result = await factory();
+        if (generation === fetchGenerationRef.current) {
+          setHasError(false);
+          setHasSettled(true);
+        }
         return result;
       } catch (error) {
         // Record the failure, then rethrow so `usePromise` clears its loading flag and logs the
         // rejection. Swallowing it here would hide it from both.
-        if (generation === latestFetchGenerationRef.current) setHasError(true);
+        if (generation === fetchGenerationRef.current) {
+          setHasError(true);
+          setHasSettled(true);
+        }
         throw error;
       }
     };
-  }, [promiseFactoryCallback, fetchGeneration]);
+  }, []);
+
+  // A changed `promiseFactoryCallback` supersedes any in-flight fetch exactly as `refetch` does, so
+  // it bumps the same generation rather than relying on `usePromise`'s currency flag, which does not
+  // cover the flags owned here.
+  useEffect(() => {
+    setHasError(false);
+    setHasSettled(false);
+    setTrackedFetch(() => (promiseFactoryCallback ? wrapFetch(promiseFactoryCallback) : undefined));
+  }, [promiseFactoryCallback, wrapFetch]);
 
   const [data, isLoading] = usePromise<T | undefined>(trackedFetch, undefined);
 
+  const promiseFactoryCallbackRef = useRef(promiseFactoryCallback);
+  promiseFactoryCallbackRef.current = promiseFactoryCallback;
+
   const refetch = useCallback(() => {
+    const factory = promiseFactoryCallbackRef.current;
+    if (!factory) return;
     setHasError(false);
-    setFetchGeneration((generation) => generation + 1);
-  }, []);
+    setHasSettled(false);
+    setTrackedFetch(() => wrapFetch(factory));
+  }, [wrapFetch]);
 
   return useMemo(
-    () => ({ data, isLoading, hasError, refetch }),
-    [data, isLoading, hasError, refetch],
+    () => ({ data, isLoading, hasError, hasSettled, refetch }),
+    [data, isLoading, hasError, hasSettled, refetch],
   );
 };
 

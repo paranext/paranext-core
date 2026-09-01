@@ -491,7 +491,7 @@
   "%resourcePicker_language_filter_multipleSelected%": "{selectCount} idiomas",
   "%resourcePicker_load_error%": "No se pudo cargar la lista de recursos disponibles.",
   "%resourcePicker_no_results%": "No se encontraron resultados",
-  "%resourcePicker_no_results_filtered%": "Ningún recurso coincide con su búsqueda.",
+  "%resourcePicker_no_results_filtered%": "Ningún recurso coincide con los filtros actuales.",
   "%resourcePicker_retry%": "Reintentar",
   "%resourcePicker_search_placeholder%": "Buscar recursos…",
   "%resourcePicker_section_already_selected%": "Incluido",

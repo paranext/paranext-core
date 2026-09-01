@@ -202,6 +202,7 @@ type DecoratorConfig = {
   resources?: DblResourceData[];
   isLoadingResources?: boolean;
   isResourcesError?: boolean;
+  onRetryResources?: GetResourcesProps['onRetryResources'];
   onInstallOrRemoveResource?: GetResourcesProps['onInstallOrRemoveResource'];
 };
 
@@ -255,6 +256,7 @@ function createDecorator(config: DecoratorConfig) {
           resources,
           isLoadingResources: config.isLoadingResources ?? false,
           isResourcesError: config.isResourcesError ?? false,
+          onRetryResources: config.onRetryResources,
           idsBeingHandled,
           selectedTypes,
           selectedLanguages,
@@ -291,7 +293,15 @@ export const Empty: Story = {
 };
 
 export const ResourcesError: Story = {
-  decorators: [createDecorator({ isResourcesError: true, resources: [] })],
+  decorators: [
+    createDecorator({
+      isResourcesError: true,
+      resources: [],
+      // Storybook story — console.log is the intended demo handler
+      // eslint-disable-next-line no-console
+      onRetryResources: () => console.log('Retry requested'),
+    }),
+  ],
 };
 
 /**

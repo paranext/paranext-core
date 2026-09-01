@@ -9,7 +9,7 @@ import {
 import { SearchBar } from '@/components/basics/search-bar.component';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
 import { Check } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Spinner } from '@/components/basics/spinner.component';
 import { useProgressiveList } from './resource-picker-dialog.utils';
 
@@ -183,22 +183,38 @@ export default function ResourcePickerDialog({
   const [searchText, setSearchText] = useState('');
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
 
+  // React writes `null` into a detached DOM ref itself, so there is no `undefined` equivalent here.
+  // eslint-disable-next-line no-null/no-null
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
   // Resets BOTH filters: clearing only the one the user is looking at leaves the list still
   // filtered by the other, which reads as the control having done nothing.
+  //
+  // Focus moves to the search box because this button is inside the region it removes: without a
+  // deliberate move, activating it drops focus to `<body>` and a keyboard user restarts from the top
+  // of the dialog. The search box is the nearest control that survives the change.
   const clearFilters = useCallback(() => {
     setSearchText('');
     setSelectedLanguages([]);
+    searchInputRef.current?.focus();
   }, []);
+
+  // The `resourceType` narrowing is separated from the user's own filters because only the latter
+  // are clearable. Counting or offering to clear against `allResources` would describe a set this
+  // dialog was never allowed to show.
+  const typeScopedResources = useMemo(
+    () => allResources.filter((r) => !resourceType || r.type === resourceType),
+    [allResources, resourceType],
+  );
 
   const filteredResources = useMemo(
     () =>
-      allResources
-        .filter((r) => !resourceType || r.type === resourceType)
+      typeScopedResources
         .filter((r) => matchesSearch(r, searchText))
         .filter(
           (r) => selectedLanguages.length === 0 || selectedLanguages.includes(r.bestLanguageName),
         ),
-    [allResources, resourceType, searchText, selectedLanguages],
+    [typeScopedResources, searchText, selectedLanguages],
   );
 
   const alreadySelected = useMemo(
@@ -271,7 +287,18 @@ export default function ResourcePickerDialog({
     );
   }, [selectedLanguages, languageOptions, anyLanguageText, localizedStrings]);
 
-  const isFiltered = searchText.length > 0 || selectedLanguages.length > 0;
+  // Selecting every language narrows nothing, which is why the trigger keeps reading "Any language"
+  // in that state. Treating it as filtered anyway would report a "showing 9 of 9" count and offer to
+  // clear a filter that is not excluding anything.
+  const isLanguageFiltered =
+    selectedLanguages.length > 0 && selectedLanguages.length < languageOptions.length;
+  const isFiltered = searchText.length > 0 || isLanguageFiltered;
+
+  // Offering "Clear filters" is only honest when clearing would actually reveal something. With a
+  // `resourceType` that matches nothing in the catalog the list is empty no matter what the user
+  // clears, and routing them through a control that provably cannot change the result just returns
+  // them to the same dead end by a longer path.
+  const canClearFiltersHelp = isFiltered && typeScopedResources.length > 0;
 
   return (
     <>
@@ -280,6 +307,7 @@ export default function ResourcePickerDialog({
       </DialogHeader>
       <div className="tw:flex tw:gap-2 tw:p-4">
         <SearchBar
+          ref={searchInputRef}
           value={searchText}
           onSearch={setSearchText}
           placeholder={searchPlaceholder}
@@ -294,11 +322,15 @@ export default function ResourcePickerDialog({
           variant="outline"
         />
       </div>
-      {isFiltered && (
+      {/* Suppressed while loading or failed: a count of a catalog that never arrived reads as a
+          confident "0 of 0" directly above the message explaining that nothing could be loaded. The
+          total is the type-scoped set, not the whole catalog — reporting entries this picker filters
+          out anyway implies candidates the user could reach by clearing something. */}
+      {isFiltered && !isResourcesLoading && !hasResourcesError && (
         <p className="tw:px-4 tw:pb-1 tw:text-right tw:text-xs tw:text-muted-foreground">
           {formatReplacementString(showingCountTemplate, {
             filtered: filteredResources.length,
-            total: allResources.length,
+            total: typeScopedResources.length,
           })}
         </p>
       )}
@@ -318,16 +350,18 @@ export default function ResourcePickerDialog({
             )}
           </div>
         )}
-        {hasNoResults && !hasResourcesError && !isResourcesLoading && isFiltered && (
-          <div className="tw:flex tw:flex-col tw:items-center tw:gap-3 tw:py-8">
+        {hasNoResults && !hasResourcesError && !isResourcesLoading && canClearFiltersHelp && (
+          <div className="tw:flex tw:flex-col tw:items-center tw:gap-3 tw:py-8" role="status">
             <p className="tw:text-center tw:text-muted-foreground">{noResultsFilteredText}</p>
             <Button variant="outline" size="sm" onClick={clearFilters}>
               {clearFiltersText}
             </Button>
           </div>
         )}
-        {hasNoResults && !hasResourcesError && !isResourcesLoading && !isFiltered && (
-          <p className="tw:py-8 tw:text-center tw:text-muted-foreground">{noResultsText}</p>
+        {hasNoResults && !hasResourcesError && !isResourcesLoading && !canClearFiltersHelp && (
+          <p className="tw:py-8 tw:text-center tw:text-muted-foreground" role="status">
+            {noResultsText}
+          </p>
         )}
         {!hasNoResults && !hasResourcesError && !isResourcesLoading && (
           <Table>

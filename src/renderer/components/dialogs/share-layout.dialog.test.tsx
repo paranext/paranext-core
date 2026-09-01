@@ -244,7 +244,10 @@ describe('ShareLayoutDialogWrapper confirm-write logic', () => {
 
     vi.mocked(sendCommand).mockImplementation(async (commandName: unknown) => {
       if (commandName === 'platformGetResources.getCachedResources') {
-        return [makeDblResource({ dblEntryUid: 'esv-uid', type: 'ScriptureResource' })];
+        return {
+          status: 'available',
+          resources: [makeDblResource({ dblEntryUid: 'esv-uid', type: 'ScriptureResource' })],
+        };
       }
       return undefined;
     });

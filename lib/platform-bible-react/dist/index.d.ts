@@ -3772,7 +3772,20 @@ export type RetryablePromiseState<T> = {
 	 * Recoverable — call {@link RetryablePromiseState.refetch}.
 	 */
 	hasError: boolean;
-	/** Clears any error and re-runs the fetch. */
+	/**
+	 * Whether a fetch has completed since the last supersession — resolved or rejected.
+	 *
+	 * Read this rather than inferring "finished" from `!isLoading`. `isLoading` is `false` both
+	 * before the first fetch starts and for the render between a `refetch` and the effect that
+	 * restarts it, so a caller deriving state from `!isLoading` alone paints a settled-looking state
+	 * during a fetch that has not run yet — most visibly a flash of the error state on the very click
+	 * meant to clear it.
+	 */
+	hasSettled: boolean;
+	/**
+	 * Clears any error and re-runs the fetch. A no-op when there is no fetch to run, so it never
+	 * presents itself as a recovery that cannot happen.
+	 */
 	refetch: () => void;
 };
 /**

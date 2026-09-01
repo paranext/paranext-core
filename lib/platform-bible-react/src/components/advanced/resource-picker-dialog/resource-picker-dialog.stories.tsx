@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, within } from 'storybook/test';
 import { Dialog } from '@/components/shadcn-ui/dialog';
 import ResourcePickerDialog, {
   ResourcePickerDialogLocalizedStrings,
@@ -21,7 +22,7 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
   '%resourcePicker_load_error%': "Couldn't load the list of available resources.",
   '%resourcePicker_retry%': 'Try again',
-  '%resourcePicker_no_results_filtered%': 'No resources match your search.',
+  '%resourcePicker_no_results_filtered%': 'No resources match the current filters.',
   '%resourcePicker_clear_filters%': 'Clear filters',
 };
 
@@ -76,11 +77,22 @@ export const CatalogFailedToLoad: Story = {
 };
 
 /**
- * Type a term that matches nothing (or pick a language with no entries) to reach the filtered-empty
- * state: it blames the filter rather than the catalog, and offers a one-click way back to the full
- * list. Driven by the component's own filter state, so there is no prop to preset it.
+ * The filtered-empty state: it blames the filter rather than the catalog, and offers a one-click
+ * way back to the full list. Driven by the component's own filter state, so the `play` function
+ * types a non-matching term rather than presetting a prop.
  */
-export const NoResultsForFilter: Story = {};
+export const NoResultsForFilter: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const searchInput = await canvas.findByPlaceholderText(
+      STRINGS['%resourcePicker_search_placeholder%'] ?? '',
+    );
+    await userEvent.type(searchInput, 'zzznomatch');
+    await expect(
+      await canvas.findByText(STRINGS['%resourcePicker_no_results_filtered%'] ?? ''),
+    ).toBeInTheDocument();
+  },
+};
 
 export const EmptyAlreadySelected: Story = {
   args: {

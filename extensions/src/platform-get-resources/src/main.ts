@@ -7,6 +7,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
+import type { DblResourceCatalog } from 'platform-get-resources';
 import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, wait } from 'platform-bible-utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
@@ -29,23 +30,29 @@ let cachedResources: DblResourceData[] | undefined;
 const fetchMutex = new Mutex();
 let hasFetchStarted = false;
 
-async function fetchAndCacheResources(): Promise<DblResourceData[] | undefined> {
+async function fetchAndCacheResources(): Promise<DblResourceCatalog> {
   const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
-  if (!provider) return undefined;
+  if (!provider) return { status: 'unavailable', reason: 'notReady' };
 
-  if (!(await provider.isGetDblResourcesAvailable())) return undefined;
+  // No DBL credentials on this build. There is no catalog to fetch and no retry that could produce
+  // one, so this must stay distinguishable from a failure all the way out to the UI.
+  if (!(await provider.isGetDblResourcesAvailable()))
+    return { status: 'unavailable', reason: 'notConfigured' };
 
   const resources = await provider.getDblResources(undefined);
-  if (resources) {
-    cachedResources = resources;
-    if (executionToken)
-      await papi.storage.writeUserData(
-        executionToken,
-        RESOURCES_CACHE_KEY,
-        JSON.stringify(cachedResources),
-      );
-  }
-  return resources;
+  // The provider resolves nothing for a fetch that produced no catalog. That is a failure, not an
+  // answer: reporting it as an empty catalog would tell the user there is nothing to download when
+  // the truth is that we could not find out.
+  if (!resources) throw new Error('The DBL resource catalog fetch produced no catalog');
+
+  cachedResources = resources;
+  if (executionToken)
+    await papi.storage.writeUserData(
+      executionToken,
+      RESOURCES_CACHE_KEY,
+      JSON.stringify(cachedResources),
+    );
+  return { status: 'available', resources };
 }
 
 async function startBackgroundFetchResources(): Promise<void> {
@@ -61,7 +68,9 @@ async function startBackgroundFetchResources(): Promise<void> {
         // Need to have these await statements inside the loop to retry 10 times
         // eslint-disable-next-line no-await-in-loop
         const result = await fetchAndCacheResources();
-        if (result !== undefined) return;
+        // Stop on a catalog, and equally on a build that has no DBL credentials — retrying the
+        // latter nine more times cannot change the answer.
+        if (result.status === 'available' || result.reason === 'notConfigured') return;
       } catch (e) {
         logger.debug(`Background resource fetch attempt ${attempt + 1} failed: ${e}`);
       }
@@ -70,7 +79,7 @@ async function startBackgroundFetchResources(): Promise<void> {
   });
 }
 
-async function getCachedResources(): Promise<DblResourceData[] | undefined> {
+async function getCachedResources(): Promise<DblResourceCatalog> {
   if (cachedResources !== undefined) {
     try {
       // Checks to make sure all the `installed` flags are accurate
@@ -116,16 +125,22 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
       logger.warn(`Error getting cached resources: ${getErrorMessage(error)}`);
     }
 
-    return cachedResources;
+    return { status: 'available', resources: cachedResources };
   }
 
   return fetchMutex.runExclusive(async () => {
-    if (cachedResources !== undefined) return cachedResources;
+    if (cachedResources !== undefined) return { status: 'available', resources: cachedResources };
     try {
-      return fetchAndCacheResources();
+      // Awaited deliberately: returning the promise un-awaited from inside this `try` lets a
+      // rejection bypass the logging below entirely, so identical failures reached callers by two
+      // different paths depending on where they originated.
+      return await fetchAndCacheResources();
     } catch (e) {
-      logger.warn(`getCachedResources on-demand fetch failed: ${e}`);
-      return undefined;
+      // Rethrown rather than flattened to an "unavailable" result. A caller can offer a retry that
+      // might actually work for a failure; it cannot for a build with no DBL credentials, and
+      // collapsing the two here is what makes that distinction unrecoverable upstream.
+      logger.warn(`getCachedResources on-demand fetch failed: ${getErrorMessage(e)}`);
+      throw e;
     }
   });
 }

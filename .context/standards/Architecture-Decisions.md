@@ -2862,8 +2862,11 @@ step, no automation. Just a record.
 - **Date:** 2026-08-31
 - **Status:** Accepted
 - **Context:** The resource panels resolve their front state through `getResourcePanelReadiness` and
-  render it through `PanelReadinessView`, so a failed DBL-catalog fetch says so and offers a retry
-  that can re-drive it. The picker surfaces those panels hand off to did not: the
+  render it through `PanelReadinessView`, which was built to make a failed DBL-catalog fetch say so
+  and offer a retry. That held only for a *rejected* fetch: `getCachedResources` also signalled
+  failure by resolving `undefined`, which `useDblResourceCatalog` read as "not ready yet", so the
+  panels spun forever with no message and no retry on a build with no DBL credentials — the most
+  common case in the wild. The picker surfaces those panels hand off to were worse still: the
   `platform.resourcePicker` dialog, the Send Layout dialog's two embedded pickers, and the Get
   Resources web view all reported a failed catalog as "no results", which reads as a truthful empty
   catalog and leaves the user no control that could change it. Worse, Get Resources is where the
@@ -2871,30 +2874,39 @@ step, no automation. Just a record.
   fetch-with-error-and-retry logic already existed once, in `useDblResourceCatalog`, but it imports
   PAPI and lives in `platform-scripture-editor`, so neither the renderer nor a different extension
   could reuse it.
-- **Decision:** The recovery primitive is `useRetryablePromise` in `platform-bible-react` — a
-  PAPI-free hook that takes the caller's fetch as an injected callback and returns
-  `{ data, isLoading, hasError, refetch }`, with a generation guard so a superseded in-flight fetch
-  cannot clear an error raised by a newer one (`usePromise`'s own currency flag guards only the state
-  it owns). Presentational components take the failure as a prop and pair it with a retry callback
-  (`hasResourcesError`/`onRetryResources` on `ResourcePickerDialog`, `isResourcesError`/
-  `onRetryResources` on `GetResources`); each host injects its own command-sending mechanism, which
-  is what lets the renderer's `sendCommand` and a web view's `papi.commands.sendCommand` share one
-  hook.
+- **Decision:** Two halves. First, `platformGetResources.getCachedResources` answers with a
+  discriminated `DblResourceCatalog` — `{ status: 'available', resources }` or
+  `{ status: 'unavailable', reason: 'notConfigured' | 'notReady' }` — and **rejects** on a genuine
+  fetch failure, so "this build cannot download DBL resources" is never confusable with "the fetch
+  broke". Second, the recovery primitive is `useRetryablePromise` in `platform-bible-react`: a
+  PAPI-free hook taking the caller's fetch as an injected callback and returning
+  `{ data, isLoading, hasError, hasSettled, refetch }`, with a generation guard so a superseded
+  in-flight fetch cannot clear an error raised by a newer one (`usePromise`'s own currency flag
+  guards only the state it owns). Presentational components take the failure as a prop and pair it
+  with a retry callback (`hasResourcesError`/`onRetryResources` on `ResourcePickerDialog`,
+  `isResourcesError`/`onRetryResources` on `GetResources`); each host injects its own
+  command-sending mechanism, which is what lets the renderer's `sendCommand` and a web view's
+  `papi.commands.sendCommand` share one hook.
 - **Alternatives:** **Duplicate the error-and-retry logic in each host** — rejected: it is ~25 lines
   whose subtlety (a rejection is not an empty result; a stale fetch must not clear a newer error) is
   exactly what gets copied wrong, and it would have made a fourth near-copy. **Move
   `useDblResourceCatalog` into a shared package** — rejected: it imports PAPI, which
   `lib/platform-bible-react/` must not.
-- **Consequences:** `useDblResourceCatalog` is now a near-duplicate of the shared hook and is
-  deliberately left un-migrated; rewiring two shipped panels is restructuring, and the ticket that
-  introduced the hook was scoped to bug fixes. Anyone touching it should migrate it then.
-  Separately, `platformGetResources.getCachedResources` signals failure **two** ways — it resolves
-  `undefined` on one path and rejects on another, because `fetchAndCacheResources()` is returned
-  un-awaited from inside its own `try` — so every host folds both in as
-  `hasError || (!isLoading && data === undefined)`. Normalizing that command to one failure signal
-  is the cleaner fix but changes a registered command's declared contract and every caller's
-  `?? []`, so it is deferred.
-  **Revisit** when a second consumer wants a value where `undefined` is a legitimate result rather
-  than a failure; the fold-in rule above is host knowledge, not hook behavior, precisely so the hook
-  stays honest about that distinction.
+- **Consequences:** The three-state result is what makes the UI rule statable: **render the error
+  state from the rejection, never from an absent value.** An earlier revision of this work had each
+  host fold `hasError || (!isLoading && data === undefined)` instead, which read a build with no DBL
+  credentials as a load failure and attached a retry that could never succeed — a *new* dead end
+  created by the change meant to remove them. Anything reading this catalog should branch on
+  `status`, and treat `unavailable` as an empty list rather than an error.
+  `useRetryablePromise` therefore exposes `hasSettled` alongside `isLoading`: `isLoading` is false
+  both before the first fetch starts and between a retry click and the effect that restarts it, so
+  a host deriving "finished" from `!isLoading` paints a settled state over a fetch that has not run.
+  Its generation guard is bumped synchronously on **both** kinds of supersession — a `refetch` and a
+  changed factory identity — because a generation derived from state lands a render late, leaving a
+  window in which a superseded fetch can resurrect a cleared error.
+  `useDblResourceCatalog` remains a near-duplicate of the shared hook and is still not migrated onto
+  it; that is a refactor, and this change was already large. Anyone touching it should migrate it.
+  **Revisit** when a consumer needs a fourth catalog state, or wants a value where `undefined` is a
+  legitimate result — the hook stays deliberately generic about that, and the `status` branching
+  lives in the hosts.
 - **Source:** PT-4433 (NN5d, Sprint 89 Simple Quality), resource-picker dead-ends.

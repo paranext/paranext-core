@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Dialog } from 'platform-bible-react';
 import { RESOURCE_PICKER_DIALOG } from '@renderer/components/dialogs/resource-picker.dialog';
 import { sendCommand } from '@shared/services/command.service';
@@ -47,6 +47,10 @@ describe('ResourcePickerDialogWrapper', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('reports a failed catalog fetch instead of claiming there are no results', async () => {
     vi.mocked(sendCommand).mockRejectedValue(new Error('the data provider is not up'));
 
@@ -58,19 +62,6 @@ describe('ResourcePickerDialogWrapper', () => {
     expect(screen.queryByText('%resourcePicker_no_results%')).not.toBeInTheDocument();
   });
 
-  // `getCachedResources` signals a failed on-demand fetch by RESOLVING undefined on one path and by
-  // rejecting on another, so watching only for a rejection still shows the empty state for half its
-  // failures.
-  it('treats a resolved-undefined catalog as a failure, not an empty catalog', async () => {
-    vi.mocked(sendCommand).mockResolvedValue(undefined);
-
-    renderWrapper();
-
-    await waitFor(() =>
-      expect(screen.getByText('%resourcePicker_load_error%')).toBeInTheDocument(),
-    );
-  });
-
   it('offers a retry that re-drives the fetch after a failure', async () => {
     vi.mocked(sendCommand).mockRejectedValue(new Error('the data provider is not up'));
 
@@ -79,13 +70,31 @@ describe('ResourcePickerDialogWrapper', () => {
     const retryButton = await screen.findByRole('button', { name: '%resourcePicker_retry%' });
     expect(vi.mocked(sendCommand)).toHaveBeenCalledTimes(1);
 
-    retryButton.click();
+    await act(async () => {
+      retryButton.click();
+    });
 
     await waitFor(() => expect(vi.mocked(sendCommand)).toHaveBeenCalledTimes(2));
   });
 
+  // A build with no DBL credentials is not a failure. Reporting it as one would attach a retry to
+  // something no retry can change, which is a worse dead end than the plain empty state.
+  it('reports a build that cannot download DBL resources as empty, not as a failure', async () => {
+    vi.mocked(sendCommand).mockResolvedValue({ status: 'unavailable', reason: 'notConfigured' });
+
+    renderWrapper();
+
+    await waitFor(() =>
+      expect(screen.getByText('%resourcePicker_no_results%')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('%resourcePicker_load_error%')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '%resourcePicker_retry%' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('reports a genuinely empty catalog as empty, not as a failure', async () => {
-    vi.mocked(sendCommand).mockResolvedValue([]);
+    vi.mocked(sendCommand).mockResolvedValue({ status: 'available', resources: [] });
 
     renderWrapper();
 

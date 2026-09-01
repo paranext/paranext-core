@@ -6,7 +6,7 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { isPlatformError } from 'platform-bible-utils';
-import { Spinner, usePromise, useRetryablePromise } from 'platform-bible-react';
+import { Button, Spinner, usePromise, useRetryablePromise } from 'platform-bible-react';
 import { RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react/experimental';
 import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { DIALOG_BASE, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
@@ -57,18 +57,17 @@ function ShareLayoutDialogWrapper({
   const [resourcePickerLocalizedStrings] = useLocalizedStrings(RESOURCE_PICKER_STRING_KEYS);
 
   const {
-    data: allResources,
+    data: catalog,
     isLoading: isResourcesLoading,
-    hasError,
+    hasError: hasResourcesError,
+    hasSettled: hasResourcesSettled,
     refetch: onRetryResources,
   } = useRetryablePromise(
     useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
   );
 
-  // `getCachedResources` signals failure two ways: it rejects on one path and resolves `undefined`
-  // on another. Reading only the rejection would leave the second one rendering as an empty
-  // catalog, which is the state the user cannot act on.
-  const hasResourcesError = hasError || (!isResourcesLoading && allResources === undefined);
+  // An `unavailable` catalog is not an error — this build simply cannot download DBL resources.
+  const allResources = catalog?.status === 'available' ? catalog.resources : undefined;
 
   const [projectResourcesSetting, setProjectResources] = useProjectSetting(
     projectId,
@@ -181,10 +180,41 @@ function ShareLayoutDialogWrapper({
   // visibility/condition mechanism, so a non-admin can still trigger the command that opens this
   // dialog. Reject here instead. This check must run after all hooks above (Rules of Hooks
   // forbids an early return between hook calls), so it sits just before the render branch.
-  if (isCanWriteLoading) {
+  // Also gated on the catalog: `ShareLayoutDialogContent` snapshots its initial resource lists in
+  // `useState` at mount, and `splitResourcesByTab` cannot classify a saved dblResource reference
+  // without the catalog — every one of them lands in `otherResources` instead. Mounting before the
+  // catalog settles therefore seeds the content with empty lists while the memo below later
+  // recomputes `otherResources` to empty too, so a Confirm from that mount writes an EMPTY
+  // referenced-resources list and erases the project's shared selection.
+  // Also gated on the catalog: `ShareLayoutDialogContent` snapshots its initial resource lists in
+  // `useState` at mount, and `splitResourcesByTab` cannot classify a saved dblResource reference
+  // without the catalog — every one of them lands in `otherResources` instead. Mounting before the
+  // catalog settles therefore seeds the content with empty lists while the memo above later
+  // recomputes `otherResources` to empty too, so a Confirm from that mount writes an EMPTY
+  // referenced-resources list and erases the project's shared selection.
+  if (isCanWriteLoading || !hasResourcesSettled) {
     return (
       <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
         <Spinner />
+      </div>
+    );
+  }
+
+  // The failure is reported HERE rather than only inside the embedded pickers. Letting the dialog
+  // body render against an empty catalog would show "nothing is shared" beside a popover saying the
+  // catalog failed — two adjacent surfaces disagreeing — over a Confirm that writes the misleading
+  // state back. A retry that lands after the body mounted cannot fix the snapshot it took, so the
+  // body must not mount until there is a catalog to take it from.
+  if (hasResourcesError) {
+    return (
+      <div className="tw:flex tw:flex-1 tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:p-8">
+        <p className="tw:text-center tw:text-muted-foreground">
+          {resourcePickerLocalizedStrings['%resourcePicker_load_error%'] ??
+            '%resourcePicker_load_error%'}
+        </p>
+        <Button variant="outline" size="sm" onClick={onRetryResources}>
+          {resourcePickerLocalizedStrings['%resourcePicker_retry%'] ?? '%resourcePicker_retry%'}
+        </Button>
       </div>
     );
   }

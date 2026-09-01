@@ -29,13 +29,27 @@ describe('useDblResourceCatalog', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('reports the catalog as ready once the fetch delivers', async () => {
-    mockSendCommand.mockResolvedValue([RESOURCE]);
+    mockSendCommand.mockResolvedValue({ status: 'available', resources: [RESOURCE] });
 
     const { result } = renderHook(() => useDblResourceCatalog());
 
     await waitFor(() => expect(result.current.isCatalogReady).toBe(true));
     expect(result.current.dblResources).toEqual([RESOURCE]);
     expect(result.current.hasCatalogError).toBe(false);
+  });
+
+  // A build with no DBL credentials has ARRIVED at its answer: there is no catalog and there never
+  // will be one. Treating that as "not ready yet" strands the panels on `getResourcePanelReadiness`'s
+  // `loading` branch — a spinner with no message and no retry — in the most common real-world case.
+  it('reports the catalog as ready, and empty, when this build cannot download DBL resources', async () => {
+    mockSendCommand.mockResolvedValue({ status: 'unavailable', reason: 'notConfigured' });
+
+    const { result } = renderHook(() => useDblResourceCatalog());
+
+    await waitFor(() => expect(result.current.isCatalogReady).toBe(true));
+    expect(result.current.dblResources).toEqual([]);
+    expect(result.current.hasCatalogError).toBe(false);
+    expect(result.current.isLoadingResources).toBe(false);
   });
 
   it('reports an error instead of loading forever when the fetch rejects', async () => {
@@ -55,7 +69,7 @@ describe('useDblResourceCatalog', () => {
     const { result } = renderHook(() => useDblResourceCatalog());
     await waitFor(() => expect(result.current.hasCatalogError).toBe(true));
 
-    mockSendCommand.mockResolvedValue([RESOURCE]);
+    mockSendCommand.mockResolvedValue({ status: 'available', resources: [RESOURCE] });
     act(() => result.current.refetchCatalog());
 
     await waitFor(() => expect(result.current.hasCatalogError).toBe(false));

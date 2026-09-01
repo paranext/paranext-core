@@ -21,9 +21,9 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
   const {
-    data: resources,
+    data: catalog,
     isLoading: isLoadingResources,
-    hasError,
+    hasError: isResourcesError,
     refetch: refetchResources,
   } = useRetryablePromise(
     useCallback(
@@ -32,12 +32,12 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     ),
   );
 
-  // `getCachedResources` signals failure two ways: it rejects on one path and resolves `undefined`
-  // on another. Reading only the rejection would leave the second one rendering as an empty
-  // catalog, which is the state the user cannot act on.
-  const isResourcesError = hasError || (!isLoadingResources && resources === undefined);
-
-  const resolvedResources = useMemo(() => resources ?? [], [resources]);
+  // An `unavailable` catalog is deliberately NOT an error: this build cannot download DBL resources
+  // at all, so the honest answer is an empty list, not a failure with a retry that cannot work.
+  const resolvedResources = useMemo(
+    () => (catalog?.status === 'available' ? catalog.resources : []),
+    [catalog],
+  );
 
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
@@ -85,7 +85,14 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const installOrRemoveResource = useCallback(
     (dblEntryUid: string, action: ResourceAction): Promise<void> | void => {
-      if (!installResource || !uninstallResource) return undefined;
+      // Reject rather than returning a bare `undefined`. The component awaits this inside a
+      // try/catch and surfaces a rejection in its error alert; awaiting `undefined` resolves, so a
+      // click landing before the data provider resolves would produce no spinner, no error and no
+      // log — the user cannot tell it from a click that did nothing at all.
+      if (!installResource || !uninstallResource)
+        return Promise.reject(
+          new Error('The DBL resources data provider is not available yet. Please try again.'),
+        );
       const newInstallInfo: InstallInfo = {
         dblEntryUid,
         action: action === 'install' ? 'installing' : 'removing',

@@ -11,9 +11,13 @@ import {
   RESOURCE_PICKER_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
 import { useCallback } from 'react';
+import type { DblResourceData } from 'platform-bible-utils';
 import { sendCommand } from '@shared/services/command.service';
 
 const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
+
+// Stable identity so an unavailable catalog does not hand the picker a new array every render.
+const EMPTY_RESOURCES: DblResourceData[] = [];
 
 /**
  * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
@@ -28,7 +32,7 @@ function ResourcePickerDialogWrapper({
 
   // Fetches all resources to pass into the resource picker
   const {
-    data: resources,
+    data: catalog,
     isLoading: isResourcesLoading,
     hasError,
     refetch,
@@ -36,16 +40,16 @@ function ResourcePickerDialogWrapper({
     useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
   );
 
-  // `getCachedResources` signals failure two ways: it rejects on one path and resolves `undefined`
-  // on another. Reading only the rejection would leave the second one rendering as an empty
-  // catalog, which is the state the user cannot act on.
-  const hasResourcesError = hasError || (!isResourcesLoading && resources === undefined);
+  // An `unavailable` catalog is deliberately NOT an error: this build simply cannot download DBL
+  // resources, and offering a retry would attach a control to something no retry can change. Only a
+  // rejection — a fetch that broke and might not next time — earns the error state.
+  const allResources = catalog?.status === 'available' ? catalog.resources : EMPTY_RESOURCES;
 
   return (
     <ResourcePickerDialog
-      allResources={resources ?? []}
+      allResources={allResources}
       isResourcesLoading={isResourcesLoading}
-      hasResourcesError={hasResourcesError}
+      hasResourcesError={hasError}
       onRetryResources={refetch}
       resourceType={resourceType}
       selectedResourceIds={selectedResourceIds}

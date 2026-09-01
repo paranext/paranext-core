@@ -7,12 +7,20 @@ import ResourcePickerDialog, {
 } from './resource-picker-dialog.component';
 import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS } from './resource-picker-dialog.data';
 
-// jsdom does not implement IntersectionObserver — stub it so the hook can mount
+// jsdom implements neither IntersectionObserver (used by the progressive list) nor ResizeObserver
+// (wired by the language filter's popover) — stub both so the dialog can mount and be interacted
+// with.
 beforeAll(() => {
   vi.stubGlobal(
     'IntersectionObserver',
     vi.fn(() => ({ observe: vi.fn(), disconnect: vi.fn() })),
   );
+  vi.stubGlobal(
+    'ResizeObserver',
+    vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
+  );
+  // cmdk scrolls its highlighted item into view; jsdom has no layout and so no such method.
+  Element.prototype.scrollIntoView = vi.fn();
 });
 afterAll(() => {
   vi.unstubAllGlobals();
@@ -29,7 +37,7 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
   '%resourcePicker_load_error%': "Couldn't load the list of available resources.",
   '%resourcePicker_retry%': 'Try again',
-  '%resourcePicker_no_results_filtered%': 'No resources match your search.',
+  '%resourcePicker_no_results_filtered%': 'No resources match the current filters.',
   '%resourcePicker_clear_filters%': 'Clear filters',
 };
 
@@ -130,23 +138,50 @@ describe('ResourcePickerDialog', () => {
     renderDialog();
     const searchInput = screen.getByPlaceholderText('Search resources…');
     fireEvent.change(searchInput, { target: { value: 'zzznomatch' } });
-    expect(screen.getByText('No resources match your search.')).toBeInTheDocument();
+    expect(screen.getByText('No resources match the current filters.')).toBeInTheDocument();
     expect(screen.queryByText('No results found')).not.toBeInTheDocument();
     expect(screen.queryByText('Already selected')).not.toBeInTheDocument();
     expect(screen.queryByText('Installed')).not.toBeInTheDocument();
     expect(screen.queryByText('Available to download')).not.toBeInTheDocument();
   });
 
-  it('restores the full list when the filters are cleared', () => {
+  // Clears BOTH filters, so the language selection has to be part of the setup: with only a search
+  // term applied, dropping the `setSelectedLanguages([])` reset leaves this green while the button
+  // silently stops doing half its job.
+  it('restores the full list when the filters are cleared, including the language filter', () => {
     renderDialog();
+
+    fireEvent.click(screen.getByRole('combobox'));
+    // Scoped to the option: "Spanish" also appears as the language cell of the RVR60 row behind the
+    // popover.
+    fireEvent.click(screen.getByRole('option', { name: 'Spanish' }));
+    // Narrowed to Spanish: the English entries are gone, the Spanish one remains.
+    expect(screen.queryByText('NIV')).not.toBeInTheDocument();
+    expect(screen.getByText('RVR60')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('Search resources…'), {
+      target: { value: 'zzznomatch' },
+    });
+    expect(screen.getByText('No resources match the current filters.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(screen.queryByText('No resources match the current filters.')).not.toBeInTheDocument();
+    // NIV is English, so it only returns if the LANGUAGE filter was cleared too.
+    expect(screen.getByText('NIV')).toBeInTheDocument();
+  });
+
+  // The type narrowing is not one of the filters `clearFilters` can reset, so offering the button
+  // here would route the user through a control that provably cannot change the result.
+  it('does not offer to clear filters when the resource type is what emptied the list', () => {
+    renderDialog({ resourceType: 'CommentaryResource' });
+
     fireEvent.change(screen.getByPlaceholderText('Search resources…'), {
       target: { value: 'zzznomatch' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-
-    expect(screen.queryByText('No resources match your search.')).not.toBeInTheDocument();
-    expect(screen.getByText('NIV')).toBeInTheDocument();
+    expect(screen.getByText('No results found')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
   });
 
   it('keeps the plain no-results text when the catalog is empty with no filter applied', () => {
