@@ -204,4 +204,11 @@ describe('refusing a second window in simple mode', () => {
   test('power mode permits a second window', () => {
     expect(isAdditionalWindowRefusedInSimpleMode('power', 1)).toBe(false);
   });
+
+  test('a mode that has not been read yet refuses nothing', () => {
+    // The startup restore creates its windows before the mode read they depend on can land,
+    // because that read can block on the extension host. Treating an unread mode as simple
+    // would refuse a power session the secondary windows it is in the middle of restoring.
+    expect(isAdditionalWindowRefusedInSimpleMode(undefined, 1)).toBe(false);
+  });
 });
