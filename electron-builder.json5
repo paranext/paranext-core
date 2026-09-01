@@ -138,6 +138,23 @@
       'unity7',
       'wayland',
       'x11',
+      // electron-builder's snapcraft template hardcodes a `gnome-3-28-1804` content plug (Ubuntu
+      // 18.04 / GNOME 3.28) and does not revise it when `base` is set, so without this override a
+      // core22 app mounts a bionic GNOME platform: mismatched Mesa/DRI, libdbus and GTK/Wayland
+      // stacks, and no window opens at all. Config can REPLACE a template plug entry but never
+      // remove one, so this has to reuse the template's key rather than introduce a new one --
+      // two plugs would then compete for the same mount point. snapd matches content plugs on the
+      // `content` attribute, which defaults to the key, so overriding `content` is what actually
+      // rebinds the plug. Keep in step with `base` above; enforced by
+      // .erb/scripts/electron-builder-snap-config.test.ts
+      {
+        'gnome-3-28-1804': {
+          interface: 'content',
+          content: 'gnome-42-2204',
+          target: '$SNAP/gnome-platform',
+          'default-provider': 'gnome-42-2204',
+        },
+      },
       {
         'dot-platform-bible': {
           interface: 'personal-files',
