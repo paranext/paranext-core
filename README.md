@@ -199,6 +199,8 @@ If you are developing `paranext-core` itself or developing extensions based on a
 
 Running `npm install` in `paranext-core` builds development versions of the npm packages `@eten-tech-foundation/platform-editor` and `@eten-tech-foundation/scripture-utilities` from `scripture-editors` and stages them into `dev-packages/staging/`. This repo's `package.json` files depend on those staged folders with `file:` specifiers, so `npm install` reads each staged package's own manifest and installs its dependencies into this repo's tree. The staged copies are symlinked into `node_modules`, so a rebuild is visible immediately without reinstalling.
 
+`scripture-editors` commits its built `dist/`, so this is a copy rather than a build: **you do not need its toolchain — no pnpm, no nx — to run Platform.Bible.** A build only happens if you are editing the editor yourself (`npm run build:editor`) or your checkout predates the committed build.
+
 This means `scripture-editors` is free to add, bump, or drop its own dependencies without this repo restating them, and nothing here resolves the editor from the npm registry.
 
 **Fresh clones just work:** on the very first `npm install`, the staged packages are created
