@@ -80,7 +80,6 @@ import {
   captureAppOutput,
   createSecondWindow,
   createStepLogger,
-  expectAppWindowCount,
   expectWindowDockHasOnlyHomeTab,
   focusWindowAndWaitForRouting,
   getAppPages,
