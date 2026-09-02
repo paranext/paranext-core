@@ -360,6 +360,22 @@ async function openHistoryDropdown(frame: FrameLocator): Promise<void> {
   await recentSearchesButton(frame).click();
 }
 
+/**
+ * Wait for the result counter to read something other than `previous`, and answer what it reads.
+ *
+ * The counter must be present throughout: falling back to the results paragraph would accept a
+ * search that FAILED, because that paragraph carries the regex error message as well as the
+ * no-results one.
+ */
+async function waitForCounterToChangeFrom(frame: FrameLocator, previous: string | null) {
+  let current = previous;
+  await expect(async () => {
+    current = await frame.locator('.tw\\:tabular-nums').textContent({ timeout: 1_000 });
+    expect(current).not.toBe(previous);
+  }).toPass({ timeout: 30_000 });
+  return current;
+}
+
 /** Open the filters dropdown (the SlidersHorizontal / Toggle filters button). */
 async function openFiltersPanel(frame: FrameLocator): Promise<void> {
   const filtersBtn = frame.getByRole('button', { name: /toggle filters/i });
@@ -767,41 +783,35 @@ test.describe('Search Filters', () => {
     // Not COMMON_SEARCH_TERM. Counted in the bundled WEB Genesis these tests search by default,
     // "the" matches 3972 times as a substring, 2375 whole-word, and 2156 whole-word and
     // case-sensitive — all far above the counter's 100-result cap, so it reads "1 of 100" in every
-    // state and cannot show either filter doing anything. FILTER_SENSITIVE_TERM matches 52, 51 and
-    // 1 for the same three states: every value under the cap, so each filter is observable.
+    // state and cannot show either filter doing anything. FILTER_SENSITIVE_TERM matches 52
+    // unfiltered, 51 whole-word, and 1 with both: every value under the cap.
+    //
+    // The order matters, and only counting reveals why. That term matches 1 with match-case ALONE,
+    // the same as with both, so applying match-case first leaves whole-word with nothing to show.
+    // Whole word goes first so each filter moves the count by itself.
     await fillSearchAndWaitForResults(frame, FILTER_SENSITIVE_TERM);
-    const counterBeforeFilters = await frame.locator('.tw\\:tabular-nums').textContent();
+    const counterUnfiltered = await frame.locator('.tw\\:tabular-nums').textContent();
 
-    // Open filters and enable Match Case
     await openFiltersPanel(frame);
-    const matchCaseCheckbox = frame.locator('#matchCase');
-    await expect(matchCaseCheckbox).toBeVisible({ timeout: 5_000 });
-    if (!(await matchCaseCheckbox.isChecked())) await matchCaseCheckbox.click();
-    await expect(matchCaseCheckbox).toBeChecked();
 
-    // Also enable Whole Word (radio button)
+    // Whole word first: 52 -> 51.
     const wholeWordRadio = frame.locator('#wordRestriction-wholeWord');
     await expect(wholeWordRadio).toBeVisible({ timeout: 5_000 });
     await wholeWordRadio.click();
     await expect(wholeWordRadio).toBeChecked();
+    const counterAfterWholeWord = await waitForCounterToChangeFrom(frame, counterUnfiltered);
 
-    // Close filters panel
+    // Then match case: 51 -> 1. Asserting against the whole-word reading rather than the
+    // unfiltered one is what makes this test fail if match-case alone stops working — comparing
+    // both filters against the original passes whenever EITHER of them still does something.
+    const matchCaseCheckbox = frame.locator('#matchCase');
+    await expect(matchCaseCheckbox).toBeVisible({ timeout: 5_000 });
+    if (!(await matchCaseCheckbox.isChecked())) await matchCaseCheckbox.click();
+    await expect(matchCaseCheckbox).toBeChecked();
+    await waitForCounterToChangeFrom(frame, counterAfterWholeWord);
+
     await matchCaseCheckbox.press('Escape');
-
-    // The search re-runs itself once the filters change. Asserting only that a counter is on screen
-    // would pass without either filter doing anything, because the unfiltered search already put
-    // one there — so compare against what it read before.
-    //
-    // The counter must be present, with no fallback to the results paragraph: that paragraph also
-    // carries the regex ERROR message, so accepting it would let a filtered search that FAILED
-    // count as success. This term still matches under both filters, so a run that produces no
-    // counter has gone wrong however it presents.
-    await expect(async () => {
-      const counterAfterFilters = await frame
-        .locator('.tw\\:tabular-nums')
-        .textContent({ timeout: 1_000 });
-      expect(counterAfterFilters).not.toBe(counterBeforeFilters);
-    }).toPass({ timeout: 30_000 });
+    await expect(wholeWordRadio).not.toBeVisible({ timeout: 5_000 });
   });
 });
 

@@ -65,7 +65,10 @@ export default async function globalTeardown(_config: FullConfig): Promise<void>
 
   if (byName === 'ran') console.log('Cleanup: also swept by process name (the machine is ours).');
   if (byName === 'failed')
-    console.log('Cleanup: the process-name sweep reported nothing to stop, or could not complete.');
+    console.log(
+      'Cleanup: the process-name sweep did not complete — most likely its 10s timeout. Anything ' +
+        'it would have stopped may still be running.',
+    );
 
   // Last line of defence for the developer's own settings and app-global state.
   //

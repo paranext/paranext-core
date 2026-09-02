@@ -48,9 +48,8 @@ const config = defineConfig({
   // `_example/` — reference template for new tests, not a runnable test suite.
   // Experimental tests that should not be wired into any standard test run. (e.g.,
   // `manage-books/` and `markers-checklist/`)
-  // `navigation-history/` (top-level, NOT an isolated subset) — needs the CDP fixture (it
-  // attaches to an already-running app), which this config's launch strategy cannot provide. It
-  // runs through `playwright-cdp.config.ts` (`npm run test:e2e-cdp`) instead.
+  // Nothing else is excluded here: `navigation-history/` is an isolated subset like any other,
+  // and `playwright-cdp.config.ts` cannot collect it at all (`testIgnore: ['**/isolated/**']`).
   projects: [
     {
       name: 'smoke',

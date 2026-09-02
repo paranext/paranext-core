@@ -220,10 +220,14 @@ describe('app-global pin refuses to empty a store it cannot park', () => {
     // Exactly the crash state: keys back in place, backup directory gone, manifest still standing.
     fs.writeFileSync(`${LIVE_DIR}.e2e-backup.json`, manifestAfterPin);
 
-    restoreAppGlobalState();
+    const recovered = restoreAppGlobalState();
 
     expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
     expect(readKey(THEME_KEY)).toBe('"dark"');
+    // And says so: the manifest still lists the keys it parked, but whichever run removed the
+    // directory had already put them back. Returning that list here would have global setup and
+    // teardown announce a recovery that did not happen.
+    expect(recovered).toEqual([]);
   });
 
   it('leaves the developer state alone when a backup dir stands with no manifest', () => {

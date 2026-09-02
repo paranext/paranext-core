@@ -1055,8 +1055,14 @@ export function restoreAppGlobalState(): string[] | undefined {
   parked.forEach((key) => {
     fs.copyFileSync(path.join(backupDir, key), path.join(liveDir, key));
   });
+  const backupDirWasThere = fs.existsSync(backupDir);
   fs.rmSync(backupDir, { recursive: true, force: true });
   fs.rmSync(mainLocalStorageBackupManifestPath(), { force: true });
+
+  // Nothing was restored when the directory holding the parked keys had already gone: the manifest
+  // still lists them, but they were put back by whichever run removed it. Reporting its list here
+  // would have callers announce a recovery that did not happen.
+  if (!backupDirWasThere) return [];
   // The parked names, even when empty: an empty pin is a recovery that restored nothing, which is a
   // different thing from having found no backup, and global setup reports them differently.
   return manifest.pinnedKeys;

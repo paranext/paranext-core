@@ -229,9 +229,12 @@ export function runCleanup(
   try {
     actions.sweepByProcessName();
   } catch {
-    // Having nothing to stop is a routine outcome, and the shell-outs behind it (ps, PowerShell's
-    // CIM enumeration, fkill) can also exit non-zero or time out. None of that should turn a run
-    // whose tests all passed into a failed one, nor discard pids already terminated.
+    // Almost certainly the 10s timeout: `npm run stop` starts npm and tsx cold, scans every process
+    // on the machine, and gives fkill its own kill-wait, which on a loaded box does not always fit.
+    // Note that having nothing to stop is NOT a cause — fkill runs with `silent: true`, so it
+    // swallows "process doesn't exist" and still exits zero. Either way a cleanup that could not
+    // finish must not turn a run whose tests all passed into a failed one, nor discard pids already
+    // signalled.
     return { pids, scoped, byName: 'failed' };
   }
   return { pids, scoped, byName: 'ran' };
