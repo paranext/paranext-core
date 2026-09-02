@@ -866,11 +866,9 @@ async function main() {
       // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
       minWidth: 900,
       icon: getAssetPath('icon.png'),
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),
+      titleBarStyle: 'hidden',
       // re-add window controls
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      ...(process.platform !== 'darwin' && process.platform !== 'linux'
+      ...(process.platform !== 'darwin'
         ? {
             titleBarOverlay: {
               height: TITLE_BAR_BUTTON_HEIGHT,
@@ -1288,8 +1286,7 @@ async function main() {
       }
 
       // Adjust the Window button colors based on the current theme
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      if (process.platform !== 'darwin' && process.platform !== 'linux') {
+      if (process.platform !== 'darwin') {
         const paintTitleBarForTheme = (newTheme: ThemeDefinitionExpanded) => {
           if (!newTheme.cssVariables.primary) {
             logger.warn(
