@@ -3,7 +3,7 @@ import DockLayout, { TabData } from 'rc-dock';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { Layout, WebViewTabProps } from '@shared/models/docking-framework.model';
 
-import { addWebViewToDock } from './platform-dock-layout-storage.util';
+import { addWebViewToDock, focusTab } from './platform-dock-layout-storage.util';
 
 // Same file-level mock set as `platform-dock-layout-storage.util.test.ts` — this file imports the
 // same module, which still needs its whole dependency graph stubbed to import cleanly.
@@ -65,6 +65,28 @@ describe('taking document focus when a web view is docked', () => {
     addWebViewToDock(webViewToDock(), layout, true, instance(localMockDockLayout));
 
     expect(focusSpy).toHaveBeenCalled();
+  });
+
+  /**
+   * `focusTab` is not only reached from a deliberate focus request. Every mounted panel and every
+   * loaded web view asks the window service to focus itself, and that lands here — after the iframe
+   * has loaded, so unlike the docking paths it really can reach `contentWindow.focus()`. A window
+   * still waiting for its first activation must not be pulled forward by its own content saying it
+   * has arrived.
+   */
+  it('focuses the tab when a focus request names it', () => {
+    focusTab(instance(localMockDockLayout), TAB_ID);
+
+    expect(focusSpy).toHaveBeenCalled();
+  });
+
+  it('leaves document focus alone when the window is still waiting for its first activation', () => {
+    focusTab(instance(localMockDockLayout), TAB_ID, true);
+
+    expect(focusSpy).not.toHaveBeenCalled();
+    // The tab still becomes the active one in its group, so the window shows the right thing
+    // whenever the user does come to it.
+    verify(localMockDockLayout.updateTab(TAB_ID, anything(), true)).once();
   });
 
   /**

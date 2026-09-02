@@ -862,15 +862,23 @@ export function containsTab(dockLayout: DockLayout, tabOrTabGroupId: string): bo
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
  * @param tabId ID of the tab to set active and focused
+ * @param activateWithoutDocumentFocus If `true`, the tab is made active without taking document
+ *   focus. Every mounted panel and every loaded web view asks to be focused, so this is reached
+ *   without anyone deliberately asking for focus — see
+ *   {@link revealTabGroupAndSetDocumentFocusToTab} for why that matters to a background window
  * @returns `true` if successfully found tab to update, `false` otherwise
  */
-export function focusTab(dockLayout: DockLayout, tabId: string): boolean {
+export function focusTab(
+  dockLayout: DockLayout,
+  tabId: string,
+  activateWithoutDocumentFocus = false,
+): boolean {
   // Bring the tab to front of its tab group
   // `rc-dock` requires null here to mean "don't change the tab data"
   // eslint-disable-next-line no-null/no-null
   const didFindTab = dockLayout.updateTab(tabId, null, true);
 
-  revealTabGroupAndSetDocumentFocusToTab(dockLayout, tabId);
+  revealTabGroupAndSetDocumentFocusToTab(dockLayout, tabId, activateWithoutDocumentFocus);
 
   return didFindTab;
 }

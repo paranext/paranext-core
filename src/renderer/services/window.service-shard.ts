@@ -394,6 +394,7 @@ class WindowDataProviderEngine
   async setFocus(
     newSetFocusSpecifierPossiblyUndefinedSelector: SetFocusSpecifier | undefined,
     newSetFocusSpecifierPossiblyNotProvided?: SetFocusSpecifier,
+    activateWithoutDocumentFocus = false,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
     // The trailing `?? undefined` collapses a `null` arriving in the specifier position. The types
     // say that cannot happen, but arguments cross the process boundary as JSON, where an `undefined`
@@ -477,7 +478,7 @@ class WindowDataProviderEngine
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     }
     // Set the focus in the docking layout to the appropriate tab or WebView
-    else (await getDockLayout()).focusTab(newFocusSubject.id);
+    else (await getDockLayout()).focusTab(newFocusSubject.id, activateWithoutDocumentFocus);
 
     return didChangeFocus;
   }

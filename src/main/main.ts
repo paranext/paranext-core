@@ -940,7 +940,16 @@ async function main() {
         // failed to load never reaches. Reveal it here instead: an empty window the user can see and
         // close is recoverable, where one that exists, is tracked and routable, and never appears is
         // not. Still inactive — a window nobody asked for does not earn the foreground by failing.
-        if (activation.revealAfterLoadFailure && !newWindow.isDestroyed() && !newWindow.isVisible())
+        // Only the main frame's failure means the page never arrives. Every web view in the app is
+        // an in-page iframe of this page, so a sub-frame failure says one web view did not load —
+        // the window itself is still on its way to `ready-to-show`, and revealing it here would
+        // show it before it can paint, which is what withholding `show` exists to prevent.
+        if (
+          isMainFrame &&
+          activation.revealAfterLoadFailure &&
+          !newWindow.isDestroyed() &&
+          !newWindow.isVisible()
+        )
           newWindow.showInactive();
       },
     );

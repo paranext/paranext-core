@@ -467,9 +467,15 @@ export type PapiDockLayout = {
    * tabs, and sets the document focus in that tab
    *
    * @param tabId ID of the tab to set active and focused
+   * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+   *   taking document focus. Every mounted panel and every loaded web view asks to be focused, so a
+   *   window still waiting for its first activation would otherwise be pulled forward by its own
+   *   content arriving. Defaults to `false`
    * @returns `true` if successfully found tab to update, `false` otherwise
+   * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+   *   member is long-established.
    */
-  focusTab: (tabId: string) => boolean;
+  focusTab: (tabId: string, activateWithoutDocumentFocus?: boolean) => boolean;
   /**
    * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
    *

@@ -126,7 +126,8 @@ export function PlatformDockLayout() {
       getTabInfoById: (tabId: string) =>
         getTabInfoById(dockLayoutRef.current, tabId, 'external getTabInfoById'),
       containsTab: (tabOrTabGroupId: string) => containsTab(dockLayoutRef.current, tabOrTabGroupId),
-      focusTab: (tabId: string) => focusTab(dockLayoutRef.current, tabId),
+      focusTab: (tabId: string, activateWithoutDocumentFocus = false) =>
+        focusTab(dockLayoutRef.current, tabId, activateWithoutDocumentFocus),
       // `LayoutInfo` is intentionally opaque in the shared model so callers don't need to know
       // about rc-dock's `LayoutBase`. Cross the boundary here at the only place we know the
       // concrete shape.
