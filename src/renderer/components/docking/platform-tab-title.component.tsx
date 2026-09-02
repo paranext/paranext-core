@@ -107,6 +107,7 @@ const MOVE_FAILURE_MESSAGE_KEYS: Record<WebViewMoveFailureDisposition, LocalizeK
   'reopened-in-source-window': '%tab_contextMenu_moveTabToNewWindow_failed%',
   'reopened-in-focused-window': '%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%',
   'not-reopened': '%tab_contextMenu_moveTabToNewWindow_failedNotReopened%',
+  'reached-new-window-unconfirmed': '%tab_contextMenu_moveTabToNewWindow_failedUnconfirmed%',
   'possibly-closed': '%tab_contextMenu_moveTabToNewWindow_failedMayHaveClosed%',
 };
 

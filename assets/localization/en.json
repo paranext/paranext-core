@@ -472,6 +472,7 @@
   "%tab_contextMenu_moveTabToNewWindow_failedMayHaveClosed%": "Could not move the tab to a new window. The tab may have closed; its details are in the log.",
   "%tab_contextMenu_moveTabToNewWindow_failedNotReopened%": "Could not move the tab to a new window, and it could not be reopened anywhere, so it is now closed. Its details are in the log.",
   "%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%": "Could not move the tab to a new window. It was reopened in a different window.",
+  "%tab_contextMenu_moveTabToNewWindow_failedUnconfirmed%": "The tab opened in the new window, but the move could not be confirmed. Its details are in the log.",
   "%tab_title_error%": "Error",
   "%tab_title_unknown%": "Unknown",
   "%test_deprecated_string%": "Test Deprecated String",

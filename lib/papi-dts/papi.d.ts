@@ -5203,9 +5203,10 @@ declare module 'papi-shared-types' {
      * a machine-readable marker at the front of the error message: `[webViewMoveFailure:<where>]`,
      * where `<where>` is `reopened-in-source-window` (nothing about where it lives changed),
      * `reopened-in-focused-window` (it did move, just not to the window that was asked for),
-     * `not-reopened` (it is open in no window, and only the log holds what it was), or
-     * `possibly-closed` (taking it out of its window is what failed, so where it is cannot be
-     * told). The marker rides in the message because a rejection that crosses processes reaches its
+     * `not-reopened` (it is open in no window, and only the log holds what it was),
+     * `reached-new-window-unconfirmed` (the window created for the move is holding it, but the
+     * move could not get that confirmed), or `possibly-closed` (taking it out of its window is
+     * what failed, so where it is cannot be told). The marker rides in the message because a rejection that crosses processes reaches its
      * caller as a code and a message and nothing else. A failure decided before the move touches
      * the web view carries no marker. Strip the marker before showing the message to a user — it is
      * there to be classified on, not read.

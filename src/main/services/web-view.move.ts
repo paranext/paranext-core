@@ -336,7 +336,7 @@ export async function moveWebView(
           : `failed (${getErrorMessage(e)})`;
         throw new Error(
           describeWebViewMoveFailure(
-            'not-reopened',
+            'reached-new-window-unconfirmed',
             `Could not move webview ${webViewId} to ${targetDescription}: adopting it there ${whatTheAdoptDid}, and window ${standingNewWindow.windowId} is holding content, so it was not reopened anywhere. Its captured definition is in the log.`,
           ),
         );
