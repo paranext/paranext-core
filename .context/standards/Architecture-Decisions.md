@@ -2595,3 +2595,75 @@ step, no automation. Just a record.
   for `PT-4502`). Revisit if the thresholds prove wrong in the field — they remain
   arbitrary, inherited from PT-1561.
 - **Source:** PT-4421; resubscribe-storm and burst behavior measured during review of this change.
+
+## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** A React render throw inside a web view left the pane blank with nothing actionable in
+  the log — the symptom behind NN-1 "Editor never blanks out" (PT-4422, and PT-3594/PT-3776 before
+  it). The app had **no** error boundary anywhere in `src/` or `extensions/src/`; the only one in the
+  tree was Lexical's internal `LexicalErrorBoundary`. Web views are real iframes with their own
+  React root, so a boundary placed anywhere in the renderer's component tree cannot catch a web
+  view's throw: the shell survives and the iframe blanks. Every React web view mounts through a
+  single `root.render(React.createElement(globalThis.webViewComponent, webViewProps))` in
+  `web-view.service-shard.ts`, in the `default:` branch of the content-type switch (the `HTML` and
+  `URL` branches mount no React root).
+- **Decision:** Wrap that one element in `WebViewErrorBoundary`, exposed to the iframe as a global
+  the same way `createRoot` is (`global-this-web-view.model.ts` assigns it;
+  the generated `imports` script pulls it across with `window.X = window.parent.X`). Three rules the
+  implementation depends on: (1) **the boundary calls no hooks** — a hook there runs above the catch,
+  so if it threw the pane would blank exactly as before and the net would have the hole it exists to
+  close; all localization happens in the fallback, which mounts only after a crash. (2) **The
+  fallback is inline-styled**, not Tailwind/shadcn: a web view's iframe head carries the CSP, fonts,
+  scrollbars and the theme stylesheet, never the renderer's Tailwind build, so `tw:` classes render
+  unstyled there. Theme CSS custom properties do resolve, because the iframe body is given the theme
+  id class. (3) **The fallback falls back to English literals**, not to the localize key, because one
+  known cause of a blank web view is a crash inside `useLocalizedStrings` itself — and, for the same
+  reason, **the part of the fallback that reaches the localization service sits below a second,
+  inner boundary**. React hands an error thrown inside a boundary's own fallback to the *next*
+  boundary up, and above a web view's root there is none, so a throw while localizing the crash
+  panel would blank the pane exactly as an uncaught web view crash does. An unresolved string and a
+  throwing hook are different failure modes: the English literals cover the first, the inner
+  boundary covers the second. Everything above that inner boundary — the panel's markup, styles and
+  focus handling — must therefore stay service-free.
+- **Alternatives:** **A boundary per extension** (the editor extension wrapping its own web view) —
+  rejected: same day of work for a fraction of the coverage, repeated per extension, leaving Text
+  Collection, resource panels, Find and the rest still blanking. **A boundary in the renderer's
+  component tree** — impossible; it cannot reach across the iframe. **A `fallback` prop for
+  genericity** — dropped: the boundary renders its crash view directly so the generated-script call
+  site stays a single `createElement`, which matters because that site has no typecheck, no lint and
+  no test coverage.
+- **Consequences:** All React web views are covered by one change, and the crash message names the
+  offending tab (`savedWebViewDefinition.title`), so a generic boundary still reads as "the editor
+  crashed". Not covered, and worth stating wherever this is relied on: event handlers, async
+  callbacks and unhandled rejections (React boundaries never see those — global `onerror` capture is
+  PT-3776); a data provider returning a `PlatformError` instead of throwing (e.g. the render-rate
+  guard in `create-use-data-hook.util.ts`); and a throw in the part of the fallback above the inner
+  boundary, which is why that part stays service-free. Because the crash unmounts everything
+  focusable in the pane, including its toolbar, there is no in-tree signal that could reset the
+  boundary — hence the reload button and the focus move on mount, both load-bearing rather than
+  polish.
+
+  **A crashed pane stays crashed until the web view is reloaded**, and nothing resets the boundary
+  on a web view definition update. This is deliberate rather than an omission. The generated iframe
+  script re-runs `root.render` against the same boundary instance on every `onDidUpdateWebView`, and
+  `updateWebViewDefinition` is reachable only from a web view's own component (bound to its own id
+  in the generated script; the web view service exposes no cross-web-view update to extensions), so
+  a crashed pane — whose component is unmounted — only ever receives updates from elsewhere in the
+  renderer: `scrollGroupScrRef` on every navigation, `state`, `isClosable`, bring-to-front. Resetting
+  on those would re-run the same failing render on every verse move, costing a crash-and-log cycle
+  each time and never producing a different result. The changes that genuinely mean "show something
+  else in this pane" do not take that path at all: switching a tab's project mints a new web view
+  via `replace-tab`, and re-pointing a related panel calls `reloadWebView` — both build a fresh
+  iframe, hence a fresh React root and a fresh boundary. Reload is therefore the only recovery path
+  that could work, which is why the panel leads with it.
+
+  Editor coverage additionally rests on a cross-package assumption:
+  `@eten-tech-foundation/platform-editor` configures Lexical with `onError(error) { throw error; }`,
+  so Lexical's own boundary re-throws out of `componentDidCatch` and React hands the error up to us.
+  If a future platform-editor release swallows there instead, editor crashes would silently show
+  Lexical's bare "An error was thrown." box; `web-view-error-boundary.component.test.tsx` pins that
+  chain so the change is caught at upgrade time.
+- **Source:** PT-4422 (NN1b), Sprint 89 Simple Quality. Mount-point placement proposed in the PT-4421
+  investigation; the Lexical re-throw chain verified by running it, not by reading it.
