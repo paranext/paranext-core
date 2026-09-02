@@ -108,6 +108,67 @@ describe('app-global backup integrity', () => {
   });
 });
 
+describe('app-global manifest write ordering', () => {
+  it('writes the manifest before copying any files, so a kill mid-copy still leaves one readable', () => {
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+    writeKey(THEME_KEY, '"dark"');
+    const manifestPath = `${LIVE_DIR}.e2e-backup.json`;
+    const realCopyFileSync = fs.copyFileSync.bind(fs);
+    let manifestExistedBeforeFirstCopy: boolean | undefined;
+    const copySpy = vi
+      .spyOn(fs, 'copyFileSync')
+      .mockImplementation((src: fs.PathLike, dest: fs.PathLike) => {
+        if (manifestExistedBeforeFirstCopy === undefined) {
+          manifestExistedBeforeFirstCopy = fs.existsSync(manifestPath);
+        }
+        return realCopyFileSync(src, dest);
+      });
+
+    try {
+      pinAppGlobalState();
+
+      expect(copySpy).toHaveBeenCalled();
+      // If a kill lands after this and before the copy loop finishes, the next run finds a
+      // manifest plus a partial directory — the shape restoreAppGlobalState already restores from
+      // — rather than a directory with no manifest, which reads as unowned and gets quarantined.
+      expect(manifestExistedBeforeFirstCopy).toBe(true);
+    } finally {
+      copySpy.mockRestore();
+    }
+  });
+
+  it('restores instead of quarantining a manifest left with a directory the copy loop had not finished', () => {
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+    writeKey(THEME_KEY, '"dark"');
+    // Exactly what a kill partway through the (now-reordered) copy loop leaves behind: a readable
+    // manifest naming everything that was live, and a backup directory holding only whichever key
+    // the loop reached before the kill — THEME_KEY never made it.
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    fs.writeFileSync(
+      `${LIVE_DIR}.e2e-backup.json`,
+      JSON.stringify({
+        ownerPid: process.pid,
+        createdAt: new Date().toISOString(),
+        pinnedKeys: [SCR_REFS_KEY, THEME_KEY],
+      }),
+    );
+    fs.writeFileSync(path.join(BACKUP_DIR, SCR_REFS_KEY), DEVELOPER_REF);
+    orphanTheBackup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      restoreAppGlobalState();
+
+      // Restored, not quarantined: a readable manifest is enough for recovery to trust the
+      // directory behind it, however much of the copy loop actually landed.
+      expect(quarantinedBackups()).toHaveLength(0);
+      expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
 describe('app-global state pin', () => {
   it('empties the store so a launch cannot inherit the previous reference', () => {
     writeKey(SCR_REFS_KEY, DEVELOPER_REF);

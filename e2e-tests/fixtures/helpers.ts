@@ -1031,12 +1031,16 @@ export function pinAppGlobalState(): () => void {
   if (createdBackup) {
     fs.mkdirSync(backupDir, { recursive: true });
     const parked = storedKeyNames(liveDir);
-    parked.forEach((key) => {
-      fs.copyFileSync(path.join(liveDir, key), path.join(backupDir, key));
-    });
     // The manifest is what makes an empty backup meaningful. Without it, "the store was empty when
     // we pinned" and "there is no backup" are the same empty directory, and the second reading
     // empties the store for real.
+    //
+    // Written BEFORE the copy loop, not after: a run killed mid-copy then leaves a manifest plus a
+    // partial directory, which restoreAppGlobalState already restores from (it reads whatever keys
+    // are actually present, not the manifest's list). Written after, the same kill leaves a
+    // directory with no manifest at all — indistinguishable from "nobody ever took this backup" —
+    // which recovery cannot restore and quarantines instead, turning off isolation for good until a
+    // human notices.
     writeFileAtomic(
       mainLocalStorageBackupManifestPath(),
       JSON.stringify({
@@ -1045,6 +1049,9 @@ export function pinAppGlobalState(): () => void {
         pinnedKeys: parked,
       }),
     );
+    parked.forEach((key) => {
+      fs.copyFileSync(path.join(liveDir, key), path.join(backupDir, key));
+    });
   }
   // Empty the store ONLY when something can put it back: either this call just parked it, or the
   // standing backup is one this process took and can still restore. A backup directory left by a
