@@ -27,6 +27,7 @@ function makeDeps(overrides: Partial<ModeSwitchDependencies> = {}): ModeSwitchDe
     getTrackedWindowIds: () => [1, 2, 3],
     isPrimaryWindow: (windowId) => windowId === 1,
     isWindowClosing: () => false,
+    isWindowAbandoned: () => false,
     markWindowClosing: vi.fn(),
     unmarkWindowClosing: vi.fn(),
     hideWindow: vi.fn(),
@@ -350,6 +351,32 @@ describe('reacting to an interface-mode change', () => {
     await handleInterfaceModeChanged('simple');
 
     expect(deps.closeWindow).not.toHaveBeenCalled();
+  });
+
+  test('a window that has been given up on cannot be the window a switch leaves behind', async () => {
+    // The primary role sits on the persisted entry, and a window whose renderer was given up on
+    // keeps its entry — so it keeps the role. Leaving it as the survivor would close every window
+    // the user can still work in and leave them looking at a dead page, which is the same failure
+    // as closing them all, one window later.
+    const deps = makeDeps({ isWindowAbandoned: (windowId) => windowId === 1 });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(deps.closeWindow).not.toHaveBeenCalled();
+  });
+
+  test('a window that is alive is still the survivor when another has been given up on', async () => {
+    // The negative control for the guard above: refusing whenever ANY window has been given up on
+    // would stop the switch working in the ordinary case, and would read as correct from the test
+    // above alone.
+    const deps = makeDeps({ isWindowAbandoned: (windowId) => windowId === 3 });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(deps.closeWindow).toHaveBeenCalledWith(2);
+    expect(deps.closeWindow).not.toHaveBeenCalledWith(1);
   });
 
   test('a window that fails to come back does not take the rest of the reopen with it', async () => {

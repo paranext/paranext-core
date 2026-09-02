@@ -30,6 +30,12 @@ export type ModeSwitchDependencies = {
   isPrimaryWindow: (windowId: number) => boolean;
   /** Whether a window's close has already begun by some other route */
   isWindowClosing: (windowId: number) => boolean;
+  /**
+   * Whether a window's renderer has been given up on, so nothing will ever run in it again. Such a
+   * window stays open and keeps its entry — and with it the primary role, if that is where the role
+   * sat — but it can no longer show the user anything.
+   */
+  isWindowAbandoned: (windowId: number) => boolean;
   /** Record that a window's close has begun, before anything can route new work to it */
   markWindowClosing: (windowId: number) => void;
   /** Take back a closing mark for a window whose close is not going to happen after all */
@@ -250,20 +256,30 @@ export function isAdditionalWindowRefusedInSimpleMode(
  *
  * Synchronous throughout, so no switch can start while it runs and it needs no generation check of
  * its own — unlike the reopen, which awaits a window at a time and can be overtaken.
+ *
+ * @returns The window left open, or `undefined` when nothing was closed because there was no window
+ *   fit to leave
  */
-function closeSecondaryWindows(deps: ModeSwitchDependencies): void {
+function closeSecondaryWindows(deps: ModeSwitchDependencies): number | undefined {
   const trackedWindowIds = deps.getTrackedWindowIds();
-  // Nothing closes unless a window is going to be left. `isPrimaryWindow` answers false for every
-  // window when no slot holds the marked entry and every live window is still awaiting content —
-  // reachable when the application is resident with no windows and an extension opens one. Closing
-  // then would mark every tracked window closing, which is the application shutting down: a mode
-  // switch must never be able to end the session.
-  const survivorId = trackedWindowIds.find((windowId) => deps.isPrimaryWindow(windowId));
+  // Nothing closes unless a window the user can work in is going to be left. `isPrimaryWindow`
+  // answers false for every window when no slot holds the marked entry and every live window is
+  // still awaiting content — reachable when the application is resident with no windows and an
+  // extension opens one. Closing then would mark every tracked window closing, which is the
+  // application shutting down: a mode switch must never be able to end the session.
+  //
+  // A window whose renderer was given up on is no survivor either, and the role can be exactly
+  // where it sits: such a window keeps its entry, so it keeps the flag the role is read from.
+  // Closing the others around it would leave the user looking at a dead page with everything they
+  // could still work in gone — the same loss as ending the session, one window later.
+  const survivorId = trackedWindowIds.find(
+    (windowId) => deps.isPrimaryWindow(windowId) && !deps.isWindowAbandoned(windowId),
+  );
   if (survivorId === undefined) {
     logger.warn(
-      'Not closing any window for the switch to simple mode: no window holds the primary role, and one has to be left open',
+      'Not closing any window for the switch to simple mode: no window that could be left open holds the primary role',
     );
-    return;
+    return undefined;
   }
 
   // Collected rather than thrown from inside the loop: one window failing to close is not a
@@ -311,6 +327,7 @@ function closeSecondaryWindows(deps: ModeSwitchDependencies): void {
       `Could not close ${closeFailures.length} window(s) for the switch to simple mode`,
     );
   }
+  return survivorId;
 }
 
 /**
@@ -384,14 +401,12 @@ export async function handleInterfaceModeChanged(newMode: InterfaceMode): Promis
 
   try {
     if (newMode === 'simple') {
-      closeSecondaryWindows(deps);
+      const survivorId = closeSecondaryWindows(deps);
       // The window the user was working in may be one of the ones just closed — the mode switcher
       // is reachable from every window — so the survivor is brought forward rather than leaving
-      // the user looking at whatever was behind it
-      const primaryWindowId = deps
-        .getTrackedWindowIds()
-        .find((windowId) => deps.isPrimaryWindow(windowId));
-      if (primaryWindowId !== undefined) deps.focusWindow(primaryWindowId);
+      // the user looking at whatever was behind it. Taken from the close rather than looked up
+      // again, so the window brought forward is the one the closes were decided around.
+      if (survivorId !== undefined) deps.focusWindow(survivorId);
       return;
     }
 
