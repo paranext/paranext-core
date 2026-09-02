@@ -991,6 +991,13 @@ interface AppGlobalBackup {
   createdAt: string;
   /** The keys parked. Empty is meaningful: it says the store was empty when the pin was taken. */
   pinnedKeys: string[];
+  /**
+   * Whether the copy loop that fills the backup directory has finished. Written `false` before that
+   * loop starts and rewritten `true` only once every parked key has copied, so a manifest left
+   * behind by a kill or a throw mid-copy is distinguishable from one whose directory can actually
+   * be trusted to hold what `pinnedKeys` promises.
+   */
+  complete: boolean;
 }
 
 /** Read the manifest, or `undefined` when it is absent, unreadable, or predates this format. */
@@ -1011,6 +1018,9 @@ function readAppGlobalBackup(): AppGlobalBackup | undefined {
     ownerPid: manifest.ownerPid,
     createdAt: manifest.createdAt ?? '',
     pinnedKeys: manifest.pinnedKeys,
+    // A manifest written before this field existed, or one whose loop never got the chance to
+    // flip it, is exactly the shape that must NOT be trusted as restorable.
+    complete: manifest.complete === true,
   };
 }
 
@@ -1032,6 +1042,26 @@ export function pinAppGlobalState(): () => void {
   const liveDir = mainLocalStorageDir();
   const backupDir = mainLocalStorageBackupDir();
 
+  // A backup a previous pin in this worker left incomplete — killed or thrown out of mid-copy — is
+  // unusable: its directory holds only whichever keys the loop reached, but its manifest names the
+  // same pid as this call (a worker reuses one process across tests), so nothing downstream can
+  // tell it apart from a backup that finished. Move it aside before deciding anything else, so this
+  // call starts from either a complete backup or none — never from one it would otherwise trust by
+  // pid alone.
+  const standingBeforeQuarantine = readAppGlobalBackup();
+  if (fs.existsSync(backupDir) && standingBeforeQuarantine?.complete !== true) {
+    const stamp = Date.now();
+    const movedDir = quarantineUnreadableBackup(backupDir, stamp);
+    const movedManifest = fs.existsSync(mainLocalStorageBackupManifestPath())
+      ? quarantineUnreadableBackup(mainLocalStorageBackupManifestPath(), stamp)
+      : undefined;
+    console.warn(
+      `Quarantined an incomplete app-global backup${movedDir ? ` (directory to ${movedDir})` : ''}` +
+        `${movedManifest ? ` (manifest to ${movedManifest})` : ''}: a previous pin did not finish ` +
+        'copying, so its directory cannot be trusted to hold what it promised. Pinning fresh instead.',
+    );
+  }
+
   const createdBackup = !fs.existsSync(backupDir);
   if (createdBackup) {
     fs.mkdirSync(backupDir, { recursive: true });
@@ -1040,32 +1070,44 @@ export function pinAppGlobalState(): () => void {
     // we pinned" and "there is no backup" are the same empty directory, and the second reading
     // empties the store for real.
     //
-    // Written BEFORE the copy loop, not after: a run killed mid-copy then leaves a manifest plus a
-    // partial directory, which restoreAppGlobalState already restores from (it reads whatever keys
-    // are actually present, not the manifest's list). Written after, the same kill leaves a
-    // directory with no manifest at all — indistinguishable from "nobody ever took this backup" —
-    // which recovery cannot restore and quarantines instead, turning off isolation for good until a
-    // human notices.
+    // Written BEFORE the copy loop with complete:false, then rewritten atomically with
+    // complete:true once every key has copied. A run killed or thrown out of mid-copy leaves the
+    // false version standing, which the quarantine check above catches on the next call in this
+    // worker instead of treating the partial directory as restorable.
     writeFileAtomic(
       mainLocalStorageBackupManifestPath(),
       JSON.stringify({
         ownerPid: process.pid,
         createdAt: new Date().toISOString(),
         pinnedKeys: parked,
+        complete: false,
       }),
     );
     parked.forEach((key) => {
       fs.copyFileSync(path.join(liveDir, key), path.join(backupDir, key));
     });
+    writeFileAtomic(
+      mainLocalStorageBackupManifestPath(),
+      JSON.stringify({
+        ownerPid: process.pid,
+        createdAt: new Date().toISOString(),
+        pinnedKeys: parked,
+        complete: true,
+      }),
+    );
   }
   // Empty the store ONLY when something can put it back: either this call just parked it, or the
-  // standing backup is one this process took and can still restore. A backup directory left by a
-  // run that died before writing its manifest exists but says nothing, so every later pin would
-  // park nothing and — without this guard — empty the store anyway, permanently, on every run. Same
-  // for a backup another live run owns: we can neither park nor restore, so emptying is pure loss.
+  // standing backup is one this process took, finished copying, and can still restore. A backup
+  // directory left by a run that died before writing its manifest exists but says nothing, so every
+  // later pin would park nothing and — without this guard — empty the store anyway, permanently, on
+  // every run. Same for a backup another live run owns: we can neither park nor restore, so emptying
+  // is pure loss.
   const standing = readAppGlobalBackup();
   const canRestoreWhatWeEmpty =
-    createdBackup || (standing !== undefined && classifyBackupOwner(standing.ownerPid) === 'ours');
+    createdBackup ||
+    (standing !== undefined &&
+      standing.complete &&
+      classifyBackupOwner(standing.ownerPid) === 'ours');
   if (canRestoreWhatWeEmpty)
     storedKeyNames(liveDir).forEach((key) => fs.rmSync(path.join(liveDir, key), { force: true }));
   else
@@ -1136,6 +1178,32 @@ export function restoreAppGlobalState(): string[] | undefined {
       `Leaving ${backupDir} alone: process ${manifest.ownerPid} still owns it, so another run is ` +
         'using these files. To recover by hand once that run has ended, move the files in that ' +
         'directory back beside it and delete the directory.',
+    );
+    return undefined;
+  }
+  if (!manifest.complete) {
+    // The manifest is readable, but the copy loop that fills the directory never finished — a kill
+    // or a throw mid-copy. Trusting `parked` here would restore only whichever keys happened to
+    // land and then report the manifest's full `pinnedKeys` list as recovered, telling a caller a
+    // complete recovery happened when part of it was silently lost. Quarantine it instead, the same
+    // way an unreadable one is handled, and report nothing restored.
+    const stamp = Date.now();
+    const movedDir = fs.existsSync(backupDir)
+      ? quarantineUnreadableBackup(backupDir, stamp)
+      : undefined;
+    const movedManifest = quarantineUnreadableBackup(mainLocalStorageBackupManifestPath(), stamp);
+    console.warn(
+      movedDir === undefined && movedManifest === undefined
+        ? `Leaving ${backupDir} alone: its manifest is readable but never finished copying, and it ` +
+            'could not be moved aside. Nothing was restored and nothing was deleted, but app-global ' +
+            'state will not be isolated while it stands — inspect it by hand.'
+        : `Moved the incomplete app-global backup aside to ${[movedDir, movedManifest]
+            .filter((moved) => moved !== undefined)
+            .join(
+              ' and ',
+            )}: its manifest never finished copying, so it cannot be trusted to hold ` +
+            'what it promised. Nothing was restored and nothing was deleted — what moved may hold ' +
+            'some of your state; look before removing it.',
     );
     return undefined;
   }

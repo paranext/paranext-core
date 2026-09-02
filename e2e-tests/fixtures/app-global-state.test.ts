@@ -109,17 +109,21 @@ describe('app-global backup integrity', () => {
 });
 
 describe('app-global manifest write ordering', () => {
-  it('writes the manifest before copying any files, so a kill mid-copy still leaves one readable', () => {
+  it('writes the manifest before copying any files, and marks it complete only once every key has landed', () => {
     writeKey(SCR_REFS_KEY, DEVELOPER_REF);
     writeKey(THEME_KEY, '"dark"');
     const manifestPath = `${LIVE_DIR}.e2e-backup.json`;
     const realCopyFileSync = fs.copyFileSync.bind(fs);
     let manifestExistedBeforeFirstCopy: boolean | undefined;
+    let manifestWasCompleteBeforeFirstCopy: boolean | undefined;
     const copySpy = vi
       .spyOn(fs, 'copyFileSync')
       .mockImplementation((src: fs.PathLike, dest: fs.PathLike) => {
         if (manifestExistedBeforeFirstCopy === undefined) {
           manifestExistedBeforeFirstCopy = fs.existsSync(manifestPath);
+          manifestWasCompleteBeforeFirstCopy = manifestExistedBeforeFirstCopy
+            ? (JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as { complete: boolean }).complete
+            : undefined;
         }
         return realCopyFileSync(src, dest);
       });
@@ -129,39 +133,104 @@ describe('app-global manifest write ordering', () => {
 
       expect(copySpy).toHaveBeenCalled();
       // If a kill lands after this and before the copy loop finishes, the next run finds a
-      // manifest plus a partial directory — the shape restoreAppGlobalState already restores from
-      // — rather than a directory with no manifest, which reads as unowned and gets quarantined.
+      // manifest plus a partial directory rather than a directory with no manifest, which reads as
+      // unowned and gets quarantined outright.
       expect(manifestExistedBeforeFirstCopy).toBe(true);
+      // And it must read as unfinished at that point, or a kill right here would leave a manifest
+      // the next pin trusts as restorable from a directory that has not actually copied anything.
+      expect(manifestWasCompleteBeforeFirstCopy).toBe(false);
+      const finalManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as {
+        complete: boolean;
+      };
+      expect(finalManifest.complete).toBe(true);
     } finally {
       copySpy.mockRestore();
     }
   });
 
-  it('restores instead of quarantining a manifest left with a directory the copy loop had not finished', () => {
+  it('leaves the manifest incomplete when the copy loop throws partway through, instead of a readable-looking half-copy', () => {
     writeKey(SCR_REFS_KEY, DEVELOPER_REF);
     writeKey(THEME_KEY, '"dark"');
-    // Exactly what a kill partway through the (now-reordered) copy loop leaves behind: a readable
-    // manifest naming everything that was live, and a backup directory holding only whichever key
-    // the loop reached before the kill — THEME_KEY never made it.
+    const manifestPath = `${LIVE_DIR}.e2e-backup.json`;
+    const realCopyFileSync = fs.copyFileSync.bind(fs);
+    let copyCount = 0;
+    const copySpy = vi
+      .spyOn(fs, 'copyFileSync')
+      .mockImplementation((src: fs.PathLike, dest: fs.PathLike) => {
+        copyCount += 1;
+        if (copyCount === 2) throw new Error('simulated disk failure mid-copy');
+        return realCopyFileSync(src, dest);
+      });
+
+    try {
+      expect(() => pinAppGlobalState()).toThrow('simulated disk failure mid-copy');
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as { complete: boolean };
+      expect(manifest.complete).toBe(false);
+    } finally {
+      copySpy.mockRestore();
+    }
+  });
+
+  it('quarantines an incomplete backup on the next pin instead of trusting it, so a key it never saw is not destroyed', () => {
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+    // Exactly what a kill or a throw partway through the copy loop leaves behind in the SAME
+    // worker process: a manifest naming this pid, a directory holding only the key the loop
+    // reached, and — because the worker keeps running afterward — a THEME_KEY the live app wrote
+    // that this backup never saw.
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    fs.writeFileSync(path.join(BACKUP_DIR, SCR_REFS_KEY), DEVELOPER_REF);
     fs.writeFileSync(
       `${LIVE_DIR}.e2e-backup.json`,
       JSON.stringify({
         ownerPid: process.pid,
         createdAt: new Date().toISOString(),
         pinnedKeys: [SCR_REFS_KEY, THEME_KEY],
+        complete: false,
       }),
     );
+    writeKey(THEME_KEY, '"dark"');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      pinAppGlobalState();
+
+      // The stale partial backup is moved aside, not trusted as ours-and-restorable.
+      expect(quarantinedBackups().length).toBeGreaterThan(0);
+      // A fresh, complete backup replaces it and captures BOTH keys live at pin time — THEME_KEY,
+      // which the partial backup never saw, is not silently destroyed by an empty-and-trust.
+      expect(restoreAppGlobalState()).toEqual(expect.arrayContaining([SCR_REFS_KEY, THEME_KEY]));
+      expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
+      expect(readKey(THEME_KEY)).toBe('"dark"');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('quarantines an incomplete backup on restore instead of reporting a recovery that did not fully happen', () => {
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
     fs.writeFileSync(path.join(BACKUP_DIR, SCR_REFS_KEY), DEVELOPER_REF);
+    fs.writeFileSync(
+      `${LIVE_DIR}.e2e-backup.json`,
+      JSON.stringify({
+        ownerPid: process.pid,
+        createdAt: new Date().toISOString(),
+        pinnedKeys: [SCR_REFS_KEY, THEME_KEY],
+        complete: false,
+      }),
+    );
     orphanTheBackup();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     try {
-      restoreAppGlobalState();
+      const recovered = restoreAppGlobalState();
 
-      // Restored, not quarantined: a readable manifest is enough for recovery to trust the
-      // directory behind it, however much of the copy loop actually landed.
-      expect(quarantinedBackups()).toHaveLength(0);
+      // Nothing is reported restored: the manifest promised two keys but the directory behind it
+      // never finished copying, so trusting its list would tell a caller a recovery happened that
+      // did not.
+      expect(recovered).toBeUndefined();
+      expect(quarantinedBackups().length).toBeGreaterThan(0);
+      // The live store is untouched — an incomplete backup is not evidence of what belongs there.
       expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
     } finally {
       warn.mockRestore();
@@ -332,18 +401,33 @@ describe('app-global pin refuses to empty a store it cannot park', () => {
     expect(recovered).toEqual([]);
   });
 
-  it('leaves the developer state alone when a backup dir stands with no manifest', () => {
+  it('quarantines a manifest-less backup dir and pins fresh, rather than leaving isolation off for good', () => {
     // A run killed between creating the backup directory and writing its manifest leaves exactly
-    // this: a directory that exists and says nothing. Every later pin sees it, parks nothing —
-    // and must therefore not empty the store either, because nothing could put it back.
+    // this: a directory that exists and says nothing, and — because the manifest write happens
+    // before the copy loop — nothing was ever actually parked in it. Refusing to act here would
+    // leave the developer's app-global state unisolated on every run until a human deletes a
+    // gitignored directory by hand, so the pin instead moves the empty directory aside and takes a
+    // fresh, complete backup of what is live right now.
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
     writeKey(SCR_REFS_KEY, DEVELOPER_REF);
     writeKey(THEME_KEY, '"dark"');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    pinAppGlobalState();
+    try {
+      pinAppGlobalState();
 
-    expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
-    expect(readKey(THEME_KEY)).toBe('"dark"');
+      expect(quarantinedBackups().length).toBeGreaterThan(0);
+      // The store is isolated for the test that follows...
+      expect(readKey(SCR_REFS_KEY)).toBeUndefined();
+      expect(readKey(THEME_KEY)).toBeUndefined();
+      // ...and the fresh, complete backup can put both keys back — nothing was destroyed on the
+      // way past the stale, empty directory.
+      expect(restoreAppGlobalState()).toEqual(expect.arrayContaining([SCR_REFS_KEY, THEME_KEY]));
+      expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
+      expect(readKey(THEME_KEY)).toBe('"dark"');
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('leaves the developer state alone when the standing backup belongs to a live run', () => {
