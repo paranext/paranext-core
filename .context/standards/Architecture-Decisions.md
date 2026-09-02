@@ -2696,7 +2696,7 @@ step, no automation. Just a record.
   `padStart`/`padEnd` throw `RangeError` above 2**20 graphemes, where native only gives up at V8's
   string limit (2**29 - 24). Padding builds one array element per grapheme before joining rather
   than filling a compact character buffer, so the native ceiling is unreachable — it exhausts the V8
-  heap first (2**16 costs ~2ms and ~1MB, 2**18 ~3ms and ~1MB, 2**20 ~11ms and ~9MB). The limit is
+  heap first (2**16 costs ~2ms and ~1MB, 2**18 ~3ms and ~1MB, 2**20 ~9ms and ~9MB). The limit is
   set where the cost is still negligible rather than where the engine finally fails, on the grounds
   that padding a string to a million graphemes is never a deliberate act. Second, the free `split`
   in `string-util` substitutes `''` for a capture group that did not participate, where native
@@ -2821,7 +2821,7 @@ step, no automation. Just a record.
   `@echogarden/icu-segmentation-wasm` is real ICU and 100% correct, but 31MB installed and slower
   than the pure-JS pick at 0.62x. `intl-segmenter-polyfill-rs` is superlinear and aborts above ~50k.
   **Native `unicode_segmentation`** — ships a single macOS-arm64 binary and will not load on Linux.
-  **Keep `stringz` and document its limits** — the earlier decision here, superseded: it framed the
+  **Keep `stringz` and document its limits** — briefly the decision on this branch, replaced by this entry rather than left alongside it, because it framed the
   choice as `stringz` versus `Intl.Segmenter` and concluded correctness cost ~10x, having never
   considered a conformant non-`Intl` library.
 - **Consequences:** Counts are now correct for pointed Hebrew, vocalized Arabic and Syriac, Indic

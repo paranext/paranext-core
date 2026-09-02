@@ -4078,8 +4078,8 @@ export declare function lastIndexOf(string: string, searchString: string, positi
  * grapheme clusters instead of UTF-16 code units. Since `length` appears to be a reserved keyword,
  * the function was renamed to `stringLength`.
  *
- * Counts as a reader would for Latin and emoji. Overcounts for `\r\n`, Indic conjuncts, Thai
- * spacing marks, and decomposed Hangul Jamo — see the module note above.
+ * Counts as a literate reader of the script would, including for pointed Hebrew, vocalized Arabic
+ * and Syriac, Indic conjuncts, Thai, and decomposed Hangul Jamo. `\r\n` counts as one.
  *
  * @param string String to return the length for
  * @returns Number of grapheme clusters in the string
@@ -4211,8 +4211,8 @@ export declare function startsWith(string: string, searchString: string, positio
 export declare function substring(string: string, begin: number, end?: number): string;
 /**
  * Converts a string to an array of its grapheme clusters. Mirrors spreading a native string, except
- * that native yields code points rather than grapheme clusters. See the module note above for where
- * these clusters differ from UAX #29.
+ * that native yields code points rather than grapheme clusters. Clusters are UAX #29; see the
+ * module note above for the two consequences worth knowing.
  *
  * @param string String to convert to an array
  * @returns An array of the string's grapheme clusters
@@ -4244,7 +4244,7 @@ export declare function toArray(string: string): string[];
  * Escaped braces, a non-string replacer, and an unknown key together.
  *
  * ```ts
- * formatReplacementStringToArray('Hi {name}! I like \{curly braces\}. Food: {food}.', {
+ * formatReplacementStringToArray('Hi {name}! I like \\{curly braces\\}. Food: {food}.', {
  *   name: ['Bill'],
  * });
  * // ['Hi ', ['Bill'], '! I like {curly braces}. Food: food.']
@@ -4269,7 +4269,7 @@ export declare function formatReplacementStringToArray<T = unknown>(str: string,
  *
  * ```ts
  * formatReplacementString(
- *   'Hi, this is {name}! I like \{curly braces\}. I have a {carColor} car. Food: {food}.',
+ *   'Hi, this is {name}! I like \\{curly braces\\}. I have a {carColor} car. Food: {food}.',
  *   { name: 'Bill', carColor: 'blue' },
  * );
  * // 'Hi, this is Bill! I like {curly braces}. I have a blue car. Food: food.'

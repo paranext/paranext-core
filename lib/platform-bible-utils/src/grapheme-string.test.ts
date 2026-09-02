@@ -582,6 +582,18 @@ describe('graphemes are the unit, not UTF-16 code units', () => {
     );
   });
 
+  it('treats a string separator as literal text, not a pattern', () => {
+    // The old implementation compiled a string separator with `new RegExp(sep, 'g')`, so every
+    // metacharacter was interpreted — `split('a.b', '.')` split on every character instead.
+    expect(new GraphemeString('a.b').split('.').map(String)).toEqual(['a', 'b']);
+    expect(new GraphemeString('aXbXc').split('.').map(String)).toEqual(['aXbXc']);
+    expect(new GraphemeString('a|b').split('|').map(String)).toEqual(['a', 'b']);
+    expect(new GraphemeString('a+b').split('+').map(String)).toEqual(['a', 'b']);
+    expect(new GraphemeString('a(b)c').split('(b)').map(String)).toEqual(['a', 'c']);
+    // A separator that would be a catastrophic pattern is just text.
+    expect(new GraphemeString('a(a+)+b').split('(a+)+').map(String)).toEqual(['a', 'b']);
+  });
+
   it('splitting keeps graphemes intact around separators', () => {
     expect(
       new GraphemeString('Look𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome')
@@ -637,9 +649,14 @@ describe('UAX #29 clusters across writing systems', () => {
   });
 
   it('reports search hits only on cluster boundaries', () => {
-    // The bare consonant shin appears inside 'שִׁ' but not as a whole cluster, so it is not a hit.
     const bereshit = new GraphemeString('בְּרֵאשִׁית');
-    expect(bereshit.indexOf('שׁ')).toEqual(-1);
+    // The bare consonant is a real substring — native finds it — but it sits inside the pointed
+    // cluster 'שִׁ' rather than forming one, so it is not a hit. Pick the needle deliberately:
+    // 'שׁ' (shin plus its dot, no hiriq) does not occur in this text at all, so asserting -1 on
+    // that would pass with the boundary rule deleted.
+    expect(bereshit.toString().includes('ש')).toEqual(true);
+    expect(bereshit.indexOf('ש')).toEqual(-1);
+    // The whole cluster is a hit, at its grapheme index.
     expect(bereshit.indexOf('שִׁ')).toEqual(3);
   });
 });
@@ -778,7 +795,15 @@ describe('iteration', () => {
 
   it('a fresh iterator starts over rather than resuming', () => {
     const graphemeString = new GraphemeString('abc');
-    expect([...graphemeString]).toEqual([...graphemeString]);
+    // Drain one iterator, then spread again: a shared or exhausted iterator would come back empty.
+    expect([...graphemeString[Symbol.iterator]()]).toEqual(['a', 'b', 'c']);
+    expect([...graphemeString]).toEqual(['a', 'b', 'c']);
+    // Two live iterators advance independently.
+    const first = graphemeString[Symbol.iterator]();
+    const second = graphemeString[Symbol.iterator]();
+    expect(first.next().value).toEqual('a');
+    expect(second.next().value).toEqual('a');
+    expect(first.next().value).toEqual('b');
   });
 });
 

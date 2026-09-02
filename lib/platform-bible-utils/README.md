@@ -68,7 +68,21 @@ Two consequences follow from conformance and are worth checking your code agains
 `split('Look𐐷At🦄This𐐷Thing', '𐐷', 2)` was `['Look', 'At🦄This𐐷Thing']` and is now
 `['Look', 'At🦄This']`.
 
-### 4. Two deliberate divergences from native
+### 4. One user-visible display change
+
+`getLocalizedIdFromBookNumber` split Chinese book names on `'\xff08'`. In C# `\x` consumes up to
+four hex digits, so PT9's `Split('\xff08')` really does split on the fullwidth left parenthesis
+`（`; the TypeScript port copied that escape text into a language where `\xNN` takes exactly two, so
+`'\xff08'` is the three characters `ÿ08` and the split never matched. Corrected to `'\uff08'`, which
+restores PT9's behavior: **a Chinese book name now truncates at `（`**, dropping the parenthesised
+second name.
+
+Measured against the shipped `zh-hans.json` and `zh-hant.json`, that takes the number of book pairs
+whose short names render identically from 3 to 7 — `1MA`/`1MQ` → `玛加伯上`, `2MA`/`2MQ`,
+`3MA`/`3MQ`, and `DNT`/`DAG` → `但以理书`. Other locales are unaffected: `es` and `fr` take an
+earlier return, and no other locale ships parenthesised book names.
+
+### 5. Two deliberate divergences from native
 
 - `padStart`/`padEnd` throw `RangeError` above 2²⁰ graphemes. Native only gives up at V8's string
   limit, which is unreachable here — padding builds an array element per grapheme, so the heap goes
