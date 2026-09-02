@@ -679,6 +679,19 @@ export function getWindowById(windowId: string): BrowserWindow | undefined {
 }
 
 /**
+ * What a removed window's marks said, reported back because removing it clears them.
+ *
+ * A caller that needs to know what a window WAS cannot ask afterwards — the marks are gone by
+ * design, so nothing is left answering for a window that no longer exists — and asking beforehand
+ * is an ordering rule nothing enforces. Returning them makes the read and the removal the same
+ * step, so there is no order left to get wrong.
+ */
+export type RemovedWindowMarks = {
+  /** Whether this window's renderer had been given up on after crash-looping */
+  wasAbandoned: boolean;
+};
+
+/**
  * Remove a window from the tracked list, along with everything keyed by its ID.
  *
  * The window is gone, so it is no longer focused and no longer routable, and the routing target
@@ -690,8 +703,11 @@ export function getWindowById(windowId: string): BrowserWindow | undefined {
  *   `closed` handler, where the BrowserWindow is already destroyed and every property read is a
  *   chance to throw — which here would abandon the rest of the closing window's teardown.
  * @param windowId The window's ID, captured while it was still alive.
+ * @returns What this window's marks said, read before they were cleared
  */
-export function removeWindow(window: BrowserWindow, windowId: string): void {
+export function removeWindow(window: BrowserWindow, windowId: string): RemovedWindowMarks {
+  // Read before the deletes below, which is the whole point of returning it
+  const wasAbandoned = abandonedWindowIds.has(windowId);
   const trackedIndex = trackedWindows.findIndex((tracked) => tracked.window === window);
   if (trackedIndex >= 0) trackedWindows.splice(trackedIndex, 1);
 
@@ -703,7 +719,7 @@ export function removeWindow(window: BrowserWindow, windowId: string): void {
   // the id now owns the state under it.
   if (trackedWindows.some((tracked) => tracked.windowId === windowId)) {
     announceRoutingTargetIfChanged();
-    return;
+    return { wasAbandoned };
   }
 
   readyWindowIds.delete(windowId);
@@ -721,6 +737,7 @@ export function removeWindow(window: BrowserWindow, windowId: string): void {
     doesFocusedWindowHoldOsFocus = false;
   }
   announceRoutingTargetIfChanged();
+  return { wasAbandoned };
 }
 
 /** Set the focused window ID (called from BrowserWindow focus events) */
