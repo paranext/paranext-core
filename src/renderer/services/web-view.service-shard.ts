@@ -27,6 +27,7 @@ import {
   getFullWebViewStateById,
   setFullWebViewStateById,
 } from '@renderer/services/web-view-state.service';
+import { WindowClosingError } from '@renderer/services/window-closing-error.model';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { LogError } from '@shared/log-error.model';
@@ -1138,6 +1139,12 @@ async function loadLayout(
     // id (the ordinary restore case, now that a window's id is durable and comes back with it),
     // another window's id (a layout that came from elsewhere), or no scope at all (the legacy
     // pre-multi-window layout).
+    //
+    // Not every layout, though: the explicit-layout branch above loads what its caller passed
+    // exactly as written and never comes through here, so the ids of a shared static layout — the
+    // Simple-mode fast path's, which are the same in every window — reach the dock unscoped. Two
+    // windows loading it at once would hold the same ids; what keeps that from happening is that
+    // Simple mode is single-window and every other window is closed as it begins.
     const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
     if (isPendingContent) {
       if (didDockGainWebViewsDuringLoad()) {
@@ -1326,6 +1333,10 @@ async function getPersistedLayout(
     return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false };
   }
   isRunningOnFallbackLayout = false;
+  // Cleared with the flag it guards, so a LATER fallback episode says so too. Left latched, a window
+  // that fell back, recovered, and fell back again would hold every push with nothing logged — and
+  // the warning is the only sign the user's layout changes are being dropped.
+  hasLoggedHeldLayoutPushes = false;
   if (response.kind === 'entry') return { layout: response.layout, isPendingContent: false };
   if (response.kind === 'empty') return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false };
   if (response.kind === 'pending-content')
@@ -1658,6 +1669,65 @@ async function withTimeout<T>(
 }
 
 /**
+ * How long to wait for the main process to say which window holds the primary role before going
+ * ahead. Short: the answer is a read of state main already holds, and the switch is waiting on it.
+ */
+const PRIMARY_WINDOW_QUESTION_TIMEOUT_MS = 5_000;
+
+/**
+ * Whether this window is the one that should carry out a switch to simple mode.
+ *
+ * Simple mode is single-window, so the main process closes every other window as part of the same
+ * switch. A window on its way out must not run the switch, because the switch writes state shared
+ * by every window — it starts a send/receive, applies the administrator's shared layout, records
+ * the project as recently opened, and caches it under a browser-storage key that is one key for the
+ * whole application. Running all of that in a window nobody will see duplicates each of them, and
+ * can settle on a different project than the surviving window when the cache is cold.
+ *
+ * Asked of the main process, which is the only place that knows which window holds the role.
+ *
+ * Decided from THIS window's own entry and nothing else. A window runs the switch when the list
+ * says it is the primary, and stands down otherwise — including when the list names no primary at
+ * all, which happens when the primary is absent from it: a window whose renderer has been given up
+ * on is deliberately left open but omitted, as is one already recorded as closing. Silence is not
+ * evidence that this window holds the role: reading it that way has every secondary run the switch
+ * at once, duplicating the shared writes above and putting the fixed simple-mode tab ids in several
+ * windows together — the collision single-window simple mode is supposed to make unreachable.
+ *
+ * A question that could not be asked is the one case that still answers `true`: nothing was
+ * learned, and leaving the mode changed with the dock never reloaded is the worse outcome. On that
+ * path the duplication above is unchanged.
+ */
+async function isThisWindowRunningTheSwitchToSimple(): Promise<boolean> {
+  try {
+    // Bounded like every other wait in this switch. It is served by a main process that is
+    // concurrently closing windows, and an unbounded wait here would hold the switch behind the
+    // network default with the overlay up and the mode already flipped.
+    const windows = await withTimeout(
+      async () => sendCommand('platform.getWindows'),
+      PRIMARY_WINDOW_QUESTION_TIMEOUT_MS,
+    );
+    if (windows === LOOKUP_TIMED_OUT) {
+      logger.warn(
+        `The main process did not say which window holds the primary role within ${PRIMARY_WINDOW_QUESTION_TIMEOUT_MS}ms; running the switch to Simple mode here`,
+      );
+      return true;
+    }
+    const thisWindowId = getWindowIdOrThrow();
+    // Absent from the list means already recorded as closing — which is what the main process does
+    // to a window just before it closes it for this very switch — or given up on
+    const thisWindow = windows.find((summary) => summary.windowId === thisWindowId);
+    if (!thisWindow) return false;
+    return thisWindow.isMain;
+  } catch (e) {
+    logger.warn(
+      `Could not establish whether this window should run the switch to Simple mode; running it: ${getErrorMessage(e)}`,
+    );
+    return true;
+  }
+}
+
+/**
  * Drives the power → simple transition from the renderer. The bare `simpleLayout` declares multiple
  * tabs with empty state (no `projectId`); restoring it would mount those empty webviews, fire
  * `onDidOpenWebView` for each, trigger the default-project picker, and then reload all those
@@ -1710,6 +1780,13 @@ export async function handleSwitchToSimpleMode(
     // batch with later state changes and the overlay never actually appears on screen. Bounded: see
     // waitForNextPaint's doc comment for the hidden/occluded-window case this guards against.
     await withTimeout(waitForNextPaint, PAINT_WAIT_TIMEOUT_MS);
+
+    // Behind the overlay, so the round trip below is covered by it like every other lookup here:
+    // by this point the mode has already flipped, so anything the user rearranges in the Power
+    // layout still on screen would be silently refused by `saveLayout`. Ahead of the layout build,
+    // the project cache and the finalize, all of which write state the whole application shares.
+    // The `finally` releases the overlay on this return like any other.
+    if (!(await isThisWindowRunningTheSwitchToSimple())) return;
 
     const cached = getLastOpenedProject();
     if (cached) {
@@ -2557,7 +2634,7 @@ let isWindowToldToClose = false;
  */
 export function throwIfWindowIsClosing(operation: string): void {
   if (!isWindowToldToClose) return;
-  throw new Error(
+  throw new WindowClosingError(
     `web-view.service-shard: window ${globalThis.windowId} cannot ${operation}: the main process has told this window that it is closing.`,
   );
 }

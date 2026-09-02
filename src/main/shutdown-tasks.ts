@@ -103,6 +103,12 @@ async function performShutdownTasksInternal(): Promise<void> {
     return;
   }
 
+  // Before either branch, because a closing window's sync belongs to no mode: it was started under
+  // whichever mode was in force when that window closed, and the mode can have changed since. Both
+  // branches go on to cancel whatever is in progress, so a sync left running here would be
+  // cancelled by the very shutdown that is meant to let it finish.
+  await drainInFlightWindowCloseSyncs();
+
   if (interfaceMode === 'power') {
     await performPowerModeShutdownSync();
     return;
@@ -146,6 +152,40 @@ const inFlightWindowCloseSyncs = new Set<Promise<void>>();
  * @param closingWindowId Window that is closing
  */
 export async function performWindowCloseTasks(closingWindowId: string): Promise<void> {
+  await beginWindowCloseSync(closingWindowId);
+}
+
+/**
+ * Start a closing window's sync and let the window go without waiting for it.
+ *
+ * For a window closing because the interface mode changed. Such a window is coming back — its entry
+ * is kept and the next switch recreates it — so holding it on screen for the length of a
+ * send/receive would make changing mode take as long as a sync, once per window. What the window
+ * had open is still worth pushing, though, so the sync is started while the window is still alive
+ * to be asked what that was.
+ *
+ * The sync joins {@link inFlightWindowCloseSyncs} exactly as an awaited one does, which is what
+ * keeps it from being lost: the shutdown drains that set before either mode's sync cancels
+ * anything, so a quit arriving mid-sync still lets it finish — including one arriving after the
+ * mode changed again, since the sync belongs to the window rather than to a mode.
+ *
+ * @param closingWindowId Window that is closing
+ */
+export function startWindowCloseTasksWithoutWaiting(closingWindowId: string): void {
+  // Deliberately neither awaited nor returned: the caller closes the window now, and failures are
+  // already swallowed and logged inside the sync itself.
+  beginWindowCloseSync(closingWindowId).catch(() => {});
+}
+
+/**
+ * Run a closing window's sync, registered in {@link inFlightWindowCloseSyncs} for as long as it
+ * takes. The one place that set is maintained, so an awaited close and one that lets go of the
+ * window cannot drift apart.
+ *
+ * @param closingWindowId Window that is closing
+ * @returns The sync, which never rejects
+ */
+function beginWindowCloseSync(closingWindowId: string): Promise<void> {
   const windowCloseSync = (async () => {
     try {
       await performWindowCloseTasksInternal(closingWindowId);
@@ -154,11 +194,9 @@ export async function performWindowCloseTasks(closingWindowId: string): Promise<
     }
   })();
   inFlightWindowCloseSyncs.add(windowCloseSync);
-  try {
-    await windowCloseSync;
-  } finally {
+  return windowCloseSync.finally(() => {
     inFlightWindowCloseSyncs.delete(windowCloseSync);
-  }
+  });
 }
 
 async function performWindowCloseTasksInternal(closingWindowId: string): Promise<void> {
@@ -224,18 +262,24 @@ function getWritableEditorProjectIds(definitions: SavedWebViewDefinition[]): str
   return [...new Set(writableEditorProjectIds)];
 }
 
-async function performSimpleModeShutdownSync(): Promise<void> {
-  // A window that closed a moment ago is already syncing what went with it, and nothing else can:
-  // its editors only ever existed in it. Waited for rather than cancelled below — it is bounded by
-  // the same shutdown wait everything else here is, so the cost is a delay and the alternative is
-  // that window's edits never going out at all.
-  if (inFlightWindowCloseSyncs.size > 0) {
-    logger.info(
-      `Waiting for ${inFlightWindowCloseSyncs.size} closing window sync(s) before cancelling in-progress syncs for shutdown`,
-    );
-    await Promise.allSettled([...inFlightWindowCloseSyncs]);
-  }
+/**
+ * Let every sync a closing window started finish before the shutdown cancels what is in progress.
+ *
+ * A window that closed a moment ago is already syncing what went with it, and nothing else can: its
+ * editors only ever existed in it. Waited for rather than cancelled or raced — it is bounded by the
+ * same shutdown wait everything else here is, so the cost is a delay and the alternative is that
+ * window's edits never going out at all. Simple mode goes on to cancel whatever is in progress;
+ * power mode runs a scheduled sync of its own against projects this one may still be writing.
+ */
+async function drainInFlightWindowCloseSyncs(): Promise<void> {
+  if (inFlightWindowCloseSyncs.size === 0) return;
+  logger.info(
+    `Waiting for ${inFlightWindowCloseSyncs.size} closing window sync(s) before the shutdown starts its own`,
+  );
+  await Promise.allSettled([...inFlightWindowCloseSyncs]);
+}
 
+async function performSimpleModeShutdownSync(): Promise<void> {
   // Cancel any in-progress sync first (e.g. a first-sync on startup), then S/R the active project.
   try {
     await networkService.requestNoRetry(

@@ -1,4 +1,8 @@
 {
+  "%abandonedWindow_confirm_close%": "Cerrar la ventana",
+  "%abandonedWindow_confirm_detail%": "No se pudo restaurar después de varios intentos. Si la cierra, volverá la próxima vez que abra la aplicación.",
+  "%abandonedWindow_confirm_leaveOpen%": "Dejarla abierta",
+  "%abandonedWindow_confirm_message%": "Esta ventana dejó de responder",
   "%about_db_ip_attribution_format%": "{intro} {websiteLink} ({terms}: {license})",
   "%about_db_ip_attribution_intro%": "Las funciones de seguridad en Internet utilizan datos de",
   "%about_db_ip_attribution_terms%": "Licencia",

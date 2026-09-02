@@ -383,7 +383,6 @@ describe('window layout persistence service', () => {
         width: 700,
         height: 500,
         isMaximized: true,
-        displayBounds: { x: 0, y: 0, width: 1920, height: 1080 },
       },
     });
     const service = await startService();
@@ -395,7 +394,6 @@ describe('window layout persistence service', () => {
       boundsState: {
         bounds: { x: 5, y: 6, width: 700, height: 500 },
         isMaximized: true,
-        displayBounds: { x: 0, y: 0, width: 1920, height: 1080 },
       },
     });
   });
@@ -1528,6 +1526,38 @@ describe('window layout persistence service', () => {
     expect(written.windows[1].isMaximized).toBe(true);
   });
 
+  test('a structure from before that record was dropped still loads, and drops it', async () => {
+    // Two halves in one, because they are the same round trip: a file written by an older version
+    // must still load — the parser reads the keys it knows and ignores the rest, so no conversion
+    // and no version bump — and what it writes back must not carry the dead key out again.
+    //
+    // This is also the only place the dead key can be asserted about: with the field gone from
+    // `WindowBoundsState` nothing in the write path can produce one, so a test over a freshly saved
+    // entry could not fail while the type stands. Put the field back and this test is what reddens.
+    const service = await startService();
+    seedFiles({
+      structure: {
+        windows: [
+          {
+            layout: layoutWithTab('one'),
+            bounds: { x: 10, y: 20, width: 800, height: 600 },
+            displayBounds: { x: 0, y: 0, width: 1920, height: 1080 },
+            isMain: true,
+          },
+        ],
+      },
+    });
+
+    const plan = await service.loadWindowLayouts();
+    if (plan.kind !== 'restore') throw new Error('expected a restore plan');
+    service.assignEntryToWindow('11', plan.entries[0].windowId);
+    await service.writeNow();
+
+    const written = writtenStructure().windows[0];
+    expect(written.bounds).toEqual({ x: 10, y: 20, width: 800, height: 600 });
+    expect(written).not.toHaveProperty('displayBounds');
+  });
+
   test('a maximize keeps the normal placement its capture does not carry', async () => {
     // A window's normal placement is captured only while the window is in its normal state, so the
     // capture that reports a maximize (or a minimize, or full screen) carries the flags alone. The
@@ -1535,14 +1565,12 @@ describe('window layout persistence service', () => {
     // back to, and losing it the first time the user maximizes returns the window next session at a
     // default size instead of where they left it.
     const normalBounds = { x: 10, y: 20, width: 800, height: 600 };
-    const displayBounds = { x: 0, y: 0, width: 1920, height: 1080 };
     const service = await startService();
     await loadAndAssignAll(service, [
       {
         windowId: '11',
         layout: layoutWithTab('one'),
         bounds: normalBounds,
-        displayBounds,
         isFullScreen: true,
         isMain: true,
       },
@@ -1554,7 +1582,6 @@ describe('window layout persistence service', () => {
 
     const written = writtenStructure().windows[0];
     expect(written.bounds).toEqual(normalBounds);
-    expect(written.displayBounds).toEqual(displayBounds);
     expect(written.isMaximized).toBe(true);
     // A flag the capture reports as `false` is the window saying it is not in that state, not the
     // capture saying nothing — treating the two alike would leave a flag set for good, and a window
@@ -1569,7 +1596,6 @@ describe('window layout persistence service', () => {
         windowId: '11',
         layout: layoutWithTab('one'),
         bounds: { x: 10, y: 20, width: 800, height: 600 },
-        displayBounds: { x: 0, y: 0, width: 1920, height: 1080 },
         isMaximized: true,
         isMain: true,
       },
@@ -1580,7 +1606,6 @@ describe('window layout persistence service', () => {
     const restoredBounds = { x: 30, y: 40, width: 900, height: 700 };
     service.updateWindowBounds('11', {
       bounds: restoredBounds,
-      displayBounds: { x: 0, y: 0, width: 1920, height: 1080 },
       isMaximized: false,
       isFullScreen: false,
     });
@@ -1597,14 +1622,12 @@ describe('window layout persistence service', () => {
     // carrying neither is a probe for the merge being per field rather than a session that could
     // happen — but every field of a captured state is optional, and a merge that read an absent
     // field as a value would answer for a window that never said so.
-    const displayBounds = { x: 0, y: 0, width: 1920, height: 1080 };
     const service = await startService();
     await loadAndAssignAll(service, [
       {
         windowId: '11',
         layout: layoutWithTab('one'),
         bounds: { x: 10, y: 20, width: 800, height: 600 },
-        displayBounds,
         isMain: true,
       },
     ]);
@@ -1619,8 +1642,245 @@ describe('window layout persistence service', () => {
 
     const written = writtenStructure().windows[0];
     expect(written.bounds).toEqual(movedBounds.bounds);
-    expect(written.displayBounds).toEqual(displayBounds);
     expect(written.isMaximized).toBe(true);
     expect(written.isFullScreen).toBe(false);
+  });
+});
+
+describe('the windows a power session left behind', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    mocks.getPath.mockReturnValue('/mock-user-data');
+    mocks.writeFile.mockResolvedValue(undefined);
+    mocks.rename.mockResolvedValue(undefined);
+    mocks.registerRequestHandler.mockResolvedValue(async () => true);
+    seedFiles();
+  });
+
+  afterEach(() => {
+    serviceUnderTest?.handleWindowRemoved('-1', 'entry-goes-with-it');
+    serviceUnderTest = undefined;
+  });
+
+  test('entries with no live window are the ones a switch back to power reopens', async () => {
+    const service = await startService();
+    await loadAndAssignAll(service, [
+      { windowId: '10', isMain: true },
+      { windowId: '11' },
+      { windowId: '12' },
+    ]);
+
+    service.handleWindowRemoved('11', 'entry-stays');
+    service.handleWindowRemoved('12', 'entry-stays');
+
+    const preserved = service.getPreservedEntryWindowIds();
+    expect(preserved).toHaveLength(2);
+    // Named by identity rather than position, so each one still resolves to its own entry
+    preserved.forEach((windowId) => expect(service.getPreservedEntry(windowId)).toBeDefined());
+  });
+
+  test('an entry a window is still living in is not offered for reopening', async () => {
+    // The negative control: an implementation that offered every entry would pass the test
+    // above and reopen duplicates of windows already on screen
+    const service = await startService();
+    await loadAndAssignAll(service, [{ windowId: '10', isMain: true }, { windowId: '11' }]);
+
+    expect(service.getPreservedEntryWindowIds()).toEqual([]);
+  });
+
+  test('a window closing for a mode switch keeps its entry, losing only its runtime id', async () => {
+    const service = await startService();
+    await loadAndAssignAll(service, [{ windowId: '10', isMain: true }, { windowId: '11' }]);
+
+    service.handleWindowRemoved('11', 'entry-stays');
+    await service.writeNow();
+
+    expect(writtenStructure().windows).toHaveLength(2);
+    expect(writtenStructure().windows[0].isMain).toBe(true);
+    expect(service.getPreservedEntryWindowIds()).toHaveLength(1);
+  });
+
+  test('a preserved entry can be read back with the placement its window is to be given', async () => {
+    const bounds = { x: 40, y: 50, width: 800, height: 600 };
+    const service = await startService();
+    await loadAndAssignAll(service, [
+      { windowId: '10', isMain: true },
+      { windowId: '11', bounds },
+    ]);
+    service.handleWindowRemoved('11', 'entry-stays');
+
+    const [preservedWindowId] = service.getPreservedEntryWindowIds();
+    expect(service.getPreservedEntry(preservedWindowId)?.bounds).toEqual(bounds);
+  });
+
+  test('a window id nothing occupies answers with nothing', async () => {
+    // The negative control: an accessor that answered with an empty entry rather than nothing
+    // would have a reopen create a window at default placement instead of skipping it
+    const service = await startService();
+    await loadAndAssignAll(service, [{ windowId: '10', isMain: true }]);
+
+    expect(service.getPreservedEntry('9999')).toBeUndefined();
+  });
+
+  test('a window id keeps naming its own entry after an earlier entry is removed', async () => {
+    // The defect this identity exists to prevent: a window the user closes during a reopen splices
+    // its entry out and shifts every later position down, so an index captured beforehand would
+    // name a different entry. Positions move; the id does not.
+    const service = await startService();
+    await loadAndAssignAll(service, [
+      { windowId: '10', isMain: true },
+      { windowId: '11', layout: layoutWithTab('second') },
+      { windowId: '12', layout: layoutWithTab('third') },
+    ]);
+    service.handleWindowRemoved('11', 'entry-stays');
+    service.handleWindowRemoved('12', 'entry-stays');
+    const [secondWindowId, thirdWindowId] = service.getPreservedEntryWindowIds();
+
+    // The window living in the FIRST entry goes away deliberately, so that entry is spliced out
+    // and every later entry moves down one position
+    service.handleWindowRemoved('10', 'entry-goes-with-it');
+
+    expect(firstTabIdOf(service.getPreservedEntry(secondWindowId)?.layout)).toBe('second');
+    expect(firstTabIdOf(service.getPreservedEntry(thirdWindowId)?.layout)).toBe('third');
+  });
+
+  test('a window is tied to the entry its id names, not the one at that position', async () => {
+    // The assignment half of the identity above, and the half the reopen actually rides on: it
+    // creates windows one at a time, so a splice can land between naming the entry and the window
+    // existing to be tied to it.
+    const service = await startService();
+    await loadAndAssignAll(service, [
+      { windowId: '10', isMain: true },
+      { windowId: '11', layout: layoutWithTab('second') },
+      { windowId: '12', layout: layoutWithTab('third') },
+    ]);
+    service.handleWindowRemoved('11', 'entry-stays');
+    service.handleWindowRemoved('12', 'entry-stays');
+    const [, thirdWindowId] = service.getPreservedEntryWindowIds();
+
+    // The window living in the FIRST entry goes away deliberately, so that entry is spliced out
+    // and every later entry moves down one position
+    service.handleWindowRemoved('10', 'entry-goes-with-it');
+
+    service.assignEntryToWindow('20', thirdWindowId);
+
+    // Which entry it was tied to, read from the structure: closing that window deliberately takes
+    // its entry with it, so the one it leaves behind names the entry it did NOT hold
+    service.handleWindowRemoved('20', 'entry-goes-with-it');
+    await service.writeNow();
+    expect(writtenStructure().windows.map((entry) => firstTabIdOf(entry.layout))).toEqual([
+      'second',
+    ]);
+  });
+
+  test('a window created for an entry that has gone is told so rather than given another', async () => {
+    // The branch the reopen depends on: tracking the window as new is what stops it from being
+    // handed whichever entry sits at that position instead, which would hand it a layout
+    // belonging to a different window.
+    const service = await startService();
+    await loadAndAssignAll(service, [
+      { windowId: '10', isMain: true },
+      { windowId: '11', layout: layoutWithTab('second') },
+    ]);
+    service.handleWindowRemoved('11', 'entry-stays');
+
+    service.assignEntryToWindow('20', '9999');
+
+    // Tracked as a new, empty window rather than handed the preserved entry
+    await expect(registeredHandler('windowLayout:get')('20')).resolves.toEqual({ kind: 'empty' });
+    // And the preserved entry it did NOT get is still there, untouched
+    expect(service.getPreservedEntry('11')?.layout).toEqual(layoutWithTab('second'));
+  });
+
+  test('an ordinary secondary close still takes its entry with it', async () => {
+    // The negative control that makes the test above non-vacuous: an implementation that
+    // preserved every entry would pass that one and resurrect windows the user closed
+    const service = await startService();
+    await loadAndAssignAll(service, [{ windowId: '10', isMain: true }, { windowId: '11' }]);
+
+    service.handleWindowRemoved('11', 'entry-goes-with-it');
+    await service.writeNow();
+
+    expect(writtenStructure().windows).toHaveLength(1);
+  });
+});
+
+describe('layout pushes from a window on its way out', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    mocks.getPath.mockReturnValue('/mock-user-data');
+    mocks.writeFile.mockResolvedValue(undefined);
+    mocks.rename.mockResolvedValue(undefined);
+    mocks.registerRequestHandler.mockResolvedValue(async () => true);
+    seedFiles();
+  });
+
+  afterEach(() => {
+    serviceUnderTest?.handleWindowRemoved('-1', 'entry-goes-with-it');
+    serviceUnderTest = undefined;
+  });
+
+  test('a push from a window closing for a mode switch leaves the saved layout untouched', async () => {
+    // Seeded with a real layout, which is the whole point: the entry is kept so the window can come
+    // back holding what it held, so an implementation that DROPPED the push but also cleared the
+    // entry would satisfy "the push was ignored" while destroying exactly what is being preserved.
+    const service = await startService();
+    await loadAndAssignAll(service, [
+      { windowId: '10', layout: layoutWithTab('power-tab'), isMain: true },
+    ]);
+    service.setModeSwitchClosePredicate((windowId) => windowId === '10');
+
+    await registeredHandler('windowLayout:save')('10', layoutWithTab('late-simple-tab'));
+    await service.writeNow();
+
+    expect(firstTabIdOf(writtenStructure().windows[0].layout)).toBe('power-tab');
+  });
+
+  test('a push refused from a window closing for a mode switch leaves it pending-content', async () => {
+    // The mark travels with the layout, because it is what says the entry holds nothing. A window
+    // created to receive content and then closed by a switch pushes its first real layout during
+    // the close; that layout is refused, so the entry still holds nothing and the mark has to say
+    // so. Clearing it here would have the entry kept — empty — and a blank window would then be
+    // built from it on every later switch to power and every launch.
+    const service = await startService();
+    await loadAndAssignAll(service, [{ windowId: '10', isMain: true }]);
+    service.trackNewWindow('20');
+    service.markWindowPendingContent('20');
+    service.setModeSwitchClosePredicate((windowId) => windowId === '20');
+
+    await registeredHandler('windowLayout:save')('20', layoutWithTab('arrived-late'));
+
+    expect(service.isWindowPendingContent('20')).toBe(true);
+  });
+
+  test('a push that is saved clears the pending-content mark', async () => {
+    // The other half, and what keeps the rule above from being "never clear it": a window whose
+    // push is recorded is holding what it just sent, so the mark must go or its entry would be
+    // dropped as empty when it closes.
+    const service = await startService();
+    await loadAndAssignAll(service, [{ windowId: '10', isMain: true }]);
+    service.trackNewWindow('20');
+    service.markWindowPendingContent('20');
+    service.setModeSwitchClosePredicate(() => false);
+
+    await registeredHandler('windowLayout:save')('20', layoutWithTab('arrived'));
+
+    expect(service.isWindowPendingContent('20')).toBe(false);
+  });
+
+  test('a push from a window closing for anything else is still saved', async () => {
+    // The guard is keyed on the mode-switch close rather than on any close deliberately: a
+    // window's close handler marks it closing BEFORE it flushes its layout, so a guard
+    // covering every closing window would drop a layout change made just before a quit
+    const service = await startService();
+    await loadAndAssignAll(service, [{ windowId: '10', isMain: true }]);
+    service.setModeSwitchClosePredicate(() => false);
+
+    await registeredHandler('windowLayout:save')('10', layoutWithTab('last-power-tab'));
+    await service.writeNow();
+
+    expect(firstTabIdOf(writtenStructure().windows[0].layout)).toBe('last-power-tab');
   });
 });

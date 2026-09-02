@@ -154,7 +154,6 @@ function parseBoundsState(
     bounds: parseRectangle(boundsSource),
     isMaximized: record.isMaximized === true ? true : undefined,
     isFullScreen: record.isFullScreen === true ? true : undefined,
-    displayBounds: parseRectangle(record.displayBounds),
   };
 }
 
@@ -453,7 +452,6 @@ export function updateWindowBounds(windowId: string, boundsState: WindowBoundsSt
   // Bounds are captured only while the window is in its normal state; a maximized/minimized/
   // full-screen capture carries no bounds and must keep the last normal placement
   slot.entry.bounds = boundsState.bounds ?? slot.entry.bounds;
-  slot.entry.displayBounds = boundsState.displayBounds ?? slot.entry.displayBounds;
   slot.entry.isMaximized = boundsState.isMaximized ?? slot.entry.isMaximized;
   slot.entry.isFullScreen = boundsState.isFullScreen ?? slot.entry.isFullScreen;
   scheduleWrite();
@@ -464,8 +462,10 @@ export function updateWindowBounds(windowId: string, boundsState: WindowBoundsSt
  *
  * - `entry-goes-with-it`: the user closed this window while the app stays up, so it must not come
  *   back next session.
- * - `entry-stays`: the window is going down with the app, so it is not leaving the structure — it has
- *   to be there next session, holding whatever it held when the app went down.
+ * - `entry-stays`: the window is not leaving the structure. Either it is going down with the app and
+ *   has to be there next session holding whatever it held, or the application is fully alive and
+ *   the window is being closed because the interface mode changed — in which case the entry is what
+ *   the switch back re-creates the window from.
  */
 export type RemovedWindowDisposition = 'entry-goes-with-it' | 'entry-stays';
 
@@ -584,6 +584,59 @@ export function setPendingContentChangeListener(listener: () => void): void {
 }
 
 /**
+ * Whether a window is closing because the interface mode changed. Injected rather than imported, so
+ * this service does not depend on the orchestration that decides it — the same shape
+ * {@link setWindowPendingContentPredicate} uses from the other direction.
+ */
+let isClosingForModeSwitch: (windowId: string) => boolean = () => false;
+
+/**
+ * Wire the predicate answering whether a window is closing because the interface mode changed.
+ *
+ * @param predicate Answers for a window id
+ */
+export function setModeSwitchClosePredicate(predicate: (windowId: string) => boolean): void {
+  isClosingForModeSwitch = predicate;
+}
+
+/**
+ * Which entries have no window living in them — the windows a switch back to power mode brings
+ * back.
+ *
+ * These are entries this session never restored (simple mode restores only the main one) and
+ * entries whose window went away while the entry stayed. Both are the same thing to a caller: a
+ * saved window with nothing on screen, which is exactly what a reopen creates a window from. This
+ * is the whole of what "the set of windows the power session had open" means — there is no separate
+ * record of it, and none is needed.
+ *
+ * Named by the entry's own durable `windowId` rather than by a secondary tracking id: that id is
+ * already splice-safe (see {@link assignEntryToWindow}), so a reopen loop can hold one across an
+ * await without a second identity layered on top of it.
+ *
+ * @returns Durable entry ids with no live window, in file order
+ */
+export function getPreservedEntryWindowIds(): string[] {
+  return fileSlots.filter((slot) => slot.windowId === undefined).map((slot) => slot.entry.windowId);
+}
+
+/**
+ * The preserved entry a durable window id names, or `undefined` if it is no longer in the structure
+ * (its window came back, or the entry left the structure entirely).
+ *
+ * A copy of the entry's own fields, but a SHALLOW one: `bounds` and the whole `layout` tree are the
+ * live slot's objects, so a caller that mutates them mutates what the window is keeping up to date.
+ * Callers read placement and pass the layout along untouched, which is all this promises.
+ *
+ * @param windowId Durable entry id to read
+ */
+export function getPreservedEntry(windowId: string): WindowLayoutEntry | undefined {
+  const slot = fileSlots.find(
+    (candidate) => candidate.entry.windowId === windowId && candidate.windowId === undefined,
+  );
+  return slot ? { ...slot.entry } : undefined;
+}
+
+/**
  * Mark a window as created-for-content: its layout get answers `pending-content` (start truly
  * empty) until the window pushes its first real layout.
  */
@@ -667,12 +720,24 @@ function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
     logger.warn(`Ignoring layout push from untracked window ${windowId}`);
     return;
   }
+  // A window closing because the mode changed is showing the mode it is leaving, so what it pushes
+  // from here on would overwrite the layout its entry is being kept for.
+  //
+  // Keyed on the mode-switch close rather than on any close in progress, deliberately: a window's
+  // close handler records the window as closing BEFORE it flushes its layout, so a guard covering
+  // every closing window would drop a layout change made just before a quit and the flush would
+  // then write the older one.
+  //
+  // The pending-content mark stays set on this path, and that is the point of refusing before
+  // clearing it: the mark says the entry holds nothing, which after a refused push is still true.
+  // Clearing it here would have the entry kept — empty — and a blank window built from it on every
+  // later switch to power and every launch.
+  if (isClosingForModeSwitch(windowId)) return;
   // Reconcile on arrival so phantom content (duplicate or orphaned tabs, empty panels) cannot
   // enter the persisted structure even when a pusher skipped its own reconciliation
   slot.entry.layout = reconcileSavedLayout(layoutRecord);
-  // This push is the window's real content arriving, so it stops being pending-content — a
-  // second get request must be answered with the entry it just saved, not told to wait again.
-  // Announced like any other change to the mark: the window becomes one routed work can go to.
+  // This push is the window's real content arriving, so it stops being pending-content. Announced
+  // like any other change to the mark: the window becomes one routed work can go to.
   if (pendingContentWindowIds.delete(windowId)) handlePendingContentChanged();
   scheduleWrite();
 }

@@ -220,11 +220,10 @@ export function getWindows(): BrowserWindow[] {
  * - A window still waiting for the content it was created to receive has nothing in it yet, and the
  *   operation filling it can still fail and close it again — see
  *   {@link setWindowPendingContentPredicate}.
- * - A window nothing will ever run in again is still on screen and still tracked, deliberately —
- *   closing it would rewrite the persisted window layout without it, taking away the user's one
- *   remaining recovery — but its renderer is dead and no reload is coming, so counting it would let
- *   the last window the user can actually work in be closed out from under them. See
- *   {@link markWindowAbandoned}.
+ * - A window nothing will ever run in again is still on screen and still tracked, deliberately — the
+ *   user is offered its close rather than having it taken — but its renderer is dead and no reload
+ *   is coming, so counting it would let the last window the user can actually work in be closed out
+ *   from under them. See {@link markWindowAbandoned}.
  *
  * The whole rule lives here rather than being composed by the caller: every input is this module's,
  * and a composed copy is a rule that can drift from the one under test.
@@ -662,6 +661,19 @@ export function getWindowById(windowId: string): BrowserWindow | undefined {
 }
 
 /**
+ * What a removed window's marks said, reported back because removing it clears them.
+ *
+ * A caller that needs to know what a window WAS cannot ask afterwards — the marks are gone by
+ * design, so nothing is left answering for a window that no longer exists — and asking beforehand
+ * is an ordering rule nothing enforces. Returning them makes the read and the removal the same
+ * step, so there is no order left to get wrong.
+ */
+export type RemovedWindowMarks = {
+  /** Whether this window's renderer had been given up on after crash-looping */
+  wasAbandoned: boolean;
+};
+
+/**
  * Remove a window from the tracked list, along with everything keyed by its ID.
  *
  * The window is gone, so it is no longer focused and no longer routable, and the routing target
@@ -673,8 +685,11 @@ export function getWindowById(windowId: string): BrowserWindow | undefined {
  *   `closed` handler, where the BrowserWindow is already destroyed and every property read is a
  *   chance to throw — which here would abandon the rest of the closing window's teardown.
  * @param windowId The window's ID, captured while it was still alive.
+ * @returns What this window's marks said, read before they were cleared
  */
-export function removeWindow(window: BrowserWindow, windowId: string): void {
+export function removeWindow(window: BrowserWindow, windowId: string): RemovedWindowMarks {
+  // Read before the deletes below, which is the whole point of returning it
+  const wasAbandoned = abandonedWindowIds.has(windowId);
   const trackedIndex = trackedWindows.findIndex((tracked) => tracked.window === window);
   if (trackedIndex >= 0) trackedWindows.splice(trackedIndex, 1);
 
@@ -686,7 +701,7 @@ export function removeWindow(window: BrowserWindow, windowId: string): void {
   // the id now owns the state under it.
   if (trackedWindows.some((tracked) => tracked.windowId === windowId)) {
     announceRoutingTargetIfChanged();
-    return;
+    return { wasAbandoned };
   }
 
   readyWindowIds.delete(windowId);
@@ -704,6 +719,7 @@ export function removeWindow(window: BrowserWindow, windowId: string): void {
     doesFocusedWindowHoldOsFocus = false;
   }
   announceRoutingTargetIfChanged();
+  return { wasAbandoned };
 }
 
 /** Set the focused window ID (called from BrowserWindow focus events) */
@@ -790,6 +806,25 @@ export function markWindowClosing(windowId: string): void {
 }
 
 /**
+ * Take back a closing mark, for a window whose close turned out not to be happening.
+ *
+ * The counterpart to {@link markWindowClosing}, and needed because a mark can be recorded before
+ * anything has decided the close will go ahead: an interface-mode switch marks every window it is
+ * about to close so that a layout pushed on the way out is already recognizable as one to drop. A
+ * window whose close is then cancelled, or never happens because asking for it threw, must stop
+ * reading as closing — otherwise it stays out of every fan-out and out of the window list for the
+ * life of the process while remaining fully open.
+ *
+ * Announces for the same reason the mark does: the window becomes somewhere new work can go again.
+ *
+ * @param windowId Window that is staying open after all
+ */
+export function markWindowNotClosing(windowId: string): void {
+  if (!closingWindowIds.delete(windowId)) return;
+  announceRoutingTargetIfChanged();
+}
+
+/**
  * Whether a window's close has begun, so nothing should try to put it back to work.
  *
  * Answered from what the window's own close handler recorded rather than from the BrowserWindow,
@@ -854,9 +889,11 @@ export function markWindowNotReady(windowId: string): void {
  * cannot usefully tell the two apart at the moment it gives up, and the never-ready case wants the
  * same record made for the same reason.
  *
- * The window stays tracked and is deliberately not closed. It is still on screen, and closing it
- * would rewrite the persisted window layout without it — taking away the one recovery the user has
- * left, which is to quit and relaunch.
+ * The window stays tracked and is deliberately not closed here. It is still on screen holding the
+ * user's layout, and taking a window away unasked is not this module's to do — the caller offers
+ * the close instead. That offer is safe to make because such a window keeps its persisted entry
+ * (see `keepsItsEntryOnClose`), so closing it brings the window back — next launch, or sooner on a
+ * switch back to power mode — rather than costing the user what it held.
  *
  * @param windowId Window nothing will ever run in again
  */

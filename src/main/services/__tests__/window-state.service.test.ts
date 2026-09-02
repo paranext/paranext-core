@@ -22,6 +22,7 @@ import {
   isWindowTracked,
   markWindowAbandoned,
   markWindowClosing,
+  markWindowNotClosing,
   markWindowNotReady,
   markWindowReady,
   onDidChangeRoutingTarget,
@@ -1177,6 +1178,63 @@ describe('window state tracking', () => {
       expect(isWindowClosing('1')).toBe(false);
     });
 
+    test('reports that a window had been given up on, and clears the mark', () => {
+      // Removing a window clears its marks so nothing is left answering for a window that no longer
+      // exists — which means a caller that needs to know what it WAS cannot ask afterwards, and
+      // asking beforehand is an ordering rule nothing enforces. The removal reports it instead.
+      const window = fakeWindow(1);
+      addWindow(window);
+      markWindowReady('1');
+      markWindowAbandoned('1');
+
+      const { wasAbandoned } = removeWindow(window, '1');
+
+      expect(wasAbandoned).toBe(true);
+      // …and the mark itself is gone, which is why it had to be reported
+      expect(isWindowAbandoned('1')).toBe(false);
+    });
+
+    test('reports that a window had not been given up on when it never was', () => {
+      // The negative control: a rule that answered `true` for every removal would read as working
+      // and would keep the entry of every window the user deliberately closed
+      const window = fakeWindow(1);
+      addWindow(window);
+      markWindowReady('1');
+
+      expect(removeWindow(window, '1').wasAbandoned).toBe(false);
+    });
+
+    test('takes a closing mark back, so the window can be routed to again', () => {
+      // The counterpart to the mark, and load-bearing: `closingWindowIds` is what
+      // `getRoutingTarget` reads to decide a window cannot take new work, so a mark left on a
+      // window whose close never happened leaves it permanently unroutable — the failure the
+      // interface-mode switch's recovery exists to prevent. Exercised here against the real
+      // implementation, since the orchestration only ever sees it through an injected mock.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowClosing('1');
+      expect(isWindowClosing('1')).toBe(true);
+
+      markWindowNotClosing('1');
+
+      expect(isWindowClosing('1')).toBe(false);
+      // Only the window named: window 2's close is still going ahead
+      markWindowClosing('2');
+      markWindowNotClosing('1');
+      expect(isWindowClosing('2')).toBe(true);
+    });
+
+    test('taking back a mark a window never had changes nothing', () => {
+      // The recovery calls this for any window it is putting back, including ones whose mark was
+      // never recorded — an untracked id is ignored by the mark itself — so it has to be a no-op
+      // rather than an announcement of a change that did not happen.
+      addWindow(fakeWindow(1));
+
+      expect(() => markWindowNotClosing('1')).not.toThrow();
+
+      expect(isWindowClosing('1')).toBe(false);
+    });
+
     test('reports the app going down when the only window closes', () => {
       addWindow(fakeWindow(1));
 
@@ -1260,6 +1318,25 @@ describe('window state tracking', () => {
       unsubscribe();
 
       expect(heard).toEqual(['2']);
+    });
+
+    test('announces routing coming back to a window whose close was taken back', () => {
+      // The mark's counterpart has to tell the routing proxies too: they hold a resolved service
+      // for whichever window the mark moved routing to, and nothing else would tell them it moved
+      // back — so a window rescued from a close that never happened would stay unused.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowReady('1');
+      markWindowReady('2');
+      setFocusedWindowId('1');
+      markWindowClosing('1');
+      const heard: (string | undefined)[] = [];
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
+
+      markWindowNotClosing('1');
+      unsubscribe();
+
+      expect(heard).toEqual(['1']);
     });
 
     test('keeps routing to the closing window when every window is closing', () => {

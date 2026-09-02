@@ -195,8 +195,57 @@ function countSavedWindowEntries(userDataDir: string): number {
   return Array.isArray(windows) ? windows.length : 0;
 }
 
+/**
+ * Launches an app this suite starts itself, with the same settings `test.use` seeds below.
+ *
+ * Playwright only builds the fixtures a test actually names, and the `test.use` values are read
+ * inside the `electronApp` fixture body — so a test that takes no fixtures and calls
+ * `launchElectronApp` itself receives none of them. The two tests that relaunch mid-test do exactly
+ * that, and Power mode is what makes the startup restore recreate secondary windows: seeded
+ * anywhere a self-launching test cannot see, those tests get one window back and fail on
+ * configuration instead of on the rule they are written to check.
+ *
+ * One seeding per test is enough for both of that test's launches — nothing restores the file in
+ * between, so the relaunch reads the same values.
+ *
+ * @returns The launched app, and the restore to call after tearing it down (that order: the app's
+ *   shutdown writes settings, and would otherwise land on top of the restored file).
+ */
+async function launchSelfSeededApp(
+  options: LaunchElectronAppOptions,
+): Promise<{ ctx: ElectronAppContext; restoreSettings: () => void }> {
+  const restoreSettings = preConfigureSettings({
+    'platform.firstRunComplete': true,
+    'platform.interfaceLanguage': ['en'],
+    'platform.interfaceMode': 'power',
+  });
+  try {
+    return { ctx: await launchElectronApp(options), restoreSettings };
+  } catch (error) {
+    // The caller only receives `restoreSettings` if this resolves, so a failed launch has to undo
+    // the seeding here. Otherwise the developer's settings file keeps the test values, and the next
+    // test's `preConfigureSettings` captures those as the original it restores to — the corruption
+    // outlives the run.
+    restoreSettings();
+    throw error;
+  }
+}
+
 test.use({
-  // The fixture launches with no special options unless a suite says otherwise, and the three
+  // Seeded through the fixture rather than a preConfigureSettings call in a hook, which the fixture
+  // would both override and then write back into the developer's shared settings.
+  //
+  // Power mode is REQUIRED: the startup restore recreates secondary windows only in Power mode, so
+  // without it a relaunching test would see one window come back and fail for configuration reasons
+  // rather than for the rule under test. `firstRunComplete` because the wizard is a modal that
+  // aria-hides the app. The English interface language these selectors depend on is seeded by the
+  // fixture itself.
+  //
+  // These reach only the tests that take a fixture. The two that launch their own app go through
+  // `launchSelfSeededApp` above for the same settings.
+  interfaceMode: 'power',
+  seedSettings: { 'platform.firstRunComplete': true },
+  // The fixture launches with no special options unless a suite says otherwise, and the four
   // tests that take `mainPage` from it need the same app the two that launch explicitly get.
   // DEV_NOISY=false is the load-bearing half: it gives the first window the single-Home-tab
   // fallback layout whose fixed web view id the emptied-primary test moves out.
@@ -209,24 +258,6 @@ test.describe('window close rule', () => {
   // would report the generic test timeout instead of the wait that actually failed. Matches the
   // sibling that also relaunches within a test (`window-layout-persistence.spec.ts`).
   test.setTimeout(900_000);
-
-  let restoreSettings: (() => void) | undefined;
-
-  test.beforeAll(() => {
-    // Power mode is REQUIRED: the startup restore recreates secondary windows only in Power mode,
-    // so without it tests 2 and 4 would see one window come back and fail for configuration
-    // reasons rather than for the rule under test. Restored afterwards so the developer's own
-    // settings survive the suite.
-    restoreSettings = preConfigureSettings({
-      'platform.firstRunComplete': true,
-      'platform.interfaceLanguage': ['en'],
-      'platform.interfaceMode': 'power',
-    });
-  });
-
-  test.afterAll(() => {
-    restoreSettings?.();
-  });
 
   test('closing the primary with another window open asks, and cancel keeps everything', async ({
     electronApp,
@@ -288,9 +319,13 @@ test.describe('window close rule', () => {
   test('confirming closes every window, and the next launch restores all of them', async () => {
     const logStep = createStepLogger('window-close-rule');
     let ctx: ElectronAppContext | undefined;
+    let restoreSettings: (() => void) | undefined;
 
     try {
-      ctx = await launchElectronApp({ ...BASE_LAUNCH_OPTIONS, preserveUserDataDir: true });
+      ({ ctx, restoreSettings } = await launchSelfSeededApp({
+        ...BASE_LAUNCH_OPTIONS,
+        preserveUserDataDir: true,
+      }));
       const { userDataDir } = ctx;
       const output = captureAppOutput(ctx.electronApp);
       const [mainPage] = await waitForAppPages(ctx.electronApp, 1, 90_000);
@@ -330,6 +365,8 @@ test.describe('window close rule', () => {
       ctx = undefined;
 
       // Phase 2 — the promise the dialog makes: both windows come back
+      // Still seeded: `launchSelfSeededApp` restores only in this test's `finally`, so this
+      // relaunch reads phase 1's settings. Anything that restores them before here breaks it.
       ctx = await launchElectronApp({
         ...BASE_LAUNCH_OPTIONS,
         userDataDir,
@@ -342,6 +379,7 @@ test.describe('window close rule', () => {
       logStep('phase 2: both windows restored');
     } finally {
       if (ctx) await teardownElectronApp(ctx);
+      restoreSettings?.();
     }
   });
 
@@ -410,9 +448,13 @@ test.describe('window close rule', () => {
     // very loss this rule exists to prevent, reopened through a timing window.
     const logStep = createStepLogger('window-close-rule');
     let ctx: ElectronAppContext | undefined;
+    let restoreSettings: (() => void) | undefined;
 
     try {
-      ctx = await launchElectronApp({ ...BASE_LAUNCH_OPTIONS, preserveUserDataDir: true });
+      ({ ctx, restoreSettings } = await launchSelfSeededApp({
+        ...BASE_LAUNCH_OPTIONS,
+        preserveUserDataDir: true,
+      }));
       const { userDataDir } = ctx;
       const output = captureAppOutput(ctx.electronApp);
       const [mainPage] = await waitForAppPages(ctx.electronApp, 1, 90_000);
@@ -448,6 +490,8 @@ test.describe('window close rule', () => {
       await teardownElectronApp(ctx);
       ctx = undefined;
 
+      // Still seeded: `launchSelfSeededApp` restores only in this test's `finally`, so this
+      // relaunch reads phase 1's settings. Anything that restores them before here breaks it.
       ctx = await launchElectronApp({
         ...BASE_LAUNCH_OPTIONS,
         userDataDir,
@@ -458,6 +502,7 @@ test.describe('window close rule', () => {
       logStep('phase 2: both windows restored, primary included');
     } finally {
       if (ctx) await teardownElectronApp(ctx);
+      restoreSettings?.();
     }
   });
 
