@@ -388,6 +388,10 @@ test.describe('Replace operations', () => {
   // Last on purpose: Replace All consumes the remaining occurrences of REPLACE_SEARCH_TERM in the
   // seeded project, so the single-result tests above would have nothing left to act on. The seeded
   // copy is rebuilt per worker run, so this does not leak into the next run.
+  //
+  // The assertion below requires the PLURAL toast. A single replacement renders a different string
+  // ("Replaced 1 occurrence") from a multiple one ("Replaced {count} occurrences"), so demanding
+  // the plural is what makes a Replace All that acted on the focused result alone fail here.
   test('replaces every visible result from Replace All', async ({ mainPage }) => {
     const frame = await setupReplaceMode(mainPage);
 
@@ -395,7 +399,7 @@ test.describe('Replace operations', () => {
     await expect(replaceAllBtn).toBeEnabled({ timeout: 5_000 });
     await replaceAllBtn.click();
 
-    await expect(frame.getByText(/replaced \d+ occurrences?/i).first()).toBeVisible({
+    await expect(frame.getByText(/replaced \d+ occurrences/i).first()).toBeVisible({
       timeout: 10_000,
     });
 
