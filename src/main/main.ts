@@ -116,7 +116,6 @@ import {
 import { decideWindowClose } from '@main/services/window-close-decision.service';
 import {
   assignEntryToWindow,
-  getSlotIdOf,
   handleWindowRemoved,
   initializeWindowLayoutPersistence,
   isWindowPendingContent,
