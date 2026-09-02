@@ -93,13 +93,13 @@ declare global {
    * in the renderer process from the URL search params; no other process assigns it, so it reads
    * `undefined` there.
    *
-   * This is the window's state at creation, not now. What content should do about it is
-   * `isWindowAwaitingFirstActivation()` in the window service shard, which stops answering `true`
-   * once the window is activated.
+   * This is the window's state at creation, not now: what content should do about it also depends
+   * on whether the user has since done anything in the window, which the renderer tracks
+   * separately.
    *
    * @experimental
    */
-  var wasWindowCreatedWithoutActivation: boolean;
+  var wasWindowCreatedWithoutActivation: boolean | undefined;
   /**
    * Whether this renderer is the main window — the one that draws the top-level menu. On Windows
    * and Linux, secondary windows get identical chrome minus that menu; on macOS the top-level menu
