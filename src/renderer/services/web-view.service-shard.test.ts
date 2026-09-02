@@ -2222,6 +2222,52 @@ describe('loadLayout when the saved-layout request fails', () => {
     expect(layoutPushes()).toHaveLength(1);
   });
 
+  test('warns again when a second fallback episode starts holding pushes', async () => {
+    // The warning is the only sign a window is silently dropping the user's layout changes, and it
+    // is latched so one episode does not log per push. The latch was never reset, so a window that
+    // fell back, recovered, and fell back again held every push with nothing said at all.
+    const { logger } = await import('@shared/services/logger.service');
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    settingsSubscribeMock.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down');
+      return undefined;
+    });
+    const heldPushWarnings = () =>
+      vi
+        .mocked(logger.warn)
+        .mock.calls.filter(([message]) =>
+          String(message).includes('Not pushing dock layout changes'),
+        ).length;
+
+    // Episode one: the load fails, the dock falls back, and the first held push says so
+    const { dockLayout } = await registerWindowThroughRetries(layoutWithAnchor());
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('held-one'), undefined, undefined);
+    expect(heldPushWarnings()).toBe(1);
+
+    // The transport recovers and a mode round trip reloads the layout, lifting the hold
+    respondToGetLayout({ kind: 'entry', layout: layoutWithTab('saved-tab') });
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+    await interfaceModeCallback('simple');
+    await interfaceModeCallback('power');
+
+    // Episode two: the transport goes again, and the next held push has to say so too
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down again');
+      return undefined;
+    });
+    await interfaceModeCallback('simple');
+    await interfaceModeCallback('power');
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('held-two'), undefined, undefined);
+
+    expect(heldPushWarnings()).toBe(2);
+  });
+
   test('a window on a fallback layout does not report itself born empty', async () => {
     mocks.networkRequest.mockImplementation(async (requestType: string) => {
       if (requestType === 'windowLayout:get') throw new Error('transport is down');
