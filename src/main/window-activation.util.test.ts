@@ -1,0 +1,45 @@
+import { describe, expect, test } from 'vitest';
+import { planWindowActivation } from '@main/window-activation.util';
+
+describe('planWindowActivation', () => {
+  test('a window a person asked for shows itself and takes the foreground', () => {
+    const plan = planWindowActivation(true);
+
+    expect(plan.showOnCreate).toBe(true);
+    expect(plan.revealWhenReady).toBe('activate');
+  });
+
+  test('a window nobody asked for appears without taking the foreground', () => {
+    // The case this exists for: an extension opening a window, or a web view moving into a new
+    // one, while the user is working somewhere else. It must appear — it is real, and its content
+    // is on its way — but it must not pull the user out of what they are doing.
+    const plan = planWindowActivation(false);
+
+    expect(plan.showOnCreate).toBe(false);
+    expect(plan.revealWhenReady).toBe('inactive');
+  });
+
+  test('withholding the constructor’s show always carries a fallback for a load that fails', () => {
+    // The hazard that makes this a plan rather than a boolean. A window created with `show: false`
+    // is revealed by `ready-to-show`, and a page that fails to load never gets there — the failure
+    // handler only logs. Without a fallback that window would exist, tracked and routable, and
+    // never appear at all: worse than the badly-timed foreground this whole feature avoids.
+    //
+    // Asserted over every plan rather than the one that happens to withhold today, so a later plan
+    // cannot withhold `show` without answering the question.
+    const withheldPlans = [true, false]
+      .map(planWindowActivation)
+      .filter((plan) => !plan.showOnCreate);
+
+    // The rule governs something: without this, a future where nothing withholds would satisfy the
+    // assertion below by having nothing to assert against.
+    expect(withheldPlans.length).toBeGreaterThan(0);
+    withheldPlans.forEach((plan) => expect(plan.revealAfterLoadFailure).toBe('inactive'));
+  });
+
+  test('a window that shows itself needs no failure fallback', () => {
+    // The positive control for the rule above: it must not pass by every plan withholding nothing.
+    expect(planWindowActivation(true).showOnCreate).toBe(true);
+    expect(planWindowActivation(true).revealAfterLoadFailure).toBeUndefined();
+  });
+});
