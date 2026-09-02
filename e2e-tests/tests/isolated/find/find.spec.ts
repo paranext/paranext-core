@@ -260,10 +260,16 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   if (await clearButton.isVisible()) await clearButton.click();
   await expect(frame.locator('#search-term')).toHaveValue('');
 
-  // Reset the filters.
-  await frame.getByRole('button', { name: /toggle filters/i }).click();
+  // Reset the filters. The filters button toggles a Radix popover open/closed, so a click here is
+  // only safe once we know the popover is closed — a leftover test that failed while it was open
+  // would otherwise get closed by this click instead of opened, and every field below would then
+  // find nothing to interact with. Checking first makes the reset converge on "filters open" from
+  // either starting point.
   const matchCase = frame.locator('#matchCase');
-  await expect(matchCase).toBeVisible({ timeout: 5_000 });
+  if (!(await matchCase.isVisible())) {
+    await frame.getByRole('button', { name: /toggle filters/i }).click();
+    await expect(matchCase).toBeVisible({ timeout: 5_000 });
+  }
   if (await matchCase.isChecked()) await matchCase.click();
   const allowRegex = frame.locator('#allowRegex');
   if (await allowRegex.isChecked()) await allowRegex.click();
@@ -283,10 +289,13 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   await matchCase.press('Escape');
   await expect(matchCase).not.toBeVisible({ timeout: 5_000 });
 
-  // Reset the scope to the whole book.
-  await frame.getByRole('button', { name: /showing/i }).click();
+  // Reset the scope to the whole book. Same open/closed hazard as the filters popover above: the
+  // scope button also toggles, so only click it while it is closed.
   const bookScope = frame.locator('#scope-book');
-  await expect(bookScope).toBeVisible({ timeout: 5_000 });
+  if (!(await bookScope.isVisible())) {
+    await frame.getByRole('button', { name: /showing/i }).click();
+    await expect(bookScope).toBeVisible({ timeout: 5_000 });
+  }
   if (!(await bookScope.isChecked())) await bookScope.click();
   await bookScope.press('Escape');
   await expect(bookScope).not.toBeVisible({ timeout: 5_000 });
@@ -535,6 +544,23 @@ test.beforeAll(async ({ electronApp }) => {
   ).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
 
   console.log('[find tests] findInScripture PDP is warm');
+});
+
+// ---------------------------------------------------------------------------
+// Failure isolation — reset the panel after every test, not only before the next one.
+// ---------------------------------------------------------------------------
+
+// replace.spec.ts's Power-mode Find tab is closable, so its equivalent afterEach closes it —
+// nothing to close here (see the class doc's "permanent tab" section). The equivalent isolation for
+// a permanent tab is running the same reset openFindPanel runs at the start of a test, but right
+// after the test that may have dirtied the panel instead of deferred to the next test's setup. That
+// timing is what buys the isolation: a reset that fails here is attributed to the test that broke
+// the panel, while the same reset only running at the top of the next test's body would instead
+// report as that unrelated next test failing — the "1 failed, 22 did not run" shape documented in
+// no-silent-skips.reporter.ts.
+test.afterEach(async ({ mainPage }) => {
+  const frame = await activateFindTab(mainPage);
+  await resetFindPanel(frame);
 });
 
 // ---------------------------------------------------------------------------
