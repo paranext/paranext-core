@@ -25,6 +25,13 @@ export type OwnerMatcher =
       projectId?: string;
     };
 
+/**
+ * How to name what an ownership search is looking for, in a log line or an error a user may read.
+ * Kept beside {@link OwnerMatcher} so every module phrases the same search the same way.
+ *
+ * @param matcher What the search is looking for
+ * @returns A noun phrase naming it
+ */
 export function describeMatcher(matcher: OwnerMatcher): string {
   if (matcher.kind === 'id') return `webview ${matcher.webViewId}`;
   return matcher.projectId === undefined
@@ -34,16 +41,21 @@ export function describeMatcher(matcher: OwnerMatcher): string {
 
 /** A web view a move has taken out of one window and not yet put into another */
 export type WebViewMoveInFlight = {
-  /** Ids the view answers to for the length of the move: the one named, and the captured one */
-  webViewIds: WebViewId[];
+  /**
+   * The id the move was asked for. Still carries its window's scope, so — unlike the captured id,
+   * which has had that scope stripped — it names one view in the whole application.
+   */
+  namedWebViewId: WebViewId;
+  /** Type of the captured view */
   webViewType: WebViewType;
   /** Project the captured view was showing, if any */
   projectId?: string;
   /**
    * The definition the capture returned, kept whole rather than split into the fields above:
-   * {@link getAllOpenWebViewDefinitionsWithReachability} folds this into its merged read so a web
-   * view mid-move is not invisible to a caller that selects by `state?.isReadOnly` alongside
-   * `projectId` — a selection `webViewIds`/`webViewType`/`projectId` alone cannot answer.
+   * `getAllOpenWebViewDefinitionsWithReachability` in `web-view.service-router.ts` folds this into
+   * its merged read so a web view mid-move is not invisible to a caller that selects by
+   * `state?.isReadOnly` alongside `projectId` — a selection
+   * `namedWebViewId`/`webViewType`/`projectId` alone cannot answer.
    */
   capturedDefinition: SavedWebViewDefinition;
 };
@@ -56,9 +68,10 @@ export type WebViewMoveInFlight = {
  * creates on a miss mints a second copy of one the app means to have exactly one of.
  *
  * Deliberately nothing to wait on. A search that lands in the gap is told the question could not be
- * answered right now — which is what {@link findOwner}'s `hadUnreachableWindows` already means — so
- * every caller keeps the weighing it already applies to that: a passive probe answers not-found,
- * and a caller that creates opens where the user is rather than refuse for the length of a move.
+ * answered right now — which is what `findOwner`'s (`web-view.owner-resolution.ts`)
+ * `hadUnreachableWindows` already means — so every caller keeps the weighing it already applies to
+ * that: a passive probe answers not-found, and a caller that creates opens where the user is rather
+ * than refuse for the length of a move.
  */
 export const webViewMovesInFlight = new Set<WebViewMoveInFlight>();
 
@@ -66,7 +79,8 @@ export const webViewMovesInFlight = new Set<WebViewMoveInFlight>();
 export function isMatchedByMoveInFlight(matcher: OwnerMatcher): boolean {
   return [...webViewMovesInFlight].some((move) =>
     matcher.kind === 'id'
-      ? move.webViewIds.includes(matcher.webViewId)
+      ? move.namedWebViewId === matcher.webViewId ||
+        move.capturedDefinition.id === matcher.webViewId
       : move.webViewType === matcher.webViewType &&
         (matcher.projectId === undefined || move.projectId === matcher.projectId),
   );

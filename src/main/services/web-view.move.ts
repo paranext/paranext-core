@@ -268,7 +268,7 @@ export async function moveWebView(
   // puts it back — see `webViewMovesInFlight`, which is what keeps a search landing in that gap
   // from being told the view does not exist.
   const moveInFlight: WebViewMoveInFlight = {
-    webViewIds: [webViewId, captured.id],
+    namedWebViewId: webViewId,
     webViewType: captured.webViewType,
     projectId: captured.projectId,
     capturedDefinition: captured,

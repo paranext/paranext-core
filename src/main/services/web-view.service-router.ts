@@ -613,7 +613,7 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   // into the new window — which is a change to the adopt path rather than to this read.
   const foldedInDefinitions: SavedWebViewDefinition[] = [];
   webViewMovesInFlight.forEach((move) => {
-    const [namedWebViewId] = move.webViewIds;
+    const { namedWebViewId } = move;
     if (namedWebViewId !== move.capturedDefinition.id && definitionIds.has(namedWebViewId)) return;
     foldedInDefinitions.push(move.capturedDefinition);
   });
