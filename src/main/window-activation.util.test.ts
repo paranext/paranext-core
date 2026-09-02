@@ -197,6 +197,7 @@ describe('handing focus back when a withheld window takes it on its own', () => 
         hasAlreadyBouncedFocusBack: false,
         canReturnFocusElsewhere: true,
         isWithinSelfFocusWindow: true,
+        wasApplicationFocusedBeforeReveal: true,
       }),
     ).toBe(true);
   });
@@ -211,6 +212,7 @@ describe('handing focus back when a withheld window takes it on its own', () => 
         hasAlreadyBouncedFocusBack: false,
         canReturnFocusElsewhere: false,
         isWithinSelfFocusWindow: true,
+        wasApplicationFocusedBeforeReveal: true,
       }),
     ).toBe(false);
   });
@@ -223,6 +225,7 @@ describe('handing focus back when a withheld window takes it on its own', () => 
         hasAlreadyBouncedFocusBack: false,
         canReturnFocusElsewhere: true,
         isWithinSelfFocusWindow: true,
+        wasApplicationFocusedBeforeReveal: true,
       }),
     ).toBe(false);
   });
@@ -237,6 +240,7 @@ describe('handing focus back when a withheld window takes it on its own', () => 
         hasAlreadyBouncedFocusBack: false,
         canReturnFocusElsewhere: true,
         isWithinSelfFocusWindow: false,
+        wasApplicationFocusedBeforeReveal: true,
       }),
     ).toBe(false);
   });
@@ -250,6 +254,23 @@ describe('handing focus back when a withheld window takes it on its own', () => 
         hasAlreadyBouncedFocusBack: true,
         canReturnFocusElsewhere: true,
         isWithinSelfFocusWindow: true,
+        wasApplicationFocusedBeforeReveal: true,
+      }),
+    ).toBe(false);
+  });
+
+  test('does not raise one of our own windows over a foreign application', () => {
+    // If nothing of ours held focus when this window was created, the user was elsewhere -- a
+    // different application, or nothing of ours at all. Handing focus to the window that last
+    // had it would raise one of our own windows over whatever the user is actually working in,
+    // which is the same harm the withholding exists to prevent, aimed the other way.
+    expect(
+      shouldBounceFocusBack({
+        isAwaitingFirstActivation: true,
+        hasAlreadyBouncedFocusBack: false,
+        canReturnFocusElsewhere: true,
+        isWithinSelfFocusWindow: true,
+        wasApplicationFocusedBeforeReveal: false,
       }),
     ).toBe(false);
   });
