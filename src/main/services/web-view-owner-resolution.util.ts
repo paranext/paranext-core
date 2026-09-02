@@ -22,8 +22,8 @@ import {
   describeMatcher,
   isMatchedByMoveInFlight,
   type OwnerMatcher,
-} from '@main/services/web-view.ownership';
-import { getWebViewShard, webViewShards } from '@main/services/web-view.shard-index';
+} from '@main/services/web-view-ownership.util';
+import { getWebViewShard, webViewShards } from '@main/services/web-view-shard-index';
 
 /**
  * The main-process window facilities the window-layout rung needs. Injected by `main.ts` after it

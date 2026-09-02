@@ -9,11 +9,11 @@
  * service shard".
  *
  * What no single window can own lives beside this file rather than inside it:
- * `web-view.shard-index.ts` holds the per-window shards, `web-view.ownership.ts` the vocabulary of
- * an ownership search and the register of moves in flight, `web-view.owner-resolution.ts` the
- * search itself and the creation of a window to hold a view, and `web-view.move.ts` the policy for
- * moving one between windows. This file keeps the routing, and the command registrations that name
- * those capabilities.
+ * `web-view-shard-index.ts` holds the per-window shards, `web-view-ownership.util.ts` the
+ * vocabulary of an ownership search and the register of moves in flight,
+ * `web-view-owner-resolution.util.ts` the search itself and the creation of a window to hold a
+ * view, and `web-view-move.util.ts` the policy for moving one between windows. This file keeps the
+ * routing, and the command registrations that name those capabilities.
  */
 
 import {
@@ -64,12 +64,12 @@ import {
   forEachMoveInFlight,
   type OwnerMatcher,
   seedMoveInFlightForTesting,
-} from '@main/services/web-view.ownership';
+} from '@main/services/web-view-ownership.util';
 import {
   getTargetWebViewShard,
   getWebViewShard,
   webViewShards,
-} from '@main/services/web-view.shard-index';
+} from '@main/services/web-view-shard-index';
 import {
   createFreshWindow,
   findLayoutTargetOwner,
@@ -80,8 +80,8 @@ import {
   WINDOW_CREATOR_WIRING_TIMEOUT_MS,
   type WebViewWindowCreator,
   type WindowShard,
-} from '@main/services/web-view.owner-resolution';
-import { moveWebView } from '@main/services/web-view.move';
+} from '@main/services/web-view-owner-resolution.util';
+import { moveWebView } from '@main/services/web-view-move.util';
 
 /**
  * Names this router no longer defines but still offers, because callers reach the web view
@@ -609,10 +609,9 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   // cannot tell it is short.
   //
   // Each record folds in at most once, because the register is walked once. Two records still
-  // holding one view — a late-landing adopt whose record has not cleared while the user drags
-  // the same tab again — fold
-  // it in twice, and that is the accepted cost: a duplicate is visible both in this list and in the
-  // debug line below, where a drop is not. `getAllOpenWebViewDefinitionsWithReachability` is a
+  // holding one view — a late-landing adopt whose record has not cleared while the user drags the
+  // same tab again — fold it in twice, and that is the accepted cost: a duplicate is visible both
+  // in this list and in the debug line below, where a drop is not. `getAllOpenWebViewDefinitionsWithReachability` is a
   // best-effort read of a system mid-move either way.
   //
   // The real fix is a per-view identity minted where it is actually known — at the adopt, carried

@@ -31,14 +31,14 @@ import {
   deleteMoveInFlight,
   type OwnerMatcher,
   type WebViewMoveInFlight,
-} from '@main/services/web-view.ownership';
-import { getTargetWebViewShard, webViewShards } from '@main/services/web-view.shard-index';
+} from '@main/services/web-view-ownership.util';
+import { getTargetWebViewShard, webViewShards } from '@main/services/web-view-shard-index';
 import {
   createFreshWindow,
   findOwner,
   type WebViewOwner,
   type WindowShard,
-} from '@main/services/web-view.owner-resolution';
+} from '@main/services/web-view-owner-resolution.util';
 
 /** Where a move sends a web view: an existing window's id, or `'new'` for a window created for it */
 export type MoveWebViewTarget = number | 'new';
@@ -365,8 +365,9 @@ async function moveCapturedWebView(
         // past the dock, or an answer lost on its way home, leaves the same window holding the same
         // web view as the timed-out adopt the probe above chases. So the move ends here: the window
         // keeps whatever reached it — closing it would destroy content that may be in front of the
-        // user — and the caller is told that nothing it can name holds the web view, which is the
-        // answer to give a user whose tab did not come back.
+        // user — and the caller is told the web view reached that window and the move could not be
+        // confirmed, which is what is actually known here: where it went, but not whether the move
+        // finished.
         logger.error(
           `Webview ${webViewId}'s adopt into window ${standingNewWindow.windowId} did not report success (${getErrorMessage(e)}), but that window is holding content, so nothing may reopen the web view elsewhere. Captured definition: ${JSON.stringify(captured)}`,
         );
@@ -377,7 +378,7 @@ async function moveCapturedWebView(
         throw new Error(
           describeWebViewMoveFailure(
             'reached-new-window-unconfirmed',
-            `Could not move webview ${webViewId} to ${targetDescription}: adopting it there ${whatTheAdoptDid}, and window ${standingNewWindow.windowId} is holding content, so it was not reopened anywhere. Its captured definition is in the log.`,
+            `Could not move webview ${webViewId} to ${targetDescription}: adopting it there ${whatTheAdoptDid}, and window ${standingNewWindow.windowId} is holding content, so the move could not be confirmed. Its captured definition is in the log.`,
           ),
         );
       }
