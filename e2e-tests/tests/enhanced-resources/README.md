@@ -38,7 +38,8 @@ of health.
 
 The `no-silent-skips` reporter (`e2e-tests/reporters/`) exists to stop exactly this from recurring —
 it fails a run in which tests are reported skipped that nobody asked to skip. It can only see suites
-that are actually collected, which is why this one is invisible to it.
+that are actually collected, and this one is (see below) — so whenever a config that collects it
+runs, the reporter is watching it.
 
 Whether to fix, delete, or keep these is an open decision.
 

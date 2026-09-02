@@ -56,15 +56,18 @@ None of this is visible in CI: CI runs on a fresh checkout with no `dev-appdata/
 sees defaults while a developer machine accumulates residue. "Green in CI, red for me" is usually
 one of these.
 
-- **`preConfigureSettings` MERGES into `dev-appdata/data/settings.json` and only restores in an
-  `afterAll`.** A run killed before teardown never restores. The three `multi-window` specs pin
-  `'platform.interfaceMode': 'power'`, so a killed multi-window run leaves the whole checkout in
-  Power mode. A suite that pins nothing inherits it. With no pin at all the app falls back to
-  `'simple'` (`src/renderer/hooks/use-interface-mode.hook.ts`).
+- **`preConfigureSettings` MERGES into `dev-appdata/data/settings.json` and restores it from the
+  launch fixture's own teardown, after the app closes — not from a test-framework `afterAll`.** A
+  run whose process is killed outright (Ctrl+C, a crashed worker) never reaches that teardown and
+  never restores. The four `multi-window` specs pin `'platform.interfaceMode': 'power'`, so a killed
+  multi-window run leaves the whole checkout in Power mode. A suite that pins nothing inherits it.
+  With no pin at all the app falls back to `'simple'` (`src/renderer/hooks/use-interface-mode.hook.ts`).
   - Check it first when a suite behaves differently than it did yesterday: `cat dev-appdata/data/settings.json`
-  - A suite that depends on a mode selects it with `test.use({ interfaceMode })`; the launch
-    fixtures seed that value and then assert the app came up in it, so there is nothing extra to
-    declare and nothing to forget. Attach-mode suites cannot seed, so `cdp.fixture` keeps an
+  - A suite that depends on a mode selects it with `test.use({ interfaceMode })` — except
+    `comment.fixture`, which hardcodes `'platform.interfaceMode': 'simple'` and exposes no such
+    option, so writing `test.use({ interfaceMode })` there fails to collect. The other launch
+    fixtures seed the declared value and then assert the app came up in it, so there is nothing
+    extra to declare and nothing to forget. Attach-mode suites cannot seed, so `cdp.fixture` keeps an
     assert-only `test.use({ requiredInterfaceMode })` instead. Either way the check confirms the app
     IS in that mode — which is what the layout depends on — rather than proving a particular seed is
     what put it there; for `'simple'` an app that was never pinned satisfies it, because that is the
