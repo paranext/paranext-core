@@ -2511,6 +2511,16 @@ step, no automation. Just a record.
   a compositor that does not self-focus the first focus event IS the user's click and undoing it
   would be worse than the problem. The visible cost is a brief flicker, and any keystroke landing in
   that gap goes to the window that had focus for those milliseconds.
+- **The hand-back cannot return focus to a foreign application.** A window that takes the
+  foreground from another application cannot hand it back, because `focusWindow` only moves focus
+  between our own windows. The hand-back is gated on whether this application already held focus
+  before the withheld window was revealed (`wasApplicationFocusedBeforeReveal` in
+  `shouldBounceFocusBack`, `src/main/window-activation.util.ts`): when it did, the bounce returns
+  focus to the window the user was actually in, which is the case this mechanism fixes. When it did
+  not — the user was in another application, or nothing of ours had focus at all — the gate leaves
+  the foreground on the newly-revealed window rather than raising a second window of ours over
+  whatever the user was in, but it cannot put the foreground back where it came from. That residual
+  case is unsolved by this PR.
 - **Where two answers disagree about the same window, the main process wins.** The renderer keeps
   its own latch for the focus requests its panels and web views make as they mount, which never
   leave that process; but that latch only sees gestures in the shell document, and a web view's

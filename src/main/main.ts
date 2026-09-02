@@ -91,6 +91,7 @@ import {
   getTargetWindowId,
   getWindows,
   handleWindowBlurred,
+  isApplicationFocused,
   isWindowClosing as isWindowMarkedClosing,
   isWindowTracked,
   isWindowReady,
@@ -821,6 +822,11 @@ async function main() {
     // the answer itself; the `!== windowId` guard at the bounce covers the case where it already is.
     const windowIdToReturnFocusTo =
       activation.revealWhenReady === 'inactive' ? getFocusedWindowId() : undefined;
+    // Captured here, before the window can be revealed: `isApplicationFocused` answers a live
+    // question, and by the time the hand-back runs this window already holds the focus that
+    // triggered it. Whether the application held focus BEFORE that is what tells the hand-back
+    // apart from raising one of our own windows over whatever the user was actually in.
+    const wasApplicationFocusedBeforeReveal = isApplicationFocused();
     /**
      * When the page may still take focus for itself. Set at the reveal, because that is the paint
      * the self-focus rides in on. Outside it, a focus event is a person, and a person's click must
@@ -842,6 +848,7 @@ async function main() {
           canReturnFocusElsewhere: canWindowTakeFocusBack(windowIdToReturnFocusTo, windowId),
           isWithinSelfFocusWindow:
             selfFocusWindowClosesAt !== undefined && Date.now() <= selfFocusWindowClosesAt,
+          wasApplicationFocusedBeforeReveal,
         })
       ) {
         noteWindowBouncedFocusBack(windowId);
