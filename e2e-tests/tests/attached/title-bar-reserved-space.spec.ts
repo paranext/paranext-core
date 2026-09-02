@@ -1,10 +1,15 @@
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import { waitForAppReady, DEFAULT_WINDOW_SIZE } from '../../fixtures/helpers';
 
 /** Window Controls Overlay API isn't in TS's DOM lib yet. */
 type NavigatorWithWindowControlsOverlay = Navigator & {
   windowControlsOverlay?: { getTitlebarAreaRect(): DOMRect };
 };
+
+// This suite reads element positions; it writes no evidence screenshots, so it does not need the
+// fixture's Full HD default. Declaring DEFAULT_WINDOW_SIZE instead means it can start on a
+// maximized Windows window under a taskbar (~1032px tall), which the 1080 floor rejects.
+test.use({ requiredWindowSize: DEFAULT_WINDOW_SIZE });
 
 test.describe('Title bar reserved space', () => {
   // titleBarOverlay (main.ts) — and navigator.windowControlsOverlay with it — is Windows-only.

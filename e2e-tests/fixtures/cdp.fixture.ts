@@ -163,9 +163,14 @@ export interface CdpFixtures {
   /**
    * Window size this suite's layout is written against; set with `test.use({ requiredWindowSize: {
    * width, height } })`. Defaults to the screenshot floor ({@link MIN_SCREENSHOT_WIDTH} x
-   * {@link MIN_SCREENSHOT_HEIGHT}), NOT {@link DEFAULT_WINDOW_SIZE}, because any spec on this fixture
-   * may write evidence screenshots and those have a Full HD minimum. Declaring anything smaller
-   * means the app must actually have been started at that size.
+   * {@link MIN_SCREENSHOT_HEIGHT}), NOT `DEFAULT_WINDOW_SIZE` from `helpers.ts`, because any spec on
+   * this fixture may write evidence screenshots and those have a Full HD minimum. Declaring
+   * anything smaller means the app must actually have been started at that size.
+   *
+   * A spec that writes no evidence screenshots should override this down to `DEFAULT_WINDOW_SIZE`
+   * (or another size it can actually reach): a maximized Windows window under a taskbar is only
+   * about 1032px tall, short of the Full HD floor by more than the tolerance below, so inheriting
+   * the default there is a precondition failure the spec did not need to take on.
    *
    * Attach mode cannot resize the window — it has no main-process channel — so this is asserted
    * rather than applied. Start the app at the declared size.

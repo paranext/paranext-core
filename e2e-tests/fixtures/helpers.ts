@@ -186,9 +186,12 @@ export const WINDOW_SIZE_TOLERANCE_PX = 8;
  * CDP-attached page applies an emulation override that sets `innerWidth`, so an inner-based check
  * reads back its own request and can never fail. Measured: a 1024px window reports `innerWidth` 469
  * before such a call and 1280 after, while `outerWidth` stays 1024.
+ *
+ * Takes only `evaluate`, not the full `Page`, so the decision can be unit tested directly against a
+ * stub instead of a real browser connection.
  */
 export async function assertDeclaredWindowSize(
-  page: Page,
+  page: Pick<Page, 'evaluate'>,
   declared: WindowSize,
   howToFix: string,
 ): Promise<void> {
