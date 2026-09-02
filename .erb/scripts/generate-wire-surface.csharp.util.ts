@@ -587,7 +587,28 @@ const ALWAYS_EXPERIMENTAL_HELPER_RE =
  * written as a target-typed `new() { ... }` at the call site, so the caller must say which one it
  * is expecting rather than this function guessing from the text alone.
  */
-type DocumentationShape = 'networkObjectStyle' | 'notificationStyle';
+type DocumentationShape = 'networkObjectStyle' | 'notificationStyle' | 'methodStyle';
+
+/**
+ * The shapes whose `Experimental` sits one level down, and the wrapper to unpack to reach it. Both
+ * are `OpenRpcSingle*Documentation`: a single-property envelope around the real documentation
+ * object, so the flag is never at the argument's own top level and reading it there finds nothing.
+ */
+const NESTED_DOCUMENTATION_SHAPES = {
+  notificationStyle: {
+    envelopeType: 'OpenRpcSingleNotificationDocumentation',
+    property: 'Notification',
+    innerType: 'OpenRpcNotificationDocumentation',
+  },
+  methodStyle: {
+    envelopeType: 'OpenRpcSingleMethodDocumentation',
+    property: 'Method',
+    innerType: 'OpenRpcMethodDocumentation',
+  },
+} as const satisfies Record<
+  Exclude<DocumentationShape, 'networkObjectStyle'>,
+  { envelopeType: string; property: string; innerType: string }
+>;
 
 /**
  * Resolves a documentation argument/return-expression to its `documented`/experimental status.
@@ -648,48 +669,47 @@ function resolveDocumentationArgument(
     };
   }
 
-  if (
-    shape === 'notificationStyle' &&
-    (/^new\s+OpenRpcSingleNotificationDocumentation\s*\{/.test(trimmed) ||
-      /^new\s*\(\s*\)\s*\{/.test(trimmed))
-  ) {
-    const braceIndex = trimmed.indexOf('{');
-    const match = matchBracket(trimmed, braceIndex);
-    if (!match) return { documented: true, docsStaticallyResolved: false, experimental: false };
+  if (shape !== 'networkObjectStyle') {
+    const { envelopeType, property, innerType } = NESTED_DOCUMENTATION_SHAPES[shape];
+    const envelopeRe = new RegExp(`^new\\s+${envelopeType}\\s*\\{`);
+    if (envelopeRe.test(trimmed) || /^new\s*\(\s*\)\s*\{/.test(trimmed)) {
+      const braceIndex = trimmed.indexOf('{');
+      const match = matchBracket(trimmed, braceIndex);
+      if (!match) return { documented: true, docsStaticallyResolved: false, experimental: false };
 
-    const notificationSegment = match.segments
-      .map((segment) => stripLeadingTrivia(segment))
-      .find((segment) => /^Notification\s*=/.test(segment));
-    if (!notificationSegment)
-      return { documented: true, docsStaticallyResolved: true, experimental: false };
+      const propertyRe = new RegExp(`^${property}\\s*=`);
+      const wrapperSegment = match.segments
+        .map((segment) => stripLeadingTrivia(segment))
+        .find((segment) => propertyRe.test(segment));
+      if (!wrapperSegment)
+        return { documented: true, docsStaticallyResolved: true, experimental: false };
 
-    const notificationValue = notificationSegment.replace(/^Notification\s*=\s*/, '').trim();
-    if (
-      !/^new\s+OpenRpcNotificationDocumentation\s*\{/.test(notificationValue) &&
-      !/^new\s*\(\s*\)\s*\{/.test(notificationValue)
-    ) {
-      return { documented: true, docsStaticallyResolved: false, experimental: false };
+      const wrapperValue = wrapperSegment.replace(new RegExp(`^${property}\\s*=\\s*`), '').trim();
+      const innerRe = new RegExp(`^new\\s+${innerType}\\s*\\{`);
+      if (!innerRe.test(wrapperValue) && !/^new\s*\(\s*\)\s*\{/.test(wrapperValue)) {
+        return { documented: true, docsStaticallyResolved: false, experimental: false };
+      }
+
+      const innerBraceIndex = wrapperValue.indexOf('{');
+      const innerMatch = matchBracket(wrapperValue, innerBraceIndex);
+      if (!innerMatch)
+        return { documented: true, docsStaticallyResolved: false, experimental: false };
+
+      const experimentalSegment = innerMatch.segments
+        .map((segment) => stripLeadingTrivia(segment))
+        .find((segment) => /^Experimental\s*=/.test(segment));
+      if (!experimentalSegment)
+        return { documented: true, docsStaticallyResolved: true, experimental: false };
+
+      const valueMatch = experimentalSegment.match(/^Experimental\s*=\s*(true|false)\s*$/);
+      if (!valueMatch)
+        return { documented: true, docsStaticallyResolved: false, experimental: false };
+      return {
+        documented: true,
+        docsStaticallyResolved: true,
+        experimental: valueMatch[1] === 'true',
+      };
     }
-
-    const innerBraceIndex = notificationValue.indexOf('{');
-    const innerMatch = matchBracket(notificationValue, innerBraceIndex);
-    if (!innerMatch)
-      return { documented: true, docsStaticallyResolved: false, experimental: false };
-
-    const experimentalSegment = innerMatch.segments
-      .map((segment) => stripLeadingTrivia(segment))
-      .find((segment) => /^Experimental\s*=/.test(segment));
-    if (!experimentalSegment)
-      return { documented: true, docsStaticallyResolved: true, experimental: false };
-
-    const valueMatch = experimentalSegment.match(/^Experimental\s*=\s*(true|false)\s*$/);
-    if (!valueMatch)
-      return { documented: true, docsStaticallyResolved: false, experimental: false };
-    return {
-      documented: true,
-      docsStaticallyResolved: true,
-      experimental: valueMatch[1] === 'true',
-    };
   }
 
   return { documented: true, docsStaticallyResolved: false, experimental: false };
@@ -1034,7 +1054,15 @@ function scanStandaloneRequestHandlerCalls(
       return;
     }
 
-    const docsInfo = resolveDocumentationArgument(getDocsArgText(match.segments));
+    // `methodStyle`: RegisterRequestHandlerAsync takes an OpenRpcSingleMethodDocumentation, whose
+    // flag is at `Method.Experimental` rather than the argument's own top level.
+    // The empty map is the resolver's own default: this site has never taken the one-hop field
+    // lookup, and only the shape changes here.
+    const docsInfo = resolveDocumentationArgument(
+      getDocsArgText(match.segments),
+      new Map(),
+      'methodStyle',
+    );
     registrations.push({
       category: 'standaloneMethod',
       name: nameResolution.value,
