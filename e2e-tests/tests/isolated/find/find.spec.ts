@@ -265,11 +265,20 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   // would otherwise get closed by this click instead of opened, and every field below would then
   // find nothing to interact with. Checking first makes the reset converge on "filters open" from
   // either starting point.
+  //
+  // The whole check-click-confirm sequence is wrapped in toPass, not just the confirmation: Radix's
+  // exit animation keeps the popover content in the DOM (and isVisible()-true) while it animates
+  // away, so a single-shot isVisible() read can land mid-close, report "already open", skip the
+  // click, and leave the fields below about to disappear out from under it. If that happens the
+  // inner toBeVisible() assertion fails once the animation finishes, and toPass retries the whole
+  // decision rather than committing to the stale read.
   const matchCase = frame.locator('#matchCase');
-  if (!(await matchCase.isVisible())) {
-    await frame.getByRole('button', { name: /toggle filters/i }).click();
-    await expect(matchCase).toBeVisible({ timeout: 5_000 });
-  }
+  await expect(async () => {
+    if (!(await matchCase.isVisible())) {
+      await frame.getByRole('button', { name: /toggle filters/i }).click();
+    }
+    await expect(matchCase).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 5_000 });
   if (await matchCase.isChecked()) await matchCase.click();
   const allowRegex = frame.locator('#allowRegex');
   if (await allowRegex.isChecked()) await allowRegex.click();
@@ -289,13 +298,16 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   await matchCase.press('Escape');
   await expect(matchCase).not.toBeVisible({ timeout: 5_000 });
 
-  // Reset the scope to the whole book. Same open/closed hazard as the filters popover above: the
-  // scope button also toggles, so only click it while it is closed.
+  // Reset the scope to the whole book. Same open/closed hazard as the filters popover above,
+  // including the animate-out race — see the comment there for why this is a toPass, not a
+  // single-shot check.
   const bookScope = frame.locator('#scope-book');
-  if (!(await bookScope.isVisible())) {
-    await frame.getByRole('button', { name: /showing/i }).click();
-    await expect(bookScope).toBeVisible({ timeout: 5_000 });
-  }
+  await expect(async () => {
+    if (!(await bookScope.isVisible())) {
+      await frame.getByRole('button', { name: /showing/i }).click();
+    }
+    await expect(bookScope).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 5_000 });
   if (!(await bookScope.isChecked())) await bookScope.click();
   await bookScope.press('Escape');
   await expect(bookScope).not.toBeVisible({ timeout: 5_000 });
@@ -558,6 +570,10 @@ test.beforeAll(async ({ electronApp }) => {
 // the panel, while the same reset only running at the top of the next test's body would instead
 // report as that unrelated next test failing — the "1 failed, 22 did not run" shape documented in
 // no-silent-skips.reporter.ts.
+//
+// This does mean every test boundary resets the panel twice — here, and again in the next test's
+// own openFindPanel — but each reset is close to a no-op once the panel is already clean, so the
+// duplication buys the isolation above cheaply rather than doubling any real cost.
 test.afterEach(async ({ mainPage }) => {
   const frame = await activateFindTab(mainPage);
   await resetFindPanel(frame);
