@@ -7,6 +7,7 @@ import {
   getOpenWebViewDefinitionsForWindow,
 } from '@main/services/web-view.service-router';
 import { logger } from '@shared/services/logger.service';
+import { RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE } from '@main/scheduled-session-sync.util';
 import {
   performShutdownTasks,
   performWindowCloseTasks,
@@ -689,6 +690,42 @@ describe('startWindowCloseTasksWithoutWaiting', () => {
 
     expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).toContainEqual(
       expect.stringContaining('cancelSync'),
+    );
+  });
+
+  it('a quit taken in power mode waits for it too', async () => {
+    // A closing window's sync belongs to the window, not to a mode: it is started under whichever
+    // mode was in force when the window closed, and the user can switch back before quitting. The
+    // power branch then runs a scheduled sync of its own — against projects the held sync may still
+    // be writing — and the shutdown ends without the window's edits ever going out.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+    const release = holdTheSync();
+
+    startWindowCloseTasksWithoutWaiting(2);
+    await vi.waitFor(() =>
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['p1'],
+      ),
+    );
+
+    // The user switched back to power before quitting
+    mockSettingsGet.mockResolvedValue('power');
+    const shutdownTasks = performShutdownTasks();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).not.toContainEqual(
+      expect.stringContaining(RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE),
+    );
+
+    release();
+    await shutdownTasks;
+
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).toContainEqual(
+      expect.stringContaining(RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE),
     );
   });
 });
