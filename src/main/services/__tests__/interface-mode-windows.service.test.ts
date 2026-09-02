@@ -84,6 +84,40 @@ describe('reacting to an interface-mode change', () => {
     expect(deps.createWindowForEntry).not.toHaveBeenCalled();
   });
 
+  test('the first mode seen after an unreadable startup read is adopted, not acted on', async () => {
+    // A startup that could not read the mode leaves it unknown, and the subscription does not ask
+    // for the current value — so the first delivery to arrive is the first this process has seen,
+    // whether or not anything changed. Acting on it would run a switch reaction on an ordinary
+    // session, off the back of some unrelated setting being written.
+    const deps = makeDeps({ getPreservedEntrySlotIds: () => [11, 12] });
+    initializeModeSwitchOrchestration(deps, undefined);
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(deps.closeWindow).not.toHaveBeenCalled();
+    expect(deps.focusWindow).not.toHaveBeenCalled();
+    // …and it is now known, so a real change from here on is acted on
+    expect(getCachedInterfaceMode()).toBe('simple');
+    await handleInterfaceModeChanged('power');
+    expect(deps.createWindowForEntry).toHaveBeenCalled();
+  });
+
+  test('a switch to power with no window open creates nothing', async () => {
+    // The application can be resident with no windows at all (macOS, after the last one closed),
+    // and the session-long subscription is still live. Building the whole saved window set there
+    // would put windows on screen with no user gesture behind them; the dock click that asks for
+    // them has its own path.
+    const deps = makeDeps({
+      getTrackedWindowIds: () => [],
+      getPreservedEntrySlotIds: () => [11, 12],
+    });
+    initializeModeSwitchOrchestration(deps, 'simple');
+
+    await handleInterfaceModeChanged('power');
+
+    expect(deps.createWindowForEntry).not.toHaveBeenCalled();
+  });
+
   test('a seed records the mode without acting on it', async () => {
     // The negative control for the test above: seeding must be a record, not a switch — and the
     // mode it records has to be the one a later change is compared against.
