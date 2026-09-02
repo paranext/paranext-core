@@ -9,7 +9,10 @@ import {
   testingWindowService,
 } from '@renderer/services/window.service-shard';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
-import { noteTabAwaitingDocumentFocus } from '@renderer/services/window-activation.util';
+import {
+  isWindowAwaitingFirstActivation,
+  noteTabAwaitingDocumentFocus,
+} from '@renderer/services/window-activation.util';
 
 type CloseWebViewCallback = (event: { webView: { id: string } }) => void;
 /** The open event's payload is ignored, so this callback takes no arguments */
@@ -66,15 +69,21 @@ const {
   };
 });
 
+// The real dock resolves an unspecified `activateWithoutDocumentFocus` through this same latch;
+// this stand-in does too, so `focusTabMock`'s recorded call args are what a real dock would have
+// been asked for rather than the request the shard forwards unresolved.
+const focusTabResolvingLatch = (tabId: string, activateWithoutDocumentFocus?: boolean) =>
+  focusTabMock(tabId, activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation());
+
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   getDockLayout: vi.fn(async () => ({
-    focusTab: focusTabMock,
+    focusTab: focusTabResolvingLatch,
     getTabInfoByElement: vi.fn(() => undefined),
     getTabInfoById: getTabInfoByIdMock,
     getTabInfoByDirectionFromTab: vi.fn(() => undefined),
   })),
   getDockLayoutSync: vi.fn(() => ({
-    focusTab: focusTabMock,
+    focusTab: focusTabResolvingLatch,
     getTabInfoByElement: vi.fn(() => undefined),
     getTabInfoById: getTabInfoByIdMock,
     getTabInfoByDirectionFromTab: vi.fn(() => undefined),
@@ -618,7 +627,7 @@ describe('a window still waiting for its first activation', () => {
     noteTabAwaitingDocumentFocus('tab-1');
 
     window.dispatchEvent(new Event('pointerdown'));
-    await vi.waitFor(() => expect(focusTabMock).toHaveBeenCalledWith('tab-1'));
+    await vi.waitFor(() => expect(focusTabMock).toHaveBeenCalledWith('tab-1', false));
   });
 
   test('gives the waiting tab its focus in the same turn as the gesture that triggers it', () => {
@@ -635,7 +644,7 @@ describe('a window still waiting for its first activation', () => {
 
     window.dispatchEvent(new Event('keydown'));
 
-    expect(focusTabMock).toHaveBeenCalledWith('tab-1');
+    expect(focusTabMock).toHaveBeenCalledWith('tab-1', false);
   });
 
   test('lets the tab the user actually clicked win when it differs from the tab the catch-up is chasing', async () => {
@@ -652,7 +661,7 @@ describe('a window still waiting for its first activation', () => {
     window.dispatchEvent(new Event('pointerdown'));
     await engine.setFocus({ focusType: 'tab', id: 'tab-b' });
 
-    await vi.waitFor(() => expect(focusTabMock).toHaveBeenCalledWith('tab-a'));
+    await vi.waitFor(() => expect(focusTabMock).toHaveBeenCalledWith('tab-a', false));
     expect(focusTabMock.mock.calls.map((call) => call[0])).toEqual(['tab-a', 'tab-b']);
   });
 
