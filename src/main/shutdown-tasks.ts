@@ -165,9 +165,9 @@ export async function performWindowCloseTasks(closingWindowId: string): Promise<
  * @param closingWindowId Window that is closing
  */
 export function startWindowCloseTasksWithoutWaiting(closingWindowId: string): void {
-  // Deliberately not awaited and not returned: the caller closes the window now. Failures are
+  // Deliberately neither awaited nor returned: the caller closes the window now, and failures are
   // already swallowed and logged inside the sync itself.
-  void beginWindowCloseSync(closingWindowId);
+  beginWindowCloseSync(closingWindowId).catch(() => {});
 }
 
 /**
