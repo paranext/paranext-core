@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { logger } from '@shared/services/logger.service';
 import {
   clearModeSwitchClose,
   getCachedInterfaceMode,
@@ -24,10 +25,11 @@ function makeDeps(overrides: Partial<ModeSwitchDependencies> = {}): ModeSwitchDe
     isPrimaryWindow: (windowId) => windowId === 1,
     isWindowClosing: () => false,
     markWindowClosing: vi.fn(),
-    closeWindow: vi.fn(),
+    hideWindow: vi.fn(),
+    closeWindow: vi.fn(() => true),
     focusWindow: vi.fn(),
     isAppShuttingDown: () => false,
-    getPreservedEntryIndexes: () => [],
+    getPreservedEntrySlotIds: () => [],
     createWindowForEntry: vi.fn(async () => {}),
     ...overrides,
   };
@@ -45,7 +47,7 @@ describe('reacting to an interface-mode change', () => {
     // Preserved entries are seeded deliberately: without something for the power branch to
     // reopen, this test passes whether or not the mode is compared at all, and the guard it
     // exists to protect could be deleted with every test still green.
-    const deps = makeDeps({ getPreservedEntryIndexes: () => [1, 2] });
+    const deps = makeDeps({ getPreservedEntrySlotIds: () => [1, 2] });
     initializeModeSwitchOrchestration(deps, 'power');
 
     await handleInterfaceModeChanged('power');
@@ -70,14 +72,22 @@ describe('reacting to an interface-mode change', () => {
     // land before the window is given any reason to push one
     const calls: string[] = [];
     const deps = makeDeps({
-      markWindowClosing: vi.fn((windowId: number) => calls.push(`mark${windowId}`)),
-      closeWindow: vi.fn((windowId: number) => calls.push(`close${windowId}`)),
+      markWindowClosing: vi.fn((windowId: number) => {
+        calls.push(`mark${windowId}`);
+      }),
+      closeWindow: vi.fn((windowId: number) => {
+        calls.push(`close${windowId}`);
+        return true;
+      }),
     });
     initializeModeSwitchOrchestration(deps, 'power');
 
     await handleInterfaceModeChanged('simple');
 
-    expect(calls.indexOf('mark2')).toBeLessThan(calls.indexOf('close2'));
+    // The whole sequence, not an index comparison: `indexOf` of a call that never happened is -1,
+    // which is "less than" everything, so an ordering assertion alone passes hardest when the mark
+    // is missing entirely — and the mark is the signal the renderer reads to stand down.
+    expect(calls).toEqual(['mark2', 'close2', 'mark3', 'close3']);
   });
 
   test('a window closed for the switch is reported as such, and the survivor is not', async () => {
@@ -111,14 +121,120 @@ describe('reacting to an interface-mode change', () => {
     expect(deps.closeWindow).not.toHaveBeenCalled();
   });
 
-  test('a window already on its way out is left alone', async () => {
+  test('a window the user already closed is left alone, and not claimed by the switch', async () => {
     const deps = makeDeps({ isWindowClosing: (windowId) => windowId === 2 });
     initializeModeSwitchOrchestration(deps, 'power');
 
     await handleInterfaceModeChanged('simple');
 
     expect(deps.closeWindow).not.toHaveBeenCalledWith(2);
+    expect(deps.markWindowClosing).not.toHaveBeenCalledWith(2);
+    // Load-bearing, not decoration: a window recorded as closing FOR THE SWITCH keeps its entry,
+    // so claiming one the user deliberately closed would bring it back on the way to power
+    expect(isClosingForModeSwitch(2)).toBe(false);
     expect(deps.closeWindow).toHaveBeenCalledWith(3);
+  });
+
+  test('a window that is already gone is not left recorded as closing for the switch', async () => {
+    // `closeWindow` answers false when there is no live window to ask. Nothing will ever report
+    // that id closed, so a record made for it would outlive the window and go on dropping layouts
+    // for an id that names nothing.
+    const deps = makeDeps({ closeWindow: vi.fn((windowId: number) => windowId !== 2) });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(isClosingForModeSwitch(2)).toBe(false);
+    expect(isClosingForModeSwitch(3)).toBe(true);
+  });
+
+  test('a window is taken off screen as it is marked, before its close is requested', async () => {
+    // Until its close finishes the window is still on screen and interactive, showing the mode it
+    // is moving to over a dock still holding the mode it is leaving — and anything rearranged in it
+    // is refused by the layout save. It should disappear when the user asks.
+    const calls: string[] = [];
+    const deps = makeDeps({
+      hideWindow: vi.fn((windowId: number) => {
+        calls.push(`hide${windowId}`);
+      }),
+      closeWindow: vi.fn((windowId: number) => {
+        calls.push(`close${windowId}`);
+        return true;
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(calls).toEqual(['hide2', 'close2', 'hide3', 'close3']);
+  });
+
+  test('with no window holding the primary role, nothing is closed', async () => {
+    // Every tracked window marked closing IS the application shutting down. A mode switch must
+    // never be able to end the session, so when no window can be identified as the survivor the
+    // switch closes nothing rather than closing them all.
+    const deps = makeDeps({ isPrimaryWindow: () => false });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(deps.closeWindow).not.toHaveBeenCalled();
+  });
+
+  test('a window that fails to come back does not take the rest of the reopen with it', async () => {
+    const created: number[] = [];
+    const deps = makeDeps({
+      getTrackedWindowIds: () => [1],
+      getPreservedEntrySlotIds: () => [11, 12, 13],
+      createWindowForEntry: vi.fn(async (slotId: number) => {
+        created.push(slotId);
+        if (slotId === 12) throw new Error('renderer never started');
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'simple');
+
+    await handleInterfaceModeChanged('power');
+
+    expect(created).toEqual([11, 12, 13]);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('12'));
+  });
+
+  test('an entry freed while the reopen is running is still picked up', async () => {
+    // A close from the switch that preceded this one can report late, freeing its entry after the
+    // reopen has already read the set. Re-reading each pass is what keeps that window from being
+    // missed until some future switch.
+    const created: number[] = [];
+    let preserved = [11];
+    const deps = makeDeps({
+      getTrackedWindowIds: () => [1],
+      getPreservedEntrySlotIds: () => preserved,
+      createWindowForEntry: vi.fn(async (slotId: number) => {
+        created.push(slotId);
+        // The secondary's close settles while the first window is being created
+        if (slotId === 11) preserved = [11, 12];
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'simple');
+
+    await handleInterfaceModeChanged('power');
+
+    expect(created).toEqual([11, 12]);
+  });
+
+  test('a failed switch leaves the mode able to be acted on again', async () => {
+    // The cache moves before the window work so the single-window guard permits the reopen. If that
+    // work throws it has to go back, or the same-value guard swallows every later delivery of the
+    // mode and the user is stuck until they toggle away and back.
+    const deps = makeDeps({
+      closeWindow: vi.fn(() => {
+        throw new Error('window vanished');
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(getCachedInterfaceMode()).toBe('power');
   });
 
   test('the primary is focused once the others are closing', async () => {
@@ -134,7 +250,7 @@ describe('reacting to an interface-mode change', () => {
     const created: number[] = [];
     const deps = makeDeps({
       getTrackedWindowIds: () => [1],
-      getPreservedEntryIndexes: () => [0, 2, 3],
+      getPreservedEntrySlotIds: () => [0, 2, 3],
       createWindowForEntry: vi.fn(async (entryIndex: number) => {
         created.push(entryIndex);
       }),
@@ -149,7 +265,7 @@ describe('reacting to an interface-mode change', () => {
   test('switching to power with nothing preserved creates nothing', async () => {
     const deps = makeDeps({
       getTrackedWindowIds: () => [1],
-      getPreservedEntryIndexes: () => [],
+      getPreservedEntrySlotIds: () => [],
     });
     initializeModeSwitchOrchestration(deps, 'simple');
 
@@ -164,7 +280,7 @@ describe('reacting to an interface-mode change', () => {
     let modeWhileCreating: string | undefined;
     const deps = makeDeps({
       getTrackedWindowIds: () => [1],
-      getPreservedEntryIndexes: () => [0],
+      getPreservedEntrySlotIds: () => [0],
       createWindowForEntry: vi.fn(async () => {
         modeWhileCreating = getCachedInterfaceMode();
       }),
@@ -180,7 +296,7 @@ describe('reacting to an interface-mode change', () => {
     const created: number[] = [];
     const deps = makeDeps({
       getTrackedWindowIds: () => [1],
-      getPreservedEntryIndexes: () => [0, 1, 2],
+      getPreservedEntrySlotIds: () => [0, 1, 2],
       createWindowForEntry: vi.fn(async (entryIndex: number) => {
         created.push(entryIndex);
         // The user flips back while the reopen is still working through the entries

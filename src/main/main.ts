@@ -122,8 +122,9 @@ import {
   loadWindowLayouts,
   markWindowPendingContent,
   isPrimaryWindow,
-  getEntryAtIndex,
-  getPreservedEntryIndexes,
+  assignEntryToWindowBySlotId,
+  getEntryBySlotId,
+  getPreservedEntrySlotIds,
   setMainWindowId,
   setModeSwitchClosePredicate,
   setPendingContentChangeListener,
@@ -298,6 +299,12 @@ const BOUNDS_CAPTURE_DEBOUNCE_MS = 100;
  */
 type WindowRestoreInfo =
   | { kind: 'entry'; entryIndex: number; entry: WindowLayoutEntry }
+  /**
+   * A window re-created for an entry a previous power session left behind. Named by slot id rather
+   * than position, because a window the user closes while the reopen runs splices its slot out and
+   * shifts every later position.
+   */
+  | { kind: 'preserved-entry'; slotId: number; entry: WindowLayoutEntry }
   | { kind: 'legacy'; boundsState?: WindowBoundsState };
 
 /** Height of the custom title bar buttons on Windows */
@@ -740,7 +747,9 @@ async function main() {
     // legacy startup — validated against the displays connected right now so a window can never
     // come back on a monitor that is gone. A window with no saved placement gets defaults.
     const savedBoundsState =
-      restoreInfo?.kind === 'entry' ? restoreInfo.entry : restoreInfo?.boundsState;
+      restoreInfo?.kind === 'entry' || restoreInfo?.kind === 'preserved-entry'
+        ? restoreInfo.entry
+        : restoreInfo?.boundsState;
     const boundsState = savedBoundsState
       ? ensureBoundsVisibleOnSomeDisplay(
           savedBoundsState,
@@ -820,7 +829,11 @@ async function main() {
 
     // Tie the window to its persisted identity so layout persistence can serve and save it
     if (restoreInfo?.kind === 'entry') assignEntryToWindow(windowId, restoreInfo.entryIndex);
-    else if (restoreInfo?.kind === 'legacy') trackLegacyWindow(windowId);
+    // The slot can have gone while this window was starting; it then tracks as a new window rather
+    // than adopting whichever slot moved into that position
+    else if (restoreInfo?.kind === 'preserved-entry') {
+      if (!assignEntryToWindowBySlotId(windowId, restoreInfo.slotId)) trackNewWindow(windowId);
+    } else if (restoreInfo?.kind === 'legacy') trackLegacyWindow(windowId);
     else trackNewWindow(windowId);
 
     if (creationOptions?.pendingContent) markWindowPendingContent(windowId);
@@ -1872,19 +1885,23 @@ async function main() {
           isPrimaryWindow,
           isWindowClosing: isWindowMarkedClosing,
           markWindowClosing,
-          closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+          hideWindow: (windowId) => BrowserWindow.fromId(windowId)?.hide(),
+          closeWindow: (windowId) => {
+            const window = BrowserWindow.fromId(windowId);
+            if (!window) return false;
+            window.close();
+            return true;
+          },
           focusWindow,
           isAppShuttingDown,
-          getPreservedEntryIndexes,
-          createWindowForEntry: async (entryIndex) => {
-            const entry = getEntryAtIndex(entryIndex);
+          getPreservedEntrySlotIds,
+          createWindowForEntry: async (slotId) => {
+            const entry = getEntryBySlotId(slotId);
             if (!entry) {
-              logger.warn(
-                `Not reopening window entry ${entryIndex}; it is no longer in the structure`,
-              );
+              logger.warn(`Not reopening window entry ${slotId}; it is no longer in the structure`);
               return;
             }
-            await createWindow({ kind: 'entry', entryIndex, entry });
+            await createWindow({ kind: 'preserved-entry', slotId, entry });
           },
         },
         startupInterfaceMode,
