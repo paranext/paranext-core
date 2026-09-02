@@ -495,6 +495,62 @@ describe('scanCSharpFiles: standaloneMethod shape', () => {
     expect(registrations).toHaveLength(0);
     expect(dynamicRegistrations).toHaveLength(0);
   });
+
+  it('reads Experimental at its real nesting when the docs are written inline instead of via the helper', () => {
+    // `RegisterRequestHandlerAsync` takes an `OpenRpcSingleMethodDocumentation`, whose flag lives at
+    // `Method.Experimental` — one level down — not at the argument's top level. Reading the top
+    // level records `experimental: false` while claiming `docsStaticallyResolved: true`, so the
+    // marker is absent from the artifact AND asserted authoritative: deleting it later produces no
+    // diff, which is the exact invisibility this snapshot exists to remove.
+    const withMarker: VirtualFile[] = [
+      {
+        path: 'c-sharp/Fixtures/FixtureInlineDocsService.cs',
+        text: `
+          namespace Paranext.DataProvider.Fixtures;
+
+          internal class FixtureInlineDocsService(PapiClient papiClient)
+          {
+              public async Task InitializeAsync()
+              {
+                  await PapiClient.RegisterRequestHandlerAsync(
+                      "command:fixture.inlineDocs",
+                      Handler,
+                      null,
+                      new() { Method = new() { Experimental = true, Summary = "Does a thing." } }
+                  );
+              }
+          }
+        `,
+      },
+    ];
+    expect(
+      findRegistration(scanCSharpFiles(withMarker).registrations, 'command:fixture.inlineDocs'),
+    ).toMatchObject({
+      category: 'standaloneMethod',
+      documented: true,
+      docsStaticallyResolved: true,
+      experimental: true,
+    });
+
+    // And deleting the marker has to move the artifact — that is the whole point of checking the
+    // snapshot in.
+    const withoutMarker: VirtualFile[] = [
+      {
+        path: withMarker[0].path,
+        text: withMarker[0].text.replace('Experimental = true, ', ''),
+      },
+    ];
+    const before = findRegistration(
+      scanCSharpFiles(withMarker).registrations,
+      'command:fixture.inlineDocs',
+    );
+    const after = findRegistration(
+      scanCSharpFiles(withoutMarker).registrations,
+      'command:fixture.inlineDocs',
+    );
+    expect(after).not.toEqual(before);
+    expect(after).toMatchObject({ experimental: false });
+  });
 });
 
 describe('scanCSharpFiles: determinism', () => {
