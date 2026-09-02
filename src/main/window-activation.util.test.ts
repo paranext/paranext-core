@@ -188,8 +188,8 @@ describe('flashing a withheld window’s frame to signal it exists', () => {
 
 describe('handing focus back when a withheld window takes it on its own', () => {
   // `showInactive()` does not keep this window in the background: the page takes focus itself when
-  // it first paints, with no call from either process (see PT-4465's diagnosis). Since the window
-  // cannot be stopped from taking focus, focus is handed straight back to where the user was.
+  // it first paints, with no call from either process. Since the window cannot be stopped from
+  // taking focus, focus is handed straight back to where the user was.
   test('hands focus back the first time a withheld window takes it unbidden', () => {
     expect(
       shouldBounceFocusBack({
