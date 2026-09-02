@@ -191,8 +191,10 @@ export function getWindows(): BrowserWindow[] {
  * How many windows could still be the one the user is left with — the arithmetic behind the answer
  * a window gets when it reports its dock empty.
  *
- * Such a window closes unless it is the last one standing, which docks Home instead, so this is the
- * complete rule for which windows may stand in as another window's reason to close:
+ * Such a window closes unless something exempts it — being the last one standing, or being the
+ * window that answers for the application, either of which docks Home instead. Those exemptions are
+ * decided elsewhere; what follows is the complete rule for which windows may stand in as another
+ * window's reason to close:
  *
  * - A window whose close has begun is on its way out — see {@link markWindowClosing}. Two windows
  *   emptying at the same moment would otherwise each count the other as a reason to close and both
