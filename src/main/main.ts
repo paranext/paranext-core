@@ -10,6 +10,7 @@ import {
   app,
   BrowserWindow,
   dialog,
+  type MessageBoxOptions,
   ipcMain,
   powerMonitor,
   RenderProcessGoneDetails,
@@ -160,6 +161,7 @@ import {
 } from '@main/renderer-crash-reload-budget.util';
 import { keepsItsEntryOnClose } from '@main/window-entry-disposition.util';
 import {
+  chooseNoticeParentWindowId,
   decideAbandonedWindowNotice,
   type AbandonedWindowNoticeParent,
 } from '@main/abandoned-window-notice.util';
@@ -1798,20 +1800,27 @@ async function main() {
    *
    * @param parent Where the decision said to put it
    * @param abandonedWindow The window the notice is about
-   * @returns The window to parent the box to, or `undefined` if none is available
+   * @param abandonedWindowId That window's id, read while it was still alive
+   * @returns The window to parent the box to, or `undefined` to show it unparented
    */
   function resolveNoticeParent(
     parent: AbandonedWindowNoticeParent,
     abandonedWindow: BrowserWindow,
-  ): BrowserWindow {
+    abandonedWindowId: number,
+  ): BrowserWindow | undefined {
     if (parent === 'abandoned-window') return abandonedWindow;
     // The runtime answer, as the mode switch uses — including its fallback to the oldest live
     // window — rather than the persisted flag, which is empty whenever no live window holds the
-    // marked entry
-    const primaryWindow = getWindows().find((window) => isPrimaryWindow(window.id));
-    // The primary can be gone or destroyed; the abandoned window is still a real window, and
-    // showing an off-screen notice beats showing none
-    return primaryWindow && !primaryWindow.isDestroyed() ? primaryWindow : abandonedWindow;
+    // marked entry. `getWindows` has already left out the destroyed ones.
+    const liveWindows = getWindows();
+    const parentWindowId = chooseNoticeParentWindowId(
+      abandonedWindowId,
+      liveWindows.map((window) => ({
+        windowId: window.id,
+        isPrimary: isPrimaryWindow(window.id),
+      })),
+    );
+    return liveWindows.find((window) => window.id === parentWindowId);
   }
 
   /**
@@ -1847,7 +1856,7 @@ async function main() {
       });
       if (decision.kind === 'stay-silent') return;
 
-      const parentWindow = resolveNoticeParent(decision.parent, abandonedWindow);
+      const parentWindow = resolveNoticeParent(decision.parent, abandonedWindow, abandonedWindowId);
       const messageKey = '%abandonedWindow_confirm_message%' satisfies LocalizeKey;
       const detailKey = '%abandonedWindow_confirm_detail%' satisfies LocalizeKey;
       const closeKey = '%abandonedWindow_confirm_close%' satisfies LocalizeKey;
@@ -1885,7 +1894,7 @@ async function main() {
 
       const closeIndex = 0;
       const leaveOpenIndex = 1;
-      const { response } = await dialog.showMessageBox(parentWindow, {
+      const noticeOptions: MessageBoxOptions = {
         type: 'warning',
         // No `title`, matching the close-all prompt: macOS hides it and the others print it twice
         message: strings[messageKey],
@@ -1895,7 +1904,16 @@ async function main() {
         // reflex press lands on. Esc and the window manager's dismiss both leave the window alone.
         defaultId: leaveOpenIndex,
         cancelId: leaveOpenIndex,
-      });
+        // As the close-all prompt does, so the application's two native questions look alike:
+        // without it Windows may render these as command links rather than buttons
+        noLink: true,
+      };
+      // Unparented when no window can carry it. Every window there is is either the one this is
+      // about — off screen, which is why the question is not on it — or gone, and a question the
+      // platform floats on its own still reaches the user.
+      const { response } = parentWindow
+        ? await dialog.showMessageBox(parentWindow, noticeOptions)
+        : await dialog.showMessageBox(noticeOptions);
       if (response !== closeIndex) return;
       logger.info(`Closing abandoned window ${abandonedWindowId} at the user's request`);
       abandonedWindow.close();
