@@ -41,6 +41,13 @@ function makeDeps(overrides: Partial<ModeSwitchDependencies> = {}): ModeSwitchDe
   };
 }
 
+/** Let work started without being awaited — a reopen kicked off by a close reporting in — run */
+async function settle(): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
 describe('reacting to an interface-mode change', () => {
   beforeEach(() => {
     resetForTesting();
@@ -417,6 +424,112 @@ describe('reacting to an interface-mode change', () => {
     await handleInterfaceModeChanged('power');
 
     expect(created).toEqual([11, 12]);
+  });
+
+  test('a switch back to power before the closes finish still brings the windows back', async () => {
+    // A window stops holding its entry only once it has actually gone, which is one Electron close
+    // later than the switch that asked for it. A switch back to power arriving in that gap sees
+    // nothing preserved — and the reopen's per-pass re-read cannot help, because with an empty set
+    // it never takes a pass at all. The closes reporting in is what starts it.
+    let preserved: number[] = [];
+    const created: number[] = [];
+    const deps = makeDeps({
+      getTrackedWindowIds: () => [1, 2],
+      getPreservedEntrySlotIds: () => preserved,
+      createWindowForEntry: vi.fn(async (slotId: number) => {
+        created.push(slotId);
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+    await handleInterfaceModeChanged('power');
+
+    // Window 2 was asked to close but has not gone, so its entry is still held by a live window
+    expect(created).toEqual([]);
+
+    // Its close finishes, and only now is there an entry to reopen
+    preserved = [22];
+    clearModeSwitchClose(2);
+    await settle();
+
+    expect(created).toEqual([22]);
+  });
+
+  test('the reopen waits for the last of the closes rather than starting on the first', async () => {
+    // Reopening between two closes would create windows while the switch that closed them is still
+    // running. Nothing is missed by waiting: the last close is what makes the set complete.
+    let preserved: number[] = [];
+    const deps = makeDeps({
+      getTrackedWindowIds: () => [1, 2, 3],
+      getPreservedEntrySlotIds: () => preserved,
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+    await handleInterfaceModeChanged('power');
+    preserved = [22];
+    clearModeSwitchClose(2);
+    await settle();
+
+    expect(deps.createWindowForEntry).not.toHaveBeenCalled();
+
+    preserved = [22, 33];
+    clearModeSwitchClose(3);
+    await settle();
+
+    expect(deps.createWindowForEntry).toHaveBeenCalledTimes(2);
+  });
+
+  test('a close reporting in during a reopen does not start a second one', async () => {
+    // The running reopen re-reads the set each pass, so it picks the entry up itself. A second one
+    // started alongside it would create a window per entry twice over.
+    const created: number[] = [];
+    let preserved = [33];
+    let releaseFirstWindow = () => {};
+    const firstWindowCreated = new Promise<void>((resolve) => {
+      releaseFirstWindow = resolve;
+    });
+    const deps = makeDeps({
+      getTrackedWindowIds: () => [1, 2, 3],
+      getPreservedEntrySlotIds: () => preserved,
+      createWindowForEntry: vi.fn(async (slotId: number) => {
+        created.push(slotId);
+        if (slotId === 33) await firstWindowCreated;
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+    // Window 3 has gone; window 2's close is still running, so its entry is still held
+    clearModeSwitchClose(3);
+    const reopen = handleInterfaceModeChanged('power');
+    await settle();
+
+    // Window 2's close reports while the first window is still being created
+    preserved = [33, 22];
+    clearModeSwitchClose(2);
+    releaseFirstWindow();
+    await reopen;
+    await settle();
+
+    expect(created).toEqual([33, 22]);
+  });
+
+  test('a close reporting in while the mode still reads simple reopens nothing', async () => {
+    // The negative control: the ordinary end of a switch to simple runs exactly this path, and a
+    // reopen fired from it would put back the window the switch had just closed.
+    const deps = makeDeps({
+      getTrackedWindowIds: () => [1, 2],
+      getPreservedEntrySlotIds: () => [22],
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+    clearModeSwitchClose(2);
+    await settle();
+
+    expect(deps.createWindowForEntry).not.toHaveBeenCalled();
   });
 
   test('a failed switch back to power leaves the mode able to be acted on again', async () => {
