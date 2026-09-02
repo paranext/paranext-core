@@ -892,10 +892,21 @@ async function main() {
      * normal state, so maximizing/minimizing/full-screening cannot overwrite the last normal
      * placement — only flip the flags.
      */
+    // Seeded from where the window is being placed, rather than left unknown until the first
+    // capture. An unknown display is trusted on sight — there is nothing to have crossed from — so
+    // a window whose first capture is its first drag to another monitor would persist exactly the
+    // placement this guard exists to refuse. The window has been placed by now, so its display is
+    // knowable, and the settle clock starts running from creation rather than from that first drag.
+    const initialDisplaySettle = trackDisplaySettle(
+      newWindow.getBounds(),
+      screen.getAllDisplays(),
+      { displayId: undefined, since: Date.now() },
+      Date.now(),
+    );
     /** Display the last accepted placement was on, so a move between displays can be recognized */
-    let lastAcceptedDisplayId: number | undefined;
+    let lastAcceptedDisplayId: number | undefined = initialDisplaySettle.displayId;
     /** Which display this window's bounds lie within, and since when — see `trackDisplaySettle` */
-    let displaySettle: DisplaySettleState = { displayId: undefined, since: Date.now() };
+    let displaySettle: DisplaySettleState = initialDisplaySettle;
 
     const captureWindowBoundsState = (): WindowBoundsState => {
       const isMaximized = newWindow.isMaximized();
