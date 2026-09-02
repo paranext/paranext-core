@@ -1090,8 +1090,9 @@ declare module 'shared/global-this.model' {
      */
     var startupMarks: boolean;
     /**
-     * Whether this window was created without being activated, as of the moment it was created. Read
-     * from the URL search params in the renderer process; `false` in every other process.
+     * Whether this window was created without being activated, as of the moment it was created. Set
+     * in the renderer process from the URL search params; no other process assigns it, so it reads
+     * `undefined` there.
      *
      * This is the window's state at creation, not now. What content should do about it is
      * `isWindowAwaitingFirstActivation()` in the window service shard, which stops answering `true`
