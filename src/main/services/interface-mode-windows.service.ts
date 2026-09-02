@@ -304,12 +304,16 @@ function closeSecondaryWindows(deps: ModeSwitchDependencies): number | undefined
   // extension opens one. Closing then would mark every tracked window closing, which is the
   // application shutting down: a mode switch must never be able to end the session.
   //
-  // A window whose renderer was given up on is no survivor either, and the role can be exactly
-  // where it sits: such a window keeps its entry, so it keeps the flag the role is read from.
-  // Closing the others around it would leave the user looking at a dead page with everything they
-  // could still work in gone — the same loss as ending the session, one window later.
+  // Two more windows cannot be the one left behind, and the role can be sitting on either: it is
+  // read from the persisted entry, which a window keeps until it has actually gone. One whose
+  // renderer was given up on would leave the user looking at a dead page with everything they could
+  // still work in closed around it; one whose close has already begun would leave them with nothing
+  // at all, one close later. Both are the loss the check above refuses, arriving late.
   const survivorId = trackedWindowIds.find(
-    (windowId) => deps.isPrimaryWindow(windowId) && !deps.isWindowAbandoned(windowId),
+    (windowId) =>
+      deps.isPrimaryWindow(windowId) &&
+      !deps.isWindowAbandoned(windowId) &&
+      !deps.isWindowClosing(windowId),
   );
   if (survivorId === undefined) {
     logger.warn(
