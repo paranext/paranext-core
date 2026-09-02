@@ -45,6 +45,7 @@ import {
   expectNoFaultsWhileRunning,
   getAppPages,
   getHeldWebViewIds,
+  expectWindowDockHasOnlyHomeTab,
   getWindowIdOfPage,
   MOVE_COMMAND_TIMEOUT_MS,
   pollUntil,
@@ -55,6 +56,17 @@ const BASE_LAUNCH_OPTIONS: LaunchElectronAppOptions = {
   isolatedProjectRoot: true,
   envOverrides: { DEV_NOISY: 'false' },
 };
+
+/**
+ * A tab id without the window suffix a tab carries.
+ *
+ * A tab's `data-web-view-id` is the web view id plus the id of the window it is in, so the same web
+ * view restored into a different window carries a different tab id. Comparing what a window held
+ * before a switch with what it holds after one has to compare the web views, not the windows.
+ */
+function stripWindowScope(tabId: string): string {
+  return tabId.replace(/-w\d+$/, '');
+}
 
 /** How long a switch may take to settle before a poll gives up */
 const SWITCH_SETTLE_TIMEOUT_MS = 120_000;
@@ -72,6 +84,32 @@ async function setInterfaceMode(mode: 'simple' | 'power'): Promise<void> {
     ['platform.interfaceMode', mode],
     WEBSOCKET_PORT,
     PAPI_CALL_TIMEOUT_MS,
+  );
+}
+
+/** The interface mode as the application reports it right now */
+async function getInterfaceMode(): Promise<string> {
+  return sendPapiRequestOnce<string>(
+    'object:platform.settingsServiceDataProvider-data.get',
+    ['platform.interfaceMode'],
+    WEBSOCKET_PORT,
+    PAPI_CALL_TIMEOUT_MS,
+  );
+}
+
+/**
+ * Wait until the application reports the mode it was told to take.
+ *
+ * Polling the window count instead would synchronize nothing where the count is already right: a
+ * poll whose condition holds on its first read returns immediately, so the assertion after it can
+ * run before the application has reacted to the change at all.
+ */
+async function waitForInterfaceMode(mode: 'simple' | 'power'): Promise<void> {
+  await pollUntil(
+    () => getInterfaceMode(),
+    (current) => current === mode,
+    SWITCH_SETTLE_TIMEOUT_MS,
+    `the application to report the ${mode} interface mode`,
   );
 }
 
@@ -182,6 +220,10 @@ test.describe('switching interface mode', () => {
     if (!page2) throw new Error('the window the web view moved into was not found');
     const secondId = getWindowIdOfPage(page2);
     await waitForRendererRegistered(secondId, 120_000);
+    // The dock-Home decision lands a round trip AFTER the renderer registers, so reading the window
+    // straight away can catch it holding nothing. Both sibling multi-window specs wait here for the
+    // same reason.
+    await expectWindowDockHasOnlyHomeTab(page2);
     // What the second window holds, recorded before the switch because the window holding it does
     // not survive the excursion — its entry is what carries the content back. The guard is the
     // precondition it proved itself to be: with nothing held, the round trip proves nothing.
@@ -219,7 +261,13 @@ test.describe('switching interface mode', () => {
       SWITCH_SETTLE_TIMEOUT_MS,
       'the reopened window to hold the web views it had before the switch',
     );
-    expect(await getHeldWebViewIds(reopened)).toEqual(tabsBefore);
+
+    // Compared with the per-window suffix stripped: a tab's id is built from the web view id plus
+    // the id of the window holding it, and the reopened window is a NEW window — so the raw ids
+    // could never match however correct the restore was.
+    expect((await getHeldWebViewIds(reopened)).map(stripWindowScope)).toEqual(
+      tabsBefore.map(stripWindowScope),
+    );
     expectNoFaultsWhileRunning(output);
   });
 
@@ -238,21 +286,25 @@ test.describe('switching interface mode', () => {
     expect(getAppPages(electronApp)).toHaveLength(1);
 
     await setInterfaceMode('simple');
+    await waitForInterfaceMode('simple');
 
-    // Nothing to close, so nothing may close. Given time to get it wrong rather than read once,
-    // because the failure this guards against is asynchronous.
-    await expect
-      .poll(() => getAppPages(electronApp).length, { timeout: 30_000, intervals: [1_000] })
-      .toBe(1);
+    // Nothing to close, so nothing may close. Given real time to get it wrong: a poll on a count
+    // that is already right would return on its first read and prove nothing, so this waits for
+    // the application to have taken the mode and then holds still to see whether a window goes.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 5_000);
+    });
+    expect(getAppPages(electronApp)).toHaveLength(1);
     expect(getWindowIdOfPage(getAppPages(electronApp)[0])).toBe(primaryId);
   });
 
   test('creating a window is refused in simple mode', async ({ electronApp, mainPage }) => {
     await waitForAppReady(mainPage, 180_000);
     await setInterfaceMode('simple');
-    await expect
-      .poll(() => getAppPages(electronApp).length, { timeout: 30_000, intervals: [1_000] })
-      .toBe(1);
+    // Waited on the mode itself, not the window count: the count is already 1, so a poll on it
+    // returns on its first read and the request below could reach the application before it has
+    // taken the new mode — the guard would then read the mode it is being tested for having left.
+    await waitForInterfaceMode('simple');
 
     // Refused, rather than quietly producing a window the mode has no way to show
     await expect(
