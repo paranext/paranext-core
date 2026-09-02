@@ -197,6 +197,12 @@ async function moveCapturedWebView(
   let standingNewWindow: WindowShard | undefined;
   /** The named target window's shard. A move to a new window has no named target */
   let targetShard: WebViewServiceShard | undefined;
+  /**
+   * The window a move to a new window created, so its close can be re-checked after its adopt the
+   * same way a named target's is — a move to a new window has no target id to check until this is
+   * set
+   */
+  let freshWindowId: number | undefined;
   /** Puts the captured definition in the destination resolved below */
   let adoptIntoDestination: (definition: SavedWebViewDefinition) => Promise<WebViewId | undefined>;
   /**
@@ -227,6 +233,7 @@ async function moveCapturedWebView(
     // no window at all. It opens nothing: an empty window gives reuse logic nothing to find, so
     // what makes the capture below have to come before the adopt is untouched by doing this early.
     const freshWindow = await createFreshWindow(webViewId);
+    freshWindowId = freshWindow.windowId;
     adoptIntoDestination = (definition) =>
       freshWindow.runOpen(
         (shard) => shard.adoptWebView(definition),
@@ -321,9 +328,14 @@ async function moveCapturedWebView(
         // Read again on the way out. The check above covers a close decided before the adopt; the
         // adopt itself waits on a provider with no bound, and a close decided during it would take
         // the web view down with the window while this reported a move that worked. Throwing hands
-        // it to the recovery below, which puts it somewhere that will still be there.
-        if (typeof target === 'number' && isWindowClosing(target))
-          throw new Error(`window ${target}'s close was decided while its adopt was running`);
+        // it to the recovery below, which puts it somewhere that will still be there. A move to a
+        // new window is not exempt: the window it created can start closing in the same gap, and
+        // freshWindowId is what makes it askable here.
+        const adoptedWindowId = typeof target === 'number' ? target : freshWindowId;
+        if (adoptedWindowId !== undefined && isWindowClosing(adoptedWindowId))
+          throw new Error(
+            `window ${adoptedWindowId}'s close was decided while its adopt was running`,
+          );
         raiseMoveTarget(target);
         return movedWebViewId;
       }

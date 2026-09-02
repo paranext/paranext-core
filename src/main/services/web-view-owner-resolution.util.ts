@@ -325,6 +325,13 @@ export async function findLayoutTargetOwner(
  */
 export type FreshWindow = {
   /**
+   * The window {@link createFreshWindow} created. Exposed so a caller that needs to re-check this
+   * specific window after a successful open — whether its close was decided while that open was
+   * running, say — has an id to ask about; `runOpen`'s own return only ever carries the web view id
+   * the open answered with.
+   */
+  windowId: number;
+  /**
    * Run an open against the created window. A failure — and a provider decline — closes the window
    * again. Success takes the pending-content mark off, so a reload before the first layout push
    * restores as an ordinary (empty) window instead of waiting forever for content that already
@@ -462,6 +469,7 @@ export async function createFreshWindow(webViewDescription: string): Promise<Fre
   }
 
   return {
+    windowId,
     runOpen: async (open, onWindowLeftStanding) => {
       let openedWebViewId: WebViewId | undefined;
       try {

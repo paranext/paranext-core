@@ -661,6 +661,33 @@ describe('moveWebView', () => {
     );
   });
 
+  test('a fresh window whose close is decided while its adopt runs does not report a move that worked', async () => {
+    // Same race as the numbered-target case above, but for a window the move itself created:
+    // content reaches it and its close is decided in the interval the request has no way to
+    // observe. Reporting success here would tell the caller the view is somewhere it is about to
+    // be taken down from.
+    const owner = windowShard(['view-1']);
+    const created = windowShard([]);
+    let createdWindowClosing = false;
+    mocks.isWindowClosing.mockImplementation(
+      (windowId: number) => windowId === 7 && createdWindowClosing,
+    );
+    created.adoptWebView.mockImplementation(async () => {
+      // The close lands while the adopt is in flight, which is the whole point
+      createdWindowClosing = true;
+      return 'view-1-window-7';
+    });
+    withWindows({ 2: owner, 7: created });
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+
+    await expect(moveWebView('view-1', 'new')).rejects.toThrow();
+
+    // And the web view is not left to go down with the window: recovery put it back where it
+    // came from, which is what the throw is for.
+    expect(owner.adoptWebView).toHaveBeenCalled();
+  });
+
   test('when nothing can reopen the view, the move rejects and the definition is in the log', async () => {
     const owner = windowShard(['view-1']);
     const target = windowShard([]);
