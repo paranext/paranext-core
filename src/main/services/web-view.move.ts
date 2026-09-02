@@ -53,6 +53,12 @@ export type MoveWebViewTarget = number | 'new';
  * briefly is worse than the cost of a user waiting a few seconds longer for a move that was already
  * in trouble.
  */
+/**
+ * Web views with a move already running, so a second move of the same one is refused rather than
+ * racing it. Ids only: this is about which web view is spoken for, not about the move's details.
+ */
+const movesInProgress = new Set<WebViewId>();
+
 const LATE_ADOPT_PROBE_ATTEMPTS = 4;
 
 /** How long {@link findWebViewAdoptedAfterTimeout} waits between attempts. See the attempt count */
@@ -140,6 +146,33 @@ function raiseMoveTarget(target: MoveWebViewTarget): void {
  *   where the web view ended up instead (see {@link recoverAfterFailedMove})
  */
 export async function moveWebView(
+  webViewId: WebViewId,
+  target: MoveWebViewTarget,
+): Promise<WebViewId> {
+  // Refused, not queued. A second move of the same web view races the first for a tab only one of
+  // them can capture, and the loser is told the tab may have closed while it is safe in the window
+  // the winner put it in. Queueing would instead hold the second caller for as long as the first
+  // takes, which the late-adopt probe can stretch to minutes with nothing on screen explaining it.
+  //
+  // This check and the `add` below it are one synchronous step, so two calls cannot both pass it.
+  // The in-flight register cannot do this job: it is filled only after the source window has
+  // answered the capture, which is several awaits later.
+  if (movesInProgress.has(webViewId))
+    throw new Error(`Cannot move webview ${webViewId}: it is already being moved.`);
+  movesInProgress.add(webViewId);
+  try {
+    return await moveCapturedWebView(webViewId, target);
+  } finally {
+    movesInProgress.delete(webViewId);
+  }
+}
+
+/**
+ * The move itself, once {@link moveWebView} has established that this web view is not already on its
+ * way somewhere. Never called directly: everything it does assumes it is the only move holding this
+ * web view.
+ */
+async function moveCapturedWebView(
   webViewId: WebViewId,
   target: MoveWebViewTarget,
 ): Promise<WebViewId> {

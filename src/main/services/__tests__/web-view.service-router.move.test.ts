@@ -222,6 +222,43 @@ describe('moveWebView', () => {
     mocks.settingsGet.mockResolvedValue('power');
   });
 
+  test('refuses a second move of the same web view while the first is still running', async () => {
+    // Two moves of one tab race for a capture only one of them can win, and the loser is told the
+    // tab may have closed while it is sitting safely in the window the winner moved it to. Nothing
+    // stopped that: the in-flight register is filled only after the source window answers the
+    // capture, several awaits in, so both calls are past it before either records anything.
+    //
+    // Double-clicking the menu item is enough to reach it — the item has no disabled state — so
+    // this is refused at the door instead.
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    let releaseAdopt: (webViewId: WebViewId) => void = () => {};
+    target.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseAdopt = resolve;
+        }),
+    );
+    withWindows({ 2: owner, 3: target });
+
+    const firstMove = moveWebView('view-1', 3);
+    await settle();
+
+    await expect(moveWebView('view-1', 3)).rejects.toThrow('it is already being moved');
+    // And it was refused before touching anything: one capture, from the first move only. Without
+    // this the second capture is what returns undefined and produces the false "may have closed".
+    expect(owner.captureAndCloseWebView).toHaveBeenCalledTimes(1);
+
+    releaseAdopt('view-1');
+    await firstMove;
+
+    // The refusal lasts exactly as long as the move does. A guard that leaked would make this web
+    // view unmovable for the rest of the session, so with the target answering promptly the next
+    // move of the same view has to go through.
+    target.adoptWebView.mockImplementation(async () => 'view-1');
+    await expect(moveWebView('view-1', 3)).resolves.toBe('view-1');
+  });
+
   test('moves to an existing window: captures in the owner, adopts in the target, answers the id', async () => {
     const owner = windowShard(['view-1']);
     const target = windowShard([]);
@@ -884,6 +921,13 @@ describe('a web view that is between windows on a move', () => {
 
     releaseAdopt('view-1');
     await moving;
+
+    // And it ends. The public documentation promises this duplicate is bounded by the move, so the
+    // read that produces it has to stop producing it once the move is done — proven here rather
+    // than inferred from the record leaving the register, because the register is not the surface
+    // the promise was made about.
+    const { definitions: afterTheMove } = await getAllOpenWebViewDefinitionsWithReachability();
+    expect(afterTheMove.filter((definition) => definition.id === 'view-1')).toHaveLength(1);
   });
 
   test('does not double-count a web view reported under the id the move started from', async () => {
