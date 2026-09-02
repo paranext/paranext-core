@@ -89,7 +89,9 @@ import {
   createSecondWindow,
   createStepLogger,
   expectWindowDockHasOnlyHomeTab,
+  focusWindowAndWaitForRouting,
   getAppPages,
+  getFocusedWindowId,
   getHeldWebViewIds,
   getWindowIdOfPage,
   homeTabTitle,
@@ -98,6 +100,7 @@ import {
   quitAndExpectCleanExit,
   waitForRendererRegistered,
   webViewTabTitle,
+  withPlatformWindow,
 } from './multi-window.util';
 
 // #region move commands
@@ -277,6 +280,49 @@ test.describe('moving a web view between windows', () => {
   // startups — a move to a new window contains a whole cold renderer start of its own — and the
   // second test adds a third move and a window close on top of that.
   test.setTimeout(480_000);
+
+  test('a window created for a moved web view does not take the foreground', async ({
+    electronApp,
+    mainPage,
+  }) => {
+    // Nobody asked for this window: a move brought it into being, and the user may be working in
+    // another application entirely. It must appear — its content is on the way — without pulling
+    // the foreground away from wherever the user is. The window a person DID ask for is covered by
+    // every other test here, all of which depend on the new window activating normally.
+    const logStep = createStepLogger('withhold-activation');
+    await waitForAppReady(mainPage, 180_000);
+    const window1Id = getWindowIdOfPage(mainPage);
+    const webViewId = homeTabWebViewId(window1Id);
+    await expect(homeTabTitle(mainPage, window1Id)).toBeVisible({ timeout: 60_000 });
+    await expectAppWindowCount(electronApp, 1, 60_000, 'the app to start with exactly one window');
+
+    // Establish the routing target first, so "focus did not move" is a change that could have been
+    // observed rather than a value that was never set.
+    await focusWindowAndWaitForRouting(electronApp, window1Id);
+    expect(await getFocusedWindowId()).toBe(window1Id);
+    logStep(`window ${window1Id} holds focus before the move`);
+
+    await moveWebViewToNewWindow(webViewId);
+    await expectAppWindowCount(electronApp, 2, 60_000, 'the moved web view to get its own window');
+
+    // The new window exists and is visible, but the focused window is still the one the user was in
+    const focusedAfterMove = await getFocusedWindowId();
+    expect(focusedAfterMove).toBe(window1Id);
+    // Matched by the platform's own windowId query parameter, not Electron's numeric
+    // `BrowserWindow.id` — see `withPlatformWindow`'s doc comment in `multi-window.util.ts`.
+    const createdWindowPage = getAppPages(electronApp).find(
+      (page) => getWindowIdOfPage(page) !== window1Id,
+    );
+    if (!createdWindowPage) throw new Error('the move did not create a second window');
+    const newWindowIsVisible = await withPlatformWindow(
+      electronApp,
+      getWindowIdOfPage(createdWindowPage),
+      (win) => win.isVisible(),
+    );
+    expect(newWindowIsVisible).toBe(true);
+    logStep(`window ${window1Id} still holds focus; the created window is visible`);
+  });
+
 
   test('a tab moved to a new window through its context menu leaves its window, arrives in the new one, and leaves a Home tab behind', async ({
     electronApp,
