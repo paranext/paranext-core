@@ -72,6 +72,13 @@ import {
  * reach into iframes, so this always addresses the window's own toolbar.
  */
 const BCV_TRIGGER = 'button[aria-label="book-chapter-trigger"]';
+/**
+ * The scripture editor's web view type. `showContextMenu` looks its menu up from the type's
+ * `webViewMenus` contributions, so this must match the key
+ * `extensions/src/platform-scripture-editor/contributions/menus.json` registers — a type with no
+ * contributions renders no menu, and the assertion would fail for the wrong reason.
+ */
+const SCRIPTURE_EDITOR_WEB_VIEW_TYPE = 'platformScriptureEditor.react';
 
 /**
  * Matches a reference in the BCV trigger whichever label form the toolbar has room for.
@@ -149,6 +156,36 @@ async function raisePopoverFromWebView(frame: Frame, bodyText: string): Promise<
       webViewWindow.webViewId,
     );
   }, bodyText);
+}
+
+/**
+ * Raise a context menu from INSIDE a web view iframe through the papi object the iframe inherits.
+ * Resolves with the command the user chose, or undefined when the menu is dismissed — so the
+ * promise stays pending until something closes the menu, and callers must not await it until then.
+ */
+async function showContextMenuFromWebView(
+  frame: Frame,
+  webViewType: string,
+): Promise<string | undefined> {
+  return frame.evaluate(async (type) => {
+    // See raisePopoverFromWebView for why this cast is needed.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const webViewWindow = window as unknown as {
+      papi: {
+        overlays: {
+          showContextMenu(
+            webViewType: string,
+            webViewId: string,
+            options?: { position?: { x: number; y: number } },
+          ): Promise<string | undefined>;
+        };
+      };
+      webViewId: string;
+    };
+    return webViewWindow.papi.overlays.showContextMenu(type, webViewWindow.webViewId, {
+      position: { x: 40, y: 40 },
+    });
+  }, webViewType);
 }
 
 /** Dismiss a popover through the same inherited papi surface that raised it. */
@@ -349,6 +386,28 @@ test.describe('per-window UI isolation', () => {
     await dismissPopoverFromWebView(editorFrame2, overlayId);
     await expect(popover2).toHaveCount(0, { timeout: 15_000 });
     logStep('popover from window 2 web view rendered in window 2 only');
+
+    // ── Context menu raised from window 2's WEB VIEW renders only in window 2 ──────────────────
+    // The popover proof above covers one overlay kind through the inherited papi; the context menu
+    // is the other, and it takes a different path — the menu is fetched from the web view type's
+    // contributions before anything renders, so a regression that resolved contributions against
+    // the wrong window would surface here and not there. Unlike showPopover, showContextMenu stays
+    // pending until the menu is dismissed, so the promise is held un-awaited while the DOM is
+    // asserted, exactly as the dialog below does.
+    const contextMenuPromise = showContextMenuFromWebView(
+      editorFrame2,
+      SCRIPTURE_EDITOR_WEB_VIEW_TYPE,
+    );
+    // The rendered menu, not `[data-overlay-context-menu]`: that marks the trigger, which is a
+    // zero-size, opacity-0, aria-hidden anchor button and so is never visible by design.
+    const contextMenu2 = page2.locator('.overlay-context-menu-content');
+    await expect(contextMenu2).toBeVisible({ timeout: 15_000 });
+    await expect(mainPage.locator('.overlay-context-menu-content')).toHaveCount(0);
+    // Escape dismisses it, which resolves the pending request with undefined (no command chosen).
+    await page2.keyboard.press('Escape');
+    expect(await contextMenuPromise).toBeUndefined();
+    await expect(contextMenu2).toHaveCount(0, { timeout: 15_000 });
+    logStep('context menu from window 2 web view rendered in window 2 only');
 
     // ── Modal dialog through the generic request lands in the FOCUSED window ───────────────────
     // Window 2 still holds focus. The pending request resolves only when the dialog is answered
