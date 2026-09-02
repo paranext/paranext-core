@@ -855,9 +855,9 @@ describe('content admitted to the dock after the entry point had its say', () =>
   test('a web view refused after its provider answered leaves nothing of it behind', async () => {
     // A refusal this late is not a request that was turned away at the door: the provider has run,
     // so the extension host holds a controller for this web view and the state is persisted under
-    // an id this window's scope is stripped from — both outlive the window that refused. Nothing
-    // else will ever emit a close event for a tab that never joined the dock, so the refusal has
-    // to land where the failed-add cleanup catches it.
+    // its own id — both outlive the window that refused. Nothing else will ever emit a close event
+    // for a tab that never joined the dock, so the refusal has to land where the failed-add cleanup
+    // catches it.
     const { shard, dockedWebViews, provider, emptyTheDockAndBeToldItIsClosing } =
       await windowHoldingOneWebViewWithNothingLoading();
     const { deleteFullWebViewStateById } = await import(
