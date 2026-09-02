@@ -1,6 +1,7 @@
 import logo from '@assets/icon.png';
 import { ReferenceHistoryButtons } from '@renderer/components/reference-history-buttons.component';
 import { SyncStatusButton } from '@renderer/components/sync-status-button.component';
+import { useBackendSyncActivity } from '@renderer/hooks/use-backend-sync-activity.hook';
 import { UserProfilePopover } from '@renderer/components/user-profile-popover/user-profile-popover.component';
 import {
   useData,
@@ -436,6 +437,19 @@ export function PlatformBibleToolbar() {
   // `undefined` while unknown — the render gate below treats that as available (fail open). Only
   // checked in simple mode, since that gate is the only thing the answer feeds.
   const isSendReceiveAvailable = useSendReceiveAvailability({ enabled: !isPowerMode });
+  // Fail open a second way: even a settled `false` must not hide the indicator once the backend has
+  // reported a sync. `useSendReceiveAvailability` asks whether the send/receive EXTENSION is
+  // present, but syncs also start from paths that never touch it — `startup-tasks.ts` calls the
+  // dotnet `syncProjects` command directly — so an extension that is missing or failed to activate
+  // would otherwise leave a multi-minute sync with no surface at all in Simple mode, where the
+  // persistent toast is suppressed in favour of this indicator.
+  //
+  // Sticky, not live: a gate on "is syncing right now" unmounts the control in the same commit the
+  // sync finishes, so the outcome the user was waiting for is never painted and never announced, and
+  // the status hook's seed loop is torn down mid-flight. Once a sync has been seen this stays true
+  // for the session. Reads a store the renderer seeds once at startup, so it costs no subscription
+  // and no request here. See `useBackendSyncActivity`.
+  const hasBackendSynced = useBackendSyncActivity();
 
   const openHome = useCallback(async () => {
     try {
@@ -469,11 +483,25 @@ export function PlatformBibleToolbar() {
         appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
         configAreaChildren={
           <>
-            {!isPowerMode && isSendReceiveAvailable !== false && (
+            {!isPowerMode && (isSendReceiveAvailable !== false || hasBackendSynced) && (
               // Simple mode only — power users send/receive per project from the Home
               // view. Fail open on availability: `undefined` means not known yet (the extension
               // host is busy, or send/receive is still activating), and the button must not hinge
-              // on that resolving. Only a settled `false` hides it.
+              // on that resolving. A settled `false` hides it — unless the backend has reported a
+              // sync, which is a surface the user needs regardless of what the extension probe says
+              // (see `hasBackendSynced` above).
+              //
+              // The cost of failing open is one seed-retry loop for the extension's CLAIM in builds
+              // with no send/receive at all, restarted on each Simple/Power toggle since that unmounts
+              // and remounts this. An unregistered command is not cheap to fail: `sendCommand` routes
+              // through `requestWithRetry`, so one read rejects only after `MAX_REQUEST_ATTEMPTS`
+              // attempts at `REQUEST_ATTEMPT_WAIT_TIME_MS` apart (~10s, `rpc.model.ts`). Availability
+              // settles to `false` within `SEND_RECEIVE_UNKNOWN_GRACE_MS` (5s) there, so this unmounts
+              // while that loop's FIRST read is still retrying. The backend activity signal costs
+              // nothing here either way: it is seeded once at startup by `initSyncActivityService`
+              // and read from a store, not re-seeded per mount.
+              // TODO(PT-4233): A one-shot capability probe would fit a permanently-absent claim
+              // command better than a retry loop does.
               <SyncStatusButton />
             )}
             {marketingVersion !== '' && (

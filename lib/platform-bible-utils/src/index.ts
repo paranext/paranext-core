@@ -107,6 +107,7 @@ export {
   includes,
   indexOf,
   isLocalizeKey,
+  isolateBidi,
   isWhiteSpace,
   lastIndexOf,
   normalize,
