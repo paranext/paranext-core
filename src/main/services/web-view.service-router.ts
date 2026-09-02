@@ -781,7 +781,9 @@ async function findWebViewAdoptedAfterTimeout(
 /**
  * Raise the window a completed move put the web view in. Raising is how the user sees where the web
  * view went — same narrow rule as cross-window opens: only between this app's windows, never taking
- * focus from another application. A new window raises itself when it is created.
+ * focus from another application. A window created for the move is not raised at all: it is
+ * revealed without activation on purpose, so the move does not pull the user out of the window they
+ * are working in.
  */
 function raiseMoveTarget(target: MoveWebViewTarget): void {
   if (typeof target === 'number' && isApplicationFocused()) focusWindow(target);
