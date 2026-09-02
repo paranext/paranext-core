@@ -1217,6 +1217,11 @@ describe('BookChapterControl top-match preview', () => {
   });
 }, 15_000);
 
+// Each case here clicks its way down through the popover — book list, then chapter grid, then for
+// the verse cases a verse grid — so it carries the same rendering cost as the top-match preview
+// block above and gets the same budget. Windows CI runs these roughly 2.5x slower than an idle
+// machine, which puts the deepest case past vitest's 5s default. Raised per suite rather than
+// globally so a genuinely hung test elsewhere still fails fast.
 describe('BookChapterControl back button', () => {
   test('is labelled for returning to books while in chapters view', async () => {
     const user = userEvent.setup();
@@ -1329,4 +1334,4 @@ describe('BookChapterControl back button', () => {
 
     expect(await screen.findByRole('button', { name: 'Back to books' })).toBeInTheDocument();
   });
-});
+}, 15_000);
