@@ -266,14 +266,15 @@ function getWritableEditorProjectIds(definitions: SavedWebViewDefinition[]): str
  * Let every sync a closing window started finish before the shutdown cancels what is in progress.
  *
  * A window that closed a moment ago is already syncing what went with it, and nothing else can: its
- * editors only ever existed in it. Waited for rather than cancelled — it is bounded by the same
- * shutdown wait everything else here is, so the cost is a delay and the alternative is that
- * window's edits never going out at all.
+ * editors only ever existed in it. Waited for rather than cancelled or raced — it is bounded by the
+ * same shutdown wait everything else here is, so the cost is a delay and the alternative is that
+ * window's edits never going out at all. Simple mode goes on to cancel whatever is in progress;
+ * power mode runs a scheduled sync of its own against projects this one may still be writing.
  */
 async function drainInFlightWindowCloseSyncs(): Promise<void> {
   if (inFlightWindowCloseSyncs.size === 0) return;
   logger.info(
-    `Waiting for ${inFlightWindowCloseSyncs.size} closing window sync(s) before cancelling in-progress syncs for shutdown`,
+    `Waiting for ${inFlightWindowCloseSyncs.size} closing window sync(s) before the shutdown starts its own`,
   );
   await Promise.allSettled([...inFlightWindowCloseSyncs]);
 }
