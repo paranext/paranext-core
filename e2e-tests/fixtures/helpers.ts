@@ -818,6 +818,38 @@ export function classifyBackupOwner(ownerPid: number): BackupOwner {
 }
 
 /**
+ * Move a backup this run cannot make sense of out of the way, and report where it went.
+ *
+ * Renamed rather than deleted: an unreadable backup is still the only surviving record of what the
+ * run that wrote it parked, and discarding that is a decision for whoever comes to look. Leaving it
+ * where it is, though, is not the conservative choice it looks like — the pin paths refuse to act
+ * while one stands, so a backup nothing ever moves stops every later run, on every worker, until a
+ * human deletes a gitignored file by hand.
+ *
+ * @param stamp Shared by the parts of one backup — the app-global directory and its manifest are
+ *   moved together, and a reader can only pair them up again if their names agree.
+ * @returns Where it was moved to, or undefined when the move failed, leaving it exactly as it was.
+ *   Callers phrase both outcomes: this one is silent so a recovery path reports its own state
+ *   once.
+ */
+function quarantineUnreadableBackup(
+  target: string,
+  stamp: number = Date.now(),
+): string | undefined {
+  // Epoch milliseconds rather than an ISO timestamp: `:` is not a legal filename character on
+  // Windows, and these files are written on all three platforms.
+  let quarantined = `${target}.unreadable-${stamp}`;
+  // Never overwrite an earlier quarantine — it holds some other run's only copy.
+  if (fs.existsSync(quarantined)) quarantined = `${quarantined}-${process.pid}`;
+  try {
+    fs.renameSync(target, quarantined);
+    return quarantined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Write a file so no reader can ever observe it half-written.
  *
  * `writeFileSync` truncates before it writes, so an interrupt inside that window leaves a zero-byte
@@ -987,7 +1019,10 @@ export function pinAppGlobalState(): () => void {
     console.warn(
       `Leaving ${liveDir} as it is: ${mainLocalStorageBackupDir()} stands but this run cannot ` +
         'restore it, so emptying the store would discard state nothing could put back. A launch ' +
-        'may therefore inherit app-global state from the developer or from an earlier run.',
+        'may therefore inherit app-global state from the developer or from an earlier run. An ' +
+        `unreadable backup clears itself: the next run's global setup moves it aside as ` +
+        `${mainLocalStorageBackupDir()}.unreadable-<epoch ms>, keeping its contents. One a live ` +
+        'run owns is left alone on purpose until that run ends.',
     );
 
   return () => {
@@ -1019,9 +1054,27 @@ export function restoreAppGlobalState(): string[] | undefined {
 
   const manifest = readAppGlobalBackup();
   if (manifest === undefined) {
+    // One stamp for both halves: the directory holds the keys and the manifest says who parked
+    // them, so whoever inspects them has to be able to see which belongs to which.
+    const stamp = Date.now();
+    const movedDir = fs.existsSync(backupDir)
+      ? quarantineUnreadableBackup(backupDir, stamp)
+      : undefined;
+    const movedManifest = fs.existsSync(mainLocalStorageBackupManifestPath())
+      ? quarantineUnreadableBackup(mainLocalStorageBackupManifestPath(), stamp)
+      : undefined;
     console.warn(
-      `Leaving ${backupDir} alone: it has no readable record of which run took it. Nothing was ` +
-        'restored and nothing was deleted — inspect it by hand.',
+      movedDir === undefined && movedManifest === undefined
+        ? `Leaving ${backupDir} alone: it has no readable record of which run took it, and it ` +
+            'could not be moved aside. Nothing was restored and nothing was deleted, but app-global ' +
+            'state will not be isolated while it stands — inspect it by hand.'
+        : `Moved the app-global backup aside to ${[movedDir, movedManifest]
+            .filter((moved) => moved !== undefined)
+            .join(
+              ' and ',
+            )}: it has no readable record of which run took it. Nothing was restored ` +
+            'and nothing was deleted — what moved holds app-global state an earlier run parked, ' +
+            'which may be yours, so look before removing it.',
     );
     return undefined;
   }
@@ -1169,9 +1222,15 @@ export function restoreLeakedSettings(): string[] | undefined {
 
   const backup = readSettingsBackup();
   if (backup === undefined) {
+    const moved = quarantineUnreadableBackup(settingsBackupPath());
     console.warn(
-      `Leaving ${settingsBackupPath()} alone: it is unreadable, or predates backups recording ` +
-        'which run took them. Nothing was restored and nothing was deleted — inspect it by hand.',
+      moved === undefined
+        ? `Leaving ${settingsBackupPath()} alone: it is unreadable, or predates backups recording ` +
+            'which run took them, and it could not be moved aside. Nothing was restored and nothing ' +
+            'was deleted, but settings pins will refuse to run until it is gone — inspect it by hand.'
+        : `Moved ${settingsBackupPath()} aside to ${moved}: it is unreadable, or predates backups ` +
+            'recording which run took them. Nothing was restored and nothing was deleted — those ' +
+            'bytes are at that path if any of it is yours. Runs are no longer blocked.',
     );
     return undefined;
   }
@@ -1273,8 +1332,10 @@ export function preConfigureSettings(overrides: Record<string, unknown>): () => 
       // intervened by hand. Failing here costs a run; pinning anyway costs them their settings.
       throw new Error(
         `Refusing to pin settings: the backup at ${settingsBackupPath()} cannot be read, so this ` +
-          'pin could not be undone by this run or recovered by the next. Inspect that file and ' +
-          'remove it once you are satisfied nothing in it is yours.',
+          'pin could not be undone by this run or recovered by the next. This does not need a ' +
+          "manual cleanup to clear: the next run's global setup moves that file aside as " +
+          `${settingsBackupPath()}.unreadable-<epoch ms> and pins normally. Read it there if any ` +
+          'of it is yours; nothing deletes it.',
       );
     const pinnedKeys = [...new Set([...standing.pinnedKeys, ...Object.keys(overrides)])];
     writeFileAtomic(settingsBackupPath(), JSON.stringify({ ...standing, pinnedKeys }));

@@ -33,9 +33,16 @@ function readSettings(): string | undefined {
   return fs.existsSync(SETTINGS_PATH) ? fs.readFileSync(SETTINGS_PATH, 'utf-8') : undefined;
 }
 
+/** Names of the backups recovery has moved aside, relative to {@link SETTINGS_DIR}. */
+function quarantinedBackups(): string[] {
+  const prefix = `${path.basename(BACKUP_PATH)}.unreadable-`;
+  return fs.readdirSync(SETTINGS_DIR).filter((name) => name.startsWith(prefix));
+}
+
 beforeEach(() => {
   fs.rmSync(SETTINGS_PATH, { force: true });
   fs.rmSync(BACKUP_PATH, { force: true });
+  quarantinedBackups().forEach((name) => fs.rmSync(path.join(SETTINGS_DIR, name), { force: true }));
 });
 
 afterAll(() => {
@@ -135,6 +142,36 @@ describe('backup ownership', () => {
 });
 
 describe('settings backup integrity', () => {
+  it('moves an unreadable backup aside so the next pin is not blocked forever', () => {
+    fs.writeFileSync(SETTINGS_PATH, DEVELOPER_SETTINGS);
+    // The format that predates backups recording their owner: valid JSON, no `ownerPid`. Every
+    // backup written before that field existed reads as unusable, so this is the state developers
+    // arrive in rather than an exotic one.
+    const stale = JSON.stringify({ existed: true, contents: DEVELOPER_SETTINGS });
+    fs.writeFileSync(BACKUP_PATH, stale);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      expect(restoreLeakedSettings()).toBeUndefined();
+
+      // Moved, never deleted: those bytes are the only surviving record of what that run parked.
+      expect(fs.existsSync(BACKUP_PATH)).toBe(false);
+      expect(quarantinedBackups()).toHaveLength(1);
+      const [moved] = quarantinedBackups();
+      expect(fs.readFileSync(path.join(SETTINGS_DIR, moved), 'utf-8')).toBe(stale);
+      expect(readSettings()).toBe(DEVELOPER_SETTINGS);
+      // Nobody can recover by hand from a file they cannot find.
+      expect(warn.mock.calls.flat().join(' ')).toContain(moved);
+
+      // The reason for moving it at all: the next pin is an ordinary first pin, not a hard stop
+      // that repeats on every worker of every run until a human deletes a gitignored file.
+      expect(() => preConfigureSettings({ 'platform.interfaceMode': 'power' })).not.toThrow();
+      expect(readSettings()).toContain('power');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('treats a zero-byte backup as unusable and leaves the settings file alone', () => {
     fs.writeFileSync(SETTINGS_PATH, DEVELOPER_SETTINGS);
     // Exactly what an interrupt inside a truncating write leaves behind.
@@ -142,8 +179,9 @@ describe('settings backup integrity', () => {
 
     expect(restoreLeakedSettings()).toBeUndefined();
     expect(readSettings()).toBe(DEVELOPER_SETTINGS);
-    // Never deleted: a backup we cannot read is a human's decision, not ours to discard.
-    expect(fs.existsSync(BACKUP_PATH)).toBe(true);
+    // Never deleted: a backup we cannot read is a human's decision, not ours to discard. Moved
+    // aside rather than left in place, because a backup nothing moves blocks every later pin.
+    expect(quarantinedBackups()).toHaveLength(1);
   });
 
   it('treats a truncated backup as unusable rather than as settings contents', () => {
@@ -164,7 +202,7 @@ describe('settings backup integrity', () => {
 
     expect(restoreLeakedSettings()).toBeUndefined();
     expect(readSettings()).toBe(DEVELOPER_SETTINGS);
-    expect(fs.existsSync(BACKUP_PATH)).toBe(true);
+    expect(quarantinedBackups()).toHaveLength(1);
   });
 
   it('leaves a backup owned by a still-running process completely alone', () => {

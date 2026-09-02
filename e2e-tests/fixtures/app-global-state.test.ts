@@ -11,7 +11,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pinAppGlobalState, restoreAppGlobalState } from './helpers';
 
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'pt-app-global-'));
@@ -57,14 +57,55 @@ function writeKey(key: string, value: string): void {
   fs.writeFileSync(path.join(LIVE_DIR, key), value);
 }
 
+/** Names of the backups recovery has moved aside, relative to {@link ROOT}. */
+function quarantinedBackups(): string[] {
+  const prefix = `${path.basename(BACKUP_DIR)}.unreadable-`;
+  return fs.readdirSync(ROOT).filter((name) => name.startsWith(prefix));
+}
+
 beforeEach(() => {
   fs.rmSync(LIVE_DIR, { recursive: true, force: true });
   fs.rmSync(BACKUP_DIR, { recursive: true, force: true });
   fs.rmSync(`${LIVE_DIR}.e2e-backup.json`, { force: true });
+  quarantinedBackups().forEach((name) =>
+    fs.rmSync(path.join(ROOT, name), { recursive: true, force: true }),
+  );
 });
 
 afterAll(() => {
   fs.rmSync(ROOT, { recursive: true, force: true });
+});
+
+describe('app-global backup integrity', () => {
+  it('moves a backup with no readable manifest aside so isolation is not off forever', () => {
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+    // Exactly what an interrupt between the copy loop and the manifest write leaves behind: parked
+    // keys with nothing recording who parked them.
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    fs.writeFileSync(path.join(BACKUP_DIR, SCR_REFS_KEY), DEVELOPER_REF);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      expect(restoreAppGlobalState()).toBeUndefined();
+
+      // Moved, never deleted: that directory holds the developer's own parked keys.
+      expect(fs.existsSync(BACKUP_DIR)).toBe(false);
+      expect(quarantinedBackups()).toHaveLength(1);
+      const [moved] = quarantinedBackups();
+      expect(fs.readFileSync(path.join(ROOT, moved, SCR_REFS_KEY), 'utf-8')).toBe(DEVELOPER_REF);
+      // The live store is not touched on the way past: recovery could not tell what belongs there.
+      expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
+      // Nobody recovers keys by hand from a directory they cannot find.
+      expect(warn.mock.calls.flat().join(' ')).toContain(moved);
+
+      // The reason for moving it at all: the next pin isolates the store again, instead of
+      // declining to empty it on every run from here on.
+      pinAppGlobalState();
+      expect(readKey(SCR_REFS_KEY)).toBeUndefined();
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
 
 describe('app-global state pin', () => {
