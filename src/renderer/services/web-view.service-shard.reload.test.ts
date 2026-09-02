@@ -91,6 +91,29 @@ type ReloadShard = {
 };
 
 /**
+ * Register the shard over a dock layout stand-in whose add succeeds, recording how it was asked to
+ * dock — the reload path's own arguments, which the throwing stand-in below never reaches.
+ */
+async function shardOverDockRecordingAdds() {
+  const module = await import('@renderer/services/web-view.service-shard');
+  const { networkObjectService } = await import('@shared/services/network-object.service');
+  const addWebViewToDock = vi.fn(() => ({ type: 'tab' }));
+  const dockLayout = {
+    onLayoutChangeRef: { current: undefined },
+    loadLayout: () => {},
+    getAllWebViewDefinitions: () => [],
+    getWebViewDefinition: () => LIVE_DEFINITION,
+    addWebViewToDock,
+    simpleLayout: EMPTY_LAYOUT,
+    testLayout: EMPTY_LAYOUT,
+  } as unknown as PapiDockLayout;
+  module.registerDockLayout(dockLayout);
+  await module.startWebViewServiceShard();
+  const [, shard] = vi.mocked(networkObjectService.set).mock.calls[0];
+  return { shard: shard as unknown as ReloadShard, addWebViewToDock };
+}
+
+/**
  * Register the shard over a dock layout stand-in holding one live web view whose dock add always
  * throws — what a reload sees when the definition the provider handed back makes the tab loader
  * throw: the loader's failure surfaces as an error tab under a fresh id, the add throws, and the
@@ -156,6 +179,44 @@ beforeEach(() => {
   mocks.networkRequest.mockImplementation(async (requestType: string) =>
     requestType === 'windowLayout:get' ? { kind: 'empty' } : undefined,
   );
+  globalThis.wasWindowCreatedWithoutActivation = false;
+});
+
+describe('content arriving through a door that names no caller', () => {
+  test('a reload in a window the user has not activated does not take document focus', async () => {
+    // A reload names no window and carries no say over focus: an extension asks for it, and it
+    // re-docks wherever the view already lives. If that is a window main opened in the background,
+    // taking document focus there focuses the iframe, which asks the browser for the foreground —
+    // the same defect as a fresh open, through a door no caller passes a flag to.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const { shard, addWebViewToDock } = await shardOverDockRecordingAdds();
+    await primeProvider();
+
+    await shard.reloadWebView('test.type', 'open-view');
+
+    expect(addWebViewToDock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      true,
+    );
+  });
+
+  test('a reload in a window the user has activated docks normally', async () => {
+    // The control: withholding is what a background window does, not what a reload does.
+    globalThis.wasWindowCreatedWithoutActivation = false;
+    const { shard, addWebViewToDock } = await shardOverDockRecordingAdds();
+    await primeProvider();
+
+    await shard.reloadWebView('test.type', 'open-view');
+
+    expect(addWebViewToDock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      false,
+    );
+  });
 });
 
 describe('a failed reload of an open web view', () => {
