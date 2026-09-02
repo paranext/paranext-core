@@ -17,6 +17,15 @@
  * under `dynamicRegistrations` with its raw source expression — never guessed, never silently
  * dropped.
  *
+ * That covers resolution, not parsing, and the difference matters. A call site this module
+ * recognises but whose text the bracket walk cannot get through — an unbalanced bracket, a close
+ * bracket of the wrong type, a missing expected segment — is skipped outright: no registration, no
+ * dynamic entry, no error. Raising there would fail the build on any construct the walk has not
+ * been taught, which is a worse trade for a scanner that is deliberately best-effort, so the
+ * backstop is the live check rather than this one: the snapshot's E2E comparison requires every
+ * method the running app exposes to reduce to a known entry (its "direction 2"), so a registration
+ * dropped here surfaces there — and that job blocks on Linux.
+ *
  * Pure and filesystem-free, mirroring `generate-wire-surface.util.ts`: callers pass in the C# file
  * paths and contents to scan (see `generate-wire-surface.ts` for the real filesystem walk), which
  * keeps this module directly testable against small fixtures and independent of scan order.
@@ -24,7 +33,6 @@
 
 // #region Public types
 
-/** One of the wire-visible C# registration shapes this scanner recognises. */
 /**
  * Order two strings by UTF-16 code unit.
  *
@@ -38,6 +46,7 @@ export function compareCodeUnits(a: string, b: string): number {
   return a < b ? -1 : 1;
 }
 
+/** One of the wire-visible C# registration shapes this scanner recognises. */
 export type CSharpRegistrationCategory =
   | 'networkObject'
   | 'dataProvider'
