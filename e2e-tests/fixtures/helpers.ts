@@ -1042,7 +1042,13 @@ export function restoreAppGlobalState(): string[] | undefined {
   // run's output. For a backup recovered from a run that has died, keys accumulated since cannot be
   // told from run output, and the developer's are the ones at stake — so restore over the top and
   // leave the rest, which is untidy but never destructive.
-  if (classifyBackupOwner(manifest.ownerPid) === 'ours')
+  //
+  // It also requires the directory the keys came from to still be there. This function removes that
+  // directory and THEN the manifest, so a run killed between the two leaves a manifest naming this
+  // process with nothing behind it; clearing then would delete the developer's keys with nothing to
+  // put back. An empty pin is different and still clears: its directory exists and is legitimately
+  // empty, which is a store that was empty when it was taken.
+  if (classifyBackupOwner(manifest.ownerPid) === 'ours' && fs.existsSync(backupDir))
     storedKeyNames(liveDir).forEach((key) => fs.rmSync(path.join(liveDir, key), { force: true }));
 
   if (parked.length > 0) fs.mkdirSync(liveDir, { recursive: true });

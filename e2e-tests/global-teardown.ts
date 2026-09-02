@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { execSync } from 'child_process';
 import { killProcessesUnderRoot, runCleanup } from './scoped-cleanup';
+import { restoreAppGlobalState, restoreLeakedSettings } from './fixtures/helpers';
 
 // Playwright global teardown requires this signature even though config is unused
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -65,4 +66,23 @@ export default async function globalTeardown(_config: FullConfig): Promise<void>
   if (byName === 'ran') console.log('Cleanup: also swept by process name (the machine is ours).');
   if (byName === 'failed')
     console.log('Cleanup: the process-name sweep reported nothing to stop, or could not complete.');
+
+  // Last line of defence for the developer's own settings and app-global state.
+  //
+  // Normally the final `teardownElectronApp` puts them back, but a relaunch chain returns early
+  // while it is preserving its profile — so a chain that dies part-way never reaches that restore
+  // and leaves the pin standing. Global setup would recover it, but only when the developer next
+  // runs e2e, and until then their reference and theme are simply missing. Both calls are
+  // idempotent and do nothing when there is no backup to put back, so running them here costs a
+  // completed run nothing.
+  const recoveredKeys = restoreAppGlobalState();
+  if (recoveredKeys !== undefined)
+    console.log(
+      recoveredKeys.length > 0
+        ? `Cleanup: restored app-global state (${recoveredKeys.join(', ')}).`
+        : 'Cleanup: restored an app-global pin that had parked nothing.',
+    );
+  const leakedKeys = restoreLeakedSettings();
+  if (leakedKeys !== undefined && leakedKeys.length > 0)
+    console.log(`Cleanup: restored leaked settings (${leakedKeys.join(', ')}).`);
 }

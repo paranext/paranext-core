@@ -134,7 +134,10 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   if (await isPortInUse(WEBSOCKET_PORT)) {
     throw new Error(
       `Port ${WEBSOCKET_PORT} is already in use. ` +
-        'Stop the running Platform.Bible instance (npm run stop) before running E2E tests.',
+        'Find what holds it (`ss -ltnp | grep :8876`) and stop that process alone. Do not reach ' +
+        'for `npm run stop` unless the whole machine is yours: it matches by process name and ' +
+        "kills every Electron and dotnet on it, including other checkouts' runs and any app you " +
+        'have open.',
     );
   }
   // What makes these two safe is that each backup records the run that took it: a backup owned by a

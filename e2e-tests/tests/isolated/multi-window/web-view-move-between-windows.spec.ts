@@ -322,6 +322,9 @@ test.describe('moving a web view between windows', () => {
     const page2 = await newWindowPromise;
     await page2.waitForLoadState('domcontentloaded');
     const window2Id = getWindowIdOfPage(page2);
+    // Premise, not behaviour: everything below reads "window 1" and "window 2" as distinct places,
+    // so state that here rather than letting a same-id surprise surface as a confusing failure
+    // further down.
     expect(window2Id).not.toBe(window1Id);
     await waitForRendererRegistered(window2Id, 180_000);
     logStep(`window ${window2Id} created for the move`);

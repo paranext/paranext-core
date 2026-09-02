@@ -162,7 +162,10 @@ export interface CdpFixtures {
   mainPage: Page;
   /**
    * Window size this suite's layout is written against; set with `test.use({ requiredWindowSize: {
-   * width, height } })`. Defaults to {@link DEFAULT_WINDOW_SIZE}.
+   * width, height } })`. Defaults to the screenshot floor ({@link MIN_SCREENSHOT_WIDTH} x
+   * {@link MIN_SCREENSHOT_HEIGHT}), NOT {@link DEFAULT_WINDOW_SIZE}, because any spec on this fixture
+   * may write evidence screenshots and those have a Full HD minimum. Declaring anything smaller
+   * means the app must actually have been started at that size.
    *
    * Attach mode cannot resize the window — it has no main-process channel — so this is asserted
    * rather than applied. Start the app at the declared size.

@@ -60,6 +60,7 @@ function writeKey(key: string, value: string): void {
 beforeEach(() => {
   fs.rmSync(LIVE_DIR, { recursive: true, force: true });
   fs.rmSync(BACKUP_DIR, { recursive: true, force: true });
+  fs.rmSync(`${LIVE_DIR}.e2e-backup.json`, { force: true });
 });
 
 afterAll(() => {
@@ -205,6 +206,26 @@ describe('app-global recovery refuses a backup another run still owns', () => {
 });
 
 describe('app-global pin refuses to empty a store it cannot park', () => {
+  it('leaves the developer state alone when a stale manifest outlives its backup directory', () => {
+    // A restore copies the keys back, removes the backup directory, and THEN removes the manifest.
+    // A run killed between those last two steps — or a manifest delete that fails — leaves the keys
+    // correctly restored beside a manifest naming this process with nothing behind it. The next
+    // restore must not read that as "this process pinned, so clear the store": there is nothing left
+    // to put back, so clearing would simply delete the developer's keys.
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+    writeKey(THEME_KEY, '"dark"');
+    pinAppGlobalState();
+    const manifestAfterPin = fs.readFileSync(`${LIVE_DIR}.e2e-backup.json`, 'utf-8');
+    restoreAppGlobalState();
+    // Exactly the crash state: keys back in place, backup directory gone, manifest still standing.
+    fs.writeFileSync(`${LIVE_DIR}.e2e-backup.json`, manifestAfterPin);
+
+    restoreAppGlobalState();
+
+    expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
+    expect(readKey(THEME_KEY)).toBe('"dark"');
+  });
+
   it('leaves the developer state alone when a backup dir stands with no manifest', () => {
     // A run killed between creating the backup directory and writing its manifest leaves exactly
     // this: a directory that exists and says nothing. Every later pin sees it, parks nothing —

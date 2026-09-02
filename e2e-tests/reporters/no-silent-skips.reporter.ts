@@ -93,9 +93,10 @@ class NoSilentSkipsReporter implements Reporter {
       .map(
         (test) =>
           `  ${path.relative(process.cwd(), test.location.file)}:${test.location.line} › ` +
-          // No `.slice(1)` to drop the project name: the filter above already removes it, because
-          // a config with no `projects` array reports it as an empty string. Slicing as well eats
-          // the outermost describe title.
+          // No `.slice(1)` to drop the project name. Under a config with no `projects` array the
+          // name is an empty string and the filter removes it anyway; under one that names its
+          // projects the name survives and is printed, which is useful rather than wrong. Slicing
+          // unconditionally would eat the outermost describe title in the first case.
           `${test
             .titlePath()
             .filter((segment) => segment && !segment.endsWith('.spec.ts'))
