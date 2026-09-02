@@ -1432,10 +1432,10 @@ async function main() {
       // of this teardown, leaving the window tracked forever and the app never told it closed.
       //
       // The removal reports what this window's marks said, because it is what clears them. Asking
-      // afterwards would answer for a window that is no longer there — which is how the abandoned
-      // mark was lost — and asking beforehand is an ordering rule nothing enforces. Taking it from
-      // the return leaves no order to get wrong. The other two marks below are cleared later, by
-      // `handleWindowRemoved` and `clearModeSwitchClose`, so they are still true here.
+      // afterwards would answer for a window that is no longer there, and asking beforehand is an
+      // ordering rule nothing enforces. Taking it from the return leaves no order to get wrong. The
+      // other two marks below are cleared later, by `handleWindowRemoved` and
+      // `clearModeSwitchClose`, so they are still true here.
       const { wasAbandoned } = removeWindow(newWindow, windowId);
 
       // What this window's disappearance means for its entry. A deliberate close — the app stays up

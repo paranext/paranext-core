@@ -1683,10 +1683,10 @@ const PRIMARY_WINDOW_QUESTION_TIMEOUT_MS = 5_000;
  * Decided from THIS window's own entry and nothing else. A window runs the switch when the list
  * says it is the primary, and stands down otherwise — including when the list names no primary at
  * all, which happens when the primary is absent from it: a window whose renderer has been given up
- * on is deliberately left open but omitted, as is one already recorded as closing. Inferring "then
- * it must be me" from that silence is what let every secondary run the switch at once, duplicating
- * the shared writes above and putting the fixed simple-mode tab ids in several windows together —
- * the collision single-window simple mode is supposed to make unreachable.
+ * on is deliberately left open but omitted, as is one already recorded as closing. Silence is not
+ * evidence that this window holds the role: reading it that way has every secondary run the switch
+ * at once, duplicating the shared writes above and putting the fixed simple-mode tab ids in several
+ * windows together — the collision single-window simple mode is supposed to make unreachable.
  *
  * A question that could not be asked is the one case that still answers `true`: nothing was
  * learned, and leaving the mode changed with the dock never reloaded is the worse outcome. On that
@@ -1776,8 +1776,8 @@ export async function handleSwitchToSimpleMode(
     await withTimeout(waitForNextPaint, PAINT_WAIT_TIMEOUT_MS);
 
     // Behind the overlay, so the round trip below is covered by it like every other lookup here:
-    // by this point the mode has already flipped, so anything the user rearranges in the still
-    // -visible Power layout would be silently refused by `saveLayout`. Ahead of the layout build,
+    // by this point the mode has already flipped, so anything the user rearranges in the Power
+    // layout still on screen would be silently refused by `saveLayout`. Ahead of the layout build,
     // the project cache and the finalize, all of which write state the whole application shares.
     // The `finally` releases the overlay on this return like any other.
     if (!(await isThisWindowRunningTheSwitchToSimple())) return;
