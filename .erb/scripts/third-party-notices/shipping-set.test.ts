@@ -19,6 +19,8 @@ import {
   resolveFromLock,
   acceptShrinkFromEnv,
   missingDirectDependencies,
+  missingImportedPackages,
+  importedPackages,
   readDirectDependencies,
 } from './shipping-set';
 import { loadPolicy } from './policy';
@@ -86,8 +88,19 @@ function writeReleaseAppDependency(name: string, version: string) {
   return dir;
 }
 
+/**
+ * The workspace shape this repository declares, which the fixtures stand in for.
+ *
+ * The breadth of every first-party scan is DERIVED from the root manifest's `workspaces` rather
+ * than hardcoded (see `workspaceGlobBases`), so a fixture that stands in for this repository has to
+ * declare the same shape it does - otherwise `lib/*` and `extensions/src/*` are not workspaces at
+ * all and nothing under them is scanned.
+ */
+const WORKSPACES = ['lib/*', 'extensions', 'extensions/src/*'];
+
 beforeEach(() => {
   repo = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-shipping-'));
+  fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ workspaces: WORKSPACES }));
 });
 afterEach(() => {
   fs.rmSync(repo, { recursive: true, force: true });
@@ -1754,7 +1767,13 @@ describe('readDirectDependencies', () => {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(
       file,
-      JSON.stringify({ name: path.basename(path.dirname(file)), dependencies }),
+      JSON.stringify({
+        name: path.basename(path.dirname(file)),
+        // The ROOT manifest is also where the workspace shape is declared, and overwriting it
+        // without one would leave `lib/*` and `extensions/src/*` outside every scan.
+        ...(rel === 'package.json' ? { workspaces: WORKSPACES } : {}),
+        dependencies,
+      }),
     );
   }
 
@@ -1780,6 +1799,7 @@ describe('readDirectDependencies', () => {
     fs.writeFileSync(
       file,
       JSON.stringify({
+        workspaces: WORKSPACES,
         dependencies: { shipped: '^1.0.0' },
         devDependencies: { tooling: '^1.0.0' },
         peerDependencies: { host: '>=1' },
@@ -1873,5 +1893,105 @@ describe('the committed policy against this repository', () => {
       .filter(([, entry]) => !entry.reason)
       .map(([name]) => name);
     expect(withoutReason).toEqual([]);
+  });
+});
+
+describe('the workspace breadth every first-party scan uses', () => {
+  it('is derived from the root manifest rather than a list kept beside it', () => {
+    // Adding a workspace glob must extend the cross-check to it. Where the breadth is a list kept
+    // beside `workspaces` rather than derived from it, the two can drift with nothing failing.
+    fs.writeFileSync(
+      path.join(repo, 'package.json'),
+      JSON.stringify({ workspaces: [...WORKSPACES, 'tools/*'] }),
+    );
+    ['lib/a', 'extensions/src/b', 'tools/c'].forEach((dir) => {
+      fs.mkdirSync(path.join(repo, dir), { recursive: true });
+      fs.writeFileSync(
+        path.join(repo, dir, 'package.json'),
+        JSON.stringify({ dependencies: { [`dep-of-${path.basename(dir)}`]: '^1.0.0' } }),
+      );
+    });
+
+    expect(
+      readDirectDependencies(repo)
+        .map((d) => d.name)
+        .sort(),
+    ).toEqual(['dep-of-a', 'dep-of-b', 'dep-of-c']);
+  });
+});
+
+describe('missingImportedPackages', () => {
+  const imported = (name: string, importedIn = 'src/renderer/thing.tsx') => ({ name, importedIn });
+
+  it('reports a package first-party source imports that the derived set does not contain', () => {
+    // The gap `missingDirectDependencies` structurally cannot cover: `react-reverse-portal` is a
+    // devDependency of platform-scripture-editor, it ships, and a `dependencies`-only scan is blind
+    // to it.
+    expect(
+      missingImportedPackages([{ name: 'present' }], [imported('present'), imported('dropped')]),
+    ).toEqual([imported('dropped')]);
+  });
+
+  it('accepts a package the policy records as reaching no bundle', () => {
+    expect(missingImportedPackages([], [imported('recorded')], ['recorded'])).toEqual([]);
+  });
+});
+
+describe('importedPackages', () => {
+  it('names a third-party package an extension imports, and where it imports it', () => {
+    writePackage('node_modules/some-widget', 'some-widget', '1.0.0');
+    const file = path.join(repo, 'extensions/src/an-extension/src/thing.tsx');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "import widget from 'some-widget';\nexport default widget;\n");
+
+    expect(importedPackages(repo)).toEqual([
+      { name: 'some-widget', importedIn: 'extensions/src/an-extension/src/thing.tsx' },
+    ]);
+  });
+
+  it('says nothing about a TYPE-ONLY import, which the compiler erases', () => {
+    writePackage('node_modules/types-only', 'types-only', '1.0.0');
+    const file = path.join(repo, 'extensions/src/an-extension/src/thing.ts');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "import type { A } from 'types-only';\nexport type B = A;\n");
+
+    expect(importedPackages(repo)).toEqual([]);
+  });
+
+  it('says nothing about a sibling FIRST-PARTY workspace package', () => {
+    // npm installs every workspace as a symlink, so an extension importing a sibling extension
+    // resolves to `node_modules/<name>` and looks like an ordinary dependency until the link is
+    // followed. It is this repository's own code and gets no third-party notice.
+    const sibling = path.join(repo, 'extensions/src/sibling');
+    fs.mkdirSync(sibling, { recursive: true });
+    fs.writeFileSync(path.join(sibling, 'package.json'), JSON.stringify({ name: 'sibling' }));
+    fs.mkdirSync(path.join(repo, 'node_modules'), { recursive: true });
+    fs.symlinkSync(sibling, path.join(repo, 'node_modules', 'sibling'), 'dir');
+    const file = path.join(repo, 'extensions/src/an-extension/src/thing.ts');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "import s from 'sibling';\nexport default s;\n");
+
+    expect(importedPackages(repo)).toEqual([]);
+  });
+
+  it('says nothing about a package reached only from a TEST SUPPORT file', () => {
+    // Bundled by nothing, so the packages it reaches ship nowhere. `vitest` reached this way is
+    // what the real repository trips over.
+    writePackage('node_modules/test-only', 'test-only', '1.0.0');
+    const file = path.join(repo, 'extensions/src/an-extension/src/thing.test-utils.ts');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "import t from 'test-only';\nexport default t;\n");
+
+    expect(importedPackages(repo)).toEqual([]);
+  });
+
+  it('says nothing about a specifier that resolves to no installed package', () => {
+    // Webpack externals (`@papi/frontend`), tsconfig path aliases and typos all fail to resolve
+    // identically, and none of them is a package this repository redistributes.
+    const file = path.join(repo, 'src/renderer/thing.tsx');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "import papi from '@papi/frontend';\nexport default papi;\n");
+
+    expect(importedPackages(repo)).toEqual([]);
   });
 });

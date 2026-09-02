@@ -51,7 +51,9 @@ import {
   assertNpmNotShrunk,
   collectPlatformOnlyPackages,
   collectShippedPackages,
+  importedPackages,
   missingDirectDependencies,
+  missingImportedPackages,
   readDirectDependencies,
 } from './shipping-set';
 import {
@@ -567,6 +569,26 @@ function buildNpmShippingSet(policy: Policy): {
               '    }',
           )
           .join(',\n')}`,
+    );
+
+  // The second half of the same cross-check, reading the one source that owes nothing to the module
+  // manifests: first-party SOURCE. `missingDirectDependencies` above reads `dependencies` only, and
+  // this repository bundles from `devDependencies` by convention - so the packages most likely to
+  // ship are exactly the ones it cannot see.
+  const exemptNames = Object.keys(policy.unbundledDependencies || {});
+  const missingImported = missingImportedPackages(npmPackages, importedPackages(REPO), exemptNames);
+  if (missingImported.length)
+    throw new Error(
+      `${missingImported.length} package(s) imported by first-party source reach no bundle and ` +
+        `are recorded nowhere:\n${missingImported
+          .map((entry) => `  ${entry.name} (imported in ${entry.importedIn})`)
+          .join('\n')}\n` +
+        'Source says these ship; the module manifests do not. That is the shape a short manifest ' +
+        'takes - the notices document would simply lose the row, and no size check can see it. ' +
+        'Rebuild first:\n' +
+        '    rm -rf .notices && npm ci && npm run build\n' +
+        'If they genuinely reach no bundle, record each one in notices-policy.json under ' +
+        '"unbundledDependencies" with a reason.',
     );
 
   return { npmPackages, unresolvedStylesheetSpecifiers };

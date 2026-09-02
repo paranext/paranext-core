@@ -41,6 +41,16 @@ const DEPENDENCIES_SUBDIR = 'lexical-db';
  */
 const NOTICE_FILENAMES = ['LICENSE.md', 'SOURCE.md'];
 
+/**
+ * How many HTTP redirects a single fetch will follow before giving up.
+ *
+ * GitHub raw and LFS redirect at least once on every real download, so following them is required
+ * rather than optional - but an unbounded chain recurses forever and leaks a socket per hop, which
+ * hangs `npm install` silently instead of failing it. Five is well clear of the two hops the real
+ * hosts use.
+ */
+const MAX_REDIRECTS = 5;
+
 /** Result of attempting to detect the GitHub organization. */
 export type OrgDetectionResult = { org: string } | { org: undefined; reason: string };
 
@@ -183,43 +193,79 @@ export function downloadFile(url: string, destination: string): Promise<void> {
     let file: fs.WriteStream | undefined;
     let settled = false;
 
+    /**
+     * Removes the staging file, then hands control back. The removal's own error is not discarded
+     * onto the floor: it is reported alongside whatever failure caused the removal, because a
+     * staging file left behind is the next run's problem.
+     */
+    const discardStaged = (onDone: () => void) =>
+      fs.rm(staged, { force: true }, (removeError) => {
+        if (removeError)
+          console.warn(
+            `Could not remove the partial download at ${staged}: ${removeError.message}`,
+          );
+        onDone();
+      });
+
     /** Abandons the download: closes the stream if one was opened, and leaves no staging file. */
     const fail = (error: Error) => {
       if (settled) return;
       settled = true;
-      // The staging file is removed only after the stream is closed, and the removal's own error
-      // is not discarded onto the floor: it is reported alongside the failure that caused it,
-      // because a staging file left behind is the next run's problem.
-      const discard = () =>
-        fs.rm(staged, { force: true }, (removeError) => {
-          if (removeError)
-            console.warn(
-              `Could not remove the partial download at ${staged}: ${removeError.message}`,
-            );
-          reject(error);
-        });
+      const discard = () => discardStaged(() => reject(error));
+      // The staging file is removed only after the stream is closed, so the removal cannot race an
+      // asynchronous `close()` and lose.
       if (file) file.close(discard);
       else discard();
     };
 
     // Don't spoil the AI's vibes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleResponse = (response: any) => {
+    const handleResponse = (response: any, hops = 0) => {
+      // EVERY response needs its own error listener, and it has to be attached before any branch
+      // below can return. `pipe` does not forward a readable's error to the writable, so a
+      // connection dropped on a response nothing is listening to is raised by Node as an unhandled
+      // error, taking the whole `postinstall` down mid-way through the sibling fetches
+      // `Promise.allSettled` is still awaiting. The redirect branch makes this reachable on the
+      // happy path rather than only on an error one: GitHub raw and LFS 302-redirect on every real
+      // download, so the first response of every fetch is one this function abandons.
+      response.on('error', fail);
+
+      // A hop already in flight when the download failed has nothing left to deliver, and following
+      // it would open yet another socket for a promise that is already settled.
+      if (settled) {
+        response.destroy();
+        return;
+      }
+
       // Handle redirects (301, 302, 303, 307, 308)
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        if (hops >= MAX_REDIRECTS) {
+          response.destroy();
+          fail(new Error(`Failed to download ${url}: more than ${MAX_REDIRECTS} redirects`));
+          return;
+        }
         console.log(`Redirecting to ${response.headers.location}`);
 
+        // Drained rather than destroyed, so the socket stays reusable for the hop that follows.
+        response.resume();
         // Follow the redirect
-        https.get(response.headers.location, handleResponse).on('error', fail);
+        https
+          .get(response.headers.location, (redirected: unknown) =>
+            handleResponse(redirected, hops + 1),
+          )
+          .on('error', fail);
         return;
       }
 
       if (response.statusCode === 404) {
+        // Nothing follows this response, so release the socket rather than draining it.
+        response.destroy();
         fail(new FileNotFoundError(url));
         return;
       }
 
       if (response.statusCode !== 200) {
+        response.destroy();
         fail(new Error(`Failed to download ${url}, status code: ${response.statusCode}`));
         return;
       }
@@ -249,13 +295,6 @@ export function downloadFile(url: string, destination: string): Promise<void> {
         }
       });
 
-      // The RESPONSE needs its own handler, not just the request's and the stream's. `pipe` does
-      // not forward a readable's error to the writable, so a connection dropped mid-body emitted
-      // `error` on an `IncomingMessage` nothing was listening to - which Node raises as an
-      // unhandled error and takes the whole `postinstall` down with, mid-way through the sibling
-      // fetch `Promise.allSettled` is still awaiting.
-      response.on('error', fail);
-
       response.pipe(file);
 
       file.on('finish', () => {
@@ -264,20 +303,25 @@ export function downloadFile(url: string, destination: string): Promise<void> {
         // runs the success path: the truncated staging file is renamed over a destination that
         // held a complete file, and the promise resolves reporting a download that failed.
         if (settled) return;
+        // Claimed here rather than after the rename, so that `fail` - which assumes an INCOMPLETE
+        // download - can no longer run once a complete body is on disk. Everything below therefore
+        // settles the promise itself: routing a close or rename failure through `fail` at this
+        // point would find `settled` already true, return without rejecting, and leave the promise
+        // pending forever, hanging the install rather than failing it.
+        settled = true;
         // Closed before the rename, and the rename before `resolve`, so a caller that sees this
         // promise settle sees a complete file under the real name - never a staging file, and
         // never a handle still open on Windows.
         file?.close((closeError) => {
           if (closeError) {
-            fail(closeError);
+            discardStaged(() => reject(closeError));
             return;
           }
           fs.rename(staged, destination, (renameError) => {
             if (renameError) {
-              fail(renameError);
+              discardStaged(() => reject(renameError));
               return;
             }
-            settled = true;
             console.log('Download complete.');
             resolve();
           });
@@ -351,24 +395,45 @@ async function fetchRemoteChecksum(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     // Don't spoil the AI's vibes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleResponse = (response: any) => {
+    const handleResponse = (response: any, hops = 0) => {
+      // Attached before any branch below can return, for the reason `downloadFile`'s copy of this
+      // handler documents: an abandoned response with no error listener is an unhandled error that
+      // takes the whole `postinstall` down rather than failing this one fetch.
+      response.on('error', reject);
+
       // Handle redirects (301, 302, 303, 307, 308)
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        if (hops >= MAX_REDIRECTS) {
+          response.destroy();
+          reject(
+            new Error(`Failed to fetch checksum from ${url}: more than ${MAX_REDIRECTS} redirects`),
+          );
+          return;
+        }
         console.log(`Redirecting to ${response.headers.location}`);
 
+        // Drained rather than destroyed, so the socket stays reusable for the hop that follows.
+        response.resume();
         // Follow the redirect
-        https.get(response.headers.location, handleResponse).on('error', (err: Error) => {
-          reject(err);
-        });
+        https
+          .get(response.headers.location, (redirected: unknown) =>
+            handleResponse(redirected, hops + 1),
+          )
+          .on('error', (err: Error) => {
+            reject(err);
+          });
         return;
       }
 
       if (response.statusCode === 404) {
+        // Nothing follows this response, so release the socket rather than draining it.
+        response.destroy();
         reject(new FileNotFoundError(url));
         return;
       }
 
       if (response.statusCode !== 200) {
+        response.destroy();
         reject(new Error(`Failed to fetch checksum, status code: ${response.statusCode}`));
         return;
       }
@@ -384,10 +449,6 @@ async function fetchRemoteChecksum(url: string): Promise<string> {
         const data = Buffer.concat(chunks).toString('utf-8');
         const checksum = data.trim().split(/\s+/)[0];
         resolve(checksum);
-      });
-
-      response.on('error', (err: Error) => {
-        reject(err);
       });
     };
 

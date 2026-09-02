@@ -92,13 +92,20 @@ const configWebView: webpack.Configuration = merge(configBase, {
   // TODO(PT-4477): this is the AGGREGATE build only. Each extension also has its own `package`
   // script that builds a redistributable zip from its own `webpack/webpack.config.web-view.ts`, and
   // none of those set this - so that path still ships the dangling pointer. The fix belongs in
-  // `paranext-multi-extension-template`, because those files are shared regions end to end and
-  // `terser-webpack-plugin` is not declared in the extensions workspace.
+  // `paranext-multi-extension-template`, because those files are shared regions end to end.
+  //
+  // `compress.passes` restates a webpack DEFAULT rather than choosing a new setting. Webpack applies
+  // its own `new TerserPlugin({ terserOptions: { compress: { passes: 2 } } })` only when
+  // `optimization.minimizer` is undefined (`webpack/lib/config/defaults.js`), so supplying an
+  // explicit array with no `'...'` spread replaces that default outright instead of extending it.
+  // Without this line the banner fix above would silently drop every production extension web-view
+  // bundle to single-pass minification, and those bundles ship inlined into each extension's
+  // `main.js` in every installer.
   optimization: {
     minimizer: [
       new TerserPlugin({
         extractComments: false,
-        terserOptions: { format: { comments: 'some' } },
+        terserOptions: { format: { comments: 'some' }, compress: { passes: 2 } },
       }),
     ],
   },

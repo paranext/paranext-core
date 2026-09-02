@@ -1,7 +1,8 @@
 import { spawnSync } from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
-import { reachableIds } from './build-corpus-index';
+import { main as buildCorpusIndex, reachableIds } from './build-corpus-index';
 import { canonicalText, corpusVersion, verifyCorpus } from './corpus';
 import { loadPolicy } from './policy';
 import { readJsonFile } from './read-json';
@@ -113,5 +114,40 @@ describe('a drifted corpus is detected', () => {
 
   it('leaves every other identifier alone, so the report names only what drifted', () => {
     expect(withMutatedCorpus("corpus.canonicalText('Apache-2.0').length > 200")).toBe(true);
+  });
+});
+
+describe('the committed corpus index is what its generator writes', () => {
+  const INDEX = path.join(__dirname, 'spdx-corpus', 'index.json');
+
+  /**
+   * `build-corpus-index.ts` writes to one fixed path - the committed index - so the only way to
+   * exercise its WRITE is to run it and put the file back. Everything else about the corpus is
+   * checked as content (`covers every license the shipped policy can reach`, `every indexed text
+   * matches its recorded checksum`); what has no other cover is that the committed bytes are the
+   * bytes the generator produces, from this policy and this `spdx-license-list` version.
+   *
+   * That is the drift this catches: an identifier added to the policy, or the matcher dependency
+   * bumped, without the index regenerated. `corpus.ts` re-verifies every text against the committed
+   * checksum at READ time, so a stale index cannot put wrong text into the document - but it can
+   * leave a reachable identifier with no entry at all, and this is what says so.
+   */
+  it('rewrites it byte-for-byte', () => {
+    const before = fs.readFileSync(INDEX, 'utf8');
+    try {
+      buildCorpusIndex();
+      expect(fs.readFileSync(INDEX, 'utf8')).toBe(before);
+    } finally {
+      // Restored unconditionally: a failing assertion must not leave the committed artifact
+      // rewritten in the working tree.
+      fs.writeFileSync(INDEX, before);
+    }
+  });
+
+  it('reaches every identifier the index records, and no others', () => {
+    const committed = JSON.parse(fs.readFileSync(INDEX, 'utf8'));
+    expect(reachableIds(loadPolicy(path.join(__dirname, 'notices-policy.json'))).sort()).toEqual(
+      Object.keys(committed.checksums).sort(),
+    );
   });
 });

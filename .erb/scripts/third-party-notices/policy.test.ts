@@ -477,7 +477,8 @@ describe('classify', () => {
       ...POLICY,
       exceptions: [
         {
-          package: 'npm:weird@1.0.0',
+          package: 'npm:weird',
+          version: '1.0.0',
           spdx: 'MIT',
           reason: 'the permissive file was read and it is MIT',
           reviewer: 'x@y',
@@ -633,7 +634,8 @@ describe('classify', () => {
       ...POLICY,
       exceptions: [
         {
-          package: 'npm:weird@1.0.0',
+          package: 'npm:weird',
+          version: '1.0.0',
           spdx: 'BSD-3-Clause',
           reason: 'custom preamble',
           reviewer: 'x@y',
@@ -661,7 +663,8 @@ describe('classify', () => {
       ...POLICY,
       exceptions: [
         {
-          package: 'npm:weird@1.0.0',
+          package: 'npm:weird',
+          version: '1.0.0',
           spdx: 'BSD-3-Clause',
           reviewer: 'x@y',
           date: '2026-08-20',
@@ -687,7 +690,8 @@ describe('classify', () => {
       ...POLICY,
       exceptions: [
         {
-          package: 'npm:weird@1.0.0',
+          package: 'npm:weird',
+          version: '1.0.0',
           spdx: 'BSD-3-Clause',
           reason: '<why this is correct - one sentence>',
           reviewer: 'x@y',
@@ -718,7 +722,8 @@ describe('classify', () => {
       ...POLICY,
       exceptions: [
         {
-          package: 'npm:weird@1.0.0',
+          package: 'npm:weird',
+          version: '1.0.0',
           spdx: 'MPL-2.0',
           reason: 'r',
           reviewer: 'x@y',
@@ -747,7 +752,8 @@ describe('classify', () => {
       ...POLICY,
       exceptions: [
         {
-          package: 'npm:weird@1.0.0',
+          package: 'npm:weird',
+          version: '1.0.0',
           spdx: 'Artistic-2.0',
           reason: 'r',
           reviewer: 'x@y',
@@ -775,7 +781,8 @@ describe('classify', () => {
       ...POLICY,
       exceptions: [
         {
-          package: 'npm:weird@1.0.0',
+          package: 'npm:weird',
+          version: '1.0.0',
           spdx: 'Proprietary - negotiated separately',
           reason: 'r',
           reviewer: 'x@y',
@@ -805,7 +812,8 @@ describe('classify', () => {
       ...POLICY,
       exceptions: [
         {
-          package: 'npm:weird@1.0.0',
+          package: 'npm:weird',
+          version: '1.0.0',
           spdx: '(BSD-3-Clause AND Apache-2.0)',
           reason: 'two grants in one file',
           reviewer: 'x@y',
@@ -832,7 +840,8 @@ describe('classify', () => {
       ...POLICY,
       exceptions: [
         {
-          package: 'npm:weird@1.0.0',
+          package: 'npm:weird',
+          version: '1.0.0',
           spdx: 'BSD-3-Clause',
           reason: 'r',
           reviewer: 'x@y',
@@ -863,7 +872,8 @@ describe('classify', () => {
       ...POLICY,
       exceptions: [
         {
-          package: 'npm:weird@1.0.0',
+          package: 'npm:weird',
+          version: '1.0.0',
           spdx: 'MIT',
           reason: 'unpinned',
           reviewer: 'x@y',
@@ -887,7 +897,8 @@ describe('classify', () => {
       ...POLICY,
       exceptions: [
         {
-          package: 'npm:weird@1.0.0',
+          package: 'npm:weird',
+          version: '1.0.0',
           reason: 'r',
           reviewer: 'x@y',
           date: '2026-08-20',
@@ -915,7 +926,8 @@ describe('classify', () => {
       ...POLICY,
       exceptions: [
         {
-          package: 'npm:p@1.0.0',
+          package: 'npm:p',
+          version: '1.0.0',
           spdx: 'BSD-3-Clause',
           reason: 'should never apply',
           reviewer: 'x@y',
@@ -1384,7 +1396,12 @@ describe('notices-policy.json', () => {
   // entry whose textSha256 is not a real digest cannot have been produced by reading the file.
   policy.exceptions.forEach((entry) => {
     it(`exception "${entry.package}" is complete and hash-pinned`, () => {
-      expect(entry.package).toMatch(/^(npm|nuget):.+@.+$/);
+      // `ecosystem:name`, with no version in the key: an exception is pinned by license TEXT, and
+      // a version bump that leaves the text byte-identical asserts nothing new.
+      expect(entry.package).toMatch(/^(npm|nuget):[^@]|^(npm|nuget):@[^/]+\//);
+      expect(entry.package).not.toMatch(/@[^/]*$/);
+      // Recorded as its own field so the determination stays re-checkable against what was read.
+      expect(entry.version.length).toBeGreaterThan(0);
       expect(entry.spdx.length).toBeGreaterThan(0);
       // Long enough to be a sentence about the license, not a shrug. The whole value of an
       // exception is that someone read the file once and wrote down what they found.
@@ -1577,7 +1594,8 @@ describe('curated overrides', () => {
         ...OVERRIDE_POLICY,
         exceptions: [
           {
-            package: 'nuget:ParatextData@1.0.0',
+            package: 'nuget:ParatextData',
+            version: '1.0.0',
             spdx: 'MIT',
             reason: 'r',
             reviewer: 'x@example.test',
@@ -1597,7 +1615,8 @@ describe('what a reviewed exception may override', () => {
   // recorded value may take.
   const pinned = (spdx: string) => [
     {
-      package: 'npm:p@1.0.0',
+      package: 'npm:p',
+      version: '1.0.0',
       spdx,
       reason: 'the license file was read and this is what it says',
       reviewer: 'x@example.test',
@@ -1866,7 +1885,8 @@ describe('loadPolicy', () => {
   };
 
   const entry = (spdx: string) => ({
-    package: 'npm:p@1.0.0',
+    package: 'npm:p',
+    version: '1.0.0',
     spdx,
     reason: 'the license file was read and this is what it says',
     reviewer: 'x@example.test',
@@ -1880,11 +1900,13 @@ describe('loadPolicy', () => {
     // it. `stalePolicyEntries` cannot see it either - both entries key a package that is still in
     // the closure, so both look used.
     const file = write({ exceptions: [entry('MIT'), entry('BSD-3-Clause')] });
-    expect(() => loadPolicy(file)).toThrow(/more than one "exceptions" entry for npm:p@1\.0\.0/);
+    expect(() => loadPolicy(file)).toThrow(/more than one "exceptions" entry for npm:p/);
   });
 
   it('accepts one entry per package', () => {
-    const file = write({ exceptions: [entry('MIT'), { ...entry('MIT'), package: 'npm:q@2.0.0' }] });
+    const file = write({
+      exceptions: [entry('MIT'), { ...entry('MIT'), package: 'npm:q', version: '2.0.0' }],
+    });
     expect(loadPolicy(file).exceptions).toHaveLength(2);
   });
 });
