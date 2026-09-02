@@ -75,6 +75,16 @@ export function forgetWindowWithholding(windowId: number): void {
 }
 
 /**
+ * Whether this window was created without activation and has not been activated since.
+ *
+ * The single fact behind both rules below: what content may do to focus, and whether a window that
+ * failed still needs revealing.
+ */
+export function isWindowAwaitingFirstActivation(windowId: number): boolean {
+  return windowIdsAwaitingFirstActivation.has(windowId);
+}
+
+/**
  * Whether content docking in this window must not take document focus.
  *
  * True only for a window created without activation that the user has not activated since. Read at
@@ -82,7 +92,7 @@ export function forgetWindowWithholding(windowId: number): void {
  * into is an ordinary window, and its next web view should land focused like any other.
  */
 export function shouldContentAvoidDocumentFocus(windowId: number): boolean {
-  return windowIdsAwaitingFirstActivation.has(windowId);
+  return isWindowAwaitingFirstActivation(windowId);
 }
 
 /**
@@ -100,14 +110,17 @@ const NAVIGATION_ABORTED_ERROR_CODE = -3;
  * to prevent.
  *
  * @param plan What the window was told to do to become visible
- * @param failure The `did-fail-load` report: whether it was this window's own page, and why it
- *   failed
+ * @param failure The `did-fail-load` report — whether it was this window's own page and why it
+ *   failed — together with whether this window is still waiting to be seen for the first time
  */
 export function shouldRevealAfterLoadFailure(
   plan: WindowActivationPlan,
-  failure: { isMainFrame: boolean; errorCode: number },
+  failure: { isMainFrame: boolean; errorCode: number; isAwaitingFirstActivation: boolean },
 ): boolean {
   if (!plan.revealAfterLoadFailure) return false;
+  // The window has been on screen and the user put it away since; bringing it back because its
+  // renderer died would undo their choice. The reveal is for a window that has never been seen.
+  if (!failure.isAwaitingFirstActivation) return false;
   // Every web view in the app is an in-page iframe of the window's page, so a sub-frame failure is
   // one web view not loading — the window itself is still on its way to `ready-to-show`.
   if (!failure.isMainFrame) return false;
@@ -123,7 +136,12 @@ export function shouldRevealAfterLoadFailure(
  * `did-fail-load`, so without this the window would never be revealed by anything.
  *
  * @param plan What the window was told to do to become visible
+ * @param isAwaitingFirstActivation Whether this window has yet to be seen — see
+ *   {@link isWindowAwaitingFirstActivation}
  */
-export function shouldRevealAfterRendererGone(plan: WindowActivationPlan): boolean {
-  return plan.revealAfterLoadFailure !== undefined;
+export function shouldRevealAfterRendererGone(
+  plan: WindowActivationPlan,
+  isAwaitingFirstActivation: boolean,
+): boolean {
+  return plan.revealAfterLoadFailure !== undefined && isAwaitingFirstActivation;
 }

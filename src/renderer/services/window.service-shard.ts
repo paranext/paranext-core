@@ -656,6 +656,15 @@ export const testingWindowService = {
   implementWindowDataProviderEngine: () => {
     return new WindowDataProviderEngine();
   },
+  /**
+   * Put the activation latch back to "not activated yet".
+   *
+   * The latch is module state that only ever goes one way in a real window, so without this a test
+   * that activates the window decides the answer for every test after it.
+   */
+  resetActivationLatchForTesting: () => {
+    hasWindowBeenActivated = false;
+  },
 };
 
 // This will be needed later for disposing of the data provider, choosing to ignore instead of

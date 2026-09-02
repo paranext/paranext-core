@@ -119,6 +119,7 @@ import {
 import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
 import {
   forgetWindowWithholding,
+  isWindowAwaitingFirstActivation,
   noteWindowWithheldFromActivation,
   planWindowActivation,
   shouldRevealAfterLoadFailure,
@@ -881,7 +882,9 @@ async function main() {
       // A renderer that died before the window could paint is the other way a withheld window never
       // reaches `ready-to-show`. `did-fail-load` does not fire for it, so without this the window
       // would stay tracked, routable and invisible for the rest of the session.
-      revealAfterFailureIfNeeded(shouldRevealAfterRendererGone(activation));
+      revealAfterFailureIfNeeded(
+        shouldRevealAfterRendererGone(activation, isWindowAwaitingFirstActivation(windowId)),
+      );
 
       // Nothing else brings a dead renderer back: Electron leaves the window there with no page in
       // it, and the `onDidRegisterWindowServiceShard` subscription that would mark this window ready
@@ -960,7 +963,11 @@ async function main() {
         // close is recoverable, where one that exists, is tracked and routable, and never appears is
         // not. Still inactive — a window nobody asked for does not earn the foreground by failing.
         revealAfterFailureIfNeeded(
-          shouldRevealAfterLoadFailure(activation, { isMainFrame, errorCode }),
+          shouldRevealAfterLoadFailure(activation, {
+            isMainFrame,
+            errorCode,
+            isAwaitingFirstActivation: isWindowAwaitingFirstActivation(windowId),
+          }),
         );
       },
     );
