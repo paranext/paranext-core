@@ -2,6 +2,7 @@ import * as fsPromises from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
+import * as prettier from 'prettier';
 import { BUNDLED_EXTENSION_LICENSE, decideLicenseStamp, stampExtensionLicense } from './git.util';
 import type { DeclaredLicense } from './git.util';
 
@@ -105,6 +106,27 @@ describe('stampExtensionLicense', () => {
     expect(await fsPromises.readFile(path.join(root, folder, 'LICENSE'), 'utf8')).toContain(
       'GNU AFFERO GENERAL PUBLIC LICENSE',
     );
+  });
+
+  it('leaves a manifest Prettier would reformat in the shape Prettier writes', async () => {
+    // `stampLicenseInJson` reprints the WHOLE file rather than editing the one field, and
+    // `JSON.stringify` always expands a short array across three lines where Prettier keeps it
+    // inline. Without formatting the result, `update-from-templates` produces a tree that fails
+    // `npm run format:check` - surfacing far from here, in an unrelated CI step after a template
+    // merge, against a file nobody edited. No extension manifest carries a short array today, so
+    // this is the guard that keeps the tripwire disarmed rather than a bug being fixed.
+    const { root, folder } = await makeTree('GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3\n', {
+      name: 'example',
+      version: '0.0.1',
+      commands: ['dotnet-csharpier'],
+    });
+
+    await stampExtensionLicense(folder, root);
+
+    const file = path.join(root, folder, 'manifest.json');
+    const written = await fsPromises.readFile(file, 'utf8');
+    expect(written).toContain('"commands": ["dotnet-csharpier"]');
+    expect(await prettier.check(written, { filepath: file, parser: 'json' })).toBe(true);
   });
 
   it('declares nothing it cannot also give the text for', async () => {

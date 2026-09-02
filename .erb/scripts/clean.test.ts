@@ -1,6 +1,9 @@
 import { execFileSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { removeGlobs } from './clean';
 
 const SCRIPT = path.join(__dirname, 'clean.ts');
 
@@ -27,6 +30,13 @@ function printedFolders(): string[] {
     .filter(Boolean);
 }
 
+let tempDirs: string[] = [];
+
+afterEach(() => {
+  tempDirs.forEach((dir) => fs.rmSync(dir, { recursive: true, force: true }));
+  tempDirs = [];
+});
+
 describe('clean', () => {
   it('names a real absolute path for every folder it removes', () => {
     const folders = printedFolders();
@@ -46,5 +56,33 @@ describe('clean', () => {
     ['dist', 'build', 'dll', `extensions${path.sep}dist`].forEach((expected) => {
       expect(folders).toContain(expected);
     });
+  });
+
+  /**
+   * The `--print` cases above cannot reach this: they exercise which paths are named, never whether
+   * removing them works. The glob wiring is the half that can fail silently - `rimrafSync` returns
+   * true for a pattern that matched nothing.
+   *
+   * Platform note: this reproduces the Windows failure only on Windows, where `path.join` emits the
+   * backslashes glob would otherwise consume as escapes. On POSIX it stands as a regression guard
+   * on the glob wiring generally.
+   */
+  it('actually removes the cache directories its glob names', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'clean-globs-'));
+    tempDirs.push(root);
+    const cache = path.join(root, 'node_modules', '.cache');
+    ['webpack-main', 'webpack-renderer'].forEach((name) =>
+      fs.mkdirSync(path.join(cache, name), { recursive: true }),
+    );
+    const keep = path.join(cache, 'not-webpack');
+    fs.mkdirSync(keep, { recursive: true });
+
+    removeGlobs([path.join(root, 'node_modules', '.cache', 'webpack-*')]);
+
+    expect(fs.existsSync(path.join(cache, 'webpack-main'))).toBe(false);
+    expect(fs.existsSync(path.join(cache, 'webpack-renderer'))).toBe(false);
+    // A glob broad enough to take the whole cache directory with it would also "pass" the two
+    // assertions above.
+    expect(fs.existsSync(keep)).toBe(true);
   });
 });

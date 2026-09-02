@@ -32,6 +32,17 @@ The core Platform.Bible application. Full license text: [`LICENSE`](./LICENSE).
 
 Anything in this repository not listed under "MIT" below is AGPL-3.0-or-later.
 
+The full AGPL text is checked in more than once: at the repository root, and again in every bundled
+extension folder. That duplication is deliberate rather than untidy. An extension folder is an
+independently installable unit — `extension.service.ts` loads one from a raw folder or a `.zip`, and
+`installExtension` downloads and installs a `.zip` from a URL with no involvement from the rest of
+the application — so a folder that travels alone carrying an AGPL declaration and no license text
+would state an obligation (section 4: "convey a copy of this License along with the Program")
+without discharging it. The root copy travels with the application, not with an extension
+redistributed on its own. `stampExtensionLicense` in `extensions/lib/git.util.ts` is what keeps the
+copies in step, and `extension-licenses.test.ts` fails if a packaged extension declares a license
+but ships no text for it.
+
 Three of the five packages under `lib/` are AGPL. They are the ones that exist only while an
 extension is being built and contribute nothing to what it ships; the "MIT" section below states the
 rule that draws that line and applies it package by package. None of the three imposes an obligation

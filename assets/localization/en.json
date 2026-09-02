@@ -5,6 +5,7 @@
   "%about_db_ip_attribution_terms%": "Terms",
   "%about_licenseLabel_format%": "License: {license}",
   "%about_licenseLabel_termsOfService%": "Paratext Terms of Service",
+  "%about_ariaLabel_opensTermsOfService%": "Opens in your default application for Markdown files",
   "%about_versionLabel_format%": "Version: {version}",
   "%acceptButton_tooltip%": "Save",
   "%ariaLabel_opensInBrowser%": "Opens externally in a browser window",
