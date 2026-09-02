@@ -229,3 +229,19 @@ describe('settings restore reconciles rather than assumes', () => {
     expect(readSettings()).toBeUndefined();
   });
 });
+
+describe('a pin taken while an unreadable backup stands', () => {
+  it('refuses rather than pinning values it could never undo', () => {
+    fs.writeFileSync(SETTINGS_PATH, DEVELOPER_SETTINGS);
+    // A torn backup from an interrupted write. Recovery already refuses to act on it, so anything
+    // pinned now would sit in the developer's settings until they intervened by hand.
+    fs.writeFileSync(BACKUP_PATH, '{"existed":true,"conte');
+
+    expect(() => preConfigureSettings({ 'platform.interfaceMode': 'power' })).toThrow(
+      /cannot be read/i,
+    );
+
+    // And it must not have written the override on its way out.
+    expect(readSettings()).toBe(DEVELOPER_SETTINGS);
+  });
+});

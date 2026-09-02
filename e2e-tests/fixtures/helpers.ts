@@ -1255,10 +1255,17 @@ export function preConfigureSettings(overrides: Record<string, unknown>): () => 
     // has to grow, or the restore below leaves this pin's keys behind as though they were the
     // developer's.
     const standing = readSettingsBackup();
-    if (standing !== undefined) {
-      const pinnedKeys = [...new Set([...standing.pinnedKeys, ...Object.keys(overrides)])];
-      writeFileAtomic(settingsBackupPath(), JSON.stringify({ ...standing, pinnedKeys }));
-    }
+    if (standing === undefined)
+      // Refuse rather than pin. The standing backup cannot be read, so recovery will decline to act
+      // on it — and anything pinned now would sit in the developer's real settings until they
+      // intervened by hand. Failing here costs a run; pinning anyway costs them their settings.
+      throw new Error(
+        `Refusing to pin settings: the backup at ${settingsBackupPath()} cannot be read, so this ` +
+          'pin could not be undone by this run or recovered by the next. Inspect that file and ' +
+          'remove it once you are satisfied nothing in it is yours.',
+      );
+    const pinnedKeys = [...new Set([...standing.pinnedKeys, ...Object.keys(overrides)])];
+    writeFileAtomic(settingsBackupPath(), JSON.stringify({ ...standing, pinnedKeys }));
   }
   fs.writeFileSync(settingsPath(), JSON.stringify({ ...existing, ...overrides }));
 
@@ -1433,6 +1440,34 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
  * the clock on its own, independent 120 s wait on top of whatever the overall readiness budget
  * already spent getting here.
  */
+/** What the gate is showing, once it is known to be showing something. */
+interface StuckGateObservations {
+  escapeHatchVisible: boolean;
+  onErrorScreen: boolean;
+}
+
+/**
+ * Decide what a stuck first-run gate needs, from what is on screen rather than from what was seen
+ * first.
+ *
+ * The three states overlap in their signals: the error screen shows a heading, an alert AND an
+ * escape hatch simultaneously. Racing "a hatch appeared" against "a heading appeared" therefore
+ * reaches either answer for one app state, depending on which locator settles first — so the race
+ * establishes only THAT the gate is stuck, and this decides what it is.
+ */
+export function decideStuckGateAction({
+  escapeHatchVisible,
+  onErrorScreen,
+}: StuckGateObservations): 'recoverable' | 'wizard' | 'inconclusive' {
+  // A way out is a way out, whichever branch offered it.
+  if (escapeHatchVisible) return 'recoverable';
+  // A heading with no alert beside it is the wizard, which offers no way out by design.
+  if (!onErrorScreen) return 'wizard';
+  // The error screen before its hatch has rendered: there IS a way out, just not yet. Naming this
+  // the wizard would report the wrong cause.
+  return 'inconclusive';
+}
+
 /**
  * Matches the first-run gate's ERROR screen and nothing else.
  *
@@ -1461,6 +1496,10 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
   const dialogHeading = firstRunDialog.getByRole('heading', { level: 1 });
   const errorScreen = firstRunDialog.locator(TOP_LEVEL_ERROR_SELECTOR);
 
+  // The race establishes only WHETHER the gate cleared or is stuck showing something; what it is
+  // stuck on is decided afterwards, from the screen itself. Racing the discriminators against each
+  // other would let one app state reach either answer depending on which locator settled first.
+  //
   // Each leg swallows its own timeout so the race reports what it SAW rather than rejecting: a
   // rejection makes the gate's ordinary loading flash a hard failure whenever the remaining budget
   // is short, which is exactly when this is called.
@@ -1471,22 +1510,25 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
       .catch(() => 'inconclusive' as const),
     escapeHatch
       .waitFor({ state: 'visible', timeout })
-      .then(() => 'recoverable' as const)
+      .then(() => 'stuck' as const)
       .catch(() => 'inconclusive' as const),
     dialogHeading
       .waitFor({ state: 'visible', timeout })
-      // A heading also appears on the error screen, which DOES offer a way out, so only a heading
-      // with no alert beside it means the wizard.
-      .then(
-        async (): Promise<'wizard' | 'inconclusive'> =>
-          (await errorScreen.count()) === 0 ? 'wizard' : 'inconclusive',
-      )
+      .then(() => 'stuck' as const)
       .catch(() => 'inconclusive' as const),
   ]);
 
   if (settled === 'cleared') return;
 
-  if (settled === 'wizard')
+  const action =
+    settled === 'stuck'
+      ? decideStuckGateAction({
+          escapeHatchVisible: await escapeHatch.isVisible(),
+          onErrorScreen: (await errorScreen.count()) > 0,
+        })
+      : 'inconclusive';
+
+  if (action === 'wizard')
     throw new Error(
       'e2e precondition: the app started its first-run setup wizard, so the pin that should have ' +
         'skipped it did not take. Check that platform.firstRunComplete is seeded before launch — ' +
@@ -1495,10 +1537,11 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
         'here can dismiss it.',
     );
 
-  // Nothing recognisable within the budget. Say nothing and let the readiness steps after this one
-  // fail with their own message: this is a recovery, and guessing at an inconclusive state would
-  // turn a run that was merely slow into a failure.
-  if (settled === 'inconclusive') return;
+  // Nothing recognisable within the budget, or an error screen that has not offered its way out
+  // yet. Say nothing and let the readiness steps after this one fail with their own message: this
+  // is a recovery, and guessing at an inconclusive state would turn a merely slow run into a
+  // failure.
+  if (action === 'inconclusive') return;
 
   // Stable "[e2e-first-run-gate-race]" tag: grep CI logs for it to count how often this actually
   // fires, independent of which test happened to hit it.
