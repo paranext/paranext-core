@@ -119,6 +119,87 @@ beforeEach(() => {
 });
 
 describe('useOpenProjectBookIds', () => {
+  describe('referential stability', () => {
+    // The returned array feeds consumers that memoize on its identity (the toolbar's
+    // `additionalBookIds` -> `fetchAdditionalBookIds` -> BookChapterControl's book list). A project
+    // switch fires a burst of web view events that do not change which projects are open, so an
+    // identity that tracked event count rather than membership would re-render those consumers on
+    // every event in the burst.
+    test('keeps the same array identity when a web view event does not change membership', async () => {
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+        webViewDefinition('webView1', { projectId: 'resourceProject' }),
+      ]);
+      getProjectDataProvider.mockResolvedValue(
+        pdpWithBooks(booksPresentFlags(66), 'resourceProject'),
+      );
+
+      const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
+      await waitFor(() => expect(result.current).toEqual(['REV']));
+      const before = result.current;
+
+      // Same open web views: the enumeration returns an equal-but-new array each time.
+      await emitWebViewEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW);
+      await emitWebViewEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW);
+      await emitWebViewEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW);
+
+      expect(result.current).toBe(before);
+    });
+
+    // The identity assertion above is necessary but not sufficient: a refresh counter in state
+    // re-renders the consumer on every web view event even when the value it produces is unchanged,
+    // which is what turns a project switch's event burst into a render storm. Assert the render
+    // count does not scale with the number of events.
+    test('does not re-render its consumer when a web view event does not change membership', async () => {
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+        webViewDefinition('webView1', { projectId: 'resourceProject' }),
+      ]);
+      getProjectDataProvider.mockResolvedValue(
+        pdpWithBooks(booksPresentFlags(66), 'resourceProject'),
+      );
+
+      let renderCount = 0;
+      const { result } = renderHook(() => {
+        renderCount += 1;
+        return useOpenProjectBookIds('activeProject');
+      });
+      await waitFor(() => expect(result.current).toEqual(['REV']));
+      const rendersBefore = renderCount;
+
+      const eventCount = 10;
+      for (let i = 0; i < eventCount; i += 1) {
+        // Each event must be delivered sequentially so React commits any resulting render before
+        // the next one arrives; emitting them concurrently would let React batch the whole burst
+        // into a single render and the count below would pass even with a per-event counter.
+        // eslint-disable-next-line no-await-in-loop
+        await emitWebViewEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW);
+      }
+
+      // Not zero extra renders: `useState` has to render the component once to discover the value
+      // is unchanged before it can bail out. What matters is that the count does not scale with the
+      // number of events — a refresh counter would add one render per event.
+      expect(renderCount - rendersBefore).toBeLessThanOrEqual(1);
+    });
+
+    test('returns a new array identity when membership actually changes', async () => {
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+        webViewDefinition('webView1', { projectId: 'resourceProject' }),
+      ]);
+      getProjectDataProvider.mockResolvedValue(
+        pdpWithBooks(booksPresentFlags(66), 'resourceProject'),
+      );
+
+      const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
+      await waitFor(() => expect(result.current).toEqual(['REV']));
+      const before = result.current;
+
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([]);
+      await emitWebViewEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW);
+
+      await waitFor(() => expect(result.current).not.toBe(before));
+      expect(result.current).toEqual([]);
+    });
+  });
+
   test('returns nothing when no web views are open', async () => {
     const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
 

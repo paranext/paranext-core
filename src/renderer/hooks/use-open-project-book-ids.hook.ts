@@ -82,8 +82,25 @@ export function useOpenProjectBookIds(
   activeProjectId: string | undefined,
   isEnabled: boolean = true,
 ): string[] {
-  const [webViewRefreshCounter, setWebViewRefreshCounter] = useState(0);
-  const refreshOpenWebViews = useCallback(() => setWebViewRefreshCounter((n) => n + 1), []);
+  // The membership fingerprint is held IN STATE rather than derived from a refresh counter. A web
+  // view event that leaves the set of open projects unchanged produces the same string, and
+  // `useState` bails out on an unchanged value — so the burst of web view events a project switch
+  // fires cannot re-render this hook's consumer. A counter would re-render on every event by
+  // construction, because its value changes even when nothing it is standing in for did.
+  //
+  // Sorted because set equality, not order, is what matters. NUL-separated so no pair of distinct
+  // id sets can collide into the same key — a space would let {'A B'} and {'A', 'B'} agree,
+  // silently suppressing a real change.
+  const readOpenProjectIdsKey = useCallback(
+    () => (isEnabled ? [...getOpenProjectIds(activeProjectId)].sort().join('\u0000') : ''),
+    [isEnabled, activeProjectId],
+  );
+
+  const [openProjectIdsKey, setOpenProjectIdsKey] = useState(readOpenProjectIdsKey);
+  const refreshOpenWebViews = useCallback(
+    () => setOpenProjectIdsKey(readOpenProjectIdsKey()),
+    [readOpenProjectIdsKey],
+  );
 
   // Undefined while disabled: `useEvent` subscribes to nothing when its event is undefined, so a
   // disabled hook does not even listen for the web view changes it would have reacted to.
@@ -91,21 +108,18 @@ export function useOpenProjectBookIds(
   useEvent(isEnabled ? onDidUpdateWebView : undefined, refreshOpenWebViews);
   useEvent(isEnabled ? onDidCloseWebView : undefined, refreshOpenWebViews);
 
-  const openProjectIds = useMemo(
-    () => (isEnabled ? getOpenProjectIds(activeProjectId) : EMPTY_IDS),
-    // webViewRefreshCounter is a refresh trigger: its value is unused, but each bump re-enumerates
-    // this window's open web views.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isEnabled, activeProjectId, webViewRefreshCounter],
-  );
+  // `activeProjectId` and `isEnabled` are not web view events, so nothing above re-reads the key
+  // when they change. Without this the hook would keep reporting the previous project's set.
+  useEffect(() => {
+    setOpenProjectIdsKey(readOpenProjectIdsKey());
+  }, [readOpenProjectIdsKey]);
 
-  // A membership fingerprint, so an unchanged set of ids is a stable dependency and an unrelated web
-  // view event does not tear down and rebuild every subscription. Sorted because set equality, not
-  // order, is what matters. NUL-separated so no pair of distinct id sets can collide into the same
-  // key — a space would let {'A B'} and {'A', 'B'} agree, silently suppressing a real change.
-  const openProjectIdsKey = useMemo(
-    () => [...openProjectIds].sort().join('\u0000'),
-    [openProjectIds],
+  // Identity tracks membership rather than event count, so the subscription effect, the returned
+  // book list, and the consumers that memoize on it all stay stable across an unchanged set. The
+  // empty key must short-circuit: `''.split('\u0000')` yields `['']`, not `[]`.
+  const openProjectIds = useMemo(
+    () => (openProjectIdsKey ? openProjectIdsKey.split('\u0000') : EMPTY_IDS),
+    [openProjectIdsKey],
   );
 
   // Entries persist for projects that have since closed rather than being pruned as each project
@@ -161,11 +175,9 @@ export function useOpenProjectBookIds(
       disposed = true;
       unsubscribers.runAllUnsubscribers();
     };
-    // openProjectIdsKey is the real dependency: it is openProjectIds' membership fingerprint, so
-    // depending on the array itself would rebuild every subscription whenever an unrelated web view
-    // event produced an equal-but-new array.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openProjectIdsKey]);
+    // `openProjectIds` is membership-stable (see its definition), so an unrelated web view event
+    // cannot rebuild every subscription here.
+  }, [openProjectIds]);
 
   return useMemo(() => {
     const openIds = new Set(openProjectIds);
