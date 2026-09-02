@@ -1274,3 +1274,18 @@ describe('the move commands', () => {
     await expect(getCommandHandler('platform.moveWebViewToNewWindow')).resolves.toBeDefined();
   });
 });
+
+describe('the move-in-flight testing seams', () => {
+  test('are reachable only through the guarded router bundle, not directly off web-view-ownership.util', async () => {
+    // Production code seeds and clears the move-in-flight register only through a real move
+    // (`addMoveInFlight`/`deleteMoveInFlight`, both legitimately exported there); a bare seed or a
+    // whole-register clear is a testing-only shortcut, so it belongs beside `moveWebView` in the
+    // bundle guarded "not for use in development" rather than sitting importable off the module that
+    // owns the register.
+    const webViewOwnershipUtil = await import('@main/services/web-view-ownership.util');
+    expect('seedMoveInFlightForTesting' in webViewOwnershipUtil).toBe(false);
+    expect('clearMovesInFlightForTesting' in webViewOwnershipUtil).toBe(false);
+    expect(testingWebViewServiceRouter.seedMoveInFlightForTesting).toBeTypeOf('function');
+    expect(testingWebViewServiceRouter.clearMovesInFlightForTesting).toBeTypeOf('function');
+  });
+});

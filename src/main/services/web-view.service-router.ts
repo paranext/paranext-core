@@ -59,11 +59,12 @@ import {
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
 import {
-  clearMovesInFlightForTesting,
+  addMoveInFlight,
+  deleteMoveInFlight,
   describeMatcher,
   forEachMoveInFlight,
   type OwnerMatcher,
-  seedMoveInFlightForTesting,
+  type WebViewMoveInFlight,
 } from '@main/services/web-view-ownership.util';
 import {
   getTargetWebViewShard,
@@ -265,6 +266,27 @@ async function moveWebViewToWindow(
       `platform.moveWebViewToWindow needs a target window id number; got ${typeof targetWindowId}`,
     );
   return moveWebView(webViewId, targetWindowId);
+}
+
+/**
+ * Put a move-in-flight record in without running a move, so a test can state the situation a read
+ * is supposed to handle. Not exported outside this guarded bundle: a move that recovers sets its
+ * flag and throws with no await in between, so no test can drive a real move and observe the record
+ * it leaves.
+ */
+function seedMoveInFlightForTesting(move: WebViewMoveInFlight): void {
+  addMoveInFlight(move);
+}
+
+/**
+ * Drop every move-in-flight record, so one test's unfinished move cannot be read by the next. Not
+ * exported outside this guarded bundle: production code only ever removes one move's own record via
+ * `deleteMoveInFlight`, never clears every record at once.
+ */
+function clearMovesInFlightForTesting(): void {
+  const moves: WebViewMoveInFlight[] = [];
+  forEachMoveInFlight((move) => moves.push(move));
+  moves.forEach(deleteMoveInFlight);
 }
 
 /**
