@@ -22,6 +22,13 @@ export interface TestOutcomeLike {
  * string `'skipped'`, which is why the distinction has to be made from the raw results.
  *
  * A test with no results at all never started, which counts too.
+ *
+ * `interrupted` does NOT count, unlike `skipped`. `JobDispatcher._onTestEnd`
+ * (`playwright/lib/runner/dispatcher.js`) overwrites a test's status to `'interrupted'` — clearing
+ * its real errors — once `--max-failures` has already tripped, even for a test that finished with a
+ * genuine result of its own. So an `interrupted` result can mean "this ran and Playwright hid the
+ * outcome", not "this never ran"; treating every one as lost turned an intentional `-x`/Ctrl+C stop
+ * into a wall of "N tests never ran" that buried the one real failure that caused it.
  */
 export function wasLost(test: TestOutcomeLike): boolean {
   if (test.expectedStatus === 'skipped') return false;
@@ -33,20 +40,31 @@ export function wasLost(test: TestOutcomeLike): boolean {
   // flakiest suites, which are exactly the ones `retries` exists for. A test is lost only when no
   // attempt produced a real result, which is also what `computeTestCaseOutcome` requires
   // (`expected === 0 && unexpected === 0`).
-  return test.results.every(
-    (testResult) => testResult.status === 'skipped' || testResult.status === 'interrupted',
-  );
+  return test.results.every((testResult) => testResult.status === 'skipped');
 }
 
 /**
- * The tests a run lost, given every test it declared.
+ * The tests a run lost, given every test it declared and how the run as a whole finished.
  *
- * Empty when nothing executed at all: that is `--list` (or an abort before the first test, which
- * already fails loudly on its own). The signal worth reporting is that SOME tests ran while others
- * were lost, so at least one test must have produced a result.
+ * Empty when nothing executed at all AND the run itself reports `'passed'`: that combination is
+ * what `--list` looks like — Playwright still loads reporters named in config for `--list`
+ * (`createReporters` in `playwright/lib/runner/reporters.js` only swaps the BUILT-IN reporters for
+ * a list-mode one; a custom reporter like this one still runs), and its task list for that mode
+ * skips test execution entirely, so every declared test keeps empty results while the run itself
+ * finishes clean.
+ *
+ * Checking `runStatus` too (not just whether anything produced a result) matters because a run that
+ * lost EVERY test to a real cause — a crashed worker, a fatal setup error, a `--max-failures` trip
+ * before anything finished — does not, in practice, come back `'passed'`: a fatal error reaching
+ * every remaining test also reaches `FailureTracker.onWorkerError` (`_massSkipTestsFromRemaining`
+ * in the same file), and an interruption reports `'interrupted'`. Gating the empty-results case on
+ * `'passed'` is what stops that real total loss from also reading as `--list` and reporting clean.
  */
-export function findLostTests<T extends TestOutcomeLike>(tests: T[]): T[] {
-  if (!tests.some((test) => test.results.length > 0)) return [];
+export function findLostTests<T extends TestOutcomeLike>(
+  tests: T[],
+  runStatus: FullResult['status'],
+): T[] {
+  if (runStatus === 'passed' && !tests.some((test) => test.results.length > 0)) return [];
   return tests.filter(wasLost);
 }
 
@@ -54,10 +72,10 @@ export function findLostTests<T extends TestOutcomeLike>(tests: T[]): T[] {
  * Fails the run when a test is reported as skipped without anyone having asked for it to be
  * skipped.
  *
- * Playwright reports a test that never executed — because its worker died, or a `beforeAll` threw,
- * or the run was interrupted — with the same outcome it uses for a deliberate `test.skip()`. On
- * Linux the list reporter prints those as "did not run" and on Windows as "skipped", and both read
- * as housekeeping rather than breakage.
+ * Playwright reports a test that never executed — because its worker died, a `beforeAll` threw, or
+ * it was still queued when the run was cut short before starting — with the same outcome it uses
+ * for a deliberate `test.skip()`. On Linux the list reporter prints those as "did not run" and on
+ * Windows as "skipped", and both read as housekeeping rather than breakage.
  *
  * That is not hypothetical. `tests/isolated/find/` sat at "1 failed, 22 did not run" for months. In
  * that window it silently absorbed a fixture refactor, a menu label rename, a Tailwind prefix
@@ -86,7 +104,7 @@ class NoSilentSkipsReporter implements Reporter {
     if (!this.rootSuite) return undefined;
 
     const allTests = this.rootSuite.allTests();
-    const lost = findLostTests(allTests);
+    const lost = findLostTests(allTests, result.status);
     if (lost.length === 0) return undefined;
 
     const listed = lost
@@ -110,7 +128,8 @@ class NoSilentSkipsReporter implements Reporter {
       `\n${lost.length} test(s) never ran, and nothing asked for them to be skipped:\n${listed}\n\n` +
         `Playwright reports these the same way it reports a deliberate test.skip() — "did not run" ` +
         `on Linux, "skipped" on Windows — so they read as housekeeping. They are not. A worker ` +
-        `died, a beforeAll threw, or the run was interrupted, and these tests were lost.\n\n` +
+        `died, a beforeAll threw, or they were still queued when the run was cut short, and these ` +
+        `tests were lost.\n\n` +
         `Look at the first FAILING test in the same file: killing its worker is what usually takes ` +
         `the rest of the file with it.\n`,
     );
