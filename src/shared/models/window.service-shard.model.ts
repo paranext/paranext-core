@@ -11,7 +11,12 @@
  */
 
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { IWindowService } from '@shared/services/window.service-model';
+import {
+  IWindowService,
+  SetFocusSpecifier,
+  WindowDataTypes,
+} from '@shared/services/window.service-model';
+import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { WebViewId } from '@shared/models/web-view.model';
 
 /**
@@ -66,4 +71,24 @@ export type WindowServiceShard = IWindowService & {
    * @experimental
    */
   getNavigationContext(): Promise<NavigationContext>;
+  /**
+   * The public focus setter, plus the one thing only the process that created this window knows.
+   *
+   * Declared here rather than widened on {@link IWindowService}: the public signature is what
+   * reaches `papi.d.ts`, and an extension has no use for this parameter — it describes the window
+   * being focused into, not what to focus.
+   *
+   * @param selectorOrSpecifier See {@link IWindowService.setFocus}
+   * @param specifierIfSelectorProvided See {@link IWindowService.setFocus}
+   * @param activateWithoutDocumentFocus Make the tab active without taking document focus. Passed
+   *   by the main process when this window was created without activation and the user has not
+   *   activated it since — every mounted panel and every loaded web view asks to be focused, and
+   *   honouring that would pull a background window forward as its own content finishes loading
+   * @experimental
+   */
+  setFocus(
+    selectorOrSpecifier: SetFocusSpecifier | undefined,
+    specifierIfSelectorProvided?: SetFocusSpecifier,
+    activateWithoutDocumentFocus?: boolean,
+  ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
 };

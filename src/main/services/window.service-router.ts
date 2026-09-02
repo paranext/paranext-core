@@ -28,6 +28,7 @@ import {
   dataProviderService,
   getByType as getDataProviderByType,
 } from '@shared/services/data-provider.service';
+import { shouldContentAvoidDocumentFocus } from '@main/window-activation.util';
 import { logger } from '@shared/services/logger.service';
 import {
   FocusSubject,
@@ -43,7 +44,7 @@ import { getErrorMessage, Mutex, Unsubscriber, UnsubscriberAsync } from 'platfor
  * Resolve the window service shard for a given window. Injected so the engine can be tested without
  * the Electron window plumbing that owns the real lookup.
  */
-export type GetWindowService = (windowId: string) => Promise<IWindowService | undefined>;
+export type GetWindowService = (windowId: string) => Promise<WindowServiceShard | undefined>;
 
 /**
  * The window service shard each window registers, found by network object type and window attribute
@@ -185,14 +186,19 @@ class FocusedWindowDataProviderEngine
     selectorOrSpecifier: SetFocusSpecifier | undefined,
     specifierIfSelectorProvided?: SetFocusSpecifier,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
-    const windowService = await this.#getTargetWindowService();
+    const { windowService, targetWindowId } = await this.#getTargetWindowServiceAndId();
     const focusSpecifier = selectorOrSpecifier ?? specifierIfSelectorProvided;
+    // A window created without activation must not be pulled forward by its own content: every
+    // mounted panel and every loaded web view asks to be focused, and routing can land here while
+    // that window is the only one ready to take work. Self-clearing on its first `focus` event, so
+    // a window the user has been in never takes this branch.
+    const activateWithoutDocumentFocus = shouldContentAvoidDocumentFocus(targetWindowId);
     // Deselecting goes over as the one-argument form. Arguments cross the process boundary as JSON,
     // where an `undefined` in a non-trailing position becomes `null`, and the window service reads
     // "deselect" as a specifier that is strictly `undefined` — so the two-argument form would reach
     // it as a `null` it then tries to read a tab id off of.
     if (focusSpecifier === undefined) return windowService.setFocus(undefined);
-    return windowService.setFocus(undefined, focusSpecifier);
+    return windowService.setFocus(undefined, focusSpecifier, activateWithoutDocumentFocus);
   }
 
   async getFocus(): Promise<FocusSubject | undefined> {
@@ -287,7 +293,21 @@ class FocusedWindowDataProviderEngine
   }
 
   /** Resolve the target window's service, or explain why there isn't one */
-  async #getTargetWindowService(): Promise<IWindowService> {
+  async #getTargetWindowService(): Promise<WindowServiceShard> {
+    return (await this.#getTargetWindowServiceAndId()).windowService;
+  }
+
+  /**
+   * The target window's service together with the window it belongs to.
+   *
+   * A caller that needs both must read the target once: the routing target can move across the
+   * `await` below, and an answer about one window paired with a call to another is worse than
+   * either alone.
+   */
+  async #getTargetWindowServiceAndId(): Promise<{
+    windowService: WindowServiceShard;
+    targetWindowId: string;
+  }> {
     const targetWindowId = getTargetWindowId();
     if (targetWindowId === undefined)
       throw new Error('No windows available to route window service call');
@@ -304,7 +324,7 @@ class FocusedWindowDataProviderEngine
     // self-heal — `#repointRelay` commits its bookkeeping only after a subscribe succeeds, so that
     // re-point genuinely retries instead of short-circuiting on a relay it does not hold.
     await this.#relayUpdatesFromTargetWindow();
-    return windowService;
+    return { windowService, targetWindowId };
   }
 }
 
