@@ -7,6 +7,13 @@
  *
  * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
  * service shard".
+ *
+ * What no single window can own lives beside this file rather than inside it:
+ * `web-view.shard-index.ts` holds the per-window shards, `web-view.ownership.ts` the vocabulary of
+ * an ownership search and the register of moves in flight, `web-view.owner-resolution.ts` the
+ * search itself and the creation of a window to hold a view, and `web-view.move.ts` the policy for
+ * moving one between windows. This file keeps the routing, and the command registrations that name
+ * those capabilities.
  */
 
 import {
@@ -74,9 +81,14 @@ import {
 } from '@main/services/web-view.owner-resolution';
 import { moveWebView } from '@main/services/web-view.move';
 
-export { getWebViewShard };
-
-export { setWebViewWindowCreator, type WebViewWindowCreator };
+/**
+ * Names this router no longer defines but still offers, because callers reach the web view
+ * machinery through the router and moving them out is not a reason to make every caller say so.
+ * `getWebViewShard` is read by `scroll-group-navigation.commands.ts` and `main.ts`;
+ * `setWebViewWindowCreator` is how `main.ts` wires the creator once its window-creating closure
+ * exists.
+ */
+export { getWebViewShard, setWebViewWindowCreator, type WebViewWindowCreator };
 
 /**
  * Run an open in the window that owns the tab it was routed by, and raise that window.
