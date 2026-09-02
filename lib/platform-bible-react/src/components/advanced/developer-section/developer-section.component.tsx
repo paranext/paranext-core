@@ -30,7 +30,7 @@ export const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[] = [
 export type DeveloperSectionProps = {
   /** Localized strings; pass strings resolved from `DEVELOPER_SECTION_STRING_KEYS`. */
   localizedStrings: LanguageStrings;
-  /** The currently selected server type. Every `ServerType` has its own item in the toggle. */
+  /** The currently selected server type. Every `ServerType` has its own radio. */
   selectedServer: ServerType;
   /** Called when the user switches to a different server type. */
   onServerChange: (server: ServerType) => void;
