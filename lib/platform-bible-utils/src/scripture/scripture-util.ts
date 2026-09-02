@@ -333,8 +333,8 @@ export async function getLocalizedIdFromBookNumber(
   // segment again — the same text again, whenever the name has no hyphen.
   const graphemeName = new GraphemeString(bookName);
   // Some entries carry a second name inside ideographic parentheses. That is the fullwidth left
-  // parenthesis U+FF08, which needs the four-digit `\u` escape — the two-digit `\xff08` is `ÿ08`,
-  // which is what this used to split on, so the split never matched.
+  // parenthesis U+FF08, which needs the four-digit `\u` escape: `\xff08` takes only the first two
+  // hex digits and yields the three characters `ÿ08`, which no book name contains.
   const beforeParenthesis = graphemeName.split('-')[0].split('\uff08')[0];
   return beforeParenthesis.toString().trim();
 }

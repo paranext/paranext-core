@@ -40,6 +40,10 @@ async function mockGetLocalizedString(item: {
   if (localizeKey === 'Book.REV') {
     if (language === 'zh-hans') return '启示\uff08默示录\uff09';
   }
+  if (localizeKey === 'Book.JON') {
+    // Surrounding whitespace, which no shipped entry has but a translator can leave behind
+    if (language === 'zh-hans') return '  约拿-书  ';
+  }
   return localizeKey;
 }
 
@@ -72,6 +76,11 @@ describe('getLocalizedIdFromBookNumber', () => {
   it('with chinese keeps only the part before a hyphen', async () => {
     const result = await getLocalizedIdFromBookNumber(40, 'zh-hans', mockGetLocalizedString);
     expect(result).toEqual('马太');
+  });
+
+  it('with chinese trims whitespace around the result', async () => {
+    const result = await getLocalizedIdFromBookNumber(32, 'zh-hans', mockGetLocalizedString);
+    expect(result).toEqual('约拿');
   });
 
   it('with chinese drops a second name in ideographic parentheses', async () => {
