@@ -750,9 +750,12 @@ test.describe('Search Results', () => {
 // `addToHistory` has four callers: the idle debounce, an explicit search (Enter), a search-options
 // change, and unmount. Three of the four are drivable here — Find is a permanent tab in Simple
 // mode, so it never unmounts, and a covering test would have to live where the panel can be closed.
-// The idle-debounce and explicit-search routes are asserted below; the search-options-change route
-// is also driven, unasserted, by the match-case test (Search Filters) and the scope-switching test
-// (Scope Switching) further down.
+// The idle-debounce and explicit-search routes are asserted below. The search-options-change route
+// is also driven by the match-case test (Search Filters) and the scope-switching test (Scope
+// Switching) further down, but those two never change the search term between an explicit search
+// and the option change that follows it, so `addToHistory`'s own (project, term) dedupe guard makes
+// every write they trigger a no-op — the third test below changes the term first, so its write is
+// the only one that actually reaches history through this route.
 //
 // What is NOT a route matters as much here: neither clearing the box nor opening a result records
 // anything, so a test asserting either would assert behaviour the panel does not have. Two such
@@ -787,6 +790,41 @@ test.describe('Search History', () => {
     // History updates synchronously on Enter — no debounce wait needed
     await openHistoryDropdown(frame);
     await expect(frame.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('should add the term in the box to history when options change, even right after an option change already recorded a different term', async ({
+    mainPage,
+  }) => {
+    const frame = await openFindPanel(mainPage);
+
+    const firstTerm = `histtest-optionschange-a-${Date.now()}`;
+    const secondTerm = `histtest-optionschange-b-${Date.now()}`;
+
+    await fillSearchAndWaitForResults(frame, firstTerm);
+    await openFiltersPanel(frame);
+
+    // First option change: the box still holds firstTerm, the same term the explicit search above
+    // just recorded, so the dedupe guard makes this write a no-op — the same shape the match-case
+    // and scope-switching tests exercise, which is why neither of them can tell whether this
+    // effect's write path actually runs.
+    const wholeWordRadio = frame.locator('#wordRestriction-wholeWord');
+    await expect(wholeWordRadio).toBeVisible({ timeout: 5_000 });
+    await wholeWordRadio.click();
+    await expect(wholeWordRadio).toBeChecked();
+
+    // Change the term without going through either of the other two history routes (no Enter, no
+    // 5s idle wait), then change a second option. Only a term change makes the dedupe key differ
+    // from what is already recorded, so a write reaching history here can only be explained by the
+    // options-change effect itself.
+    await frame.locator('#search-term').fill(secondTerm);
+    const matchCaseCheckbox = frame.locator('#matchCase');
+    await expect(matchCaseCheckbox).toBeVisible({ timeout: 5_000 });
+    await matchCaseCheckbox.click();
+    await expect(matchCaseCheckbox).toBeChecked();
+    await matchCaseCheckbox.press('Escape');
+
+    await openHistoryDropdown(frame);
+    await expect(frame.getByRole('option', { name: secondTerm })).toBeVisible({ timeout: 5_000 });
   });
 });
 
