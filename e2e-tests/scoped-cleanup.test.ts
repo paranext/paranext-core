@@ -202,13 +202,19 @@ describe('a root reached through a symlink', () => {
     fs.rmSync(scratch, { recursive: true, force: true });
   });
 
-  it("claims its own processes when the run's root is a symlink", () => {
-    // /proc/<pid>/cwd is a resolved path, so a run launched through a symlinked checkout compares
-    // its own processes against a path they can never match, and cleans up nothing at all.
-    const mine = { pid: 301, comm: 'electron', cwd: path.join(realRoot, 'release/app') };
+  // Skipped off Linux: this is the only test that needs real directories, and a Windows temp path
+  // is not POSIX, so it cannot describe a /proc working directory. Creating a symlink there also
+  // needs privileges the runner may not have.
+  it.skipIf(process.platform !== 'linux')(
+    "claims its own processes when the run's root is a symlink",
+    () => {
+      // /proc/<pid>/cwd is a resolved path, so a run launched through a symlinked checkout compares
+      // its own processes against a path they can never match, and cleans up nothing at all.
+      const mine = { pid: 301, comm: 'electron', cwd: path.join(realRoot, 'release/app') };
 
-    expect(selectPidsUnderRoot(linkedRoot, [mine], [])).toEqual([301]);
-  });
+      expect(selectPidsUnderRoot(linkedRoot, [mine], [])).toEqual([301]);
+    },
+  );
 });
 
 describe('process names as the kernel reports them', () => {
