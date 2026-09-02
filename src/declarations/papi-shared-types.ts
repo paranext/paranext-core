@@ -25,13 +25,12 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from '@shared/services/scroll-group.service-model';
-  import type { WindowSummary } from '@shared/services/window.service-model';
+  import type { AppWindowInputEvent, WindowSummary } from '@shared/services/window.service-model';
   import type {
     CloseWebViewEvent,
     OpenWebViewEvent,
     UpdateWebViewEvent,
   } from '@shared/services/web-view.service-model';
-  import type { AppWindowInputEvent } from '@shared/services/window.service-model';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { WebViewFactory } from '@shared/models/web-view-factory.model';
