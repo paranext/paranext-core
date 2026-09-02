@@ -4,6 +4,8 @@ import {
   noteWindowWithheldFromActivation,
   planWindowActivation,
   shouldContentAvoidDocumentFocus,
+  shouldRevealAfterLoadFailure,
+  shouldRevealAfterRendererGone,
 } from '@main/window-activation.util';
 
 describe('planWindowActivation', () => {
@@ -84,5 +86,50 @@ describe('whether content must avoid taking document focus', () => {
 
     expect(shouldContentAvoidDocumentFocus(withheld)).toBe(true);
     expect(shouldContentAvoidDocumentFocus(ordinary)).toBe(false);
+  });
+});
+
+describe('revealing a window that failed before it could paint', () => {
+  const withheld = planWindowActivation(false);
+  const asked = planWindowActivation(true);
+
+  test('reveals a withheld window whose page genuinely failed to load', () => {
+    expect(shouldRevealAfterLoadFailure(withheld, { isMainFrame: true, errorCode: -105 })).toBe(
+      true,
+    );
+  });
+
+  test('leaves a sub-frame failure alone, since the window itself is still on its way', () => {
+    // Every web view is an in-page iframe of this window's page, so one web view failing to load
+    // says nothing about whether the window will reach `ready-to-show`. Revealing then would show
+    // it before it can paint, which is what withholding `show` exists to prevent.
+    expect(shouldRevealAfterLoadFailure(withheld, { isMainFrame: false, errorCode: -105 })).toBe(
+      false,
+    );
+  });
+
+  test('leaves an aborted navigation alone, since the page is still coming', () => {
+    // A main-frame navigation that was superseded or cancelled reports ERR_ABORTED. Nothing failed
+    // to arrive, so revealing would be the same premature reveal by another route.
+    expect(shouldRevealAfterLoadFailure(withheld, { isMainFrame: true, errorCode: -3 })).toBe(
+      false,
+    );
+  });
+
+  test('does nothing for a window that showed itself', () => {
+    // The positive control for all three above: a window the constructor already showed has
+    // nothing to reveal, so the rule must not be answering `true` for everything.
+    expect(shouldRevealAfterLoadFailure(asked, { isMainFrame: true, errorCode: -105 })).toBe(false);
+  });
+
+  test('reveals a withheld window whose renderer died before it could paint', () => {
+    // A renderer that dies before `ready-to-show` emits `render-process-gone` rather than
+    // `did-fail-load`, and nothing else would ever reveal the window — it would stay tracked,
+    // routable and invisible, which is the failure the reveal exists to prevent.
+    expect(shouldRevealAfterRendererGone(withheld)).toBe(true);
+  });
+
+  test('does nothing when a window that showed itself loses its renderer', () => {
+    expect(shouldRevealAfterRendererGone(asked)).toBe(false);
   });
 });
