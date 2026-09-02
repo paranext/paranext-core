@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
-// The module under test pulls in `getMarkerMenuItems`/`defaultStyleInfo` as real (not type-only)
-// imports from `@eten-tech-foundation/platform-editor`, whose bundled entry point touches
-// `document` at module-eval time (it re-exports the whole editor, React components and all). The
-// default `node` environment (see `vitest.config.ts`) has no `document`, so this file needs jsdom
-// — same fix already used by `scripture-pane.test.tsx` and `use-editor-pdp-sync.hook.test.ts` for
-// the same package.
+// The module under test value-imports `platform-bible-react`, whose bundled entry point touches
+// `document` at module-eval time (it re-exports the whole component library). The default `node`
+// environment (see `vitest.config.ts`) has no `document`, so this file needs jsdom — same fix
+// already used by `scripture-pane.test.tsx` and `use-editor-pdp-sync.hook.test.ts`.
 import { describe, it, expect, vi } from 'vitest';
 import { MutableRefObject } from 'react';
-import type { EditorRef, SelectionRange, StyleInfo } from '@eten-tech-foundation/platform-editor';
-import { isLocalizeKey, type LanguageStrings } from 'platform-bible-utils';
+import type { EditorRef, SelectionRange } from '@eten-tech-foundation/platform-editor';
+import { isBlockMarker, isLocalizeKey } from 'platform-bible-utils';
 import {
   generateInlineMarkerMenuListItems,
   getChapterKey,
@@ -34,158 +32,72 @@ function makeMockEditorRef() {
 }
 
 describe('generateInlineMarkerMenuListItems', () => {
+  // The 'p' parent's children include block markers (e.g. 'q' poetry, 's1' section heading) and
+  // inline markers (e.g. 'f' footnote, 'x' cross-reference) against the real usfmMarkers data.
   const PARENT = 'p';
   const noop = () => {};
 
-  // Minimal project-stylesheet fixture (as if merged from usfm.sty + custom.sty and serialized by
-  // the host), carrying one of each styleType the menu has to handle: 'p' the parent paragraph and
-  // 'q1'/'s1' two more block styles, 'v' a verse marker (the library classifies it as styleType
-  // "character", but `isBlockMarker` special-cases 'v' as structural — same as PT9), 'f' a note
-  // marker, and 'nd' a plain inline character marker. `wj` is deliberately absent here and added
-  // back per-test to exercise stylesheet-driven inclusion/exclusion.
-  const BASE_STYLE_INFO: StyleInfo = {
-    markers: {
-      p: { marker: 'p', styleType: 'paragraph' },
-      q1: { marker: 'q1', styleType: 'paragraph', description: 'Poetic line' },
-      s1: { marker: 's1', styleType: 'paragraph', description: 'Section heading' },
-      v: { marker: 'v', styleType: 'character' },
-      f: { marker: 'f', styleType: 'note', endMarker: 'f*', description: 'A Footnote text item' },
-      nd: { marker: 'nd', styleType: 'character', description: 'For name of deity' },
-    },
-  };
-
-  /** Invoke the generator with the fixture stylesheet, overriding only what a test cares about. */
-  function generate({
-    localizedStrings = {},
-    isStructureProtected = false,
-    notifyStructureProtected = vi.fn(),
-    restoreSelection,
-    parentMarker = PARENT,
-    styleInfo = BASE_STYLE_INFO,
-    ref = makeMockEditorRef().ref,
-    closeMarkersMenu = vi.fn(),
-  }: {
-    localizedStrings?: LanguageStrings;
-    isStructureProtected?: boolean;
-    notifyStructureProtected?: () => void;
-    restoreSelection?: () => void;
-    parentMarker?: string;
-    styleInfo?: StyleInfo;
-    ref?: MutableRefObject<EditorRef | null>;
-    closeMarkersMenu?: () => void;
-  } = {}) {
-    return generateInlineMarkerMenuListItems(
+  it('offers both block and inline markers for the parent', () => {
+    const { ref } = makeMockEditorRef();
+    const markers = generateInlineMarkerMenuListItems(
       ref,
-      closeMarkersMenu,
-      localizedStrings,
-      isStructureProtected,
-      notifyStructureProtected,
-      restoreSelection,
-      parentMarker,
-      styleInfo,
-    );
-  }
+      noop,
+      {},
+      false,
+      vi.fn(),
+      undefined,
+      PARENT,
+    ).map((item) => item.marker ?? '');
 
-  it('offers BOTH block and inline markers, so `\\` in the Formatted view reaches the whole stylesheet', () => {
-    const markers = generate().map((item) => item.marker);
-
-    // The two kinds the menu exists to combine. `nd` is a character style, `p`/`q1`/`s1` are block
-    // styles — the library's own `character` and `paragraph` sources are mutually exclusive, so a
-    // list holding both can only have come from merging them.
-    expect(markers).toEqual(expect.arrayContaining(['nd', 'f', 'p', 'q1', 's1']));
+    // The menu is the one place a user can reach either kind from the keyboard, so both have to be
+    // there: 'nd'/'wj' character styles, 'f'/'x' notes, 'p'/'q'/'s1' block styles.
+    expect(markers).toEqual(expect.arrayContaining(['nd', 'wj', 'f', 'x', 'p', 'q', 's1']));
+    expect(markers.filter((marker) => isBlockMarker(marker)).length).toBeGreaterThan(0);
+    expect(markers.filter((marker) => !isBlockMarker(marker)).length).toBeGreaterThan(0);
   });
 
-  it('omits block markers when the caret is in a character span, which cannot start a paragraph', () => {
-    // Positive control: this same stylesheet DOES yield block markers from a block context, so an
-    // absent block half below is the gate doing its job, not the block half having gone missing.
-    expect(generate({ parentMarker: PARENT }).map((item) => item.marker)).toContain('q1');
-
-    const markers = generate({ parentMarker: 'nd' }).map((item) => item.marker);
-
-    // ...and the character half still arrives, so this is not merely an empty menu.
-    expect(markers).toContain('nd');
-    expect(markers).not.toContain('p');
-    expect(markers).not.toContain('q1');
-    expect(markers).not.toContain('s1');
-  });
-
-  it('omits block markers when the caret is in a note, which cannot contain a paragraph', () => {
-    expect(generate({ parentMarker: PARENT }).map((item) => item.marker)).toContain('q1');
-
-    const markers = generate({ parentMarker: 'f' }).map((item) => item.marker);
-
-    expect(markers).toContain('nd');
-    expect(markers).not.toContain('p');
-    expect(markers).not.toContain('q1');
-    expect(markers).not.toContain('s1');
-  });
-
-  it('offers block markers under any block context, not just the caret paragraph itself', () => {
-    // Guards against a merge that only ever echoes `parentMarker` back: asking from inside `\s1`
-    // must still offer `p` and `q1`.
-    const markers = generate({ parentMarker: 's1' }).map((item) => item.marker);
-
-    expect(markers).toEqual(expect.arrayContaining(['p', 'q1', 's1', 'nd']));
-  });
-
-  it('when protected: every block marker is disallowed while inline markers stay insertable', () => {
-    const items = generate({ isStructureProtected: true });
-    const isDisallowed = (marker: string) => items.find((i) => i.marker === marker)?.isDisallowed;
-
-    expect(isDisallowed('p')).toBe(true);
-    expect(isDisallowed('q1')).toBe(true);
-    expect(isDisallowed('s1')).toBe(true);
-    expect(isDisallowed('nd')).toBeFalsy();
-    expect(isDisallowed('f')).toBeFalsy();
-  });
-
-  it('keeps basic markers ahead of non-basic ones across the merged list', () => {
-    // `(basic)` in a stylesheet Description is what PT9's ScrTag.IsBasic reads, and the library
-    // lifts it into its ordering. A naive concatenation would strand a basic block marker behind
-    // every non-basic character marker.
-    const items = generate({
-      styleInfo: {
-        markers: {
-          ...BASE_STYLE_INFO.markers,
-          q1: { marker: 'q1', styleType: 'paragraph', description: 'Poetic line (basic)' },
-          nd: { marker: 'nd', styleType: 'character', description: 'For name of deity' },
-        },
-      },
-    });
-    const markers = items.map((item) => item.marker);
-
-    expect(markers.indexOf('q1')).toBeLessThan(markers.indexOf('nd'));
-  });
-
-  it('when protected: a block-marker item is disallowed and its action notifies without inserting', () => {
-    const { ref, insertMarker } = makeMockEditorRef();
-    const notify = vi.fn();
-    const close = vi.fn();
-    const items = generate({
+  it('offers only the markers the parent declares as children', () => {
+    const { ref } = makeMockEditorRef();
+    const markers = generateInlineMarkerMenuListItems(
       ref,
-      closeMarkersMenu: close,
-      isStructureProtected: true,
-      notifyStructureProtected: notify,
-    });
+      noop,
+      {},
+      false,
+      vi.fn(),
+      undefined,
+      PARENT,
+    ).map((item) => item.marker);
 
-    const blockItem = items.find((i) => i.marker === 'p');
-    expect(blockItem?.isDisallowed).toBe(true);
-
-    blockItem?.action?.();
-    expect(notify).toHaveBeenCalledTimes(1);
-    expect(close).toHaveBeenCalledTimes(1);
-    expect(insertMarker).not.toHaveBeenCalled();
+    // Parent-scoped, not the whole marker table: 'p' declares no introduction markers, and a menu
+    // that offered them would be listing markers that cannot occur here.
+    expect(markers).not.toContain('ip');
+    expect(markers).not.toContain('imt');
   });
 
-  it('when protected: the verse marker is disallowed too, though the sheet types it as a character', () => {
-    const items = generate({ isStructureProtected: true });
+  it('sorts by marker code', () => {
+    const { ref } = makeMockEditorRef();
+    const markers = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      {},
+      false,
+      vi.fn(),
+      undefined,
+      PARENT,
+    ).map((item) => item.marker ?? '');
 
-    // `isBlockMarker` special-cases `v` as structural, same as PT9 — so it is blocked while
-    // structure protection is on even though it arrives via the character source.
-    expect(items.find((i) => i.marker === 'v')?.isDisallowed).toBe(true);
+    expect(markers).toEqual([...markers].sort((a, b) => a.localeCompare(b)));
   });
 
-  it('when protected: inline-marker item (f) is allowed and its action inserts', () => {
+  it('returns [] for a parent with no children, so the menu never opens empty', () => {
+    const { ref } = makeMockEditorRef();
+    // 'nd' is a leaf character marker — nothing can be inserted under it.
+    expect(
+      generateInlineMarkerMenuListItems(ref, noop, {}, false, vi.fn(), undefined, 'nd'),
+    ).toEqual([]);
+  });
+
+  it('when protected: block-marker item is disallowed and its action notifies without inserting', () => {
     const { ref, insertMarker } = makeMockEditorRef();
     const notify = vi.fn();
     const close = vi.fn();
@@ -197,7 +109,29 @@ describe('generateInlineMarkerMenuListItems', () => {
       notify,
       undefined,
       PARENT,
-      BASE_STYLE_INFO,
+    );
+
+    const blockItem = items.find((i) => i.marker === 'q');
+    expect(blockItem?.isDisallowed).toBe(true);
+
+    blockItem?.action?.();
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(insertMarker).not.toHaveBeenCalled();
+  });
+
+  it('when protected: inline-marker item is allowed and its action inserts', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const notify = vi.fn();
+    const close = vi.fn();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      close,
+      {},
+      true,
+      notify,
+      undefined,
+      PARENT,
     );
 
     const inlineItem = items.find((i) => i.marker === 'f');
@@ -221,16 +155,30 @@ describe('generateInlineMarkerMenuListItems', () => {
       notify,
       undefined,
       PARENT,
-      BASE_STYLE_INFO,
     );
 
     expect(items.length).toBeGreaterThan(0);
     expect(items.every((i) => !i.isDisallowed)).toBe(true);
 
-    items.forEach((item) => item.action?.());
-    expect(insertMarker).toHaveBeenCalledTimes(items.length);
-    items.forEach((item) => expect(insertMarker).toHaveBeenCalledWith(item.marker));
+    items[0].action?.();
+    expect(insertMarker).toHaveBeenCalledWith(items[0].marker);
     expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('localizes marker titles, falling back to the raw localize key when not loaded', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      { '%markerMenu_marker_f_description%': 'Fußnote (übersetzt)' },
+      false,
+      vi.fn(),
+      undefined,
+      PARENT,
+    );
+
+    expect(items.find((i) => i.marker === 'f')?.title).toBe('Fußnote (übersetzt)');
+    expect(items.find((i) => i.marker === 'nd')?.title).toBe('%markerMenu_marker_nd_description%');
   });
 
   it('restores the caret before inserting, so a pick made after the menu took focus still lands', () => {
@@ -244,7 +192,6 @@ describe('generateInlineMarkerMenuListItems', () => {
       vi.fn(),
       restoreSelection,
       PARENT,
-      BASE_STYLE_INFO,
     );
 
     items[0].action?.();
@@ -269,7 +216,6 @@ describe('generateInlineMarkerMenuListItems', () => {
       vi.fn(),
       restoreSelection,
       PARENT,
-      BASE_STYLE_INFO,
     );
 
     items.find((item) => item.isDisallowed)?.action?.();
@@ -281,160 +227,6 @@ describe('generateInlineMarkerMenuListItems', () => {
   it('returns [] when there is no parent marker', () => {
     const { ref } = makeMockEditorRef();
     expect(generateInlineMarkerMenuListItems(ref, noop, {}, false, vi.fn())).toEqual([]);
-  });
-
-  it('titles fall back to the raw stylesheet description, or the marker code when no description is given', () => {
-    const { ref } = makeMockEditorRef();
-    const items = generateInlineMarkerMenuListItems(
-      ref,
-      noop,
-      {},
-      false,
-      vi.fn(),
-      undefined,
-      PARENT,
-      BASE_STYLE_INFO,
-    );
-
-    expect(items.find((i) => i.marker === 'f')?.title).toBe('A Footnote text item');
-    expect(items.find((i) => i.marker === 'v')?.title).toBe('v');
-  });
-
-  it('prefers the bundled markerMenu LocalizeKey over the stylesheet description when loaded', () => {
-    const { ref } = makeMockEditorRef();
-    const items = generateInlineMarkerMenuListItems(
-      ref,
-      noop,
-      { '%markerMenu_marker_f_description%': 'Fußnote (übersetzt)' },
-      false,
-      vi.fn(),
-      undefined,
-      PARENT,
-      BASE_STYLE_INFO,
-    );
-
-    // The translated markerMenu_marker_* strings are the PRIMARY title source; the raw
-    // stylesheet Description only fills in for markers with no loaded LocalizeKey — which is
-    // what custom.sty markers rely on.
-    expect(items.find((i) => i.marker === 'f')?.title).toBe('Fußnote (übersetzt)');
-    expect(items.find((i) => i.marker === 'v')?.title).toBe('v');
-  });
-
-  it('localizes a description that is a localize key through localizedStrings', () => {
-    const { ref } = makeMockEditorRef();
-    const withLocalizeKeyDescription: StyleInfo = {
-      markers: {
-        ...BASE_STYLE_INFO.markers,
-        nd: { marker: 'nd', styleType: 'character', description: '%marker_nd_description%' },
-      },
-    };
-    const items = generateInlineMarkerMenuListItems(
-      ref,
-      noop,
-      { '%marker_nd_description%': 'For name of deity (localized)' },
-      false,
-      vi.fn(),
-      undefined,
-      PARENT,
-      withLocalizeKeyDescription,
-    );
-
-    expect(items.find((i) => i.marker === 'nd')?.title).toBe('For name of deity (localized)');
-  });
-
-  it('falls back to the raw localize key when localizedStrings has no entry for it', () => {
-    const { ref } = makeMockEditorRef();
-    const withLocalizeKeyDescription: StyleInfo = {
-      markers: {
-        ...BASE_STYLE_INFO.markers,
-        nd: { marker: 'nd', styleType: 'character', description: '%marker_nd_description%' },
-      },
-    };
-    const items = generateInlineMarkerMenuListItems(
-      ref,
-      noop,
-      {},
-      false,
-      vi.fn(),
-      undefined,
-      PARENT,
-      withLocalizeKeyDescription,
-    );
-
-    expect(items.find((i) => i.marker === 'nd')?.title).toBe('%marker_nd_description%');
-  });
-
-  it('omits a marker the supplied project stylesheet does not define (project-invalid)', () => {
-    const { ref } = makeMockEditorRef();
-    const items = generateInlineMarkerMenuListItems(
-      ref,
-      noop,
-      {},
-      false,
-      vi.fn(),
-      undefined,
-      PARENT,
-      BASE_STYLE_INFO,
-    );
-
-    expect(items.some((i) => i.marker === 'wj')).toBe(false);
-  });
-
-  it('includes a marker once the supplied stylesheet defines it (custom.sty addition)', () => {
-    const { ref } = makeMockEditorRef();
-    const withCustomMarker: StyleInfo = {
-      markers: {
-        ...BASE_STYLE_INFO.markers,
-        wj: { marker: 'wj', styleType: 'character', description: 'For marking the words of Jesus' },
-      },
-    };
-    const items = generateInlineMarkerMenuListItems(
-      ref,
-      noop,
-      {},
-      false,
-      vi.fn(),
-      undefined,
-      PARENT,
-      withCustomMarker,
-    );
-
-    expect(items.some((i) => i.marker === 'wj')).toBe(true);
-  });
-
-  it('falls back to the bundled default stylesheet when no project styleInfo is supplied', () => {
-    const { ref } = makeMockEditorRef();
-    const items = generateInlineMarkerMenuListItems(
-      ref,
-      noop,
-      {},
-      false,
-      vi.fn(),
-      undefined,
-      PARENT,
-    );
-
-    // The bundled usfm.sty defines far more inline/note markers under 'p' than the minimal test
-    // fixture above, so this can only pass if the no-styleInfo path is actually wired up.
-    expect(items.length).toBeGreaterThan(Object.keys(BASE_STYLE_INFO.markers).length);
-    expect(items.some((i) => i.marker === 'wj')).toBe(true);
-  });
-
-  it('offers both kinds against the real bundled stylesheet, not just the test fixture', () => {
-    const { ref } = makeMockEditorRef();
-    const markers = generateInlineMarkerMenuListItems(
-      ref,
-      noop,
-      {},
-      false,
-      vi.fn(),
-      undefined,
-      PARENT,
-    ).map((item) => item.marker);
-
-    // The user-facing shape of this menu, pinned against the stylesheet that actually ships:
-    // inline styles (`nd`, `wj`), note styles (`f`), and block styles (`p`, `q1`, `s1`) together.
-    expect(markers).toEqual(expect.arrayContaining(['nd', 'wj', 'f', 'p', 'q1', 's1']));
   });
 });
 

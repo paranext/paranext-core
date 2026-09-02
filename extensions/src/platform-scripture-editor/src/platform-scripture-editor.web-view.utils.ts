@@ -1,19 +1,18 @@
 /**
  * WEB-VIEW-ONLY utility helpers for the platform-scripture-editor extension.
  *
- * IMPORTANT: this module imports RUNTIME VALUES (`getMarkerMenuItems`, `defaultStyleInfo`) from
- * `@eten-tech-foundation/platform-editor`, whose dist is a single, non-splittable library bundle
- * that also contains the React editor components and a top-level `react/jsx-runtime` import.
- * Importing any value from it pulls the whole bundle into the importer's webpack module graph. That
- * is fine in the web view (browser iframe, live React), but FATAL in the extension host: `main.js`
- * runs in a sandboxed Node context with no React runtime and a `require` that rejects anything but
- * `@papi/*`-family modules, so the editor bundle's eager `react/jsx-runtime` import throws during
- * `activate()` and the whole extension fails to activate.
+ * IMPORTANT: this module value-imports `platform-bible-react`, a React component library that calls
+ * `forwardRef`/`createContext` at module-eval time. That is fine in the web view (browser iframe,
+ * live React), but FATAL in the extension host: `main.js` runs in a sandboxed Node context with no
+ * React runtime and a `require` that rejects anything but `@papi/*`-family modules, so the eager
+ * `react` import throws during `activate()` and the whole extension fails to activate. The same
+ * hazard applies to any RUNTIME VALUE from `@eten-tech-foundation/platform-editor`, whose dist is a
+ * single non-splittable bundle carrying the React editor components — import types from it only.
  *
  * Therefore this module must ONLY ever be imported by web-view code (and its tests) — NEVER by
  * `main.ts` or anything `main.ts` reaches. Main-bundle-safe helpers live in
- * `platform-scripture-editor.utils.ts`, which is restricted to `import type` from the editor
- * package.
+ * `platform-scripture-editor.utils.ts`. `extension-host-import-boundary.test.ts` walks the import
+ * graph from `main.ts` and enforces this.
  */
 
 import {
@@ -24,77 +23,19 @@ import {
   type PaletteItem,
 } from 'platform-bible-utils';
 import type { MutableRefObject } from 'react';
-import {
-  defaultStyleInfo,
-  getMarkerMenuItems,
-  type EditorRef,
-  type MarkerMenuItem as EditorMarkerMenuItem,
-  type SelectionRange,
-  type StyleInfo,
+import type {
+  EditorRef,
+  MarkerMenuItem as EditorMarkerMenuItem,
+  SelectionRange,
 } from '@eten-tech-foundation/platform-editor';
 import { markerMenuItemToPaletteItem, type MarkerMenuItem } from 'platform-bible-react';
 import { stripMarkerNestingPrefix } from 'platform-bible-react/experimental';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
 /**
- * Resolves the display title for a stylesheet-sourced marker-menu item.
- *
- * The bundled markers table's `description` is always a `LocalizeKey`
- * (`%markerMenu_marker_*_description%`) and is the PRIMARY title source — the translated
- * `markerMenu_marker_*` strings must keep working for every marker the table knows. The
- * stylesheet's raw English `Description` is the FALLBACK: it is all a custom.sty marker has (no
- * LocalizeKey exists for it), and it also covers a bundled marker whose translation is not loaded.
- * The marker code itself is the last resort so a row with no description at all still has a title
- * (though the row then shows the code twice).
- */
-function resolveMarkerMenuItemTitle(
-  marker: string,
-  description: string | undefined,
-  localizedStrings: LanguageStrings,
-): string {
-  const localizeKey = usfmMarkers[marker]?.description;
-  if (localizeKey && isLocalizeKey(localizeKey)) {
-    const localized = localizedStrings[localizeKey];
-    if (localized) return localized;
-  }
-  if (!description) return marker;
-  return isLocalizeKey(description) ? (localizedStrings[description] ?? description) : description;
-}
-
-/**
- * Whether the marker the caret sits in is a block (paragraph-styleType) context, and so a place
- * where inserting another block marker makes sense.
- *
- * `Object.hasOwn`, not a bare index: a document marked `\toString` (or any other `Object.prototype`
- * member name) would otherwise resolve to the inherited function and be read as a stylesheet entry
- * the sheet never declared.
- */
-function isBlockContext(styleInfo: StyleInfo, marker: string): boolean {
-  if (!Object.hasOwn(styleInfo.markers, marker)) return false;
-  return styleInfo.markers[marker]?.styleType === 'paragraph';
-}
-
-/**
  * Function that generates the inline marker menu items that will update as the cursor location
- * changes. Sourced from the project's stylesheet (usfm.sty + custom.sty, merged and serialized by
- * the host) via the shared library's `getMarkerMenuItems` — the same PT9-derived classification
- * used by the standard-view `\`/Enter palettes — so a project's custom.sty markers are offered and
- * markers the project's stylesheet doesn't define are not, instead of walking a static built-in
- * marker list.
- *
- * This is the palette the Formatted and Markers views open on `\`, and it offers BOTH kinds of
- * marker: the character/note styles from the library's `character` source, plus the block styles
- * from its `paragraph` source. It has to combine them itself because those two sources are mutually
- * exclusive by design — PT9 picks between them by where the caret sits relative to the paragraph's
- * marker glyph, which is the rule the standard-view `\` palette follows. These views render no
- * marker glyphs at all, so no caret position in them can ever reach the paragraph source, and
- * offering only one of the two would put half the stylesheet permanently out of reach.
- *
- * The block half is offered only in a block context ({@link isBlockContext}) — a caret inside a
- * character span or a note is not a position another paragraph can start at. Item order is the
- * library's PT9-derived one, with a final stable basic-first pass over the combined list so basic
- * markers of both kinds lead, matching what the library itself does when it merges close tags into
- * the character source.
+ * changes. In the future this function will take data from an `.sty` file so that users can define
+ * their own markers.
  *
  * @param editorRef The ref for the editor component to be able to insert markers
  * @param closeMarkersMenu Callback to close the markers menu after an action
@@ -108,10 +49,7 @@ function isBlockContext(styleInfo: StyleInfo, marker: string): boolean {
  *   focus, run just before inserting. The menu focuses its own search input, so without this the
  *   insert can find no selection to act on
  * @param parentMarker The current parent marker which is used to determine which markers to include
- * @param styleInfo The project's stylesheet data; falls back to the bundled default stylesheet when
- *   absent (e.g. no project stylesheet loaded yet)
- * @returns The list of inline marker menu items, in the library's PT9-derived order (basic markers
- *   first)
+ * @returns The list of inline marker menu items
  */
 export function generateInlineMarkerMenuListItems(
   editorRef: MutableRefObject<EditorRef | null>,
@@ -121,61 +59,45 @@ export function generateInlineMarkerMenuListItems(
   notifyStructureProtected: () => void,
   restoreSelection?: () => void,
   parentMarker?: string,
-  styleInfo?: StyleInfo,
 ): MarkerMenuItem[] {
   if (!parentMarker) return [];
 
-  const effectiveStyleInfo = styleInfo ?? defaultStyleInfo;
-  const context = {
-    paraMarker: parentMarker,
-    previousParaMarkers: [],
-    openCharMarkers: [],
-    hasTextSelection: false,
-    inMarkerText: false,
-  };
+  const markerDetails = usfmMarkers[parentMarker];
+  if (!markerDetails?.children) return [];
 
-  const characterItems = getMarkerMenuItems(effectiveStyleInfo, {
-    ...context,
-    source: 'character',
+  const markerMenuItems: MarkerMenuItem[] = [];
+  Object.entries(markerDetails.children).forEach(([, markers]) => {
+    markerMenuItems.push(
+      ...markers.map((marker): MarkerMenuItem => {
+        const isDisallowed = isStructureProtected && isBlockMarker(marker);
+        return {
+          marker,
+          title:
+            localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
+          isDisallowed,
+          action: () => {
+            // Defense-in-depth: unreachable while the menu renders `isDisallowed` items as
+            // disabled `CommandItem`s (a disabled cmdk item never fires `onSelect`). Kept as a
+            // second layer of protection in case that disabled rendering is ever loosened or the
+            // menu wiring changes.
+            if (isDisallowed) {
+              notifyStructureProtected();
+              closeMarkersMenu();
+              return;
+            }
+            // This menu focuses its own search input on open, which takes focus off
+            // `.editor-input` — and Lexical's blur processing can null the selection `insertMarker`
+            // needs, so the insert would land nowhere. Restore it first, as every other
+            // marker-apply surface does.
+            restoreSelection?.();
+            editorRef.current?.insertMarker(marker);
+            closeMarkersMenu();
+          },
+        };
+      }),
+    );
   });
-  // No `previousParaMarkers`, so the library's validity replay starts from an empty stack and every
-  // block marker the sheet declares is offered. This menu deliberately does not narrow by document
-  // position: it is an insert palette the user searches, not PT9's caret-shape-driven `\` popup.
-  const paragraphItems = isBlockContext(effectiveStyleInfo, parentMarker)
-    ? getMarkerMenuItems(effectiveStyleInfo, { ...context, source: 'paragraph' })
-    : [];
-
-  // `Array.prototype.sort` is stable, so each source keeps its own PT9-derived ordering within the
-  // basic and non-basic groups.
-  const items = [...characterItems, ...paragraphItems].sort((a, b) => {
-    if (a.isBasic === b.isBasic) return 0;
-    return a.isBasic ? -1 : 1;
-  });
-
-  return items.map((item): MarkerMenuItem => {
-    const isDisallowed = isStructureProtected && isBlockMarker(item.marker);
-    return {
-      marker: item.marker,
-      title: resolveMarkerMenuItemTitle(item.marker, item.description, localizedStrings),
-      isDisallowed,
-      action: () => {
-        // Defense-in-depth: unreachable while the menu renders `isDisallowed` items as disabled
-        // `CommandItem`s (a disabled cmdk item never fires `onSelect`). Kept as a second layer of
-        // protection in case that disabled rendering is ever loosened or the menu wiring changes.
-        if (isDisallowed) {
-          notifyStructureProtected();
-          closeMarkersMenu();
-          return;
-        }
-        // This menu focuses its own search input on open, which takes focus off `.editor-input` —
-        // and Lexical's blur processing can null the selection `insertMarker` needs, so the insert
-        // would land nowhere. Restore it first, as every other marker-apply surface does.
-        restoreSelection?.();
-        editorRef.current?.insertMarker(item.marker);
-        closeMarkersMenu();
-      },
-    };
-  });
+  return markerMenuItems.sort((a, b) => (a.marker ?? a.title).localeCompare(b.marker ?? b.title));
 }
 
 /**
