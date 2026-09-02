@@ -822,11 +822,14 @@ async function main() {
     // the answer itself; the `!== windowId` guard at the bounce covers the case where it already is.
     const windowIdToReturnFocusTo =
       activation.revealWhenReady === 'inactive' ? getFocusedWindowId() : undefined;
-    // Captured here, before the window can be revealed: `isApplicationFocused` answers a live
-    // question, and by the time the hand-back runs this window already holds the focus that
-    // triggered it. Whether the application held focus BEFORE that is what tells the hand-back
-    // apart from raising one of our own windows over whatever the user was actually in.
-    const wasApplicationFocusedBeforeReveal = isApplicationFocused();
+    // Read at the reveal itself (`showInactive()` below), not here: `isApplicationFocused`
+    // answers a live question, and this window is created with `show: false`, so nothing between
+    // here and that reveal can raise its own `focus` event to consume a stale answer. The window
+    // can, though, sit unrevealed for as long as its page takes to load -- long enough for the
+    // user to have switched applications since construction. Whether the application held focus
+    // immediately BEFORE the reveal is what tells the hand-back apart from raising one of our own
+    // windows over whatever the user is in by the time the window actually appears.
+    let wasApplicationFocusedBeforeReveal = false;
     /**
      * When the page may still take focus for itself. Set at the reveal, because that is the paint
      * the self-focus rides in on. Outside it, a focus event is a person, and a person's click must
@@ -1113,6 +1116,7 @@ async function main() {
         // a raise.
         if (activation.revealWhenReady === 'activate') newWindow.show();
         else {
+          wasApplicationFocusedBeforeReveal = isApplicationFocused();
           newWindow.showInactive();
           if (shouldFlashOnReveal(activation)) newWindow.flashFrame(true);
           selfFocusWindowClosesAt = Date.now() + SELF_FOCUS_WINDOW_MS;
