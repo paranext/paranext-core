@@ -2688,6 +2688,13 @@ step, no automation. Just a record.
   `dev-packages/staging/<stagingFolder>`. Every `package.json` here depends on that folder with a
   `file:` specifier. npm reads the staged manifest and installs the package's own dependencies into
   this repo's tree, so the editor's dependency set is authoritative and no consumer restates it.
+  The dev repos commit their built `dist/`, so staging is a copy: consumers need none of their
+  toolchain (no pnpm, no nx, no build) to run this app, and the publish-shaping their
+  `prepublishOnly` performs — dropping the `development` export and `devDependencies`, rewriting
+  `workspace:` specifiers — is applied to the staged copy here instead, which also means the source
+  checkout is never mutated. A build happens only in `--local` mode or when a checkout has no
+  `dist/`, and always with `--skip-nx-cache`: nx declares `dist` a cached target output, so a cache
+  hit would restore its copy over the committed one and silently delete files the cache predates.
   Staging must run before npm resolves, because the staged folders are the resolution targets; the
   script is therefore plain Node importing only the standard library, since no devDependency exists
   yet. It is wired to `preinstall` so an existing checkout re-stages on every install (skipping
