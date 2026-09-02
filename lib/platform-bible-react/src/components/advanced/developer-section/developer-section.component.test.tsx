@@ -23,10 +23,10 @@ beforeAll(() => {
 
 const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_developer_section_label%': 'Developer only',
-  '%paratextRegistration_label_serverType_option_Production%': 'Production',
-  '%paratextRegistration_label_serverType_option_QualityAssurance%': 'Quality Assurance',
-  '%paratextRegistration_label_serverType_option_Development%': 'Development',
-  '%paratextRegistration_label_serverType_option_Test%': 'Test',
+  '%paratextRegistration_label_serverType_option_Production%': 'Production server',
+  '%paratextRegistration_label_serverType_option_QualityAssurance%': 'Quality Assurance server',
+  '%paratextRegistration_label_serverType_option_Development%': 'Development server',
+  '%paratextRegistration_label_serverType_option_Test%': 'Test server',
 };
 
 function renderSection(overrides: Partial<DeveloperSectionProps> = {}) {
@@ -58,13 +58,13 @@ describe('DeveloperSection', () => {
   test('server choices render as radio buttons labeled by their server names', () => {
     renderSection();
     fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
-    expect(screen.getByRole('radio', { name: 'Production' })).toBe(
+    expect(screen.getByRole('radio', { name: 'Production server' })).toBe(
       screen.getByTestId('server-type-production'),
     );
-    expect(screen.getByRole('radio', { name: 'Test' })).toBe(
+    expect(screen.getByRole('radio', { name: 'Test server' })).toBe(
       screen.getByTestId('server-type-test'),
     );
-    expect(screen.getByRole('radio', { name: 'Development' })).toBe(
+    expect(screen.getByRole('radio', { name: 'Development server' })).toBe(
       screen.getByTestId('server-type-development'),
     );
     // The group takes its accessible name from the disclosure header rather than a new string.
