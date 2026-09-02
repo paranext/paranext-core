@@ -296,22 +296,32 @@ export function isPopoverTriggerExpanded(ariaExpanded: string | null): boolean {
 }
 
 /**
- * Run a recovery action (e.g. a re-click) inside a polling loop, tolerating its own failure.
+ * Run a recovery action (e.g. a re-click) inside a polling loop, tolerating ONLY the kind of
+ * failure the loop exists to work around.
  *
- * A recovery attempt can be intercepted by the very instability the loop exists to work around — an
- * overlapping element, a pane that has not settled yet. If that throws uncaught, an unhandled
- * rejection ends the loop right there, on the recovery attempt's own generic error, instead of
- * letting the loop retry or its own observation-based diagnostic (built from what it has actually
- * seen) be what surfaces once the budget runs out.
+ * A recovery attempt can be intercepted by the very instability the loop is polling through — an
+ * overlapping element, a pane that has not settled yet — which Playwright reports as a
+ * `TimeoutError` once the action's own timeout elapses. That is expected, and safe to retry past.
+ * Any OTHER failure is not expected: it says something is wrong beyond the instability this loop
+ * tolerates, and swallowing it here would bury a real bug behind the loop's own later, unrelated
+ * deadline message. Only a `TimeoutError` is caught; anything else propagates uncaught, the same as
+ * if this wrapper were not here at all.
+ *
+ * @returns The caught error, so a caller accumulating a diagnostic across attempts can attach the
+ *   most recent one as `cause` on whatever it eventually throws — `onFailure` alone only logs, so
+ *   without this the cause is visible in the console and nowhere else.
  */
 export async function attemptRecovery(
   action: () => Promise<void>,
-  onFailure: (error: unknown) => void,
-): Promise<void> {
+  onFailure: (error: Error) => void,
+): Promise<Error | undefined> {
   try {
     await action();
+    return undefined;
   } catch (error) {
+    if (!(error instanceof Error) || error.name !== 'TimeoutError') throw error;
     onFailure(error);
+    return error;
   }
 }
 

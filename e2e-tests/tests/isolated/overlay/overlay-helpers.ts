@@ -2,6 +2,7 @@ import { Frame, Page } from '@playwright/test';
 import {
   attemptRecovery,
   PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  singleAttemptBudgetMs,
   waitForPapiMethodRegistered,
 } from '../../../fixtures/helpers';
 
@@ -45,6 +46,7 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
   // Clicking once and then polling passively can never recover from that, because nothing clicks
   // again.
   let sawHiddenMatch = false;
+  let lastRecoveryError: Error | undefined;
   let reclicks = 0;
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
@@ -101,19 +103,21 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
         `[findHelloRock3Frame] Hello Rock3 pane was not active; re-clicking its tab (attempt ${attemptNumber}).`,
       );
       // Polling loop: the re-click must finish before the next read, or the read would race it.
-      // The explicit timeout leaves the deadline to the loop. Without it the click inherits
-      // Playwright's 30s default, which is this loop's whole budget — so an intercepted click
-      // throws its own generic timeout instead of letting the message below name interception as
-      // the likely cause. `use: { actionTimeout }` would not help: it is applied in
-      // `browser.newContext`, which an Electron launch never goes through.
+      // The explicit timeout leaves the deadline to the loop, scaled to what is actually left of
+      // it rather than a fixed guess — a click attempted late still gets a sane minimum, and one
+      // attempted early does not claim more of the budget than a single attempt needs. Without an
+      // explicit timeout the click inherits Playwright's 30s default, which is this loop's whole
+      // budget — so an intercepted click throws its own generic timeout instead of letting the
+      // message below name interception as the likely cause. `use: { actionTimeout }` would not
+      // help: it is applied in `browser.newContext`, which an Electron launch never goes through.
       //
       // Tolerated, not propagated: the click itself can be intercepted by the same instability
-      // this loop is polling through. Left uncaught, that rejection would end the loop on the
-      // click's own generic error instead of the sawHiddenMatch-aware diagnostic below, once the
-      // deadline is actually reached.
+      // this loop is polling through, which Playwright reports as a timeout. A genuinely different
+      // failure still propagates — only the expected kind is absorbed here, into the
+      // sawHiddenMatch-aware diagnostic below (as its cause) once the deadline is actually reached.
       // eslint-disable-next-line no-await-in-loop
-      await attemptRecovery(
-        () => tab.first().click({ timeout: 5_000 }),
+      lastRecoveryError = await attemptRecovery(
+        () => tab.first().click({ timeout: singleAttemptBudgetMs(deadline - Date.now()) }),
         (error) =>
           console.log(
             `[findHelloRock3Frame] Re-click attempt ${attemptNumber} was itself intercepted: ${error}. Continuing to poll.`,
@@ -134,6 +138,9 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
         'element, or another tab in the same stack was activated afterwards.'
       : 'Hello Rock3 WebView frame not found within 30s. ' +
         'Ensure DEV_NOISY=true is set so the helloRock3 test extension loads.',
+    // Only the sawHiddenMatch branch ever attempts a recovery click, so this is the last
+    // interception it hit, if any — the concrete evidence behind "most likely intercepted" above.
+    lastRecoveryError ? { cause: lastRecoveryError } : undefined,
   );
 }
 
