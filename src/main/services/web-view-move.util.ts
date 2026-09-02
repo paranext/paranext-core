@@ -265,7 +265,8 @@ async function moveCapturedWebView(
     destinationWindowId = freshWindow.windowId;
     adoptIntoDestination = (definition) =>
       freshWindow.runOpen(
-        (shard) => shard.adoptWebView(definition),
+        (shard, activateWithoutDocumentFocus) =>
+          shard.adoptWebView(definition, activateWithoutDocumentFocus),
         (standingWindow) => {
           standingNewWindow = standingWindow;
         },

@@ -12,6 +12,7 @@ import {
   getWindowCreationRank,
 } from '@main/services/window-state.service';
 import { clearWindowPendingContent } from '@main/services/window-layout-persistence.service';
+import { shouldContentAvoidDocumentFocus } from '@main/window-activation.util';
 import { resolveShardForWindow } from '@main/services/target-shard-resolver.util';
 import { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
 import { Layout } from '@shared/models/docking-framework.model';
@@ -366,7 +367,10 @@ export type FreshWindow = {
    *   content went may ignore that one
    */
   runOpen: (
-    open: (shard: WebViewServiceShard) => Promise<WebViewId | undefined>,
+    open: (
+      shard: WebViewServiceShard,
+      activateWithoutDocumentFocus: boolean,
+    ) => Promise<WebViewId | undefined>,
     onWindowLeftStanding?: (standingWindow: WindowShard) => void,
   ) => Promise<WebViewId | undefined>;
   /**
@@ -492,7 +496,9 @@ export async function createFreshWindow(webViewDescription: string): Promise<Fre
     runOpen: async (open, onWindowLeftStanding) => {
       let openedWebViewId: WebViewId | undefined;
       try {
-        openedWebViewId = await open(shard);
+        // Read now rather than when the window was created: a window the user has activated in the
+        // meantime is an ordinary window, and its content should land focused like any other.
+        openedWebViewId = await open(shard, shouldContentAvoidDocumentFocus(windowId));
       } catch (e) {
         await closeAbandonedWindow(onWindowLeftStanding);
         throw e;

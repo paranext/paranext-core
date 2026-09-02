@@ -150,7 +150,10 @@ async function openWebViewInOwningWindow(
  */
 async function openInFreshWindow(
   webViewDescription: string,
-  open: (shard: WebViewServiceShard) => Promise<WebViewId | undefined>,
+  open: (
+    shard: WebViewServiceShard,
+    activateWithoutDocumentFocus: boolean,
+  ) => Promise<WebViewId | undefined>,
 ): Promise<WebViewId | undefined> {
   const freshWindow = await createFreshWindow(webViewDescription);
   return freshWindow.runOpen(open);
@@ -182,8 +185,8 @@ async function openWebViewInNewWindow(
     return webViewShard.openWebView(webViewType, { type: 'tab' }, options);
   }
 
-  return openInFreshWindow(webViewType, (shard) =>
-    shard.openWebView(webViewType, { type: 'tab' }, options),
+  return openInFreshWindow(webViewType, (shard, activateWithoutDocumentFocus) =>
+    shard.openWebView(webViewType, { type: 'tab' }, options, activateWithoutDocumentFocus),
   );
 }
 

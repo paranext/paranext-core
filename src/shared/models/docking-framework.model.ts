@@ -339,13 +339,19 @@ export type PapiDockLayout = {
    * @param layout Information about where to put a new webview
    * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
    *   tabs. Defaults to `true`
+   * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+   *   taking document focus. Focusing a tab focuses its web view's iframe, and a `focus()` inside a
+   *   window that does not hold OS focus asks the browser to activate that window — so a window
+   *   opened deliberately in the background must dock its content without it. Defaults to `false`
    * @returns If WebView added, final layout used to display the new webView. If existing webView
    *   updated, `undefined`
+   * @experimental
    */
   addWebViewToDock: (
     webView: WebViewTabProps,
     layout: Layout,
     shouldBringToFront?: boolean,
+    activateWithoutDocumentFocus?: boolean,
   ) => Layout | undefined;
   /**
    * Remove a tab in the layout
