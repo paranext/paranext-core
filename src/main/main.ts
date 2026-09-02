@@ -112,7 +112,6 @@ import { confirmCloseAllWindows } from '@main/services/close-all-prompt.service'
 import { decideWindowClose } from '@main/services/window-close-decision.service';
 import {
   assignEntryToWindow,
-  getSlotIdOf,
   handleWindowRemoved,
   initializeWindowLayoutPersistence,
   isWindowPendingContent,

@@ -176,8 +176,8 @@ describe('shutdown latches', () => {
 
     test('blocks firing while every tracked window is closing', () => {
       // Off macOS this is how the app goes down, and the quit flag is still false throughout it.
-      addWindow(fakeWindow(1));
-      markWindowClosing(1);
+      const windowId = addWindow(fakeWindow(1));
+      markWindowClosing(windowId);
 
       expect(isAppQuitRequested()).toBe(false);
       expect(canStartupSyncFireNow(1, true)).toBe(false);

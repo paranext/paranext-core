@@ -190,7 +190,7 @@ describe('web-view window creator wiring', () => {
     // the ordering question
     let clearCallsWhenClosed: number | undefined;
     const creator = {
-      createPendingContentWindow: vi.fn(async () => 7),
+      createPendingContentWindow: vi.fn(async () => '7'),
       closeWindow: vi.fn(() => {
         clearCallsWhenClosed = mocks.clearWindowPendingContent.mock.calls.length;
       }),
@@ -200,7 +200,7 @@ describe('web-view window creator wiring', () => {
     const freshWindow = await createFreshWindow('someType');
     await freshWindow.discard();
 
-    expect(creator.closeWindow).toHaveBeenCalledWith(7);
+    expect(creator.closeWindow).toHaveBeenCalledWith('7');
     expect(clearCallsWhenClosed).toBe(0);
   });
 });

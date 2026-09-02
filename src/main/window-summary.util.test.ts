@@ -57,11 +57,11 @@ describe('summarizeWindows', () => {
     // The role is a question the caller answers per window, not a value to match: the answer can
     // fall back to a different window than the one the persisted entry names, so a summary that
     // compared ids would report the wrong window — or no window at all — in exactly that case.
-    const isPrimary = vi.fn<(windowId: number) => boolean>(() => false);
+    const isPrimary = vi.fn<(windowId: string) => boolean>(() => false);
 
     summarizeWindows([window('4', 'Home'), window('7', 'Notes'), window('9', 'MRK')], isPrimary);
 
-    expect(isPrimary.mock.calls.map(([windowId]) => windowId)).toEqual([4, 7, 9]);
+    expect(isPrimary.mock.calls.map(([windowId]) => windowId)).toEqual(['4', '7', '9']);
   });
 
   test('marks the window that answers for the application even when no entry names it', () => {
@@ -69,7 +69,7 @@ describe('summarizeWindows', () => {
     // opened one into the space left behind, so no persisted entry names a live window. Something
     // still has to answer for the application's lifetime, and the caller's rule says the oldest
     // live window does. A summary keyed on the entry reports no main window at all here.
-    const oldestLiveWindowAnswers = (windowId: number) => windowId === 13;
+    const oldestLiveWindowAnswers = (windowId: string) => windowId === '13';
 
     const summaries = summarizeWindows(
       [window('13', 'Home'), window('14', 'Notes')],
