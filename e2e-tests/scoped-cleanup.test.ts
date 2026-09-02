@@ -10,7 +10,12 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
-import { isSweepEnabled, runCleanup, selectPidsUnderRoot } from './scoped-cleanup';
+import {
+  isSweepEnabled,
+  machineOwnershipFlag,
+  runCleanup,
+  selectPidsUnderRoot,
+} from './scoped-cleanup';
 
 // Working directories come from /proc, so every synthetic one here is POSIX regardless of the host
 // running the tests. The real directories in the symlink test below are the one exception.
@@ -89,6 +94,28 @@ describe('which processes belong to this checkout', () => {
   });
 });
 
+describe('which environment variable decides the machine is ours', () => {
+  it('reads GITHUB_ACTIONS, and is not fooled by CI', () => {
+    // The distinction the dispatch tests below cannot make, because they inject the value: `CI=true`
+    // is the ordinary way to make CLI tooling non-interactive and says nothing about who owns the
+    // machine, so reading it would hand a developer's own box the machine-wide sweep.
+    const original = { ci: process.env.CI, gha: process.env.GITHUB_ACTIONS };
+    try {
+      process.env.CI = 'true';
+      delete process.env.GITHUB_ACTIONS;
+      expect(machineOwnershipFlag()).toBeUndefined();
+
+      process.env.GITHUB_ACTIONS = 'true';
+      expect(machineOwnershipFlag()).toBe('true');
+    } finally {
+      if (original.ci === undefined) delete process.env.CI;
+      else process.env.CI = original.ci;
+      if (original.gha === undefined) delete process.env.GITHUB_ACTIONS;
+      else process.env.GITHUB_ACTIONS = original.gha;
+    }
+  });
+});
+
 describe('which cleanup each environment gets', () => {
   /** Records which action ran, so the choice can be asserted without killing anything. */
   function spyActions(sweepByProcessName = () => {}) {
@@ -108,13 +135,14 @@ describe('which cleanup each environment gets', () => {
     };
   }
 
-  function cleanup(ciFlag: string | undefined, platform: NodeJS.Platform) {
+  /** `githubActions` is the value of GITHUB_ACTIONS, which is unset anywhere but a GitHub runner. */
+  function cleanup(githubActions: string | undefined, platform: NodeJS.Platform) {
     const { calls, actions } = spyActions();
-    const result = runCleanup({ ciFlag, platform, root: ROOT }, actions);
+    const result = runCleanup({ machineIsOursFlag: githubActions, platform, root: ROOT }, actions);
     return { ...result, calls };
   }
 
-  it('cleans up this checkout on Linux even when nobody set CI', () => {
+  it('cleans up this checkout on Linux off a GitHub runner', () => {
     // The case the whole module exists for. A developer's box is where scoping matters: their run
     // must clear its own leaked app without touching a peer's checkout or their editor's.
     const result = cleanup(undefined, 'linux');
@@ -125,16 +153,29 @@ describe('which cleanup each environment gets', () => {
     expect(result.byName).toBe('skipped');
   });
 
-  it('does the same when CI is explicitly false on Linux', () => {
+  it('does the same when the flag is explicitly false on Linux', () => {
     const result = cleanup('false', 'linux');
 
     expect(result.scoped).toBe(true);
     expect(result.byName).toBe('skipped');
   });
 
-  it('also runs the machine-wide sweep on a Linux CI runner', () => {
-    // A CI runner is single-tenant, so the old sweep's wider reach costs nothing there and keeps
-    // its coverage — it matches build watchers by command line, which scoped selection does not.
+  it('does NOT sweep the machine just because a developer shell exports CI=true', () => {
+    // `CI=true` is the ordinary way to make CLI tooling non-interactive, and dev containers and
+    // wrapper scripts export it — so reading CI here would hand a developer's own box the
+    // machine-wide kill this module exists to prevent. GITHUB_ACTIONS is set on a GitHub runner
+    // and nowhere else, so a shell with CI=true and no GITHUB_ACTIONS looks like what it is.
+    // GITHUB_ACTIONS unset is what such a shell hands this function, whatever CI says.
+    const result = cleanup(undefined, 'linux');
+
+    expect(result.scoped).toBe(true);
+    expect(result.byName).toBe('skipped');
+  });
+
+  it('also runs the machine-wide sweep on a Linux GitHub runner', () => {
+    // A GitHub runner is single-tenant, so the old sweep's wider reach costs nothing there and
+    // keeps its coverage — it matches build watchers by command line, which scoped selection does
+    // not reach.
     const result = cleanup('true', 'linux');
 
     expect(result.scoped).toBe(true);
@@ -142,7 +183,7 @@ describe('which cleanup each environment gets', () => {
     expect(result.calls).toEqual([`scoped:${ROOT}`, 'by-name']);
   });
 
-  it('sweeps by name on a CI runner without /proc', () => {
+  it('sweeps by name on a GitHub runner without /proc', () => {
     (['darwin', 'win32'] as const).forEach((platform) => {
       const result = cleanup('true', platform);
 
@@ -152,7 +193,7 @@ describe('which cleanup each environment gets', () => {
     });
   });
 
-  it('does nothing off CI where it cannot scope', () => {
+  it('does nothing off a GitHub runner where it cannot scope', () => {
     // Nothing can be scoped without /proc, and a machine-wide kill on someone's own Mac or Windows
     // box is the behaviour this module exists to stop. Doing nothing is the only safe answer.
     (['darwin', 'win32'] as const).forEach((platform) => {
@@ -247,16 +288,20 @@ describe('a failing name sweep does not fail the run', () => {
     // `npm run stop` shelling out to ps/CIM and fkill can exit non-zero or time out; that was an
     // expected outcome before and must not turn a passing run red.
     expect(() =>
-      runCleanup({ ciFlag: 'true', platform: 'darwin', root: ROOT }, throwingActions),
+      runCleanup({ machineIsOursFlag: 'true', platform: 'darwin', root: ROOT }, throwingActions),
     ).not.toThrow();
     expect(
-      runCleanup({ ciFlag: 'true', platform: 'darwin', root: ROOT }, throwingActions).byName,
+      runCleanup({ machineIsOursFlag: 'true', platform: 'darwin', root: ROOT }, throwingActions)
+        .byName,
     ).toBe('failed');
   });
 
   it('keeps the scoped result when only the name sweep fails', () => {
     // On a Linux runner both run. A failing name sweep must not discard pids already terminated.
-    const result = runCleanup({ ciFlag: 'true', platform: 'linux', root: ROOT }, throwingActions);
+    const result = runCleanup(
+      { machineIsOursFlag: 'true', platform: 'linux', root: ROOT },
+      throwingActions,
+    );
 
     expect(result.scoped).toBe(true);
     expect(result.pids).toEqual([4242]);

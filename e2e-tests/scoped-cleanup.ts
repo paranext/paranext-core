@@ -40,11 +40,26 @@ const SWEEPABLE_PROCESS_NAMES = ['electron', 'dotnet', 'ParanextDataProvider'].m
 const NEGATIVE_FLAG_VALUES = ['0', 'false', 'no', 'off'];
 
 /**
- * Whether an environment flag asks for the sweep.
+ * The environment's answer to "does this whole machine belong to the run".
  *
- * A plain truthiness test on `process.env.CI` treats `CI=false` and `CI=0` as yes, because both are
- * non-empty strings — and those are ordinary wrapper and IDE idioms rather than exotic cases. That
- * reading is what let a developer's machine be swept by a run that had explicitly said not to.
+ * Reading it here rather than at the call site is what makes the CHOICE of variable testable: a
+ * caller that passed `process.env.CI` directly would look identical to one that passed the right
+ * thing, because the dispatch tests inject the value.
+ */
+export function machineOwnershipFlag(): string | undefined {
+  return process.env.GITHUB_ACTIONS;
+}
+
+/**
+ * Whether an environment flag asks for the machine-wide sweep.
+ *
+ * The flag to read is `GITHUB_ACTIONS`, not `CI`. `CI=true` is the ordinary way to make CLI tooling
+ * non-interactive and is exported by dev containers and wrapper scripts, so gating on it hands a
+ * developer's own machine the sweep this module exists to prevent — on a box where the sweep also
+ * reaches `webpack`, `vite` and `extension-host` by command line, not just Electron.
+ *
+ * The negative-value handling stays because it costs nothing and the failure it prevents is silent:
+ * a plain truthiness test treats `false` and `0` as yes, both being non-empty strings.
  */
 export function isSweepEnabled(value: string | undefined): boolean {
   if (value === undefined) return false;
@@ -217,15 +232,15 @@ export type CleanupOutcome = {
  */
 export function runCleanup(
   {
-    ciFlag,
+    machineIsOursFlag,
     platform,
     root,
-  }: { ciFlag: string | undefined; platform: NodeJS.Platform; root: string },
+  }: { machineIsOursFlag: string | undefined; platform: NodeJS.Platform; root: string },
   actions: CleanupActions,
 ): CleanupOutcome {
   const scoped = platform === 'linux';
   const pids = scoped ? actions.killUnderRoot(root) : [];
-  if (!isSweepEnabled(ciFlag)) return { pids, scoped, byName: 'skipped' };
+  if (!isSweepEnabled(machineIsOursFlag)) return { pids, scoped, byName: 'skipped' };
   try {
     actions.sweepByProcessName();
   } catch {

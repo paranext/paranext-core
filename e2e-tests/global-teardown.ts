@@ -2,7 +2,7 @@ import type { FullConfig } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import { execSync } from 'child_process';
-import { killProcessesUnderRoot, runCleanup } from './scoped-cleanup';
+import { killProcessesUnderRoot, machineOwnershipFlag, runCleanup } from './scoped-cleanup';
 import { restoreAppGlobalState, restoreLeakedSettings } from './fixtures/helpers';
 
 // Playwright global teardown requires this signature even though config is unused
@@ -40,7 +40,7 @@ export default async function globalTeardown(_config: FullConfig): Promise<void>
   // CDP-based suite is attached to, and other checkouts' runs on a shared box. See
   // e2e-tests/scoped-cleanup.ts for which sweeps each environment gets and why.
   const { scoped, byName, pids } = runCleanup(
-    { ciFlag: process.env.CI, platform: process.platform, root: rootDir },
+    { machineIsOursFlag: machineOwnershipFlag(), platform: process.platform, root: rootDir },
     {
       killUnderRoot: killProcessesUnderRoot,
       sweepByProcessName: () => {
