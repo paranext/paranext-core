@@ -2667,3 +2667,192 @@ step, no automation. Just a record.
   chain so the change is caught at upgrade time.
 - **Source:** PT-4422 (NN1b), Sprint 89 Simple Quality. Mount-point placement proposed in the PT-4421
   investigation; the Lexical re-throw chain verified by running it, not by reading it.
+
+
+## adr-grapheme-string-native-parity: `GraphemeString` mirrors native `String` semantics one-for-one; `string-util` is a thin wrapper over it
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** `lib/platform-bible-utils/src/string-util.ts` exposes ~19 grapheme-aware string
+  functions that re-segment their input with `stringz` on **every** call, and a few
+  (`formatReplacementString`, `lastIndexOf`, `endsWith`) segment per character, making them
+  quadratic — one `formatReplacementString` call costs ~48ms on a 1000-character string.
+  `GraphemeString` segments once in its constructor and reuses that work. Two questions had to be
+  settled to land it: what semantics the class should have where they could differ from native
+  `String`, and how existing callers get the speedup. An earlier iteration of this work chose
+  **uniform indexing** — negative indexes counting from the end in *every* method (`charAt`,
+  `indexOf`, `lastIndexOf`, not just `at`), a backwards `substring` range returning empty rather
+  than swapping, and an empty search needle reporting "not found" — on the theory that one internally
+  consistent rule is easier to learn than native's per-method inconsistencies. It also planned to
+  leave `string-util` in place marked `@deprecated`, migrating call sites over time.
+- **Decision:** **Match the native `String` API exactly**, including the parts that are arguably
+  inconsistent: `charAt`/`indexOf`/`lastIndexOf`/`startsWith`/`endsWith` clamp a negative position
+  to 0 while only `at` counts from the end; `substring` swaps a backwards range while `slice` does
+  not; an empty needle is found at the clamped position; `split`'s limit discards the remainder past
+  it and is converted with `ToUint32`. Index arguments go through the spec's `ToIntegerOrInfinity`,
+  so fractional and `NaN` arguments behave as native does. The single substitution is the **unit**:
+  grapheme cluster instead of UTF-16 code unit, with a search additionally required to begin and end
+  on cluster boundaries. **Two behavioral exceptions are accepted deliberately.** First,
+  `padStart`/`padEnd` throw `RangeError` above 2**20 graphemes, where native only gives up at V8's
+  string limit (2**29 - 24). Padding builds one array element per grapheme before joining rather
+  than filling a compact character buffer, so the native ceiling is unreachable — it exhausts the V8
+  heap first (2**16 costs ~2ms and ~1MB, 2**18 ~3ms and ~1MB, 2**20 ~9ms and ~9MB). The limit is
+  set where the cost is still negligible rather than where the engine finally fails, on the grounds
+  that padding a string to a million graphemes is never a deliberate act. Second, the free `split`
+  in `string-util` substitutes `''` for a capture group that did not participate, where native
+  yields `undefined`. Native declares `string[]` and then puts `undefined` in it, so `split(s,
+  re).map((p) => p.trim())` type-checks and throws; a wrapper that advertises `string[]` should
+  deliver one. The cost is that a non-participating group reads the same as one that matched empty —
+  `GraphemeString.split` declares `(GraphemeString | undefined)[]` and keeps the distinction for
+  callers who need it. This also restores a guarantee the pre-wrapper implementation had by
+  accident: it built results from `substring` and could never emit `undefined`, so no existing
+  caller can depend on one. Two additions are kept (`normalize('none')`, `ordinalCompare`), plus
+  `toArray`. Range methods still return `GraphemeString` rather than `string` so derived values
+  inherit the parent's segmentation — a type-level difference, not a behavioral one. The padding
+  methods return plain text, because they are the one pair that *adds* characters: a range only
+  removes clusters, so a range of an honest segmentation is still honest, while added padding can
+  fuse with the text it lands against (a filler ending in a combining mark joins the character
+  beside it). An instance carrying the concatenated arrays would therefore report a length its own
+  text does not have, and re-segmenting to avoid that costs a full pass on every call. Returning
+  text costs nothing to adopt: the class is introduced by this work, so no caller anywhere can hold
+  a padded `GraphemeString` yet, and in this repo nothing calls the grapheme-aware padding at all —
+  the two `padStart` call sites are native calls on hex strings. `paratext-10-studio` and
+  `paratext-bible-internal-extensions` were checked and contain no reference;
+  `paratext-bible-extensions` was not checked out to confirm. The raw text comes back from
+  `toString()` rather than a `.string` getter, so an instance drops straight into a template literal
+  or `String(...)`; `length` is the sole remaining getter, kept as a property precisely because that
+  is what makes `gs.length` read like `str.length`. Then **`string-util`'s functions become thin
+  wrappers over the class** and the `@deprecated` tags are removed: every existing caller gets the
+  faster implementation with no source change, and the documented advice becomes "doing more than
+  one operation on the same string? construct one `GraphemeString`", not "this function is going
+  away".
+- **Alternatives:** **Uniform indexing** (the earlier choice) — rejected: the utility's whole
+  premise is being a drop-in for `String` with a corrected unit, so every semantic departure is a
+  trap for a reader who knows JavaScript, and the departures are invisible at the call site.
+  Consistency was also not free of surprise: it made `charAt(-1)` silently return the *last*
+  character where native returns `''`, which is a wrong answer rather than a different convention.
+  **Keep `string-util` deprecated and migrate call sites** — rejected: ~200 call sites across four
+  repos, of which the export-swap majority need no edit at all; deprecation puts the work on every
+  consumer to get a speedup that a wrapper delivers for free, and leaves two implementations of the
+  same semantics alive to drift. **Return plain `string` from range methods** for total native
+  parity — rejected: it re-segments on every chained operation, discarding the class's main
+  advantage, and the difference surfaces as a compile error rather than a silent behavior change.
+  **Route `normalize`/`ordinalCompare` through the class too**, for uniformity — rejected: neither
+  needs segmentation, so wrapping them would add construction cost to 30+ call sites for no benefit;
+  they stay direct native calls.
+- **Consequences:** Native is now the test oracle: for ASCII input one grapheme is exactly one code
+  unit, so the suite compares `GraphemeString` against `String.prototype` across a matrix of
+  edge-case arguments rather than hand-written expectations — which is what surfaced native's
+  `ToUint32` limit conversion and the `NaN`-means-`+Infinity` rule in `lastIndexOf`. Note the limit
+  of that oracle: ASCII makes every grapheme index equal its UTF-16 offset, so the harness cannot
+  see the grapheme-boundary layer at all — deleting the boundary rule outright leaves it green, and
+  only the hand-written cluster tests object. The harness also always builds from the constructor,
+  so instances derived by `slice`/`substring`/`split`/padding are never the subject under test. Both
+  gaps hid real defects. The wrapper swap moves the old API's behavior to native as a side effect,
+  which fixes six long-standing bugs: `endsWith` ignoring its position; `padStart`/`padEnd`
+  overshooting with a multi-grapheme pad; `slice(1, 0)` returning most of the string; `split`
+  throwing on a limit above the match count; `lastIndexOf('')` off by one; and a string separator
+  compiled via `new RegExp(sep, 'g')`, so `split('a.b', '.')` treated the separator as a
+  metacharacter. It also ends an `indexOf('a', 'a', -Infinity)` infinite loop the old
+  `stringz`-backed scan had. Beyond those, it changes behavior for inputs that were always valid,
+  and these reach external callers with no compile-time signal: `split` with a limit now discards
+  the remainder instead of keeping it as a final piece (the one data-losing change); a
+  regular-expression separator now interleaves its capture groups and honors flags other than `g`,
+  where the old code recompiled the source and discarded them; `substring` swaps a backwards range
+  instead of returning `''`; `endsWith(s, '')` is `true` rather than `false`; and `at`, `charAt`,
+  and `codePointAt` route fractional and `NaN` indexes through `ToIntegerOrInfinity`, so `charAt(s,
+  NaN)` returns element 0 where it used to return `''`. No in-repo call site passes a `split` limit
+  or a regular-expression separator, and a scan for the other changed shapes (negative index
+  arguments, an `indexOf` result reused as a position, multi-grapheme pads) found no site whose
+  behavior changes — `stringz` had clamped negative positions to 0 just as native does. External
+  extension authors are the residual exposure, which is why the full list belongs somewhere they
+  will read rather than only here. The previously-flagged hazard of a `-1` sentinel being read as
+  "count from the end" is gone for every *search position*, which now clamps to 0 — but not for
+  `substring`'s end argument, where `-1` clamps to 0 and the backwards range is then swapped, so
+  `substring(s, 5, -1)` returns text from the front of the string instead of `''`.
+- **Source:** PT-2626 grapheme-string-util work. The decision rests on a benchmark investigation by
+  Matthew Getgen comparing the old per-call `stringz` segmentation against a segment-once
+  `GraphemeString`, across the operations `string-util` exposes and over string lengths from tens to
+  tens of thousands of characters. That investigation also produced the candidate search
+  implementations weighed here (a native scan validated at grapheme boundaries, which was kept, versus
+  a pure grapheme walk, which was not). The headline figures worth carrying forward:
+  `formatReplacementString` went from ~48ms/call on a 1000-character string to ~0.085ms/call on a
+  1200-character template, and the trailing-whitespace trim in `areUsjContentsEqualExceptWhitespace`
+  from ~30ms/call to ~0.26ms/call on a 10,000-character string with 2,000 trailing spaces. The
+  benchmark harness and the full result write-ups were scratch work on the author's machine and were
+  deliberately not checked in — the numbers above are the durable part, and the parity suite in
+  `grapheme-string.test.ts` is what guards the behavior.
+
+## adr-grapheme-segmenter-unicode-segmenter: Grapheme segmentation uses `unicode-segmenter`, the only candidate both UAX #29 conformant and as fast as `stringz`
+
+- **Date:** 2026-09-01
+- **Status:** Accepted
+- **Context:** `GraphemeString` and the `string-util` wrappers describe their unit as the "grapheme
+  cluster" — what a reader would call a character. Review flagged that the segmenter behind that,
+  `stringz`, mishandles some scripts. A dedicated evaluation found it worse than flagged: `stringz`
+  scores **65.8% on Unicode's own `GraphemeBreakTest.txt`** for Unicode 16 (28 of 56 corpus cases
+  across 30 writing systems), and it cannot count pointed Hebrew — `בְּרֵאשִׁית` (Genesis 1:1)
+  returns 11 where a reader counts 6. The root cause is structural and not patchable: `stringz`
+  delegates to `char-regex`, which hardcodes exactly five combining-mark ranges, all Latin or
+  general. Hebrew points, Arabic harakat, Devanagari marks, Thai, Khmer and Myanmar are all absent,
+  so every mark becomes its own character. That is also why `é` worked and almost nothing else did —
+  `U+0301` is in the first range. `stringz` was never a UAX #29 implementation; it is an emoji-aware
+  regex that happens to cover Latin.
+- **Decision:** Replace it with **`unicode-segmenter`** (`splitGraphemes` from
+  `unicode-segmenter/grapheme`). Pure JavaScript, zero dependencies, MIT, ~4KB gzipped, tracking
+  Unicode 17.0, 99.9% conformance and 56/56 corpus. Speed is a wash against `stringz` — 0.95x
+  geometric mean over 12 content mixes — and it is *faster* on exactly the scripts that were broken:
+  1.57x on decomposed Hangul, 1.40x on pointed Hebrew, 1.25x on Devanagari. It is slower on ASCII
+  (0.79x), CJK (0.75x) and surrogate-heavy text (0.72x); the worst case in absolute terms is +0.8ms
+  on a 100,000-character string. Only two call sites change, both taking
+  `Array.from(splitGraphemes(...))`: the constructor and the padding filler.
+- **Alternatives:** **`Intl.Segmenter`** — 100% conformant and needs no dependency, rejected at
+  0.18x (5.3x slower than the pick). **`graphemer`**, the ecosystem default at 46M downloads a week
+  — rejected: archived since September 2022, 0.07x, and it still fails every Indic conjunct. Its
+  popularity measures eslint's dependency graph, not its fitness. **The 99.4% / 51-of-56 cluster**
+  (`text-segmentation`, `graphemes`, `@stdlib`, `grapheme-breaker-mjs`) — rejected as a partial fix
+  easy to mistake for a complete one: they all predate Unicode 15.1's conjunct rule, so they fix
+  CRLF and Hangul but leave Devanagari and Bengali broken. **`@marijn/find-cluster-break`** — the
+  only faster candidate (1.13x), rejected because it breaks CRLF by design (85.5%).
+  **`cldr-segmentation`** — 100% conformant but quadratic, 8.7s at 100k. **WebAssembly** — not
+  blocked by policy (the WebView CSP already grants `'wasm-unsafe-eval'`) but structurally:
+  `GraphemeString`'s constructor is synchronous and WASM needs `await initialize()`; top-level
+  `await` is ESM-only while this package builds both ESM and CJS.
+  `@echogarden/icu-segmentation-wasm` is real ICU and 100% correct, but 31MB installed and slower
+  than the pure-JS pick at 0.62x. `intl-segmenter-polyfill-rs` is superlinear and aborts above ~50k.
+  **Native `unicode_segmentation`** — ships a single macOS-arm64 binary and will not load on Linux.
+  **Keep `stringz` and document its limits** — briefly the decision on this branch, replaced by this entry rather than left alongside it, because it framed the
+  choice as `stringz` versus `Intl.Segmenter` and concluded correctness cost ~10x, having never
+  considered a conformant non-`Intl` library.
+- **Consequences:** Counts are now correct for pointed Hebrew, vocalized Arabic and Syriac, Indic
+  conjuncts, Thai, and decomposed Hangul — the scripts this project translates into. Two behavioral
+  consequences follow from conformance, both worth knowing. **`\r\n` is a single cluster** (rule
+  GB3), and since searches only report boundary-aligned hits, `'\n'` is not findable inside it:
+  `split(text, '\n')` will not break Windows-style lines apart, and a regex matching the whole
+  terminator (`/\r?\n/`) is the correct separator. The one in-repo caller, `logger.utils.ts`, splits
+  a V8 stack trace, which is LF-separated. **ZWJ attaches to the preceding character** (rule GB9),
+  where `stringz` grouped it with the following one; a string ending in ZWJ + space therefore ends
+  in a whitespace-only cluster now, so `areUsjContentsEqualExceptWhitespace` trims that space where
+  it previously kept it. A single free-function call on a large string costs more than it did,
+  because each one constructs a `GraphemeString` and so segments the whole input for one operation.
+  Measured on a ~7,000-character chapter, segmentation is 100% of `stringLength`'s time and about
+  90% of `indexOf`'s, `startsWith`'s and `substring`'s. That is the design working as intended — the
+  module's guidance is to construct one instance when doing more than one operation — and no in-repo
+  call site does single-shot work on a string that size. Deferred, and worth being precise about
+  what it would and would not buy: `unicode-segmenter` exposes `countGraphemes`, which walks a
+  string without allocating the cluster array and is 5.5x cheaper than segmenting it. That helps
+  `stringLength` and nothing else, since `length` on an existing instance is already a property
+  read. The search and range methods need cluster boundaries and so need the segmentation; making
+  them cheaper single-shot would mean segmenting lazily up to the hit rather than up front, which is
+  a different and larger change. Residual risk: single maintainer and a smaller user base than
+  `graphemer`, mitigated by the library being small, dependency-free and table-driven, and by every
+  claim above being re-verifiable against the evaluation suite in one command. Note also that
+  Unicode 17 extended the Indic conjunct rule to Khmer, Myanmar, Balinese and Gujarati while Node's
+  bundled ICU 76 implements Unicode 16, so `unicode-segmenter` and `Intl.Segmenter` disagree on
+  Khmer — both correctly, for different Unicode versions.
+- **Source:** PT-2626 review follow-up. Evaluation of 14 candidates by Matthew Getgen scored two
+  independent ways — Unicode's official `GraphemeBreakTest.txt` at 15.1, 16.0 and 17.0, and a
+  56-case corpus across 30 writing systems — with timing from 100 to 1,000,000 UTF-16 code units on
+  Node 22.12 / ICU 76.1. Write-up: "Replacing stringz" artifact. Reproduction:
+  `~/repos/test/grapheme-segmentation`, `npm run all`. Memory, non-V8 engines and browser runtimes
+  were not measured.
