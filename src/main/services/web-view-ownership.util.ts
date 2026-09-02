@@ -103,21 +103,6 @@ export function forEachMoveInFlight(visit: (move: WebViewMoveInFlight) => void):
   webViewMovesInFlight.forEach(visit);
 }
 
-/**
- * Put a record in without running a move, so a test can state the situation a read is supposed to
- * handle. Reachable only through `testingWebViewServiceRouter`: a move that recovers sets its flag
- * and throws with no await in between, so no test can drive a real move and observe the record it
- * leaves.
- */
-export function seedMoveInFlightForTesting(move: WebViewMoveInFlight): void {
-  webViewMovesInFlight.add(move);
-}
-
-/** Drop every record, so one test's unfinished move cannot be read by the next */
-export function clearMovesInFlightForTesting(): void {
-  webViewMovesInFlight.clear();
-}
-
 /** Whether a move in flight is holding the web view a search is looking for */
 export function isMatchedByMoveInFlight(matcher: OwnerMatcher): boolean {
   return [...webViewMovesInFlight].some((move) =>
