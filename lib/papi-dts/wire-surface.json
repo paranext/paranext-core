@@ -705,6 +705,26 @@
       "docsStaticallyResolved": true,
       "documented": true,
       "experimental": true,
+      "file": "src/main/services/web-view.service-router.ts",
+      "language": "typescript",
+      "name": "platform.moveWebViewToNewWindow",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/web-view.service-router.ts",
+      "language": "typescript",
+      "name": "platform.moveWebViewToWindow",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
       "file": "src/main/services/book-chapter-control.service-router.ts",
       "language": "typescript",
       "name": "platform.openBookChapterControl",
@@ -1161,6 +1181,16 @@
       "registeredVia": "registerCommand"
     },
     {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "language": "typescript",
+      "name": "platformScriptureEditor.toggleFootnotesAutoShow",
+      "registeredVia": "registerCommand"
+    },
+    {
       "category": "dataProviderEngine",
       "docsStaticallyResolved": true,
       "documented": false,
@@ -1367,6 +1397,16 @@
       "docsStaticallyResolved": true,
       "documented": true,
       "experimental": true,
+      "file": "src/main/main.ts",
+      "language": "typescript",
+      "name": "windowLayout:emptied",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "directRequestHandler",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
       "file": "src/main/services/window-layout-persistence.service.ts",
       "language": "typescript",
       "name": "windowLayout:get",
@@ -1421,6 +1461,16 @@
       "language": "typescript",
       "name": "object:onDidDisposeNetworkObject",
       "registeredVia": "createCoreMultiSourceEventEmitter"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/app-window-input.util.ts",
+      "language": "typescript",
+      "name": "platform.onDidAppWindowInput",
+      "registeredVia": "createNetworkEventEmitterAsync"
     },
     {
       "category": "networkEvent",
