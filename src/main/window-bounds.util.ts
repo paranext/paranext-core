@@ -74,35 +74,6 @@ export const DISPLAY_SETTLE_MS = 500;
 export type IdentifiedDisplayLike = DisplayLike & { id: number };
 
 /**
- * Whether a window's current placement is safe to persist.
- *
- * While a window spans the boundary between two displays with different scale factors, Windows and
- * Chromium report different answers for its DPI — Win32 keeps the scale the window is crossing FROM
- * while the window is already resolved onto the display it is crossing TO — so the window is
- * physically about 25% larger than the layout it holds. The state is harmless to look at and clears
- * itself, but a placement captured during it and restored later brings the window back at the wrong
- * size.
- *
- * Two moments are refused, and the second is the one that actually corrupts anything:
- *
- * - Bounds lying in no single display: the window is straddling. Restoring these would be refused
- *   anyway by {@link ensureBoundsVisibleOnSomeDisplay}, which requires containment in one display —
- *   so this half only avoids replacing a good placement with one already known to be unusable.
- * - Bounds on a display the window has just reached, before {@link DISPLAY_SETTLE_MS} has passed.
- *   These pass containment and would be restored, and they are the ones that come back wrong: the
- *   geometry has landed while the two DPI answers have not yet met.
- *
- * A window moved within one display crosses nothing and is trusted at once, which is what keeps
- * this from quietly freezing every saved placement.
- *
- * @param bounds Placement captured just now
- * @param displays Displays connected right now
- * @param lastAcceptedDisplayId Display the last accepted capture was on, or `undefined` if none has
- *   been accepted this session
- * @param msSinceDisplayChange How long the window has been on the display it is on now
- * @returns Whether the placement can be persisted
- */
-/**
  * What a window's capture remembers about which display it is on, and since when.
  *
  * Keyed on the display the bounds lie fully WITHIN — the same question
@@ -148,6 +119,35 @@ export function trackDisplaySettle(
   return displayId === previous.displayId ? previous : { displayId, since: now };
 }
 
+/**
+ * Whether a window's current placement is safe to persist.
+ *
+ * While a window spans the boundary between two displays with different scale factors, Windows and
+ * Chromium report different answers for its DPI — Win32 keeps the scale the window is crossing FROM
+ * while the window is already resolved onto the display it is crossing TO — so the window is
+ * physically about 25% larger than the layout it holds. The state is harmless to look at and clears
+ * itself, but a placement captured during it and restored later brings the window back at the wrong
+ * size.
+ *
+ * Two moments are refused, and the second is the one that actually corrupts anything:
+ *
+ * - Bounds lying in no single display: the window is straddling. Restoring these would be refused
+ *   anyway by {@link ensureBoundsVisibleOnSomeDisplay}, which requires containment in one display —
+ *   so this half only avoids replacing a good placement with one already known to be unusable.
+ * - Bounds on a display the window has just reached, before {@link DISPLAY_SETTLE_MS} has passed.
+ *   These pass containment and would be restored, and they are the ones that come back wrong: the
+ *   geometry has landed while the two DPI answers have not yet met.
+ *
+ * A window moved within one display crosses nothing and is trusted at once, which is what keeps
+ * this from quietly freezing every saved placement.
+ *
+ * @param bounds Placement captured just now
+ * @param displays Displays connected right now
+ * @param lastAcceptedDisplayId Display the last accepted capture was on, or `undefined` if none has
+ *   been accepted this session
+ * @param msSinceDisplayChange How long the window has been on the display it is on now
+ * @returns Whether the placement can be persisted
+ */
 export function areCapturedBoundsTrustworthy(
   bounds: WindowRectangle,
   displays: readonly IdentifiedDisplayLike[],
