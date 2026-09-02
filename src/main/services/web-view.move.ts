@@ -27,7 +27,8 @@ import { SettingTypes } from 'papi-shared-types';
 import { NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE } from '@shared/services/web-view.service-model';
 import {
   describeMatcher,
-  webViewMovesInFlight,
+  addMoveInFlight,
+  deleteMoveInFlight,
   type OwnerMatcher,
   type WebViewMoveInFlight,
 } from '@main/services/web-view.ownership';
@@ -265,7 +266,7 @@ export async function moveWebView(
   }
 
   // From here the web view is open in NO window until the target takes it, or until recovery
-  // puts it back — see `webViewMovesInFlight`, which is what keeps a search landing in that gap
+  // puts it back — see the in-flight register, which is what keeps a search landing in that gap
   // from being told the view does not exist.
   const moveInFlight: WebViewMoveInFlight = {
     namedWebViewId: webViewId,
@@ -273,7 +274,7 @@ export async function moveWebView(
     projectId: captured.projectId,
     capturedDefinition: captured,
   };
-  webViewMovesInFlight.add(moveInFlight);
+  addMoveInFlight(moveInFlight);
   try {
     try {
       // Read again at the last moment: the capture above closed the source tab, and everything
@@ -346,9 +347,15 @@ export async function moveWebView(
       );
     }
 
-    return await recoverAfterFailedMove(webViewId, owner, captured, targetDescription);
+    return await recoverAfterFailedMove(
+      webViewId,
+      owner,
+      captured,
+      targetDescription,
+      moveInFlight,
+    );
   } finally {
-    webViewMovesInFlight.delete(moveInFlight);
+    deleteMoveInFlight(moveInFlight);
   }
 }
 
@@ -401,6 +408,7 @@ async function recoverAfterFailedMove(
   owner: WebViewOwner,
   captured: SavedWebViewDefinition,
   targetDescription: string,
+  moveInFlight: WebViewMoveInFlight,
 ): Promise<never> {
   logger.debug(
     `Reopening webview ${webViewId} after its failed move to ${targetDescription}. Captured definition: ${JSON.stringify(captured)}`,
@@ -418,18 +426,22 @@ async function recoverAfterFailedMove(
         logger.warn(
           `Webview ${webViewId} was reopened in window ${owner.windowId}, but that window's close was decided in the meantime; reopening it somewhere else as well.`,
         );
-      else
+      else {
         reopenedIn = { description: sourceDescription, disposition: 'reopened-in-source-window' };
+        moveInFlight.recoveredIntoWindow = true;
+      }
     }
   }
   if (reopenedIn === undefined) {
     try {
       const focusedShard = await getTargetWebViewShard();
-      if (await readoptAfterFailedMove(focusedShard, webViewId, captured, 'the focused window'))
+      if (await readoptAfterFailedMove(focusedShard, webViewId, captured, 'the focused window')) {
         reopenedIn = {
           description: 'the focused window',
           disposition: 'reopened-in-focused-window',
         };
+        moveInFlight.recoveredIntoWindow = true;
+      }
     } catch (e) {
       logger.warn(
         `Could not reopen webview ${webViewId} in the focused window: ${getErrorMessage(e)}`,

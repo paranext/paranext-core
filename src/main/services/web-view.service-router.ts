@@ -59,9 +59,11 @@ import {
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
 import {
+  clearMovesInFlightForTesting,
   describeMatcher,
-  webViewMovesInFlight,
+  forEachMoveInFlight,
   type OwnerMatcher,
+  seedMoveInFlightForTesting,
 } from '@main/services/web-view.ownership';
 import {
   getTargetWebViewShard,
@@ -277,6 +279,8 @@ export const testingWebViewServiceRouter = {
   createFreshWindow,
   WINDOW_CREATOR_WIRING_TIMEOUT_MS,
   resetWindowCreatorForTesting,
+  seedMoveInFlightForTesting,
+  clearMovesInFlightForTesting,
 };
 
 // Router methods that route to the focused window's WebView service shard
@@ -564,34 +568,35 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   );
   const definitions = definitionsPerWindow.flat();
 
-  // A web view mid-move is open in no window (see `webViewMovesInFlight`), so every window above
+  // A web view mid-move is open in no window (see the in-flight register), so every window above
   // answered truthfully and the merged read still misses it — the one gap a caller that selects by
-  // this list, like the shutdown sync's writable-project selection, cannot see for itself. Folded in
-  // by id rather than appended unconditionally: the target may already have adopted while the move
-  // record is still in the set (a late-landing adopt only clears it once its own probe confirms),
-  // and a view the windows have already reported does not need folding in again.
+  // this list, like the shutdown sync's writable-project selection, cannot see for itself.
   //
-  // Matched on the spelling the move was ASKED for, and never on the captured one.
+  // Each open move folds its captured definition in, unless the view is already in the read. Two
+  // separate things establish that, because the ids alone cannot.
   //
-  // The captured spelling has had its window scope stripped, and stripping is not injective: every
-  // window's default Home tab reduces to `home`. Matching on it therefore matched OTHER views —
-  // a window that received an earlier move holds it unscoped, because the adopt opens under the
-  // stripped id and nothing re-scopes it until the next layout load, so that window reports `home`
-  // while still holding its own `home-w2`. Dragging the `home-w2` one out then found `home`
-  // already reported and dropped a view that was open in no window at all. One ordinary drag, and
-  // silent.
+  // A window still reporting the spelling the move was ASKED for is holding that view: the `-wN`
+  // suffix names the window whose layout minted it, so `home-w2` reported by a window really is
+  // that window's own — the move failed, or recovery put it back — and skipping it is right.
   //
-  // A window-scoped id cannot do that: the `-wN` suffix names the window whose layout minted it, so
-  // a window reporting `home-w2` really is holding that view — the move failed, or recovery put it
-  // back — and skipping it is right. When the move was asked for an already-unscoped id there is no
-  // such spelling to match, and nothing is skipped.
+  // The captured spelling proves nothing of the kind, and is never matched here. It has had its
+  // window scope stripped, and stripping is not injective: every window's default Home tab reduces
+  // to `home`. A window that received an earlier move holds that view unscoped, because the adopt
+  // opens under the stripped id and nothing re-scopes it until the next layout load — so it reports
+  // `home` while still holding its own `home-w2`. Matching the captured spelling would read that
+  // `home` as "already reported" and drop the `home-w2` being dragged out, a view open in no window
+  // at all. One ordinary drag, and silent. When the move was asked for an already-unscoped id there
+  // is no scoped spelling to match and nothing is skipped.
   //
-  // The cost is a duplicate, in the one case the old match was actually right about: a target that
-  // has adopted reports the view under the stripped spelling, which this no longer matches, so the
-  // view is both reported and folded in until the record clears. That is bounded by the same
-  // late-adopt probe as the duplicate below, and it is the trade this whole read is built on — a
-  // duplicate is visible in the result and in the debug line, a drop is not. `getAllOpenWebViewDefinitions`
-  // says so on the public surface.
+  // The other thing is recovery, which the read cannot infer and the move therefore records: a
+  // failed move puts the view back under the captured id, and the window then reports it. That
+  // looks identical to a target that adopted, so `recoveredIntoWindow` says which happened.
+  //
+  // What is left is one accepted duplicate: a target that adopted reports the view under the
+  // stripped spelling, which nothing here matches, so it is both reported and folded in until the
+  // record clears. That is the trade this read is built on — a duplicate is visible in the result
+  // and in the debug line, a drop is not — and `getAllOpenWebViewDefinitions` says so on the public
+  // surface.
   const definitionIds = new Set(definitions.map((definition) => definition.id));
   // Deliberately NOT deduped against other move records, only against what the windows reported.
   //
@@ -603,8 +608,9 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   // missing in some order of events, and dropping is invisible: the caller sees a shorter list and
   // cannot tell it is short.
   //
-  // Each record folds in once, which the Set guarantees. Two records still holding one view — a
-  // late-landing adopt whose record has not cleared while the user drags the same tab again — fold
+  // Each record folds in at most once, because the register is walked once. Two records still
+  // holding one view — a late-landing adopt whose record has not cleared while the user drags
+  // the same tab again — fold
   // it in twice, and that is the accepted cost: a duplicate is visible both in this list and in the
   // debug line below, where a drop is not. `getAllOpenWebViewDefinitionsWithReachability` is a
   // best-effort read of a system mid-move either way.
@@ -612,8 +618,9 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   // The real fix is a per-view identity minted where it is actually known — at the adopt, carried
   // into the new window — which is a change to the adopt path rather than to this read.
   const foldedInDefinitions: SavedWebViewDefinition[] = [];
-  webViewMovesInFlight.forEach((move) => {
+  forEachMoveInFlight((move) => {
     const { namedWebViewId } = move;
+    if (move.recoveredIntoWindow && definitionIds.has(move.capturedDefinition.id)) return;
     if (namedWebViewId !== move.capturedDefinition.id && definitionIds.has(namedWebViewId)) return;
     foldedInDefinitions.push(move.capturedDefinition);
   });
