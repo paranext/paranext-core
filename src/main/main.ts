@@ -2297,6 +2297,7 @@ async function main() {
           getTrackedWindowIds: () => getTrackedWindows().map((tracked) => tracked.windowId),
           isPrimaryWindow,
           isWindowClosing: isWindowMarkedClosing,
+          isWindowAbandoned,
           markWindowClosing,
           unmarkWindowClosing: markWindowNotClosing,
           hideWindow: (windowId) => getWindowById(windowId)?.hide(),
