@@ -1611,7 +1611,15 @@ export function decideStuckGateAction({
  */
 export const TOP_LEVEL_ERROR_SELECTOR = '[role="alert"]:has(h1)';
 
-async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<void> {
+/**
+ * Whether {@link dismissStuckFirstRunGate} settled the gate one way or another, or gave up within
+ * its budget having recognised nothing — the case `waitForAppReady` needs to know about, since its
+ * very next step ({@link waitForOverlayGone}) matches a selector the gate's own loading spinner also
+ * matches.
+ */
+type FirstRunGateOutcome = 'settled' | 'inconclusive';
+
+async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<FirstRunGateOutcome> {
   const start = Date.now();
   const firstRunDialog = page.getByTestId('first-run-dialog');
   const escapeHatch = page.getByRole('button', {
@@ -1650,7 +1658,7 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
       .catch(() => 'inconclusive' as const),
   ]);
 
-  if (settled === 'cleared') return;
+  if (settled === 'cleared') return 'settled';
 
   const action =
     settled === 'stuck'
@@ -1664,7 +1672,7 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
       : 'inconclusive';
 
   // The gate resolved while it was being examined, which is the outcome this whole step wants.
-  if (action === 'cleared') return;
+  if (action === 'cleared') return 'settled';
 
   if (action === 'wizard')
     throw new Error(
@@ -1678,8 +1686,10 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
   // Nothing recognisable within the budget, or an error screen that has not offered its way out
   // yet. Say nothing and let the readiness steps after this one fail with their own message: this
   // is a recovery, and guessing at an inconclusive state would turn a merely slow run into a
-  // failure.
-  if (action === 'inconclusive') return;
+  // failure. Reported to the caller rather than swallowed here, because the very next readiness
+  // step matches a selector the gate's own loading spinner also matches — see
+  // describeInconclusiveOverlayTimeout.
+  if (action === 'inconclusive') return 'inconclusive';
 
   // Stable "[e2e-first-run-gate-race]" tag: grep CI logs for it to count how often this actually
   // fires, independent of which test happened to hit it.
@@ -1692,6 +1702,28 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
   await escapeHatch.click();
   const remainingForDismiss = Math.max(1000, timeout - (Date.now() - start));
   await expect(firstRunDialog).not.toBeVisible({ timeout: remainingForDismiss });
+  return 'settled';
+}
+
+/**
+ * Build the error `waitForAppReady` should surface when the workspace overlay wait times out right
+ * after `dismissStuckFirstRunGate` gave up inconclusive.
+ *
+ * `waitForOverlayGone`'s `.pr-twp [role="status"]` selector also matches the first-run gate's own
+ * loading spinner (see its docblock and `first-run-wizard.spec.ts`), so a gate that is still
+ * showing at this point times out here with a generic locator message that gives no hint the gate,
+ * not the workspace overlay, is what never went away. Exported so the message this builds is
+ * checkable without a live Page.
+ */
+export function describeInconclusiveOverlayTimeout(originalError: unknown): Error {
+  const reason = originalError instanceof Error ? originalError.message : String(originalError);
+  return new Error(
+    'e2e precondition: the workspace overlay never cleared, and the first-run gate check just ' +
+      'before this wait was inconclusive (still showing something unrecognised, or an error ' +
+      `screen with no escape hatch yet). waitForOverlayGone's ".pr-twp [role="status"]" ` +
+      "selector also matches the gate's own loading spinner, so this timeout may be the gate " +
+      `still showing, not the workspace overlay. Original error: ${reason}`,
+  );
 }
 
 /**
@@ -1717,11 +1749,18 @@ export async function waitForAppReady(page: Page, timeout = 90_000): Promise<voi
     ),
   );
   const remainingForFirstRunGate = Math.max(1000, timeout - (Date.now() - start));
-  await dismissStuckFirstRunGate(page, remainingForFirstRunGate);
+  const gateOutcome = await dismissStuckFirstRunGate(page, remainingForFirstRunGate);
   const remainingForOverlay = Math.max(1000, timeout - (Date.now() - start));
   // Services like settings and theme finish async work after the dock layout mounts and the shards
   // register, so the overlay can outlast both earlier signals.
-  await waitForOverlayGone(page, remainingForOverlay);
+  try {
+    await waitForOverlayGone(page, remainingForOverlay);
+  } catch (error) {
+    // An inconclusive gate is the one prior state that can make this timeout name the wrong cause
+    // — see describeInconclusiveOverlayTimeout. Any other error is left exactly as
+    // waitForOverlayGone reported it.
+    throw gateOutcome === 'inconclusive' ? describeInconclusiveOverlayTimeout(error) : error;
+  }
 }
 
 /** Options accepted by {@link openFromEditorHamburger}. */

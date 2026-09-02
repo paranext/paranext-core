@@ -8,7 +8,7 @@
  * function of what is on screen and nothing else.
  */
 import { describe, expect, it } from 'vitest';
-import { decideStuckGateAction } from './helpers';
+import { decideStuckGateAction, describeInconclusiveOverlayTimeout } from './helpers';
 
 describe('deciding what a stuck first-run gate needs', () => {
   it('reports a gate that has gone as cleared, not as the wizard', () => {
@@ -64,5 +64,21 @@ describe('deciding what a stuck first-run gate needs', () => {
         gateStillShowing: true,
       }),
     ).toBe('inconclusive');
+  });
+});
+
+describe('naming the cause of a workspace-overlay timeout that followed an inconclusive gate check', () => {
+  it('names the gate/spinner selector collision, not just the original timeout', () => {
+    const { message } = describeInconclusiveOverlayTimeout(new Error('locator timeout'));
+
+    expect(message).toContain('first-run gate');
+    expect(message).toContain('.pr-twp [role="status"]');
+    expect(message).toContain('locator timeout');
+  });
+
+  it('describes a non-Error rejection too, rather than losing what was thrown', () => {
+    const { message } = describeInconclusiveOverlayTimeout('a plain string rejection');
+
+    expect(message).toContain('a plain string rejection');
   });
 });
