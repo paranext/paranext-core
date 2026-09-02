@@ -76,6 +76,19 @@
  *   placement on the display must come back at its saved size, and one off the display must come
  *   back at the default size (see expectRestoredSizeForSavedPlacement).
  *
+ * ## Why this file imports `test` straight from `@playwright/test`
+ *
+ * Every other spec in this directory drives its app through `isolated.fixture` (or `app.fixture`),
+ * which launches exactly ONE Electron instance per test and pins settings through `test.use`. This
+ * file cannot use that fixture: each of its three tests is 2–3 SEQUENTIAL manual launches into one
+ * preserved user-data profile (see the phase breakdown above) — the whole point is what a relaunch
+ * finds waiting for it, which a fixture built around a single launch per test has no way to
+ * express. So it calls `launchElectronApp`/`teardownElectronApp` itself, phase by phase, and pins
+ * the shared settings it needs once in `test.beforeAll` (`preConfigureSettings`, restored in
+ * `test.afterAll`) rather than through `test.use`, which only a fixture reads. This is deliberate,
+ * not an unconverted leftover: consuming `{ mainPage }` from the fixture here would launch a
+ * FOURTH, unwanted app on top of the three this file manages by hand.
+ *
  * ## How to run
  *
  * `npm run test:e2e:isolated multi-window`
