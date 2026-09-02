@@ -202,11 +202,10 @@ export function getWindows(): BrowserWindow[] {
  * - A window still waiting for the content it was created to receive has nothing in it yet, and the
  *   operation filling it can still fail and close it again — see
  *   {@link setWindowPendingContentPredicate}.
- * - A window nothing will ever run in again is still on screen and still tracked, deliberately —
- *   closing it would rewrite the persisted window layout without it, taking away the user's one
- *   remaining recovery — but its renderer is dead and no reload is coming, so counting it would let
- *   the last window the user can actually work in be closed out from under them. See
- *   {@link markWindowAbandoned}.
+ * - A window nothing will ever run in again is still on screen and still tracked, deliberately — the
+ *   user is offered its close rather than having it taken — but its renderer is dead and no reload
+ *   is coming, so counting it would let the last window the user can actually work in be closed out
+ *   from under them. See {@link markWindowAbandoned}.
  *
  * The whole rule lives here rather than being composed by the caller: every input is this module's,
  * and a composed copy is a rule that can drift from the one under test.
@@ -765,9 +764,11 @@ export function markWindowNotReady(windowId: number): void {
  * cannot usefully tell the two apart at the moment it gives up, and the never-ready case wants the
  * same record made for the same reason.
  *
- * The window stays tracked and is deliberately not closed. It is still on screen, and closing it
- * would rewrite the persisted window layout without it — taking away the one recovery the user has
- * left, which is to quit and relaunch.
+ * The window stays tracked and is deliberately not closed here. It is still on screen holding the
+ * user's layout, and taking a window away unasked is not this module's to do — the caller offers
+ * the close instead. That offer is safe to make because such a window keeps its persisted entry
+ * (see `keepsItsEntryOnClose`), so closing it brings the window back next launch rather than
+ * costing the user what it held.
  *
  * @param windowId Window nothing will ever run in again
  */

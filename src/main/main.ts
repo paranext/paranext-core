@@ -985,7 +985,7 @@ async function main() {
       const reloadDecision = decideRendererCrashReload(crashReloadBudget, Date.now());
       if (!reloadDecision.shouldReload) {
         logger.error(
-          `Window ${windowId} renderer died ${reloadDecision.reloadsAlreadySpent} times in a row despite being reloaded each time, so it is being left down. Close the window and open a new one.`,
+          `Window ${windowId} renderer died ${reloadDecision.reloadsAlreadySpent} times in a row despite being reloaded each time, so it is being left down. Closing it keeps what it held, so it comes back on the next launch.`,
         );
         // The reload was the only thing that would ever have put this window back in the app, so
         // the window has to stop being treated as one that is coming back. `markWindowNotReady`
@@ -998,10 +998,11 @@ async function main() {
         // same window in the same state, and one flag recorded on both paths is what keeps this
         // from needing a second mechanism for the case that is harder to see.
         //
-        // The window is deliberately left open and tracked. It is still on screen with the user's
-        // tabs' worth of layout behind it, and closing it here would rewrite the persisted window
-        // layout without it — taking away the one recovery they have left, which is to quit and
-        // relaunch.
+        // The window is deliberately left open and tracked rather than closed from under the user:
+        // it is still on screen with the user's tabs' worth of layout behind it, and taking a
+        // window away unasked is not this handler's to do. Closing it costs nothing now — an
+        // abandoned window keeps its entry, so it comes back holding what it held — which is what
+        // makes the offer below worth putting to them rather than deciding for them.
         markWindowAbandoned(windowId);
         // Nothing awaits this: the handler is synchronous and the window is already dead, so the
         // notice runs on its own and reports its own failures. The user is told what happened and
