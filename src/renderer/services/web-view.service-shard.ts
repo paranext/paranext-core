@@ -1660,6 +1660,12 @@ async function withTimeout<T>(
 }
 
 /**
+ * How long to wait for the main process to say which window holds the primary role before going
+ * ahead. Short: the answer is a read of state main already holds, and the switch is waiting on it.
+ */
+const PRIMARY_WINDOW_QUESTION_TIMEOUT_MS = 5_000;
+
+/**
  * Whether this window is the one that should carry out a switch to simple mode.
  *
  * Simple mode is single-window, so the main process closes every other window as part of the same
@@ -1669,25 +1675,39 @@ async function withTimeout<T>(
  * whole application. Running all of that in a window nobody will see duplicates each of them, and
  * can settle on a different project than the surviving window when the cache is cold.
  *
- * Asked of the main process rather than read from this window's own creation parameters: which
- * window holds the primary role is the main process's to answer, and the parameter that names the
- * main window at creation time governs whether to draw the top-level menu and nothing else.
+ * Asked of the main process, which is the only place that knows which window holds the role.
  *
- * Answers `true` whenever it cannot establish otherwise — a question that failed, or a list naming
- * no primary at all, which happens only when every window is still waiting for its content.
- * Refusing the switch on either would leave the mode changed with the dock never reloaded, which is
- * worse than the duplication this avoids; on those paths the duplication above is unchanged.
+ * Decided from THIS window's own entry and nothing else. A window runs the switch when the list
+ * says it is the primary, and stands down otherwise — including when the list names no primary at
+ * all, which happens when the primary is absent from it: a window whose renderer has been given up
+ * on is deliberately left open but omitted, as is one already recorded as closing. Inferring "then
+ * it must be me" from that silence is what let every secondary run the switch at once, duplicating
+ * the shared writes above and putting the fixed simple-mode tab ids in several windows together —
+ * the collision single-window simple mode is supposed to make unreachable.
+ *
+ * A question that could not be asked is the one case that still answers `true`: nothing was
+ * learned, and leaving the mode changed with the dock never reloaded is the worse outcome. On that
+ * path the duplication above is unchanged.
  */
 async function isThisWindowRunningTheSwitchToSimple(): Promise<boolean> {
   try {
-    const windows = await sendCommand('platform.getWindows');
-    // Nothing is flagged while the main process is falling back to the oldest live window, which
-    // this window has no way to work out for itself
-    if (!windows.some((summary) => summary.isMain)) return true;
+    // Bounded like every other wait in this switch. It is served by a main process that is
+    // concurrently closing windows, and an unbounded wait here would hold the switch behind the
+    // network default with the overlay up and the mode already flipped.
+    const windows = await withTimeout(
+      async () => sendCommand('platform.getWindows'),
+      PRIMARY_WINDOW_QUESTION_TIMEOUT_MS,
+    );
+    if (windows === LOOKUP_TIMED_OUT) {
+      logger.warn(
+        `The main process did not say which window holds the primary role within ${PRIMARY_WINDOW_QUESTION_TIMEOUT_MS}ms; running the switch to Simple mode here`,
+      );
+      return true;
+    }
     const thisWindowId = getWindowIdOrThrow();
+    // Absent from the list means already recorded as closing — which is what the main process does
+    // to a window just before it closes it for this very switch — or given up on
     const thisWindow = windows.find((summary) => summary.windowId === thisWindowId);
-    // Absent from the list means already recorded as closing, which is what the main process does
-    // to a window just before it closes it for this very switch
     if (!thisWindow) return false;
     return thisWindow.isMain;
   } catch (e) {
@@ -1728,9 +1748,6 @@ async function isThisWindowRunningTheSwitchToSimple(): Promise<boolean> {
 export async function handleSwitchToSimpleMode(
   generation: number = startNewSwitchGeneration(),
 ): Promise<void> {
-  // Before the overlay, the layout build, the project cache and the finalize below: a window the
-  // main process is closing as part of this switch has no switch of its own to run
-  if (!(await isThisWindowRunningTheSwitchToSimple())) return;
   // Declared here, assigned inside `try` below (not called here directly) - so a throw from
   // `startWorkspaceUpdate()` itself, or from the paint wait right after it, still reaches `catch`/
   // `finally` instead of escaping as an unhandled rejection in the `platform.interfaceMode`
@@ -1754,6 +1771,13 @@ export async function handleSwitchToSimpleMode(
     // batch with later state changes and the overlay never actually appears on screen. Bounded: see
     // waitForNextPaint's doc comment for the hidden/occluded-window case this guards against.
     await withTimeout(waitForNextPaint, PAINT_WAIT_TIMEOUT_MS);
+
+    // Behind the overlay, so the round trip below is covered by it like every other lookup here:
+    // by this point the mode has already flipped, so anything the user rearranges in the still
+    // -visible Power layout would be silently refused by `saveLayout`. Ahead of the layout build,
+    // the project cache and the finalize, all of which write state the whole application shares.
+    // The `finally` releases the overlay on this return like any other.
+    if (!(await isThisWindowRunningTheSwitchToSimple())) return;
 
     const cached = getLastOpenedProject();
     if (cached) {
