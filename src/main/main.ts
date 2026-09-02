@@ -150,6 +150,7 @@ import { summarizeWindows } from '@main/window-summary.util';
 import {
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
+  areCapturedBoundsTrustworthy,
   ensureBoundsVisibleOnSomeDisplay,
 } from '@main/window-bounds.util';
 import {
@@ -294,6 +295,8 @@ const WINDOW_CLOSE_TIME_OUT_MS = 10000;
 
 /** How long to coalesce a window's resize/move events before capturing its bounds */
 const BOUNDS_CAPTURE_DEBOUNCE_MS = 100;
+// A window that has just crossed to another display is left untrusted for longer than this
+// debounce — see `DISPLAY_SETTLE_MS` in `window-bounds.util.ts`, which says why.
 
 /**
  * How a window being created relates to the persisted window-layouts structure: it restores a saved
@@ -870,14 +873,42 @@ async function main() {
      * normal state, so maximizing/minimizing/full-screening cannot overwrite the last normal
      * placement — only flip the flags.
      */
+    /** Display the last accepted placement was on, so a move between displays can be recognized */
+    let lastAcceptedDisplayId: number | undefined;
+    /** When this window was first seen on the display it is on now */
+    let currentDisplaySince = Date.now();
+    /** Display this window was last seen on, whether or not that placement was accepted */
+    let lastSeenDisplayId: number | undefined;
+
     const captureWindowBoundsState = (): WindowBoundsState => {
       const isMaximized = newWindow.isMaximized();
       const isFullScreen = newWindow.isFullScreen();
       const capturedState: WindowBoundsState = { isMaximized, isFullScreen };
       if (!isMaximized && !isFullScreen && !newWindow.isMinimized()) {
         const { x, y, width, height } = newWindow.getBounds();
-        capturedState.bounds = { x, y, width, height };
-        capturedState.displayBounds = { ...screen.getDisplayMatching(capturedState.bounds).bounds };
+        const bounds = { x, y, width, height };
+        const displays = screen.getAllDisplays();
+        const seenDisplayId = screen.getDisplayMatching(bounds).id;
+        if (seenDisplayId !== lastSeenDisplayId) {
+          lastSeenDisplayId = seenDisplayId;
+          currentDisplaySince = Date.now();
+        }
+        // A placement the platform has not finished agreeing about is left out entirely, the same
+        // way a maximized or minimized window's is: `updateWindowBounds` keeps the last one it was
+        // given when a capture carries none, so the window keeps the placement it last held rather
+        // than gaining a wrong one. See `areCapturedBoundsTrustworthy`.
+        if (
+          areCapturedBoundsTrustworthy(
+            bounds,
+            displays,
+            lastAcceptedDisplayId,
+            Date.now() - currentDisplaySince,
+          )
+        ) {
+          capturedState.bounds = bounds;
+          capturedState.displayBounds = { ...screen.getDisplayMatching(bounds).bounds };
+          lastAcceptedDisplayId = seenDisplayId;
+        }
       }
       return capturedState;
     };
