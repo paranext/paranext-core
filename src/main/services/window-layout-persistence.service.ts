@@ -331,8 +331,12 @@ export function setMainWindowId(windowId: number): void {
  * Undefined is a real answer, not only an error case: main-ness belongs to the entry rather than to
  * a window, so it outlives the window that held it and the role can sit on an entry with no window
  * living in it.
+ *
+ * Deliberately not exported: `undefined` here does not mean no window answers for the application,
+ * only that no live window holds the marked entry. {@link isPrimaryWindow} is the question callers
+ * actually want, and it resolves that case rather than passing it on.
  */
-export function getMainWindowId(): number | undefined {
+function getMainWindowId(): number | undefined {
   return fileSlots.find((slot) => slot.entry.isMain === true)?.windowId;
 }
 
