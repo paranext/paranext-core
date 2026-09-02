@@ -1,4 +1,5 @@
 import { expect, type FrameLocator, type Locator, type Page } from '@playwright/test';
+import { isPopoverTriggerExpanded } from '../../fixtures/helpers';
 
 /**
  * Open the user-profile popover and return its "Internet & connectivity" action.
@@ -8,18 +9,17 @@ import { expect, type FrameLocator, type Locator, type Page } from '@playwright/
  * putting the overlay back up) leaves the popover shut, and a blind second click would close one
  * that did open.
  *
- * Gated on the trigger's own `data-state` (Radix's open/closed state for the popover), not on
- * whether `action` has rendered yet. The popover can be open with its content still mounting — the
- * action's own render, or a `PopoverContent` animation — and gating the click on the action's
- * visibility instead treated that in-between moment as "still closed", so a retry re-clicked the
- * toggle and closed the popover that had, in fact, just opened. `data-state` reflects Radix's own
- * open/closed state directly, so a retry only clicks while the popover is actually shut.
+ * Gated on the trigger's `aria-expanded` (see {@link isPopoverTriggerExpanded}), not on whether
+ * `action` has rendered yet. The popover can be open with its content still mounting — the action's
+ * own render, or a `PopoverContent` animation — and gating the click on the action's visibility
+ * instead treated that in-between moment as "still closed", so a retry re-clicked the toggle and
+ * closed the popover that had, in fact, just opened.
  */
 export async function openUserProfilePopover(mainPage: Page): Promise<Locator> {
   const action = mainPage.getByTestId('user-profile-action-network');
   const trigger = mainPage.getByTestId('user-profile-popover-trigger');
   await expect(async () => {
-    if ((await trigger.getAttribute('data-state')) !== 'open')
+    if (!isPopoverTriggerExpanded(await trigger.getAttribute('aria-expanded')))
       await trigger.click({ timeout: 5_000 });
     await expect(action).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 30_000 });

@@ -282,6 +282,20 @@ export function singleAttemptBudgetMs(remainingMs: number): number {
 }
 
 /**
+ * Whether a Radix trigger reports itself expanded, given its `aria-expanded` attribute.
+ *
+ * Some triggers in the app compose a `TooltipTrigger` wrapping another Radix trigger (a
+ * `PopoverTrigger` or `DropdownMenuTrigger`), both `asChild`. That nesting leaves the rendered
+ * element's `data-state` reflecting the Tooltip's own open/closed/delayed-open state, not the inner
+ * trigger's — reading it as the inner trigger's open state picks up hover state instead.
+ * `aria-expanded` is set by the inner trigger alone (Tooltip has no "expanded" concept), so it
+ * names that trigger's state unambiguously regardless of what wraps it.
+ */
+export function isPopoverTriggerExpanded(ariaExpanded: string | null): boolean {
+  return ariaExpanded === 'true';
+}
+
+/**
  * Run a recovery action (e.g. a re-click) inside a polling loop, tolerating its own failure.
  *
  * A recovery attempt can be intercepted by the very instability the loop exists to work around — an

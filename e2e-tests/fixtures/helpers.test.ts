@@ -10,6 +10,7 @@ import {
   assertDeclaredWindowSize,
   ASSERT_INTERFACE_MODE_TIMEOUT_MS,
   DEFAULT_WINDOW_SIZE,
+  isPopoverTriggerExpanded,
   LAUNCH_PHASE_TIMEOUT_MS,
 } from './helpers';
 
@@ -57,5 +58,22 @@ describe('timeout budgets', () => {
     // part of LAUNCH_PHASE_TIMEOUT_MS, so its own poll must leave a margin rather than claim the
     // full budget — see the constants' TSDoc in helpers.ts for why.
     expect(ASSERT_INTERFACE_MODE_TIMEOUT_MS).toBeLessThan(LAUNCH_PHASE_TIMEOUT_MS);
+  });
+});
+
+describe('isPopoverTriggerExpanded', () => {
+  it('reports expanded when aria-expanded is the string "true"', () => {
+    expect(isPopoverTriggerExpanded('true')).toBe(true);
+  });
+
+  it('reports collapsed when aria-expanded is "false"', () => {
+    expect(isPopoverTriggerExpanded('false')).toBe(false);
+  });
+
+  it('reports collapsed when the attribute is absent (null)', () => {
+    // getAttribute's real return type is `string | null` (a DOM/Playwright contract), so this
+    // case needs an actual null, not undefined.
+    // eslint-disable-next-line no-null/no-null
+    expect(isPopoverTriggerExpanded(null)).toBe(false);
   });
 });
