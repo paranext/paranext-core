@@ -50,10 +50,7 @@ import {
   performWindowCloseTasks,
   startWindowCloseTasksWithoutWaiting,
 } from '@main/shutdown-tasks';
-import type {
-  CloseAllAnswer,
-  WindowCloseDecision,
-} from '@main/services/window-close-decision.service';
+import type { WindowCloseDecision } from '@main/services/window-close-decision.service';
 import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationServiceRouter } from '@main/services/notification.service-router';
 import {
@@ -160,6 +157,11 @@ import {
   MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS,
   NO_RENDERER_CRASH_RELOADS_YET,
 } from '@main/renderer-crash-reload-budget.util';
+import { keepsItsEntryOnClose } from '@main/window-entry-disposition.util';
+import {
+  decideAbandonedWindowNotice,
+  type AbandonedWindowNoticeParent,
+} from '@main/abandoned-window-notice.util';
 import {
   WINDOW_EMPTIED_REQUEST_TYPE,
   type WindowBoundsState,
@@ -935,6 +937,10 @@ async function main() {
     // What this window has spent of its crash-reload budget. Per window, because a crash loop is
     // one window's page failing rather than the app's.
     let crashReloadBudget = NO_RENDERER_CRASH_RELOADS_YET;
+    // Whether the user has been told this window was given up on. Per window and set once, because
+    // `render-process-gone` can fire again for a window already abandoned and the question has
+    // already been answered.
+    let hasAskedAboutAbandonment = false;
     newWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) => {
       logger.warn(`Window ${windowId} render process gone: ${JSON.stringify(details)}`);
       // Everything this window registered died with its renderer, so routing has to move to a window
@@ -983,6 +989,12 @@ async function main() {
         // layout without it — taking away the one recovery they have left, which is to quit and
         // relaunch.
         markWindowAbandoned(windowId);
+        // Nothing awaits this: the handler is synchronous and the window is already dead, so the
+        // notice runs on its own and reports its own failures. The user is told what happened and
+        // offered the way out — closing it keeps its entry, so the window comes back next launch.
+        const askedBefore = hasAskedAboutAbandonment;
+        hasAskedAboutAbandonment = true;
+        offerToCloseAbandonedWindow(newWindow, windowId, askedBefore).catch(() => {});
         return;
       }
       crashReloadBudget = reloadDecision.budget;
@@ -1415,8 +1427,12 @@ async function main() {
       // it does for a window going down with the app. A window still waiting for its content is the
       // exception — its entry holds nothing, so keeping it would resurrect a blank window on every
       // later switch.
-      const keepsItsEntry =
-        isAppGoingDown || (isClosingForModeSwitch(windowId) && !isWindowPendingContent(windowId));
+      const keepsItsEntry = keepsItsEntryOnClose({
+        isAppGoingDown,
+        isAbandoned: isWindowAbandoned(windowId),
+        isClosingForModeSwitch: isClosingForModeSwitch(windowId),
+        isPendingContent: isWindowPendingContent(windowId),
+      });
       handleWindowRemoved(windowId, keepsItsEntry ? 'entry-stays' : 'entry-goes-with-it');
       clearModeSwitchClose(windowId);
       // A window told to close counts as gone from the moment it is told, and stops counting for
@@ -1754,6 +1770,119 @@ async function main() {
     }
     return interfaceMode;
   };
+
+  /**
+   * Which window an abandoned-window notice should be shown on.
+   *
+   * @param parent Where the decision said to put it
+   * @param abandonedWindow The window the notice is about
+   * @returns The window to parent the box to, or `undefined` if none is available
+   */
+  function resolveNoticeParent(
+    parent: AbandonedWindowNoticeParent,
+    abandonedWindow: BrowserWindow,
+  ): BrowserWindow {
+    if (parent === 'abandoned-window') return abandonedWindow;
+    // The runtime answer, as the mode switch uses — including its fallback to the oldest live
+    // window — rather than the persisted flag, which is empty whenever no live window holds the
+    // marked entry
+    const primaryWindow = getWindows().find((window) => isPrimaryWindow(window.id));
+    // The primary can be gone or destroyed; the abandoned window is still a real window, and
+    // showing an off-screen notice beats showing none
+    return primaryWindow && !primaryWindow.isDestroyed() ? primaryWindow : abandonedWindow;
+  }
+
+  /**
+   * Tell the user a window has been given up on, and offer to close it.
+   *
+   * A window whose renderer crash-looped past its budget is left open on purpose — closing it from
+   * under the user would take its saved layout with it. But left alone it is a dead page with no
+   * explanation, absent from `platform.getWindows`, and the only advice we had was a log line
+   * nobody reads. This puts that advice where the user is, with the close made safe:
+   * {@link keepsItsEntryOnClose} keeps an abandoned window's entry, so closing it brings the window
+   * back next launch rather than costing them its tabs.
+   *
+   * Failures are swallowed and logged. The window is already dead either way, and a notice that
+   * could not be shown or localized must not also take down the crash handling around it.
+   *
+   * @param abandonedWindow Window whose renderer was given up on
+   * @param abandonedWindowId That window's id
+   * @param hasAlreadyAsked Whether the user has been asked about this window before
+   */
+  async function offerToCloseAbandonedWindow(
+    abandonedWindow: BrowserWindow,
+    abandonedWindowId: number,
+    hasAlreadyAsked: boolean,
+  ): Promise<void> {
+    try {
+      const decision = decideAbandonedWindowNotice({
+        isAppShuttingDown: isAppShuttingDown(),
+        isWindowClosing: isWindowMarkedClosing(abandonedWindowId),
+        hasAlreadyAsked,
+        // Asked of the window rather than assumed: a minimized or hidden window would carry the
+        // question off screen with it
+        isAbandonedWindowVisible: !abandonedWindow.isMinimized() && abandonedWindow.isVisible(),
+      });
+      if (decision.kind === 'stay-silent') return;
+
+      const parentWindow = resolveNoticeParent(decision.parent, abandonedWindow);
+      const messageKey = '%abandonedWindow_confirm_message%' satisfies LocalizeKey;
+      const detailKey = '%abandonedWindow_confirm_detail%' satisfies LocalizeKey;
+      const closeKey = '%abandonedWindow_confirm_close%' satisfies LocalizeKey;
+      const leaveOpenKey = '%abandonedWindow_confirm_leaveOpen%' satisfies LocalizeKey;
+      const fallbackStrings: Record<
+        typeof messageKey | typeof detailKey | typeof closeKey | typeof leaveOpenKey,
+        string
+      > = {
+        [messageKey]: 'This window stopped responding',
+        [detailKey]:
+          'It could not be restored after several attempts. Closing it will bring it back the next time you open the application.',
+        [closeKey]: 'Close window',
+        [leaveOpenKey]: 'Leave it open',
+      };
+      let strings = fallbackStrings;
+      try {
+        // Bounded for the same reason the close-all prompt is: a hang would leave the user with a
+        // dead window and no explanation at all, and English on time beats localized eventually.
+        strings = {
+          ...fallbackStrings,
+          ...(await Promise.race([
+            localizationService.getLocalizedStrings({
+              localizeKeys: [messageKey, detailKey, closeKey, leaveOpenKey],
+            }),
+            wait(CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS).then<never>(() => {
+              throw new Error(`no answer within ${CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS} ms`);
+            }),
+          ])),
+        };
+      } catch (e) {
+        logger.warn(
+          `Could not localize the abandoned-window notice; showing English: ${getErrorMessage(e)}`,
+        );
+      }
+
+      const closeIndex = 0;
+      const leaveOpenIndex = 1;
+      const { response } = await dialog.showMessageBox(parentWindow, {
+        type: 'warning',
+        // No `title`, matching the close-all prompt: macOS hides it and the others print it twice
+        message: strings[messageKey],
+        detail: strings[detailKey],
+        buttons: [strings[closeKey], strings[leaveOpenKey]],
+        // Closing is the useful answer, but it is still a window going away, so it is not what a
+        // reflex press lands on. Esc and the window manager's dismiss both leave the window alone.
+        defaultId: leaveOpenIndex,
+        cancelId: leaveOpenIndex,
+      });
+      if (response !== closeIndex) return;
+      logger.info(`Closing abandoned window ${abandonedWindowId} at the user's request`);
+      abandonedWindow.close();
+    } catch (e) {
+      logger.warn(
+        `Could not offer to close abandoned window ${abandonedWindowId}: ${getErrorMessage(e)}`,
+      );
+    }
+  }
 
   app.on('window-all-closed', () => {
     // The macOS convention of keeping the application resident after its last window closes only
