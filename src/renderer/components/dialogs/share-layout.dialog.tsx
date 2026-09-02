@@ -6,7 +6,18 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { isPlatformError } from 'platform-bible-utils';
-import { Button, Spinner, usePromise, useRetryablePromise } from 'platform-bible-react';
+import {
+  Button,
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  Spinner,
+  usePromise,
+  useRetryablePromise,
+} from 'platform-bible-react';
+import { CloudOff } from 'lucide-react';
 import { RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react/experimental';
 import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { DIALOG_BASE, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
@@ -20,6 +31,7 @@ import {
   ShareLayoutResult,
   SHARE_LAYOUT_DIALOG_STRING_KEYS,
   isShareLayoutActiveTab,
+  localizeString,
 } from '@renderer/components/dialogs/share-layout.component';
 import {
   seedResourceList,
@@ -66,8 +78,15 @@ function ShareLayoutDialogWrapper({
     useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
   );
 
-  // An `unavailable` catalog is not an error — this build simply cannot download DBL resources.
   const allResources = catalog?.status === 'available' ? catalog.resources : undefined;
+
+  // `notReady` is transient, so it earns the retryable error state; `notConfigured` is permanent for
+  // this installation, so the dialog still renders and the embedded pickers explain the empty list
+  // rather than showing an unexplained "no results".
+  const isCatalogNotReady = catalog?.status === 'unavailable' && catalog.reason === 'notReady';
+  const areDownloadsUnavailable =
+    catalog?.status === 'unavailable' && catalog.reason === 'notConfigured';
+  const hasUnrecoverableCatalogError = hasResourcesError || isCatalogNotReady;
 
   const [projectResourcesSetting, setProjectResources] = useProjectSetting(
     projectId,
@@ -175,17 +194,10 @@ function ShareLayoutDialogWrapper({
     ],
   );
 
-  //
   // Defense-in-depth admin gate: menu items in this codebase have no declarative
   // visibility/condition mechanism, so a non-admin can still trigger the command that opens this
   // dialog. Reject here instead. This check must run after all hooks above (Rules of Hooks
   // forbids an early return between hook calls), so it sits just before the render branch.
-  // Also gated on the catalog: `ShareLayoutDialogContent` snapshots its initial resource lists in
-  // `useState` at mount, and `splitResourcesByTab` cannot classify a saved dblResource reference
-  // without the catalog — every one of them lands in `otherResources` instead. Mounting before the
-  // catalog settles therefore seeds the content with empty lists while the memo below later
-  // recomputes `otherResources` to empty too, so a Confirm from that mount writes an EMPTY
-  // referenced-resources list and erases the project's shared selection.
   // Also gated on the catalog: `ShareLayoutDialogContent` snapshots its initial resource lists in
   // `useState` at mount, and `splitResourcesByTab` cannot classify a saved dblResource reference
   // without the catalog — every one of them lands in `otherResources` instead. Mounting before the
@@ -205,17 +217,23 @@ function ShareLayoutDialogWrapper({
   // catalog failed — two adjacent surfaces disagreeing — over a Confirm that writes the misleading
   // state back. A retry that lands after the body mounted cannot fix the snapshot it took, so the
   // body must not mount until there is a catalog to take it from.
-  if (hasResourcesError) {
+  if (hasUnrecoverableCatalogError) {
     return (
-      <div className="tw:flex tw:flex-1 tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:p-8">
-        <p className="tw:text-center tw:text-muted-foreground">
-          {resourcePickerLocalizedStrings['%resourcePicker_load_error%'] ??
-            '%resourcePicker_load_error%'}
-        </p>
-        <Button variant="outline" size="sm" onClick={onRetryResources}>
-          {resourcePickerLocalizedStrings['%resourcePicker_retry%'] ?? '%resourcePicker_retry%'}
-        </Button>
-      </div>
+      <Empty className="tw:flex-1" role="alert">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <CloudOff />
+          </EmptyMedia>
+          <EmptyDescription>
+            {localizeString(localizedStrings, '%shareLayoutDialog_loadError%')}
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button variant="outline" size="sm" onClick={onRetryResources}>
+            {localizeString(localizedStrings, '%shareLayoutDialog_retry%')}
+          </Button>
+        </EmptyContent>
+      </Empty>
     );
   }
 
@@ -236,8 +254,9 @@ function ShareLayoutDialogWrapper({
       initialCommentaryResources={commentaryResources}
       allResources={allResources ?? []}
       isResourcesLoading={isResourcesLoading}
-      hasResourcesError={hasResourcesError}
+      hasResourcesError={hasUnrecoverableCatalogError}
       onRetryResources={onRetryResources}
+      areDownloadsUnavailable={areDownloadsUnavailable}
       resourcePickerLocalizedStrings={resourcePickerLocalizedStrings}
       localizedStrings={localizedStrings}
       onConfirm={handleConfirm}

@@ -77,20 +77,36 @@ describe('ResourcePickerDialogWrapper', () => {
     await waitFor(() => expect(vi.mocked(sendCommand)).toHaveBeenCalledTimes(2));
   });
 
-  // A build with no DBL credentials is not a failure. Reporting it as one would attach a retry to
-  // something no retry can change, which is a worse dead end than the plain empty state.
-  it('reports a build that cannot download DBL resources as empty, not as a failure', async () => {
+  // An installation with no DBL credentials is not a failure, so it gets neither the error state nor
+  // a retry that could not work — but it is also not a plain empty list, because the user would have
+  // no way to tell why nothing is there.
+  it('explains an installation that cannot download resources, without offering a retry', async () => {
     vi.mocked(sendCommand).mockResolvedValue({ status: 'unavailable', reason: 'notConfigured' });
 
     renderWrapper();
 
     await waitFor(() =>
-      expect(screen.getByText('%resourcePicker_no_results%')).toBeInTheDocument(),
+      expect(screen.getByText('%resourcePicker_downloads_unavailable%')).toBeInTheDocument(),
     );
+    expect(screen.queryByText('%resourcePicker_no_results%')).not.toBeInTheDocument();
     expect(screen.queryByText('%resourcePicker_load_error%')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '%resourcePicker_retry%' }),
     ).not.toBeInTheDocument();
+  });
+
+  // `notReady` means the data provider has not registered yet — genuinely transient, and `main.ts`
+  // retries it ten times of its own accord. Rendering it as a plain empty list would strand the user
+  // one click away from a working list.
+  it('offers a retry when the catalog is only temporarily unavailable', async () => {
+    vi.mocked(sendCommand).mockResolvedValue({ status: 'unavailable', reason: 'notReady' });
+
+    renderWrapper();
+
+    await waitFor(() =>
+      expect(screen.getByText('%resourcePicker_load_error%')).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: '%resourcePicker_retry%' })).toBeInTheDocument();
   });
 
   it('reports a genuinely empty catalog as empty, not as a failure', async () => {

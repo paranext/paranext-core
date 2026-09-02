@@ -46,6 +46,8 @@ const RESOURCE_PICKER_STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_retry%': 'Try again',
   '%resourcePicker_no_results_filtered%': 'No resources match the current filters.',
   '%resourcePicker_clear_filters%': 'Clear filters',
+  '%resourcePicker_downloads_unavailable%':
+    "Resource downloads aren't available on this installation.",
 };
 
 const ESV: ResourceReference = {
@@ -143,6 +145,7 @@ const meta: Meta<typeof ShareLayoutDialogContent> = {
     allResources: ALL_RESOURCES,
     isResourcesLoading: false,
     hasResourcesError: false,
+    areDownloadsUnavailable: false,
     // Storybook story — console.log is the intended demo handler
     // eslint-disable-next-line no-console
     onRetryResources: () => console.log('Retry requested'),

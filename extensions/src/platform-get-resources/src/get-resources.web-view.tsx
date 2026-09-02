@@ -4,7 +4,12 @@ import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { useRetryablePromise } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { GetResources, GET_RESOURCES_STRING_KEYS, ResourceAction } from './get-resources.component';
+import {
+  GetResources,
+  GET_RESOURCES_STRING_KEYS,
+  RESOURCE_ACTION_PROVIDER_NOT_READY,
+  ResourceAction,
+} from './get-resources.component';
 
 type InstallInfo = {
   dblEntryUid: string;
@@ -22,8 +27,9 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const {
     data: catalog,
-    isLoading: isLoadingResources,
+    isLoading,
     hasError: isResourcesError,
+    hasSettled,
     refetch: refetchResources,
   } = useRetryablePromise(
     useCallback(
@@ -32,12 +38,23 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     ),
   );
 
-  // An `unavailable` catalog is deliberately NOT an error: this build cannot download DBL resources
-  // at all, so the honest answer is an empty list, not a failure with a retry that cannot work.
+  // `!hasSettled` counts as loading, not just `isLoading`. A retry clears the error synchronously
+  // while `usePromise` only raises its loading flag in an effect, so the render in between would
+  // otherwise report "no resources found" on the very click meant to disprove it.
+  const isLoadingResources = isLoading || !hasSettled;
+
   const resolvedResources = useMemo(
     () => (catalog?.status === 'available' ? catalog.resources : []),
     [catalog],
   );
+
+  // The two unavailable reasons need opposite treatments. `notReady` means the provider has not
+  // registered yet — transient, so a retry genuinely can work and it earns the error state.
+  // `notConfigured` means this installation has no DBL credentials, which no retry can change; it
+  // gets its own message rather than an unexplained empty list.
+  const isCatalogNotReady = catalog?.status === 'unavailable' && catalog.reason === 'notReady';
+  const areDownloadsUnavailable =
+    catalog?.status === 'unavailable' && catalog.reason === 'notConfigured';
 
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
@@ -88,11 +105,10 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       // Reject rather than returning a bare `undefined`. The component awaits this inside a
       // try/catch and surfaces a rejection in its error alert; awaiting `undefined` resolves, so a
       // click landing before the data provider resolves would produce no spinner, no error and no
-      // log — the user cannot tell it from a click that did nothing at all.
+      // log — the user cannot tell it from a click that did nothing at all. The sentinel carries no
+      // prose: the component holds the localized strings and maps this onto one of its own.
       if (!installResource || !uninstallResource)
-        return Promise.reject(
-          new Error('The DBL resources data provider is not available yet. Please try again.'),
-        );
+        return Promise.reject(new Error(RESOURCE_ACTION_PROVIDER_NOT_READY));
       const newInstallInfo: InstallInfo = {
         dblEntryUid,
         action: action === 'install' ? 'installing' : 'removing',
@@ -141,8 +157,9 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
       resources={resolvedResources}
       isLoadingResources={isLoadingResources}
-      isResourcesError={isResourcesError}
+      isResourcesError={isResourcesError || isCatalogNotReady}
       onRetryResources={refetchResources}
+      areDownloadsUnavailable={areDownloadsUnavailable}
       idsBeingHandled={idsBeingHandled}
       selectedTypes={selectedTypes}
       selectedLanguages={selectedLanguages}

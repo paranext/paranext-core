@@ -4,7 +4,7 @@ import { DblResourceData, getErrorMessage } from 'platform-bible-utils';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 /** The DBL resource catalog plus everything a panel needs to reason about its arrival. */
-export type DblResourceCatalog = {
+export type DblResourceCatalogState = {
   /** The catalog, coerced to `[]` before it arrives. */
   dblResources: DblResourceData[];
   /** Whether the fetch is in flight. */
@@ -17,7 +17,10 @@ export type DblResourceCatalog = {
    * consumer reading this alone would treat a failure as a genuinely empty catalog.
    */
   isCatalogReady: boolean;
-  /** Whether the last fetch failed. Recoverable — call {@link DblResourceCatalog.refetchCatalog}. */
+  /**
+   * Whether the last fetch failed. Recoverable — call
+   * {@link DblResourceCatalogState.refetchCatalog}.
+   */
   hasCatalogError: boolean;
   /** Re-runs the fetch, clearing any previous error. */
   refetchCatalog: () => void;
@@ -27,16 +30,23 @@ export type DblResourceCatalog = {
  * Fetches the DBL resource catalog for a panel.
  *
  * Both the Model Text and Resource panels need the same catalog and the same "has it arrived?"
- * distinction, and previously derived it with identical copy-pasted blocks. That distinction is
- * what the premature-empty-state fix hinges on (see `getResourcePanelReadiness`), so it lives in
- * one place.
+ * distinction. That distinction is what the premature-empty-state fix hinges on (see
+ * `getResourcePanelReadiness`), so it lives in one place.
  *
  * A rejected fetch is caught deliberately. `usePromise` has no rejection path — an uncaught
  * rejection never reaches its `setIsLoading(false)`, so the panel would spin forever with no
  * message and no way out. Resolving to an empty catalog and reporting `hasCatalogError` lets the
  * panel say what happened and offer a retry that can actually re-drive the fetch.
+ *
+ * TODO: Migrate onto `useRetryablePromise` from `platform-bible-react`, which now provides this
+ * hook's whole mechanism generically — the supersession guard, the error flag cleared on refetch,
+ * and the settled-vs-loading distinction this hook spells `isCatalogReady`. Only the PAPI call and
+ * the `unavailable`-to-empty mapping below would remain here. Deliberately deferred rather than
+ * missed; see `adr-picker-recovery-injected-fetch-hook` in
+ * `.context/standards/Architecture-Decisions.md` for why, and note that migrating means keeping
+ * this hook's own tests green.
  */
-export function useDblResourceCatalog(): DblResourceCatalog {
+export function useDblResourceCatalog(): DblResourceCatalogState {
   const [fetchResources, setFetchResources] = useState(true);
   const [hasCatalogError, setHasCatalogError] = useState(false);
 

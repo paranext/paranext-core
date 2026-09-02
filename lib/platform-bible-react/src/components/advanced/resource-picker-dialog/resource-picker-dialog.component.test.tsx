@@ -39,6 +39,8 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_retry%': 'Try again',
   '%resourcePicker_no_results_filtered%': 'No resources match the current filters.',
   '%resourcePicker_clear_filters%': 'Clear filters',
+  '%resourcePicker_downloads_unavailable%':
+    "Resource downloads aren't available on this installation.",
 };
 
 function renderDialog(overrides: Partial<Parameters<typeof ResourcePickerDialog>[0]> = {}) {
@@ -55,6 +57,32 @@ function renderDialog(overrides: Partial<Parameters<typeof ResourcePickerDialog>
     </Dialog>,
   );
   return { onSelect };
+}
+
+/** Same as {@link renderDialog}, but keeps the handle needed to re-render with changed props. */
+function renderDialogForRerender(
+  overrides: Partial<Parameters<typeof ResourcePickerDialog>[0]> = {},
+) {
+  const props = {
+    allResources: SAMPLE_RESOURCES,
+    selectedResourceIds: SAMPLE_SELECTED_IDS,
+    localizedStrings: STRINGS,
+    onSelect: vi.fn(),
+    ...overrides,
+  };
+  const view = render(
+    <Dialog open>
+      <ResourcePickerDialog {...props} />
+    </Dialog>,
+  );
+  return {
+    rerender: (next: Partial<Parameters<typeof ResourcePickerDialog>[0]>) =>
+      view.rerender(
+        <Dialog open>
+          <ResourcePickerDialog {...props} {...next} />
+        </Dialog>,
+      ),
+  };
 }
 
 describe('ResourcePickerDialog', () => {
@@ -189,6 +217,65 @@ describe('ResourcePickerDialog', () => {
 
     expect(screen.getByText('No results found')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+  });
+
+  // An installation with no DBL credentials has an empty list for a reason the user cannot act on.
+  // "No results found" hides that; a retry would be an inert control attached to a false failure.
+  it('explains an installation that cannot download resources, and offers no retry', () => {
+    renderDialog({ allResources: [], selectedResourceIds: [], areDownloadsUnavailable: true });
+
+    expect(
+      screen.getByText("Resource downloads aren't available on this installation."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No results found')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
+  // Selecting every language excludes nothing, which is why the trigger keeps reading "Any
+  // language". Counting it as a filter would claim a narrowing that is not happening.
+  it('does not treat selecting every language as a filter', () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('combobox'));
+    ['English', 'Spanish', 'Greek', 'Hebrew'].forEach((language) => {
+      const option = screen.queryByRole('option', { name: language });
+      if (option) fireEvent.click(option);
+    });
+
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+  });
+
+  // The count describes what this picker is allowed to show. Reporting the whole catalog implies
+  // candidates the user could reach by clearing something, when the type narrowing is not clearable.
+  it('counts against the type-scoped set, not the whole catalog', () => {
+    renderDialog({ resourceType: 'XmlResource' });
+
+    fireEvent.change(screen.getByPlaceholderText('Search resources…'), {
+      target: { value: 'UBS' },
+    });
+
+    // Two XmlResource entries exist in the sample catalog; only one matches "UBS".
+    expect(screen.getByText('Showing 1 of 2 resources')).toBeInTheDocument();
+  });
+
+  it('suppresses the count while the catalog is still loading or failed', () => {
+    const { rerender } = renderDialogForRerender({ isResourcesLoading: true });
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+
+    rerender({ allResources: [], hasResourcesError: true });
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+  });
+
+  // The button lives inside the region it removes, so without a deliberate move focus falls to
+  // `<body>` and a keyboard user restarts from the top of the dialog.
+  it('moves focus to the search box when Clear filters removes itself', () => {
+    renderDialog();
+    const searchInput = screen.getByPlaceholderText('Search resources…');
+    fireEvent.change(searchInput, { target: { value: 'zzznomatch' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(document.activeElement).toBe(searchInput);
   });
 
   it('reports a failed catalog fetch instead of claiming there are no results', () => {

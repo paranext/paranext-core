@@ -74,6 +74,7 @@ function renderContent(overrides: Partial<Parameters<typeof ShareLayoutDialogCon
         isResourcesLoading={false}
         hasResourcesError={false}
         onRetryResources={vi.fn()}
+        areDownloadsUnavailable={false}
         resourcePickerLocalizedStrings={{}}
         localizedStrings={{}}
         onConfirm={onConfirm}

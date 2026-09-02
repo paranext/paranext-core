@@ -33,24 +33,37 @@ function ResourcePickerDialogWrapper({
   // Fetches all resources to pass into the resource picker
   const {
     data: catalog,
-    isLoading: isResourcesLoading,
+    isLoading,
     hasError,
+    hasSettled,
     refetch,
   } = useRetryablePromise(
     useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
   );
 
-  // An `unavailable` catalog is deliberately NOT an error: this build simply cannot download DBL
-  // resources, and offering a retry would attach a control to something no retry can change. Only a
-  // rejection — a fetch that broke and might not next time — earns the error state.
+  // `!hasSettled` counts as loading, not just `isLoading`. A retry clears the error synchronously
+  // while `usePromise` only raises its loading flag in an effect, so the render in between would
+  // otherwise report "no results" on the very click meant to disprove it.
+  const isResourcesLoading = isLoading || !hasSettled;
+
   const allResources = catalog?.status === 'available' ? catalog.resources : EMPTY_RESOURCES;
+
+  // The two unavailable reasons need opposite treatments, so neither collapses into a bare empty
+  // list. `notReady` means the provider has not registered yet — transient, and a retry genuinely
+  // can work, so it earns the error state alongside a real rejection. `notConfigured` means this
+  // installation has no DBL credentials at all, which no retry can change; it gets its own message
+  // saying so rather than an unexplained "no results".
+  const isCatalogNotReady = catalog?.status === 'unavailable' && catalog.reason === 'notReady';
+  const areDownloadsUnavailable =
+    catalog?.status === 'unavailable' && catalog.reason === 'notConfigured';
 
   return (
     <ResourcePickerDialog
       allResources={allResources}
       isResourcesLoading={isResourcesLoading}
-      hasResourcesError={hasError}
+      hasResourcesError={hasError || isCatalogNotReady}
       onRetryResources={refetch}
+      areDownloadsUnavailable={areDownloadsUnavailable}
       resourceType={resourceType}
       selectedResourceIds={selectedResourceIds}
       localizedStrings={localizedStrings}

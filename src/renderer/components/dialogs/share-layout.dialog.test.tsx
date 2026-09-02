@@ -149,7 +149,83 @@ beforeEach(() => {
   mockTextConnectionsProvider.getUserReferencedProjectsAndResources.mockClear();
   mockTextConnectionsProvider.getUserModelTexts.mockClear();
   vi.mocked(sendCommand).mockReset();
-  vi.mocked(sendCommand).mockResolvedValue([]);
+  vi.mocked(sendCommand).mockResolvedValue({ status: 'available', resources: [] });
+});
+
+describe('ShareLayoutDialogWrapper catalog gate', () => {
+  it('waits for the catalog before mounting the body, so Confirm cannot erase the saved resource list', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+
+    const savedResource: ResourceReference = { type: 'dblResource', name: 'ESV', id: 'esv-uid' };
+    mockState.referencedProjectsAndResources = { dataVersion: '2.0.0', items: [savedResource] };
+
+    let resolveCatalog: (value: unknown) => void = () => {};
+    vi.mocked(sendCommand).mockImplementation(async (commandName: unknown) => {
+      if (commandName === 'platformGetResources.getCachedResources')
+        return new Promise((resolve) => {
+          resolveCatalog = resolve;
+        });
+      return undefined;
+    });
+
+    renderWrapper();
+
+    // The body must not mount yet. `ShareLayoutDialogContent` snapshots its initial lists in
+    // `useState` at mount, and without a catalog `splitResourcesByTab` cannot classify a saved
+    // dblResource reference — every one lands in `otherResources`, so the snapshot would be empty.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('%shareLayoutDialog_confirm_label%')).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveCatalog({
+        status: 'available',
+        resources: [makeDblResource({ dblEntryUid: 'esv-uid', type: 'ScriptureResource' })],
+      });
+      await Promise.resolve();
+    });
+
+    const confirmButton = await screen.findByText('%shareLayoutDialog_confirm_label%');
+    act(() => {
+      confirmButton.click();
+    });
+
+    // Mounting early would make this an empty list: the memo recomputes `otherResources` to empty
+    // once the catalog lands, while the body's snapshot stays empty too, and Confirm writes both.
+    expect(mockState.setReferencedProjectsAndResources).toHaveBeenCalledWith({
+      dataVersion: '2.0.0',
+      items: [savedResource],
+    });
+  });
+
+  it('reports a failed catalog with a retry rather than rendering a body it cannot trust', async () => {
+    // `usePromise` logs every rejection it sees; this one rejects on purpose.
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.referencedProjectsAndResources = {
+      dataVersion: '2.0.0',
+      items: [{ type: 'dblResource', name: 'ESV', id: 'esv-uid' }],
+    };
+
+    vi.mocked(sendCommand).mockImplementation(async (commandName: unknown) => {
+      if (commandName === 'platformGetResources.getCachedResources')
+        throw new Error('the catalog fetch failed');
+      return undefined;
+    });
+
+    renderWrapper();
+
+    // The dialog owns its own copy of this message rather than borrowing the picker's key: this is
+    // the Share Layout body, not a resource picker.
+    await waitFor(() =>
+      expect(screen.getByText('%shareLayoutDialog_loadError%')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('%shareLayoutDialog_confirm_label%')).not.toBeInTheDocument();
+    expect(mockState.setReferencedProjectsAndResources).not.toHaveBeenCalled();
+
+    vi.restoreAllMocks();
+  });
 });
 
 describe('SHARE_LAYOUT_DIALOG registration', () => {

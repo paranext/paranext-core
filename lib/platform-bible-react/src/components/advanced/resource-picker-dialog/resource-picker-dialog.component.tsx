@@ -1,4 +1,12 @@
 import { Button } from '@/components/shadcn-ui/button';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+} from '@/components/shadcn-ui/empty';
+import { EmptyState } from '@/components/basics/empty-state.component';
 import { DialogHeader, DialogTitle } from '@/components/shadcn-ui/dialog';
 import { Label } from '@/components/shadcn-ui/label';
 import { Table, TableBody, TableCell, TableRow } from '@/components/shadcn-ui/table';
@@ -8,7 +16,7 @@ import {
 } from '@/components/advanced/multi-select-combo-box.component';
 import { SearchBar } from '@/components/basics/search-bar.component';
 import { DblResourceData, ResourceType, formatReplacementString } from 'platform-bible-utils';
-import { Check } from 'lucide-react';
+import { Check, CloudOff, SearchX } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Spinner } from '@/components/basics/spinner.component';
 import { useProgressiveList } from './resource-picker-dialog.utils';
@@ -31,6 +39,7 @@ export const RESOURCE_PICKER_DIALOG_STRING_KEYS = Object.freeze([
   '%resourcePicker_retry%',
   '%resourcePicker_no_results_filtered%',
   '%resourcePicker_clear_filters%',
+  '%resourcePicker_downloads_unavailable%',
 ] as const);
 
 /**
@@ -63,6 +72,15 @@ export interface ResourcePickerDialogProps {
    * state then renders its message without a retry rather than an inert button.
    */
   onRetryResources?: () => void;
+  /**
+   * Whether this installation cannot download resources at all, so the list is empty for a reason
+   * that has nothing to do with the user's filters and that no retry can change.
+   *
+   * Distinct from `hasResourcesError`: that state offers a retry because trying again might work.
+   * This one deliberately offers none, and says why the list is empty instead of leaving the user
+   * to infer it from "no results".
+   */
+  areDownloadsUnavailable?: boolean;
   /** If provided, only resources of this type are shown */
   resourceType?: ResourceType;
   /** IDs of resources already selected in the calling panel */
@@ -146,6 +164,54 @@ function ResourceSection({
   );
 }
 
+/**
+ * Which of the picker body's mutually exclusive states to render.
+ *
+ * - `loading` — the catalog has not settled; show a spinner.
+ * - `error` — the fetch failed; say so and offer a retry, which can genuinely re-drive it.
+ * - `filteredEmpty` — the user's own filters excluded everything; offer to clear them.
+ * - `downloadsUnavailable` — this installation cannot download resources; say so, offer nothing,
+ *   because nothing the user does here can change it.
+ * - `empty` — the catalog genuinely holds nothing for this picker.
+ * - `list` — there is something to show.
+ */
+export type ResourcePickerBodyState =
+  | 'loading'
+  | 'error'
+  | 'filteredEmpty'
+  | 'downloadsUnavailable'
+  | 'empty'
+  | 'list';
+
+/**
+ * Decides which body state the picker is in.
+ *
+ * Derived once rather than re-spelled as a guard on each branch: the states are mutually exclusive
+ * by construction here, where five overlapping boolean expressions leave that exclusivity to be
+ * verified by eye — and a sixth state added later has to be threaded correctly through all of them.
+ * Mirrors `getResourcePanelReadiness` on the panels' side of this same handoff.
+ *
+ * @param input The independent signals the state is derived from.
+ * @returns The single state to render.
+ */
+export function getResourcePickerBodyState(input: {
+  isResourcesLoading: boolean;
+  hasResourcesError: boolean;
+  hasNoResults: boolean;
+  canClearFiltersHelp: boolean;
+  areDownloadsUnavailable: boolean;
+}): ResourcePickerBodyState {
+  if (input.isResourcesLoading) return 'loading';
+  // A failure outranks emptiness: an empty list caused by a fetch that never arrived is not an
+  // answer about the catalog.
+  if (input.hasResourcesError) return 'error';
+  if (!input.hasNoResults) return 'list';
+  // Clearable filters first — that is the one empty state the user can act on directly.
+  if (input.canClearFiltersHelp) return 'filteredEmpty';
+  if (input.areDownloadsUnavailable) return 'downloadsUnavailable';
+  return 'empty';
+}
+
 function matchesSearch(resource: DblResourceData, searchText: string): boolean {
   if (!searchText) return true;
   const lower = searchText.toLowerCase();
@@ -174,6 +240,7 @@ export default function ResourcePickerDialog({
   isResourcesLoading,
   hasResourcesError,
   onRetryResources,
+  areDownloadsUnavailable,
   resourceType,
   selectedResourceIds,
   localizedStrings,
@@ -270,6 +337,10 @@ export default function ResourcePickerDialog({
     '%resourcePicker_no_results_filtered%',
   );
   const clearFiltersText = localizeString(localizedStrings, '%resourcePicker_clear_filters%');
+  const downloadsUnavailableText = localizeString(
+    localizedStrings,
+    '%resourcePicker_downloads_unavailable%',
+  );
   const showingCountTemplate = localizeString(localizedStrings, '%resourcePicker_showing_count%');
 
   const customLanguageSelectText = useMemo(() => {
@@ -300,6 +371,19 @@ export default function ResourcePickerDialog({
   // them to the same dead end by a longer path.
   const canClearFiltersHelp = isFiltered && typeScopedResources.length > 0;
 
+  // Filtering a catalog that has not arrived, or one whose fetch failed, cannot change what is on
+  // screen — `GetResources` disables its own filters in the same situation, and leaving these live
+  // invites the user to narrow an empty list and conclude their search was at fault.
+  const areFiltersInert = !!isResourcesLoading || !!hasResourcesError;
+
+  const bodyState = getResourcePickerBodyState({
+    isResourcesLoading: !!isResourcesLoading,
+    hasResourcesError: !!hasResourcesError,
+    hasNoResults,
+    canClearFiltersHelp,
+    areDownloadsUnavailable: !!areDownloadsUnavailable,
+  });
+
   return (
     <>
       <DialogHeader className="tw:px-4 tw:pt-4">
@@ -312,6 +396,7 @@ export default function ResourcePickerDialog({
           onSearch={setSearchText}
           placeholder={searchPlaceholder}
           isFullWidth
+          isDisabled={areFiltersInert}
         />
         <MultiSelectComboBox
           entries={languageOptions}
@@ -320,13 +405,14 @@ export default function ResourcePickerDialog({
           customSelectedText={customLanguageSelectText}
           placeholder={anyLanguageText}
           variant="outline"
+          isDisabled={areFiltersInert}
         />
       </div>
       {/* Suppressed while loading or failed: a count of a catalog that never arrived reads as a
           confident "0 of 0" directly above the message explaining that nothing could be loaded. The
           total is the type-scoped set, not the whole catalog — reporting entries this picker filters
           out anyway implies candidates the user could reach by clearing something. */}
-      {isFiltered && !isResourcesLoading && !hasResourcesError && (
+      {isFiltered && bodyState !== 'loading' && bodyState !== 'error' && (
         <p className="tw:px-4 tw:pb-1 tw:text-right tw:text-xs tw:text-muted-foreground">
           {formatReplacementString(showingCountTemplate, {
             filtered: filteredResources.length,
@@ -335,35 +421,57 @@ export default function ResourcePickerDialog({
         </p>
       )}
       <div className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
-        {isResourcesLoading && (
+        {bodyState === 'loading' && (
           <p className="tw:py-8 tw:text-center">
             <Spinner />
           </p>
         )}
-        {hasResourcesError && !isResourcesLoading && (
-          <div className="tw:flex tw:flex-col tw:items-center tw:gap-3 tw:py-8" role="alert">
-            <p className="tw:text-center tw:text-muted-foreground">{loadErrorText}</p>
+        {bodyState === 'error' && (
+          <Empty role="alert">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <CloudOff />
+              </EmptyMedia>
+              <EmptyDescription>{loadErrorText}</EmptyDescription>
+            </EmptyHeader>
             {onRetryResources && (
-              <Button variant="outline" size="sm" onClick={onRetryResources}>
-                {retryText}
-              </Button>
+              <EmptyContent>
+                <Button variant="outline" size="sm" onClick={onRetryResources}>
+                  {retryText}
+                </Button>
+              </EmptyContent>
             )}
-          </div>
+          </Empty>
         )}
-        {hasNoResults && !hasResourcesError && !isResourcesLoading && canClearFiltersHelp && (
-          <div className="tw:flex tw:flex-col tw:items-center tw:gap-3 tw:py-8" role="status">
-            <p className="tw:text-center tw:text-muted-foreground">{noResultsFilteredText}</p>
-            <Button variant="outline" size="sm" onClick={clearFilters}>
-              {clearFiltersText}
-            </Button>
-          </div>
+        {bodyState === 'filteredEmpty' && (
+          <Empty role="status">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <SearchX />
+              </EmptyMedia>
+              <EmptyDescription>{noResultsFilteredText}</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                {clearFiltersText}
+              </Button>
+            </EmptyContent>
+          </Empty>
         )}
-        {hasNoResults && !hasResourcesError && !isResourcesLoading && !canClearFiltersHelp && (
-          <p className="tw:py-8 tw:text-center tw:text-muted-foreground" role="status">
-            {noResultsText}
-          </p>
+        {bodyState === 'downloadsUnavailable' && (
+          <Empty role="status">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <CloudOff />
+              </EmptyMedia>
+              <EmptyDescription>{downloadsUnavailableText}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
-        {!hasNoResults && !hasResourcesError && !isResourcesLoading && (
+        {bodyState === 'empty' && (
+          <EmptyState className="tw:py-8 tw:text-center" message={noResultsText} />
+        )}
+        {bodyState === 'list' && (
           <Table>
             <TableBody>
               <ResourceSection

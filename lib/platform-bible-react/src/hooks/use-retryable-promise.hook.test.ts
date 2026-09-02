@@ -189,11 +189,14 @@ describe('useRetryablePromise', () => {
     expect(result.current.hasSettled).toBe(false);
   });
 
-  it('reports neither loading nor error when there is no fetch to run', () => {
+  // A host that gates its render on `hasSettled` would spin forever otherwise, and `refetch` could
+  // not rescue it because there is no factory to re-run.
+  it('reports settled, and neither loading nor error, when there is no fetch to run', () => {
     const { result } = renderHook(() => useRetryablePromise(undefined));
 
     expect(result.current.isLoading).toBe(false);
     expect(result.current.hasError).toBe(false);
+    expect(result.current.hasSettled).toBe(true);
     expect(result.current.data).toBeUndefined();
   });
 });

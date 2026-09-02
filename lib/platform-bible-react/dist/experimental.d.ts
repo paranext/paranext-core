@@ -269,7 +269,8 @@ export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
 	"%resourcePicker_load_error%",
 	"%resourcePicker_retry%",
 	"%resourcePicker_no_results_filtered%",
-	"%resourcePicker_clear_filters%"
+	"%resourcePicker_clear_filters%",
+	"%resourcePicker_downloads_unavailable%"
 ];
 /**
  * Map of localized strings required by {@link ResourcePickerDialog}. Derive from
@@ -295,6 +296,15 @@ export interface ResourcePickerDialogProps {
 	 * state then renders its message without a retry rather than an inert button.
 	 */
 	onRetryResources?: () => void;
+	/**
+	 * Whether this installation cannot download resources at all, so the list is empty for a reason
+	 * that has nothing to do with the user's filters and that no retry can change.
+	 *
+	 * Distinct from `hasResourcesError`: that state offers a retry because trying again might work.
+	 * This one deliberately offers none, and says why the list is empty instead of leaving the user
+	 * to infer it from "no results".
+	 */
+	areDownloadsUnavailable?: boolean;
 	/** If provided, only resources of this type are shown */
 	resourceType?: ResourceType;
 	/** IDs of resources already selected in the calling panel */
@@ -323,7 +333,7 @@ export interface ResourcePickerDialogProps {
  *
  * @param props See {@link ResourcePickerDialogProps}
  */
-export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, resourceType, selectedResourceIds, localizedStrings, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+export function ResourcePickerDialog({ allResources, isResourcesLoading, hasResourcesError, onRetryResources, areDownloadsUnavailable, resourceType, selectedResourceIds, localizedStrings, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Derives the list of available, non-obsolete book IDs from the `availableBookInfo` string
  *

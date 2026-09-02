@@ -10,6 +10,7 @@ import {
 import type { DblResourceCatalog } from 'platform-get-resources';
 import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, wait } from 'platform-bible-utils';
+import { resolveDblCatalog, shouldStopBackgroundFetch } from './dbl-catalog.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
@@ -32,27 +33,19 @@ let hasFetchStarted = false;
 
 async function fetchAndCacheResources(): Promise<DblResourceCatalog> {
   const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
-  if (!provider) return { status: 'unavailable', reason: 'notReady' };
+  // The contract itself lives in `dbl-catalog.utils` so it can be tested: this module imports web
+  // views through webpack's `?inline` loader and so cannot be loaded by the test runner.
+  const catalog = await resolveDblCatalog(provider);
+  if (catalog.status !== 'available') return catalog;
 
-  // No DBL credentials on this build. There is no catalog to fetch and no retry that could produce
-  // one, so this must stay distinguishable from a failure all the way out to the UI.
-  if (!(await provider.isGetDblResourcesAvailable()))
-    return { status: 'unavailable', reason: 'notConfigured' };
-
-  const resources = await provider.getDblResources(undefined);
-  // The provider resolves nothing for a fetch that produced no catalog. That is a failure, not an
-  // answer: reporting it as an empty catalog would tell the user there is nothing to download when
-  // the truth is that we could not find out.
-  if (!resources) throw new Error('The DBL resource catalog fetch produced no catalog');
-
-  cachedResources = resources;
+  cachedResources = catalog.resources;
   if (executionToken)
     await papi.storage.writeUserData(
       executionToken,
       RESOURCES_CACHE_KEY,
       JSON.stringify(cachedResources),
     );
-  return { status: 'available', resources };
+  return catalog;
 }
 
 async function startBackgroundFetchResources(): Promise<void> {
@@ -68,9 +61,7 @@ async function startBackgroundFetchResources(): Promise<void> {
         // Need to have these await statements inside the loop to retry 10 times
         // eslint-disable-next-line no-await-in-loop
         const result = await fetchAndCacheResources();
-        // Stop on a catalog, and equally on a build that has no DBL credentials — retrying the
-        // latter nine more times cannot change the answer.
-        if (result.status === 'available' || result.reason === 'notConfigured') return;
+        if (shouldStopBackgroundFetch(result)) return;
       } catch (e) {
         logger.debug(`Background resource fetch attempt ${attempt + 1} failed: ${e}`);
       }
@@ -131,9 +122,8 @@ async function getCachedResources(): Promise<DblResourceCatalog> {
   return fetchMutex.runExclusive(async () => {
     if (cachedResources !== undefined) return { status: 'available', resources: cachedResources };
     try {
-      // Awaited deliberately: returning the promise un-awaited from inside this `try` lets a
-      // rejection bypass the logging below entirely, so identical failures reached callers by two
-      // different paths depending on where they originated.
+      // Awaited deliberately: returning the promise un-awaited from inside this `try` would let a
+      // rejection bypass the logging below entirely.
       return await fetchAndCacheResources();
     } catch (e) {
       // Rethrown rather than flattened to an "unavailable" result. A caller can offer a retry that

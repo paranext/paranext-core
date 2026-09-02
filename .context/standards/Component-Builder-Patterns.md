@@ -195,7 +195,7 @@ one anyway. Reference: `useEffectiveResourceReferenceList`.
 **Flat named state object** — when the values are always present and the flags describe them:
 
 ```ts
-type DblResourceCatalog = {
+type DblResourceCatalogState = {
   dblResources: DblResourceData[]; // always present (coerced to [])
   isLoadingResources: boolean;
   isCatalogReady: boolean;

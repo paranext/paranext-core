@@ -68,6 +68,8 @@ export const SHARE_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_cancel_label%',
   '%shareLayoutDialog_closePicker_label%',
   '%shareLayoutDialog_confirm_label%',
+  '%shareLayoutDialog_loadError%',
+  '%shareLayoutDialog_retry%',
 ] as const);
 
 export type ShareLayoutDialogLocalizedStrings = {
@@ -85,13 +87,15 @@ export type ShareLayoutDialogContentProps = {
   hasResourcesError: boolean;
   /** Re-runs the resource fetch; forwarded to every embedded resource picker. */
   onRetryResources: () => void;
+  /** Whether this installation cannot download resources at all; forwarded to every picker. */
+  areDownloadsUnavailable: boolean;
   resourcePickerLocalizedStrings: ResourcePickerDialogLocalizedStrings;
   localizedStrings: ShareLayoutDialogLocalizedStrings;
   onConfirm: (result: ShareLayoutResult) => void;
   onCancel: () => void;
 };
 
-function localizeString(
+export function localizeString(
   strings: ShareLayoutDialogLocalizedStrings,
   key: keyof ShareLayoutDialogLocalizedStrings,
 ) {
@@ -160,6 +164,7 @@ export function ShareLayoutDialogContent({
   isResourcesLoading,
   hasResourcesError,
   onRetryResources,
+  areDownloadsUnavailable,
   resourcePickerLocalizedStrings,
   localizedStrings: strings,
   onConfirm,
@@ -269,6 +274,7 @@ export function ShareLayoutDialogContent({
                 isResourcesLoading={isResourcesLoading}
                 hasResourcesError={hasResourcesError}
                 onRetryResources={onRetryResources}
+                areDownloadsUnavailable={areDownloadsUnavailable}
                 resourceType={tab}
                 selectedResourceIds={resources.filter(hasStringId).map((r) => r.id)}
                 localizedStrings={resourcePickerLocalizedStrings}
@@ -325,6 +331,7 @@ export function ShareLayoutDialogContent({
                     isResourcesLoading={isResourcesLoading}
                     hasResourcesError={hasResourcesError}
                     onRetryResources={onRetryResources}
+                    areDownloadsUnavailable={areDownloadsUnavailable}
                     resourceType="ScriptureResource"
                     selectedResourceIds={modelText && hasStringId(modelText) ? [modelText.id] : []}
                     localizedStrings={resourcePickerLocalizedStrings}

@@ -24,6 +24,8 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_retry%': 'Try again',
   '%resourcePicker_no_results_filtered%': 'No resources match the current filters.',
   '%resourcePicker_clear_filters%': 'Clear filters',
+  '%resourcePicker_downloads_unavailable%':
+    "Resource downloads aren't available on this installation.",
 };
 
 const meta: Meta<typeof ResourcePickerDialog> = {

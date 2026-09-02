@@ -106,8 +106,19 @@ export const useRetryablePromise = <T>(
   // cover the flags owned here.
   useEffect(() => {
     setHasError(false);
+    if (!promiseFactoryCallback) {
+      setTrackedFetch(undefined);
+      // Nothing to wait for, so the caller is not mid-fetch. Reporting "not settled" forever would
+      // strand any host that gates its render on this — and `refetch` could not rescue it, because
+      // there is no factory to re-run.
+      setHasSettled(true);
+      return;
+    }
     setHasSettled(false);
-    setTrackedFetch(() => (promiseFactoryCallback ? wrapFetch(promiseFactoryCallback) : undefined));
+    // Wrapped before the setter rather than inside it: `wrapFetch` bumps the generation ref, and
+    // React may invoke a state updater more than once.
+    const wrapped = wrapFetch(promiseFactoryCallback);
+    setTrackedFetch(() => wrapped);
   }, [promiseFactoryCallback, wrapFetch]);
 
   const [data, isLoading] = usePromise<T | undefined>(trackedFetch, undefined);
@@ -120,7 +131,9 @@ export const useRetryablePromise = <T>(
     if (!factory) return;
     setHasError(false);
     setHasSettled(false);
-    setTrackedFetch(() => wrapFetch(factory));
+    // See the effect above: wrapped outside the updater because `wrapFetch` mutates the generation.
+    const wrapped = wrapFetch(factory);
+    setTrackedFetch(() => wrapped);
   }, [wrapFetch]);
 
   return useMemo(

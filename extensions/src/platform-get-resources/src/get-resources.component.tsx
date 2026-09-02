@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronsUpDown,
   ChevronUp,
+  CloudOff,
   Ellipsis,
   Globe,
   Shapes,
@@ -13,6 +14,11 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
   Card,
   CardContent,
   CardDescription,
@@ -53,6 +59,7 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_any_type%',
   '%resources_dialog_subtitle%',
   '%resources_dialog_title%',
+  '%resources_downloadsUnavailable%',
   '%resources_filterBy%',
   '%resources_filterInput%',
   '%resources_fullName%',
@@ -63,6 +70,7 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_noResults%',
   '%resources_noResultsError%',
   '%resources_open%',
+  '%resources_providerNotReady%',
   '%resources_remove%',
   '%resources_results%',
   '%resources_retry%',
@@ -172,6 +180,15 @@ const getActionContent = (
   return <Label className="tw:my-2 tw:flex tw:h-6 tw:items-center">{installedText}</Label>;
 };
 
+/**
+ * Rejection reason a caller of `onInstallOrRemoveResource` uses to say "the backing data provider
+ * has not resolved yet".
+ *
+ * A sentinel rather than a message: this component owns the localized strings, so a caller that
+ * supplied its own text would put untranslated English in front of the user.
+ */
+export const RESOURCE_ACTION_PROVIDER_NOT_READY = 'platformGetResources.providerNotReady';
+
 export type GetResourcesProps = {
   /**
    * Array of [Object with localized strings for the component, isLoading]. Import
@@ -190,6 +207,12 @@ export type GetResourcesProps = {
    * state then renders its message without a retry rather than an inert button.
    */
   onRetryResources?: () => void;
+  /**
+   * Whether this installation cannot download resources at all. Distinct from `isResourcesError`:
+   * that state offers a retry because trying again might work; this one says why the list is empty
+   * and offers none, because no retry can change it.
+   */
+  areDownloadsUnavailable?: boolean;
   /** DBL entry UIDs that are currently installing/removing (shown with a spinner). */
   idsBeingHandled?: string[];
   /** Currently selected resource type filter values. */
@@ -229,6 +252,7 @@ export function GetResources({
   isLoadingResources = false,
   isResourcesError = false,
   onRetryResources,
+  areDownloadsUnavailable = false,
   idsBeingHandled = [],
   selectedTypes = [],
   selectedLanguages = [],
@@ -256,6 +280,8 @@ export function GetResources({
   const noResultsText: string = getLocalizedString('%resources_noResults%');
   const noResultsErrorText: string = getLocalizedString('%resources_noResultsError%');
   const retryText: string = getLocalizedString('%resources_retry%');
+  const providerNotReadyText: string = getLocalizedString('%resources_providerNotReady%');
+  const downloadsUnavailableText: string = getLocalizedString('%resources_downloadsUnavailable%');
   const openText: string = getLocalizedString('%resources_open%');
   const removeText: string = getLocalizedString('%resources_remove%');
   const resultsText: string = getLocalizedString('%resources_results%');
@@ -280,7 +306,14 @@ export function GetResources({
     try {
       await onInstallOrRemoveResource(dblEntryUid, action);
     } catch (e) {
-      setActionError(getErrorMessage(e));
+      // Callers signal "the backing provider has not resolved yet" with a sentinel rather than a
+      // message, because the text the user reads has to be localized and this component is the half
+      // that holds the localized strings. Any other rejection carries a message worth showing.
+      setActionError(
+        getErrorMessage(e) === RESOURCE_ACTION_PROVIDER_NOT_READY
+          ? providerNotReadyText
+          : getErrorMessage(e),
+      );
     }
   };
 
@@ -463,14 +496,30 @@ export function GetResources({
             /* eslint-disable no-nested-ternary */
             <div>
               {isResourcesError ? (
-                <div className="tw:m-4 tw:flex tw:flex-col tw:items-center tw:gap-3" role="alert">
-                  <Label>{noResultsErrorText}</Label>
+                <Empty role="alert">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <CloudOff />
+                    </EmptyMedia>
+                    <EmptyDescription>{noResultsErrorText}</EmptyDescription>
+                  </EmptyHeader>
                   {onRetryResources && (
-                    <Button variant="outline" size="sm" onClick={handleRetryResources}>
-                      {retryText}
-                    </Button>
+                    <EmptyContent>
+                      <Button variant="outline" size="sm" onClick={handleRetryResources}>
+                        {retryText}
+                      </Button>
+                    </EmptyContent>
                   )}
-                </div>
+                </Empty>
+              ) : sortedResources.length === 0 && areDownloadsUnavailable ? (
+                <Empty role="status">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <CloudOff />
+                    </EmptyMedia>
+                    <EmptyDescription>{downloadsUnavailableText}</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
               ) : sortedResources.length === 0 ? (
                 <div className="tw:m-4 tw:flex tw:justify-center">
                   <Label>{noResultsText}</Label>
