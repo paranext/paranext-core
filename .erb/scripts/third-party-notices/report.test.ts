@@ -29,7 +29,9 @@ describe('describeBlock', () => {
     const message = describeBlock(block);
     const json = message.slice(message.indexOf('{'), message.lastIndexOf('}') + 1);
     const parsed = JSON.parse(json);
-    expect(parsed.package).toBe('npm:weird-pkg@2.1.0');
+    expect(parsed.package).toBe('npm:weird-pkg');
+    // Provenance beside the key, so the determination stays re-checkable against what was read.
+    expect(parsed.version).toBe('2.1.0');
     expect(parsed.textSha256).toBe('deadbeef');
     expect(parsed.reviewer).toBeDefined();
   });
@@ -150,16 +152,19 @@ describe('stalePolicyEntries', () => {
     ]);
   });
 
-  it('reports an exception whose package is present at a DIFFERENT version', () => {
-    // Version-scoped, because that is how an exception is keyed: an entry pinned to 3.9.0 is dead
-    // once the package moves to 3.10.1, and it never fires to say so.
+  it('reports an exception whose package has LEFT the shipping set', () => {
+    // Name-scoped, because that is how an exception is keyed: it is pinned to the license TEXT, so
+    // it survives a version bump and goes stale only when the package itself is gone. An entry left
+    // behind is a standing determination waiting to auto-apply to whatever returns under that name.
     const entries = stalePolicyEntries(
-      { exceptions: [{ package: 'npm:jszip@3.9.0' }, { package: 'npm:jszip@3.10.1' }] },
+      {
+        exceptions: [{ package: 'npm:jszip', version: '3.9.0' }, { package: 'npm:departed' }],
+      },
       verdicts,
     );
-    expect(entries).toEqual([
-      'exception "npm:jszip@3.9.0" - no such package at that version in the shipping set',
-    ]);
+    // `npm:jszip` still ships, at a different version, and is NOT reported: that is the whole point
+    // of keying by name. Only the departed one is.
+    expect(entries).toEqual(['exception "npm:departed" - no such package in the shipping set']);
   });
 
   it('reports an unbundled-dependency entry once its package IS in the shipping set', () => {
@@ -204,7 +209,7 @@ describe('stalePolicyEntries', () => {
     const entries = stalePolicyEntries(
       {
         elections: { 'npm:jszip': {}, 'nuget:CsvHelper': {} },
-        exceptions: [{ package: 'npm:jszip@3.10.1' }],
+        exceptions: [{ package: 'npm:jszip', version: '3.10.1' }],
         copyrightNotices: { 'nuget:CsvHelper': 'Copyright © 2009-2024 Josh Close' },
       },
       verdicts,

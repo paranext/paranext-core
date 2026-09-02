@@ -41,11 +41,29 @@ const foldersToRemove = [
  */
 const globsToRemove = [path.join(webpackPaths.rootPath, 'node_modules', '.cache', 'webpack-*')];
 
+/**
+ * Removes every directory matching a glob pattern built with platform separators.
+ *
+ * `windowsPathsNoEscape` is required, not optional: the patterns are built with `path.join`, so on
+ * Windows they are separated by backslashes, and glob reads a backslash as an escape character.
+ * Without it the pattern matches nothing, `rimrafSync` reports success, and the script exits 0
+ * having deleted none of the caches - on the one platform where a warm cache is hardest to notice,
+ * because `EmitShippedModulesPlugin` then refuses to certify the module list this script exists to
+ * have cleared. Normalizing to forward slashes here does not fix it: `rootPath` itself already
+ * carries platform separators.
+ *
+ * Exported so the removal can be exercised against a temp tree - `clean` itself names the real
+ * repository's build output, which a test must not delete.
+ */
+export function removeGlobs(patterns: string[]): void {
+  patterns.forEach((pattern) => rimrafSync(pattern, { glob: { windowsPathsNoEscape: true } }));
+}
+
 function clean(): void {
   foldersToRemove.forEach((folder) => {
     if (fs.existsSync(folder)) rimrafSync(folder);
   });
-  globsToRemove.forEach((pattern) => rimrafSync(pattern, { glob: true }));
+  removeGlobs(globsToRemove);
 }
 
 // `--print` lists what would be removed and removes nothing, so the entry point can be exercised

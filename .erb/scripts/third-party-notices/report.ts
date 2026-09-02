@@ -50,9 +50,9 @@ function admissibleSpdx(
  * The remedy for a package whose license text WAS found but could not be cleared.
  *
  * A reviewed exception is the right instrument here precisely because there is a text to pin it to:
- * the entry names one version AND one text hash, so the block returns if the package changes
- * either. `textSha256` is filled in with the real detected value rather than a placeholder - the
- * developer's job is to supply a reason and a reviewer, not to compute a hash.
+ * the entry names one text hash, so the block returns if the package changes it. `textSha256` is
+ * filled in with the real detected value rather than a placeholder - the developer's job is to
+ * supply a reason and a reviewer, not to compute a hash.
  *
  * Where the identified text is itself inadmissible, NO exception can clear the block - an exception
  * records which license an unidentifiable text actually is, and this text is not unidentifiable -
@@ -66,6 +66,7 @@ function admissibleSpdx(
 function exceptionRemedy(
   v: Verdict,
   key: string,
+  version: string,
   copyleft?: Set<string>,
   allowed?: Set<string>,
 ): string[] {
@@ -110,6 +111,9 @@ function exceptionRemedy(
     '',
     indented({
       package: key,
+      // Provenance, not part of the key - `applyException` matches on `package` alone. It records
+      // which version the reader had in front of them, so the determination stays re-checkable.
+      version,
       spdx: v.detected || admissibleSpdx(declared, v.declared, copyleftIds, allowed ?? new Set()),
       reason: '<why this is correct - one sentence>',
       reviewer: '<your email>',
@@ -124,8 +128,9 @@ function exceptionRemedy(
     '',
     '  Every identifier in "spdx" has to be on the policy\'s "allowed" list and absent from its',
     '  "copyleft" list; a conjunction is checked one operand at a time.',
-    '  The exception is pinned to this exact version AND this exact license text. If the package',
-    '  changes either, the block returns and the exception must be reviewed again.',
+    '  The exception is pinned to this exact license TEXT. If the package changes it, the block',
+    '  returns and the exception must be reviewed again. "version" records what you read, so a',
+    '  later reader can check the determination against the same thing; it does not pin anything.',
     '',
   ];
 }
@@ -285,7 +290,7 @@ export function describeBlock(
     `  file:     ${v.matchedFile === undefined ? '(none)' : v.matchedFile}`,
     '',
     ...(v.textSha256
-      ? exceptionRemedy(v, key, copyleft, policy.allowed ? allowed : undefined)
+      ? exceptionRemedy(v, entryKey, v.version, copyleft, policy.allowed ? allowed : undefined)
       : policyRemedy(v, entryKey, copyleft)),
   ].join('\n');
 }
@@ -322,15 +327,16 @@ export function stalePolicyEntries(
   verdicts: { ecosystem: string; name: string; version: string }[],
 ): string[] {
   const names = new Set(verdicts.map((v) => `${v.ecosystem}:${v.name}`));
-  const versioned = new Set(verdicts.map((v) => `${v.ecosystem}:${v.name}@${v.version}`));
   return [
     ...Object.keys(policy.elections || {})
       .filter((key) => !names.has(key))
       .map((key) => `election "${key}" - no such package in the shipping set`),
+    // Keyed by `ecosystem:name` like the tables around it - an exception is pinned by license TEXT
+    // rather than by version, so it goes stale when the package LEAVES, not when it moves.
     ...(policy.exceptions || [])
       .map((entry) => entry.package)
-      .filter((key) => !versioned.has(key))
-      .map((key) => `exception "${key}" - no such package at that version in the shipping set`),
+      .filter((key) => !names.has(key))
+      .map((key) => `exception "${key}" - no such package in the shipping set`),
     // The `alwaysList` exemption is bounded to the prefix that implements it. Exempting the flag
     // wherever it appeared meant an entry under any other prefix was both inert (`alwaysListedPackages`
     // produces rows for NuGet only) and unreported.

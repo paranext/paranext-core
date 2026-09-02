@@ -203,23 +203,85 @@ export type DirectDependency = {
  * reason: a dependency added where it naturally belongs must be seen wherever that is.
  */
 function firstPartyManifests(repo: string): string[] {
-  const candidates = ['package.json', 'release/app/package.json', 'extensions/package.json'];
-  ['extensions/src', 'lib'].forEach((base) => {
-    const dir = path.join(repo, base);
-    if (!fs.existsSync(dir)) return;
-    fs.readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .forEach((entry) => candidates.push(`${base}/${entry.name}/package.json`));
+  const candidates = ['package.json', 'release/app/package.json'];
+  workspaceDirectories(repo).forEach((relative) => candidates.push(`${relative}/package.json`));
+  return [...new Set(candidates)].filter((relative) => fs.existsSync(path.join(repo, relative)));
+}
+
+/**
+ * The CONTAINER directory of each `<dir>/*` workspace glob the root manifest declares.
+ *
+ * `["lib/*", "extensions", "extensions/src/*"]` yields `['extensions/src', 'lib']` - the two
+ * directories that hold one source tree per child, which is the shape `childSourceRoots` walks. A
+ * workspace declared as a plain path is a package in its own right, not a container, so it
+ * contributes no base.
+ */
+/**
+ * The `workspaces` patterns the root manifest declares.
+ *
+ * An ABSENT root manifest yields none, the same tolerance `readBuildId` takes for the same reason:
+ * a tree without one declares no workspaces, and a fixture describing three packages is not obliged
+ * to carry a root `package.json` to be a usable fixture. Anything other than ENOENT is a broken
+ * tree reading as a workspace-less one, which would quietly narrow every scan derived from this, so
+ * it throws.
+ */
+function rootWorkspacePatterns(repo: string): string[] {
+  const file = path.join(repo, 'package.json');
+  if (!fs.existsSync(file)) return [];
+  return readJsonFile<{ workspaces?: string[] }>(file, 'package.json').workspaces || [];
+}
+
+function workspaceGlobBases(repo: string): string[] {
+  return [
+    ...new Set(
+      rootWorkspacePatterns(repo)
+        .filter((pattern) => pattern.endsWith('/*'))
+        .map((pattern) => pattern.slice(0, -2)),
+    ),
+  ].sort();
+}
+
+/**
+ * Every workspace directory the ROOT manifest declares, repo-relative.
+ *
+ * Derived from `workspaces` rather than from a list kept here, so that the breadth this module
+ * scans cannot silently fall behind the repository. A hardcoded `['extensions/src', 'lib']` covers
+ * exactly the same ground as today's `["lib/*", "extensions", "extensions/src/*"]`, so the two
+ * agree - but only by hand: adding a fourth workspace glob would leave the notices cross-check
+ * quietly not extending to it, with no new manifests scanned and no warning. Both this and
+ * `productionStylesheetRoots` read the same derivation, which is what makes the "same breadth"
+ * invariant they share self-maintaining rather than a coincidence two lists have to preserve.
+ */
+function workspaceDirectories(repo: string): string[] {
+  const directories: string[] = [];
+  rootWorkspacePatterns(repo).forEach((pattern) => {
+    // Only the one glob shape npm workspaces use in this repository, `<dir>/*`. A pattern this does
+    // not understand is expanded as a literal directory rather than silently dropped, so an
+    // unrecognized shape narrows nothing.
+    if (pattern.endsWith('/*')) {
+      const base = pattern.slice(0, -2);
+      const dir = path.join(repo, base);
+      if (!fs.existsSync(dir)) return;
+      fs.readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .forEach((entry) => directories.push(`${base}/${entry.name}`));
+    } else directories.push(pattern);
   });
-  return candidates.filter((relative) => fs.existsSync(path.join(repo, relative)));
+  return [...new Set(directories)].sort();
 }
 
 /**
  * The runtime dependencies this repository DECLARES, as a second source for what it ships.
  *
- * `dependencies` only. `devDependencies` are not distributed, and `peerDependencies` are a
- * requirement placed on the host rather than this package's own statement that it carries
- * something
+ * `dependencies` only, and `peerDependencies` are a requirement placed on the host rather than this
+ * package's own statement that it carries something.
+ *
+ * `devDependencies` are excluded here because this guard asks a NARROWER question - a declared
+ * RUNTIME dependency that reaches no bundle is an inconsistency in its own right - and NOT because
+ * they are undistributed. In this repository they routinely are: the Code Style Guide routes a
+ * bundled dependency into `devDependencies` precisely because webpack inlines it rather than npm
+ * installing it, so roughly a tenth of them ship. Reading them here would report every build-only
+ * tool as a missing row. `importedPackages` is what covers the ones that ship
  *
  * - The same distinction `readDirectPackageReferences` draws when it discounts a reference whose
  *   `ExcludeAssets` names `runtime`.
@@ -248,7 +310,13 @@ export function readDirectDependencies(repo: string): DirectDependency[] {
  * modules are never recorded is simply absent: no row, no removal to notice in a diff, no failing
  * check. The NuGet half has had the answer to this from the start - `missingDirectReferences`
  * cross-checks the restore closure against the project file's own `PackageReference` entries - and
- * this is that guard for npm, reading the one second source npm offers.
+ * this is that guard for npm, reading the second source a `dependencies` block offers.
+ *
+ * Its reach is DECLARED RUNTIME dependencies, which is a minority of the set.
+ * `missingImportedPackages` covers what first-party source imports, and between them the claim they
+ * support is "every direct declaration that ships is cross-checked", never that a package cannot
+ * ship without getting a row. The transitive majority is guarded by byte-comparison against the
+ * committed artifact, which catches a regression rather than an omission.
  *
  * Deletion is not the dangerous case; a dropped row is at least visible in a PR diff. OMISSION is:
  * when a newly added dependency's modules are never recorded, the correct artifact would have
@@ -285,6 +353,141 @@ export function missingDirectDependencies(
       if (!missing.has(dependency.name)) missing.set(dependency.name, dependency);
     });
   return [...missing.values()].sort((a, b) => compareStrings(a.name, b.name));
+}
+
+/**
+ * Whether a resolved package directory is one of THIS repository's own workspace packages.
+ *
+ * Npm installs every workspace package as a SYMLINK under `node_modules`, so
+ * `node_modules/platform-bible-react` points at `lib/platform-bible-react` and
+ * `node_modules/platform-scripture` at `extensions/src/platform-scripture` - each looks like an
+ * ordinary installed dependency until the link is followed. Following it and asking whether the
+ * real directory is inside the repository but OUTSIDE any `node_modules` answers the question for
+ * every workspace at once, rather than for whichever container a caller remembered to name: an
+ * extension importing a sibling extension is as first-party as a component importing `lib/`.
+ *
+ * Both sides must be REAL paths. Where the repository itself is reached through a symlink - macOS
+ * `/var` -> `/private/var`, a symlinked worktree - a repo-spelled root contains no real path at
+ * all, and every first-party package would read as third-party.
+ */
+function isFirstPartyWorkspace(dir: string, repoReal: string): boolean {
+  const real = realPathOf(dir);
+  if (containedPath(repoReal, real) === undefined) return false;
+  return !real.split(path.sep).includes('node_modules');
+}
+
+/** One third-party package a first-party source file imports at runtime, and where. */
+export type ImportedPackage = {
+  name: string;
+  /** Repo-relative path of the source file importing it, for the failure message. */
+  importedIn: string;
+};
+
+/**
+ * Third-party packages that first-party SOURCE imports at runtime, read from the source itself.
+ *
+ * The second source `missingDirectDependencies` cannot be. That guard reads `dependencies` only, on
+ * the stated rationale that "`devDependencies` are not distributed" - true of a package published
+ * to npm, false of this repository, where the Code Style Guide routes a BUNDLED dependency into
+ * `devDependencies` precisely because it is bundled rather than installed. So the packages most
+ * likely to ship are the ones that guard is least able to see: `react-reverse-portal` - the package
+ * `adr-notices-derived-from-what-ships` names as the one a manifest-based scan misses - is a
+ * `devDependency` of `platform-scripture-editor`, ships, and is invisible to a `dependencies`-only
+ * cross-check.
+ *
+ * Independent of the module manifests by construction: it reads what the source says, not what
+ * webpack reported compiling. That independence is the whole point - if `EmitShippedModulesPlugin`
+ * regresses and the manifests come back short, the imports are still in the source, so the loss
+ * fails the build instead of silently shortening a legal document.
+ *
+ * `lib/*` is scanned too, and that is NOT circular even though `collectPrebuiltLibLeaves` derives
+ * shipping-set entries from the same files. That function only scans the libraries webpack reported
+ * compiling (`shippedLibNames`, read from the module manifests); this one scans them
+ * unconditionally. In the healthy case the two agree and this adds nothing - but in exactly the
+ * failure this guard exists for, where the manifests come back short, `shippedLibNames` shrinks,
+ * the lib scan stops feeding the set, and the packages it was contributing (`lexical`,
+ * `@lexical/*`, `@eten-tech-foundation/platform-editor`) vanish from the document with nothing else
+ * to notice. Scanning them here is what turns that into a build failure.
+ *
+ * Test, story and type-only files are excluded for the reasons `findPrebuiltSources` and
+ * `runtimeModuleSpecifiers` document, as are test-support helpers and first-party workspace
+ * packages (see `isFirstPartyWorkspace`).
+ *
+ * Its reach is REAL but partial, and worth stating rather than assuming: of the packages that ship
+ * from a `devDependencies` declaration - the ones `missingDirectDependencies` structurally cannot
+ * see - this names roughly half. The rest are named in no source statement at all: a package pulled
+ * in through a stylesheet `@import` (`tailwindcss`, `tw-animate-css`,
+ * `@fontsource-variable/ibm-plex-sans`, `tailwindcss-scoped-preflight`), one injected by the
+ * compiler (`tslib`), and build-time CSS tooling (`css-loader`, `shadcn`). Those have NO omission
+ * guard, and that is a bounded, deliberate gap rather than an oversight. An omission guard over
+ * DECLARATIONS cannot work here: distinguishing "newly declared, should have shipped, and did not"
+ * from "newly declared build tool that ships nothing" requires knowing whether the package ships,
+ * which is the very thing being verified. Applied to this repository's manifests such a check
+ * reports every one of ~140 build-only `devDependencies`. What guards them instead is the
+ * stylesheet leaf scan that puts them in the set in the first place, plus the byte-comparison
+ * against the committed artifact - which catches a regression in an existing row rather than the
+ * omission of a new one.
+ */
+export function importedPackages(repo: string): ImportedPackage[] {
+  const repoReal = realPathOf(repo);
+  const roots = [
+    path.join(repo, 'src'),
+    ...workspaceGlobBases(repo).flatMap((base) => childSourceRoots(path.join(repo, base))),
+  ].filter((root) => fs.existsSync(root));
+
+  const found = new Map<string, ImportedPackage>();
+  roots.forEach((root) => {
+    findPrebuiltSources(root)
+      // Test SUPPORT files, on top of the `.test.`/`.spec.`/`.stories.` files `findPrebuiltSources`
+      // already drops. A helper named `*.test-utils.ts` or sitting in `__mocks__` is imported only
+      // by tests and bundled by nothing, so the packages it reaches (`vitest`, here) ship nowhere.
+      // Filtered here rather than in `findPrebuiltSources`, which also feeds the shipping set:
+      // narrowing that would REMOVE rows from the notices document, which is the direction this
+      // pipeline refuses to take on a guess.
+      .filter(
+        (file) =>
+          !/\.test-utils?\./.test(path.basename(file)) &&
+          !file.split(path.sep).includes('__mocks__'),
+      )
+      .forEach((file) => {
+        runtimeModuleSpecifiers(fs.readFileSync(file, 'utf8'), file).forEach((specifier) => {
+          const name = packageOfSpecifier(specifier);
+          if (!name || found.has(name)) return;
+          // Resolution is the filter, not a list of names to skip. A webpack external (`@papi/*`), a
+          // tsconfig path alias and a typo all fail to resolve identically, and none of them is a
+          // package this repository redistributes - so nothing that cannot be pointed at an installed
+          // directory is ever reported.
+          const dir = resolvePackageLeaf(name, path.dirname(file), repo);
+          if (!dir) return;
+          if (isFirstPartyWorkspace(dir, repoReal)) return;
+          // Described from `package-lock.json` rather than from disk, and already reaching the set
+          // through the module graph - see `collectPrebuiltLibLeaves`.
+          if (isDevLinked(dir)) return;
+          found.set(name, {
+            name,
+            importedIn: path.relative(repo, file).split(path.sep).join('/'),
+          });
+        });
+      });
+  });
+  return [...found.values()].sort((a, b) => compareStrings(a.name, b.name));
+}
+
+/**
+ * Imported third-party packages the derived shipping set does not contain.
+ *
+ * Same contract as `missingDirectDependencies` - anything absent must be in the set or recorded in
+ * the policy with a reason - and the same exemption list, because a package that legitimately
+ * reaches no bundle is the same fact whichever guard notices it.
+ */
+export function missingImportedPackages(
+  packages: { name: string }[],
+  imported: ImportedPackage[],
+  exemptNames: string[] = [],
+): ImportedPackage[] {
+  const present = new Set(packages.map((pkg) => pkg.name));
+  const exempt = new Set(exemptNames);
+  return imported.filter((entry) => !present.has(entry.name) && !exempt.has(entry.name));
 }
 
 /**
@@ -1081,8 +1284,9 @@ function productionStylesheetRoots(repo: string): string[] {
   // `childSourceRoots` filters its own output; this covers `coreRoots`, which is a fixed list.
   return [
     ...coreRoots,
-    ...childSourceRoots(path.join(repo, 'extensions', 'src')),
-    ...childSourceRoots(path.join(repo, 'lib')),
+    // Derived from the same `workspaces` field `firstPartyManifests` reads, so the two stay the
+    // same breadth without a second list to keep in step - see `workspaceGlobBases`.
+    ...workspaceGlobBases(repo).flatMap((base) => childSourceRoots(path.join(repo, base))),
   ].filter((root) => fs.existsSync(root));
 }
 

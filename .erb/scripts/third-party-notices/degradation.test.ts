@@ -332,6 +332,11 @@ describe('a degraded environment fails closed', () => {
         // report as dozens of unbundled declarations, drowning out what each case is about.
         readDirectDependencies: () => [],
         missingDirectDependencies: () => [],
+        // The source-import cross-check, stubbed for exactly the same reason: it reads the REAL
+        // repository's source tree against the small npm set these cases supply, so every package
+        // this repository imports would be reported as reaching no bundle.
+        importedPackages: () => [],
+        missingImportedPackages: () => [],
       });
       const real = load('nuget-set.ts');
       stub('./nuget-set', {
@@ -370,6 +375,11 @@ describe('a degraded environment fails closed', () => {
         // report as dozens of unbundled declarations, drowning out what each case is about.
         readDirectDependencies: () => [],
         missingDirectDependencies: () => [],
+        // The source-import cross-check, stubbed for exactly the same reason: it reads the REAL
+        // repository's source tree against the small npm set these cases supply, so every package
+        // this repository imports would be reported as reaching no bundle.
+        importedPackages: () => [],
+        missingImportedPackages: () => [],
         collectShippedPackages: () => ({
           packages: [
             {
@@ -445,6 +455,11 @@ describe('a degraded environment fails closed', () => {
         // report as dozens of unbundled declarations, drowning out what each case is about.
         readDirectDependencies: () => [],
         missingDirectDependencies: () => [],
+        // The source-import cross-check, stubbed for exactly the same reason: it reads the REAL
+        // repository's source tree against the small npm set these cases supply, so every package
+        // this repository imports would be reported as reaching no bundle.
+        importedPackages: () => [],
+        missingImportedPackages: () => [],
         collectShippedPackages: () => ({
           packages: [
             {
@@ -626,6 +641,11 @@ describe('a degraded environment fails closed', () => {
         // report as dozens of unbundled declarations, drowning out what each case is about.
         readDirectDependencies: () => [],
         missingDirectDependencies: () => [],
+        // The source-import cross-check, stubbed for exactly the same reason: it reads the REAL
+        // repository's source tree against the small npm set these cases supply, so every package
+        // this repository imports would be reported as reaching no bundle.
+        importedPackages: () => [],
+        missingImportedPackages: () => [],
         collectShippedPackages: () => ({
           packages: [
             {
@@ -705,6 +725,11 @@ describe('a degraded environment fails closed', () => {
         // report as dozens of unbundled declarations, drowning out what each case is about.
         readDirectDependencies: () => [],
         missingDirectDependencies: () => [],
+        // The source-import cross-check, stubbed for exactly the same reason: it reads the REAL
+        // repository's source tree against the small npm set these cases supply, so every package
+        // this repository imports would be reported as reaching no bundle.
+        importedPackages: () => [],
+        missingImportedPackages: () => [],
         collectShippedPackages: () => ({
           packages: [
             {

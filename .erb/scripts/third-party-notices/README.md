@@ -32,6 +32,33 @@ Captured, each by an exact mechanism rather than a heuristic:
 | Third-party files copied into an extension   | the static-asset scan, against `staticAssetNotices`                            |
 | Ubuntu libraries staged inside the `.snap`   | `electron-builder.json5`, classified by `snapStagePackages`                    |
 
+### What cross-checks the derivation
+
+The table above is how the set is DERIVED. Every entry in it reads, directly or indirectly, from
+what the build reported — so a regression in that reporting shortens the set silently: no row, no
+removal in a diff, no failing size check. Three guards read a second source instead, and it is worth
+being exact about how far each reaches:
+
+| Guard                       | Second source                                            | Reaches                                 |
+| --------------------------- | -------------------------------------------------------- | --------------------------------------- |
+| `missingDirectDependencies` | `dependencies` blocks of every first-party manifest      | Declared runtime dependencies only      |
+| `missingImportedPackages`   | first-party source, parsed for runtime import specifiers | Any package a `.ts`/`.tsx` file imports |
+
+Packages reached only through a stylesheet `@import` (`tailwindcss`, `tw-animate-css`,
+`@fontsource-variable/ibm-plex-sans`) are named in no `.ts` file and so have **no omission guard**.
+That gap is bounded and deliberate: an omission guard over _declarations_ cannot work here, because
+telling "newly declared, should have shipped, and did not" apart from "newly declared build tool
+that ships nothing" needs to know whether the package ships — which is what is being verified. Over
+this repository's manifests such a check reports every one of the ~140 build-only
+`devDependencies`.
+
+The accurate claim is **"every direct declaration that ships is cross-checked"** — not that a package
+cannot ship without getting a row. The majority of the set is transitive (about 160 of ~218 rows),
+reachable by no manifest-reading or source-reading approach at all. What guards those is the
+byte-comparison against the committed document and lock, which catches a **regression** in an
+existing row rather than the **omission** of a new one. The three guards above are what cover
+omission, and only for what this repository itself declares or imports.
+
 Deliberately **not** covered, each for a stated reason:
 
 - **Anything that only exists while building or linting.** It is not in the binary.
@@ -39,9 +66,9 @@ Deliberately **not** covered, each for a stated reason:
 - **.NET framework packages** (`runtime.*`, and packages superseded into the shared framework).
   Their payload belongs to the .NET runtime, which the document covers as a whole in prose.
 - **Electron itself**, which ships its own notices inside the packaged app — described in prose.
-- **Declared runtime dependencies that reach no bundle.** These need an explicit
-  `unbundledDependencies` entry; silence is not accepted, because a missing row looks identical to
-  a package that was dropped.
+- **Declared dependencies that reach no bundle.** These need an explicit `unbundledDependencies`
+  entry; silence is not accepted, because a missing row looks identical to a package that was
+  dropped.
 - **UI surfacing.** The notices ship as installed files and are not shown in the application. That
   is a decision, not an oversight.
 

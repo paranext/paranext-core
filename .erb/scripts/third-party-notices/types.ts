@@ -74,9 +74,17 @@ export type VendoredLicenseText = {
   reason: string;
 };
 
-/** A reviewed determination that clears one blocked package, pinned to a version and a text hash. */
+/**
+ * A reviewed determination that clears one blocked package, pinned to its license TEXT.
+ *
+ * `package` is `ecosystem:name` - never `name@version`. The hash is the pin; `version` records what
+ * the determination was read against so it stays re-checkable, and a version bump that leaves the
+ * text byte-identical asserts nothing new.
+ */
 export type Exception = {
   package: string;
+  /** The version this determination was read against. Provenance, not part of the key. */
+  version: string;
   spdx: string;
   reason: string;
   reviewer: string;
