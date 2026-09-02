@@ -244,6 +244,34 @@ describe('scanCSharpFiles: dataProvider shape', () => {
     });
   });
 
+  it('does not claim a DataProvider constructor entry resolved the documentation it cannot see', () => {
+    // A DataProvider's documentation, when it has any, comes from a GetNetworkObjectDocumentation()
+    // override elsewhere in the class — never from the constructor this entry is built from. Saying
+    // `docsStaticallyResolved: true` here tells the live check to treat `experimental: false` as
+    // ground truth, so a provider that overrides the method with Experimental = true fails the
+    // BLOCKING Linux smoke run on correct code. The entry has to say it does not know.
+    const files: VirtualFile[] = [
+      {
+        path: 'c-sharp/Fixtures/FixtureDocumentedProvider.cs',
+        text: `
+          namespace Paranext.DataProvider.Fixtures;
+
+          internal sealed class FixtureDocumentedProvider(PapiClient papiClient)
+              : NetworkObjects.DataProvider("fixture-documented", papiClient)
+          {
+              protected override NetworkObjectDocumentation GetNetworkObjectDocumentation() =>
+                  new() { Experimental = true };
+          }
+        `,
+      },
+    ];
+    const { registrations } = scanCSharpFiles(files);
+    expect(findRegistration(registrations, 'fixture-documented')).toMatchObject({
+      category: 'dataProvider',
+      docsStaticallyResolved: false,
+    });
+  });
+
   it('resolves a traditional-form DataProvider subclass name via its : base(...) constructor initializer', () => {
     const files: VirtualFile[] = [
       {

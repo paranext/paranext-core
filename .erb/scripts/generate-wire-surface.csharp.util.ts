@@ -920,14 +920,17 @@ function scanDataProviderSubclassConstructors(
 
   // No documentation ever reaches this call site — a DataProvider's documentation, if any, comes
   // from a separate GetNetworkObjectDocumentation() override (see the scanner below), not from its
-  // constructor.
+  // constructor. So `experimental: false` here is an absence of information, not a finding, and
+  // `docsStaticallyResolved` has to say so: the live check treats a resolved entry as ground truth
+  // and would fail a provider that overrides the method with Experimental = true, on correct code,
+  // in a run that blocks on Linux.
   registrations.push({
     category: 'dataProvider',
     name: nameResolution.value,
     file: file.path,
     registeredVia,
     documented: false,
-    docsStaticallyResolved: true,
+    docsStaticallyResolved: false,
     experimental: false,
     language: 'csharp',
   });
