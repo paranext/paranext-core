@@ -9,6 +9,7 @@ import {
   initializeModeSwitchOrchestration,
   isAdditionalWindowRefusedInSimpleMode,
   isClosingForModeSwitch,
+  undoModeSwitchClose,
   resetForTesting,
   type ModeSwitchDependencies,
 } from '@main/services/interface-mode-windows.service';
@@ -27,7 +28,9 @@ function makeDeps(overrides: Partial<ModeSwitchDependencies> = {}): ModeSwitchDe
     isPrimaryWindow: (windowId) => windowId === 1,
     isWindowClosing: () => false,
     markWindowClosing: vi.fn(),
+    unmarkWindowClosing: vi.fn(),
     hideWindow: vi.fn(),
+    showWindow: vi.fn(),
     closeWindow: vi.fn(() => true),
     focusWindow: vi.fn(),
     isAppShuttingDown: () => false,
@@ -65,7 +68,7 @@ describe('reacting to an interface-mode change', () => {
     const deps = makeDeps({ getTrackedWindowIds: () => [1] });
     initializeModeSwitchOrchestration(deps, undefined);
 
-    seedInterfaceMode('simple');
+    seedInterfaceMode('simple', getSwitchGeneration());
     await handleInterfaceModeChanged('simple');
 
     expect(deps.focusWindow).not.toHaveBeenCalled();
@@ -79,7 +82,7 @@ describe('reacting to an interface-mode change', () => {
     const deps = makeDeps({ getPreservedEntrySlotIds: () => [11] });
     initializeModeSwitchOrchestration(deps, undefined);
 
-    seedInterfaceMode('power');
+    seedInterfaceMode('power', getSwitchGeneration());
 
     expect(getCachedInterfaceMode()).toBe('power');
     expect(deps.createWindowForEntry).not.toHaveBeenCalled();
@@ -225,6 +228,97 @@ describe('reacting to an interface-mode change', () => {
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('2'));
   });
 
+  test('a window that fails to close is put back on screen instead of left hidden and claimed', async () => {
+    // The switch marks and hides a window before it asks for the close. When that ask throws the
+    // close never happens, and nothing else ever undoes it: `closed` is the only thing that clears
+    // the mark and it will not fire. Left alone the window is invisible, still recorded as closing,
+    // skipped by every later switch, and unreachable by the user for the life of the process.
+    const deps = makeDeps({
+      closeWindow: vi.fn((windowId: number) => {
+        if (windowId === 2) throw new Error('window vanished');
+        return true;
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(isClosingForModeSwitch(2)).toBe(false);
+    expect(deps.showWindow).toHaveBeenCalledWith(2);
+    expect(deps.unmarkWindowClosing).toHaveBeenCalledWith(2);
+    // Only the window that failed. Window 3 closed cleanly and must not be brought back.
+    expect(deps.showWindow).not.toHaveBeenCalledWith(3);
+    expect(deps.unmarkWindowClosing).not.toHaveBeenCalledWith(3);
+  });
+
+  test('a recovery that itself fails does not abandon the rest of the batch', async () => {
+    // Both callers of the undo are already recovering from something that went wrong. A second
+    // throw out of the recovery would, from here, skip every window after this one — losing the
+    // isolation the loop exists to give — and from the close handler would strand the very window
+    // it is rescuing.
+    const deps = makeDeps({
+      closeWindow: vi.fn((windowId: number) => {
+        if (windowId === 2) throw new Error('window vanished');
+        return true;
+      }),
+      showWindow: vi.fn((windowId: number) => {
+        if (windowId === 2) throw new Error('window already destroyed');
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    // Window 3 still got its turn, and window 2's claim came off despite the failed recovery
+    expect(deps.closeWindow).toHaveBeenCalledWith(3);
+    expect(isClosingForModeSwitch(2)).toBe(false);
+  });
+
+  test('a partial switch to simple leaves the mode where the user left it, so switching back still works', async () => {
+    // The switch DID happen for every window that closed, and the setting on disk already reads
+    // simple. Putting the cache back to power would make the user's next action — switching to
+    // power — equal the cache and be swallowed by the same-value guard above, leaving the windows
+    // that closed closed with no route back except toggling twice.
+    const deps = makeDeps({
+      closeWindow: vi.fn((windowId: number) => {
+        if (windowId === 2) throw new Error('window vanished');
+        return true;
+      }),
+      // Window 2 is alive again after the recovery, so its entry is not among the preserved ones;
+      // only slot 7 is. Which entries count as preserved is `getPreservedEntrySlotIds`' own
+      // decision, pinned in the persistence suite — this asserts the reopen honours it.
+      getPreservedEntrySlotIds: () => [7],
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+    expect(getCachedInterfaceMode()).toBe('simple');
+
+    await handleInterfaceModeChanged('power');
+
+    // Exactly the entry with no live window — no second copy of the window that stayed open
+    expect(deps.createWindowForEntry).toHaveBeenCalledTimes(1);
+    expect(deps.createWindowForEntry).toHaveBeenCalledWith(7);
+  });
+
+  test('a window whose close is cancelled comes back on screen and stops being claimed by the switch', async () => {
+    // The other route to the same end state: the close was asked for, and the window's own handler
+    // decided to stay open. Same consequence, same undo, different caller.
+    const deps = makeDeps();
+    initializeModeSwitchOrchestration(deps, 'power');
+    await handleInterfaceModeChanged('simple');
+    expect(isClosingForModeSwitch(2)).toBe(true);
+
+    undoModeSwitchClose(2);
+
+    expect(isClosingForModeSwitch(2)).toBe(false);
+    expect(deps.showWindow).toHaveBeenCalledWith(2);
+    expect(deps.unmarkWindowClosing).toHaveBeenCalledWith(2);
+    // Window 3's close is still going ahead, so a blanket clear would be as wrong as no clear.
+    expect(isClosingForModeSwitch(3)).toBe(true);
+    expect(deps.showWindow).not.toHaveBeenCalledWith(3);
+  });
+
   test('a window is taken off screen as it is marked, before its close is requested', async () => {
     // Until its close finishes the window is still on screen and interactive, showing the mode it
     // is moving to over a dock still holding the mode it is leaving — and anything rearranged in it
@@ -298,20 +392,24 @@ describe('reacting to an interface-mode change', () => {
     expect(created).toEqual([11, 12]);
   });
 
-  test('a failed switch leaves the mode able to be acted on again', async () => {
-    // The cache moves before the window work so the single-window guard permits the reopen. If that
-    // work throws it has to go back, or the same-value guard swallows every later delivery of the
-    // mode and the user is stuck until they toggle away and back.
+  test('a failed switch back to power leaves the mode able to be acted on again', async () => {
+    // The cache moves before the window work so the single-window guard permits the reopen. When
+    // the reopen throws, nothing was closed and nothing came back, so the cache has to go back —
+    // otherwise the same-value guard swallows the user's next attempt at power and they are stuck.
+    //
+    // Only this direction. A switch to SIMPLE that fails part-way still closed the windows whose
+    // closes succeeded, so putting the cache back there would describe the application as being in
+    // a mode it has left and would swallow the user's way out — see the partial-switch test below.
     const deps = makeDeps({
-      closeWindow: vi.fn(() => {
-        throw new Error('window vanished');
-      }),
+      getPreservedEntrySlotIds: () => {
+        throw new Error('the structure could not be read');
+      },
     });
-    initializeModeSwitchOrchestration(deps, 'power');
+    initializeModeSwitchOrchestration(deps, 'simple');
 
-    await handleInterfaceModeChanged('simple');
+    await handleInterfaceModeChanged('power');
 
-    expect(getCachedInterfaceMode()).toBe('power');
+    expect(getCachedInterfaceMode()).toBe('simple');
   });
 
   test('the primary is focused once the others are closing', async () => {

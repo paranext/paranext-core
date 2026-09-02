@@ -32,12 +32,21 @@ export type ModeSwitchDependencies = {
   isWindowClosing: (windowId: number) => boolean;
   /** Record that a window's close has begun, before anything can route new work to it */
   markWindowClosing: (windowId: number) => void;
+  /** Take back a closing mark for a window whose close is not going to happen after all */
+  unmarkWindowClosing: (windowId: number) => void;
   /**
    * Take a window off screen. Called the moment it is marked for a mode-switch close, because from
    * then on its chrome shows the mode it is moving to over a dock still holding the mode it is
    * leaving, and anything the user rearranges in it is refused by the layout save.
    */
   hideWindow: (windowId: number) => void;
+  /**
+   * Put a window back on screen after it was hidden for a close that did not happen.
+   *
+   * Must not take focus: the switch decides separately which window the user should be looking at,
+   * and a window coming back from a close that failed is not it.
+   */
+  showWindow: (windowId: number) => void;
   /**
    * Close a window, running its ordinary close handling.
    *
@@ -126,12 +135,14 @@ export function getSwitchGeneration(): number {
  *
  * @param mode Mode the restore read, or `undefined` if it could not be read
  * @param sinceGeneration The generation {@link getSwitchGeneration} reported before the restore
- *   started, if the caller can wait on other events meanwhile. A real switch that ran in that
- *   window already moved the cache to a value this seed would otherwise stomp with a stale reading,
- *   so the seed is skipped when the generation has moved on.
+ *   started. A real switch that ran in that window already moved the cache to a value this seed
+ *   would otherwise stomp with a stale reading, so the seed is skipped when the generation has
+ *   moved on. Required rather than optional: a caller that omitted it would silently get the
+ *   clobbering this parameter exists to prevent, and a caller with nothing to wait on can pass
+ *   {@link getSwitchGeneration}'s reading from the moment before it read the mode.
  */
-export function seedInterfaceMode(mode: InterfaceMode | undefined, sinceGeneration?: number): void {
-  if (sinceGeneration !== undefined && sinceGeneration !== switchGeneration) return;
+export function seedInterfaceMode(mode: InterfaceMode | undefined, sinceGeneration: number): void {
+  if (sinceGeneration !== switchGeneration) return;
   cachedInterfaceMode = mode;
 }
 
@@ -153,6 +164,63 @@ export function isClosingForModeSwitch(windowId: number): boolean {
  */
 export function clearModeSwitchClose(windowId: number): void {
   modeSwitchClosingWindowIds.delete(windowId);
+}
+
+/**
+ * Take back everything a switch to simple mode did to a window in the expectation that it was about
+ * to close, for a window whose close then did not happen.
+ *
+ * {@link closeSecondaryWindows} records the mark and takes the window off screen BEFORE the close is
+ * asked for, let alone decided, so that a layout pushed on the way out is already recognizable as
+ * one to drop. That ordering is deliberate, and this is what makes it safe. Two routes end with the
+ * close not happening: asking for it throws, or the window's own handler decides to stay open (the
+ * user cancels the close-all question, or deciding fails and leaving the window open is the safe
+ * outcome). Either way `closed` never fires, and `closed` is the only thing that would otherwise
+ * clear the mark — so without this the window is left invisible, still recorded as closing, skipped
+ * by every later switch, absent from the window list, and with every layout it pushes dropped, for
+ * the life of the process.
+ *
+ * Scoped to the one window: its siblings are still closing. Does nothing for a window this switch
+ * never claimed, so it cannot show a window that was never hidden.
+ *
+ * @param windowId Window whose close is not going to happen after all
+ */
+export function undoModeSwitchClose(windowId: number): void {
+  const deps = dependencies;
+  if (!deps) {
+    logger.warn(
+      `Cannot put window ${windowId} back after its close did not happen; the window orchestration is not wired`,
+    );
+    return;
+  }
+  undoModeSwitchCloseWith(deps, windowId);
+}
+
+/**
+ * {@link undoModeSwitchClose} for a caller that already holds the collaborators.
+ *
+ * @param deps Collaborators to act through
+ * @param windowId Window whose close is not going to happen after all
+ */
+function undoModeSwitchCloseWith(deps: ModeSwitchDependencies, windowId: number): void {
+  if (!modeSwitchClosingWindowIds.delete(windowId)) return;
+  // Each collaborator is tried on its own, and a failure in either is reported rather than thrown.
+  // Both callers are recovering from something that already went wrong — a close that threw, or one
+  // the window refused — and neither can afford a second throw: from the batch it would abandon
+  // every window after this one, and from the close handler it would strand the window it is trying
+  // to rescue. Taking the claim off above is what matters most and has already happened.
+  try {
+    deps.unmarkWindowClosing(windowId);
+  } catch (e) {
+    logger.warn(`Could not clear the closing mark on window ${windowId}: ${getErrorMessage(e)}`);
+  }
+  try {
+    deps.showWindow(windowId);
+  } catch (e) {
+    logger.warn(
+      `Could not put window ${windowId} back on screen after its close did not happen: ${getErrorMessage(e)}`,
+    );
+  }
 }
 
 /**
@@ -225,10 +293,17 @@ function closeSecondaryWindows(deps: ModeSwitchDependencies): void {
         modeSwitchClosingWindowIds.delete(windowId);
       }
     } catch (e) {
+      // Recorded and reported BEFORE the undo below: a throw out of the undo would otherwise escape
+      // this catch, taking the rest of the batch with it and losing the failure that started it —
+      // which is the isolation this loop exists to give.
       closeFailures.push(e);
       logger.warn(
         `Could not close window ${windowId} for the switch to simple mode: ${getErrorMessage(e)}`,
       );
+      // The mark and the hide are already applied, and the close that would have cleared them
+      // never happened — so put this window back rather than leaving it invisible and permanently
+      // claimed by a switch that could not take it
+      undoModeSwitchCloseWith(deps, windowId);
     }
   });
   if (closeFailures.length > 0) {
@@ -322,9 +397,18 @@ export async function handleInterfaceModeChanged(newMode: InterfaceMode): Promis
 
     await reopenPreservedWindows(deps, generation);
   } catch (e) {
-    // Only if no newer switch has started: putting the cache back under a switch that superseded
-    // this one would describe the application as being in a mode it has already left
-    if (generation === switchGeneration) cachedInterfaceMode = modeBeforeSwitch;
+    // Only the reopen is put back. A switch to simple that failed part-way still CLOSED every
+    // window whose close succeeded, and the setting on disk already reads simple — so describing
+    // the application as being in power mode again would be false, and worse than useless: the
+    // user's way out is to switch to power, which would then equal the cache and be swallowed by
+    // the same-value guard above, leaving those windows closed with no route back. A failed reopen
+    // has no such asymmetry — nothing was closed, so putting the cache back is what lets the user
+    // ask for power again and have it retried.
+    //
+    // Only if no newer switch has started, either: putting the cache back under a switch that
+    // superseded this one would describe the application as being in a mode it has already left.
+    if (newMode === 'power' && generation === switchGeneration)
+      cachedInterfaceMode = modeBeforeSwitch;
     logger.warn(`Could not finish switching the windows to ${newMode} mode: ${getErrorMessage(e)}`);
   }
 }

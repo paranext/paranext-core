@@ -665,6 +665,25 @@ export function markWindowClosing(windowId: number): void {
 }
 
 /**
+ * Take back a closing mark, for a window whose close turned out not to be happening.
+ *
+ * The counterpart to {@link markWindowClosing}, and needed because a mark can be recorded before
+ * anything has decided the close will go ahead: an interface-mode switch marks every window it is
+ * about to close so that a layout pushed on the way out is already recognizable as one to drop. A
+ * window whose close is then cancelled, or never happens because asking for it threw, must stop
+ * reading as closing — otherwise it stays out of every fan-out and out of the window list for the
+ * life of the process while remaining fully open.
+ *
+ * Announces for the same reason the mark does: the window becomes somewhere new work can go again.
+ *
+ * @param windowId Window that is staying open after all
+ */
+export function markWindowNotClosing(windowId: number): void {
+  if (!closingWindowIds.delete(windowId)) return;
+  announceRoutingTargetIfChanged();
+}
+
+/**
  * Whether a window's close has begun, so nothing should try to put it back to work.
  *
  * Answered from what the window's own close handler recorded rather than from the BrowserWindow,

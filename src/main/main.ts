@@ -106,6 +106,7 @@ import {
   wasWindowEverReady,
   markWindowAbandoned,
   markWindowClosing,
+  markWindowNotClosing,
   markWindowNotReady,
   markWindowReady,
   removeWindow,
@@ -136,6 +137,7 @@ import {
 import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
 import {
   clearModeSwitchClose,
+  undoModeSwitchClose,
   getCachedInterfaceMode,
   getSwitchGeneration,
   handleInterfaceModeChanged,
@@ -1204,8 +1206,15 @@ async function main() {
       } finally {
         isAskingAboutClose = false;
       }
-      // A cancelled close is not a close: nothing was latched, so the next close click asks again
-      if (decision === 'stay-open') return;
+      // A cancelled close is not a close: nothing was latched, so the next close click asks again.
+      // One thing may already have been: an interface-mode switch marks a window closing and takes
+      // it off screen before its handler decides anything, so that layouts pushed on the way out
+      // are dropped. This is the exit where that decision comes back "not closing", so it is where
+      // that has to be undone — for a window the switch did not claim it does nothing.
+      if (decision === 'stay-open') {
+        undoModeSwitchClose(windowId);
+        return;
+      }
 
       // Only now is this a close in progress, and only now may a second click reach the escape
       // hatch: the wait it escapes from starts below, not during the question.
@@ -1900,7 +1909,13 @@ async function main() {
           isPrimaryWindow,
           isWindowClosing: isWindowMarkedClosing,
           markWindowClosing,
+          unmarkWindowClosing: markWindowNotClosing,
           hideWindow: (windowId) => BrowserWindow.fromId(windowId)?.hide(),
+          // `showInactive`, not `show`: a window coming back from a close that did not happen must
+          // not pull focus off whichever window the switch brought forward. A window the user had
+          // minimized still comes back restored — `hide` does not record that it was minimized —
+          // which is a smaller wrong than stealing focus.
+          showWindow: (windowId) => BrowserWindow.fromId(windowId)?.showInactive(),
           closeWindow: (windowId) => {
             const window = BrowserWindow.fromId(windowId);
             if (!window) return false;
