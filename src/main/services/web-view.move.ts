@@ -318,6 +318,12 @@ async function moveCapturedWebView(
         throw new Error(`window ${target}'s close was decided while the move was in flight`);
       const movedWebViewId = await adoptIntoDestination(captured);
       if (movedWebViewId !== undefined) {
+        // Read again on the way out. The check above covers a close decided before the adopt; the
+        // adopt itself waits on a provider with no bound, and a close decided during it would take
+        // the web view down with the window while this reported a move that worked. Throwing hands
+        // it to the recovery below, which puts it somewhere that will still be there.
+        if (typeof target === 'number' && isWindowClosing(target))
+          throw new Error(`window ${target}'s close was decided while its adopt was running`);
         raiseMoveTarget(target);
         return movedWebViewId;
       }

@@ -211,6 +211,10 @@ function resolvedShardOfWindowAt(windowId: number): number {
 
 describe('moveWebView', () => {
   beforeEach(() => {
+    // Same reason as the sibling block below: the register is module state, and a test that leaves
+    // a record behind is read by the next one. No test here leaks today, which is exactly when it
+    // is cheap to stop one from starting to.
+    clearMovesInFlightForTesting();
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
@@ -257,6 +261,27 @@ describe('moveWebView', () => {
     // move of the same view has to go through.
     target.adoptWebView.mockImplementation(async () => 'view-1');
     await expect(moveWebView('view-1', 3)).resolves.toBe('view-1');
+  });
+
+  test('a target whose close is decided while its adopt runs does not report a move that worked', async () => {
+    // The check before the adopt catches a close decided up to that moment. The adopt then waits on
+    // a provider with no bound of its own, and a close decided inside that wait is invisible to it —
+    // so the window takes the web view down with it while the move reports the id it just got back.
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    let targetClosing = false;
+    mocks.isWindowClosing.mockImplementation((windowId: number) => windowId === 3 && targetClosing);
+    target.adoptWebView.mockImplementation(async () => {
+      // The close lands while the adopt is in flight, which is the whole point
+      targetClosing = true;
+      return 'view-1';
+    });
+    withWindows({ 2: owner, 3: target });
+
+    await expect(moveWebView('view-1', 3)).rejects.toThrow();
+    // And the web view is not left to go down with the window: recovery put it back where it came
+    // from, which is what the throw is for.
+    expect(owner.adoptWebView).toHaveBeenCalled();
   });
 
   test('moves to an existing window: captures in the owner, adopts in the target, answers the id', async () => {
