@@ -437,6 +437,18 @@ describe('reacting to an interface-mode change', () => {
     expect(deps.closeWindow).not.toHaveBeenCalled();
   });
 
+  test('a switch to simple that closes nothing leaves the cache where it was', async () => {
+    // No window closed (the case above), so nothing about the window set changed. A cache moved to
+    // simple here would make the same-value guard swallow every later delivery of it — including one
+    // that arrives after the abandoned window is gone and a real switch has become possible again.
+    const deps = makeDeps({ isWindowAbandoned: (windowId) => windowId === 1 });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(getCachedInterfaceMode()).toBe('power');
+  });
+
   test('a window already on its way out cannot be the window a switch leaves behind', async () => {
     // The primary role is read from the persisted entry, which a window keeps until it has actually
     // gone — so a window the user closed a moment ago still answers to it. Leaving that one and
