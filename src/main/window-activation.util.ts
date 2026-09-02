@@ -145,3 +145,42 @@ export function shouldRevealAfterRendererGone(
 ): boolean {
   return plan.revealAfterLoadFailure !== undefined && isAwaitingFirstActivation;
 }
+
+/** Withheld windows whose focus has already been handed back once. See {@link shouldBounceFocusBack} */
+const windowIdsAlreadyBouncedBack = new Set<number>();
+
+/** Record that a window's focus has been handed back, so it is never done to that window again */
+export function noteWindowBouncedFocusBack(windowId: number): void {
+  windowIdsAlreadyBouncedBack.add(windowId);
+}
+
+/** Whether this window's focus has already been handed back once */
+export function hasWindowBouncedFocusBack(windowId: number): boolean {
+  return windowIdsAlreadyBouncedBack.has(windowId);
+}
+
+/** Forget a window's bounce record, for a window that has gone away */
+export function forgetWindowBounce(windowId: number): void {
+  windowIdsAlreadyBouncedBack.delete(windowId);
+}
+
+/**
+ * Whether to hand focus straight back to the window the user was in.
+ *
+ * A window held back from the foreground takes focus anyway the moment its page first paints, with
+ * no call from either process to stop — so it cannot be prevented, only undone. This is what undoes
+ * it.
+ *
+ * Bounded to ONE bounce per window, because the alternative is a window nobody can get into: a rule
+ * that fired every time would throw the user out on each attempt to reach it. After the first, the
+ * window keeps whatever focus it is given.
+ *
+ * @param state Whether the window is still waiting to be seen for the first time — a user gesture
+ *   in it ends that — and whether its focus has already been handed back once
+ */
+export function shouldBounceFocusBack(state: {
+  isAwaitingFirstActivation: boolean;
+  hasAlreadyBouncedFocusBack: boolean;
+}): boolean {
+  return state.isAwaitingFirstActivation && !state.hasAlreadyBouncedFocusBack;
+}

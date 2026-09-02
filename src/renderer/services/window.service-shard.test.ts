@@ -551,20 +551,33 @@ describe('a window still waiting for its first activation', () => {
     expect(focusTabMock).toHaveBeenCalledWith('tab-1', true);
   });
 
-  test('stops withholding the moment the window is activated', async () => {
-    // The transition itself, in one test: withheld before the window is activated and ordinary
-    // after. Split across two tests this passed for the wrong reason, because the latch is module
-    // state and the first test had already tripped it.
+  test('stops withholding the moment the user does something in the window', async () => {
+    // The transition itself, in one test: withheld before the gesture and ordinary after. Split
+    // across two tests this passed for the wrong reason, because the latch is module state and the
+    // first test had already tripped it.
     globalThis.wasWindowCreatedWithoutActivation = true;
     const engine = testingWindowService.implementWindowDataProviderEngine();
 
     await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
     expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', true);
 
-    window.dispatchEvent(new Event('focus'));
+    window.dispatchEvent(new Event('pointerdown'));
 
     await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
     expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', false);
+  });
+
+  test('keeps withholding when the window merely takes focus by itself', async () => {
+    // The reason the latch is not driven by focus: a window held back from the foreground takes
+    // focus on its own the moment its page first paints. Ending the withholding there would undo it
+    // before the user had done anything at all, which is the defect this whole change exists for.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+
+    window.dispatchEvent(new Event('focus'));
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
+    expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', true);
   });
 
   test('focuses normally in a window the user asked for', async () => {

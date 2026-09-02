@@ -3,6 +3,7 @@ import {
   forgetWindowWithholding,
   noteWindowWithheldFromActivation,
   planWindowActivation,
+  shouldBounceFocusBack,
   shouldContentAvoidDocumentFocus,
   shouldRevealAfterLoadFailure,
   shouldRevealAfterRendererGone,
@@ -163,5 +164,34 @@ describe('revealing a window that failed before it could paint', () => {
 
   test('does nothing when a window that showed itself loses its renderer', () => {
     expect(shouldRevealAfterRendererGone(asked, false)).toBe(false);
+  });
+});
+
+describe('handing focus back when a withheld window takes it on its own', () => {
+  // `showInactive()` does not keep this window in the background: the page takes focus itself when
+  // it first paints, with no call from either process (see PT-4465's diagnosis). Since the window
+  // cannot be stopped from taking focus, focus is handed straight back to where the user was.
+  test('hands focus back the first time a withheld window takes it unbidden', () => {
+    expect(
+      shouldBounceFocusBack({ isAwaitingFirstActivation: true, hasAlreadyBouncedFocusBack: false }),
+    ).toBe(true);
+  });
+
+  test('leaves a window the user has activated alone', () => {
+    // The gesture already ended the withholding, so this focus is the user's own doing.
+    expect(
+      shouldBounceFocusBack({
+        isAwaitingFirstActivation: false,
+        hasAlreadyBouncedFocusBack: false,
+      }),
+    ).toBe(false);
+  });
+
+  test('hands focus back at most once, so a user who returns to the window keeps it', () => {
+    // Bouncing twice would be a window the user cannot get into: every attempt would throw them
+    // out again.
+    expect(
+      shouldBounceFocusBack({ isAwaitingFirstActivation: true, hasAlreadyBouncedFocusBack: true }),
+    ).toBe(false);
   });
 });
