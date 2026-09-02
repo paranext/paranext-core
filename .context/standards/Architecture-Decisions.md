@@ -2507,10 +2507,15 @@ step, no automation. Just a record.
   not ask for DOES briefly hold the foreground, and focus is handed straight back to the window that
   held it. Three bounds make that safe rather than a fight: it happens at most once per window, or a
   window nobody can enter; only while the target still exists and is not minimized, or handing back
-  would undo the user putting it away; and only inside a short window after first paint, because on
-  a compositor that does not self-focus the first focus event IS the user's click and undoing it
-  would be worse than the problem. The visible cost is a brief flicker, and any keystroke landing in
-  that gap goes to the window that had focus for those milliseconds.
+  would undo the user putting it away; and only inside a short window after first paint —
+  2000ms (`SELF_FOCUS_WINDOW_MS`, `src/main/window-activation.util.ts`) — because on a compositor
+  that does not self-focus the first focus event IS the user's click and undoing it would be
+  worse than the problem. The visible cost is a brief flicker, and any keystroke landing in that
+  gap goes to the window that had focus for those milliseconds. The bound has two failure modes
+  at its edges: a user who reacts within those 2000ms to the deliberate taskbar flash and clicks
+  the window is bounced back out once anyway, because the click still lands inside the window;
+  and a self-focus that arrives after 2000ms — a slow cold start — skips the bounce, and any
+  record of it, entirely, leaving the window with whatever focus it already has.
 - **The hand-back cannot return focus to a foreign application.** A window that takes the
   foreground from another application cannot hand it back, because `focusWindow` only moves focus
   between our own windows. The hand-back is gated on whether this application already held focus
