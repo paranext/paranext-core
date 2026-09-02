@@ -532,12 +532,14 @@ describe('a window still waiting for its first activation', () => {
   beforeEach(() => {
     focusTabMock.mockClear();
     getTabInfoByIdMock.mockReturnValue({ id: 'tab-1', tabType: 'webView' });
+    // The latch only ever goes one way in a real window, so each test has to start it over —
+    // otherwise the first test to activate the window answers for every test after it.
+    testingWindowService.resetActivationLatchForTesting();
   });
 
   afterEach(() => {
     globalThis.wasWindowCreatedWithoutActivation = false;
-    // Undo the latch this suite trips, so the flag does not leak into later tests
-    window.dispatchEvent(new Event('focus'));
+    testingWindowService.resetActivationLatchForTesting();
   });
 
   test('tells the dock to activate the tab without taking document focus', async () => {
@@ -549,16 +551,20 @@ describe('a window still waiting for its first activation', () => {
     expect(focusTabMock).toHaveBeenCalledWith('tab-1', true);
   });
 
-  test('focuses normally once the window has been activated', async () => {
-    // The positive control, and the latch: the same one-argument call, after the window is
-    // activated, focuses like any other.
+  test('stops withholding the moment the window is activated', async () => {
+    // The transition itself, in one test: withheld before the window is activated and ordinary
+    // after. Split across two tests this passed for the wrong reason, because the latch is module
+    // state and the first test had already tripped it.
     globalThis.wasWindowCreatedWithoutActivation = true;
     const engine = testingWindowService.implementWindowDataProviderEngine();
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
+    expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', true);
+
     window.dispatchEvent(new Event('focus'));
 
     await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
-
-    expect(focusTabMock).toHaveBeenCalledWith('tab-1', false);
+    expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', false);
   });
 
   test('focuses normally in a window the user asked for', async () => {
