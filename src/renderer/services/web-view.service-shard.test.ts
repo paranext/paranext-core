@@ -684,7 +684,7 @@ describe('handleSwitchToSimpleMode', () => {
     // gate's catch swallowed: the switch ran only because the question had failed, and the suite
     // could not tell that from the question being answered.
     sendCommandMock.mockImplementation(async (command: string) =>
-      command === 'platform.getWindows' ? [{ windowId: 1, label: '', isMain: true }] : undefined,
+      command === 'platform.getWindows' ? [{ windowId: '1', label: '', isMain: true }] : undefined,
     );
     globalThis.windowId = '1';
     buildSimpleLayoutForProjectMock.mockClear();
@@ -698,10 +698,10 @@ describe('handleSwitchToSimpleMode', () => {
 
   /** Answer `platform.getWindows` with these summaries, and this window's own id */
   function setWindowsAndThisWindow(
-    windows: { windowId: number; label: string; isMain: boolean }[],
-    thisWindowId: number,
+    windows: { windowId: string; label: string; isMain: boolean }[],
+    thisWindowId: string,
   ) {
-    globalThis.windowId = String(thisWindowId);
+    globalThis.windowId = thisWindowId;
     sendCommandMock.mockImplementation(async (command: string) =>
       command === 'platform.getWindows' ? windows : undefined,
     );
@@ -713,10 +713,10 @@ describe('handleSwitchToSimpleMode', () => {
     // browser-storage cache under one key for all windows. Running it here duplicates all four.
     setWindowsAndThisWindow(
       [
-        { windowId: 1, label: '', isMain: true },
-        { windowId: 2, label: '', isMain: false },
+        { windowId: '1', label: '', isMain: true },
+        { windowId: '2', label: '', isMain: false },
       ],
-      2,
+      '2',
     );
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
@@ -741,7 +741,7 @@ describe('handleSwitchToSimpleMode', () => {
   });
 
   it('the primary window runs the switch', async () => {
-    setWindowsAndThisWindow([{ windowId: 1, label: '', isMain: true }], 1);
+    setWindowsAndThisWindow([{ windowId: '1', label: '', isMain: true }], '1');
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
@@ -757,7 +757,7 @@ describe('handleSwitchToSimpleMode', () => {
   it('a window missing from the list does no switch work', async () => {
     // Main records a window as closing just before it closes it, and the window list leaves out
     // windows already recorded that way — so an absent id means this window is on its way out
-    setWindowsAndThisWindow([{ windowId: 1, label: '', isMain: true }], 2);
+    setWindowsAndThisWindow([{ windowId: '1', label: '', isMain: true }], '2');
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
@@ -795,10 +795,10 @@ describe('handleSwitchToSimpleMode', () => {
     // simple-mode tab ids in several windows together.
     setWindowsAndThisWindow(
       [
-        { windowId: 2, label: '', isMain: false },
-        { windowId: 3, label: '', isMain: false },
+        { windowId: '2', label: '', isMain: false },
+        { windowId: '3', label: '', isMain: false },
       ],
-      2,
+      '2',
     );
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
@@ -1283,7 +1283,7 @@ describe('handleSwitchToSimpleMode', () => {
 
     // `globalThis.windowId` is set to a window id of the shape the platform mints, matching the
     // suffix `withWindowScopedWebViewIds` would have appended to this id had it come through a
-    // real scoped load.
+    // real scoped load. Another window's suffix would pass a guard that only ever strips its own.
     globalThis.windowId = '22222222-2222-4222-8222-222222222222';
     const contaminatedLayout = {
       dockbox: {
@@ -2519,7 +2519,7 @@ describe('loadLayout discards a load a newer one has superseded', () => {
     sendCommandMock.mockReset();
     sendCommandMock.mockImplementation(async (command: string) =>
       command === 'platform.getWindows'
-        ? [{ windowId: Number(globalThis.windowId), label: '', isMain: true }]
+        ? [{ windowId: globalThis.windowId, label: '', isMain: true }]
         : undefined,
     );
   });
