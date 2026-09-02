@@ -249,6 +249,26 @@ export async function applyDeclaredWindowSize(
 export const LAUNCH_PHASE_TIMEOUT_MS = 120_000;
 
 /**
+ * Budget for polling `rpc.discover` for one PAPI method's registration — the shared default for
+ * {@link waitForPapiMethodRegistered} and every helper built on it. Named rather than repeated as a
+ * literal so every call site moves together the next time the cold-boot number above changes.
+ */
+export const PAPI_METHOD_REGISTRATION_TIMEOUT_MS = 60_000;
+
+/**
+ * Budget for {@link assertInterfaceMode}'s own poll, deliberately smaller than
+ * LAUNCH_PHASE_TIMEOUT_MS. Both playwright configs set the whole-test timeout to
+ * LAUNCH_PHASE_TIMEOUT_MS, and assertInterfaceMode runs LAST in a launch's fixture setup, after
+ * phases (firstWindow, the root selector) that can themselves each take a share of that same
+ * budget. If its own poll were allowed the full LAUNCH_PHASE_TIMEOUT_MS, Playwright's generic "test
+ * timeout exceeded" would always fire at or before its internal deadline on a genuine mode
+ * mismatch, burying the specific `howToFix` diagnostic under a message that does not name it. This
+ * constant must stay comfortably below LAUNCH_PHASE_TIMEOUT_MS — see the inequality assertion in
+ * `helpers.test.ts` that keeps the two from drifting back together.
+ */
+export const ASSERT_INTERFACE_MODE_TIMEOUT_MS = 45_000;
+
+/**
  * How long ONE attempt inside a polling wait may take, given the budget the whole wait has left.
  *
  * A poll that hands its entire remaining budget to each request stops being a poll: one request
@@ -329,7 +349,7 @@ export type RequiredInterfaceMode = 'simple' | 'power';
 export async function assertInterfaceMode(
   required: RequiredInterfaceMode,
   howToFix: string,
-  timeoutMs = LAUNCH_PHASE_TIMEOUT_MS,
+  timeoutMs = ASSERT_INTERFACE_MODE_TIMEOUT_MS,
 ): Promise<void> {
   const start = Date.now();
   let actual: string | undefined;
@@ -730,7 +750,7 @@ export async function sendPapiRequestOnce<T>(
 export async function waitForPapiMethodRegistered(
   methodName: string | RegExp,
   port: number = DEFAULT_WEBSOCKET_PORT,
-  timeoutMs = 60_000,
+  timeoutMs = PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
 ): Promise<void> {
   const isMatch = (name: string) =>
     typeof methodName === 'string' ? name === methodName : methodName.test(name);
@@ -776,7 +796,7 @@ const PROJECT_LOOKUP_GET_ALL_PROJECTS_METHOD =
  */
 export async function waitForAtLeastOneProjectMetadata(
   port: number = DEFAULT_WEBSOCKET_PORT,
-  timeoutMs = 60_000,
+  timeoutMs = PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
 ): Promise<void> {
   return waitForProjectMetadata(() => true, 'any project', port, timeoutMs);
 }
@@ -796,7 +816,7 @@ export async function waitForProjectMetadata(
   matches: (project: { id?: string }) => boolean,
   description: string,
   port: number = DEFAULT_WEBSOCKET_PORT,
-  timeoutMs = 60_000,
+  timeoutMs = PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
 ): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {

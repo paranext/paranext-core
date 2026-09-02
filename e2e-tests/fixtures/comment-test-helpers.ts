@@ -33,7 +33,12 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { expect, type FrameLocator, type Page } from '@playwright/test';
-import { addUsersToProject, sendPapiRequestOnce, waitForPapiMethodRegistered } from './helpers';
+import {
+  addUsersToProject,
+  PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  sendPapiRequestOnce,
+  waitForPapiMethodRegistered,
+} from './helpers';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -339,7 +344,11 @@ export async function createCommentThreads(
   const resolvedPort = port ?? DEFAULT_WEBSOCKET_PORT;
 
   // 1. Wait for the Paratext PDPF to register getProjectDataProviderId
-  await waitForPapiMethodRegistered(PARATEXT_PDPF_METHOD, resolvedPort, 60_000);
+  await waitForPapiMethodRegistered(
+    PARATEXT_PDPF_METHOD,
+    resolvedPort,
+    PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  );
 
   // 2. Get (or lazily create) the PDP for this project.
   //    The C# factory calls projectID.ToUpperInvariant() internally, so case doesn't matter.
@@ -352,7 +361,11 @@ export async function createCommentThreads(
   );
 
   // 3. Wait for the PDP's createComment method to appear in rpc.discover
-  await waitForPapiMethodRegistered(`object:${pdpId}.createComment`, resolvedPort, 60_000);
+  await waitForPapiMethodRegistered(
+    `object:${pdpId}.createComment`,
+    resolvedPort,
+    PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  );
 
   // 4. Create each thread sequentially (the PDP is not safe to hammer in parallel)
   const threadIds: string[] = [];

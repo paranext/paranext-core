@@ -6,7 +6,12 @@
  * it directly with a stub instead of a real browser connection.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { assertDeclaredWindowSize, DEFAULT_WINDOW_SIZE } from './helpers';
+import {
+  assertDeclaredWindowSize,
+  ASSERT_INTERFACE_MODE_TIMEOUT_MS,
+  DEFAULT_WINDOW_SIZE,
+  LAUNCH_PHASE_TIMEOUT_MS,
+} from './helpers';
 
 /** A stub whose `evaluate` resolves to the given window size, whatever function is passed in. */
 function pageReporting(size: { width: number; height: number }): {
@@ -43,5 +48,14 @@ describe('assertDeclaredWindowSize', () => {
     await expect(
       assertDeclaredWindowSize(page, DEFAULT_WINDOW_SIZE, 'resize it'),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('timeout budgets', () => {
+  it('gives assertInterfaceMode room to report its own diagnostic before the whole-test timeout fires', () => {
+    // assertInterfaceMode runs last in a launch fixture, after phases that can themselves spend
+    // part of LAUNCH_PHASE_TIMEOUT_MS, so its own poll must leave a margin rather than claim the
+    // full budget — see the constants' TSDoc in helpers.ts for why.
+    expect(ASSERT_INTERFACE_MODE_TIMEOUT_MS).toBeLessThan(LAUNCH_PHASE_TIMEOUT_MS);
   });
 });
