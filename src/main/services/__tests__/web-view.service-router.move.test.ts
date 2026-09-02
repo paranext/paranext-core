@@ -870,6 +870,54 @@ describe('a web view that is between windows on a move', () => {
     releaseAdopt('view-1-w2');
     await moving;
   });
+
+  test('folds in both of two moves whose captured ids strip to the same base', async () => {
+    // A window scopes its web view ids to itself, so two windows' default Home tabs are `home-w2`
+    // and `home-w3`, and the capture strips that scope — both moves capture a definition called
+    // `home`. While both are in flight neither view is reported by any window, so both belong in
+    // this read. Deduping the fold-in on the stripped id makes the first fold-in claim `home` and
+    // the second move read that as "already reported", dropping a view that really is missing.
+    // Power mode reaches this: every window opens a Home tab by default, so any two of them moved
+    // at once collide.
+    const sourceA = sourceWindowShard('home-w2', 'home', { projectId: 'project-a' });
+    const sourceB = sourceWindowShard('home-w3', 'home', { projectId: 'project-b' });
+    const targetA = windowShard([]);
+    const targetB = windowShard([]);
+    let releaseAdoptA: (webViewId: WebViewId) => void = () => {};
+    let releaseAdoptB: (webViewId: WebViewId) => void = () => {};
+    targetA.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseAdoptA = resolve;
+        }),
+    );
+    targetB.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseAdoptB = resolve;
+        }),
+    );
+    withWindows({ 2: sourceA, 3: sourceB, 4: targetA, 5: targetB });
+
+    const movingA = moveWebView('home-w2', 4);
+    const movingB = moveWebView('home-w3', 5);
+    await settle();
+
+    const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
+
+    // Both, distinguished by the project each was showing — the ids cannot tell them apart, which
+    // is the whole point.
+    expect(definitions).toContainEqual(
+      expect.objectContaining({ id: 'home', projectId: 'project-a' }),
+    );
+    expect(definitions).toContainEqual(
+      expect.objectContaining({ id: 'home', projectId: 'project-b' }),
+    );
+
+    releaseAdoptA('home');
+    releaseAdoptB('home');
+    await Promise.all([movingA, movingB]);
+  });
 });
 
 describe('the move commands', () => {
