@@ -327,6 +327,38 @@ describe('scanCSharpFiles: dataProvider shape', () => {
     expect(findRegistration(registrations, 'fixture-helper-not-the-provider')).toBeUndefined();
   });
 
+  it('takes the base call of the provider class, not one belonging to a type nested inside it', () => {
+    // Scoping the search to the class body is not enough on its own: a type declared INSIDE the
+    // provider, above its constructor, puts its own `: base(` first within that same body. The
+    // provider's own call is the one at the body's own nesting depth.
+    const files: VirtualFile[] = [
+      {
+        path: 'c-sharp/Fixtures/FixtureProviderWithNestedType.cs',
+        text: `
+          namespace Paranext.DataProvider.Fixtures;
+
+          internal sealed class FixtureProviderWithNestedType : NetworkObjects.DataProvider
+          {
+              private sealed class NestedHelper : SomeOtherBase
+              {
+                  public NestedHelper(PapiClient papiClient)
+                      : base("fixture-nested-not-the-provider", papiClient) { }
+              }
+
+              public FixtureProviderWithNestedType(PapiClient papiClient)
+                  : base("fixture-provider-with-nested-type", papiClient) { }
+          }
+        `,
+      },
+    ];
+    const { registrations } = scanCSharpFiles(files);
+    expect(findRegistration(registrations, 'fixture-provider-with-nested-type')).toMatchObject({
+      category: 'dataProvider',
+      registeredVia: 'DataProvider(name, papiClient) constructor',
+    });
+    expect(findRegistration(registrations, 'fixture-nested-not-the-provider')).toBeUndefined();
+  });
+
   it("records DataProvider.RegisterDataProviderAsync's own call under dynamicRegistrations (DataProviderName is a computed property, never a literal)", () => {
     const files: VirtualFile[] = [
       {
