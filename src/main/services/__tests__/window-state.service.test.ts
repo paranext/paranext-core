@@ -1032,6 +1032,25 @@ describe('window state tracking', () => {
       expect(heard).toEqual([2]);
     });
 
+    test('announces routing coming back to a window whose close was taken back', () => {
+      // The mark's counterpart has to tell the routing proxies too: they hold a resolved service
+      // for whichever window the mark moved routing to, and nothing else would tell them it moved
+      // back — so a window rescued from a close that never happened would stay unused.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowReady(1);
+      markWindowReady(2);
+      setFocusedWindowId(1);
+      markWindowClosing(1);
+      const heard: (number | undefined)[] = [];
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
+
+      markWindowNotClosing(1);
+      unsubscribe();
+
+      expect(heard).toEqual([1]);
+    });
+
     test('keeps routing to the closing window when every window is closing', () => {
       // The closing window's own shutdown work — Send/Receive progress, anything it needs to ask
       // the user — has nowhere else to go during a quit, and the window is alive until its
