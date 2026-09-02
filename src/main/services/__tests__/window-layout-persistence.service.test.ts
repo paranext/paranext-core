@@ -1564,11 +1564,12 @@ describe('layout pushes from a window on its way out', () => {
     expect(firstTabIdOf(writtenStructure().windows[0].layout)).toBe('power-tab');
   });
 
-  test('a push from a window closing for a mode switch still clears its pending-content mark', async () => {
-    // A window created to receive content and then closed by a switch pushes its first real layout
-    // during the close. The layout is refused, but the MARK has to go: it is read to decide whether
-    // the entry is worth keeping, and a window still marked pending-content is treated as holding
-    // nothing and has its entry dropped — taking the moved web view with it.
+  test('a push refused from a window closing for a mode switch leaves it pending-content', async () => {
+    // The mark travels with the layout, because it is what says the entry holds nothing. A window
+    // created to receive content and then closed by a switch pushes its first real layout during
+    // the close; that layout is refused, so the entry still holds nothing and the mark has to say
+    // so. Clearing it here would have the entry kept — empty — and a blank window would then be
+    // built from it on every later switch to power and every launch.
     const service = await startService();
     await loadAndAssignAll(service, [{ isMain: true }], 10);
     service.trackNewWindow(20);
@@ -1576,6 +1577,21 @@ describe('layout pushes from a window on its way out', () => {
     service.setModeSwitchClosePredicate((windowId) => windowId === 20);
 
     await registeredHandler('windowLayout:save')(20, layoutWithTab('arrived-late'));
+
+    expect(service.isWindowPendingContent(20)).toBe(true);
+  });
+
+  test('a push that is saved clears the pending-content mark', async () => {
+    // The other half, and what keeps the rule above from being "never clear it": a window whose
+    // push is recorded is holding what it just sent, so the mark must go or its entry would be
+    // dropped as empty when it closes.
+    const service = await startService();
+    await loadAndAssignAll(service, [{ isMain: true }], 10);
+    service.trackNewWindow(20);
+    service.markWindowPendingContent(20);
+    service.setModeSwitchClosePredicate(() => false);
+
+    await registeredHandler('windowLayout:save')(20, layoutWithTab('arrived'));
 
     expect(service.isWindowPendingContent(20)).toBe(false);
   });
