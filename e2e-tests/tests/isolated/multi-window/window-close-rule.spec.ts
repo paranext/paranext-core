@@ -52,7 +52,6 @@ import {
   ElectronAppContext,
   LaunchElectronAppOptions,
   launchElectronApp,
-  preConfigureSettings,
   sendPapiRequestOnce,
   teardownElectronApp,
   waitForAppReady,
@@ -198,6 +197,16 @@ function countSavedWindowEntries(userDataDir: string): number {
 }
 
 test.use({
+  // Seeded through the fixture rather than a preConfigureSettings call in a hook, which the fixture
+  // would both override and then write back into the developer's shared settings.
+  //
+  // Power mode is REQUIRED: the startup restore recreates secondary windows only in Power mode, so
+  // without it the two relaunching tests would see one window come back and fail for configuration
+  // reasons rather than for the rule under test. `firstRunComplete` because the wizard is a modal
+  // that aria-hides the app. The English interface language these selectors depend on is seeded by
+  // the fixture itself.
+  interfaceMode: 'power',
+  seedSettings: { 'platform.firstRunComplete': true },
   // The fixture launches with no special options unless a suite says otherwise, and the three
   // tests that take `mainPage` from it need the same app the two that launch explicitly get.
   // DEV_NOISY=false is the load-bearing half: it gives the first window the single-Home-tab
@@ -211,24 +220,6 @@ test.describe('window close rule', () => {
   // would report the generic test timeout instead of the wait that actually failed. Matches the
   // sibling that also relaunches within a test (`window-layout-persistence.spec.ts`).
   test.setTimeout(900_000);
-
-  let restoreSettings: (() => void) | undefined;
-
-  test.beforeAll(() => {
-    // Power mode is REQUIRED: the startup restore recreates secondary windows only in Power mode,
-    // so without it tests 2 and 4 would see one window come back and fail for configuration
-    // reasons rather than for the rule under test. Restored afterwards so the developer's own
-    // settings survive the suite.
-    restoreSettings = preConfigureSettings({
-      'platform.firstRunComplete': true,
-      'platform.interfaceLanguage': ['en'],
-      'platform.interfaceMode': 'power',
-    });
-  });
-
-  test.afterAll(() => {
-    restoreSettings?.();
-  });
 
   test('closing the primary with another window open asks, and cancel keeps everything', async ({
     electronApp,
