@@ -1137,7 +1137,8 @@ describe('a web view that is between windows on a move', () => {
     // capture's already-stripped `home` — the state any window is in after receiving a move. Drag
     // ONLY `home-w2`. Its capture strips to `home`, so the record names `home-w2` and carries a
     // captured definition whose id is `home` — and window 2 still reports the OTHER view under
-    // `home`. The
+    // `home`.
+    //
     // A guard that matched the captured spelling would read that report as this view and suppress
     // it, leaving the dragged view — open in no window at all — out of the read entirely.
     //
