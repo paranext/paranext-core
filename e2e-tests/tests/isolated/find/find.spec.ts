@@ -97,6 +97,13 @@ const COMMENTARIES_WEB_VIEW_UUID = '6c950d23-f8d7-4482-a384-93ea0481698b';
  * fail with "no results found", update this term to something that appears in the test project.
  */
 const COMMON_SEARCH_TERM = 'the';
+/**
+ * A term whose result count changes observably under each search filter, and stays under the
+ * counter's 100-result cap in every state so the change is visible at all. Picking a common word
+ * here silently disables the filter assertions — see the comment in the filter test for the
+ * counts.
+ */
+const FILTER_SENSITIVE_TERM = 'LORD';
 
 /**
  * A rare term whose result count stays under the 100-result batch cap, so its counter is
@@ -754,13 +761,16 @@ test.describe('Search Filters', () => {
     await expect(frame.getByText(/an error occurred/i)).toBeVisible({ timeout: 20_000 });
   });
 
-  test('should apply match-case and whole-word filters simultaneously without crashing', async ({
-    mainPage,
-  }) => {
+  test('should apply match-case and whole-word filters simultaneously', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
 
-    // Search with defaults first so there is a current term to re-search when filters change
-    await fillSearchAndWaitForResults(frame, COMMON_SEARCH_TERM);
+    // Not COMMON_SEARCH_TERM. Counted in the bundled WEB Genesis these tests search by default,
+    // "the" matches 3972 times as a substring, 2375 whole-word, and 2156 whole-word and
+    // case-sensitive — all far above the counter's 100-result cap, so it reads "1 of 100" in every
+    // state and cannot show either filter doing anything. FILTER_SENSITIVE_TERM matches 52, 51 and
+    // 1 for the same three states: every value under the cap, so each filter is observable.
+    await fillSearchAndWaitForResults(frame, FILTER_SENSITIVE_TERM);
+    const counterBeforeFilters = await frame.locator('.tw\\:tabular-nums').textContent();
 
     // Open filters and enable Match Case
     await openFiltersPanel(frame);
@@ -778,12 +788,19 @@ test.describe('Search Filters', () => {
     // Close filters panel
     await matchCaseCheckbox.press('Escape');
 
-    // After both filters are applied the search re-runs automatically. Either the counter
-    // updates (different result count) or the no-results paragraph appears — either confirms
-    // both filters are honoured without a crash.
-    await expect(frame.locator('.tw\\:tabular-nums').or(resultsMessage(frame)).first()).toBeVisible(
-      { timeout: 30_000 },
-    );
+    // The search re-runs itself once the filters change. Asserting only that a counter is on
+    // screen would pass without either filter doing anything, because the unfiltered search
+    // already put one there — so compare against what it read before.
+    await expect(async () => {
+      if (await frame.locator('.tw\\:tabular-nums').isVisible()) {
+        const counterAfterFilters = await frame
+          .locator('.tw\\:tabular-nums')
+          .textContent({ timeout: 1_000 });
+        expect(counterAfterFilters).not.toBe(counterBeforeFilters);
+      } else if (!(await resultsMessage(frame).isVisible())) {
+        throw new Error('Waiting for the filtered search to produce results');
+      }
+    }).toPass({ timeout: 30_000 });
   });
 });
 

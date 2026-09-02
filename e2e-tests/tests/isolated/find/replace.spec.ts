@@ -119,6 +119,13 @@ async function switchToReplaceMode(frame: FrameLocator): Promise<void> {
   await expect(frame.locator('#replace-term')).toBeVisible({ timeout: 5_000 });
 }
 
+/** Open the recent searches history dropdown. */
+async function openHistoryDropdown(frame: FrameLocator): Promise<void> {
+  const button = frame.getByRole('button', { name: /show recent searches/i });
+  await expect(button).toBeVisible({ timeout: 5_000 });
+  await button.click();
+}
+
 /** Open the filters dropdown (the "Toggle filters" button). */
 async function openFiltersPanel(frame: FrameLocator): Promise<void> {
   const filtersBtn = frame.getByRole('button', { name: /toggle filters/i });
@@ -386,5 +393,43 @@ test.describe('Replace operations', () => {
     });
 
     await closeFindPanel(mainPage);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: Search history on close
+//
+// This lives here rather than in find.spec.ts because it needs the panel to be closed, and
+// find.spec.ts's per-test entry point keeps it open for the next test.
+// ---------------------------------------------------------------------------
+
+test.describe('Search history on close', () => {
+  test('adds the search term to history when the Find panel is closed', async ({ mainPage }) => {
+    const frame = await openFindPanel(mainPage);
+
+    const term = `histtest-unmount-${Date.now()}`;
+    await frame.locator('#search-term').fill(term);
+
+    // Positive control. Neither of the other two routes into history can have fired: Enter was
+    // never pressed and the inactivity debounce has not elapsed. So if the term were already
+    // here, the assertion after the close would pass without the close doing anything.
+    await openHistoryDropdown(frame);
+    await expect(frame.getByRole('option', { name: term })).toHaveCount(0);
+    await frame.locator('#search-term').press('Escape');
+
+    // Opening the dropdown leaves the pointer on its trigger, and the tooltip that follows renders
+    // in a popper wrapper OUTSIDE the panel — so it outlives the panel's close and sits over the
+    // editor's menu button, swallowing the click that reopens Find. Park the pointer and wait for
+    // it to go before closing.
+    await mainPage.mouse.move(0, 0);
+    await expect(mainPage.locator('[data-slot="tooltip-content"]')).toHaveCount(0, {
+      timeout: 10_000,
+    });
+
+    await closeFindPanel(mainPage);
+
+    const reopened = await openFindPanel(mainPage);
+    await openHistoryDropdown(reopened);
+    await expect(reopened.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
   });
 });
