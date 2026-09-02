@@ -4479,21 +4479,15 @@ declare module 'shared/services/web-view.service-model' {
      * view definitions themselves. Changing properties on returned definitions does not affect the
      * actual WebView definitions.
      *
-     * @returns Saved properties of every open WebView. Empty array if no WebViews are open. A WebView
-     *   being moved between windows is included even though it is docked in neither of them for the
-     *   length of the move, so it is not left out of the result while a move is open; treat the
-     *   result as what is open in the app, not as what is docked in some window right now.
+     * @returns Saved properties of every open WebView, each listed once under the id it was minted
+     *   with — a web view keeps that id for its whole life, across any number of moves. Empty array
+     *   if no WebViews are open. A WebView being moved between windows is included even though it is
+     *   docked in neither of them for the length of the move, so it is not left out of the result
+     *   while a move is open; treat the result as what is open in the app, not as what is docked in
+     *   some window right now.
      *
-     *   A web view can also appear more than once. A move strips the source window's scope from the id,
-     *   so during a move the view can be reported by the window that took it, or named by two
-     *   overlapping moves at once. This can last up to about two minutes if the window being moved to
-     *   has stopped answering, and indefinitely for an adopted view until the next layout load.
-     *   Repeats are kept rather than risk dropping one, because a duplicate is something a caller can
-     *   see and a missing web view is not.
-     *
-     *   Do not deduplicate this list by id, and not by web view type plus project either; both can
-     *   collapse two real web views into one. Until a web view has an identity that survives a move,
-     *   tolerate repeats.
+     *   Do not deduplicate this list by web view type plus project: two open WebViews can genuinely
+     *   share both, and collapsing them would lose one.
      * @throws If any window could not be asked what it has open. Callers read this as the complete
      *   picture, and a window that could not answer is indistinguishable in the result from one with
      *   nothing open, so a short list is refused rather than passed off as the whole landscape.
@@ -5200,29 +5194,29 @@ declare module 'papi-shared-types' {
      * `useWebViewState` state — in the target window. Consumers see a close event in the source and
      * an open event in the target, and the web view controller is disposed and re-created: a held
      * controller reference must be re-acquired after a move. The returned id is the authoritative
-     * id of the web view after the move, and it can differ from the id passed in: a web view
-     * restored from a persisted layout carries a window-scoped id, and a move does not carry that
-     * scope along — so use the returned id for anything after the move. In Simple mode —
-     * single-window by design — there is no other window to move to, and this does nothing.
+     * id of the web view after the move — the same id as `webViewId`, since a web view keeps the id
+     * it was minted with for its whole life, across any number of moves — so use the returned id
+     * for anything after the move. In Simple mode — single-window by design — there is no other
+     * window to move to, and this does nothing.
      *
      * A failed move says where it left the web view, as a machine-readable marker at the front of
      * the error message: `[webViewMoveFailure:<where>]`, where `<where>` is
-     * `reopened-in-source-window` (nothing about where it lives changed), `reopened-in-focused-window`
-     * (it did move, just not to the window that was asked for), `not-reopened` (it is open in no
-     * window, and only the log holds what it was), `reached-new-window-unconfirmed` (the window
-     * created for the move is holding it, but the move could not get that confirmed),
-     * `possibly-closed` (taking it out of its window is what failed, so where it is cannot be told),
-     * or `already-moving` (this call was refused before it started, because another move of the same
-     * web view was already running — the web view is wherever that other move leaves it). The marker
-     * rides in the message because a rejection that crosses processes reaches its caller as a code
-     * and a message and nothing else. A failure decided before the move touches the web view for any
-     * other reason — an unknown target window, a target on its way out, an interface mode that could
-     * not be read — carries no marker. Strip the marker before showing the message to a user — it is
-     * there to be classified on, not read.
+     * `reopened-in-source-window` (nothing about where it lives changed),
+     * `reopened-in-focused-window` (it did move, just not to the window that was asked for),
+     * `not-reopened` (it is open in no window, and only the log holds what it was),
+     * `reached-new-window-unconfirmed` (the window created for the move is holding it, but the move
+     * could not get that confirmed), `possibly-closed` (taking it out of its window is what failed,
+     * so where it is cannot be told), or `already-moving` (this call was refused before it started,
+     * because another move of the same web view was already running — the web view is wherever that
+     * other move leaves it). The marker rides in the message because a rejection that crosses
+     * processes reaches its caller as a code and a message and nothing else. A failure decided
+     * before the move touches the web view for any other reason — an unknown target window, a
+     * target on its way out, an interface mode that could not be read — carries no marker. Strip
+     * the marker before showing the message to a user — it is there to be classified on, not read.
      *
      * @param webViewId Web view to move
-     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
-     *   see above
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   above
      * @experimental
      */
     'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
@@ -5237,8 +5231,8 @@ declare module 'papi-shared-types' {
      *
      * @param webViewId Web view to move
      * @param targetWindowId Window to move it to
-     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
-     *   see `platform.moveWebViewToNewWindow`
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   `platform.moveWebViewToNewWindow`
      * @experimental
      */
     'platform.moveWebViewToWindow': (
