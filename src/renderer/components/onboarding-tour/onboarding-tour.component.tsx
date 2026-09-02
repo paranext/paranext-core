@@ -12,6 +12,7 @@ import { Tour, TourStep, TOUR_LOCALIZE_KEYS } from './tour.component';
 import {
   getTourReplayCount,
   readTourDone,
+  subscribeToTourDone,
   subscribeToTourReplay,
   writeTourDone,
 } from './onboarding-tour.store';
@@ -55,14 +56,17 @@ const LOCALIZE_KEYS: LocalizeKey[] = [...STEP_LOCALIZE_KEYS, ...TOUR_LOCALIZE_KE
 function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
   const isPowerMode = useIsPowerMode();
   const firstRunStatus = useSyncExternalStore(subscribeToFirstRun, getFirstRunStatus);
-  // The persisted flag is re-read every render (it is a cheap synchronous localStorage read)
-  // rather than snapshotted in state: an external writer — e.g. the e2e harness suppressing the
-  // tour between mount and open — must be honored at the moment the tour would open. The state
-  // half only exists to trigger the closing re-render on Done/Skip, since same-document
-  // localStorage writes fire no event. A replay skips the flag entirely: the user asked for the
-  // tour from the Help menu, which only ever happens after they have already completed it.
+  // The persisted flag is subscribed to rather than snapshotted, for two reasons. `readTourDone`
+  // as the snapshot keeps it re-read on every render, so an external writer — e.g. the e2e harness
+  // suppressing the tour between mount and open — is honored at the moment the tour would open.
+  // And subscribing adds the render trigger that read alone lacks: the flag is shared across
+  // same-origin renderers, so a window that finishes the tour has to close the overlay in any
+  // other window still showing it. That is reachable because nothing collapses a Power user's
+  // extra windows when they switch to Simple. A replay skips the flag entirely: the user asked for
+  // the tour from the Help menu, which only ever happens after they have already completed it.
   const [finishedThisSession, setFinishedThisSession] = useState(false);
-  const tourDone = finishedThisSession || (!isReplay && readTourDone());
+  const persistedTourDone = useSyncExternalStore(subscribeToTourDone, readTourDone);
+  const tourDone = finishedThisSession || (!isReplay && persistedTourDone);
 
   const [strings, isLoading] = useLocalizedStrings(LOCALIZE_KEYS);
 
