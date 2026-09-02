@@ -576,38 +576,27 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   // spelling the move started from rather than the stripped one the target was handed. One match
   // means this view is already in the read under a name of its own.
   const definitionIds = new Set(definitions.map((definition) => definition.id));
-  // What has already been folded in. Two sets, because the two spellings a move tracks answer
-  // different questions and one set conflates them.
+  // Deliberately NOT deduped against other move records, only against what the windows reported.
   //
-  // A captured id has had its window scope stripped, and stripping is not injective: every window's
-  // default Home tab reduces to the same string. So a captured id cannot say WHICH view it is, and
-  // matching one move's ids against another's captured id would let the first fold-in claim `home`
-  // and the next move read that as "already reported", dropping a view that really is missing.
+  // Telling "one view moved twice" from "two views whose ids happen to match" needs an identity a
+  // web view keeps, and it does not have one: the capture strips the source window's scope, the
+  // adopt opens the view under that stripped spelling, and the next layout load re-scopes it. So
+  // one view wears three names over a move while two different views — every window's default Home
+  // tab — share one. Any dedupe keyed on a spelling therefore drops a view that is genuinely
+  // missing in some order of events, and dropping is invisible: the caller sees a shorter list and
+  // cannot tell it is short.
   //
-  // A window-scoped id can say which view it is — stripping only removes a `-wN` suffix, so an id
-  // that survives the filter below still carries its window's scope and names one view in the whole
-  // application.
-  const foldedInScopedIds = new Set<WebViewId>();
-  // And the captured spellings, read only against a LATER move's named id. That direction is what
-  // distinguishes the two cases: a second move whose named id is what an earlier fold-in delivered
-  // has picked up that very view — the target adopted late, the record has not cleared yet, and the
-  // user moved the same tab again — whereas two different views whose captured ids collide never
-  // have one's named id equal to the other's captured id, because the named id keeps its scope.
-  const foldedInCapturedIds = new Set<WebViewId>();
+  // Each record folds in once, which the Set guarantees. Two records still holding one view — a
+  // late-landing adopt whose record has not cleared while the user drags the same tab again — fold
+  // it in twice, and that is the accepted cost: a duplicate is visible both in this list and in the
+  // debug line below, where a drop is not. `getAllOpenWebViewDefinitionsWithReachability` is a
+  // best-effort read of a system mid-move either way.
+  //
+  // The real fix is a per-view identity minted where it is actually known — at the adopt, carried
+  // into the new window — which is a change to the adopt path rather than to this read.
   const foldedInDefinitions: SavedWebViewDefinition[] = [];
   webViewMovesInFlight.forEach((move) => {
-    const [namedWebViewId] = move.webViewIds;
-    if (
-      move.webViewIds.some(
-        (webViewId) => definitionIds.has(webViewId) || foldedInScopedIds.has(webViewId),
-      ) ||
-      foldedInCapturedIds.has(namedWebViewId)
-    )
-      return;
-    move.webViewIds
-      .filter((webViewId) => webViewId !== move.capturedDefinition.id)
-      .forEach((webViewId) => foldedInScopedIds.add(webViewId));
-    foldedInCapturedIds.add(move.capturedDefinition.id);
+    if (move.webViewIds.some((webViewId) => definitionIds.has(webViewId))) return;
     foldedInDefinitions.push(move.capturedDefinition);
   });
   // `debug`, not `warn`: a move overlapping a whole-app read is an expected, handled condition, and
