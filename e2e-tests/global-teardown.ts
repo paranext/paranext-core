@@ -56,6 +56,8 @@ export default async function globalTeardown(_config: FullConfig): Promise<void>
     );
   } else if (swept === 'by-name') {
     console.log(`Cleanup: swept by process name (${process.platform} has no /proc to scope by).`);
+  } else if (swept === 'by-name-failed') {
+    console.log('Cleanup: the process-name sweep reported nothing to stop, or could not complete.');
   } else if (pids.length > 0) {
     console.log(
       `Cleanup: terminated ${pids.length} process(es) under ${rootDir}: ${pids.join(', ')}`,

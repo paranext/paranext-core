@@ -15,18 +15,24 @@ import path from 'path';
 /** A process considered for cleanup. `cwd` is undefined when it could not be read. */
 export type ProcessCandidate = { pid: number; comm: string; cwd: string | undefined };
 
+/** `/proc/<pid>/comm` is capped at this many characters by the kernel (TASK_COMM_LEN - 1). */
+const COMM_MAX_LENGTH = 15;
+
 /**
- * The only process names cleanup considers.
+ * The only process names cleanup considers, truncated the way `/proc` reports them.
  *
  * Being under the repo root is necessary but NOT sufficient: npm, node and the shell running the
  * suite are rooted there too, and killing them kills the run doing the killing.
  *
  * `dotnet` is the data provider in development (`dotnet watch --project
- * c-sharp/ParanextDataProvider.csproj`), which is how every e2e run launches it. A packaged build
- * runs it as a `ParanextDataProvider` executable instead, named here so a packaged app started by
- * hand in this checkout is not left behind.
+ * c-sharp/ParanextDataProvider.csproj`), which is how every e2e run launches it. `dotnet watch`
+ * then execs the apphost binary, and a packaged build runs that binary directly — so the executable
+ * name is here too. It is longer than the cap, which is exactly why these are truncated rather than
+ * compared whole: spelled in full it would never match anything.
  */
-const SWEEPABLE_PROCESS_NAMES = ['electron', 'dotnet', 'ParanextDataProvider'];
+const SWEEPABLE_PROCESS_NAMES = ['electron', 'dotnet', 'ParanextDataProvider'].map((name) =>
+  name.slice(0, COMM_MAX_LENGTH),
+);
 
 /** Values that mean "no" even though they are non-empty strings. */
 const NEGATIVE_FLAG_VALUES = ['0', 'false', 'no', 'off'];
@@ -61,13 +67,20 @@ export function selectPidsUnderRoot(
 ): number[] {
   const resolvedRoot = path.resolve(root);
   const prefix = `${resolvedRoot}${path.sep}`;
+  // Worktrees of this repository live at <root>/.claude/worktrees/<name>, so they sit INSIDE the
+  // root by path while belonging to a different checkout and, usually, a different run. Plain
+  // containment would claim all of them, which is the same cross-checkout kill this module exists
+  // to prevent. A run whose own root IS such a directory is unaffected: the container it excludes
+  // is relative to its own root, not the canonical one.
+  const nestedWorktrees = `${path.join(resolvedRoot, '.claude', 'worktrees')}${path.sep}`;
   return candidates
     .filter((candidate) => !excludePids.includes(candidate.pid))
     .filter((candidate) => SWEEPABLE_PROCESS_NAMES.includes(candidate.comm))
     .filter(
       (candidate) =>
         candidate.cwd !== undefined &&
-        (candidate.cwd === resolvedRoot || candidate.cwd.startsWith(prefix)),
+        (candidate.cwd === resolvedRoot || candidate.cwd.startsWith(prefix)) &&
+        !candidate.cwd.startsWith(nestedWorktrees),
     )
     .map((candidate) => candidate.pid);
 }
@@ -170,9 +183,16 @@ export function runCleanup(
     root,
   }: { ciFlag: string | undefined; platform: NodeJS.Platform; root: string },
   actions: CleanupActions,
-): { swept: 'none' | 'scoped' | 'by-name'; pids: number[] } {
+): { swept: 'none' | 'scoped' | 'by-name' | 'by-name-failed'; pids: number[] } {
   if (!isSweepEnabled(ciFlag)) return { swept: 'none', pids: [] };
   if (platform === 'linux') return { swept: 'scoped', pids: actions.killUnderRoot(root) };
-  actions.sweepByProcessName();
+  try {
+    actions.sweepByProcessName();
+  } catch {
+    // Having nothing to stop is a routine outcome, and the shell-outs behind it (ps, PowerShell's
+    // CIM enumeration, fkill) can also exit non-zero or time out. None of that should turn a run
+    // whose tests all passed into a failed one.
+    return { swept: 'by-name-failed', pids: [] };
+  }
   return { swept: 'by-name', pids: [] };
 }
