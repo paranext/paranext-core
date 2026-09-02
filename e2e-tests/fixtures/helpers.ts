@@ -920,30 +920,6 @@ let quarantineCallCount = 0;
  */
 const MAX_QUARANTINE_ATTEMPTS = 10;
 
-/**
- * Move a backup this run cannot make sense of out of the way, and report where it went.
- *
- * Renamed rather than deleted: an unreadable backup is still the only surviving record of what the
- * run that wrote it parked, and discarding that is a decision for whoever comes to look. Leaving it
- * where it is, though, is not the conservative choice it looks like — the pin paths refuse to act
- * while one stands, so a backup nothing ever moves stops every later run, on every worker, until a
- * human deletes a gitignored file by hand.
- *
- * The destination is checked for existence explicitly, rather than left to `renameSync` itself,
- * because the two kinds of target this moves — a settings file and an app-global backup directory —
- * disagree about what happens when the destination is already taken: POSIX `rename(2)` silently
- * REPLACES an existing regular-file destination instead of failing, so relying on the OS call alone
- * to detect a collision fails open for a file target while failing closed (`ENOTEMPTY`) for a
- * directory one. Checking first, and retrying under a fresh destination on any collision either
- * check misses, treats both the same way: neither ever overwrites another run's only copy.
- *
- * @param stamp Shared by the parts of one backup — the app-global directory and its manifest are
- *   moved together, and a reader can only pair them up again if their names agree. Combined with
- *   this process's pid and a monotonically increasing per-call counter, so two quarantine calls
- *   sharing one `stamp` still land on distinct destinations.
- * @returns Where it was moved to, or undefined when there was nothing at `target` to move. Callers
- *   phrase both outcomes: this one is silent so a recovery path reports its own state once.
- */
 /** What one candidate destination told {@link quarantineUnreadableBackup} to do next. */
 type QuarantineAttemptOutcome = 'moved' | 'nothing-to-quarantine' | 'collision';
 
@@ -977,6 +953,30 @@ function attemptQuarantineMove(target: string, quarantined: string): QuarantineA
   }
 }
 
+/**
+ * Move a backup this run cannot make sense of out of the way, and report where it went.
+ *
+ * Renamed rather than deleted: an unreadable backup is still the only surviving record of what the
+ * run that wrote it parked, and discarding that is a decision for whoever comes to look. Leaving it
+ * where it is, though, is not the conservative choice it looks like — the pin paths refuse to act
+ * while one stands, so a backup nothing ever moves stops every later run, on every worker, until a
+ * human deletes a gitignored file by hand.
+ *
+ * The destination is checked for existence explicitly, rather than left to `renameSync` itself,
+ * because the two kinds of target this moves — a settings file and an app-global backup directory —
+ * disagree about what happens when the destination is already taken: POSIX `rename(2)` silently
+ * REPLACES an existing regular-file destination instead of failing, so relying on the OS call alone
+ * to detect a collision fails open for a file target while failing closed (`ENOTEMPTY`) for a
+ * directory one. Checking first, and retrying under a fresh destination on any collision either
+ * check misses, treats both the same way: neither ever overwrites another run's only copy.
+ *
+ * @param stamp Shared by the parts of one backup — the app-global directory and its manifest are
+ *   moved together, and a reader can only pair them up again if their names agree. Combined with
+ *   this process's pid and a monotonically increasing per-call counter, so two quarantine calls
+ *   sharing one `stamp` still land on distinct destinations.
+ * @returns Where it was moved to, or undefined when there was nothing at `target` to move. Callers
+ *   phrase both outcomes: this one is silent so a recovery path reports its own state once.
+ */
 function quarantineUnreadableBackup(
   target: string,
   stamp: number = Date.now(),
