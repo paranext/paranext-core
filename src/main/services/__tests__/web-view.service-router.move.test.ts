@@ -364,7 +364,7 @@ describe('moveWebView', () => {
     // What the window creator does for a move: brings the window into being without activating it
     noteWindowWithheldFromActivation('7');
 
-    await moveWebView('view-1', 'new');
+    await moveWebView('view-1', { kind: 'new' });
 
     expect(created.adoptWebView).toHaveBeenCalledWith(expect.anything(), true);
   });
@@ -379,7 +379,7 @@ describe('moveWebView', () => {
     // The user clicked into it while the move was still in flight, so it is an ordinary window now
     forgetWindowWithholding('7');
 
-    await moveWebView('view-1', 'new');
+    await moveWebView('view-1', { kind: 'new' });
 
     expect(created.adoptWebView).toHaveBeenCalledWith(expect.anything(), false);
   });
