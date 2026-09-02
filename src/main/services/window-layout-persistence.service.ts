@@ -669,12 +669,6 @@ function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
     logger.warn(`Ignoring layout push from untracked window ${windowId}`);
     return;
   }
-  // This push is the window's real content arriving, so it stops being pending-content whatever
-  // happens to the layout below. Above the mode-switch return deliberately: the mark is read to
-  // decide whether a closing window's entry is worth keeping, and a window still carrying it is
-  // treated as holding nothing — so leaving it set would drop the entry of a window that had just
-  // told us what it holds.
-  if (pendingContentWindowIds.delete(windowId)) handlePendingContentChanged();
   // A window closing because the mode changed is showing the mode it is leaving, so what it pushes
   // from here on would overwrite the layout its entry is being kept for.
   //
@@ -682,10 +676,18 @@ function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
   // close handler records the window as closing BEFORE it flushes its layout, so a guard covering
   // every closing window would drop a layout change made just before a quit and the flush would
   // then write the older one.
+  //
+  // The pending-content mark stays set on this path, and that is the point of refusing before
+  // clearing it: the mark says the entry holds nothing, which after a refused push is still true.
+  // Clearing it here would have the entry kept — empty — and a blank window built from it on every
+  // later switch to power and every launch.
   if (isClosingForModeSwitch(windowId)) return;
   // Reconcile on arrival so phantom content (duplicate or orphaned tabs, empty panels) cannot
   // enter the persisted structure even when a pusher skipped its own reconciliation
   slot.entry.layout = reconcileSavedLayout(layoutRecord);
+  // This push is the window's real content arriving, so it stops being pending-content. Announced
+  // like any other change to the mark: the window becomes one routed work can go to.
+  if (pendingContentWindowIds.delete(windowId)) handlePendingContentChanged();
   scheduleWrite();
 }
 
