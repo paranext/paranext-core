@@ -61,7 +61,11 @@ import {
   waitForProjects,
   WEB_COPY_PROJECT_ID,
 } from '../../../fixtures/find.fixture';
-import { waitForAppReady, PROCESS_READY_TIMEOUT } from '../../../fixtures/helpers';
+import {
+  isPopoverTriggerExpanded,
+  waitForAppReady,
+  PROCESS_READY_TIMEOUT,
+} from '../../../fixtures/helpers';
 import {
   EDITOR_HAMBURGER_SELECTOR,
   findScriptureEditorFrame,
@@ -268,15 +272,17 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   //
   // The whole check-click-confirm sequence is wrapped in toPass, not just the confirmation: Radix's
   // exit animation keeps the popover content in the DOM (and isVisible()-true) while it animates
-  // away, so a single-shot isVisible() read can land mid-close, report "already open", skip the
-  // click, and leave the fields below about to disappear out from under it. If that happens the
-  // inner toBeVisible() assertion fails once the animation finishes, and toPass retries the whole
-  // decision rather than committing to the stale read.
+  // away. Gating the click decision on that content's visibility can land mid-close, report
+  // "already open" from a pane that is about to disappear, skip the click, and leave the fields
+  // below about to vanish out from under it. The trigger's `aria-expanded` flips synchronously with
+  // Radix's open/closed state, unlike the content's visibility, so the decision reads that instead
+  // (see `isPopoverTriggerExpanded` and `openUserProfilePopover` in internet-settings.page.ts for the
+  // same pattern). toPass still wraps the sequence in case the click itself lands mid-transition.
+  const filtersTrigger = frame.getByRole('button', { name: /toggle filters/i });
   const matchCase = frame.locator('#matchCase');
   await expect(async () => {
-    if (!(await matchCase.isVisible())) {
-      await frame.getByRole('button', { name: /toggle filters/i }).click();
-    }
+    if (!isPopoverTriggerExpanded(await filtersTrigger.getAttribute('aria-expanded')))
+      await filtersTrigger.click();
     await expect(matchCase).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 5_000 });
   if (await matchCase.isChecked()) await matchCase.click();
@@ -299,13 +305,13 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   await expect(matchCase).not.toBeVisible({ timeout: 5_000 });
 
   // Reset the scope to the whole book. Same open/closed hazard as the filters popover above,
-  // including the animate-out race — see the comment there for why this is a toPass, not a
-  // single-shot check.
+  // including the animate-out race and the aria-expanded-over-visibility fix — see the comment
+  // there.
+  const scopeTrigger = frame.getByRole('button', { name: /showing/i });
   const bookScope = frame.locator('#scope-book');
   await expect(async () => {
-    if (!(await bookScope.isVisible())) {
-      await frame.getByRole('button', { name: /showing/i }).click();
-    }
+    if (!isPopoverTriggerExpanded(await scopeTrigger.getAttribute('aria-expanded')))
+      await scopeTrigger.click();
     await expect(bookScope).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 5_000 });
   if (!(await bookScope.isChecked())) await bookScope.click();
