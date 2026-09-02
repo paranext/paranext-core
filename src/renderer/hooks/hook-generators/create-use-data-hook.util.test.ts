@@ -511,4 +511,62 @@ describe('createUseDataHook runaway-loop guard', () => {
     expect(result.current[0]).toBe(`value ${deliveryCount - 1}`);
     expect(logger.warn).not.toHaveBeenCalled();
   });
+
+  it('names the data type and its selector in the warning', async () => {
+    renderUseStuff(selectorGen1);
+    await act(async () => harness.subscriptions[0].resolveSubscribe());
+
+    deliverTimes(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 1);
+
+    expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('Data of type Stuff (selector: {"book":"GEN","chapterNum":1})'),
+    );
+  });
+
+  it('identifies an unnamed data type by its selector', async () => {
+    // `useSetting` reads the settings provider through an empty data type name, so every setting in
+    // the app shares one blank name in this warning, and four of the sixteen warnings in an
+    // observed storm looked like that. The selector is what tells them apart.
+    let deliverSetting: ((data: string) => void) | undefined;
+    // Mirrors the settings provider's shape: unprefixed `get`/`set`/`subscribe` rather than the
+    // `getStuff`/`setStuff`/`subscribeStuff` a named data type generates. Cast for the same reason
+    // the harness above casts — re-implementing the full network-object surface in a test double
+    // adds nothing, and structural typing rejects the narrower subscribe callback.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const settingsLikeProvider = {
+      get: vi.fn(async () => 'unused'),
+      set: vi.fn(async () => true),
+      subscribe: vi.fn(async (_selector: string, callback: (data: string) => void) => {
+        deliverSetting = callback;
+        return async () => true;
+      }),
+      onDidDispose: () => () => true,
+    } as unknown as IDataProvider;
+    const useSettingsLikeData = createUseDataHook<[]>(() => settingsLikeProvider);
+
+    // The generated proxy is typed by data type name, and '' is not expressible as one of those
+    // names, so the empty-name hook `useSetting` really calls can only be reached through an index
+    // signature.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const useEmptyNamedHook = useSettingsLikeData() as unknown as Record<
+      string,
+      (...hookArgs: unknown[]) => unknown
+    >;
+
+    renderHook(() => useEmptyNamedHook['']('platform.interfaceMode', 'simple'));
+    await act(async () => {});
+
+    // Captured once: the loop below closes over it, and reading the mutable binding from inside
+    // the loop would leave which callback each iteration delivers to up to when it happens to run
+    const deliverToSetting = deliverSetting;
+    // Each delivery in its own `act` with a distinct value, for the reasons `deliverTimes` documents
+    for (let i = 0; i < RUNAWAY_EVENTS_PER_WINDOW + 1; i += 1) {
+      const value = `value ${i}`;
+      act(() => deliverToSetting?.(value));
+    }
+
+    expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('Data of type (unnamed) (selector: platform.interfaceMode)'),
+    );
+  });
 });

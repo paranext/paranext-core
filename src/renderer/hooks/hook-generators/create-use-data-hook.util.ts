@@ -72,10 +72,16 @@ type RunawayCounters = {
  * error by its `RESOURCE_EXHAUSTED` code and supply its own localized text.
  *
  * @param dataType Data type name, used to name the offending hook in the warning
+ * @param describeDataTypeForWarning Optional. Called only when the guard trips, to name the
+ *   offending hook more precisely than `dataType` can on its own - some data providers expose
+ *   unnamed data types, so the name alone identifies nothing. Defaults to `dataType`.
  * @returns `recordDelivery` and `recordSubscribe`, each called once per event of that kind and
  *   returning whether the caller may proceed; and `runawayError`, set while the guard is tripped
  */
-function useRunawayLoopGuard(dataType: string): {
+function useRunawayLoopGuard(
+  dataType: string,
+  describeDataTypeForWarning?: () => string,
+): {
   recordDelivery: () => boolean;
   recordSubscribe: () => boolean;
   runawayError: PlatformError | undefined;
@@ -107,6 +113,12 @@ function useRunawayLoopGuard(dataType: string): {
   const reArmTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(reArmTimeoutRef.current), []);
 
+  // Read through a ref so a caller passing an inline arrow does not change the identity of the
+  // record callbacks below every render
+  const describeRef = useRef(describeDataTypeForWarning);
+  describeRef.current = describeDataTypeForWarning;
+  const describeDataTypeSafely = useCallback(() => describeRef.current?.() ?? dataType, [dataType]);
+
   // The clause must begin with the data type name — this prepends `Data of type ` to it
   const trip = useCallback((whatHappenedStartingWithDataType: string) => {
     hasTrippedRef.current = true;
@@ -131,10 +143,10 @@ function useRunawayLoopGuard(dataType: string): {
     if (!counters.deliveries.hasViolatedThreshold(RUNAWAY_WINDOW_MS)) return true;
 
     trip(
-      `${dataType} was updated ${RUNAWAY_EVENTS_PER_WINDOW} times in the last ${RUNAWAY_WINDOW_MS} milliseconds.`,
+      `${describeDataTypeSafely()} was updated ${RUNAWAY_EVENTS_PER_WINDOW} times in the last ${RUNAWAY_WINDOW_MS} milliseconds.`,
     );
     return false;
-  }, [dataType, getCounters, trip]);
+  }, [describeDataTypeSafely, getCounters, trip]);
 
   const recordSubscribe = useCallback(() => {
     if (hasTrippedRef.current) return false;
@@ -144,10 +156,10 @@ function useRunawayLoopGuard(dataType: string): {
     if (!counters.subscribes.hasViolatedThreshold(RUNAWAY_WINDOW_MS)) return true;
 
     trip(
-      `${dataType} was subscribed to ${RUNAWAY_EVENTS_PER_WINDOW} times in the last ${RUNAWAY_WINDOW_MS} milliseconds.`,
+      `${describeDataTypeSafely()} was subscribed to ${RUNAWAY_EVENTS_PER_WINDOW} times in the last ${RUNAWAY_WINDOW_MS} milliseconds.`,
     );
     return false;
-  }, [dataType, getCounters, trip]);
+  }, [describeDataTypeSafely, getCounters, trip]);
 
   // `RESOURCE_EXHAUSTED` lets consumers recognize a rate-limited hook without matching on message
   // text
@@ -218,6 +230,33 @@ type UseDataHookGeneric<TUseDataProviderParams extends unknown[]> = {
   ): UseDataProxy<TDataProvider>;
 };
 
+/** Longest selector description included in the runaway-render warning. */
+const MAX_SELECTOR_DESCRIPTION_LENGTH = 80;
+
+/**
+ * Renders a data type and its selector for the runaway-render warning.
+ *
+ * Some data providers expose unnamed data types - `useSetting` reads the settings provider through
+ * an empty data type name - so the type alone can identify nothing, and every setting in the app
+ * shares one blank name. Including the selector is what lets a reader of the log tell them apart
+ * and name the hook that is re-rendering.
+ */
+function describeDataType(dataType: unknown, selector: unknown): string {
+  const typeName = String(dataType) || '(unnamed)';
+  let selectorDescription: string;
+  if (isString(selector)) selectorDescription = selector;
+  else {
+    try {
+      selectorDescription = JSON.stringify(selector) ?? String(selector);
+    } catch {
+      selectorDescription = '[unserializable]';
+    }
+  }
+  if (selectorDescription.length > MAX_SELECTOR_DESCRIPTION_LENGTH)
+    selectorDescription = `${selectorDescription.slice(0, MAX_SELECTOR_DESCRIPTION_LENGTH)}...`;
+  return `${typeName} (selector: ${selectorDescription})`;
+}
+
 /**
  * Create a `useData(...).DataType(selector, defaultValue, options)` hook for a specific subset of
  * data providers as supported by `useDataProviderHook`
@@ -256,8 +295,21 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
       ),
       boolean,
     ] {
+      // Held as a ref so the guard's description of this hook is computed only when it trips.
+      // Serializing the selector on every render would add work to the hot path the guard exists
+      // to protect, and an unstable selector - the very mistake being reported - would give the
+      // guard's callbacks a new identity every render.
+      const selectorRef = useRef(selector);
+      selectorRef.current = selector;
+      // No dependencies: `dataType` is fixed when this hook is generated, not a render value
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const describeThisDataType = useCallback(
+        () => describeDataType(dataType, selectorRef.current),
+        [],
+      );
       const { recordDelivery, recordSubscribe, runawayError } = useRunawayLoopGuard(
         String(dataType),
+        describeThisDataType,
       );
 
       // Use subscriberOptions as a ref so it doesn't update dependency arrays
