@@ -662,7 +662,14 @@ describe('handleSwitchToSimpleMode', () => {
     dataProviderGetMock.mockReset();
     dataProviderGetMock.mockResolvedValue(undefined);
     sendCommandMock.mockReset();
-    sendCommandMock.mockResolvedValue(undefined);
+    // A real one-window answer for `platform.getWindows`, so the whole suite reaches the switch by
+    // the ordinary route. Answering `undefined` made every test here arrive through a TypeError the
+    // gate's catch swallowed: the switch ran only because the question had failed, and the suite
+    // could not tell that from the question being answered.
+    sendCommandMock.mockImplementation(async (command: string) =>
+      command === 'platform.getWindows' ? [{ windowId: 1, label: '', isMain: true }] : undefined,
+    );
+    globalThis.windowId = '1';
     buildSimpleLayoutForProjectMock.mockClear();
     simpleLayoutTabIdsMock.length = 0;
     visibleSimpleLayoutTabIdsMock.length = 0;
@@ -764,10 +771,11 @@ describe('handleSwitchToSimpleMode', () => {
     expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-cached');
   });
 
-  it('a list naming no primary at all runs the switch', async () => {
-    // The summary reads the marked entry with no fallback of its own, while main falls back to the
-    // oldest live window when nothing holds that entry. This window cannot compute that fallback,
-    // so it must not conclude from silence that it is a secondary.
+  it('a list naming no primary at all stands the window down', async () => {
+    // Fail closed. A list with no primary means the primary is absent from it — given up on, or
+    // already recorded as closing — not that this window is it. Inferring otherwise let every
+    // secondary run the switch at once, duplicating the shared writes and putting the fixed
+    // simple-mode tab ids in several windows together.
     setWindowsAndThisWindow(
       [
         { windowId: 2, label: '', isMain: false },
@@ -784,7 +792,7 @@ describe('handleSwitchToSimpleMode', () => {
 
     await host.handleSwitchToSimpleMode();
 
-    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-cached');
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
   });
 
   it('fast path: builds the layout for the cached project id', async () => {
@@ -2379,6 +2387,19 @@ describe('a dock emptied by removal while running on a fallback layout', () => {
 });
 
 describe('loadLayout discards a load a newer one has superseded', () => {
+  beforeEach(() => {
+    // This suite drives the switch to Simple too, so it needs the same ordinary route: a real
+    // one-window answer for `platform.getWindows` naming this window as the primary. Without it the
+    // switch would reach its body only because the question failed. Derived from whatever window id
+    // the test is running as, so it cannot fight a test that chooses its own.
+    sendCommandMock.mockReset();
+    sendCommandMock.mockImplementation(async (command: string) =>
+      command === 'platform.getWindows'
+        ? [{ windowId: Number(globalThis.windowId), label: '', isMain: true }]
+        : undefined,
+    );
+  });
+
   /**
    * Let every already-scheduled continuation run. A superseded load produces no observable call, so
    * there is nothing to wait FOR — drain the queue instead and then assert nothing arrived. Several
