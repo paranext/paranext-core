@@ -2667,3 +2667,64 @@ step, no automation. Just a record.
   chain so the change is caught at upgrade time.
 - **Source:** PT-4422 (NN1b), Sprint 89 Simple Quality. Mount-point placement proposed in the PT-4421
   investigation; the Lexical re-throw chain verified by running it, not by reading it.
+## adr-column-3-panels-are-told-their-project: A Column 3 panel is told its project by the switch; it never infers one from the scroll group
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** Simple mode's Column 3 holds five panels, and a project switch re-pointed four of them
+  explicitly (`openOrUpdateRelatedPanels` sends `openModelText`, two `openResourceText` calls, and
+  `openCommentListPanel`) plus Find separately (`updateRelatedFindPanel`, which waits for the new
+  editor's web view id). The Text Collection was the one panel left to work its project out for
+  itself: opened by the shipped layout with no `projectId`, it fell back to the 5th tuple member of
+  `useWebViewScrollGroupScrRef` — which is the scroll group's **source** project, "whichever project
+  last SET the group's reference", a signal that exists for versification conversion
+  (`use-scroll-group-scr-ref.hook.ts`, `extractSourceProjectId`). The local name at the call site,
+  `activeEditorProjectId`, invited reading it as "the active editor's project", which it is not. A
+  project switch does not change the reference — the incoming editor stamps the group only when the
+  caret moves (`setScrRefNoScroll`) — so the value keeps naming the *outgoing* project, and the panel
+  kept rendering the outgoing project's texts until the user next navigated, at which point it
+  silently corrected itself.
+- **Decision:** Every Column 3 panel is **told** its project by the switch; none infers one. The Text
+  Collection is re-pointed by `updateRelatedTextCollectionPanel`, called directly from
+  `openOrUpdateRelatedPanels` (same module, so no command indirection is needed — unlike the four
+  panels whose handlers live in `main.ts`). It follows Find's variant of the mechanism rather than the
+  older three: re-point by `reloadWebView`, never open a panel that is not already there, skip the
+  reload when the panel already shows the project, and never bring the tab to front. Reload rather
+  than an in-place `projectId` update for two reasons — `papi.webViews` exposes no
+  definition-updating call at all (only a web view can update its *own* definition, so from the
+  service side a reload is the only route), and, more bindingly, the grid reads admin layout settings
+  through `useBufferedLayoutSetting`, which documents itself as built for consumers that switch
+  projects via `reloadWebView` and NOT safe for ones that change `projectId` in place, with a
+  `logger.warn` tripwire for exactly that. (`projectId` *is* in
+  `WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS` — the constraint is the absent service-side updater
+  and the hook's remount requirement, not the property list.) The scroll-group source project survives only as the fallback for a grid opened with
+  no explicit project, and its call-site name now says what it is.
+- **Alternatives:** **Fix the inferred signal instead** — track the live Scripture editor's web view
+  from inside the panel and follow that rather than the scroll group. Rejected: it re-derives, inside
+  a web view, something the switch already knows and can simply hand over; and because Simple mode
+  shows one Column 3 tab at a time, the panel is usually hidden exactly when the switch happens, so a
+  panel-side solution has to be designed around having no layout (see
+  `.claude/rules/cross-view-sync-hidden-views.md`). A main-driven reload feeding a data-driven render
+  has no such constraint. **Copy the older sibling variant** (open-if-absent, `bringToFront: true`,
+  projectId smuggled through a module-level pending variable) — rejected: fronting fights
+  `sharedLayoutReceiver.applyForProject`, which picks the front tab moments later, so every switch
+  would flash the Text Collection forward and then away; and the module-level pending slot adds
+  hidden coupling with a forgot-to-clear failure mode. **Register a public command** like the other
+  four — rejected as surface area for nobody: the Text Collection has no menu entry and no external
+  caller.
+- **Consequences:** The scroll group's source project is now documented at its call site as *not* an
+  active-editor signal, which is the trap that produced this bug; any future panel that reaches for
+  it should be re-pointed explicitly instead. Note that `adr-find-follows-editor-to-read-only`
+  records Find as "the only Column 3 panel that command re-points without also being able to open
+  it" — that is no longer the only such panel, though the Text Collection is re-pointed by a direct
+  call rather than a command. Reloading the grid drops its in-memory React state (an open
+  chapter-context split, in-flight "Installing…" rows); state held through `useWebViewState` —
+  `viewMode`, per-cell zoom — survives, because a reload reuses the same web view id. The loss is
+  accepted, because the collection's contents legitimately change on a project switch anyway, and the
+  skip-if-unchanged guard keeps it from happening when the project did not change. The reload also
+  reopens the panel's load window on every switch, not just at first mount, so the grid body now
+  renders a labelled spinner for that window instead of an empty container — matching the three
+  sibling panels re-pointed by the same mechanism. If a sixth Column 3 panel appears, the rule to apply is this one: add it to
+  `openOrUpdateRelatedPanels` (or, if it needs the new editor's id, beside `updateRelatedFindPanel`)
+  rather than giving it a signal to infer from.
+- **Source:** PT-4423, which fixes PT-4238.
