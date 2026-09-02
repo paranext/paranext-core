@@ -4248,12 +4248,18 @@ declare module 'shared/models/docking-framework.model' {
      *   doesn't always work well) or merged (so we can remove properties from `state`).
      * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
      *   tabs. Defaults to `false`
+     * @param activateWithoutDocumentFocus If true, a tab brought to the front is made active without
+     *   being given document focus. For content arriving in a window the user has not activated:
+     *   focusing the tab focuses its iframe, which asks the browser to bring that window forward.
+     *   Defaults to `false`. **Experimental** — this parameter is the new part of this method
      * @returns True if successfully found the WebView to update; false otherwise
+     * @experimental
      */
     updateWebViewDefinition: (
       webViewId: string,
       updateInfo: WebViewDefinitionUpdateInfo,
       shouldBringToFront?: boolean,
+      activateWithoutDocumentFocus?: boolean,
     ) => boolean;
     /**
      * Gets info for a tab in a direction from the source tab.

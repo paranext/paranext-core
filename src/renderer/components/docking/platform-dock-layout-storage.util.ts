@@ -770,6 +770,7 @@ export function updateWebViewDefinition(
   updateInfo: WebViewDefinitionUpdateInfo,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
+  activateWithoutDocumentFocus = false,
 ): boolean {
   const [targetTabInfo, targetTabWebViewData] = getWebViewTabInfoById(
     webViewId,
@@ -796,7 +797,13 @@ export function updateWebViewDefinition(
   );
 
   // Update existing tab
-  updateTab(dockLayout, updatedTabData, shouldBringToFront);
+  updateTab(
+    dockLayout,
+    updatedTabData,
+    shouldBringToFront,
+    undefined,
+    activateWithoutDocumentFocus,
+  );
 
   // Only consider the WebView to have updated if its properties actually changed, not just if it was brought to front
   return !!updatedWebViewData;

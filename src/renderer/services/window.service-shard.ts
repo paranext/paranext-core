@@ -53,6 +53,11 @@ import {
 import { isDirectionFromTab } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewId } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
+import {
+  isWindowAwaitingFirstActivation,
+  noteWindowActivated,
+  resetActivationLatchForTesting,
+} from '@renderer/services/window-activation.util';
 import { settingsService } from '@shared/services/settings.service';
 
 const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
@@ -297,6 +302,50 @@ onDidCloseWebView(({ webView }) => {
   }
 })();
 
+// A gesture, not a focus event: a window held back from the foreground takes focus by itself when
+// its page first paints, so treating focus as activation would end the withholding before the user
+// had done anything. Pointer and key are the first things a person actually does in a window.
+window.addEventListener('pointerdown', () => {
+  endWithholdingAndCatchUp();
+});
+window.addEventListener('keydown', () => {
+  endWithholdingAndCatchUp();
+});
+
+/**
+ * The tab that was docked while this window was in the background, and so was made active without
+ * being given document focus.
+ *
+ * Only the latest is kept: several arrivals collapse into one catch-up, because focusing each in
+ * turn on activation would end with the same tab focused anyway.
+ */
+let tabAwaitingDocumentFocus: string | undefined;
+
+/**
+ * Remember a tab that was activated without document focus, so it can be given focus when the user
+ * arrives. Withholding focus while nobody is looking is only half the job — without this the user
+ * activates the window, sees the tab rendered active, types, and the keystrokes go nowhere until
+ * they click inside the web view, which is not a path a keyboard or screen-reader user takes.
+ */
+function noteTabAwaitingDocumentFocus(tabId: string): void {
+  tabAwaitingDocumentFocus = tabId;
+}
+
+/** End the withholding on the user's first gesture, and give the waiting tab its focus */
+function endWithholdingAndCatchUp(): void {
+  if (!noteWindowActivated()) return;
+  const tabId = tabAwaitingDocumentFocus;
+  tabAwaitingDocumentFocus = undefined;
+  if (tabId === undefined) return;
+  // Failure here costs the caret, not the content, so it is logged rather than thrown: the user can
+  // still click into the view.
+  getDockLayout()
+    .then((dockLayout) => dockLayout.focusTab(tabId))
+    .catch((e) => {
+      logger.warn(`Could not focus tab ${tabId} after this window was activated: ${e}`);
+    });
+}
+
 /**
  * What navigation should act on in this window — the resolved target (if any) and this window's
  * layout direction, in one round trip for the main process's navigation commands.
@@ -306,33 +355,6 @@ onDidCloseWebView(({ webView }) => {
  * `NavigationContext` data type and fails registration for want of a `setNavigationContext`, which
  * is why the engine's copy carries the `ignore` decorator.
  */
-/**
- * Whether this window has been activated since it was created. Latched on, never off: a window the
- * user has been in is an ordinary window from then on.
- */
-let hasWindowBeenActivated = false;
-
-// A gesture, not a focus event: a window held back from the foreground takes focus by itself when
-// its page first paints, so treating focus as activation would end the withholding before the user
-// had done anything. Pointer and key are the first things a person actually does in a window.
-window.addEventListener('pointerdown', () => {
-  hasWindowBeenActivated = true;
-});
-window.addEventListener('keydown', () => {
-  hasWindowBeenActivated = true;
-});
-
-/**
- * Whether content arriving in this window must be shown without taking document focus.
- *
- * True only for a window main created without activating, and only until the user activates it.
- * Read at the moment content asks to be focused rather than at creation, so a window the user has
- * since clicked into behaves like any other.
- */
-export function isWindowAwaitingFirstActivation(): boolean {
-  return globalThis.wasWindowCreatedWithoutActivation === true && !hasWindowBeenActivated;
-}
-
 export async function getNavigationContext(): Promise<NavigationContext> {
   const target = getNavigationTargetWebView();
   return {
@@ -510,11 +532,13 @@ class WindowDataProviderEngine
     // pointer or key event inside a docked web view's iframe never reaches it, so it can stay set
     // long after the user has been working here. The latch answers only for the focus requests this
     // window's own panels and web views make as they mount, which never leave the renderer.
-    else
-      (await getDockLayout()).focusTab(
-        newFocusSubject.id,
-        activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation(),
-      );
+    else {
+      const withholdDocumentFocus =
+        activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation();
+      // Deferred, not dropped: whoever is left waiting gets focus when the user actually arrives.
+      if (withholdDocumentFocus) noteTabAwaitingDocumentFocus(newFocusSubject.id);
+      (await getDockLayout()).focusTab(newFocusSubject.id, withholdDocumentFocus);
+    }
 
     return didChangeFocus;
   }
@@ -668,9 +692,7 @@ export const testingWindowService = {
    * The latch is module state that only ever goes one way in a real window, so without this a test
    * that activates the window decides the answer for every test after it.
    */
-  resetActivationLatchForTesting: () => {
-    hasWindowBeenActivated = false;
-  },
+  resetActivationLatchForTesting,
 };
 
 // This will be needed later for disposing of the data provider, choosing to ignore instead of

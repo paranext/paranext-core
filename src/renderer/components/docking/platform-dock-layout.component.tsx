@@ -117,8 +117,15 @@ export function PlatformDockLayout() {
         webViewId: string,
         updateInfo: Partial<WebViewDefinitionUpdatableProperties>,
         shouldBringToFront = false,
+        activateWithoutDocumentFocus = false,
       ) =>
-        updateWebViewDefinition(webViewId, updateInfo, shouldBringToFront, dockLayoutRef.current),
+        updateWebViewDefinition(
+          webViewId,
+          updateInfo,
+          shouldBringToFront,
+          dockLayoutRef.current,
+          activateWithoutDocumentFocus,
+        ),
       getTabInfoByDirectionFromTab: (sourceTabId: string, direction: DirectionFromTab) =>
         getTabInfoByDirectionFromTab(dockLayoutRef.current, sourceTabId, direction),
       getTabInfoByElement: (tabElement: Element) =>

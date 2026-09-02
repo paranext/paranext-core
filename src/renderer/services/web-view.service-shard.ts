@@ -119,6 +119,7 @@ import {
   VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
 } from '@renderer/components/docking/simple-layout.builder';
 import { trackSimpleLayoutTabsResolved as trackSimpleLayoutTabsResolvedImpl } from '@renderer/services/simple-layout-tabs-resolved.tracker';
+import { isWindowAwaitingFirstActivation } from '@renderer/services/window-activation.util';
 import {
   GET_WINDOW_LAYOUT_REQUEST_TYPE,
   SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
@@ -2101,11 +2102,13 @@ export function updateWebViewDefinitionSync(
   webViewId: WebViewId,
   webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
   shouldBringToFront = false,
+  activateWithoutDocumentFocus: boolean | undefined = undefined,
 ): boolean {
   const didUpdateWebView = getDockLayoutSync().updateWebViewDefinition(
     webViewId,
     webViewDefinitionUpdateInfo,
     shouldBringToFront,
+    activateWithoutDocumentFocus,
   );
   if (didUpdateWebView) {
     const webView = getSavedWebViewDefinitionSync(webViewId);
@@ -2603,7 +2606,7 @@ export async function openOrReloadWebView(
   layout: Layout = { type: 'tab' },
   optionsDefaulted: OpenWebViewOptions = {},
   isReloadOfAnOpenWebView = false,
-  activateWithoutDocumentFocus = false,
+  activateWithoutDocumentFocus: boolean | undefined = undefined,
 ): Promise<WebViewId | undefined> {
   const { webViewType } = savedWebViewDefinition;
 
@@ -3033,7 +3036,7 @@ export async function openOrReloadWebView(
       finalWebView,
       layout,
       optionsDefaulted.bringToFront,
-      activateWithoutDocumentFocus,
+      activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation(),
     );
   } catch (e) {
     // A throw can leave this web view's own tab in the dock: a definition its tab loader refuses
@@ -3099,7 +3102,7 @@ export const openWebView = async (
   webViewType: WebViewType,
   layout: Layout = { type: 'tab' },
   options: OpenWebViewOptions = {},
-  activateWithoutDocumentFocus = false,
+  activateWithoutDocumentFocus: boolean | undefined = undefined,
 ): Promise<WebViewId | undefined> => {
   // Ahead of everything, including the provider: a window on its way out must not run a web view
   // provider's side effects for a tab that is about to be destroyed with it
@@ -3143,8 +3146,16 @@ export const openWebView = async (
 
     // If we found an existing WebView, handle it and return it
     if (existingWebView) {
-      // We found an existing web view, so bring it to front
-      if (optionsDefaulted.bringToFront) updateWebViewDefinitionSync(existingWebView.id, {}, true);
+      // We found an existing web view, so bring it to front. The tab is raised either way; whether
+      // it also takes document focus follows the same rule as a fresh open, so reusing a view in a
+      // window the user has not been in yet does not pull the caret there.
+      if (optionsDefaulted.bringToFront)
+        updateWebViewDefinitionSync(
+          existingWebView.id,
+          {},
+          true,
+          activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation(),
+        );
 
       // We found an existing WebView, so no need to do anything else
       return existingWebView.id;
@@ -3665,7 +3676,7 @@ async function deleteSeededStateUnlessDocked(webViewId: WebViewId): Promise<void
 /** See {@link WebViewServiceShard.adoptWebView} */
 async function adoptWebView(
   savedWebViewDefinition: SavedWebViewDefinition,
-  activateWithoutDocumentFocus = false,
+  activateWithoutDocumentFocus: boolean | undefined = undefined,
 ): Promise<WebViewId | undefined> {
   // Ahead of the seeding below, and of anything that reads the bundle: this method is reachable
   // from any process, so an unvalidated bundle would let an arbitrary caller write a state blob

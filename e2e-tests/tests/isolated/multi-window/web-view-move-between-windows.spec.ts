@@ -414,6 +414,24 @@ test.describe('moving a web view between windows', () => {
     });
     logStep(`window ${window2Id} holds the moved web view as ${movedWebViewId}`);
 
+    // The other half of the withholding rule, and the half a test is most likely to lose: this move
+    // came from the tab's OWN CONTEXT MENU, so a person asked for it and the window they asked for
+    // must come to the front. Without this, withholding could be applied to every move — including
+    // the user's own — and the suite would still be green.
+    const menuMoveFocus = await electronApp.evaluate(
+      ({ BrowserWindow }, { id }) => {
+        const created = BrowserWindow.getAllWindows().find((win) => win.id !== id);
+        return {
+          createdIsFocused: created ? created.isFocused() : undefined,
+          focusedWindowId: BrowserWindow.getFocusedWindow()?.id,
+        };
+      },
+      { id: window1Id },
+    );
+    expect(menuMoveFocus.createdIsFocused).toBe(true);
+    expect(menuMoveFocus.focusedWindowId).toBe(window2Id);
+    logStep(`window ${window2Id} took the foreground, as a window the user asked for should`);
+
     // Gone from the window it left — the tab and its iframe both.
     await expect(
       mainPage.locator(`.platform-tab-title[data-web-view-id="${webViewIdBeforeMove}"]`),

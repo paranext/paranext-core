@@ -1193,6 +1193,15 @@ const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
           summary: 'Web view to move',
           schema: { type: 'string' },
         },
+        {
+          name: 'isUserRequested',
+          required: false,
+          summary:
+            'Whether a person asked for this move, which decides whether the window it creates ' +
+            'comes to the front. Defaults to false, so a window an extension asks for appears ' +
+            'without interrupting whatever the user is doing',
+          schema: { type: 'boolean' },
+        },
       ],
       result: {
         name: 'return value',

@@ -349,6 +349,34 @@ describe('moveWebView', () => {
     expect(movedId).toBe('view-1-window-7');
   });
 
+  test('a move a person asked for creates a window that comes to the front', async () => {
+    // The case this whole mechanism exists to get right, and the one most easily lost: the tab's own
+    // context menu is a person asking, so the window it creates must activate normally. Withholding
+    // here would leave the user's own click producing a window behind the one they are looking at.
+    const owner = windowShard(['view-1']);
+    const created = windowShard([]);
+    withWindows({ 2: owner, 7: created });
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+
+    await moveWebView('view-1', 'new', true);
+
+    expect(creator.createPendingContentWindow).toHaveBeenCalledWith(true);
+  });
+
+  test('a move nobody asked for creates a window that does not', async () => {
+    // The positive control for the case above: omitting the flag must not silently activate.
+    const owner = windowShard(['view-1']);
+    const created = windowShard([]);
+    withWindows({ 2: owner, 7: created });
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+
+    await moveWebView('view-1', 'new');
+
+    expect(creator.createPendingContentWindow).toHaveBeenCalledWith(false);
+  });
+
   test('a window created without activation adopts the view without taking document focus', async () => {
     const owner = windowShard(['view-1']);
     const created = windowShard([]);
