@@ -8,6 +8,7 @@ import {
   planWindowActivation,
   shouldBounceFocusBack,
   shouldContentAvoidDocumentFocus,
+  shouldFlashOnReveal,
   shouldRevealAfterLoadFailure,
   shouldRevealAfterRendererGone,
 } from '@main/window-activation.util';
@@ -169,6 +170,19 @@ describe('revealing a window that failed before it could paint', () => {
     // Only the plan gate is turned off here: with `true` for the activation gate, this fails if the
     // plan check is dropped. Turning both off at once would pass without it.
     expect(shouldRevealAfterRendererGone(asked, true)).toBe(false);
+  });
+});
+
+describe('flashing a withheld window’s frame to signal it exists', () => {
+  test('flashes a window revealed without taking the foreground', () => {
+    // `showInactive()` puts the window on screen without pulling focus, so the flash is the only
+    // visible signal it exists at all.
+    expect(shouldFlashOnReveal(planWindowActivation(false))).toBe(true);
+  });
+
+  test('does not flash a window that already has the foreground', () => {
+    // The positive control: without this, the rule would be satisfied by flashing every window.
+    expect(shouldFlashOnReveal(planWindowActivation(true))).toBe(false);
   });
 });
 
