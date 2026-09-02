@@ -221,7 +221,16 @@ async function launchSelfSeededApp(
     'platform.interfaceLanguage': ['en'],
     'platform.interfaceMode': 'power',
   });
-  return { ctx: await launchElectronApp(options), restoreSettings };
+  try {
+    return { ctx: await launchElectronApp(options), restoreSettings };
+  } catch (error) {
+    // The caller only receives `restoreSettings` if this resolves, so a failed launch has to undo
+    // the seeding here. Otherwise the developer's settings file keeps the test values, and the next
+    // test's `preConfigureSettings` captures those as the original it restores to — the corruption
+    // outlives the run.
+    restoreSettings();
+    throw error;
+  }
 }
 
 test.use({
@@ -358,6 +367,8 @@ test.describe('window close rule', () => {
       ctx = undefined;
 
       // Phase 2 — the promise the dialog makes: both windows come back
+      // Still seeded: `launchSelfSeededApp` restores only in this test's `finally`, so this
+      // relaunch reads phase 1's settings. Anything that restores them before here breaks it.
       ctx = await launchElectronApp({
         ...BASE_LAUNCH_OPTIONS,
         userDataDir,
@@ -481,6 +492,8 @@ test.describe('window close rule', () => {
       await teardownElectronApp(ctx);
       ctx = undefined;
 
+      // Still seeded: `launchSelfSeededApp` restores only in this test's `finally`, so this
+      // relaunch reads phase 1's settings. Anything that restores them before here breaks it.
       ctx = await launchElectronApp({
         ...BASE_LAUNCH_OPTIONS,
         userDataDir,
