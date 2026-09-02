@@ -30,15 +30,24 @@ export type AbandonedWindowNoticeInput = {
   hasAlreadyAsked: boolean;
   /** Whether the abandoned window is on screen right now — not minimized, not hidden */
   isAbandonedWindowVisible: boolean;
+  /**
+   * Whether the abandoned window is still waiting for the content it was created to receive, so its
+   * persisted entry holds nothing.
+   */
+  isAbandonedWindowPendingContent: boolean;
 };
 
 /**
  * Whether to tell the user a window has been given up on, and which window to ask on.
  *
- * Three states say nothing, and each is a question with no answer left to give: the application is
+ * Four states say nothing. Three are a question with no answer left to give: the application is
  * going down, so every window is leaving anyway and a whole-application crash would otherwise put
  * one of these on screen per window; this window's close has already begun; or the user has already
  * been asked about it, which `render-process-gone` firing twice for one window would otherwise do.
+ *
+ * The fourth is a question not worth asking. A window still waiting for the content it was created
+ * to receive holds nothing, so its entry is not kept when it closes — the offer's promise that the
+ * window comes back would be false, and there would be nothing to bring back either.
  *
  * Otherwise the question goes on the abandoned window, because it is the window the message is
  * about and one shown over a different window reads as being about that one. The exception is a
@@ -54,6 +63,7 @@ export function decideAbandonedWindowNotice(
   if (input.isAppShuttingDown) return { kind: 'stay-silent' };
   if (input.isWindowClosing) return { kind: 'stay-silent' };
   if (input.hasAlreadyAsked) return { kind: 'stay-silent' };
+  if (input.isAbandonedWindowPendingContent) return { kind: 'stay-silent' };
   return {
     kind: 'ask',
     parent: input.isAbandonedWindowVisible ? 'abandoned-window' : 'another-window',
