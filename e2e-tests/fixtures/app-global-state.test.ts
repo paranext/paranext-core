@@ -57,10 +57,22 @@ function writeKey(key: string, value: string): void {
   fs.writeFileSync(path.join(LIVE_DIR, key), value);
 }
 
-/** Names of the backups recovery has moved aside, relative to {@link ROOT}. */
+/**
+ * Names of the backups recovery has moved aside, relative to {@link ROOT}.
+ *
+ * Matches both what a quarantined backup DIRECTORY is named (`<base>.unreadable-...`) and what a
+ * quarantined MANIFEST is named (`<base>.json.unreadable-...`) — the manifest's own un-quarantined
+ * path already ends in `.json`, so its quarantine name inserts `.unreadable-...` after that segment
+ * rather than in place of it, and a single `<base>.unreadable-` prefix check does not match it.
+ */
 function quarantinedBackups(): string[] {
-  const prefix = `${path.basename(BACKUP_DIR)}.unreadable-`;
-  return fs.readdirSync(ROOT).filter((name) => name.startsWith(prefix));
+  const base = path.basename(BACKUP_DIR);
+  return fs
+    .readdirSync(ROOT)
+    .filter(
+      (name) =>
+        name.startsWith(`${base}.unreadable-`) || name.startsWith(`${base}.json.unreadable-`),
+    );
 }
 
 beforeEach(() => {
@@ -231,6 +243,37 @@ describe('app-global manifest write ordering', () => {
       expect(recovered).toBeUndefined();
       expect(quarantinedBackups().length).toBeGreaterThan(0);
       // The live store is untouched — an incomplete backup is not evidence of what belongs there.
+      expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('quarantines a manifest that has no backup directory behind it at all', () => {
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+    // The manifest is written before the copy loop creates BACKUP_DIR (see "writes the manifest
+    // before copying any files" above), so a kill in that window leaves a manifest with no
+    // directory behind it whatsoever, not a directory missing some keys.
+    fs.writeFileSync(
+      `${LIVE_DIR}.e2e-backup.json`,
+      JSON.stringify({
+        ownerPid: process.pid,
+        createdAt: new Date().toISOString(),
+        pinnedKeys: [SCR_REFS_KEY],
+        complete: false,
+      }),
+    );
+    orphanTheBackup();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const recovered = restoreAppGlobalState();
+
+      expect(recovered).toBeUndefined();
+      // Only the manifest file was quarantined here — there was no directory to move alongside
+      // it — so this only passes once quarantinedBackups() recognizes a quarantined MANIFEST
+      // name, not only a quarantined backup DIRECTORY name.
+      expect(quarantinedBackups().length).toBeGreaterThan(0);
       expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
     } finally {
       warn.mockRestore();
