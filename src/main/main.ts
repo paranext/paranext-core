@@ -904,7 +904,6 @@ async function main() {
           )
         ) {
           capturedState.bounds = bounds;
-          capturedState.displayBounds = { ...screen.getDisplayMatching(bounds).bounds };
           lastAcceptedDisplayId = displaySettle.displayId;
         }
       }

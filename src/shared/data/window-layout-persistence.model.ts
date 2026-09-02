@@ -37,14 +37,18 @@ export type WindowRectangle = { x: number; y: number; width: number; height: num
 
 /**
  * Sizing and position state persisted for one window. `bounds` is the window's normal (unmaximized)
- * placement; `displayBounds` records the display those bounds were on, so a restore can tell when
- * that display is gone.
+ * placement — the maximized, full-screen and minimized states carry none, so the last normal
+ * placement is what survives them.
+ *
+ * Which display those bounds were on is deliberately not recorded. A restore decides usability from
+ * the bounds against the displays connected at the time, so a remembered display would be a second
+ * account of something already derivable, and a stale one whenever the arrangement changed while
+ * the application was closed.
  */
 export type WindowBoundsState = {
   bounds?: WindowRectangle;
   isMaximized?: boolean;
   isFullScreen?: boolean;
-  displayBounds?: WindowRectangle;
 };
 
 /**
