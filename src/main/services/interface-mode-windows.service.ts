@@ -103,13 +103,14 @@ let switchGeneration = 0;
 const modeSwitchClosingWindowIds = new Set<number>();
 
 /**
- * Whether a reopen is running right now.
+ * The reopen running right now, if there is one.
  *
- * A reopen re-reads the preserved set on every pass, so one already running picks up entries freed
- * while it runs. What that cannot cover is an entry freed when no reopen is running — which is what
- * {@link clearModeSwitchClose} starts one for, and why it has to know not to start a second.
+ * At most one may run: an entry stays preserved until its window exists, so two reopens reading the
+ * set at the same moment both see the entry the other is midway through creating, and the user gets
+ * two windows for one saved window. The two callers want opposite things from that, and both are
+ * right — see {@link runReopen} and {@link clearModeSwitchClose}.
  */
-let isReopenInFlight = false;
+let reopenInFlight: Promise<void> | undefined;
 
 /**
  * Wire the collaborators and seed the mode. Called once during startup, after the window restore
@@ -193,8 +194,10 @@ export function clearModeSwitchClose(windowId: number): void {
   if (cachedInterfaceMode !== 'power') return;
   const deps = dependencies;
   if (!deps || deps.isAppShuttingDown()) return;
-  // A reopen already running re-reads the set each pass, so it picks these up on its own
-  if (isReopenInFlight) return;
+  // A reopen already running belongs to this same switch — nothing has bumped the generation since
+  // — and re-reads the set every pass, so it picks these entries up itself. Queueing behind it
+  // would create a window per entry a second time.
+  if (reopenInFlight) return;
   // Not awaited: this runs from a window's `closed` handler, which is synchronous and has its own
   // teardown to finish. Failures are reported by the reopen itself, one window at a time.
   runReopen(deps, switchGeneration).catch((e: unknown) => {
@@ -401,20 +404,34 @@ async function reopenPreservedWindows(
 }
 
 /**
- * {@link reopenPreservedWindows}, with the flag that keeps two of them from running at once.
+ * {@link reopenPreservedWindows}, run one at a time.
  *
- * Both callers go through here, so the flag cannot be set by one route and read by another that
- * never sets it.
+ * A reopen only notices it has been superseded between windows, so when a new switch arrives it is
+ * still creating one — and the entry it is creating is still preserved, because an entry stops
+ * being preserved only once its window exists. Starting alongside it would have both reopens claim
+ * that entry and the user would get two windows for one saved window. So this waits for it: the
+ * older run stops at its next pass, and by then the entries it did not reach are still there to be
+ * read.
+ *
+ * The wait is what makes this different from {@link clearModeSwitchClose}, which skips instead. A
+ * run already going there is the SAME switch's, and re-reads the set every pass; here it is an
+ * earlier switch's, and is about to stop without finishing.
  *
  * @param deps Collaborators to act through
  * @param generation Switch this reopen belongs to
  */
 async function runReopen(deps: ModeSwitchDependencies, generation: number): Promise<void> {
-  isReopenInFlight = true;
+  // Its failure belongs to whoever started it, and has already been reported there
+  await reopenInFlight?.catch(() => {});
+  // A third switch arriving while this waited needs no check of its own: the reopen tests the
+  // generation before every window it creates, so a run that is already stale creates none
+  const run = reopenPreservedWindows(deps, generation);
+  reopenInFlight = run;
   try {
-    await reopenPreservedWindows(deps, generation);
+    await run;
   } finally {
-    isReopenInFlight = false;
+    // Only if nothing has taken its place: a run that waited on this one has already claimed it
+    if (reopenInFlight === run) reopenInFlight = undefined;
   }
 }
 
@@ -486,6 +503,6 @@ export function resetForTesting(): void {
   dependencies = undefined;
   cachedInterfaceMode = undefined;
   switchGeneration = 0;
-  isReopenInFlight = false;
+  reopenInFlight = undefined;
   modeSwitchClosingWindowIds.clear();
 }
