@@ -1253,9 +1253,7 @@ async function moveWebViewToNewWindow(
 ): Promise<WebViewId> {
   if (typeof webViewId !== 'string')
     throw new Error(`platform.moveWebViewToNewWindow needs a web view id; got ${typeof webViewId}`);
-  // Defaults to "nobody asked for this", which is the safe answer: a caller that does not say is an
-  // extension moving a view on its own, and a window the user did not ask for must not take the
-  // foreground. The tab context menu, which IS a person asking, says so explicitly.
+  // Same default and reason as moveWebView's isUserRequested.
   return moveWebView(webViewId, 'new', isUserRequested === true);
 }
 
