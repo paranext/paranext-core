@@ -449,6 +449,21 @@ async function runReopen(deps: ModeSwitchDependencies, generation: number): Prom
 }
 
 /**
+ * Take a mode as the current one without doing any window work for it.
+ *
+ * The generation moves with the mode, as it does for a switch that acts: a restore that read the
+ * mode before this point is now holding a stale reading, and without the bump it would land
+ * afterwards and put that reading back over this one — the clobbering {@link seedInterfaceMode}'s
+ * generation check exists to prevent.
+ *
+ * @param mode Mode to record
+ */
+function recordModeWithoutActing(mode: InterfaceMode): void {
+  cachedInterfaceMode = mode;
+  switchGeneration += 1;
+}
+
+/**
  * React to the interface mode changing.
  *
  * @param newMode Mode the application has changed to
@@ -477,7 +492,7 @@ export async function handleInterfaceModeChanged(newMode: InterfaceMode): Promis
   // set the failed read declined to restore, at an arbitrary later moment. Adopting it leaves the
   // application where that read left it and makes every real change from here on visible.
   if (cachedInterfaceMode === undefined) {
-    cachedInterfaceMode = newMode;
+    recordModeWithoutActing(newMode);
     logger.info(`Adopting interface mode ${newMode}; the startup read did not report one`);
     return;
   }
@@ -486,7 +501,7 @@ export async function handleInterfaceModeChanged(newMode: InterfaceMode): Promis
   // application is resident and idle — macOS after its last window closed — and nothing the user did
   // asked for these; the dock click that does ask has its own path through the window restore.
   if (newMode === 'power' && deps.getTrackedWindowIds().length === 0) {
-    cachedInterfaceMode = newMode;
+    recordModeWithoutActing(newMode);
     logger.info('Not reopening any window for the switch to power mode: the application has none');
     return;
   }

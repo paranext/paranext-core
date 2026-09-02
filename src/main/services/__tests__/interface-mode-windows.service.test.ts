@@ -118,6 +118,36 @@ describe('reacting to an interface-mode change', () => {
     expect(deps.createWindowForEntry).not.toHaveBeenCalled();
   });
 
+  test('adopting the first reading counts as a switch against a restore already in flight', async () => {
+    // Anything that moves the cache has to move the generation with it, or a restore that read the
+    // mode before this point lands afterwards and puts its now-stale reading back — which is the
+    // clobbering the generation exists to prevent.
+    const deps = makeDeps();
+    initializeModeSwitchOrchestration(deps, undefined);
+    const generationBeforeRestore = getSwitchGeneration();
+
+    await handleInterfaceModeChanged('simple');
+    expect(getCachedInterfaceMode()).toBe('simple');
+
+    seedInterfaceMode('power', generationBeforeRestore);
+
+    expect(getCachedInterfaceMode()).toBe('simple');
+  });
+
+  test('a switch to power with no window counts as one too', async () => {
+    // The same rule for the other branch that records a mode without acting on it
+    const deps = makeDeps({ getTrackedWindowIds: () => [], getPreservedEntrySlotIds: () => [11] });
+    initializeModeSwitchOrchestration(deps, 'simple');
+    const generationBeforeRestore = getSwitchGeneration();
+
+    await handleInterfaceModeChanged('power');
+    expect(getCachedInterfaceMode()).toBe('power');
+
+    seedInterfaceMode('simple', generationBeforeRestore);
+
+    expect(getCachedInterfaceMode()).toBe('power');
+  });
+
   test('a seed records the mode without acting on it', async () => {
     // The negative control for the test above: seeding must be a record, not a switch — and the
     // mode it records has to be the one a later change is compared against.

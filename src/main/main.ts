@@ -1880,8 +1880,11 @@ async function main() {
    * @param abandonedWindow Window whose renderer was given up on
    * @param abandonedWindowId That window's id
    * @param hasAlreadyAsked Whether the user has been asked about this window before
-   * @param recordAsked Called once the question is actually on screen, so a notice that stayed
-   *   silent or could not be shown leaves the offer available rather than spending it
+   * @param recordAsked Called as the question goes up, so a notice that stayed silent, or gave up
+   *   before reaching the box, leaves the offer available rather than spending it. As the box goes
+   *   up rather than once it has: a second `render-process-gone` arriving while the dialog is open
+   *   must not put a duplicate beside it, and that is the likelier of the two. The gap left is a
+   *   `showMessageBox` that itself fails, which spends the offer on a box nobody saw.
    */
   async function offerToCloseAbandonedWindow(
     abandonedWindow: BrowserWindow,
@@ -1954,7 +1957,9 @@ async function main() {
         noLink: true,
       };
       // Recorded here rather than on return: from this line the box is going up, and a second
-      // `render-process-gone` for the same window must not put a duplicate beside it.
+      // `render-process-gone` for the same window must not put a duplicate beside it. The trade is
+      // named in the parameter's doc — a `showMessageBox` that fails spends the offer — and it is
+      // the right way round, because a duplicate dialog is the commoner accident.
       recordAsked();
       // Unparented when no window can carry it. Every window there is is either the one this is
       // about — off screen, which is why the question is not on it — or gone, and a question the
