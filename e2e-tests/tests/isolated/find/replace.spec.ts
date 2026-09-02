@@ -393,14 +393,46 @@ test.describe('Replace operations', () => {
   // ("Replaced 1 occurrence") from a multiple one ("Replaced {count} occurrences"), so demanding
   // the plural is what makes a Replace All that acted on the focused result alone fail here.
   test('replaces every visible result from Replace All', async ({ mainPage }) => {
-    const frame = await setupReplaceMode(mainPage);
+    const frame = await openFindPanel(mainPage);
+    const counter = frame.locator('.tw\\:tabular-nums');
+
+    // Baseline occurrences of the replacement word already in the project: the three single-replace
+    // tests above each wrote one, using the same default replacement term as this test, so counting
+    // "replaced" after this test's own Replace All would double-count theirs.
+    await frame.locator('#search-term').fill('replaced');
+    await frame.locator('#search-term').press('Enter');
+    await expect(counter).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+    const baselineCount = Number((await counter.textContent())?.match(/of (\d+)/)?.[1]);
+    expect(Number.isNaN(baselineCount)).toBe(false);
+
+    await frame.locator('#search-term').fill(REPLACE_SEARCH_TERM);
+    await frame.locator('#search-term').press('Enter');
+    await switchToReplaceMode(frame);
+    await frame.locator('#replace-term').fill('replaced');
+    await expect(firstResultCard(frame)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
 
     const replaceAllBtn = frame.getByRole('button', { name: /^replace all$/i });
     await expect(replaceAllBtn).toBeEnabled({ timeout: 5_000 });
     await replaceAllBtn.click();
 
-    await expect(frame.getByText(/replaced \d+ occurrences/i).first()).toBeVisible({
-      timeout: 10_000,
+    const toast = frame.getByText(/replaced \d+ occurrences/i).first();
+    await expect(toast).toBeVisible({ timeout: 10_000 });
+    const toastCount = Number((await toast.textContent())?.match(/(\d+)/)?.[1]);
+    expect(toastCount).toBeGreaterThan(0);
+
+    // The toast's count is computed client-side from the FIND results loaded before the replace,
+    // not from what replace() (a Promise<void>) actually wrote. Confirm it against the project
+    // itself: a fresh Find for the old term must come back empty, and a fresh Find for the
+    // replacement term must report exactly the baseline plus what the toast claimed — proving the
+    // write landed rather than merely that the toast fired.
+    await frame.locator('#search-term').fill(REPLACE_SEARCH_TERM);
+    await frame.locator('#search-term').press('Enter');
+    await expect(frame.getByText(/no results found/i)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+
+    await frame.locator('#search-term').fill('replaced');
+    await frame.locator('#search-term').press('Enter');
+    await expect(counter).toHaveText(new RegExp(`of ${baselineCount + toastCount}$`), {
+      timeout: SEARCH_TIMEOUT_MS,
     });
 
     await closeFindPanel(mainPage);
