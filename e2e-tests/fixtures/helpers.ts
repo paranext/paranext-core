@@ -1448,12 +1448,14 @@ function readSettingsBackup(): SettingsBackup | undefined {
  * Undo a settings pin left behind by a run that never reached its teardown, and report which
  * settings it found. Safe to call when there is nothing to restore.
  *
- * The restore returned by `preConfigureSettings` only runs in an `afterAll`, so Ctrl+C, a killed
- * worker, or a crashed run all leave the pinned values in the shared settings file. The three
- * multi-window specs pin `interfaceMode: 'power'`, so the usual symptom is an unrelated suite
- * silently running in the wrong interface mode days later. CI never sees any of this — it starts
- * from a fresh checkout with no `dev-appdata/` at all — which is what makes it present as "green in
- * CI, red for me".
+ * The restore returned by `preConfigureSettings` is normally called from a launch fixture's own
+ * teardown, not a test-framework `afterAll` (the one exception,
+ * `window-layout-persistence.spec.ts`, manages its own launches by hand and does use
+ * `test.afterAll`), so Ctrl+C, a killed worker, or a crashed run all leave the pinned values in the
+ * shared settings file. The four multi-window specs pin `interfaceMode: 'power'`, so the usual
+ * symptom is an unrelated suite silently running in the wrong interface mode days later. CI never
+ * sees any of this — it starts from a fresh checkout with no `dev-appdata/` at all — which is what
+ * makes it present as "green in CI, red for me".
  *
  * @returns The top-level keys of the file that was left behind, or `undefined` when there was
  *   nothing to undo. Keys rather than contents: that file holds the developer's real settings too,
@@ -1557,9 +1559,11 @@ export function preConfigureSettings(overrides: Record<string, unknown>): () => 
     }
   }
   fs.mkdirSync(settingsDir, { recursive: true });
-  // Park the original on disk BEFORE overwriting it. The returned restore only runs in an
-  // `afterAll`, so anything that kills the run first would otherwise leave the overrides in the
-  // developer's file permanently. With the backup present, the next run's global setup undoes it.
+  // Park the original on disk BEFORE overwriting it. The returned restore normally runs from a
+  // launch fixture's own teardown (one caller instead uses `test.afterAll` directly — see
+  // restoreLeakedSettings above), so anything that kills the run first would otherwise leave the
+  // overrides in the developer's file permanently. With the backup present, the next run's global
+  // setup undoes it.
   //
   // Only the FIRST pin writes it. A second pin taken while the first is still active would
   // otherwise back up the already-pinned file, and a crash after that would "recover" the first

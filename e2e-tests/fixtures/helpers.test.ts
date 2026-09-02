@@ -35,8 +35,8 @@ describe('assertDeclaredWindowSize', () => {
   });
 
   it('accepts the same window against DEFAULT_WINDOW_SIZE', async () => {
-    // The fix: a spec that does not write evidence screenshots declares DEFAULT_WINDOW_SIZE instead
-    // of inheriting the Full HD floor, and the same real window that failed above satisfies it.
+    // A spec that does not write evidence screenshots declares DEFAULT_WINDOW_SIZE instead of
+    // inheriting the Full HD floor, and the same real window that failed above satisfies it.
     const page = pageReporting({ width: 1920, height: 1032 });
 
     await expect(

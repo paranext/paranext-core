@@ -10,10 +10,10 @@ import { isPopoverTriggerExpanded } from '../../fixtures/helpers';
  * that did open.
  *
  * Gated on the trigger's `aria-expanded` (see {@link isPopoverTriggerExpanded}), not on whether
- * `action` has rendered yet. The popover can be open with its content still mounting — the action's
- * own render, or a `PopoverContent` animation — and gating the click on the action's visibility
- * instead treated that in-between moment as "still closed", so a retry re-clicked the toggle and
- * closed the popover that had, in fact, just opened.
+ * `action` has rendered yet: the popover can be open with its content still mounting — the action's
+ * own render, or a `PopoverContent` animation — so gating the click on the action's visibility
+ * instead would read that in-between moment as "still closed" and re-click a popover that had, in
+ * fact, just opened, closing the very thing this function is trying to open.
  */
 export async function openUserProfilePopover(mainPage: Page): Promise<Locator> {
   const action = mainPage.getByTestId('user-profile-action-network');

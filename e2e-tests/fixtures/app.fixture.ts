@@ -53,16 +53,21 @@ export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
       // events (breaking clicks); smoke tests drive the menubar/toolbar/profile popover and are not
       // about first-run, so they must start past it. interfaceMode and interfaceLanguage are pinned
       // alongside it so mode-dependent UI and text-based selectors are deterministic regardless of
-      // the developer's saved settings. All restored after the app closes in teardown.
+      // the developer's saved settings — pinned before launch rather than switched afterwards, which
+      // would take the mid-session locale-reload path and sequentially reload every open WebView.
       const restoreSettings = preConfigureSettings({
         'platform.firstRunComplete': true,
         'platform.interfaceMode': interfaceMode,
         'platform.interfaceLanguage': ['en'],
       });
-      // Nested try/finally: restoreSettings must run only after teardown has fully finished (so the
-      // app's own shutdown writes cannot clobber it), and must run even if launch, `use`, or
-      // teardown itself throws. A launch that throws gets no teardown from Playwright at all, so
-      // without the outer finally the pins above would stay in CI's dev-appdata settings file.
+      // Nested try/finally: restoreSettings runs in the outer finally so it fires even if launch,
+      // `use`, or teardown itself throws; on the success path it also runs only after
+      // teardownElectronApp has resolved, so the app's own shutdown writes cannot clobber it there.
+      // A launch that throws gives Playwright nothing to call its own teardown on, so without this
+      // outer finally the pins above would leak into the developer's local dev-appdata settings
+      // file. A graceful run's own global-teardown safety net (restoreLeakedSettings) would
+      // eventually undo a leak like that, but only a run that reaches it — a hard kill (Ctrl+C, a
+      // crashed worker) reaches neither that safety net nor this finally.
       try {
         const ctx: ElectronAppContext = await launchElectronApp();
         try {

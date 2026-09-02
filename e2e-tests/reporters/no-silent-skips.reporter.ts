@@ -27,8 +27,8 @@ export interface TestOutcomeLike {
  * (`playwright/lib/runner/dispatcher.js`) overwrites a test's status to `'interrupted'` — clearing
  * its real errors — once `--max-failures` has already tripped, even for a test that finished with a
  * genuine result of its own. So an `interrupted` result can mean "this ran and Playwright hid the
- * outcome", not "this never ran"; treating every one as lost turned an intentional `-x`/Ctrl+C stop
- * into a wall of "N tests never ran" that buried the one real failure that caused it.
+ * outcome", not "this never ran"; counting every one as lost would turn an intentional `-x`/Ctrl+C
+ * stop into a wall of "N tests never ran" that buries the one real failure that caused it.
  */
 export function wasLost(test: TestOutcomeLike): boolean {
   if (test.expectedStatus === 'skipped') return false;

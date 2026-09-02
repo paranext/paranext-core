@@ -48,8 +48,8 @@ describe('findLostTests', () => {
   it('does not treat an interrupted result as lost — it can be a real outcome max-failures hid', () => {
     // JobDispatcher._onTestEnd overwrites an ALREADY-FINISHED test's status to 'interrupted' once
     // --max-failures trips, clearing its real errors. Counting every 'interrupted' result as lost
-    // turned an intentional -x/Ctrl+C stop into a wall of "N tests never ran" that buried the one
-    // real failure that caused it.
+    // would turn an intentional -x/Ctrl+C stop into a wall of "N tests never ran" that buries the
+    // one real failure that caused it.
     expect(findLostTests([ran, declaredTest(['interrupted'])], 'failed').lost).toEqual([]);
     // Same conclusion whether or not a 'skipped' attempt preceded it.
     expect(findLostTests([ran, declaredTest(['skipped', 'interrupted'])], 'failed').lost).toEqual(
