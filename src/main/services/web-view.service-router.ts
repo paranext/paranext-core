@@ -38,6 +38,7 @@ import {
   WebViewMoveFailureDisposition,
 } from '@shared/models/web-view-move.model';
 import { Layout } from '@shared/models/docking-framework.model';
+import { shouldContentAvoidDocumentFocus } from '@main/window-activation.util';
 import { logger } from '@shared/services/logger.service';
 import { AsyncVariable, getErrorMessage, wait } from 'platform-bible-utils';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -518,7 +519,10 @@ type FreshWindow = {
    *   content went may ignore that one
    */
   runOpen: (
-    open: (shard: WebViewServiceShard) => Promise<WebViewId | undefined>,
+    open: (
+      shard: WebViewServiceShard,
+      activateWithoutDocumentFocus: boolean,
+    ) => Promise<WebViewId | undefined>,
     onWindowLeftStanding?: (standingWindow: WindowShard) => void,
   ) => Promise<WebViewId | undefined>;
   /**
@@ -643,7 +647,9 @@ async function createFreshWindow(webViewDescription: string): Promise<FreshWindo
     runOpen: async (open, onWindowLeftStanding) => {
       let openedWebViewId: WebViewId | undefined;
       try {
-        openedWebViewId = await open(shard);
+        // Read now rather than when the window was created: a window the user has activated in the
+        // meantime is an ordinary window, and its content should land focused like any other.
+        openedWebViewId = await open(shard, shouldContentAvoidDocumentFocus(windowId));
       } catch (e) {
         await closeAbandonedWindow(onWindowLeftStanding);
         throw e;
@@ -673,7 +679,10 @@ async function createFreshWindow(webViewDescription: string): Promise<FreshWindo
  */
 async function openInFreshWindow(
   webViewDescription: string,
-  open: (shard: WebViewServiceShard) => Promise<WebViewId | undefined>,
+  open: (
+    shard: WebViewServiceShard,
+    activateWithoutDocumentFocus: boolean,
+  ) => Promise<WebViewId | undefined>,
 ): Promise<WebViewId | undefined> {
   const freshWindow = await createFreshWindow(webViewDescription);
   return freshWindow.runOpen(open);
@@ -705,8 +714,8 @@ async function openWebViewInNewWindow(
     return webViewShard.openWebView(webViewType, { type: 'tab' }, options);
   }
 
-  return openInFreshWindow(webViewType, (shard) =>
-    shard.openWebView(webViewType, { type: 'tab' }, options),
+  return openInFreshWindow(webViewType, (shard, activateWithoutDocumentFocus) =>
+    shard.openWebView(webViewType, { type: 'tab' }, options, activateWithoutDocumentFocus),
   );
 }
 
@@ -865,7 +874,8 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
     const freshWindow = await createFreshWindow(webViewId);
     adoptIntoDestination = (definition) =>
       freshWindow.runOpen(
-        (shard) => shard.adoptWebView(definition),
+        (shard, activateWithoutDocumentFocus) =>
+          shard.adoptWebView(definition, activateWithoutDocumentFocus),
         (standingWindow) => {
           standingNewWindow = standingWindow;
         },

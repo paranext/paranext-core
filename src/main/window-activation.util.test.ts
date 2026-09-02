@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'vitest';
-import { planWindowActivation } from '@main/window-activation.util';
+import {
+  noteWindowActivated,
+  noteWindowWithheldFromActivation,
+  planWindowActivation,
+  shouldContentAvoidDocumentFocus,
+} from '@main/window-activation.util';
 
 describe('planWindowActivation', () => {
   test('a window a person asked for shows itself and takes the foreground', () => {
@@ -41,5 +46,43 @@ describe('planWindowActivation', () => {
     // The positive control for the rule above: it must not pass by every plan withholding nothing.
     expect(planWindowActivation(true).showOnCreate).toBe(true);
     expect(planWindowActivation(true).revealAfterLoadFailure).toBeUndefined();
+  });
+});
+
+describe('whether content must avoid taking document focus', () => {
+  // Ids are per-test so nothing leaks between them, since the set is module state.
+  let nextWindowId = 1000;
+  function freshWindowId(): number {
+    nextWindowId += 1;
+    return nextWindowId;
+  }
+
+  test('a window nobody asked for keeps content from taking focus', () => {
+    const windowId = freshWindowId();
+    noteWindowWithheldFromActivation(windowId);
+
+    expect(shouldContentAvoidDocumentFocus(windowId)).toBe(true);
+  });
+
+  test('a window the user asked for lets content take focus', () => {
+    // The positive control: without this, the rule would be satisfied by always answering true.
+    expect(shouldContentAvoidDocumentFocus(freshWindowId())).toBe(false);
+  });
+
+  test('activation ends the withholding, so later content lands focused', () => {
+    const windowId = freshWindowId();
+    noteWindowWithheldFromActivation(windowId);
+    noteWindowActivated(windowId);
+
+    expect(shouldContentAvoidDocumentFocus(windowId)).toBe(false);
+  });
+
+  test('one window being withheld says nothing about another', () => {
+    const withheld = freshWindowId();
+    const ordinary = freshWindowId();
+    noteWindowWithheldFromActivation(withheld);
+
+    expect(shouldContentAvoidDocumentFocus(withheld)).toBe(true);
+    expect(shouldContentAvoidDocumentFocus(ordinary)).toBe(false);
   });
 });

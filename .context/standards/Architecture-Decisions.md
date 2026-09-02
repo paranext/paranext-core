@@ -2474,7 +2474,7 @@ step, no automation. Just a record.
   window-creation path reads focus state to decide activation. The mechanism, built in PT-4465:
   an explicit user-intent flag on `createWindow`, passed by each call site (menu and
   `platform.createWindow`, dock-click and startup restore: yes; a `{ type: 'window' }` web-view
-  open or `moveWebViewToNewWindow` arriving from an extension: no). **None of that is wired yet** —
+  open or `moveWebViewToNewWindow` arriving from an extension: no).
   `createWindow` takes a required `isUserRequested` on its creation options, and
   `planWindowActivation` (`src/main/window-activation.util.ts`) turns that into what the window
   does to become visible. The flag is required rather than defaulted so a call site added later has
@@ -2497,6 +2497,8 @@ step, no automation. Just a record.
   is scoped to the not-asked-for case, and that case carries a fallback for a page that never
   reaches `ready-to-show`: `did-fail-load`
   only logs, so a window that never reaches `ready-to-show` would otherwise stay invisible, which is
-  worse than a badly-timed foreground.
+  worse than a badly-timed foreground. Withholding activation at creation is not enough on its own:
+  the declared status rides the content call to the renderer, since docking a web view focuses its
+  iframe and the dock cannot infer intent from focus state any more than window creation could.
 - **Source:** PR #2670 review item 6 (2026-08-25) and the review rounds that followed; PT-4465,
   which carries the design, the call-site table and the `show` hazard in full.

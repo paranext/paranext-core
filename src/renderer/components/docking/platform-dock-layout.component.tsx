@@ -83,8 +83,19 @@ export function PlatformDockLayout() {
         findFirstWebViewDefinitionByType(dockLayoutRef.current, webViewType, projectId),
       addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout, shouldBringToFront = true) =>
         addTabToDock(savedTabInfo, layout, shouldBringToFront, dockLayoutRef.current),
-      addWebViewToDock: (webView: WebViewTabProps, layout: Layout, shouldBringToFront = true) =>
-        addWebViewToDock(webView, layout, shouldBringToFront, dockLayoutRef.current),
+      addWebViewToDock: (
+        webView: WebViewTabProps,
+        layout: Layout,
+        shouldBringToFront = true,
+        activateWithoutDocumentFocus = false,
+      ) =>
+        addWebViewToDock(
+          webView,
+          layout,
+          shouldBringToFront,
+          dockLayoutRef.current,
+          activateWithoutDocumentFocus,
+        ),
       removeTabFromDock: (tabId: string) => {
         const tabToRemove = dockLayoutRef.current.find(tabId);
         // Null required by the external API

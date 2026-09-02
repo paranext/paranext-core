@@ -48,3 +48,40 @@ export function planWindowActivation(isUserRequested: boolean): WindowActivation
     revealAfterLoadFailure: 'inactive',
   };
 }
+
+/**
+ * Windows created without activation that the user has not activated since.
+ *
+ * Held in the process that creates windows because that is the only one that knows both halves: it
+ * decided not to activate the window, and it sees the window's `focus` event. A window drops out on
+ * its first activation, so content arriving later focuses normally — which is why the renderer
+ * needs no state of its own to remember how its window was opened.
+ */
+const windowIdsAwaitingFirstActivation = new Set<number>();
+
+/** Record that a window was created without being activated. See {@link planWindowActivation} */
+export function noteWindowWithheldFromActivation(windowId: number): void {
+  windowIdsAwaitingFirstActivation.add(windowId);
+}
+
+/**
+ * Record that a window has been activated, or has gone away.
+ *
+ * Called from the window's `focus` handler and from its teardown — the second so a closed window's
+ * id cannot sit in the set for the life of the process, and cannot answer for a later window that
+ * is handed the same id.
+ */
+export function noteWindowActivated(windowId: number): void {
+  windowIdsAwaitingFirstActivation.delete(windowId);
+}
+
+/**
+ * Whether content docking in this window must not take document focus.
+ *
+ * True only for a window created without activation that the user has not activated since. Read at
+ * the moment content is sent, not when the window was created: a window the user has since clicked
+ * into is an ordinary window, and its next web view should land focused like any other.
+ */
+export function shouldContentAvoidDocumentFocus(windowId: number): boolean {
+  return windowIdsAwaitingFirstActivation.has(windowId);
+}

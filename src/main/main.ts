@@ -117,7 +117,11 @@ import {
   writeNow,
 } from '@main/services/window-layout-persistence.service';
 import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
-import { planWindowActivation } from '@main/window-activation.util';
+import {
+  noteWindowActivated,
+  noteWindowWithheldFromActivation,
+  planWindowActivation,
+} from '@main/window-activation.util';
 import {
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
@@ -778,9 +782,17 @@ async function main() {
 
     if (creationOptions?.pendingContent) markWindowPendingContent(windowId);
 
+    // Withholding activation only survives until content arrives unless the content knows: docking a
+    // web view focuses its iframe, and a `focus()` inside a window that does not hold OS focus asks
+    // the browser to activate that window. Recorded here so the open that follows can say so.
+    if (activation.revealWhenReady === 'inactive') noteWindowWithheldFromActivation(windowId);
+
     // Track which window is focused for multi-window command routing
     newWindow.on('focus', () => {
       setFocusedWindowId(windowId);
+      // The user is in this window now, so content arriving in it should take focus like anywhere
+      // else. One activation is enough — this window stops being a background one for good.
+      noteWindowActivated(windowId);
     });
     // The other half of focus tracking: a blur with no focus following it is the whole application
     // going to the background, which is what isApplicationFocused answers from
@@ -1231,6 +1243,9 @@ async function main() {
       // is destroyed by now, and reading a property off it can throw — which would abandon the rest
       // of this teardown, leaving the window tracked forever and the app never told it closed.
       removeWindow(newWindow, windowId);
+      // Electron reuses window ids within a process, so leaving this id behind would let a closed
+      // background window answer for whatever window is handed its id next.
+      noteWindowActivated(windowId);
 
       // What this window's disappearance means for its entry. A deliberate close — the app stays up
       // — takes the entry with it, and the structure is rewritten without it below so the window

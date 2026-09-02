@@ -17,6 +17,10 @@ import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
 import type { WebViewServiceType } from '@shared/services/web-view.service-model';
+import {
+  noteWindowActivated,
+  noteWindowWithheldFromActivation,
+} from '@main/window-activation.util';
 
 const mocks = vi.hoisted(() => {
   // Where the router's shard index parks its subscriptions. Plain arrays rather than the subscribe
@@ -172,6 +176,9 @@ async function getCommandHandler(commandName: string) {
 describe('web view service router', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Which windows were created without activation is process state, not a mock, so a test that
+    // marks one has to leave the next test the window it expects.
+    noteWindowActivated(7);
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
@@ -598,9 +605,60 @@ describe('web view service router', () => {
 
       const openedId = await router.openWebView('someType', { type: 'window' });
 
-      expect(created.openWebView).toHaveBeenCalledWith('someType', { type: 'tab' }, undefined);
+      expect(created.openWebView).toHaveBeenCalledWith(
+        'someType',
+        { type: 'tab' },
+        undefined,
+        false,
+      );
       expect(focused.openWebView).not.toHaveBeenCalled();
       expect(openedId).toBe('opened');
+    });
+
+    test('a window created without activation opens the view without taking document focus', async () => {
+      const focused = windowShard([]);
+      const created = windowShard([]);
+      withWindows({ 1: focused, 7: created });
+      setWebViewWindowCreator({
+        createPendingContentWindow: vi.fn(async () => 7),
+        closeWindow: vi.fn(),
+      });
+      const router = await getRouter();
+      // What the window creator does for a web view's own window: brings it into being without
+      // activating it, so the content that lands must not activate it either
+      noteWindowWithheldFromActivation(7);
+
+      await router.openWebView('someType', { type: 'window' });
+
+      expect(created.openWebView).toHaveBeenCalledWith(
+        'someType',
+        { type: 'tab' },
+        undefined,
+        true,
+      );
+    });
+
+    test('a window the user has activated opens the view normally', async () => {
+      const focused = windowShard([]);
+      const created = windowShard([]);
+      withWindows({ 1: focused, 7: created });
+      setWebViewWindowCreator({
+        createPendingContentWindow: vi.fn(async () => 7),
+        closeWindow: vi.fn(),
+      });
+      const router = await getRouter();
+      noteWindowWithheldFromActivation(7);
+      // The user clicked into it before the content arrived, so it is an ordinary window now
+      noteWindowActivated(7);
+
+      await router.openWebView('someType', { type: 'window' });
+
+      expect(created.openWebView).toHaveBeenCalledWith(
+        'someType',
+        { type: 'tab' },
+        undefined,
+        false,
+      );
     });
 
     test('degrades to a tab in the focused window in simple mode', async () => {
@@ -795,6 +853,7 @@ describe('web view service router', () => {
         'comments',
         { type: 'tab' },
         { existingId: '?' },
+        false,
       );
     });
 
