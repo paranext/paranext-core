@@ -1,14 +1,15 @@
 /**
  * Unit tests for the teardown's process selection.
  *
- * Teardown used to finish by killing every process named `electron` or `dotnet` on the machine.
- * That is correct on a CI runner the run owns and wrong everywhere else: it takes down the
- * developer's own app, any app a CDP-based suite is attached to, and other people's runs. These
- * cover the two decisions that keep it from doing so — whether to sweep at all, and which processes
- * belong to this checkout.
+ * Killing every process named `electron` or `dotnet` on the machine is correct only on a CI runner
+ * the run owns. Anywhere else it takes down the developer's own app, any app a CDP-based suite is
+ * attached to, and other people's runs. These cover the two decisions that keep teardown from doing
+ * that — whether to sweep at all, and which processes belong to this checkout.
  */
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { isSweepEnabled, runCleanup, selectPidsUnderRoot } from './scoped-cleanup';
 
 const ROOT = '/home/dev/paranext-core';
@@ -167,6 +168,26 @@ describe('processes this checkout must NOT claim', () => {
     const own = { pid: 503, comm: 'electron', cwd: worktreeRoot };
 
     expect(selectPidsUnderRoot(worktreeRoot, [own], [])).toEqual([503]);
+  });
+});
+
+describe('a root reached through a symlink', () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'scoped-cleanup-'));
+  const realRoot = path.join(scratch, 'real-checkout');
+  const linkedRoot = path.join(scratch, 'linked-checkout');
+  fs.mkdirSync(realRoot);
+  fs.symlinkSync(realRoot, linkedRoot);
+
+  afterAll(() => {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  });
+
+  it("claims its own processes when the run's root is a symlink", () => {
+    // /proc/<pid>/cwd is a resolved path, so a run launched through a symlinked checkout compares
+    // its own processes against a path they can never match, and cleans up nothing at all.
+    const mine = { pid: 301, comm: 'electron', cwd: path.join(realRoot, 'release/app') };
+
+    expect(selectPidsUnderRoot(linkedRoot, [mine], [])).toEqual([301]);
   });
 });
 
