@@ -7,6 +7,7 @@ import type {
 } from 'platform-scripture';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
+import { matchesDownloaded, type DownloadedResource } from './downloaded-resources.utils';
 
 /**
  * A Bible-text reference — the only reference types that carry `id` and
@@ -170,14 +171,18 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
  * Checkbox state comes from the overlay for admin-owned entries and from
  * `isInTextCollectionForUser` for the user's own entries. An admin-owned id never also appears as a
  * user entry (admin precedence).
+ *
+ * @param sources Data sources for the current project.
+ * @param resolveLongName Optional resolver that maps an entry's reference to its long name for
+ *   display.
+ * @param options.downloaded When provided, downloaded-but-unlisted projects are appended to
+ *   `bottom` as unchecked, non-removable rows. Omit to skip — PT-4171 will wire this up.
  */
 export function getViewOptionsTexts(
   sources: TextCollectionSources,
   resolveLongName?: (reference: BibleTextReference) => string | undefined,
-): {
-  top: ViewOptionsTextEntry[];
-  bottom: ViewOptionsTextEntry[];
-} {
+  options?: { downloaded?: DownloadedResource[] },
+): { top: ViewOptionsTextEntry[]; bottom: ViewOptionsTextEntry[] } {
   const { adminReferenced, userReferenced, overlay } = sources;
   const adminOwned = getAdminOwnedEntries(adminReferenced, overlay);
   const top: ViewOptionsTextEntry[] = [];
@@ -207,6 +212,26 @@ export function getViewOptionsTexts(
       isAdminLocked: false,
       isUserRemovable: true,
       ...(longName ? { longName } : {}),
+    });
+  });
+
+  (options?.downloaded ?? []).forEach((downloadedResource) => {
+    const alreadyListed = [...top, ...bottom].some((row) =>
+      matchesDownloaded(downloadedResource, row.reference),
+    );
+    if (alreadyListed) return;
+    bottom.push({
+      reference: {
+        type: 'project',
+        name: downloadedResource.name,
+        id: downloadedResource.projectId,
+      },
+      checked: false,
+      isAdminLocked: false,
+      isUserRemovable: false,
+      ...(downloadedResource.fullName !== downloadedResource.name
+        ? { longName: downloadedResource.fullName }
+        : {}),
     });
   });
 

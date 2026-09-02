@@ -23,7 +23,7 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import type { DblResourceReference } from 'platform-scripture';
+import type { DblResourceReference, ProjectReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
 import {
@@ -32,6 +32,13 @@ import {
   reconcileCellOrder,
 } from './scripture-text-grid-order.utils';
 import { resolveDblLongName } from './scripture-text-grid/view-options-long-name.utils';
+import {
+  DOWNLOADED_NO_PROJECT_KEY,
+  resolveLocalizedString,
+  resolvePickerNotice,
+  VIEW_OPTIONS_NOTICE_STRING_KEYS,
+} from './scripture-text-grid/view-options-notice.utils';
+import { planResourcePick } from './scripture-text-grid/resource-pick.utils';
 import {
   persistCellOrder,
   persistUserAddition,
@@ -54,6 +61,7 @@ import {
 } from './scripture-text-grid/scripture-text-grid.component';
 import { GridResource } from './scripture-text-grid/resource-cell.component';
 import { toGridResources } from './scripture-text-grid/grid-resources.utils';
+import { isNonDblResource } from './resource-reference.utils';
 import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
 import { useResourceZoom } from './scripture-text-grid/use-resource-zoom.hook';
 import {
@@ -88,6 +96,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
   VIEW_OPTIONS_BUTTON_KEY,
   NO_PROJECT_KEY,
+  ...VIEW_OPTIONS_NOTICE_STRING_KEYS,
   CHAPTER_CONTEXT_CLOSE_KEY,
   EMPTY_STATE_KEY,
   CELL_ACCESSIBLE_NAME_KEY,
@@ -102,9 +111,6 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   REORDER_HINT_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
-
-// The Scripture Text Grid shows Bible-text resources.
-const GRID_RESOURCE_TYPE = 'ScriptureResource';
 
 // Theme-adaptive tab icon: the platform paints the tab icon as a static CSS background-image, so a
 // `currentColor` SVG can't follow the theme. We swap the `iconUrl` based on both the current theme
@@ -408,9 +414,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
-      if (!textConnectionPdp) return;
-
-      if (!resource.installed) {
+      const plan = planResourcePick(!!resource.installed, !!textConnectionPdp);
+      if (plan.shouldInstall) {
         if (!dblResourcesProvider) return;
         const pending = { id: resource.dblEntryUid, name: resource.displayName };
         setInstalling((prev) => [...prev, pending]);
@@ -429,14 +434,22 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         setRefreshCounter((k) => k + 1);
       }
 
+      if (!textConnectionPdp) {
+        // Nothing in the panel behind the picker reflects a download that could not be added, so
+        // confirm it here — otherwise the "Installing…" row is the only sign it happened, and it
+        // disappears.
+        if (plan.shouldConfirmDownloadOnly)
+          papi.notifications.send({ message: DOWNLOADED_NO_PROJECT_KEY, severity: 'info' });
+        return;
+      }
+
       // Re-read after the await: the subscription may have advanced during the install.
       const { current } = sourcesRef;
       if (!current) return;
-      const reference: DblResourceReference = {
-        type: 'dblResource',
-        name: resource.displayName,
-        id: resource.dblEntryUid,
-      };
+      const isLocalOnly = isNonDblResource(resource);
+      const reference: DblResourceReference | ProjectReference = isLocalOnly
+        ? { type: 'project', name: resource.displayName, id: resource.projectId }
+        : { type: 'dblResource', name: resource.displayName, id: resource.dblEntryUid };
       persistUserAddition(textConnectionPdp, reference, current.userReferenced)?.catch((e) => {
         papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
         logger.warn(`Failed to persist added resource: ${getErrorMessage(e)}`);
@@ -470,8 +483,16 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
     useMemo(
-      () => ({ resourceType: GRID_RESOURCE_TYPE, selectedResourceIds, isModal: true }),
-      [selectedResourceIds],
+      () => ({
+        resourceType: ['ScriptureResource', 'CommentaryResource'] as const,
+        selectedResourceIds,
+        isModal: true,
+        notice: resolvePickerNotice(localizedStrings, !!textConnectionPdp),
+        // With no text collection to add to, installing is all a pick can accomplish — so an
+        // already-installed resource would take the click and do nothing.
+        allowSelectingInstalled: !!textConnectionPdp,
+      }),
+      [selectedResourceIds, textConnectionPdp, localizedStrings],
     ),
     useCallback(
       (resource: DblResourceData | undefined) => {
@@ -534,7 +555,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
               // controls. Show the "no project" prompt only when there is genuinely no project (not
               // during the brief load after one is bound).
               disabled={!sources || !textConnectionPdp}
-              disabledMessage={effectiveProjectId ? undefined : localizedStrings[NO_PROJECT_KEY]}
+              disabledMessage={
+                effectiveProjectId
+                  ? undefined
+                  : resolveLocalizedString(localizedStrings, NO_PROJECT_KEY)
+              }
               localizedStrings={localizedStrings}
             />
           </PopoverContent>

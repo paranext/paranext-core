@@ -76,6 +76,19 @@ const INSTALLED_RESOURCE: DblResourceData = {
 
 const UNINSTALLED_RESOURCE: DblResourceData = { ...INSTALLED_RESOURCE, installed: false };
 
+/** Synthetic non-DBL entry (dblEntryUid === projectId) as returned by getLocalNonDblResources. */
+const LOCAL_NON_DBL_RESOURCE: DblResourceData = {
+  dblEntryUid: 'proj-local',
+  projectId: 'proj-local',
+  displayName: 'LocalRes',
+  fullName: 'LocalRes',
+  bestLanguageName: '',
+  type: 'ScriptureResource',
+  size: 0,
+  installed: true,
+  updateAvailable: false,
+};
+
 /**
  * A chapter with content. It carries a chapter marker and a verse because the panel distinguishes a
  * populated chapter from a blank one by those nodes — USJ with an empty `content` array is a
@@ -294,16 +307,51 @@ describe('ModelTextPanel', () => {
   });
 
   it('offers the picker (not a dead end) when a configured reference cannot be resolved', async () => {
-    // A configured model text that is not a resolvable DBL resource (here a project reference) must
-    // not spin forever, and must not be a dead end — it shows a not-found state with a way to
-    // recover by picking another.
+    // A configured model text whose DBL uid is not in the catalog must not spin forever, and must
+    // not be a dead end — it shows a not-found state with a way to recover by picking another.
     const showResourcePicker = vi.fn(async () => undefined);
     renderPanel({
       modelTextsState: readyState({
         dataVersion: '1.0.0',
-        items: [{ type: 'project', id: 'p1', name: 'Some Project', source: 'admin' }],
+        items: [{ type: 'dblResource', id: 'unknown-uid', name: 'Unknown', source: 'admin' }],
       }),
       dblResources: [],
+      showResourcePicker,
+    });
+    expect(screen.getByText('The selected model text could not be found.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
+    await waitFor(() => expect(showResourcePicker).toHaveBeenCalled());
+  });
+
+  it('loads a configured ProjectReference model text directly by project ID', async () => {
+    // Locally-installed non-DBL resources (added via selectTextConnection as ProjectReferences)
+    // are resolvable directly by project ID when the resource is in the installed list.
+    const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
+    renderPanel({
+      modelTextsState: readyState({
+        dataVersion: '1.0.0',
+        items: [{ type: 'project', id: 'proj-local', name: 'LocalRes', source: 'admin' }],
+      }),
+      dblResources: [LOCAL_NON_DBL_RESOURCE],
+      getResourceChapter,
+    });
+    await waitFor(() =>
+      expect(getResourceChapter).toHaveBeenCalledWith('proj-local', expect.anything()),
+    );
+    expect(await screen.findByTestId('editorial')).toBeInTheDocument();
+  });
+
+  it('offers the picker (not a dead end) when a ProjectReference points to an uninstalled project', async () => {
+    // An admin-shared model text pointing at a project the user does not have must not render a
+    // blank editor — it must show the not-found state with a way to pick another.
+    const showResourcePicker = vi.fn(async () => undefined);
+    renderPanel({
+      modelTextsState: readyState({
+        dataVersion: '1.0.0',
+        items: [{ type: 'project', id: 'missing-project', name: 'Missing', source: 'admin' }],
+      }),
+      dblResources: [], // project not in the installed list
       showResourcePicker,
     });
     expect(screen.getByText('The selected model text could not be found.')).toBeInTheDocument();

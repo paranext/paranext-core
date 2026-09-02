@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { LayoutBase } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import {
+  applyProjectIdToTabs,
   buildSimpleLayoutForProject,
   SIMPLE_LAYOUT_TAB_IDS,
   VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
@@ -202,6 +203,70 @@ describe('simple-layout.builder', () => {
       // The box branch (recursing into `children`) runs before the panel branch (visiting the node
       // itself), so the nested child is visited first.
       expect(visitedIds).toEqual(['nested-tab', 'ambiguous-node-tab']);
+    });
+  });
+
+  describe('applyProjectIdToTabs', () => {
+    /**
+     * A one-panel-per-tab layout carrying the given saved tabs. rc-dock's `TabBase` has no `data`,
+     * but every tab in a saved layout is a `SavedTabInfo` — the same round-trip `visitTabs` makes,
+     * done once here so the fixtures below stay literal.
+     */
+    function layoutWithTabs(...tabs: SavedTabInfo[]): LayoutBase {
+      // `TabBase` declares no `data`, so a saved tab can only be placed into a layout literal
+      // through the same cast `visitTabs` uses to read it back out.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      return {
+        dockbox: { mode: 'horizontal', children: tabs.map((tab) => ({ tabs: [tab] })) },
+      } as unknown as LayoutBase;
+    }
+
+    it('writes projectId into every tab that carries a data payload', () => {
+      const layout = layoutWithTabs(
+        { id: 'tab-a', tabType: 'webView', data: { webViewType: 'a.b' } },
+        { id: 'tab-b', tabType: 'webView', data: { webViewType: 'c.d', state: {} } },
+      );
+
+      const result = applyProjectIdToTabs(layout, 'proj-1');
+
+      const tabs = collectTabs(result);
+      expect(tabs).toHaveLength(2);
+      tabs.forEach((tab) => {
+        // Narrow only the field we read.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        expect((tab.data as { projectId?: string }).projectId).toBe('proj-1');
+      });
+    });
+
+    it('does not mutate the layout it was given', () => {
+      const layout = layoutWithTabs({
+        id: 'tab-a',
+        tabType: 'webView',
+        data: { webViewType: 'a.b' },
+      });
+
+      applyProjectIdToTabs(layout, 'proj-1');
+
+      // Narrow only the field we read.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((collectTabs(layout)[0].data as { projectId?: string }).projectId).toBeUndefined();
+    });
+
+    it('leaves a tab with no data payload untouched', () => {
+      const layout = layoutWithTabs({ id: 'tab-a', tabType: 'webView' });
+
+      const result = applyProjectIdToTabs(layout, 'proj-1');
+
+      expect(collectTabs(result)[0].data).toBeUndefined();
+    });
+
+    it('is what buildSimpleLayoutForProject bakes into the static layout', () => {
+      // Both paths must produce the same baked layout: the static one goes through
+      // `buildSimpleLayoutForProject`, and supplement tabs merged in afterward are baked by calling
+      // this directly.
+      expect(applyProjectIdToTabs(simpleLayout, 'proj-1')).toEqual(
+        buildSimpleLayoutForProject('proj-1'),
+      );
     });
   });
 });
