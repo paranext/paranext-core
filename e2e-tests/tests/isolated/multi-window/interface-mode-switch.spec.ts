@@ -46,6 +46,7 @@ import {
   getAppPages,
   getHeldWebViewIds,
   getWindowIdOfPage,
+  MOVE_COMMAND_TIMEOUT_MS,
   pollUntil,
   waitForRendererRegistered,
 } from './multi-window.util';
@@ -67,7 +68,7 @@ type WindowSummary = { windowId: number; label: string; isMain: boolean };
 /** Flip the interface mode the way the user's mode switcher does — by writing the setting */
 async function setInterfaceMode(mode: 'simple' | 'power'): Promise<void> {
   await sendPapiRequestOnce(
-    'object:platform.settingsServiceDataProvider.set',
+    'object:platform.settingsServiceDataProvider-data.set',
     ['platform.interfaceMode', mode],
     WEBSOCKET_PORT,
     PAPI_CALL_TIMEOUT_MS,
@@ -153,11 +154,30 @@ test.describe('switching interface mode', () => {
     await waitForAppReady(mainPage, 180_000);
     const primaryId = getWindowIdOfPage(mainPage);
 
-    const page2 = await createSecondWindow(electronApp);
+    // A window created mid-session deliberately starts empty, so the second window is made by
+    // MOVING real content into one: there has to be something to preserve for the round trip to
+    // mean anything. The primary reopens Home in its place.
+    const [webViewToMove] = await getHeldWebViewIds(mainPage);
+    expect(webViewToMove).toBeDefined();
+    await sendPapiRequestOnce(
+      'command:platform.moveWebViewToNewWindow',
+      [webViewToMove],
+      WEBSOCKET_PORT,
+      MOVE_COMMAND_TIMEOUT_MS,
+    );
+    await pollUntil(
+      async () => getAppPages(electronApp),
+      (pages) => pages.length === 2,
+      SWITCH_SETTLE_TIMEOUT_MS,
+      'the moved web view to open in a window of its own',
+    );
+    const page2 = getAppPages(electronApp).find((page) => getWindowIdOfPage(page) !== primaryId);
+    if (!page2) throw new Error('the window the web view moved into was not found');
     const secondId = getWindowIdOfPage(page2);
     await waitForRendererRegistered(secondId, 120_000);
     // What the second window holds, recorded before the switch because the window holding it does
-    // not survive the excursion — its entry is what carries the content back
+    // not survive the excursion — its entry is what carries the content back. The guard is the
+    // precondition it proved itself to be: with nothing held, the round trip proves nothing.
     const tabsBefore = await getHeldWebViewIds(page2);
     expect(tabsBefore.length).toBeGreaterThan(0);
     logStep(`window ${secondId} holds ${tabsBefore.length} web view(s)`);
