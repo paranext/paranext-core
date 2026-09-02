@@ -1233,13 +1233,13 @@ describe('handleSwitchToSimpleMode', () => {
     await vi.waitFor(() => expect(fakeDockLayout.loadLayout).toHaveBeenCalled());
     mocks.networkRequest.mockClear();
 
-    // `globalThis.windowId` is `'2'` (file-wide beforeEach), matching the `-w2` suffix
-    // `withWindowScopedWebViewIds` would have appended to this id had it come through a real scoped
-    // load.
+    // The suffix has to be THIS window's — `globalThis.windowId` is `'1'` in this describe — because
+    // that is what `withWindowScopedWebViewIds` would have appended had the id come through a real
+    // scoped load. Another window's suffix would pass a guard that only ever strips its own.
     const contaminatedLayout = {
       dockbox: {
         mode: 'horizontal',
-        children: [{ tabs: [{ id: 'simple-fixed-tab-1-w2', tabType: 'webView', data: {} }] }],
+        children: [{ tabs: [{ id: 'simple-fixed-tab-1-w1', tabType: 'webView', data: {} }] }],
       },
     };
     // onLayoutChangeRef.current's real type (OnLayoutChange) is rc-dock's own LayoutInfo-shaped

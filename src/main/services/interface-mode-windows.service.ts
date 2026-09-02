@@ -324,9 +324,12 @@ function closeSecondaryWindows(deps: ModeSwitchDependencies): number | undefined
 
   // Collected rather than thrown from inside the loop: one window failing to close is not a
   // reason to leave the rest of the batch visible, so every window still gets its turn. The
-  // failure is rethrown once the loop is done so the caller still rolls the cached mode back —
-  // this process could not fully act on the new mode, and a later delivery of the same mode must
-  // not be swallowed by the same-value guard.
+  // failure is rethrown once the loop is done, so that a switch which could not be fully carried
+  // out is reported as one rather than passing for a clean one. It does NOT put the cached mode
+  // back: the windows whose closes succeeded are gone and the setting on disk already reads
+  // simple, so calling the application power again would be false and would swallow the user's
+  // way out — see the catch in {@link handleInterfaceModeChanged}, which rolls back only a failed
+  // switch to power.
   const closeFailures: unknown[] = [];
   trackedWindowIds.forEach((windowId) => {
     if (windowId === survivorId) return;
