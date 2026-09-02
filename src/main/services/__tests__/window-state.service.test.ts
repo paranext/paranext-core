@@ -308,6 +308,30 @@ describe('window state tracking', () => {
       expect(restoredId).toBe('entry-durable-id');
     });
 
+    test('sweeps the window it reclaimed the id from, so the id names exactly one entry', () => {
+      // Reclaiming leaves the dead window in the tracked list unless it is swept, and every lookup
+      // here answers from the FIRST entry with a matching id — so the corpse, pushed first, would
+      // answer for the window that is actually on screen. Ordered with the dead window first
+      // because that is the arrangement in which the two behaviours differ.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const destroyed = { id: 1, isDestroyed: () => true } as BrowserWindow;
+      addWindow(destroyed, 'entry-durable-id');
+      addWindow(fakeWindow(2));
+      const live = raisableWindow(3);
+
+      const reclaimedId = addWindow(live.window, 'entry-durable-id');
+
+      expect(reclaimedId).toBe('entry-durable-id');
+      // Raising it reaches the live window rather than stopping at the destroyed one
+      focusWindow('entry-durable-id');
+      expect(live.calls).toContain('focus');
+      // Creation rank is the live window's place in the list, not the dead one's
+      expect(getWindowCreationRank('entry-durable-id')).toBe(1);
+      // And nothing is left behind holding the id once the live window goes
+      removeWindow(live.window, 'entry-durable-id');
+      expect(isWindowTracked('entry-durable-id')).toBe(false);
+    });
+
     test('says which id it refused and what the window lost when it mints over a duplicate', () => {
       addWindow(fakeWindow(1), 'entry-durable-id');
 
