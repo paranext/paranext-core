@@ -119,6 +119,13 @@ async function switchToReplaceMode(frame: FrameLocator): Promise<void> {
   await expect(frame.locator('#replace-term')).toBeVisible({ timeout: 5_000 });
 }
 
+/**
+ * How long the Find panel waits after the last keystroke before writing the term to history
+ * (`HISTORY_DEBOUNCE_DELAY_MS` in `find.web-view.tsx`). The close-path test below must complete its
+ * setup within this, or the inactivity write beats the close and the close goes untested.
+ */
+const HISTORY_INACTIVITY_DEBOUNCE_MS = 5_000;
+
 /** Open the recent searches history dropdown. */
 async function openHistoryDropdown(frame: FrameLocator): Promise<void> {
   const button = frame.getByRole('button', { name: /show recent searches/i });
@@ -409,6 +416,7 @@ test.describe('Search history on close', () => {
 
     const term = `histtest-unmount-${Date.now()}`;
     await frame.locator('#search-term').fill(term);
+    const filledAt = Date.now();
 
     // Positive control. Neither of the other two routes into history can have fired: Enter was
     // never pressed and the inactivity debounce has not elapsed. So if the term were already
@@ -420,11 +428,19 @@ test.describe('Search history on close', () => {
     // Opening the dropdown leaves the pointer on its trigger, and the tooltip that follows renders
     // in a popper wrapper OUTSIDE the panel — so it outlives the panel's close and sits over the
     // editor's menu button, swallowing the click that reopens Find. Park the pointer and wait for
-    // it to go before closing.
+    // it to go before closing. The wait is deliberately short: everything between filling the term
+    // and closing has to finish inside the inactivity debounce below.
     await mainPage.mouse.move(0, 0);
     await expect(mainPage.locator('[data-slot="tooltip-content"]')).toHaveCount(0, {
-      timeout: 10_000,
+      timeout: 2_000,
     });
+
+    // The panel also writes to history after a period of inactivity, and that write dedups against
+    // the one the close performs. So if the steps above ever outlast the debounce, the term is
+    // already in history before the close, the close becomes a no-op, and this test would pass
+    // even with the close-path write deleted — the exact regression it exists to catch. Fail
+    // loudly instead of passing for the wrong reason.
+    expect(Date.now() - filledAt).toBeLessThan(HISTORY_INACTIVITY_DEBOUNCE_MS);
 
     await closeFindPanel(mainPage);
 
