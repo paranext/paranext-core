@@ -284,7 +284,7 @@ test.describe('moving a web view between windows', () => {
   }) => {
     const logStep = createStepLogger('web-view-move');
     const output = captureAppOutput(electronApp);
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const window1Id = getWindowIdOfPage(mainPage);
     logStep(`window ${window1Id} ready`);
 
@@ -398,7 +398,7 @@ test.describe('moving a web view between windows', () => {
   }) => {
     const logStep = createStepLogger('web-view-move');
     const output = captureAppOutput(electronApp);
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const window1Id = getWindowIdOfPage(mainPage);
     const webViewIdBeforeMove = homeTabWebViewId(window1Id);
     await expect(homeTabTitle(mainPage, window1Id)).toBeVisible({ timeout: 60_000 });
