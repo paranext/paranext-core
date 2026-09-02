@@ -295,6 +295,122 @@ describe('settings restore reconciles rather than assumes', () => {
   });
 });
 
+describe('quarantining a colliding or locked backup', () => {
+  it('retries under a fresh destination when the computed quarantine path is already taken, rather than overwriting it', () => {
+    fs.writeFileSync(SETTINGS_PATH, DEVELOPER_SETTINGS);
+    fs.writeFileSync(BACKUP_PATH, '{"existed":true,"conte'); // corrupt -> triggers quarantine
+
+    const originalRenameSync = fs.renameSync;
+    let attempts = 0;
+    const renameSync = vi
+      .spyOn(fs, 'renameSync')
+      .mockImplementation((from: fs.PathLike, to: fs.PathLike) => {
+        attempts += 1;
+        if (attempts === 1) {
+          const error: NodeJS.ErrnoException = new Error('dest exists');
+          error.code = 'EEXIST';
+          throw error;
+        }
+        originalRenameSync(from, to);
+      });
+
+    try {
+      expect(restoreLeakedSettings()).toBeUndefined();
+      // The first attempt collided and was retried, not accepted as an overwrite or a failure.
+      expect(attempts).toBeGreaterThan(1);
+      expect(quarantinedBackups()).toHaveLength(1);
+    } finally {
+      renameSync.mockRestore();
+    }
+  });
+
+  it('rethrows a permission or lock error with cause, instead of quarantining a backup it merely could not move', () => {
+    fs.writeFileSync(SETTINGS_PATH, DEVELOPER_SETTINGS);
+    fs.writeFileSync(BACKUP_PATH, '{"existed":true,"conte'); // corrupt -> triggers quarantine attempt
+
+    let lockError: NodeJS.ErrnoException | undefined;
+    const renameSync = vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      lockError = new Error('resource busy or locked');
+      lockError.code = 'EBUSY';
+      throw lockError;
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      let caught: unknown;
+      try {
+        restoreLeakedSettings();
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(Error);
+      const cause = caught instanceof Error ? caught.cause : undefined;
+      expect(cause).toBe(lockError);
+      // A lock is not corruption: nothing was moved, unlike the genuinely-corrupt cases above.
+      expect(fs.existsSync(BACKUP_PATH)).toBe(true);
+      expect(quarantinedBackups()).toHaveLength(0);
+    } finally {
+      renameSync.mockRestore();
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('reading a backup that is locked rather than corrupt', () => {
+  it('rethrows a permission or lock error with cause, and never quarantines a backup it merely could not read yet', () => {
+    fs.writeFileSync(SETTINGS_PATH, DEVELOPER_SETTINGS);
+    fs.writeFileSync(
+      BACKUP_PATH,
+      JSON.stringify({
+        ownerPid: 2 ** 31 - 1,
+        createdAt: new Date().toISOString(),
+        existed: true,
+        contents: DEVELOPER_SETTINGS,
+        pinnedKeys: ['platform.interfaceMode'],
+      }),
+    );
+
+    const originalReadFileSync = fs.readFileSync.bind(fs);
+    let lockError: NodeJS.ErrnoException | undefined;
+    const readFileSync = vi
+      .spyOn(fs, 'readFileSync')
+      .mockImplementation(
+        (filePath: fs.PathOrFileDescriptor, options: Parameters<typeof fs.readFileSync>[1]) => {
+          if (filePath === BACKUP_PATH) {
+            lockError = new Error('resource busy or locked');
+            lockError.code = 'EBUSY';
+            throw lockError;
+          }
+          return originalReadFileSync(filePath, options);
+        },
+      );
+
+    try {
+      let caught: unknown;
+      try {
+        restoreLeakedSettings();
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(Error);
+      const cause = caught instanceof Error ? caught.cause : undefined;
+      expect(cause).toBe(lockError);
+      // Nothing was quarantined: a lock says nothing about whether the backup itself is trustworthy.
+      expect(fs.existsSync(BACKUP_PATH)).toBe(true);
+      expect(quarantinedBackups()).toHaveLength(0);
+    } finally {
+      readFileSync.mockRestore();
+    }
+  });
+
+  it('treats a genuinely missing backup as nothing to restore, not a lock error', () => {
+    // No BACKUP_PATH written at all -- readSettingsBackup's own readFileSync call hits real ENOENT.
+    expect(restoreLeakedSettings()).toBeUndefined();
+  });
+});
+
 describe('a pin taken while an unreadable backup stands', () => {
   it('refuses rather than pinning values it could never undo', () => {
     fs.writeFileSync(SETTINGS_PATH, DEVELOPER_SETTINGS);

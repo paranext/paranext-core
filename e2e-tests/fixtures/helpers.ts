@@ -898,6 +898,19 @@ export function classifyBackupOwner(ownerPid: number): BackupOwner {
 }
 
 /**
+ * Distinguishes quarantine destinations computed within the same millisecond, in the same process —
+ * the app-global backup's directory and its manifest are quarantined together under one
+ * caller-supplied `stamp` (see {@link quarantineUnreadableBackup}), which would otherwise collide.
+ */
+let quarantineCallCount = 0;
+
+/**
+ * How many colliding destinations {@link quarantineUnreadableBackup} will retry past before giving
+ * up.
+ */
+const MAX_QUARANTINE_ATTEMPTS = 10;
+
+/**
  * Move a backup this run cannot make sense of out of the way, and report where it went.
  *
  * Renamed rather than deleted: an unreadable backup is still the only surviving record of what the
@@ -906,27 +919,72 @@ export function classifyBackupOwner(ownerPid: number): BackupOwner {
  * while one stands, so a backup nothing ever moves stops every later run, on every worker, until a
  * human deletes a gitignored file by hand.
  *
+ * The destination is checked for existence explicitly, rather than left to `renameSync` itself,
+ * because the two kinds of target this moves — a settings file and an app-global backup directory —
+ * disagree about what happens when the destination is already taken: POSIX `rename(2)` silently
+ * REPLACES an existing regular-file destination instead of failing, so relying on the OS call alone
+ * to detect a collision fails open for a file target while failing closed (`ENOTEMPTY`) for a
+ * directory one. Checking first, and retrying under a fresh destination on any collision either
+ * check misses, treats both the same way: neither ever overwrites another run's only copy.
+ *
  * @param stamp Shared by the parts of one backup — the app-global directory and its manifest are
- *   moved together, and a reader can only pair them up again if their names agree.
- * @returns Where it was moved to, or undefined when the move failed, leaving it exactly as it was.
- *   Callers phrase both outcomes: this one is silent so a recovery path reports its own state
- *   once.
+ *   moved together, and a reader can only pair them up again if their names agree. Combined with
+ *   this process's pid and a monotonically increasing per-call counter, so two quarantine calls
+ *   sharing one `stamp` still land on distinct destinations.
+ * @returns Where it was moved to, or undefined when there was nothing at `target` to move. Callers
+ *   phrase both outcomes: this one is silent so a recovery path reports its own state once.
  */
+/** What one candidate destination told {@link quarantineUnreadableBackup} to do next. */
+type QuarantineAttemptOutcome = 'moved' | 'nothing-to-quarantine' | 'collision';
+
+/**
+ * Try moving `target` to exactly `quarantined`, reporting what happened rather than deciding what
+ * to do about it — that decision needs the caller's attempt count and its own `target`, neither of
+ * which this needs to know.
+ */
+function attemptQuarantineMove(target: string, quarantined: string): QuarantineAttemptOutcome {
+  // Never overwrite an earlier quarantine — it holds some other run's only copy.
+  if (fs.existsSync(quarantined)) return 'collision';
+  try {
+    fs.renameSync(target, quarantined);
+    return 'moved';
+  } catch (error) {
+    // `catch` binds `unknown`; reading `.code` is the only way to tell these apart
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const errnoError = error as NodeJS.ErrnoException;
+    // Nothing at `target` (any more) — there is nothing to quarantine, which is not a failure.
+    if (errnoError.code === 'ENOENT') return 'nothing-to-quarantine';
+    // Another process won the race between the existence check above and this rename — report a
+    // collision so the caller tries the next destination, rather than either overwriting it or
+    // giving up.
+    if (errnoError.code === 'EEXIST' || errnoError.code === 'ENOTEMPTY') return 'collision';
+    // A permission problem or a lock (EPERM/EBUSY) is not a condition this function invented the
+    // target's unreadable-ness to explain — it says nothing about whether `target` itself is
+    // usable, and quarantining a backup this run merely could not move right now would discard
+    // something that may still be perfectly good. Surface it instead of guessing.
+    console.warn(`Could not quarantine ${target} to ${quarantined}: ${errnoError.message}`);
+    throw new Error(`Failed to quarantine ${target} to ${quarantined}`, { cause: errnoError });
+  }
+}
+
 function quarantineUnreadableBackup(
   target: string,
   stamp: number = Date.now(),
 ): string | undefined {
-  // Epoch milliseconds rather than an ISO timestamp: `:` is not a legal filename character on
-  // Windows, and these files are written on all three platforms.
-  let quarantined = `${target}.unreadable-${stamp}`;
-  // Never overwrite an earlier quarantine — it holds some other run's only copy.
-  if (fs.existsSync(quarantined)) quarantined = `${quarantined}-${process.pid}`;
-  try {
-    fs.renameSync(target, quarantined);
-    return quarantined;
-  } catch {
-    return undefined;
+  for (let attempt = 0; attempt < MAX_QUARANTINE_ATTEMPTS; attempt += 1) {
+    // Epoch milliseconds rather than an ISO timestamp: `:` is not a legal filename character on
+    // Windows, and these files are written on all three platforms.
+    const quarantined = `${target}.unreadable-${stamp}-${process.pid}-${quarantineCallCount}`;
+    quarantineCallCount += 1;
+    const outcome = attemptQuarantineMove(target, quarantined);
+    if (outcome === 'moved') return quarantined;
+    if (outcome === 'nothing-to-quarantine') return undefined;
+    // 'collision': fall through and try the next candidate destination.
   }
+  throw new Error(
+    `Failed to quarantine ${target}: ${MAX_QUARANTINE_ATTEMPTS} candidate destinations in a row ` +
+      'were already taken.',
+  );
 }
 
 /**
@@ -1150,7 +1208,8 @@ export function pinAppGlobalState(): () => void {
         'restore it, so emptying the store would discard state nothing could put back. A launch ' +
         'may therefore inherit app-global state from the developer or from an earlier run. An ' +
         `unreadable backup clears itself: the next run's global setup moves it aside as ` +
-        `${mainLocalStorageBackupDir()}.unreadable-<epoch ms>, keeping its contents. One a live ` +
+        `${mainLocalStorageBackupDir()}.unreadable-<epoch ms>-<pid>-<counter>, keeping its ` +
+        `contents. One a live ` +
         'run owns is left alone on purpose until that run ends.',
     );
 
@@ -1331,11 +1390,30 @@ function sameSettings(a: Record<string, unknown>, b: Record<string, unknown>): b
  * cannot reason about — a torn write, or one written before backups recorded who took them. The
  * only safe reading of "I do not understand this file" is to change nothing: guessing at its
  * meaning is how a truncated backup ends up written into the developer's settings verbatim.
+ *
+ * That reading applies only to a MISSING or CORRUPT backup — `undefined` is also what tells a
+ * caller to quarantine it. A backup this run merely could not read right NOW, because something
+ * else holds it open or has denied permission (`EPERM`/`EBUSY`), is a different condition: nothing
+ * says the file itself is bad, so folding it into the same `undefined` would quarantine — and
+ * thereby discard from the normal recovery path — a backup that might read perfectly well a moment
+ * later. That case is thrown instead, with the original error attached as `cause`.
  */
 function readSettingsBackup(): SettingsBackup | undefined {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(settingsBackupPath(), 'utf-8');
+  } catch (error) {
+    // `catch` binds `unknown`; reading `.code` is the only way to tell ENOENT from a lock/permission
+    // error
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const errnoError = error as NodeJS.ErrnoException;
+    // No backup at all — nothing to trust or distrust.
+    if (errnoError.code === 'ENOENT') return undefined;
+    throw new Error(`Could not read ${settingsBackupPath()}`, { cause: errnoError });
+  }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(fs.readFileSync(settingsBackupPath(), 'utf-8'));
+    parsed = JSON.parse(raw);
   } catch {
     return undefined;
   }
@@ -1502,8 +1580,8 @@ export function preConfigureSettings(overrides: Record<string, unknown>): () => 
         `Refusing to pin settings: the backup at ${settingsBackupPath()} cannot be read, so this ` +
           'pin could not be undone by this run or recovered by the next. This does not need a ' +
           "manual cleanup to clear: the next run's global setup moves that file aside as " +
-          `${settingsBackupPath()}.unreadable-<epoch ms> and pins normally. Read it there if any ` +
-          'of it is yours; nothing deletes it.',
+          `${settingsBackupPath()}.unreadable-<epoch ms>-<pid>-<counter> and pins normally. Read ` +
+          'it there if any of it is yours; nothing deletes it.',
       );
     const pinnedKeys = [...new Set([...standing.pinnedKeys, ...Object.keys(overrides)])];
     writeFileAtomic(settingsBackupPath(), JSON.stringify({ ...standing, pinnedKeys }));
