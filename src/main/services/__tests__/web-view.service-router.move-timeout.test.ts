@@ -318,9 +318,10 @@ describe('moveWebView when the target adopt does not come back a success', () =>
         expect(focused.adoptWebView).not.toHaveBeenCalled();
         // The window holds content the user can see, whoever put it there
         expect(creator.closeWindow).not.toHaveBeenCalled();
-        // The caller has to be able to tell the user their tab could not be reopened, without
-        // reading a sentence written for the log
-        expect(getWebViewMoveFailureDisposition(failure)).toBe('not-reopened');
+        // The window is holding the tab, so the caller must not be handed a disposition that says it
+        // is closed — the user is most likely looking at it. What is unknown is whether the move
+        // finished, not where the web view went
+        expect(getWebViewMoveFailureDisposition(failure)).toBe('reached-new-window-unconfirmed');
       } finally {
         vi.useRealTimers();
       }
@@ -350,7 +351,7 @@ describe('moveWebView when the target adopt does not come back a success', () =>
       expect(focused.adoptWebView).not.toHaveBeenCalled();
       // The window holds content the user can see, whoever put it there
       expect(creator.closeWindow).not.toHaveBeenCalled();
-      expect(getWebViewMoveFailureDisposition(failure)).toBe('not-reopened');
+      expect(getWebViewMoveFailureDisposition(failure)).toBe('reached-new-window-unconfirmed');
       // Only the ownership search asked: an adopt that came back an answer of its own is not one
       // that could still be running, so no probe may delay the recovery the user is waiting on
       expect(created.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);

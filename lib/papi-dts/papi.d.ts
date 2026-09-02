@@ -4752,8 +4752,19 @@ declare module 'shared/services/web-view.service-model' {
      *
      * @returns Saved properties of every open WebView. Empty array if no WebViews are open. A WebView
      *   being moved between windows is included even though it is docked in neither of them for the
-     *   length of the move, so that a caller selecting from this list cannot silently miss it; treat
-     *   the result as what is open in the app, not as what is docked in some window right now.
+     *   length of the move, so it is not left out of the result while a move is open; treat the
+     *   result as what is open in the app, not as what is docked in some window right now.
+     *
+     *   A web view can also appear more than once. A move strips the source window's scope from the id,
+     *   so during a move the view can be reported by the window that took it, or named by two
+     *   overlapping moves at once. This can last up to about two minutes if the window being moved to
+     *   has stopped answering, and indefinitely for an adopted view until the next layout load.
+     *   Repeats are kept rather than risk dropping one, because a duplicate is something a caller can
+     *   see and a missing web view is not.
+     *
+     *   Do not deduplicate this list by id, and not by web view type plus project either; both can
+     *   collapse two real web views into one. Until a web view has an identity that survives a move,
+     *   tolerate repeats.
      * @throws If any window could not be asked what it has open. Callers read this as the complete
      *   picture, and a window that could not answer is indistinguishable in the result from one with
      *   nothing open, so a short list is refused rather than passed off as the whole landscape.
@@ -5299,12 +5310,13 @@ declare module 'papi-shared-types' {
      * a machine-readable marker at the front of the error message: `[webViewMoveFailure:<where>]`,
      * where `<where>` is `reopened-in-source-window` (nothing about where it lives changed),
      * `reopened-in-focused-window` (it did move, just not to the window that was asked for),
-     * `not-reopened` (it is open in no window, and only the log holds what it was), or
-     * `possibly-closed` (taking it out of its window is what failed, so where it is cannot be
-     * told). The marker rides in the message because a rejection that crosses processes reaches its
-     * caller as a code and a message and nothing else. A failure decided before the move touches
-     * the web view carries no marker. Strip the marker before showing the message to a user — it is
-     * there to be classified on, not read.
+     * `not-reopened` (it is open in no window, and only the log holds what it was),
+     * `reached-new-window-unconfirmed` (the window created for the move is holding it, but the move
+     * could not get that confirmed), or `possibly-closed` (taking it out of its window is what
+     * failed, so where it is cannot be told). The marker rides in the message because a rejection
+     * that crosses processes reaches its caller as a code and a message and nothing else. A failure
+     * decided before the move touches the web view carries no marker. Strip the marker before
+     * showing the message to a user — it is there to be classified on, not read.
      *
      * @param webViewId Web view to move
      * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;

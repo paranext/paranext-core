@@ -201,6 +201,9 @@ const MOVE_FAILURE_MESSAGE_KEYS: Record<WebViewMoveFailureDisposition, LocalizeK
   'reopened-in-source-window': '%tab_contextMenu_moveTab_failed%',
   'reopened-in-focused-window': '%tab_contextMenu_moveTab_failedReopenedElsewhere%',
   'not-reopened': '%tab_contextMenu_moveTab_failedNotReopened%',
+  // Only the move-to-new-window path can leave this disposition — a window created for the move is
+  // the only thing that can be "standing unconfirmed"; move-to-an-existing-window never sets it.
+  'reached-new-window-unconfirmed': '%tab_contextMenu_moveTabToNewWindow_failedUnconfirmed%',
   'possibly-closed': '%tab_contextMenu_moveTab_failedMayHaveClosed%',
 };
 

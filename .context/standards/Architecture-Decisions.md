@@ -2997,3 +2997,68 @@ step, no automation. Just a record.
 - **Source:** PT-4286 "Interface-mode switching"; design spec in the PRD folder
   (`2026-09-02-pt-4286-mode-switch-spec.md`); amends nothing in
   `adr-primary-window-owns-app-lifetime`, which it depends on for the primary role.
+
+## adr-web-view-id-is-not-an-identity-across-a-move: A web view's id does not identify it across a move, so reads report repeats rather than deduplicate
+
+- **Date:** 2026-09-02
+- **Status:** Accepted — durable fix (identity minted at the adopt) deferred
+- **Context:** A cross-window move takes a web view out of one window and puts it into another, and
+  the id it answers to changes twice on the way. The capture strips the source window's scope, the
+  adopt reopens the view under that stripped spelling, and the next layout load re-scopes it to the
+  new window. So one view wears three names across a move. Worse, the stripping is not injective:
+  every window's default Home tab reduces to the same `home`, so two different views can share a
+  spelling indefinitely — an adopted view keeps the stripped one until its window loads a layout
+  again. There is also no other field that separates them. `webViewType` plus `projectId` collides
+  on exactly the same case, because two windows each showing their own Home tab are identical under
+  it. The definition simply carries nothing that is unique to a view.
+
+  This surfaced in `getAllOpenWebViewDefinitionsWithReachability`, which folds views that are
+  mid-move into its read because such a view is open in no window and every window answers
+  truthfully without it. Three successive attempts to make that fold-in deduplicate correctly were
+  written and each was wrong in a different order of events, because all three keyed on a spelling.
+- **Decision:** Stop trying to establish identity from ids. Two consequences follow, and both are
+  deliberate.
+
+  A read may report the same web view more than once. The fold-in skips a view only when a window
+  still reports the id the move was **asked for** — which is scoped, and therefore does name one
+  view in the whole application — and never on the captured, scope-stripped one. Where that leaves a
+  repeat, the repeat is kept.
+
+  Callers are told not to deduplicate. `getAllOpenWebViewDefinitions` documents that the list can
+  contain a view twice, and instructs callers not to collapse by id and not by web view type plus
+  project either, because both can merge two real web views into one.
+
+  The direction of failure is the whole point: a duplicate is visible in the result and in the debug
+  line, and a caller that cannot tolerate one can see it. A drop is invisible — the caller receives a
+  shorter list and has no way to know it is short.
+- **Alternatives:**
+  - *Deduplicate by the captured id.* Rejected: it is the non-injective spelling, so it drops a
+    different view whenever two share it, which one ordinary drag reaches.
+  - *Deduplicate across move records as well as against what windows reported.* Rejected after three
+    attempts. Every variant answered "have I already seen this view?" with a string comparison, and
+    the string does not identify the view.
+  - *Deduplicate by web view type plus project.* Rejected: identical for two windows' Home tabs.
+  - *Have the read wait for moves to settle.* Rejected: a move can take about two minutes when the
+    target has stopped answering (four probe attempts, each able to wait out a 30-second request
+    timeout, with three-second gaps), and this read is on the shutdown path.
+  - *Mint an identity at the adopt and carry it into the new window.* Correct, and deferred — it
+    changes the web view contract across processes, which is more than the read that exposed it can
+    carry.
+- **Consequences:** One transient duplicate remains by design: a target that has adopted reports the
+  view under the stripped spelling, which the guard does not match, so the view is both reported and
+  folded in until the move's record clears. It is bounded by the move.
+
+  Because no field on a definition distinguishes a residual duplicate from two genuinely distinct
+  views, no caller-side rule can be recommended beyond tolerating repeats. That is what makes the
+  deferred identity the real fix rather than a refinement.
+
+  A recovery duplicate is *not* accepted: a failed move puts the view back under the captured id and
+  the window then reports it, which is indistinguishable from an adopt at read time, so the move
+  records which happened while it still knows and the read trusts that.
+
+  Anything else in this subsystem that compares ids to decide whether it is looking at the same view
+  inherits the same defect. The late-adopt probe does exactly that, and is recorded as a known limit
+  rather than fixed here.
+- **Source:** PR #2758 (PT-4463), the fold-in defect reported on #2670, and the review rounds on
+  both. The deferred identity and the move-lifecycle cases that share this root cause are ledgered
+  as A16 and A17 in the multi-window small-items ledger.
