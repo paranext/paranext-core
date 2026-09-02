@@ -158,7 +158,12 @@ export async function moveWebView(
   // The in-flight register cannot do this job: it is filled only after the source window has
   // answered the capture, which is several awaits later.
   if (movesInProgress.has(webViewId))
-    throw new Error(`Cannot move webview ${webViewId}: it is already being moved.`);
+    throw new Error(
+      describeWebViewMoveFailure(
+        'already-moving',
+        `Cannot move webview ${webViewId}: it is already being moved.`,
+      ),
+    );
   movesInProgress.add(webViewId);
   try {
     return await moveCapturedWebView(webViewId, target);
