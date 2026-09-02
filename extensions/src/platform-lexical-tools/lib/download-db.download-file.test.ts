@@ -53,6 +53,50 @@ function stubHttpsGet(drive: (response: PassThrough) => void) {
   );
 }
 
+/**
+ * Stands in for `https.get` across a REDIRECT CHAIN, serving one scripted response per hop.
+ *
+ * GitHub raw and LFS redirect on every real download, so the first response of every fetch is one
+ * `downloadFile` abandons - the hop the single-response stub above cannot reach.
+ */
+function stubHttpsGetSequence(hops: ((response: PassThrough, hop: number) => void)[]) {
+  let hop = 0;
+  const requests: EventEmitter[] = [];
+  vi.spyOn(https, 'get').mockImplementation(
+    // @ts-expect-error ts(2345) - a test stub for one call shape, not the full `https.get` surface
+    (_url: string, callback: (response: unknown) => void) => {
+      const request = new EventEmitter();
+      requests.push(request);
+      const response = new PassThrough();
+      Object.assign(response, { statusCode: 200, headers: {} });
+      const index = hop;
+      hop += 1;
+      setImmediate(() => {
+        // Scripted BEFORE the callback, not after: `handleResponse` reads `statusCode` the moment
+        // it is handed the response, so a script that sets it afterwards would send every hop down
+        // the 200 path and quietly never exercise the redirect branch at all.
+        // Past the end of the script the chain TERMINATES rather than repeating its last hop, so a
+        // test that abandons a download mid-chain cannot leave a live redirect chain running on
+        // into whichever test happens to follow it.
+        const scripted = hops[index];
+        if (scripted) scripted(response, index);
+        else Object.assign(response, { statusCode: 200, headers: {} });
+        callback(response);
+        if (!scripted) response.end('');
+      });
+      return request;
+    },
+  );
+  return { requestCount: () => hop, requests };
+}
+
+/** Turns a scripted response into a 302 pointing at the next hop. */
+function redirectTo(location: string) {
+  return (response: PassThrough) => {
+    Object.assign(response, { statusCode: 302, headers: { location } });
+  };
+}
+
 describe('downloadFile', () => {
   it('leaves the existing file intact when the connection drops mid-body', async () => {
     const dir = makeTempDir();
@@ -84,6 +128,108 @@ describe('downloadFile', () => {
     await downloadFile('https://example.invalid/LICENSE.md', destination);
 
     expect(fs.readFileSync(destination, 'utf8')).toBe(GOOD_TEXT);
+    expect(fs.existsSync(`${destination}.part`)).toBe(false);
+  });
+
+  it('rejects rather than crashing when a redirect hop drops its connection', async () => {
+    const dir = makeTempDir();
+    const destination = path.join(dir, 'LICENSE.md');
+    fs.writeFileSync(destination, GOOD_TEXT);
+
+    // The redirect response is abandoned by design - nothing pipes it anywhere. Without an error
+    // listener attached BEFORE the redirect branch returns, this `error` is unhandled, which Node
+    // raises process-wide and which would take the whole `postinstall` down rather than failing
+    // this one fetch.
+    stubHttpsGetSequence([
+      (response) => {
+        Object.assign(response, {
+          statusCode: 302,
+          headers: { location: 'https://example.invalid/redirected' },
+        });
+        setImmediate(() => response.emit('error', new Error('socket hang up on the redirect')));
+      },
+    ]);
+
+    await expect(downloadFile('https://example.invalid/LICENSE.md', destination)).rejects.toThrow(
+      'socket hang up on the redirect',
+    );
+
+    expect(fs.readFileSync(destination, 'utf8')).toBe(GOOD_TEXT);
+    expect(fs.existsSync(`${destination}.part`)).toBe(false);
+  });
+
+  it('gives up on an endless redirect chain instead of following it forever', async () => {
+    const dir = makeTempDir();
+    const destination = path.join(dir, 'LICENSE.md');
+    fs.writeFileSync(destination, GOOD_TEXT);
+
+    // Every hop redirects, forever - the shape a misconfigured host or a redirect loop produces.
+    let gets = 0;
+    vi.spyOn(https, 'get').mockImplementation(
+      // @ts-expect-error ts(2345) - a test stub for one call shape, not the full `https.get` surface
+      (_url: string, callback: (response: unknown) => void) => {
+        const request = new EventEmitter();
+        const response = new PassThrough();
+        gets += 1;
+        Object.assign(response, {
+          statusCode: 302,
+          headers: { location: 'https://example.invalid/loop' },
+        });
+        setImmediate(() => callback(response));
+        return request;
+      },
+    );
+
+    await expect(downloadFile('https://example.invalid/LICENSE.md', destination)).rejects.toThrow(
+      /more than \d+ redirects/,
+    );
+
+    // Bounded, not merely terminated: an unbounded chain recurses until the stack or the socket
+    // pool gives out, which hangs `npm install` rather than failing it. One initial request plus
+    // the capped number of hops.
+    expect(gets).toBe(6);
+    expect(fs.readFileSync(destination, 'utf8')).toBe(GOOD_TEXT);
+    expect(fs.existsSync(`${destination}.part`)).toBe(false);
+  });
+
+  it('follows a redirect to a real body, as every GitHub download does', async () => {
+    const dir = makeTempDir();
+    const destination = path.join(dir, 'LICENSE.md');
+
+    stubHttpsGetSequence([
+      redirectTo('https://example.invalid/redirected'),
+      (response) => response.end(GOOD_TEXT),
+    ]);
+
+    await downloadFile('https://example.invalid/LICENSE.md', destination);
+
+    expect(fs.readFileSync(destination, 'utf8')).toBe(GOOD_TEXT);
+    expect(fs.existsSync(`${destination}.part`)).toBe(false);
+  });
+
+  it('rejects exactly once, leaving no staging file, when the rename fails after a complete body', async () => {
+    const dir = makeTempDir();
+    const destination = path.join(dir, 'LICENSE.md');
+    fs.writeFileSync(destination, GOOD_TEXT);
+
+    // The body lands correctly and only the rename fails, which is the window in which the
+    // teardown path must NOT be re-entered: it assumes an incomplete download, and reaching it
+    // here would find the promise already claimed and leave it pending forever.
+    vi.spyOn(fs, 'rename').mockImplementation(
+      // @ts-expect-error ts(2345) - a test stub for the one call shape `downloadFile` uses
+      (_from: string, _to: string, callback: (error: Error | undefined) => void) => {
+        callback(new Error('EXDEV: cross-device link not permitted'));
+      },
+    );
+
+    stubHttpsGet((response) => {
+      response.end(GOOD_TEXT);
+    });
+
+    await expect(downloadFile('https://example.invalid/LICENSE.md', destination)).rejects.toThrow(
+      'cross-device link not permitted',
+    );
+
     expect(fs.existsSync(`${destination}.part`)).toBe(false);
   });
 });

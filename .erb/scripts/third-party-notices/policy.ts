@@ -195,8 +195,20 @@ const PLACEHOLDER_REASON = /^<.*>$/;
 
 /**
  * Applies a reviewed exception. Exceptions are an override applied AFTER a block, never a path
- * reconciliation can reach on its own, and they are pinned to name@version AND the exact text hash
- * so that a package changing its license text re-blocks instead of silently inheriting the escape.
+ * reconciliation can reach on its own, and they are pinned to the exact license TEXT so that a
+ * package changing it re-blocks instead of silently inheriting the escape.
+ *
+ * Keyed by `ecosystem:name`, NOT by `name@version`. The hash is what the determination actually
+ * rests on - a human read that text and decided what it is - and it already delivers the stated
+ * goal on its own: the block returns the moment the text changes. Adding the version to the key
+ * bought one further behaviour, firing on every version bump even when the text is byte-identical,
+ * which is the common case: these entries are by definition the packages whose license text cannot
+ * be identified automatically, so a bump that found no entry fell through to normal classification
+ * and BLOCKED. That made a routine patch release of any of them a hard build failure demanding a
+ * fresh legal read, across sixteen packages including `lodash`, `yjs`, `lucide-react` and `jszip`.
+ * The weighed cost of dropping it: a new version could add or RELOCATE a license file in a way the
+ * recorded hash does not cover. That is real but uncertain, and it was judged smaller than a
+ * certain, recurring failure across sixteen moving packages.
  *
  * Requires a non-empty string on BOTH sides of the hash comparison, and a recorded `spdx` id.
  * `undefined !== undefined` is `false` in JavaScript, so an exception with no text found (`sha256`
@@ -225,7 +237,7 @@ function applyException(
   allowed: Set<string>,
   copyleft: Set<string>,
 ): BlockedFields | undefined {
-  const entry = (policy.exceptions || []).find((e) => e.package === `${key}@${version}`);
+  const entry = (policy.exceptions || []).find((e) => e.package === key);
   if (!entry) return undefined;
   if (!entry.spdx)
     return blocked(`a reviewed exception exists for ${key}@${version} but has no spdx id recorded`);

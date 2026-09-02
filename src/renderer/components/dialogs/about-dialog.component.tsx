@@ -11,7 +11,7 @@ import {
   formatReplacementStringToArray,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { Fragment, ReactNode, useCallback, useId } from 'react';
+import { Fragment, ReactNode, useCallback, useId, useMemo } from 'react';
 import packageInfo from '../../../../release/app/package.json';
 import { resolveLicenseDisplay } from './about-dialog.data';
 import './about-dialog.component.scss';
@@ -41,7 +41,7 @@ const STRING_KEYS: LocalizeKey[] = [
   '%about_db_ip_attribution_format%',
   '%about_db_ip_attribution_intro%',
   '%about_db_ip_attribution_terms%',
-  '%ariaLabel_opensInBrowser%',
+  '%about_ariaLabel_opensTermsOfService%',
 ];
 
 const defaultAppInfo: AppInfo = {
@@ -61,7 +61,7 @@ function AboutDialog() {
       '%about_db_ip_attribution_format%': dbIpAttributionFormat,
       '%about_db_ip_attribution_intro%': dbIpAttributionIntro,
       '%about_db_ip_attribution_terms%': dbIpAttributionTerms,
-      '%ariaLabel_opensInBrowser%': opensExternallyLabel,
+      '%about_ariaLabel_opensTermsOfService%': opensTermsOfServiceLabel,
     },
   ] = useLocalizedStrings(STRING_KEYS);
 
@@ -71,9 +71,22 @@ function AboutDialog() {
     useCallback(async () => appService.getAppInfo(), []),
     defaultAppInfo,
   );
-  if (appInfo.version) packageInfo.version = appInfo.version;
+  // Derived, never written back onto `packageInfo`. That object is the shared
+  // `release/app/package.json` module instance, and assigning to it during render mutates something
+  // outside the component - the pattern React disallows, and the one StrictMode double-rendering
+  // and concurrent features expose. It matters more here than it reads: this same object now feeds
+  // the license display below, so the legal statement the dialog makes would be resolved off an
+  // object patched in place on whichever render `usePromise` happened to settle on.
+  //
+  // The value is worth keeping. `APP_VERSION` appends SemVer build metadata, so the dialog shows
+  // `0.6.0-alpha.0+github.20260831142233.18234567890` rather than a bare `0.6.0-alpha.0` - the
+  // difference between a bug report that can be pinned to a build and one that cannot.
+  const displayInfo = useMemo(
+    () => ({ ...packageInfo, version: appInfo.version || packageInfo.version }),
+    [appInfo.version],
+  );
 
-  const opensExternallyId = useId();
+  const opensTermsOfServiceId = useId();
 
   const openTermsOfService = useCallback(() => {
     sendCommand('platform.openTermsOfService').catch((e) => {
@@ -81,13 +94,17 @@ function AboutDialog() {
     });
   }, []);
 
-  const licenseDisplay = resolveLicenseDisplay(packageInfo.license, termsOfService);
+  const licenseDisplay = resolveLicenseDisplay(displayInfo.license, termsOfService);
   // The Terms of Service ship beside the application rather than at a URL, so this opens the
   // installed document through the operating system instead of navigating anywhere.
   //
+  // The description says "your default application for Markdown files", not "a browser window":
+  // the Terms of Service ship as an installed file and `platform.openTermsOfService` hands the path
+  // to the operating system, so whatever opens Markdown there is what appears - often not a browser.
+  //
   // A button is named from its contents, which folds in every descendant's accessible name - so a
-  // label on the icon becomes part of the button's name ("Terms of Service Opens externally in a
-  // browser window") rather than staying beside it. It is carried as a DESCRIPTION instead, on a
+  // label on the icon becomes part of the button's name rather than staying beside it. It is
+  // carried as a DESCRIPTION instead, on a
   // visually-hidden sibling outside the button so name-from-contents cannot reach it, leaving the
   // visible text as the whole accessible name (WCAG 2.5.3). The icon is decorative and hidden:
   // lucide adds `aria-hidden` only when no accessibility prop is passed, so passing one is exactly
@@ -98,13 +115,13 @@ function AboutDialog() {
         variant="link"
         className="tw:h-auto tw:p-0"
         onClick={openTermsOfService}
-        aria-describedby={opensExternallyId}
+        aria-describedby={opensTermsOfServiceId}
       >
         {licenseDisplay.name}
         <ExternalLink aria-hidden="true" />
       </Button>
-      <span id={opensExternallyId} className="tw:sr-only">
-        {opensExternallyLabel}
+      <span id={opensTermsOfServiceId} className="tw:sr-only">
+        {opensTermsOfServiceLabel}
       </span>
     </>
   ) : (
@@ -116,13 +133,13 @@ function AboutDialog() {
       <div className="about-content">
         <InlineLogoAndName className="about-logo" />
         <h1 className="about-title">{productName}</h1>
-        <p className="about-description">{packageInfo.description}</p>
-        <p className="about-version">{formatReplacementString(versionLabelFormat, packageInfo)}</p>
+        <p className="about-description">{displayInfo.description}</p>
+        <p className="about-version">{formatReplacementString(versionLabelFormat, displayInfo)}</p>
         <p className="about-license">
-          {/* The explicit type argument keeps `packageInfo`'s non-string fields (`author`, `scripts`)
+          {/* The explicit type argument keeps `displayInfo`'s non-string fields (`author`, `scripts`)
               from widening what the array is inferred to hold. */}
           {formatReplacementStringToArray<ReactNode>(licenseLabelFormat, {
-            ...packageInfo,
+            ...displayInfo,
             license: licenseContent,
           }).map((contribution, index) => (
             // We can use index as key here because the array is static and will not change.

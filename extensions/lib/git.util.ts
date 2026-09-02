@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import replaceInFile from 'replace-in-file';
 import { minimatch } from 'minimatch';
+import * as prettier from 'prettier';
 import { subtreeRootFolder } from '../webpack/webpack.util';
 
 // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/lib/git.util.ts
@@ -367,7 +368,16 @@ async function readCanonicalLicense(root: string = repoRoot): Promise<string> {
   return text;
 }
 
-/** Sets `license` in a JSON file, keeping it beside `version` when the field is not there yet. */
+/**
+ * Sets `license` in a JSON file, keeping it beside `version` when the field is not there yet.
+ *
+ * PRECONDITION: the caller has already decided that this FOLDER may be stamped.
+ * `decideLicenseStamp` is what makes that decision, and it makes it for the folder rather than per
+ * file - an extension deliberately given other terms is left alone there, before this is ever
+ * called. A second per-file check here would be unreachable through the only caller, and worse than
+ * unreachable: it would read as the decision while `decideLicenseStamp` was actually making it, so
+ * a future caller could reasonably believe this function is safe to call on any folder. It is not.
+ */
 async function stampLicenseInJson(
   repoRootRelativePath: string,
   root: string = repoRoot,
@@ -381,21 +391,38 @@ async function stampLicenseInJson(
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false;
     throw error;
   }
+  // Idempotence only - the folder-level decision above is what protects an extension deliberately
+  // given other terms.
   if (parsed.license === BUNDLED_EXTENSION_LICENSE) return false;
-  // An extension that has deliberately been given other terms is left alone; only a template's own
-  // value (or none) is overwritten.
-  if (parsed.license !== undefined && parsed.license !== 'MIT') return false;
 
+  // One mechanism for one placement decision: copy the file's own key order, putting `license`
+  // after `version` where the field was absent, and append it if there was no `version` to follow.
   const stamped: Record<string, unknown> = {};
   Object.entries(parsed).forEach(([key, value]) => {
     stamped[key] = key === 'license' ? BUNDLED_EXTENSION_LICENSE : value;
     if (key === 'version' && parsed.license === undefined)
       stamped.license = BUNDLED_EXTENSION_LICENSE;
   });
-  if (stamped.license === undefined) stamped.license = BUNDLED_EXTENSION_LICENSE;
+  if (!('license' in stamped)) stamped.license = BUNDLED_EXTENSION_LICENSE;
 
-  await fs.writeFile(file, `${JSON.stringify(stamped, undefined, 2)}\n`, 'utf8');
+  // Formatted with Prettier rather than written straight out of `JSON.stringify`, because this
+  // reprints the WHOLE file rather than editing the one field, and the two disagree: Prettier keeps
+  // a short array inline (`"commands": ["dotnet-csharpier"]`) where `JSON.stringify` always expands
+  // it across three lines. `update-from-templates` runs this over every extension folder, so the
+  // disagreement would surface far from here - as `npm run format:check` failing in an unrelated CI
+  // step after a template merge, against a file nobody edited.
+  await fs.writeFile(
+    file,
+    await formatJson(`${JSON.stringify(stamped, undefined, 2)}\n`, file),
+    'utf8',
+  );
   return true;
+}
+
+/** Formats JSON text the way `npm run format` would, so a rewritten manifest stays check-clean. */
+async function formatJson(text: string, file: string): Promise<string> {
+  const config = await prettier.resolveConfig(file);
+  return prettier.format(text, { ...config, filepath: file, parser: 'json' });
 }
 
 /**
