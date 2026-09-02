@@ -140,3 +140,62 @@ describe('which cleanup a platform gets', () => {
     });
   });
 });
+
+describe('processes this checkout must NOT claim', () => {
+  it('leaves a nested worktree alone, even though its path is inside the root', () => {
+    // Worktrees in this repo live at <root>/.claude/worktrees/<name>, so plain prefix containment
+    // claims every one of them. A teardown run from the canonical checkout would then kill every
+    // worktree's app — the exact cross-checkout kill this module exists to prevent, wearing a
+    // different shape.
+    const nested = {
+      pid: 501,
+      comm: 'electron',
+      cwd: path.join(ROOT, '.claude/worktrees/some-branch'),
+    };
+    const deeper = {
+      pid: 502,
+      comm: 'dotnet',
+      cwd: path.join(ROOT, '.claude/worktrees/some-branch/c-sharp'),
+    };
+
+    expect(selectPidsUnderRoot(ROOT, [nested, deeper], [])).toEqual([]);
+  });
+
+  it('still claims its own processes when it IS a nested worktree', () => {
+    // The run happening inside a worktree must clean up after itself.
+    const worktreeRoot = path.join(ROOT, '.claude/worktrees/some-branch');
+    const own = { pid: 503, comm: 'electron', cwd: worktreeRoot };
+
+    expect(selectPidsUnderRoot(worktreeRoot, [own], [])).toEqual([503]);
+  });
+});
+
+describe('process names as the kernel reports them', () => {
+  it('matches the data provider by the name /proc actually shows', () => {
+    // /proc/<pid>/comm is capped at 15 characters, so a 20-character executable name is truncated
+    // and a full-length entry in the list can never match anything.
+    const dataProvider = { pid: 601, comm: 'ParanextDataPro', cwd: ROOT };
+
+    expect(selectPidsUnderRoot(ROOT, [dataProvider], [])).toEqual([601]);
+  });
+});
+
+describe('a failing name sweep does not fail the run', () => {
+  it('reports the failure instead of throwing out of teardown', () => {
+    // `npm run stop` shelling out to ps/CIM and fkill can exit non-zero or time out; that was an
+    // expected outcome before and must not turn a passing run red.
+    const actions = {
+      killUnderRoot: () => [],
+      sweepByProcessName: () => {
+        throw new Error('npm run stop exited 1');
+      },
+    };
+
+    expect(() =>
+      runCleanup({ ciFlag: 'true', platform: 'darwin', root: ROOT }, actions),
+    ).not.toThrow();
+    expect(runCleanup({ ciFlag: 'true', platform: 'darwin', root: ROOT }, actions).swept).toBe(
+      'by-name-failed',
+    );
+  });
+});
