@@ -110,6 +110,18 @@ export function getCachedInterfaceMode(): InterfaceMode | undefined {
 }
 
 /**
+ * Record the mode a window restore acted on, without treating it as a change.
+ *
+ * The restore decides how many windows to build from its own read of the mode, and this is that
+ * value. Reacting to it would run a switch against a window set that already matches it.
+ *
+ * @param mode Mode the restore read, or `undefined` if it could not be read
+ */
+export function seedInterfaceMode(mode: InterfaceMode | undefined): void {
+  cachedInterfaceMode = mode;
+}
+
+/**
  * Whether a window is closing because the mode changed. Its entry stays in the persisted structure,
  * and any layout it pushes from here on is ignored.
  *
