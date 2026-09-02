@@ -95,6 +95,14 @@
     // The base version needs to align with the Ubuntu runners in the GitHub Actions workflows.
     // Some things are built in the host OS, and some are built in the snap environment. If they
     // don't match, there will likely be compatibility issues.
+    //
+    // It must also align with the GNOME platform content snap mounted at $SNAP/gnome-platform,
+    // which is NOT configurable here: electron-builder's snapcraft template hardcodes that plug
+    // and config can replace a template plug entry but never rename or remove one. Renaming it is
+    // what matters -- snapd matches stored connections by plug NAME on refresh, so an attribute-only
+    // override leaves existing installs mounting the old platform. The pairing therefore lives in
+    // the `app-builder-lib` patch under `patches/`, and is enforced against this `base` value by
+    // .erb/scripts/electron-builder-snap-config.test.ts
     base: 'core22',
     category: 'Development',
     environment: {
@@ -138,23 +146,6 @@
       'unity7',
       'wayland',
       'x11',
-      // electron-builder's snapcraft template hardcodes a `gnome-3-28-1804` content plug (Ubuntu
-      // 18.04 / GNOME 3.28) and does not revise it when `base` is set, so without this override a
-      // core22 app mounts a bionic GNOME platform: mismatched Mesa/DRI, libdbus and GTK/Wayland
-      // stacks, and no window opens at all. Config can REPLACE a template plug entry but never
-      // remove one, so this has to reuse the template's key rather than introduce a new one --
-      // two plugs would then compete for the same mount point. snapd matches content plugs on the
-      // `content` attribute, which defaults to the key, so overriding `content` is what actually
-      // rebinds the plug. Keep in step with `base` above; enforced by
-      // .erb/scripts/electron-builder-snap-config.test.ts
-      {
-        'gnome-3-28-1804': {
-          interface: 'content',
-          content: 'gnome-42-2204',
-          target: '$SNAP/gnome-platform',
-          'default-provider': 'gnome-42-2204',
-        },
-      },
       {
         'dot-platform-bible': {
           interface: 'personal-files',
