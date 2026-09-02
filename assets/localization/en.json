@@ -1,4 +1,8 @@
 {
+  "%abandonedWindow_confirm_close%": "Close window",
+  "%abandonedWindow_confirm_detail%": "It could not be restored after several attempts. Closing it will bring it back the next time you open the application.",
+  "%abandonedWindow_confirm_leaveOpen%": "Leave it open",
+  "%abandonedWindow_confirm_message%": "This window stopped responding",
   "%about_ariaLabel_opensTermsOfService%": "Opens in your default application for Markdown files",
   "%about_copyright_format%": "Copyright © {years} SIL Global and United Bible Societies",
   "%about_db_ip_attribution_format%": "{intro} {websiteLink} ({license}, {terms})",
