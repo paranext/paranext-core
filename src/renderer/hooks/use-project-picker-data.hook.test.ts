@@ -573,6 +573,50 @@ describe('useProjectPickerData', () => {
     expect(result.current.currentSimpleProject?.id).toBe('proj-r1');
   });
 
+  it('does not re-render its consumer when a web view event leaves the active editor unchanged', async () => {
+    // Not re-fetching metadata (above) is not enough: a refresh counter in state re-renders the
+    // consumer on every web view event even when the project it stands for is unchanged. This hook
+    // feeds PlatformBibleToolbar, and a project switch fires a burst of these events, so the render
+    // count must not scale with the number of events.
+    const { getNetworkEvent, getAllOpenWebViewDefinitionsSync, projectLookupService } =
+      await importMocks();
+    let webViewCallback: (() => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      (eventName: string) =>
+        vi.fn((cb: () => void) => {
+          if (eventName === EVENT_NAME_ON_DID_UPDATE_WEB_VIEW) webViewCallback = cb;
+          return vi.fn();
+        }) as never,
+    );
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-r1' },
+    ] as never);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([{ id: 'proj-r1', fullName: 'Full proj-r1', name: 'Short proj-r1' }]) as never,
+    );
+
+    let renderCount = 0;
+    const { result } = renderHook(() => {
+      renderCount += 1;
+      return useProjectPickerData();
+    });
+    await settle(result);
+    expect(result.current.currentSimpleProject?.id).toBe('proj-r1');
+    const rendersBefore = renderCount;
+
+    // Same open web views throughout, so every event resolves the same active editor project id.
+    expect(webViewCallback).toBeDefined();
+    const fireWebViewEvent = webViewCallback!;
+    const eventCount = 10;
+    for (let i = 0; i < eventCount; i += 1) act(() => fireWebViewEvent());
+
+    // Not zero: `useState` has to render once to discover the value is unchanged before it can bail
+    // out. What matters is that the count does not scale with the number of events — a refresh
+    // counter would add one render per event.
+    expect(renderCount - rendersBefore).toBeLessThanOrEqual(1);
+    expect(result.current.currentSimpleProject?.id).toBe('proj-r1');
+  });
+
   it('re-fetches metadata when onDidReloadExtensions fires (project set may have changed)', async () => {
     const { getNetworkEvent, projectLookupService } = await importMocks();
     let reloadCallback: (() => void) | undefined;
