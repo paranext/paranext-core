@@ -417,6 +417,11 @@ async function reopenPreservedWindows(
  * run already going there is the SAME switch's, and re-reads the set every pass; here it is an
  * earlier switch's, and is about to stop without finishing.
  *
+ * Unbounded, deliberately: a window creation that never finishes holds every later switch's reopen
+ * behind it. That is the lesser harm — such a run is stuck holding the very entry the later one
+ * would read, so letting it past would put back a duplicate of exactly the window the user is
+ * missing. The hang is the thing to fix if it is ever seen, not this wait.
+ *
  * @param deps Collaborators to act through
  * @param generation Switch this reopen belongs to
  */
