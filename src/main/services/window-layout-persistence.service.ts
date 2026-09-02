@@ -154,7 +154,6 @@ function parseBoundsState(
     bounds: parseRectangle(boundsSource),
     isMaximized: record.isMaximized === true ? true : undefined,
     isFullScreen: record.isFullScreen === true ? true : undefined,
-    displayBounds: parseRectangle(record.displayBounds),
   };
 }
 
@@ -453,7 +452,6 @@ export function updateWindowBounds(windowId: string, boundsState: WindowBoundsSt
   // Bounds are captured only while the window is in its normal state; a maximized/minimized/
   // full-screen capture carries no bounds and must keep the last normal placement
   slot.entry.bounds = boundsState.bounds ?? slot.entry.bounds;
-  slot.entry.displayBounds = boundsState.displayBounds ?? slot.entry.displayBounds;
   slot.entry.isMaximized = boundsState.isMaximized ?? slot.entry.isMaximized;
   slot.entry.isFullScreen = boundsState.isFullScreen ?? slot.entry.isFullScreen;
   scheduleWrite();
@@ -620,10 +618,9 @@ export function getPreservedEntryIds(): string[] {
 /**
  * The entry a durable id names, or `undefined` if that entry has left the structure.
  *
- * A copy of the entry's own fields, but a SHALLOW one: `bounds`, `displayBounds` and the whole
- * `layout` tree are the live slot's objects, so a caller that mutates them mutates what the window
- * is keeping up to date. Callers read placement and pass the layout along untouched, which is all
- * this promises.
+ * A copy of the entry's own fields, but a SHALLOW one: `bounds` and the whole `layout` tree are the
+ * live slot's objects, so a caller that mutates them mutates what the window is keeping up to date.
+ * Callers read placement and pass the layout along untouched, which is all this promises.
  *
  * @param entryWindowId Durable id of the entry to read
  */
