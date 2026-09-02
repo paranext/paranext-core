@@ -17,7 +17,6 @@ describe('ensureBoundsVisibleOnSomeDisplay', () => {
       bounds: { x: 100, y: 50, width: 800, height: 600 },
       isMaximized: false,
       isFullScreen: false,
-      displayBounds: { ...PRIMARY.bounds },
     };
 
     expect(ensureBoundsVisibleOnSomeDisplay(savedState, [PRIMARY, SECONDARY], PRIMARY)).toEqual(
@@ -45,7 +44,6 @@ describe('ensureBoundsVisibleOnSomeDisplay', () => {
       width: DEFAULT_WINDOW_WIDTH,
       height: DEFAULT_WINDOW_HEIGHT,
     });
-    expect(result.displayBounds).toEqual(PRIMARY.bounds);
   });
 
   test('keeps a maximized window maximized while re-placing it off a departed display', () => {
@@ -53,7 +51,6 @@ describe('ensureBoundsVisibleOnSomeDisplay', () => {
       bounds: { x: 2000, y: 100, width: 800, height: 600 },
       isMaximized: true,
       isFullScreen: false,
-      displayBounds: { ...SECONDARY.bounds },
     };
 
     const result = ensureBoundsVisibleOnSomeDisplay(savedState, [PRIMARY], PRIMARY);
@@ -65,7 +62,6 @@ describe('ensureBoundsVisibleOnSomeDisplay', () => {
       width: DEFAULT_WINDOW_WIDTH,
       height: DEFAULT_WINDOW_HEIGHT,
     });
-    expect(result.displayBounds).toEqual(PRIMARY.bounds);
   });
 
   test('re-places a partially offscreen window (containment must be within a single display)', () => {

@@ -58,7 +58,6 @@ export function ensureBoundsVisibleOnSomeDisplay(
       width: DEFAULT_WINDOW_WIDTH,
       height: DEFAULT_WINDOW_HEIGHT,
     },
-    displayBounds: { ...primaryDisplay.bounds },
   };
 }
 
