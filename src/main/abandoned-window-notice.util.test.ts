@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  chooseNoticeParentWindowId,
   decideAbandonedWindowNotice,
   type AbandonedWindowNoticeInput,
 } from '@main/abandoned-window-notice.util';
@@ -22,12 +23,12 @@ describe('decideAbandonedWindowNotice', () => {
     });
   });
 
-  test('asks on the primary instead when the abandoned window is not on screen', () => {
+  test('asks on another window when the abandoned window is not on screen', () => {
     // A modal parented to a minimized or hidden window is a question nobody is shown, and the
     // window it is about has already stopped being somewhere the user can look
     expect(decideAbandonedWindowNotice({ ...ASKABLE, isAbandonedWindowVisible: false })).toEqual({
       kind: 'ask',
-      parent: 'primary-window',
+      parent: 'another-window',
     });
   });
 
@@ -64,5 +65,46 @@ describe('decideAbandonedWindowNotice', () => {
         isAbandonedWindowVisible: false,
       }),
     ).toEqual({ kind: 'stay-silent' });
+  });
+});
+
+describe('chooseNoticeParentWindowId', () => {
+  test('never answers with the window the notice is about', () => {
+    // This choice is only made because that window is not on screen, and the primary role sits on
+    // the persisted entry — which a window given up on keeps. Answering with it would put the
+    // question back on the window nobody is shown, which is the whole thing this avoids.
+    expect(
+      chooseNoticeParentWindowId(1, [
+        { windowId: 1, isPrimary: true },
+        { windowId: 2, isPrimary: false },
+      ]),
+    ).toBe(2);
+  });
+
+  test('prefers the primary among the windows that are left', () => {
+    expect(
+      chooseNoticeParentWindowId(1, [
+        { windowId: 2, isPrimary: false },
+        { windowId: 3, isPrimary: true },
+      ]),
+    ).toBe(3);
+  });
+
+  test('takes any other window when none of them holds the role', () => {
+    // Reachable exactly when the abandoned window is the primary: some window has to carry the
+    // question, and any window the user can see beats one they cannot
+    expect(
+      chooseNoticeParentWindowId(1, [
+        { windowId: 1, isPrimary: true },
+        { windowId: 2, isPrimary: false },
+        { windowId: 3, isPrimary: false },
+      ]),
+    ).toBe(2);
+  });
+
+  test('answers with nothing when there is no other window', () => {
+    // The caller shows the box with no parent rather than parenting it to a window off screen
+    expect(chooseNoticeParentWindowId(1, [{ windowId: 1, isPrimary: true }])).toBeUndefined();
+    expect(chooseNoticeParentWindowId(1, [])).toBeUndefined();
   });
 });
