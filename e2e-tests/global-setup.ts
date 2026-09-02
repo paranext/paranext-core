@@ -233,9 +233,10 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       cwd: rootDir,
       stdio: ['ignore', devServerLog, devServerLog],
       shell: true,
-      // Create a new process group so global-teardown can kill the entire tree
-      // via process.kill(-pid). Without this, the shell child inherits the
-      // parent's PGID and process.kill(-pid) throws ESRCH.
+      // Create a new process group so global-teardown can kill the entire tree: on POSIX via
+      // process.kill(-pid) (without this, the shell child inherits the parent's PGID and
+      // process.kill(-pid) throws ESRCH), on Windows via `taskkill /t` instead, since `detached`
+      // does not create an addressable process group there.
       detached: true,
       // Must clear ELECTRON_RUN_AS_NODE for the env to be clean.
       // SKIP_START_MAIN tells the webpack dev server's setupMiddlewares to skip
