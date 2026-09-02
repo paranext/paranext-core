@@ -16,6 +16,9 @@ const config = defineConfig(async () => {
         'src/**/*.test.tsx',
         'tools/pt9-css-converter/src/**/*.test.ts',
         '.erb/scripts/**/*.test.ts',
+        // e2e HARNESS logic only — never the Playwright specs, which live under
+        // e2e-tests/tests/ and are run by Playwright, not vitest.
+        'e2e-tests/*.test.ts',
       ],
     },
   };
