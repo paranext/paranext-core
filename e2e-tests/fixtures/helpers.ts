@@ -512,14 +512,10 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
       // eslint-disable-next-line no-null/no-null
       return electronProcess.exitCode === null && electronProcess.signalCode === null;
     if (pid === undefined) return false;
-    // No child-process handle (Playwright disposed it) — probe the OS directly. Signal 0 performs
-    // only an existence/permission check and delivers nothing.
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
+    // No child-process handle (Playwright disposed it) — probe the OS directly. Shared with the
+    // backup-ownership checks so both answer EPERM the same way: a refused signal means the process
+    // exists, and reading it as dead here would leak an Electron holding the fixed debug port.
+    return isPidAlive(pid);
   };
 
   if (isProcessAlive()) {
