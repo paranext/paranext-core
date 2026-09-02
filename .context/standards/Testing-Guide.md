@@ -1260,6 +1260,10 @@ Where a spec lives is decided by how it gets its app, and that choice also picks
   because they cannot own its lifecycle. Uses `cdp.fixture` and `playwright-cdp.config.ts`.
   Deliberately not a project in `playwright.config.ts`: its `globalSetup` refuses to run while
   port 8876 is bound, which is exactly the state these specs need.
+- `tests/enhanced-resources/`, `tests/manage-books/`, `tests/markers-checklist/` — older
+  local-only suites that also use `cdp.fixture` and the CDP config. They are not part of any
+  standard run (see their READMEs for what collects each and why), so put new work in one of the
+  three directories above rather than extending them.
 - `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
   tests.
 
@@ -1288,7 +1292,7 @@ e2e-tests/
 
 | Fixture       | Mode                               | When to Use                               | Provides                  |
 | ------------- | ---------------------------------- | ----------------------------------------- | ------------------------- |
-| `cdp.fixture`      | Connects to running app (CDP 9223)        | Specs under `tests/attached/` only        | `mainPage`                |
+| `cdp.fixture`      | Connects to running app (CDP 9223)        | Specs that attach to an app you started   | `mainPage`                |
 | `app.fixture`      | Launches fresh Electron                   | CI smoke tests, standalone testing        | `electronApp`, `mainPage` |
 | `papi.fixture`     | Extends app.fixture + WebSocket           | **Deprecated** — CI smoke tests only      | `papiClient` + app.fixture |
 | `papi-live.fixture`| Connects to already-running app (WS 8876) | Command-surface verification only (see below) | `papiLive`                |
@@ -1413,6 +1417,8 @@ A cross-screen journey test that only checks `toBeVisible()` proves the page ren
 
 ```bash
 # CDP mode (app already running via ./.erb/scripts/refresh.sh)
+# Swap tests/attached/ for tests/enhanced-resources/, tests/manage-books/ or
+# tests/markers-checklist/ to run one of the local-only suites.
 npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=list
 
 # CDP mode with HTML report

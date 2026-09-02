@@ -3,8 +3,10 @@
  *
  * Matching processes by NAME reaches every `electron` and `dotnet` on the machine: the developer's
  * own app, any app a CDP-based suite is attached to, and other checkouts' runs on a shared box.
- * Selection here is by working directory instead, so cleanup reaches only what this checkout
- * started.
+ * Selection here is by working directory instead, so cleanup stays inside this checkout. Note what
+ * that does and does not say: it reaches every sweepable process whose working directory is in
+ * here, including ones this run did not start — a `npm run start:data` left running in another
+ * terminal is inside the checkout and will be signalled.
  *
  * Two decisions live here so they can be tested without killing anything: whether to sweep at all,
  * and which processes belong to this checkout.
@@ -56,7 +58,7 @@ export function isSweepEnabled(value: string | undefined): boolean {
  *
  * A working directory read from /proc is always fully resolved, so a root that still contains a
  * symlink compares against a path no process can match. The fallback covers a root that does not
- * exist, and every root on a host without /proc.
+ * exist, which is what the unit tests' synthetic roots rely on.
  */
 function realPathOrResolved(dir: string): string {
   const resolved = path.posix.resolve(dir);

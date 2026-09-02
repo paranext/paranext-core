@@ -788,18 +788,19 @@ test.describe('Search Filters', () => {
     // Close filters panel
     await matchCaseCheckbox.press('Escape');
 
-    // The search re-runs itself once the filters change. Asserting only that a counter is on
-    // screen would pass without either filter doing anything, because the unfiltered search
-    // already put one there — so compare against what it read before.
+    // The search re-runs itself once the filters change. Asserting only that a counter is on screen
+    // would pass without either filter doing anything, because the unfiltered search already put
+    // one there — so compare against what it read before.
+    //
+    // The counter must be present, with no fallback to the results paragraph: that paragraph also
+    // carries the regex ERROR message, so accepting it would let a filtered search that FAILED
+    // count as success. This term still matches under both filters, so a run that produces no
+    // counter has gone wrong however it presents.
     await expect(async () => {
-      if (await frame.locator('.tw\\:tabular-nums').isVisible()) {
-        const counterAfterFilters = await frame
-          .locator('.tw\\:tabular-nums')
-          .textContent({ timeout: 1_000 });
-        expect(counterAfterFilters).not.toBe(counterBeforeFilters);
-      } else if (!(await resultsMessage(frame).isVisible())) {
-        throw new Error('Waiting for the filtered search to produce results');
-      }
+      const counterAfterFilters = await frame
+        .locator('.tw\\:tabular-nums')
+        .textContent({ timeout: 1_000 });
+      expect(counterAfterFilters).not.toBe(counterBeforeFilters);
     }).toPass({ timeout: 30_000 });
   });
 });

@@ -65,9 +65,10 @@ describe('which processes belong to this checkout', () => {
   });
 
   it('never selects this process or its ancestors', () => {
-    // Teardown runs from the repo root, so without this it would select the very process doing the
-    // killing and take the run down with it.
-    const self = { pid: 999, comm: 'node', cwd: ROOT };
+    // The stand-in has to carry a sweepable name. With something the name filter rejects anyway —
+    // `node`, which is what teardown's own process really is — this passes whether or not the
+    // exclusion works, and the exclusion is the only thing it is here to check.
+    const self = { pid: 999, comm: 'electron', cwd: ROOT };
 
     expect(selectPidsUnderRoot(ROOT, [...candidates, self], [999])).not.toContain(999);
   });

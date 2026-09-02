@@ -414,6 +414,13 @@ test.describe('Search history on close', () => {
   test('adds the search term to history when the Find panel is closed', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
 
+    // Seed one entry so the history control exists at all. RecentSearches renders nothing when the
+    // list is empty, so on a profile with no history the dropdown this test opens is simply absent
+    // — which would fail as if the control had regressed. Earlier tests in this file happen to
+    // leave history behind, but relying on that makes running this one alone fail confusingly.
+    await frame.locator('#search-term').fill(`histtest-seed-${Date.now()}`);
+    await frame.locator('#search-term').press('Enter');
+
     const term = `histtest-unmount-${Date.now()}`;
     await frame.locator('#search-term').fill(term);
     const filledAt = Date.now();
@@ -435,14 +442,15 @@ test.describe('Search history on close', () => {
       timeout: 2_000,
     });
 
-    // The panel also writes to history after a period of inactivity, and that write dedups against
-    // the one the close performs. So if the steps above ever outlast the debounce, the term is
-    // already in history before the close, the close becomes a no-op, and this test would pass
-    // even with the close-path write deleted — the exact regression it exists to catch. Fail
-    // loudly instead of passing for the wrong reason.
-    expect(Date.now() - filledAt).toBeLessThan(HISTORY_INACTIVITY_DEBOUNCE_MS);
-
     await closeFindPanel(mainPage);
+
+    // The panel also writes to history after a period of inactivity, and that write dedups against
+    // the one the close performs. So if the term reaches the debounce before the panel is actually
+    // gone, the close becomes a no-op and this test would pass even with the close-path write
+    // deleted — the exact regression it exists to catch. The measurement has to span the close
+    // itself, not just the setup before it: the unmount is the event that must win, and
+    // `closeFindPanel` returns only once the tab has gone, so by here the race is decided.
+    expect(Date.now() - filledAt).toBeLessThan(HISTORY_INACTIVITY_DEBOUNCE_MS);
 
     const reopened = await openFindPanel(mainPage);
     await openHistoryDropdown(reopened);

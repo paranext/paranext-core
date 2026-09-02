@@ -52,7 +52,7 @@ export default async function globalTeardown(_config: FullConfig): Promise<void>
   if (scoped) {
     console.log(
       pids.length > 0
-        ? `Cleanup: terminated ${pids.length} process(es) under ${rootDir}: ${pids.join(', ')}`
+        ? `Cleanup: signalled ${pids.length} process(es) under ${rootDir}: ${pids.join(', ')}`
         : `Cleanup: no leftover processes under ${rootDir}.`,
     );
   } else if (byName === 'skipped') {
