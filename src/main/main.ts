@@ -1768,48 +1768,44 @@ async function main() {
       // Cleared before it is run so a second pass through here cannot run it again
       const unsubscribeMode = unsubscribeInterfaceMode;
       unsubscribeInterfaceMode = undefined;
-      if (unsubscribeMode) {
-        // Bounded for the same reason as the menubar unsubscribe below: it is a request to the
-        // extension host, and one that has stopped answering would otherwise hold the whole quit
-        // for the request timeout. A subscription left behind in a process about to exit costs
-        // nothing.
-        const didFinishUnsubscribing = await waitForDuration(async () => {
-          try {
-            await unsubscribeMode();
-          } catch (error) {
-            logger.warn(
-              `Failed to unsubscribe from interface mode changes: ${getErrorMessage(error)}`,
-            );
-          }
-          return true;
-        }, PROCESS_CLOSE_TIME_OUT_MS);
-        if (!didFinishUnsubscribing)
-          logger.warn(
-            `The interface mode did not unsubscribe within ${PROCESS_CLOSE_TIME_OUT_MS} ms; quitting anyway`,
-          );
-      }
-
-      // Cleared before it is run so a second pass through here cannot run it again
       const unsubscribeMenubar = unsubscribeMacosMenubar;
       unsubscribeMacosMenubar = undefined;
-      if (unsubscribeMenubar) {
-        // Bounded like every other wait on this path. The unsubscribe is an RPC to the extension
-        // host, which is still up at this point and should answer at once — but an extension host
-        // that has stopped answering would otherwise hold the whole quit for the request timeout,
-        // and a subscription left behind in a process that is about to exit costs nothing.
+
+      /**
+       * Unsubscribe one session-long subscription on the way out, bounded.
+       *
+       * Each is an RPC to the extension host, which is still up at this point and should answer at
+       * once — but one that has stopped answering would otherwise hold the whole quit for the
+       * request timeout, and a subscription left behind in a process about to exit costs nothing.
+       *
+       * @param name What is being unsubscribed, for the log
+       * @param unsubscribe The unsubscriber, if there is one
+       */
+      const unsubscribeBounded = async (
+        name: string,
+        unsubscribe: (() => Promise<boolean>) | undefined,
+      ) => {
+        if (!unsubscribe) return;
         const didFinishUnsubscribing = await waitForDuration(async () => {
           try {
-            await unsubscribeMenubar();
+            await unsubscribe();
           } catch (error) {
-            logger.warn(`Failed to unsubscribe the macOS menubar: ${getErrorMessage(error)}`);
+            logger.warn(`Failed to unsubscribe ${name}: ${getErrorMessage(error)}`);
           }
           return true;
         }, PROCESS_CLOSE_TIME_OUT_MS);
         if (!didFinishUnsubscribing)
           logger.warn(
-            `The macOS menubar did not unsubscribe within ${PROCESS_CLOSE_TIME_OUT_MS} ms; quitting anyway`,
+            `${name} did not unsubscribe within ${PROCESS_CLOSE_TIME_OUT_MS} ms; quitting anyway`,
           );
-      }
+      };
+
+      // Together rather than one after the other: they are independent, and waiting on them in turn
+      // would make the quit's worst case before the process-close waits the sum of their bounds.
+      await Promise.all([
+        unsubscribeBounded('the interface mode', unsubscribeMode),
+        unsubscribeBounded('the macOS menubar', unsubscribeMenubar),
+      ]);
 
       await Promise.all([
         dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
