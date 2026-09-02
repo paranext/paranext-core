@@ -8,6 +8,10 @@ import {
 import { windowServiceProviderName } from '@shared/services/window.service-model';
 import { settle } from '@main/services/__tests__/service-router-test.util';
 import { dataProviderService } from '@shared/services/data-provider.service';
+import {
+  forgetWindowWithholding,
+  noteWindowWithheldFromActivation,
+} from '@main/window-activation.util';
 
 /** Handler the engine registers against the routing-target-change event, so tests can fire it */
 type RoutingTargetChangeHandler = (windowId: string | undefined) => void;
@@ -101,6 +105,8 @@ function moveRoutingTargetTo(windowId: string | undefined) {
 describe('window service router', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Which windows were created without activation is process state, not a mock.
+    forgetWindowWithholding('1');
     mocks.routingTargetChangeHandlers.clear();
     mocks.getTargetWindowId.mockReturnValue('1');
   });
@@ -150,7 +156,7 @@ describe('window service router', () => {
 
     await engine.setFocus(undefined, 'detect');
 
-    expect(second.setFocus).toHaveBeenCalledWith(undefined, 'detect');
+    expect(second.setFocus).toHaveBeenCalledWith(undefined, 'detect', false);
     expect(first.setFocus).not.toHaveBeenCalled();
   });
 
@@ -160,7 +166,35 @@ describe('window service router', () => {
 
     await engine.setFocus('detect');
 
-    expect(only.setFocus).toHaveBeenCalledWith(undefined, 'detect');
+    expect(only.setFocus).toHaveBeenCalledWith(undefined, 'detect', false);
+  });
+
+  test('tells a window still awaiting its first activation not to take document focus', async () => {
+    // Every mounted panel and every loaded web view asks the window service to focus it, and
+    // routing lands here whenever the background window is the one ready to take work. Honouring
+    // that focus would pull forward the window the platform deliberately opened behind.
+    const only = windowShard('a');
+    const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+    noteWindowWithheldFromActivation('1');
+
+    await engine.setFocus('detect');
+
+    expect(only.setFocus).toHaveBeenCalledWith(undefined, 'detect', true);
+
+    forgetWindowWithholding('1');
+  });
+
+  test('tells a window the user has activated to focus normally', async () => {
+    // The positive control for the rule above: the withholding ends at the first activation, so an
+    // ordinary window can never reach the new branch.
+    const only = windowShard('a');
+    const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+    noteWindowWithheldFromActivation('1');
+    forgetWindowWithholding('1');
+
+    await engine.setFocus('detect');
+
+    expect(only.setFocus).toHaveBeenCalledWith(undefined, 'detect', false);
   });
 
   test('deselects with one argument, the only form that survives the trip to the renderer', async () => {
