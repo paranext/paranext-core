@@ -44,6 +44,12 @@ import {
 export type MoveWebViewTarget = number | 'new';
 
 /**
+ * Web views with a move already running, so a second move of the same one is refused rather than
+ * racing it. Ids only: this is about which web view is spoken for, not about the move's details.
+ */
+const movesInProgress = new Set<WebViewId>();
+
+/**
  * How many times {@link findWebViewAdoptedAfterTimeout} asks the target whether the adopt landed.
  *
  * Attempts and delay are sized together to cover a provider slower than the request timeout on a
@@ -53,12 +59,6 @@ export type MoveWebViewTarget = number | 'new';
  * briefly is worse than the cost of a user waiting a few seconds longer for a move that was already
  * in trouble.
  */
-/**
- * Web views with a move already running, so a second move of the same one is refused rather than
- * racing it. Ids only: this is about which web view is spoken for, not about the move's details.
- */
-const movesInProgress = new Set<WebViewId>();
-
 const LATE_ADOPT_PROBE_ATTEMPTS = 4;
 
 /** How long {@link findWebViewAdoptedAfterTimeout} waits between attempts. See the attempt count */
