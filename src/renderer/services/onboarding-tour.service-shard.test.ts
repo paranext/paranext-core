@@ -4,6 +4,7 @@ import { ONBOARDING_TOUR_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/servic
 const mocks = vi.hoisted(() => ({
   networkObjectSet: vi.fn(),
   requestTourReplay: vi.fn(),
+  getFirstRunStatus: vi.fn(),
 }));
 
 vi.mock('@shared/services/network-object.service', () => ({
@@ -13,6 +14,9 @@ vi.mock('@shared/services/network-object.service', () => ({
 }));
 vi.mock('@renderer/components/onboarding-tour/onboarding-tour.store', () => ({
   requestTourReplay: mocks.requestTourReplay,
+}));
+vi.mock('@renderer/services/first-run-store', () => ({
+  getFirstRunStatus: mocks.getFirstRunStatus,
 }));
 
 /** Register the shard and hand back the object the main process's router calls into */
@@ -32,6 +36,7 @@ async function registerShard() {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.networkObjectSet.mockResolvedValue({ dispose: vi.fn() });
+  mocks.getFirstRunStatus.mockReturnValue({ kind: 'app' });
   // A renderer receives its window id as a string query parameter
   globalThis.windowId = '1';
 });
@@ -69,5 +74,18 @@ describe('what the shard does when the router calls it', () => {
     await shard.show();
 
     expect(mocks.requestTourReplay).toHaveBeenCalledTimes(1);
+  });
+
+  test('drops a request the tour could never show rather than banking it for later', async () => {
+    // Nothing consumes the replay count, so a request accepted while the first-run wizard still
+    // gates the app would not be discarded — it would sit until the wizard finished and then open
+    // the tour unprompted. Refusing at the boundary is what keeps "cannot show now" from meaning
+    // "will show at some arbitrary later moment".
+    mocks.getFirstRunStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    const { shard } = await registerShard();
+
+    await shard.show();
+
+    expect(mocks.requestTourReplay).not.toHaveBeenCalled();
   });
 });

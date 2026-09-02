@@ -104,6 +104,9 @@ vi.mock('./tour.component', async (importOriginal) => {
 // OnboardingTour polls for this element before it opens (the dock layout loads async, so the
 // panel divs are not present at startup; we add a stand-in so the layoutReady gate clears).
 let layoutPanelEl: HTMLElement;
+// The toolbar's Profile button — the one stop that survives Tour's filter in Power mode, and so
+// what the readiness gate waits for there. `platform-bible-toolbar` renders it in both modes.
+let profileTriggerEl: HTMLElement;
 
 beforeEach(() => {
   mockStatus = { kind: 'app' };
@@ -115,12 +118,17 @@ beforeEach(() => {
   layoutPanelEl = document.createElement('div');
   layoutPanelEl.setAttribute('data-dockid', SIMPLE_PANEL_ID_PROJECT);
   document.body.appendChild(layoutPanelEl);
+
+  profileTriggerEl = document.createElement('button');
+  profileTriggerEl.setAttribute('data-testid', 'user-profile-popover-trigger');
+  document.body.appendChild(profileTriggerEl);
 });
 
 afterEach(() => {
   cleanup();
   mockTourDone = false;
   layoutPanelEl?.remove();
+  profileTriggerEl?.remove();
 });
 
 describe('OnboardingTour', () => {
@@ -197,7 +205,7 @@ describe('OnboardingTour', () => {
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
 
-  it('does not render in Power mode', () => {
+  it('does not auto-show in Power mode', () => {
     mockIsPowerMode = true;
     render(<OnboardingTour />);
     expect(screen.queryByTestId('mock-tour')).toBeNull();
@@ -272,7 +280,10 @@ describe('OnboardingTour', () => {
     expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
   });
 
-  it('ignores a replay request in Power mode, where the tour has nothing to point at', () => {
+  it('shows a replay in Power mode, where the shared Profile stop still applies', () => {
+    // Power has no Simple columns and no Sync button, so Tour's open-time filter drops those stops.
+    // The Profile stop survives — the toolbar renders `UserProfilePopover` in both modes — and it
+    // is the one thing Help > Show the tour again can still teach a Power user.
     mockIsPowerMode = true;
     writeTourDone();
     render(<OnboardingTour />);
@@ -281,6 +292,43 @@ describe('OnboardingTour', () => {
       requestTourReplay();
     });
 
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+  });
+
+  it('opens a Power replay without waiting for the Simple layout panel', () => {
+    // The readiness gate exists so the column stops are in the DOM before Tour snapshots its step
+    // list. Power never mounts those panels, so waiting on them would stall the replay until the
+    // 10s safety timeout — a Help menu item that appears to do nothing for ten seconds.
+    layoutPanelEl.remove();
+    mockIsPowerMode = true;
+    writeTourDone();
+    render(<OnboardingTour />);
+
+    act(() => {
+      requestTourReplay();
+    });
+
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+  });
+
+  it('waits for the toolbar Profile button before opening a Power replay', async () => {
+    // The gate is what stops Tour snapshotting an empty step list. If every stop filters out, Tour
+    // treats that as a skip and persists the done flag — so opening before the one Power anchor
+    // exists would silently consume the tour rather than show it.
+    profileTriggerEl.remove();
+    mockIsPowerMode = true;
+    writeTourDone();
+    render(<OnboardingTour />);
+
+    act(() => {
+      requestTourReplay();
+    });
     expect(screen.queryByTestId('mock-tour')).toBeNull();
+
+    await act(async () => {
+      document.body.appendChild(profileTriggerEl);
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
   });
 });

@@ -3198,6 +3198,54 @@ step, no automation. Just a record.
 - **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
 
+## adr-tour-offered-in-both-modes: Offer the orientation tour in both interface modes, letting the anchor filter decide what each mode sees
+
+- **Date:** 2026-09-02
+- **Status:** Accepted
+- **Context:** The tour was built for Simple mode and shipped Simple-only — hidden from the Help
+  menu in Power (`hiddenInterfaceModes`) and refused in the component (`!isPowerMode`). Review
+  established that this was a different answer than the one the stakeholder asked for ("we should
+  offer this tour under Help… for Power and Simple"), and that Power was not cleanly declined but
+  half-wired: `requestTourReplay()` increments a count nothing consumes, so a replay requested in
+  Power was accepted, rendered nothing, and then opened the tour unprompted if that window later
+  switched to Simple. Three of the five stops anchor to `[data-dockid="simple-panel-*"]` and a
+  fourth to the Sync button, which the toolbar renders only in Simple; the copy for two of them
+  asserts Simple invariants ("There is only ever one project here", "these can't be closed or
+  moved") that are false in Power. The fifth stop, the toolbar's Profile button, is rendered in
+  both modes and is where internet settings and registration live in both.
+- **Decision:** Offer the tour in both modes and let `Tour`'s existing open-time filter decide what
+  each mode gets — Simple sees its columns and toolbar stops, Power sees the one shared Profile
+  stop. Keep the *unrequested* showing Simple-only: `mightShow` allows Power only for an explicit
+  replay, so no Power user is interrupted by a one-stop tour they did not ask for. Make the
+  readiness gate mode-aware, waiting on the anchor that mode actually has. Refuse a replay at the
+  shard boundary while the first-run wizard gates the app, since that is the one non-transient
+  "cannot show" state and the request would otherwise be banked rather than dropped.
+- **Alternatives:**
+  - *Keep it Simple-only, declared deliberately* — rejected once the shared stop was identified.
+    Declining would have been defensible on the grounds that the tour teaches the three-column
+    model, but it discards a stop that is correct in Power and that answers the same question a
+    Power user has. It also leaves the stakeholder's request answered with "no" where a partial yes
+    costs a mode-aware selector.
+  - *Author a Power-specific tour* — rejected as premature: Power's orientation needs are not
+    established, and inventing stops for it inside a review pass is the kind of UX-by-developer the
+    review already pushed back on. If Power ever warrants its own tour, this decision does not
+    block it.
+  - *Let the tour auto-show in Power too* — rejected: a single stop pointing at the Profile button,
+    appearing unprompted on next launch for every existing Power user, is interruption without
+    orientation. The Help menu is the right door for it.
+  - *Fix only the banked-replay bug and leave Power refused* — rejected: it fixes the symptom the
+    review found while leaving the mode question unanswered, and the boundary refusal is needed
+    either way for the wizard case.
+- **Consequences:** The tour's step list is now a superset that each mode filters, so what a user
+  sees depends on what their layout renders — a stop added later without a Power-safe anchor simply
+  will not appear there, silently. That is the same degradation the component already relies on for
+  the Sync button (absent until `PT-4007`), so the behavior is not new, but it does mean stop count
+  is not a fixed number and tests assert on the filtered list rather than a constant. Copy for any
+  future stop must be true in every mode the stop can appear in, since the filter selects on anchor
+  presence and cannot know whether prose applies.
+- **Source:** PT-4262 review (PR #2632), where the Help entry was found to ship Simple-only against
+  an explicit request for both modes.
+
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 
 - **Date:** 2026-08-27
