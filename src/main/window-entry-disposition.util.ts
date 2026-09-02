@@ -1,8 +1,8 @@
 /**
  * Whether a closing window's persisted entry stays in the structure or leaves with it.
  *
- * Pure — the caller passes in what it knows — so the rule is unit-testable without Electron. It
- * lived inline in the close handler, where nothing could reach it.
+ * Pure — the caller passes in what it knows — so the rule is unit-testable without Electron rather
+ * than reachable only through a window's close handler.
  */
 
 /** What the close handler knows about the window and the application as the window goes */
@@ -32,8 +32,7 @@ export type WindowEntryDispositionInput = {
  * A window whose renderer was given up on after crash-looping keeps its entry too, and that is what
  * makes offering to close it safe: the window is dead either way, so the only question is whether
  * the user also loses its tabs. Without this, closing it would rewrite the structure without it and
- * the layout would be gone — which is why such a window used to be left open with no way out but a
- * relaunch.
+ * the layout would be gone, leaving a relaunch as the only way out of a dead window.
  *
  * The exception, for the last two but deliberately NOT for a quit: a window still waiting for the
  * content it was created to receive has nothing in its entry, so keeping it would resurrect a blank
