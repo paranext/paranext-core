@@ -60,12 +60,26 @@ export function isSweepEnabled(value: string | undefined): boolean {
  * unknown means "not ours", because /proc entries for another user's processes are unreadable and
  * guessing in that direction is how a neighbour's app gets killed.
  */
+/**
+ * `dir` with symlinks resolved, falling back to a plain resolve when the path cannot be read.
+ *
+ * A working directory read from /proc is always fully resolved, so a root that still contains a
+ * symlink compares against a path no process can match.
+ */
+function realPathOrResolved(dir: string): string {
+  try {
+    return fs.realpathSync(path.resolve(dir));
+  } catch {
+    return path.resolve(dir);
+  }
+}
+
 export function selectPidsUnderRoot(
   root: string,
   candidates: ProcessCandidate[],
   excludePids: number[],
 ): number[] {
-  const resolvedRoot = path.resolve(root);
+  const resolvedRoot = realPathOrResolved(root);
   const prefix = `${resolvedRoot}${path.sep}`;
   // Worktrees of this repository live at <root>/.claude/worktrees/<name>, so they sit INSIDE the
   // root by path while belonging to a different checkout and, usually, a different run. Plain
