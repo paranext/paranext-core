@@ -1361,7 +1361,12 @@ async function openWebView(
       webViewShards,
       options.targetWindowId,
     );
-    return shard.openWebView(webViewType, effectiveLayout, options);
+    return shard.openWebView(
+      webViewType,
+      effectiveLayout,
+      options,
+      shouldContentAvoidDocumentFocus(options.targetWindowId),
+    );
   }
 
   // A layout naming a tab or tab group names the window that holds it, so it routes the same way an

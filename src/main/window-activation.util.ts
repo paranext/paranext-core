@@ -65,13 +65,12 @@ export function noteWindowWithheldFromActivation(windowId: number): void {
 }
 
 /**
- * Record that a window has been activated, or has gone away.
+ * Stop withholding focus from content arriving in a window.
  *
- * Called from the window's `focus` handler and from its teardown — the second so a closed window's
- * id cannot sit in the set for the life of the process, and cannot answer for a later window that
- * is handed the same id.
+ * Called from the window's `focus` handler, which is the event that makes it an ordinary window,
+ * and from its teardown, which is what keeps the set from growing for the life of the process.
  */
-export function noteWindowActivated(windowId: number): void {
+export function forgetWindowWithholding(windowId: number): void {
   windowIdsAwaitingFirstActivation.delete(windowId);
 }
 

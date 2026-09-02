@@ -18,7 +18,7 @@ import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import type { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
 import { getWebViewMoveFailureDisposition } from '@shared/models/web-view-move.model';
 import {
-  noteWindowActivated,
+  forgetWindowWithholding,
   noteWindowWithheldFromActivation,
 } from '@main/window-activation.util';
 import { getErrorMessage } from 'platform-bible-utils';
@@ -217,7 +217,7 @@ describe('moveWebView', () => {
     vi.clearAllMocks();
     // Which windows were created without activation is process state, not a mock, so a test
     // that marks one has to leave the next test the window it expects.
-    noteWindowActivated(7);
+    forgetWindowWithholding(7);
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
@@ -371,7 +371,7 @@ describe('moveWebView', () => {
     setWebViewWindowCreator(creator);
     noteWindowWithheldFromActivation(7);
     // The user clicked into it while the move was still in flight, so it is an ordinary window now
-    noteWindowActivated(7);
+    forgetWindowWithholding(7);
 
     await moveWebView('view-1', 'new');
 

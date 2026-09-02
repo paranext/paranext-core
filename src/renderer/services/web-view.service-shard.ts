@@ -3799,6 +3799,11 @@ async function setDetachedScrRef(
  */
 const webViewServiceShard: WebViewServiceShard = {
   ...papiWebViewService,
+  // Named rather than left to the spread: `papiWebViewService` is typed as the public service,
+  // whose `openWebView` stops at three parameters. A function with fewer parameters is assignable
+  // to one with more optional ones, so the spread would satisfy the shard's widened signature with
+  // a value typed as though the fourth argument did not exist — and the main process passes it.
+  openWebView,
   dockContainsTab,
   hasContentArrivedSinceEmptyReport,
   openSettingsTab,

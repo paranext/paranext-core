@@ -118,7 +118,7 @@ import {
 } from '@main/services/window-layout-persistence.service';
 import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
 import {
-  noteWindowActivated,
+  forgetWindowWithholding,
   noteWindowWithheldFromActivation,
   planWindowActivation,
 } from '@main/window-activation.util';
@@ -792,7 +792,7 @@ async function main() {
       setFocusedWindowId(windowId);
       // The user is in this window now, so content arriving in it should take focus like anywhere
       // else. One activation is enough — this window stops being a background one for good.
-      noteWindowActivated(windowId);
+      forgetWindowWithholding(windowId);
     });
     // The other half of focus tracking: a blur with no focus following it is the whole application
     // going to the background, which is what isApplicationFocused answers from
@@ -1243,9 +1243,9 @@ async function main() {
       // is destroyed by now, and reading a property off it can throw — which would abandon the rest
       // of this teardown, leaving the window tracked forever and the app never told it closed.
       removeWindow(newWindow, windowId);
-      // Electron reuses window ids within a process, so leaving this id behind would let a closed
-      // background window answer for whatever window is handed its id next.
-      noteWindowActivated(windowId);
+      // Nothing will ask about this window again, and the set should not grow for the life of the
+      // process.
+      forgetWindowWithholding(windowId);
 
       // What this window's disappearance means for its entry. A deliberate close — the app stays up
       // — takes the entry with it, and the structure is rewritten without it below so the window

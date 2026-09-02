@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
-  noteWindowActivated,
+  forgetWindowWithholding,
   noteWindowWithheldFromActivation,
   planWindowActivation,
   shouldContentAvoidDocumentFocus,
@@ -72,7 +72,7 @@ describe('whether content must avoid taking document focus', () => {
   test('activation ends the withholding, so later content lands focused', () => {
     const windowId = freshWindowId();
     noteWindowWithheldFromActivation(windowId);
-    noteWindowActivated(windowId);
+    forgetWindowWithholding(windowId);
 
     expect(shouldContentAvoidDocumentFocus(windowId)).toBe(false);
   });

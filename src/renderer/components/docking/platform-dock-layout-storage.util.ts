@@ -1121,7 +1121,7 @@ export function addTabToDock(
   }
 
   if (shouldBringToFront && !didFocusTab)
-    revealTabGroupAndSetDocumentFocusToTab(dockLayout, tab.id);
+    revealTabGroupAndSetDocumentFocusToTab(dockLayout, tab.id, activateWithoutDocumentFocus);
 
   // If there was an error loading the tab, we create an error tab. But we also want to throw here
   // so people know there was a problem.

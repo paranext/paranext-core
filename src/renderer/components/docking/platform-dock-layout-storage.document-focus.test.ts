@@ -27,13 +27,15 @@ describe('taking document focus when a web view is docked', () => {
 
   beforeEach(() => {
     localMockDockLayout = mock(DockLayout);
-    // An empty layout: nothing is maximized and nothing floats, so revealing the tab group is a
-    // no-op and the only thing left to observe is the document focus.
+    // An empty layout: nothing is docked, nothing floats and nothing is maximized, which is the
+    // shape of a window created to receive a single web view. Asserted rather than built in full
+    // because rc-dock's layout type carries far more than these paths read, and spelling all of it
+    // out would say nothing about what is under test.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     when(localMockDockLayout.getLayout()).thenReturn({
-      // Intentionally a minimal layout fixture; only `maxbox` is read on this path.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      ...({} as ReturnType<DockLayout['getLayout']>),
-    });
+      dockbox: { mode: 'horizontal', children: [] },
+      floatbox: { mode: 'float', children: [] },
+    } as ReturnType<DockLayout['getLayout']>);
     // Only `id` and a non-null `title` are read on this path — `title` is what marks this as a tab
     // rather than a panel, and no `parent` means there is no floating tab group to raise.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -63,6 +65,38 @@ describe('taking document focus when a web view is docked', () => {
     addWebViewToDock(webViewToDock(), layout, true, instance(localMockDockLayout));
 
     expect(focusSpy).toHaveBeenCalled();
+  });
+
+  /**
+   * A window created for a web view has an empty dock, so its first web view is ADDED rather than
+   * updated — a different branch from the one the tests above take. `find` answers `undefined`
+   * before the add and the tab afterwards, which is what the real dock does.
+   */
+  function whenTabIsAddedRatherThanUpdated() {
+    when(localMockDockLayout.find(anything()))
+      .thenReturn(undefined)
+      // Only `id` and a non-null `title` are read of the found tab, so the rest of `TabData` —
+      // including the React content it demands — would be noise here.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      .thenReturn({ id: TAB_ID, title: TAB_ID } as TabData);
+  }
+
+  it('focuses a newly added web view by default', () => {
+    whenTabIsAddedRatherThanUpdated();
+
+    addWebViewToDock(webViewToDock(), layout, true, instance(localMockDockLayout));
+
+    expect(focusSpy).toHaveBeenCalled();
+  });
+
+  it('leaves document focus alone for a newly added web view when asked to activate without it', () => {
+    // The branch a background window actually takes: its dock is empty, so nothing is there to
+    // update. Covering only the update branch would leave this one free to steal focus.
+    whenTabIsAddedRatherThanUpdated();
+
+    addWebViewToDock(webViewToDock(), layout, true, instance(localMockDockLayout), true);
+
+    expect(focusSpy).not.toHaveBeenCalled();
   });
 
   it('still activates the tab, but leaves document focus alone, when asked to activate without it', () => {

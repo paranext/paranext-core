@@ -159,9 +159,12 @@ describe('float layouts are untouched by multi-window routing', () => {
 
     await router.openWebView('someType', FLOAT_LAYOUT, { targetWindowId: 2 });
 
-    expect(named.openWebView).toHaveBeenCalledWith('someType', FLOAT_LAYOUT, {
-      targetWindowId: 2,
-    });
+    expect(named.openWebView).toHaveBeenCalledWith(
+      'someType',
+      FLOAT_LAYOUT,
+      { targetWindowId: 2 },
+      false,
+    );
     expect(focused.openWebView).not.toHaveBeenCalled();
     expect(creator.createPendingContentWindow).not.toHaveBeenCalled();
   });

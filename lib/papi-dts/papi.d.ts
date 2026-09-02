@@ -4167,7 +4167,8 @@ declare module 'shared/models/docking-framework.model' {
      *   opened deliberately in the background must dock its content without it. Defaults to `false`
      * @returns If WebView added, final layout used to display the new webView. If existing webView
      *   updated, `undefined`
-     * @experimental
+     * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+     *   member is long-established.
      */
     addWebViewToDock: (
       webView: WebViewTabProps,

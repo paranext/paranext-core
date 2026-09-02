@@ -18,7 +18,7 @@ import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard
 import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
 import type { WebViewServiceType } from '@shared/services/web-view.service-model';
 import {
-  noteWindowActivated,
+  forgetWindowWithholding,
   noteWindowWithheldFromActivation,
 } from '@main/window-activation.util';
 
@@ -178,7 +178,7 @@ describe('web view service router', () => {
     vi.clearAllMocks();
     // Which windows were created without activation is process state, not a mock, so a test that
     // marks one has to leave the next test the window it expects.
-    noteWindowActivated(7);
+    forgetWindowWithholding(7);
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
@@ -649,7 +649,7 @@ describe('web view service router', () => {
       const router = await getRouter();
       noteWindowWithheldFromActivation(7);
       // The user clicked into it before the content arrived, so it is an ordinary window now
-      noteWindowActivated(7);
+      forgetWindowWithholding(7);
 
       await router.openWebView('someType', { type: 'window' });
 
@@ -1027,8 +1027,30 @@ describe('web view service router', () => {
         'someType',
         { type: 'tab' },
         { targetWindowId: 2 },
+        false,
       );
       expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
+    test('a named window that is still in the background keeps its content from focusing it', async () => {
+      // A caller can name a window created for an earlier web view, which may never have been
+      // activated — the second open must not do what the first was stopped from doing.
+      const focused = windowShard([]);
+      const named = windowShard([]);
+      withWindows({ 1: focused, 2: named });
+      const router = await getRouter();
+      noteWindowWithheldFromActivation(2);
+
+      await router.openWebView('someType', { type: 'tab' }, { targetWindowId: 2 });
+
+      expect(named.openWebView).toHaveBeenCalledWith(
+        'someType',
+        { type: 'tab' },
+        { targetWindowId: 2 },
+        true,
+      );
+
+      forgetWindowWithholding(2);
     });
 
     test('fails rather than guessing when the named window does not exist', async () => {
