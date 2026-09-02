@@ -469,6 +469,28 @@ export async function handleInterfaceModeChanged(newMode: InterfaceMode): Promis
   // swallow every later delivery of it, so an application that somehow carried on would never act.
   if (deps.isAppShuttingDown()) return;
 
+  // A mode this process has never seen is not a change, whatever it says. The cache is unknown only
+  // when the startup read failed, and the subscription does not ask for the current value — so the
+  // first delivery to arrive is simply the first reading, and it arrives on whatever unrelated
+  // settings write happens to wake the callback. Acting on it would run a switch reaction on an
+  // ordinary session: pulling a window in front of a user who has moved on, or building the window
+  // set the failed read declined to restore, at an arbitrary later moment. Adopting it leaves the
+  // application where that read left it and makes every real change from here on visible.
+  if (cachedInterfaceMode === undefined) {
+    cachedInterfaceMode = newMode;
+    logger.info(`Adopting interface mode ${newMode}; the startup read did not report one`);
+    return;
+  }
+
+  // The windows a switch to power brings back belong to a session that has some. With none open the
+  // application is resident and idle — macOS after its last window closed — and nothing the user did
+  // asked for these; the dock click that does ask has its own path through the window restore.
+  if (newMode === 'power' && deps.getTrackedWindowIds().length === 0) {
+    cachedInterfaceMode = newMode;
+    logger.info('Not reopening any window for the switch to power mode: the application has none');
+    return;
+  }
+
   // Moved before the window work, not after: the single-window guard reads this, so a mode still
   // reading simple here would make the reopen below refuse the very windows it is creating. It is
   // put back if that work throws, so a mode this process never managed to act on is not left
