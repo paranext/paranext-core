@@ -38,6 +38,7 @@ import {
   WebViewType,
 } from '@shared/models/web-view.model';
 import { Layout } from '@shared/models/docking-framework.model';
+import { shouldContentAvoidDocumentFocus } from '@main/window-activation.util';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -458,7 +459,12 @@ async function openWebView(
       webViewShards,
       options.targetWindowId,
     );
-    return shard.openWebView(webViewType, effectiveLayout, options);
+    return shard.openWebView(
+      webViewType,
+      effectiveLayout,
+      options,
+      shouldContentAvoidDocumentFocus(options.targetWindowId),
+    );
   }
 
   // A layout naming a tab or tab group names the window that holds it, so it routes the same way an
