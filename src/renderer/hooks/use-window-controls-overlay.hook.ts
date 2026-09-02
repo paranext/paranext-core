@@ -6,8 +6,10 @@ import { useEffect, useState } from 'react';
  * pixel guess can't track DPI scaling, text-size settings, or OS theme differences that change the
  * buttons' actual width; this reads the real value instead.
  *
- * Returns `undefined` when the API is unavailable (macOS/Linux) or the overlay isn't visible (e.g.
- * full screen).
+ * Returns `undefined` when the API is unavailable — macOS draws its own traffic lights and has no
+ * overlay — or when the overlay isn't visible (e.g. full screen). Linux uses the overlay, but which
+ * desktop environments report geometry for it is unverified; one that does not falls back to the
+ * static reservation, the same as before the overlay was asked for there.
  */
 export function useWindowControlsOverlay(): DOMRect | undefined {
   const { windowControlsOverlay } = navigator;
