@@ -129,10 +129,10 @@ declare module 'papi-shared-types' {
      * `useWebViewState` state — in the target window. Consumers see a close event in the source and
      * an open event in the target, and the web view controller is disposed and re-created: a held
      * controller reference must be re-acquired after a move. The returned id is the authoritative
-     * id of the web view after the move, and it can differ from the id passed in: a web view
-     * restored from a persisted layout carries a window-scoped id, and a move does not carry that
-     * scope along — so use the returned id for anything after the move. In Simple mode —
-     * single-window by design — there is no other window to move to, and this does nothing.
+     * id of the web view after the move — the same id as `webViewId`, since a web view keeps the id
+     * it was minted with for its whole life, across any number of moves — so use the returned id
+     * for anything after the move. In Simple mode — single-window by design — there is no other
+     * window to move to, and this does nothing.
      *
      * A failed move says where it left the web view, as a machine-readable marker at the front of
      * the error message: `[webViewMoveFailure:<where>]`, where `<where>` is
@@ -150,8 +150,8 @@ declare module 'papi-shared-types' {
      * the marker before showing the message to a user — it is there to be classified on, not read.
      *
      * @param webViewId Web view to move
-     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
-     *   see above
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   above
      * @experimental
      */
     'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
@@ -166,8 +166,8 @@ declare module 'papi-shared-types' {
      *
      * @param webViewId Web view to move
      * @param targetWindowId Window to move it to
-     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
-     *   see `platform.moveWebViewToNewWindow`
+     * @returns Authoritative id of the web view in its new window — the same id as `webViewId`; see
+     *   `platform.moveWebViewToNewWindow`
      * @experimental
      */
     'platform.moveWebViewToWindow': (

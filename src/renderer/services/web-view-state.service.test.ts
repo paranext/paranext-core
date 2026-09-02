@@ -2,7 +2,7 @@ import { deserialize, serialize } from 'platform-bible-utils';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const WEBVIEW_STATE_KEY = 'web-view-state';
-/** Web view id as `openWebView` mints it — no window suffix */
+/** Web view id as a materialization mints it — stable for the web view's whole life */
 const MINTED_ID = '0a23566d-1b2c-4dd2-8d3d-cda54b598cd2';
 const OTHER_MINTED_ID = '3cf575f0-2cc2-464b-8765-b588f216dfce';
 
@@ -32,59 +32,44 @@ describe('web view state service', () => {
     globalThis.windowId = '1';
   });
 
-  test('finds state saved under the minted id when the layout brings that id back window-scoped', async () => {
-    // A layout is re-scoped on load, so the same web view that saved its state as `<id>` is looked
-    // up as `<id>-w1` on the next launch
+  test('finds state saved under a web view’s id', async () => {
     seedStateForThisWindow([[MINTED_ID, { scrRef: 'JHN 3:16' }]]);
 
     const { getFullWebViewStateById } = await importWebViewStateService();
 
-    expect(getFullWebViewStateById(`${MINTED_ID}-w1`)).toEqual({ scrRef: 'JHN 3:16' });
+    expect(getFullWebViewStateById(MINTED_ID)).toEqual({ scrRef: 'JHN 3:16' });
   });
 
-  test('stores state under the minted id, so a window id that changes cannot strand it', async () => {
-    // Electron's BrowserWindow.id is not stable across restarts, so a suffix baked into the storage
-    // key would lose the record on any restart that renumbers the window
+  test('persists state under the id it was set with', async () => {
     const { setFullWebViewStateById, getFullWebViewStateById } = await importWebViewStateService();
 
-    setFullWebViewStateById(`${MINTED_ID}-w1`, { scrRef: 'JHN 3:16' });
+    setFullWebViewStateById(MINTED_ID, { scrRef: 'JHN 3:16' });
 
     expect(readPersistedState()).toEqual([[MINTED_ID, { scrRef: 'JHN 3:16' }]]);
-    expect(getFullWebViewStateById(`${MINTED_ID}-w7`)).toEqual({ scrRef: 'JHN 3:16' });
+    expect(getFullWebViewStateById(MINTED_ID)).toEqual({ scrRef: 'JHN 3:16' });
   });
 
-  test('deletes the record a window-scoped id refers to', async () => {
+  test('deletes the record an id refers to', async () => {
     seedStateForThisWindow([[MINTED_ID, { scrRef: 'JHN 3:16' }]]);
 
     const { deleteFullWebViewStateById } = await importWebViewStateService();
-    deleteFullWebViewStateById(`${MINTED_ID}-w1`);
+    deleteFullWebViewStateById(MINTED_ID);
 
     expect(readPersistedState()).toEqual([]);
-  });
-
-  test('reads back a record left behind under a window-scoped id', async () => {
-    seedStateForThisWindow([[`${MINTED_ID}-w3`, { scrRef: 'JHN 3:16' }]]);
-
-    const { getFullWebViewStateById } = await importWebViewStateService();
-
-    expect(getFullWebViewStateById(`${MINTED_ID}-w1`)).toEqual({ scrRef: 'JHN 3:16' });
   });
 
   test('returns a fresh state object for a web view that has none saved', async () => {
     const { getFullWebViewStateById } = await importWebViewStateService();
 
-    expect(getFullWebViewStateById(`${MINTED_ID}-w1`)).toEqual({});
+    expect(getFullWebViewStateById(MINTED_ID)).toEqual({});
   });
 
   describe('cleanupOldWebViewState', () => {
     test('keeps the state of a web view the layout still holds', async () => {
-      // The upgrade launch: state saved before multi-window support arrives under the legacy
-      // unprefixed key, is migrated into this window's storage, and is looked up through the
-      // window-scoped ids the reloaded layout now carries
-      localStorage.setItem(WEBVIEW_STATE_KEY, serialize([[MINTED_ID, { scrRef: 'JHN 3:16' }]]));
+      seedStateForThisWindow([[MINTED_ID, { scrRef: 'JHN 3:16' }]]);
 
       const { getFullWebViewStateById, cleanupOldWebViewState } = await importWebViewStateService();
-      getFullWebViewStateById(`${MINTED_ID}-w1`);
+      getFullWebViewStateById(MINTED_ID);
       cleanupOldWebViewState();
 
       expect(readPersistedState()).toEqual([[MINTED_ID, { scrRef: 'JHN 3:16' }]]);
@@ -97,7 +82,7 @@ describe('web view state service', () => {
       ]);
 
       const { getFullWebViewStateById, cleanupOldWebViewState } = await importWebViewStateService();
-      getFullWebViewStateById(`${MINTED_ID}-w1`);
+      getFullWebViewStateById(MINTED_ID);
       cleanupOldWebViewState();
 
       expect(readPersistedState()).toEqual([[MINTED_ID, { scrRef: 'JHN 3:16' }]]);
