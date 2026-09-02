@@ -593,6 +593,35 @@ describe('a window still waiting for its first activation', () => {
     expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', true);
   });
 
+  test('gives the waiting tab its focus when the user finally arrives', async () => {
+    // The catch-up half of the withholding. Content docked while nobody was looking was made active
+    // WITHOUT document focus; if nothing restores it, the user activates the window, sees the tab
+    // rendered active, types, and nothing reaches the web view until they click inside it — which a
+    // keyboard or screen-reader user does not do.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
+    expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', true);
+    focusTabMock.mockClear();
+
+    window.dispatchEvent(new Event('pointerdown'));
+    await vi.waitFor(() => expect(focusTabMock).toHaveBeenCalledWith('tab-1'));
+  });
+
+  test('has nothing to catch up when no tab was left waiting', async () => {
+    // The positive control: the catch-up must fire because a tab was deferred, not on every gesture.
+    globalThis.wasWindowCreatedWithoutActivation = false;
+    testingWindowService.implementWindowDataProviderEngine();
+
+    window.dispatchEvent(new Event('pointerdown'));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(focusTabMock).not.toHaveBeenCalled();
+  });
+
   test('focuses normally in a window the user asked for', async () => {
     // Nothing in the URL bag means an ordinary window, which must be unaffected.
     globalThis.wasWindowCreatedWithoutActivation = false;
