@@ -146,6 +146,19 @@ export function shouldRevealAfterRendererGone(
   return plan.revealAfterLoadFailure !== undefined && isAwaitingFirstActivation;
 }
 
+/**
+ * Whether revealing a window should flash its frame to draw attention to it.
+ *
+ * `showInactive()` puts a withheld window on screen without pulling focus, so the flash is the only
+ * visible signal the user gets that it exists at all. A window revealed with the foreground already
+ * has the user's attention and needs no signal.
+ *
+ * @param plan What the window was told to do to become visible
+ */
+export function shouldFlashOnReveal(plan: WindowActivationPlan): boolean {
+  return plan.revealWhenReady === 'inactive';
+}
+
 /** Withheld windows whose focus has already been handed back once. See {@link shouldBounceFocusBack} */
 const windowIdsAlreadyBouncedBack = new Set<number>();
 
