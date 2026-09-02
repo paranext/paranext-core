@@ -6,8 +6,10 @@ export interface OpenScriptureEditorOptions {
   /**
    * Skip the wait for an existing iframe that guards against the initial loadLayout race. Pass true
    * only for a window whose initial layout demonstrably finished loading through some other signal
-   * — e.g. an empty secondary window that already passed an empty-dock probe. Such a window never
-   * gets an initial iframe, so for it the guard would time out instead of protect.
+   * — e.g. a secondary window that already passed a dock-content probe (an empty-dock probe, or —
+   * for a window that docks Home on the fly rather than starting truly empty — a probe that waited
+   * for that Home tab specifically). Either probe already proves the initial loadLayout race is
+   * over, which is what this guard exists to prove in the first place.
    */
   skipInitialLayoutGuard?: boolean;
 }

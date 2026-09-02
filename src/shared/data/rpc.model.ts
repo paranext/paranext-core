@@ -544,3 +544,17 @@ export function isJsonRpcMethodNotFoundError(error: unknown, requestType?: strin
  * @experimental
  */
 export const JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX = 'JSON-RPC Request timed out:';
+
+/**
+ * Whether `error` is what `network.service`'s request plumbing throws when a request expires
+ * client-side before any answer arrives (`doRequest` builds `JSON-RPC Request timed out:
+ * <requestType> <args>` when its per-request wait runs out). Matched by message substring — no
+ * richer machine-readable marker exists for this failure — deriving the format from its one
+ * producer ({@link JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX}), so a reformat there cannot silently
+ * stop this matcher from matching.
+ *
+ * @experimental
+ */
+export function isRequestTimedOutError(error: unknown): boolean {
+  return getErrorMessage(error).includes(JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX);
+}

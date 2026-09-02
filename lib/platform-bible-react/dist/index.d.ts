@@ -4008,10 +4008,10 @@ export declare function useShrinkStepValue(): number;
  * Z-index for elements that need to appear above rc-dock floating tabs and potential modals (~200)
  * — the menubar, and every `PopoverContent`.
  *
- * At 600 this sits above the overlay, modal, and tooltip layers, which is why content portalled
- * out of a popover needs {@link Z_INDEX_ABOVE_POPOVER} to stay visible. Two consequences are
- * unresolved and deliberately not papered over here: a tooltip triggered from inside a popover
- * ({@link Z_INDEX_TOOLTIP}, 550) renders BEHIND it, and a popover renders OVER a modal dialog
+ * At 600 this sits above the overlay, modal, and tooltip layers, which is why content portalled out
+ * of a popover needs {@link Z_INDEX_ABOVE_POPOVER} to stay visible. Two consequences are unresolved
+ * and deliberately not papered over here: a tooltip triggered from inside a popover
+ * (`Z_INDEX_TOOLTIP`, 550) renders BEHIND it, and a popover renders OVER a modal dialog
  * ({@link Z_INDEX_MODAL}, 500). Both want the scale re-ordered rather than another constant raised.
  */
 export declare const Z_INDEX_ABOVE_DOCK = 600;
@@ -4022,8 +4022,8 @@ export declare const Z_INDEX_ABOVE_DOCK = 600;
  * Radix portals such content to `document.body` rather than nesting it inside the popover, so the
  * two become stacking SIBLINGS: the popover's own {@link Z_INDEX_ABOVE_DOCK} competes directly with
  * whatever the portalled child asks for, and anything lower renders behind the popover it belongs
- * to. Must therefore stay above {@link Z_INDEX_ABOVE_DOCK} and below {@link Z_INDEX_FIRST_RUN},
- * which gates the whole app. Pinned by `z-index.test.ts`.
+ * to. Must therefore stay above {@link Z_INDEX_ABOVE_DOCK} and below {@link Z_INDEX_FIRST_RUN}, which
+ * gates the whole app. Pinned by `z-index.test.ts`.
  *
  * Note this is only needed because {@link Z_INDEX_ABOVE_DOCK} sits so high; see its own doc.
  */

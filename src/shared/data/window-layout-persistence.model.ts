@@ -25,6 +25,13 @@ export const GET_WINDOW_LAYOUT_REQUEST_TYPE = serializeRequestType(CATEGORY_WIND
  */
 export const SAVE_WINDOW_LAYOUT_REQUEST_TYPE = serializeRequestType(CATEGORY_WINDOW_LAYOUT, 'save');
 
+/**
+ * Report that a window's dock became empty (or that it started that way) and learn what it should
+ * do about it. Takes the reporting window's id and a {@link WindowEmptiedReason}; returns a
+ * {@link WindowEmptiedResponse}.
+ */
+export const WINDOW_EMPTIED_REQUEST_TYPE = serializeRequestType(CATEGORY_WINDOW_LAYOUT, 'emptied');
+
 /** Position and size of a window or display, in screen coordinates */
 export type WindowRectangle = { x: number; y: number; width: number; height: number };
 
@@ -42,8 +49,10 @@ export type WindowBoundsState = {
 
 /**
  * One window's saved state in the persisted structure. Position in the structure's list is the
- * window's identity across sessions — window ids stay runtime-only. Exactly one entry carries
- * `isMain` (the window with the top-level menu and close-quits behavior).
+ * window's identity across sessions — window ids stay runtime-only. At most one entry carries
+ * `isMain` (the window with the top-level menu and close-quits behavior). The flag belongs to the
+ * entry, so a structure written after the main entry left with its window carries none at all;
+ * loading resolves that back to exactly one by taking the first entry.
  */
 export type WindowLayoutEntry = WindowBoundsState & {
   layout?: LayoutInfo;
@@ -69,6 +78,8 @@ export type WindowLayoutStructure = { windows: WindowLayoutEntry[] };
  *   entry for a deliberately empty window, or its stored value is not object-shaped). It is also
  *   the defensive answer to a request that carries no window id or names a window that is not
  *   tracked.
+ * - `pending-content`: like `empty`, but also skip the default-layout supplement — the window was
+ *   created to receive one specific web view, routed separately, and must start with nothing else.
  *
  * An entry whose saved layout held only phantom tabs produces none of these: it is dropped while
  * the structure loads, so no window is ever created to ask. The one exception is the main entry,
@@ -78,4 +89,41 @@ export type WindowLayoutStructure = { windows: WindowLayoutEntry[] };
 export type WindowLayoutGetResponse =
   | { kind: 'entry'; layout: LayoutInfo }
   | { kind: 'legacy' }
-  | { kind: 'empty' };
+  | { kind: 'empty' }
+  /**
+   * This window was created to receive specific content that the main process is about to route to
+   * it: start truly empty (no default tabs, no supplement) and wait
+   */
+  | { kind: 'pending-content' };
+
+/**
+ * Why a window is reporting itself empty:
+ *
+ * - `emptied-by-removal`: it held tabs and the last one was just removed.
+ * - `born-empty`: it started with nothing to restore (a {@link WindowLayoutGetResponse} of `empty`)
+ *   and stayed that way. A `pending-content` window never reports this: its load returns before the
+ *   born-empty check, because the content it is waiting for is routed to it separately.
+ */
+export type WindowEmptiedReason = 'emptied-by-removal' | 'born-empty';
+
+/**
+ * What a window that reported itself empty should do, per the main process:
+ *
+ * - `open-home`: dock Home instead of staying empty — the window either started empty or is the last
+ *   window standing, and closing it would exit the application.
+ * - `closing`: the main process is closing this window. Windows are equal siblings; one with nothing
+ *   in it has nothing to be.
+ * - `stay`: do nothing at all — see below.
+ */
+export type WindowEmptiedResponse =
+  | { action: 'open-home' }
+  | { action: 'closing' }
+  /**
+   * Content reached this window after it sent its report, so it is not empty any more and neither
+   * other answer applies: docking Home would add a tab nobody asked for, and closing would take the
+   * content that just arrived with it. The window keeps what it has and reports again if it empties
+   * again.
+   *
+   * @experimental
+   */
+  | { action: 'stay' };

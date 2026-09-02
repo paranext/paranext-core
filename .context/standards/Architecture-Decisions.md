@@ -2334,6 +2334,341 @@ step, no automation. Just a record.
 - **Source:** PT-2626 review (PR #2727), finding 7 — "the current standard tells the next author to
   do the opposite of what this PR establishes."
 
+## adr-startup-sync-readiness-gate: Core owns startup-sync ordering and gates it on project-data-provider readiness
+
+- **Date:** 2026-08-16
+- **Status:** Accepted
+- **Context:** In Simple mode, `performStartupTasks` fired `paratextBibleSendReceive.syncProjects`
+  ("sync every locally-known shared project") as soon as its settings gates passed
+  (`src/main/startup-tasks.ts`). In Paratext 10 Studio that command is served by the .NET data
+  provider; its Mercurial and DBL work saturates that process before the scripture PDP factories
+  finish initializing. Because extensions activate strictly sequentially (the awaited loop inside
+  `activateExtensions` in `src/extension-host/services/extension.service.ts`), any extension awaiting
+  the busy provider stalls `platform-scripture` behind it — and `platform-scripture` registers the Scripture
+  Extender layering PDPF, the only factory advertising `platformScripture.USJ_Chapter`, which the
+  project picker waits on. The picker's wait timed out and it stayed locked. The Power-mode path was
+  already gated, but on a different signal — the S/R command's registration, plus a freshness window
+  — never on project-data-provider readiness; the Simple-mode branch had no ordering gate of any kind.
+- **Decision:** Core keeps ownership of the startup-sync trigger and gates it on workspace
+  readiness, in the main process. `src/main/startup-readiness.util.ts` waits — bounded by
+  `STARTUP_SYNC_READINESS_BUDGET_MS` (120 s) — first for the scripture PDP factory network object to
+  register, then for a scripture-metadata probe to answer non-empty, and only then fires the sync.
+  On timeout it fires anyway (delayed, never suppressed); on abort it skips.
+- **Alternatives:** **Have the Send/Receive extension self-trigger at the end of its own
+  activation** (the shape PT-4386 named as preferred, and the one sketched in `startup-tasks.ts`'s
+  own TSDoc) — rejected: sequential activation gives no guarantee that
+  `paratextBibleSendReceive` activates *after* `platform-scripture`, so if it goes first its
+  self-trigger starves the same factory — the identical bug, relocated into a repo core cannot test.
+  Paratext 10 Studio also *removed* its own `Task.Run(SyncProjects)` self-trigger precisely so core
+  would be the single trigger owner; self-triggering would undo that. The evidence is in the
+  `paranext/paratext-10-studio` repo at `repo-patches/paranext-core.patch` (lines 5334–5336 as of
+  commit `f779810`), in the hunk that patches
+  `c-sharp/Projects/SendReceive/ParatextProjectSendReceiveService.cs`: *"NOTE: startup auto-sync is
+  triggered by paranext-core itself (src/main/startup-tasks.ts, "Conditional autosync on startup"),
+  which calls the syncProjects papi command — so the patch no longer kicks off its own
+  Task.Run(SyncProjects) here (that would double-sync)."* **Defer until an existing
+  "workspace ready" signal** — rejected: none exists. `all-extensions-activated` is a performance
+  mark emitted only under `PT_STARTUP_MARKS`, at the end of `activateExtensions` in
+  `src/extension-host/services/extension.service.ts`, not a network event.
+  **Gate on factory registration alone** — rejected as insufficient: the Scripture Extender is a
+  layering factory whose `getAvailableProjects` fans out to the .NET base factories, so it can be
+  registered while still unable to answer; hence the second, metadata-probe phase.
+  **Treat any phase-1 rejection as the end of the gate** — rejected: `waitForNetworkObject` rejects
+  both when the budget it was given expires (genuine exhaustion) and when the status service is
+  unreachable, and the latter can land with nearly the whole budget unspent. Ending there would
+  collapse a 120 s gate into seconds and fire the sync early — the original bug, reintroduced
+  invisibly, since the cause is logged only at debug while the caller warns "syncing anyway". A
+  non-exhaustion rejection therefore falls through to phase 2, which tests the stronger condition
+  and already tolerates throws; with no factory registered it sees empty results and polls to the
+  deadline, so the worst case degrades to the same `'timed-out'`. This is insurance, not a fix for
+  an observed failure: from main the path is currently unreachable (the status service is hosted in
+  main, `startNetworkObjectStatusService()` is awaited long before the startup tasks run, and a
+  same-process `get` returns the local proxy, making the call a synchronous in-memory read). It is
+  written this way so the guarantee does not silently depend on that arrangement holding.
+- **Consequences:** Core is the single owner of startup-sync ordering, and the gate is
+  mechanism-agnostic — it holds regardless of which contention inside the .NET provider is
+  responsible, which matters because that contention is not fully pinned down (the obvious
+  read-loop-blocking explanation was real but was already fixed in Studio, verified 2026-08-16). The
+  startup sync can now be delayed by up to 120 s on a pathological boot. **Power mode is knowingly
+  left ungated** and retains the same latent race: its freshness window is anchored to
+  window-interactive time, so charging a readiness wait against it could silently *drop* a legitimate
+  startup sync — trading a visible bug for an invisible one. Revisit when the freshness anchor is
+  reworked. Because the wait can park for up to 120 s, the three Simple-mode settings gates
+  (interface mode, first-run, sync-on-startup) are re-read and re-evaluated immediately after it, not
+  just before — a setting changed mid-wait now re-gates the sync rather than firing on stale
+  settings. On a real quit (`isAppQuitRequested()`) the wait is aborted and the sync is skipped; a
+  macOS last-window close that leaves the app resident deliberately does NOT abort it, since the app
+  is still going to want its startup sync. That exception is carried on its own abort signal
+  (`startupReadinessAbort` in `main.ts`, `StartupTasksSignals.readinessAbortSignal`) rather than on
+  the shared one, so it applies to the Simple readiness wait ALONE — Power mode's boot-race retry
+  loop keeps aborting on every shutdown, on every platform, exactly as before. The Simple path then
+  has to run on that signal *throughout*, including its post-wait abort check: a last-window close
+  makes `isAppShuttingDown()` true via `areAllWindowsClosing()`, so the shared signal aborts on
+  precisely the close the carve-out exists to survive, and re-checking it after the wait would make
+  the carve-out unreachable — the wait would outlive the close only to be discarded as "quitting".
+  Simple mode's hard stop is therefore the live predicate rather than a latched signal, which is
+  strictly better anyway: it is evaluated at fire time and covers both ways the app can be
+  un-syncable (shutting down, and resident but windowless). A surviving wait is
+  still not licence to fire: `canStartupSyncFireNow` is re-checked immediately before the command
+  goes out and skips when the app is resident but windowless, which is the state a macOS last-window
+  close leaves behind. It distinguishes that from having no window YET — the app still coming up —
+  which stays allowed, since treating it as disqualifying would silently drop the sync on any boot
+  whose readiness landed before the first window did. Without the check a wait parked for the full
+  budget could resolve minutes later and run a whole-workspace Send/Receive after the shutdown sync
+  already ran, with no UI to report progress or failure into. The exception therefore pays off in
+  exactly one case — a dock reactivation brings a window back before readiness lands — which is the
+  case it was added for.
+- **Source:** PT-4386.
+
+## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
+
+- **Date:** 2026-08-11
+- **Status:** Accepted
+- **Context:** rc-dock ships a `windowbox` feature that pops a dock tab into a child browser
+  window, which looked like a shortcut to multi-window. A live spike (Power mode, tab dragged
+  out via the windowbox path) failed on four independent axes: the popup is an unmanaged
+  window (default chrome, none of the app's preload/security/window wiring); React 19 removed
+  `findDOMNode` and rc-dock's rc-util fallback crashes the host window's React root
+  (`WindowPanel`/`NewWindow` — the same crash signature later reproduced when a persisted
+  layout carrying a stray windowbox node was restored); the popped tab's content did not
+  render and could not be interacted with; and the popup booted a spurious second full app
+  renderer, registering duplicate window-scoped services. The failures are structural — the
+  feature assumes a same-origin child window sharing the parent's React tree, which
+  contradicts this app's window model (isolated renderer per window, window-scoped service
+  shards, main-process orchestration).
+- **Decision:** Every application window is a real Electron `BrowserWindow` created and
+  tracked by the main process, with its own renderer, dock layout, and window-scoped service
+  shards; cross-window placement flows through the main-process routers (window layout,
+  `targetWindowId`, the move primitive), never through rc-dock's windowbox. Layout traversal
+  code still walks the `windowbox` box shape defensively (`savedLayoutHasAnyTabs`), so foreign or legacy
+  layout nodes cannot make a non-empty dock read as empty.
+- **Alternatives:** rc-dock windowbox — rejected on the spike evidence above. Keeping the
+  single-window model — rejected; multi-window is the epic. Patching rc-dock's windowbox into
+  the app's window model — rejected; it would re-implement window management inside a docking
+  library that never owned it, against the process architecture.
+- **Consequences:** Windows are equal siblings managed by main (persistence, bounds, layout
+  each per window); popping a tab out is a routed re-open in a new `BrowserWindow`, so the
+  web view's close/open lifecycle runs on a move rather than a reparent. A windowbox node
+  appearing in a persisted layout is foreign data: restore currently renders it through
+  rc-dock's crashing code path, so stripping windowbox nodes at restore is candidate
+  hardening if such layouts recur.
+- **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
+  design doc § spike); multi-window epic architecture discussion.
+
+## adr-window-activation-is-declared-not-inferred: Whether a new window activates is declared by its caller; focus state cannot answer it
+
+- **Date:** 2026-08-31
+- **Status:** Accepted — capability deferred to PT-4465
+- **Context:** A window created while the user is working in another application should appear
+  without stealing the foreground, and a window the user asked for must come to the front. The
+  obvious source for that distinction is focus state, and it has been reached for multiple times
+  in this PR's review rounds. Both attempts failed on the same case. Reading `getFocusedWindowId()`
+  does not survive `removeWindow` clearing it, so on macOS — where the app stays resident with no
+  windows — closing the focused window reset the answer to the startup one and a backgrounded
+  creation took the foreground anyway. Replacing that with a never-cleared "has this app ever been
+  focused" latch cannot tell "the user is in another application" from "no window holds focus
+  because the user closed them all and is now clicking the dock icon" — and the dock-click path
+  creates a window through `app.on('activate')` → `restoreWindows()`, so it would have shown the
+  window the user just asked for unfocused and flashing.
+- **Decision:** The question is *"did a person in this app ask for this window?"*, which is the
+  caller's knowledge and nothing else's, so it is declared by the caller rather than inferred. No
+  window-creation path reads focus state to decide activation. The mechanism is PT-4465's to build:
+  an explicit user-intent flag on `createWindow`, passed by each call site (menu and
+  `platform.createWindow`, dock-click and startup restore: yes; a `{ type: 'window' }` web-view
+  open or `moveWebViewToNewWindow` arriving from an extension: no). **None of that is wired yet** —
+  `createWindow` takes `restoreInfo` and `{ pendingContent }` and nothing else, and no
+  intent flag exists in the tree — so a reader looking for it will find it on the ticket, not in
+  the code. This entry exists so the inference is not re-attempted in the meantime.
+- **Scope — this is about activating a NEW window, not about raising an existing one.** Focus state
+  remains the right input for a raise, and is used deliberately today: `isApplicationFocused()`
+  gates the cross-window open raise (`web-view.service-router.ts`) and the move raise, so an in-app
+  action never pulls the app in front of whatever the user is working in. `handleUri` in `main.ts`
+  is just as deliberately *not* gated on it, and its comment states this entry's principle for the
+  case that was already shipped: the raise runs precisely when the app does not own the foreground,
+  because the user asked by following the link. Those guards answer "is this app in front?", which
+  focus state does know. Nothing here argues against them.
+- **Alternatives:** Infer from `getFocusedWindowId()` — rejected, cleared by `removeWindow`. Infer
+  from an app-ever-focused latch — rejected, indistinguishable from the dock-click restore. Ship
+  the third variation of a focus heuristic — rejected: every variation answers a question about the
+  foreground, and the question being asked is about a person's intent.
+- **Consequences:** Until PT-4465 lands, every new window activates, including one an extension
+  creates while the user is elsewhere. That is the known cost of not guessing. When it does land,
+  withholding the constructor's `show` must stay scoped to the not-asked-for case: `did-fail-load`
+  only logs, so a window that never reaches `ready-to-show` would otherwise stay invisible, which is
+  worse than a badly-timed foreground.
+- **Source:** PR #2670 review item 6 (2026-08-25) and the review rounds that followed; PT-4465,
+  which carries the design, the call-site table and the `show` hazard in full.
+
+## adr-runaway-data-hook-guard: `useData`'s runaway guard counts subscribes and deliveries, degrades rather than throws, and expires
+
+- **Date:** 2026-08-28
+- **Status:** Accepted
+- **Context:** `create-use-data-hook.util.ts` carries a circuit breaker (PT-1561) meant to stop a
+  `useData` consumer from spinning in a render loop. It counted **renders** in a dependency-less
+  effect, then took an early `return` that skipped every hook below it — changing the hook count
+  between renders. React threw mid-render, and because the app has no error boundary, the web view's
+  React root unmounted: the blank editor. The trip path had therefore never once degraded
+  gracefully. Fixing the hook order forced three policy questions about the platform's most-consumed
+  hook, since consumers now observe a tripped state instead of a crash.
+- **Decision:** (1) Count **deliveries and subscribe attempts**, never renders. (2) A trip degrades:
+  the subscription is dropped, `[PlatformError, undefined, true]` is returned, and the error carries
+  the `RESOURCE_EXHAUSTED` code. (3) A trip **expires** after a cooldown, then re-arms and
+  resubscribes. (4) Every hook in the family reports the dropped setter the same way — as
+  `undefined`. `useData` and `useProjectSetting` already did; `useSetting` is widened to match
+  rather than fabricating a substitute setter to keep its published type non-optional.
+- **Alternatives:**
+  - *Keep counting renders* — rejected: a consumer can re-render rapidly for reasons unrelated to
+    this data (a busy parent, a cold-start storm, fast typing), and stopping a healthy subscription
+    over that is wrong. This was the false positive behind the original report.
+  - *Count deliveries only* — rejected once measured: an unstable selector rebuilds the subscription
+    every render, and each subscription is superseded before it resolves, so `useEventAsync` mutes
+    every emission and nothing is ever delivered. A probe produced 201 subscribe attempts in 200ms
+    with zero warnings — invisible to delivery counting, and it is precisely the loop the warning's
+    "memoize your parameters" advice describes.
+  - *Report `isLoading: false` while tripped* — rejected: it tells consumers that gate on loading
+    that this IS the answer, resolving a three-state interface-mode check to the wrong mode and
+    rendering raw localization keys as real strings. The value has not resolved and will be retried,
+    so `true` is the honest report.
+  - *Keep the trip permanent* (PT-1561's behavior) — rejected. Both designs stop the loop; the
+    subscription is dropped the moment the guard trips either way. The only question is whether the
+    stop expires. Priced out: the guard trips at 100 events in a 1s window and then sits tripped for
+    5s with fresh counters, so a genuinely stuck consumer costs ~100 events per ~5.1s ≈ 20/s against
+    a measured free-running ~1000/s — re-arming already removes ~98% of the damage, and latching
+    buys only the remaining ~20 events/s in a state that is already broken and already logging.
+    Against that, latching makes the false-positive case unbounded in time: the guard fires on a
+    *rate* signal, which cannot distinguish a bug from a Send/Receive burst, and a wrong guess under
+    a latch is recoverable only by closing the tab. A large open-ended harm traded for a small
+    closed one. Latching also has an unpaid bill — permanently stopping a pane is a state the user
+    must be told about and given a way out of, and neither PT-1561 nor this change builds that UI,
+    so "permanent" would mean silently unrecoverable. Finally, re-arming's repeated warning is the
+    diagnostic, not the defect: a latched trip warns once and goes quiet, which in the logs is
+    indistinguishable from a burst that resolved on its own, whereas a warning every 5s for as long
+    as the consumer is broken is what actually separates "someone ran an S/R" from "this component
+    has an unstable selector". PT-1561's trip path crashed the web view from the day it shipped and
+    nobody caught it, which is what a once-and-done signal buys.
+  - *Return the last delivered value instead of the error while tripped* — rejected: it removes the
+    only signal consumers have that anything is wrong, and a pane that looks normal while silently
+    refusing writes is more deceptive than one that reports an unresolved state. Note the accepted
+    design does mean a consumer substituting a fallback for a `PlatformError` will visibly swap
+    content for the cooldown's duration.
+  - *Escalating backoff* (5s, 10s, 20s…) — deferred, not rejected. It converges on permanent for a
+    truly stuck consumer while staying cheap for a burst, and is the natural answer to "can we have
+    both?". Not done here because the fixed cooldown already captures the ~50x reduction and backoff
+    adds state that has to be reasoned about and tested. Tracked as `PT-4502`.
+  - *Re-arm on selector or data provider change* — rejected as actively harmful: an unstable
+    selector, the very mistake being reported, gets a new identity every render, so this would reset
+    the counter every render and disarm the guard entirely. Re-arming must be time-based.
+  - *Fabricate a rejecting setter inside `useSetting` so its published tuple can keep promising a
+    callable setter* — rejected. It buys call sites the right to skip a null check by making the
+    published type disagree with the value `useData` actually hands back, and it leaves the three
+    hooks in the family describing the same condition three different ways. Widening the tuple is a
+    breaking type change for every `useSetting` setter call site, in this repo and in extensions,
+    but the break is a compile error at exactly the sites that have a decision to make, and
+    `setSetting?.(…)` is already the established shape at `useProjectSetting` call sites.
+  - *Keep the setter live while tripped* — rejected as destructive: consumers substitute a default
+    value for a `PlatformError`, so a live setter lets the first keystroke overwrite real content
+    with that default.
+- **Consequences:** Consumers of `useData`/`useProjectData`/`useSetting` may now observe a
+  `RESOURCE_EXHAUSTED` error, a temporarily `undefined` setter, and a `true` `isLoading` that later
+  resolves. `useSetting`'s published setter type is now optional, so every setter call site guards
+  it — either `setSetting?.(…)` or an explicit branch that says the control is unavailable, which is
+  what the user-facing ones (the profile popover, the first-run language step) do rather than
+  letting a click land on nothing. A genuine loop is bounded to one burst per cooldown rather than
+  stopped outright, which is a deliberate trade of absolute containment for self-healing.
+
+  **A repeatedly-tripping consumer cycles, and nothing tells the user.** For a transient burst the
+  cost is one cooldown, bounded and singular. For a consumer that is genuinely stuck — an unstable
+  `selector`, the mistake the warning names — it is not an episode but a cycle: trip → cooldown →
+  re-arm → ~100 subscribes → trip, for as long as the view stays open. Concretely, in
+  `platform-scripture-editor.web-view.tsx` a tripped `platform.interfaceMode` subscription means
+  `isInterfaceModeLoading` never resolves to `false`, so the editor renders its spinner branch
+  indefinitely, while `isPowerMode` falls back to `false` on every cycle — a Power user's editor
+  flips between Simple and Power every five seconds. There is no message and no way out but closing
+  the tab. This is the same unpaid bill charged against latching above, paid in flicker rather than
+  in stillness; what still separates them is that a self-expiring trip lets a FALSE positive recover
+  on its own, which a latch cannot. Bounding the cycle is `PT-4502` (escalating backoff), which also
+  carries the option of surfacing a repeated trip to the user.
+
+  The known limit: re-arming bounds *rate*, not *total*. If a stuck consumer accumulates something a trip does not release — memory,
+  subscriptions, IPC backlog — throttling to ~2% moves the wall out rather than removing it. The
+  bet is that a warning appearing in the console every 5s gets the consumer fixed in the session it
+  appears in; a named accumulation that survives a trip would be a real argument for latching (or
+  for `PT-4502`). Revisit if the thresholds prove wrong in the field — they remain
+  arbitrary, inherited from PT-1561.
+- **Source:** PT-4421; resubscribe-storm and burst behavior measured during review of this change.
+
+## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** A React render throw inside a web view left the pane blank with nothing actionable in
+  the log — the symptom behind NN-1 "Editor never blanks out" (PT-4422, and PT-3594/PT-3776 before
+  it). The app had **no** error boundary anywhere in `src/` or `extensions/src/`; the only one in the
+  tree was Lexical's internal `LexicalErrorBoundary`. Web views are real iframes with their own
+  React root, so a boundary placed anywhere in the renderer's component tree cannot catch a web
+  view's throw: the shell survives and the iframe blanks. Every React web view mounts through a
+  single `root.render(React.createElement(globalThis.webViewComponent, webViewProps))` in
+  `web-view.service-shard.ts`, in the `default:` branch of the content-type switch (the `HTML` and
+  `URL` branches mount no React root).
+- **Decision:** Wrap that one element in `WebViewErrorBoundary`, exposed to the iframe as a global
+  the same way `createRoot` is (`global-this-web-view.model.ts` assigns it;
+  the generated `imports` script pulls it across with `window.X = window.parent.X`). Three rules the
+  implementation depends on: (1) **the boundary calls no hooks** — a hook there runs above the catch,
+  so if it threw the pane would blank exactly as before and the net would have the hole it exists to
+  close; all localization happens in the fallback, which mounts only after a crash. (2) **The
+  fallback is inline-styled**, not Tailwind/shadcn: a web view's iframe head carries the CSP, fonts,
+  scrollbars and the theme stylesheet, never the renderer's Tailwind build, so `tw:` classes render
+  unstyled there. Theme CSS custom properties do resolve, because the iframe body is given the theme
+  id class. (3) **The fallback falls back to English literals**, not to the localize key, because one
+  known cause of a blank web view is a crash inside `useLocalizedStrings` itself — and, for the same
+  reason, **the part of the fallback that reaches the localization service sits below a second,
+  inner boundary**. React hands an error thrown inside a boundary's own fallback to the *next*
+  boundary up, and above a web view's root there is none, so a throw while localizing the crash
+  panel would blank the pane exactly as an uncaught web view crash does. An unresolved string and a
+  throwing hook are different failure modes: the English literals cover the first, the inner
+  boundary covers the second. Everything above that inner boundary — the panel's markup, styles and
+  focus handling — must therefore stay service-free.
+- **Alternatives:** **A boundary per extension** (the editor extension wrapping its own web view) —
+  rejected: same day of work for a fraction of the coverage, repeated per extension, leaving Text
+  Collection, resource panels, Find and the rest still blanking. **A boundary in the renderer's
+  component tree** — impossible; it cannot reach across the iframe. **A `fallback` prop for
+  genericity** — dropped: the boundary renders its crash view directly so the generated-script call
+  site stays a single `createElement`, which matters because that site has no typecheck, no lint and
+  no test coverage.
+- **Consequences:** All React web views are covered by one change, and the crash message names the
+  offending tab (`savedWebViewDefinition.title`), so a generic boundary still reads as "the editor
+  crashed". Not covered, and worth stating wherever this is relied on: event handlers, async
+  callbacks and unhandled rejections (React boundaries never see those — global `onerror` capture is
+  PT-3776); a data provider returning a `PlatformError` instead of throwing (e.g. the render-rate
+  guard in `create-use-data-hook.util.ts`); and a throw in the part of the fallback above the inner
+  boundary, which is why that part stays service-free. Because the crash unmounts everything
+  focusable in the pane, including its toolbar, there is no in-tree signal that could reset the
+  boundary — hence the reload button and the focus move on mount, both load-bearing rather than
+  polish.
+
+  **A crashed pane stays crashed until the web view is reloaded**, and nothing resets the boundary
+  on a web view definition update. This is deliberate rather than an omission. The generated iframe
+  script re-runs `root.render` against the same boundary instance on every `onDidUpdateWebView`, and
+  `updateWebViewDefinition` is reachable only from a web view's own component (bound to its own id
+  in the generated script; the web view service exposes no cross-web-view update to extensions), so
+  a crashed pane — whose component is unmounted — only ever receives updates from elsewhere in the
+  renderer: `scrollGroupScrRef` on every navigation, `state`, `isClosable`, bring-to-front. Resetting
+  on those would re-run the same failing render on every verse move, costing a crash-and-log cycle
+  each time and never producing a different result. The changes that genuinely mean "show something
+  else in this pane" do not take that path at all: switching a tab's project mints a new web view
+  via `replace-tab`, and re-pointing a related panel calls `reloadWebView` — both build a fresh
+  iframe, hence a fresh React root and a fresh boundary. Reload is therefore the only recovery path
+  that could work, which is why the panel leads with it.
+
+  Editor coverage additionally rests on a cross-package assumption:
+  `@eten-tech-foundation/platform-editor` configures Lexical with `onError(error) { throw error; }`,
+  so Lexical's own boundary re-throws out of `componentDidCatch` and React hands the error up to us.
+  If a future platform-editor release swallows there instead, editor crashes would silently show
+  Lexical's bare "An error was thrown." box; `web-view-error-boundary.component.test.tsx` pins that
+  chain so the change is caught at upgrade time.
+- **Source:** PT-4422 (NN1b), Sprint 89 Simple Quality. Mount-point placement proposed in the PT-4421
+  investigation; the Lexical re-throw chain verified by running it, not by reading it.
+
 ## adr-sync-surface-per-interface-mode: One sync surface per interface mode, closed by a run-marker signal rather than the gate
 
 - **Date:** 2026-08-20
@@ -2485,4 +2820,3 @@ step, no automation. Just a record.
   S/R snapshot signals are built on;
   Paratext 10 Studio's `repo-patches/paranext-core.patch` for `RunWithSyncNotification`,
   `BeginSyncRun`/`EndSync`, and `ShowSyncNotification` (not in this repo).
-

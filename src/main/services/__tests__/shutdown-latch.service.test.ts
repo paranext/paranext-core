@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
 import {
+  canStartupSyncFireNow,
   isAppQuitRequested,
   isAppShuttingDown,
   markQuitRequested,
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
+  shouldWindowCloseAbortReadinessWait,
 } from '@main/services/shutdown-latch.service';
 import {
   addWindow,
@@ -39,6 +41,65 @@ describe('shutdown latches', () => {
     markQuitRequested();
 
     expect(isAppQuitRequested()).toBe(true);
+  });
+
+  test('leaves the readiness wait running when macOS closes its last window without quitting', () => {
+    // The app stays resident and a dock reactivation starts a fresh session, but the startup tasks
+    // run once per process — so aborting here would drop that session's startup sync permanently.
+    expect(shouldWindowCloseAbortReadinessWait('darwin')).toBe(false);
+
+    markQuitRequested();
+
+    // A real quit on macOS still has to stop it.
+    expect(shouldWindowCloseAbortReadinessWait('darwin')).toBe(true);
+  });
+
+  test('stops the readiness wait off macOS even before a quit is flagged', () => {
+    // Off macOS the last window closing always ends in a quit, but `window-all-closed` calls
+    // `app.quit()` only after the close handlers have run — so the quit flag is still false while
+    // the shutdown tasks this guard protects are already running. The platform has to decide.
+    expect(isAppQuitRequested()).toBe(false);
+
+    expect(shouldWindowCloseAbortReadinessWait('win32')).toBe(true);
+    expect(shouldWindowCloseAbortReadinessWait('linux')).toBe(true);
+  });
+
+  describe('whether the startup sync may still fire', () => {
+    test('allows firing while the app is up with a window', () => {
+      addWindow(fakeWindow(1));
+
+      expect(canStartupSyncFireNow(1, true)).toBe(true);
+    });
+
+    test('blocks firing once the app has had a window and no longer has one', () => {
+      // The macOS last-window-close state the readiness wait deliberately survives: resident, not
+      // quitting, windowless. The shutdown sync has already run and there is no UI to report into.
+      expect(canStartupSyncFireNow(0, true)).toBe(false);
+    });
+
+    test('allows firing before this process has created its first window', () => {
+      // No window YET is the app coming UP, not going down — the same distinction
+      // `areAllWindowsClosing` draws. Reading it as "went windowless" would silently drop the
+      // startup sync of any boot whose readiness landed before the first window did, which is the
+      // invisible failure the readiness gate exists to avoid.
+      expect(canStartupSyncFireNow(0, false)).toBe(true);
+    });
+
+    test('blocks firing once a quit has been requested, window or not', () => {
+      markQuitRequested();
+
+      expect(canStartupSyncFireNow(1, true)).toBe(false);
+      expect(canStartupSyncFireNow(0, false)).toBe(false);
+    });
+
+    test('blocks firing while every tracked window is closing', () => {
+      // Off macOS this is how the app goes down, and the quit flag is still false throughout it.
+      addWindow(fakeWindow(1));
+      markWindowClosing(1);
+
+      expect(isAppQuitRequested()).toBe(false);
+      expect(canStartupSyncFireNow(1, true)).toBe(false);
+    });
   });
 
   test('shares one run across every window closing as part of the same quit', async () => {

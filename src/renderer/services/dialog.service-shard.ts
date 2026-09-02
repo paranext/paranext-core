@@ -12,7 +12,10 @@ import { ABOUT_DIALOG } from '@renderer/components/dialogs/about-dialog.componen
 import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
 import { DIALOGS } from '@renderer/components/dialogs/index';
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
-import { showModalDialogOverlay } from '@renderer/services/overlays/overlay.service-host';
+import {
+  rejectModalDialogOverlaysOnShutdown,
+  showModalDialogOverlay,
+} from '@renderer/services/overlays/overlay.service-host';
 import {
   rejectAndRemoveOverlay,
   resolveAndRemoveOverlay,
@@ -213,6 +216,15 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 
   const localizedOptions = await localizeDialogOptions(options);
 
+  // Routed to this window by the main process, the same as an open or a settings tab, so it needs
+  // the same refusal: a dialog put in a window whose close is decided is destroyed with it moments
+  // later, leaving the requestor awaiting an answer from a dialog the user never saw. A statement
+  // about the window rather than about the dock, so it is asked before the routing below and holds
+  // for both answers — and a modal has the least to fall back on of the two. Its promise lives in
+  // the overlay and never in `dialogRequests`, so the unload rejection below does not reach it, and
+  // the router lifts the request timeout for `showDialog`, so nothing else settles it either.
+  webViewService.throwIfWindowIsClosing(`show dialog ${dialogType}`);
+
   // Route based on modal flag
   if (localizedOptions?.isModal) {
     // Look up the DialogDefinition for this dialog type
@@ -272,6 +284,19 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
   }
 
   // Non-modal path: create rc-dock floating tab (existing behavior)
+
+  // The dock's own hazard, which this path alone has: a layout load in flight replaces this dock
+  // wholesale with what it read before this dialog existed. A dialog tab is not a web view, so it
+  // is in none of the lists a load diffs — it goes with nothing reported anywhere, and the dialog
+  // simply never appears. A modal is in no dock and so waits for none of this.
+  await webViewService.waitForLayoutLoadToSettle();
+  // The refusal again, because the wait above parks for as long as a load takes and this window's
+  // close can be decided inside it: `isWindowToldToClose` latches whenever an emptiness report is
+  // answered, which can be at any moment. The guard above spoke for the moment this request
+  // arrived, not for this one. Still ahead of the request registration below, so the refusal
+  // reaches the caller as a rejection rather than as a dialog that quietly never opens.
+  webViewService.throwIfWindowIsClosing(`show dialog ${dialogType}`);
+
   let dialogId = newGuid();
   // Dumbest way to make sure the guid is unique
   while (dialogRequests.has(dialogId)) dialogId = newGuid();
@@ -369,6 +394,17 @@ export async function startDialogServiceShard(): Promise<void> {
   window.addEventListener('beforeunload', async () => {
     // TODO: preserve requests between refreshes - stop rejecting all remaining requests
     dialogRequests.forEach((request) => request.reject(`DialogService is shutting down`));
+    // The modal half of the same job, and the only thing anywhere that does it. A modal's promise
+    // lives in its overlay rather than in `dialogRequests` above, and the router lifts the request
+    // timeout for `showDialog`, so a modal still on screen when this window goes leaves its
+    // requestor waiting for the rest of the session. The per-request refusal cannot stand in for
+    // this: it speaks only for a close already decided when the dialog arrives, and neither of the
+    // other two ways this window ends is visible to it — a modal is an overlay and no dock add, so
+    // it is not the arrival that keeps a window whose emptiness report is being answered, and a
+    // close the user or a quit decides is settled in the main process and never announced here.
+    // Unload is the one moment all three have in common. Same words as the line above so a
+    // requestor is told one story whichever kind of dialog it asked for.
+    rejectModalDialogOverlaysOnShutdown('DialogService is shutting down');
     await dialogServiceNetworkObject.dispose();
   });
 }
