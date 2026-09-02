@@ -117,6 +117,7 @@ import {
   writeNow,
 } from '@main/services/window-layout-persistence.service';
 import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
+import { planWindowActivation } from '@main/window-activation.util';
 import {
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
@@ -660,9 +661,13 @@ async function main() {
 
   /** Sets up the electron BrowserWindow renderer process */
   const createWindow = async (
-    restoreInfo?: WindowRestoreInfo,
-    creationOptions?: { pendingContent?: boolean },
+    restoreInfo: WindowRestoreInfo | undefined,
+    creationOptions: { isUserRequested: boolean; pendingContent?: boolean },
   ): Promise<BrowserWindow> => {
+    // Declared by the caller rather than read from focus state, which answers a different question
+    // — see `adr-window-activation-is-declared-not-inferred`. Required rather than defaulted so a
+    // call site added later has to say which kind of window it is creating.
+    const activation = planWindowActivation(creationOptions.isUserRequested);
     // The menu and the `platform.createWindow` command stay live through a quit, because every
     // window sits in `preventDefault()` waiting on the shared shutdown run for as long as that run
     // takes. Opening a window in that gap would start a session the app is in no position to serve:
@@ -724,7 +729,7 @@ async function main() {
     }
 
     const newWindow = new BrowserWindow({
-      show: true,
+      show: activation.showOnCreate,
       ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
       width: windowWidth,
       height: windowHeight,
@@ -919,6 +924,12 @@ async function main() {
         logger.warn(
           `Window ${windowId} failed to load "${validatedURL}" with error "${errorDescription}" (${errorCode}). isMainFrame: ${isMainFrame}`,
         );
+        // A window held back from the constructor is revealed by `ready-to-show`, which a page that
+        // failed to load never reaches. Reveal it here instead: an empty window the user can see and
+        // close is recoverable, where one that exists, is tracked and routable, and never appears is
+        // not. Still inactive — a window nobody asked for does not earn the foreground by failing.
+        if (activation.revealAfterLoadFailure && !newWindow.isDestroyed() && !newWindow.isVisible())
+          newWindow.showInactive();
       },
     );
 
@@ -989,7 +1000,14 @@ async function main() {
         logger.info(`Window ${windowId} is starting minimized due to START_MINIMIZED env variable`);
         newWindow.minimize();
       } else {
-        newWindow.show();
+        // A window nobody asked for appears where it belongs without taking the foreground, and
+        // flashes so the user can find it — the same signal `focusWindow` gives when the OS refuses
+        // a raise.
+        if (activation.revealWhenReady === 'activate') newWindow.show();
+        else {
+          newWindow.showInactive();
+          newWindow.flashFrame(true);
+        }
         // Once-guarded like window-created above: ready-to-show fires again for a re-created window.
         markStartupOnce('window-shown');
         if (isFirstWindowOfProcess && getCommandLineSwitch(CommandLineArgs.Maximize)) {
@@ -1474,7 +1492,7 @@ async function main() {
   // extension-host ready signal would deadlock against that wait.
   setWebViewWindowCreator({
     createPendingContentWindow: async () =>
-      (await createWindow(undefined, { pendingContent: true })).id,
+      (await createWindow(undefined, { isUserRequested: false, pendingContent: true })).id,
     closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
   });
 
@@ -1491,7 +1509,10 @@ async function main() {
   const restoreWindows = async () => {
     const plan = await loadWindowLayouts();
     if (plan.kind === 'legacy') {
-      const legacyWindow = await createWindow({ kind: 'legacy', boundsState: plan.boundsState });
+      const legacyWindow = await createWindow(
+        { kind: 'legacy', boundsState: plan.boundsState },
+        { isUserRequested: true },
+      );
       setMainWindowId(legacyWindow.id);
       return;
     }
@@ -1500,11 +1521,14 @@ async function main() {
     // block on the extension host early in startup — so the first window never waits on it. The
     // saved structure keeps entry order regardless of window creation order.
     const { entries, mainEntryIndex } = plan;
-    const mainWindow = await createWindow({
-      kind: 'entry',
-      entryIndex: mainEntryIndex,
-      entry: entries[mainEntryIndex],
-    });
+    const mainWindow = await createWindow(
+      {
+        kind: 'entry',
+        entryIndex: mainEntryIndex,
+        entry: entries[mainEntryIndex],
+      },
+      { isUserRequested: true },
+    );
     setMainWindowId(mainWindow.id);
     if (entries.length <= 1) return;
 
@@ -1527,7 +1551,10 @@ async function main() {
         // Sequential on purpose: creating windows one at a time keeps the tracked window order
         // (and so the focus fallback and save order) deterministic
         // eslint-disable-next-line no-await-in-loop
-        await createWindow({ kind: 'entry', entryIndex, entry: entries[entryIndex] });
+        await createWindow(
+          { kind: 'entry', entryIndex, entry: entries[entryIndex] },
+          { isUserRequested: true },
+        );
       }
     }
   };
@@ -1756,7 +1783,7 @@ async function main() {
   commandService.registerCommand(
     'platform.createWindow',
     async () => {
-      await createWindow();
+      await createWindow(undefined, { isUserRequested: true });
     },
     {
       method: {
