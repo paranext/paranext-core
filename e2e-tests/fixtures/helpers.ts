@@ -258,6 +258,26 @@ export function singleAttemptBudgetMs(remainingMs: number): number {
   return Math.min(10_000, Math.max(1000, remainingMs));
 }
 
+/**
+ * Run a recovery action (e.g. a re-click) inside a polling loop, tolerating its own failure.
+ *
+ * A recovery attempt can be intercepted by the very instability the loop exists to work around — an
+ * overlapping element, a pane that has not settled yet. If that throws uncaught, an unhandled
+ * rejection ends the loop right there, on the recovery attempt's own generic error, instead of
+ * letting the loop retry or its own observation-based diagnostic (built from what it has actually
+ * seen) be what surfaces once the budget runs out.
+ */
+export async function attemptRecovery(
+  action: () => Promise<void>,
+  onFailure: (error: unknown) => void,
+): Promise<void> {
+  try {
+    await action();
+  } catch (error) {
+    onFailure(error);
+  }
+}
+
 /** The two interface modes a spec can require. Mirrors `SettingTypes['platform.interfaceMode']`. */
 export type RequiredInterfaceMode = 'simple' | 'power';
 

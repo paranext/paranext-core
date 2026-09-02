@@ -1,5 +1,5 @@
 import { Frame, Page } from '@playwright/test';
-import { waitForPapiMethodRegistered } from '../../../fixtures/helpers';
+import { attemptRecovery, waitForPapiMethodRegistered } from '../../../fixtures/helpers';
 
 /**
  * Find the Hello Rock3 WebView frame by activating its dock tab and searching child frames for
@@ -88,8 +88,9 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
       // this, a green run cannot tell you whether re-clicking fixed anything — only that nothing
       // failed — so the line is what makes one run enough to answer that.
       reclicks += 1;
+      const attemptNumber = reclicks;
       console.log(
-        `[findHelloRock3Frame] Hello Rock3 pane was not active; re-clicking its tab (attempt ${reclicks}).`,
+        `[findHelloRock3Frame] Hello Rock3 pane was not active; re-clicking its tab (attempt ${attemptNumber}).`,
       );
       // Polling loop: the re-click must finish before the next read, or the read would race it.
       // The explicit timeout leaves the deadline to the loop. Without it the click inherits
@@ -97,8 +98,19 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
       // throws its own generic timeout instead of letting the message below name interception as
       // the likely cause. `use: { actionTimeout }` would not help: it is applied in
       // `browser.newContext`, which an Electron launch never goes through.
+      //
+      // Tolerated, not propagated: the click itself can be intercepted by the same instability
+      // this loop is polling through. Left uncaught, that rejection would end the loop on the
+      // click's own generic error instead of the sawHiddenMatch-aware diagnostic below, once the
+      // deadline is actually reached.
       // eslint-disable-next-line no-await-in-loop
-      await tab.first().click({ timeout: 5_000 });
+      await attemptRecovery(
+        () => tab.first().click({ timeout: 5_000 }),
+        (error) =>
+          console.log(
+            `[findHelloRock3Frame] Re-click attempt ${attemptNumber} was itself intercepted: ${error}. Continuing to poll.`,
+          ),
+      );
     }
 
     // Polling loop: wait between attempts must be sequential
