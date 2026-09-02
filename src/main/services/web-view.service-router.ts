@@ -611,8 +611,9 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   // Each record folds in at most once, because the register is walked once. Two records still
   // holding one view — a late-landing adopt whose record has not cleared while the user drags the
   // same tab again — fold it in twice, and that is the accepted cost: a duplicate is visible both
-  // in this list and in the debug line below, where a drop is not. `getAllOpenWebViewDefinitionsWithReachability` is a
-  // best-effort read of a system mid-move either way.
+  // in this list and in the debug line below, where a drop is not.
+  // `getAllOpenWebViewDefinitionsWithReachability` is a best-effort read of a system mid-move
+  // either way.
   //
   // The real fix is a per-view identity minted where it is actually known — at the adopt, carried
   // into the new window — which is a change to the adopt path rather than to this read. The
