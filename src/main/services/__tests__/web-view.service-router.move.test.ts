@@ -795,11 +795,21 @@ describe('a web view that is between windows on a move', () => {
     await moving;
   });
 
-  test('does not double-count a web view the target already reports while the move record is still open', async () => {
+  test('reports a web view twice while the target already has it and the move record is still open', async () => {
+    // The chosen cost of matching only the spelling the move was asked for.
+    //
     // A late-landing adopt (the router's own request timed out, but the target's state already has
     // it) clears the move record only once its own probe confirms — so for a stretch the target
-    // already reports the definition AND the move record is still in the set. Folding in the move
-    // record unconditionally would count the same web view twice.
+    // already reports the definition AND the move record is still in the set. The target reports it
+    // under the captured, scope-stripped spelling, which the guard no longer matches, so the view is
+    // both reported and folded in.
+    //
+    // Matching that spelling instead would drop a different view entirely whenever two views share
+    // it, which one ordinary drag reaches — see the sibling test about an adopted view reported
+    // under the captured name. A duplicate is visible in this list and in the debug line; a drop is
+    // not, so this is the direction to fail in. `getAllOpenWebViewDefinitions` documents it on the
+    // public surface, and the fix that removes it — a per-view identity minted at the adopt — is in
+    // the multi-window small-items ledger.
     const owner = sourceWindowShard('view-1', 'view-1', { projectId: 'project-1' });
     const target = windowShard([]);
     let releaseAdopt: (webViewId: WebViewId) => void = () => {};
@@ -823,11 +833,10 @@ describe('a web view that is between windows on a move', () => {
 
     const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
 
-    expect(definitions.filter((definition) => definition.id === 'view-1')).toHaveLength(1);
-    // Nothing was folded in, so nothing says it was. The sibling test above shows this same call
-    // does log when a fold-in really happens, so silence here is the dedupe working rather than the
-    // assertion having nothing to catch.
-    expect(mocks.loggerDebug).not.toHaveBeenCalledWith(
+    expect(definitions.filter((definition) => definition.id === 'view-1')).toHaveLength(2);
+    // And it says so: the fold-in logs, which is what makes this duplicate visible to anyone
+    // reading a log rather than silently doubling a list.
+    expect(mocks.loggerDebug).toHaveBeenCalledWith(
       expect.stringContaining('are between windows on a move'),
     );
 
@@ -978,6 +987,47 @@ describe('a web view that is between windows on a move', () => {
     releaseFirstAdopt('view-1');
     releaseSecondAdopt('view-1');
     await Promise.allSettled([firstMove, secondMove]);
+  });
+
+  test('folds in a dragged view whose window still reports an adopted sibling under the captured name', async () => {
+    // Window 2 holds its own `home-w2` and, from an earlier move, window 1's Home adopted under the
+    // capture's already-stripped `home` — the state any window is in after receiving a move. Drag
+    // ONLY `home-w2`. Its capture strips to `home`, so the in-flight record's ids are
+    // ['home-w2', 'home'] — and window 2 still reports the OTHER view under `home`. The
+    // window-reported guard matches on that spelling and suppresses, so the dragged view, which is
+    // open in no window at all, is left out of the read entirely.
+    //
+    // Two different views, one spelling. The guard has to match the captured SCOPED spelling rather
+    // than the stripped one for this to come out right.
+    const holderWebViewIds = ['home-w2', 'home'];
+    const holder = windowShard(holderWebViewIds);
+    holder.captureAndCloseWebView.mockImplementation(async (id) => {
+      const index = holderWebViewIds.indexOf(id);
+      if (index < 0) return undefined;
+      // The capture closes the dragged tab; the adopted sibling stays open and keeps being reported
+      holderWebViewIds.splice(index, 1);
+      return { id: 'home', webViewType: 'test.type', projectId: 'project-dragged' };
+    });
+    const target = windowShard([]);
+    let releaseAdopt: (webViewId: WebViewId) => void = () => {};
+    target.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseAdopt = resolve;
+        }),
+    );
+    withWindows({ 2: holder, 4: target });
+
+    const move = moveWebView('home-w2', 4);
+    await settle();
+
+    const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
+    // The sibling is reported by its window; the dragged view is reported by nobody and must be
+    // folded in. Asserted by project rather than by id, because both views answer to `home`.
+    expect(definitions.some((definition) => definition.projectId === 'project-dragged')).toBe(true);
+
+    releaseAdopt('home');
+    await Promise.allSettled([move]);
   });
 
   test.each([

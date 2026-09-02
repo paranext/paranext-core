@@ -571,24 +571,27 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   // record is still in the set (a late-landing adopt only clears it once its own probe confirms),
   // and a view the windows have already reported does not need folding in again.
   //
-  // Matched against every id the move tracks, not just the captured one: a window scopes web view
-  // ids to itself when it loads a layout, so the window holding this view may answer with the
-  // spelling the move started from rather than the stripped one the target was handed.
+  // Matched on the spelling the move was ASKED for, and never on the captured one.
   //
-  // A match does NOT establish that this view is the one being reported, and the difference is a
-  // live defect rather than a nicety. The captured spelling has had its window scope stripped, and
-  // stripping is not injective — every window's default Home tab reduces to `home` — so a window
-  // reporting some OTHER view under that spelling matches too, and this view is then skipped and
-  // missing from the read. One ordinary drag reaches it: a window that has received an earlier move
-  // holds that view unscoped (the adopt opens under the stripped id and nothing re-scopes it until
-  // the next layout load) alongside its own `home-w2`, and dragging the `home-w2` one out drops it.
+  // The captured spelling has had its window scope stripped, and stripping is not injective: every
+  // window's default Home tab reduces to `home`. Matching on it therefore matched OTHER views —
+  // a window that received an earlier move holds it unscoped, because the adopt opens under the
+  // stripped id and nothing re-scopes it until the next layout load, so that window reports `home`
+  // while still holding its own `home-w2`. Dragging the `home-w2` one out then found `home`
+  // already reported and dropped a view that was open in no window at all. One ordinary drag, and
+  // silent.
   //
-  // Longstanding rather than introduced here — this line is byte-identical on main — and left as it
-  // is deliberately, not overlooked. Restricting the match to the windows that could legitimately
-  // hold the view does NOT fix it, because the source window is one of those and is exactly the
-  // window reporting the colliding name. What would fix it is a per-view identity minted at the
-  // adopt, which is the same fix the accepted duplicate below wants; both are in the general
-  // small-items ledger.
+  // A window-scoped id cannot do that: the `-wN` suffix names the window whose layout minted it, so
+  // a window reporting `home-w2` really is holding that view — the move failed, or recovery put it
+  // back — and skipping it is right. When the move was asked for an already-unscoped id there is no
+  // such spelling to match, and nothing is skipped.
+  //
+  // The cost is a duplicate, in the one case the old match was actually right about: a target that
+  // has adopted reports the view under the stripped spelling, which this no longer matches, so the
+  // view is both reported and folded in until the record clears. That is bounded by the same
+  // late-adopt probe as the duplicate below, and it is the trade this whole read is built on — a
+  // duplicate is visible in the result and in the debug line, a drop is not. `getAllOpenWebViewDefinitions`
+  // says so on the public surface.
   const definitionIds = new Set(definitions.map((definition) => definition.id));
   // Deliberately NOT deduped against other move records, only against what the windows reported.
   //
@@ -610,7 +613,8 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   // into the new window — which is a change to the adopt path rather than to this read.
   const foldedInDefinitions: SavedWebViewDefinition[] = [];
   webViewMovesInFlight.forEach((move) => {
-    if (move.webViewIds.some((webViewId) => definitionIds.has(webViewId))) return;
+    const [namedWebViewId] = move.webViewIds;
+    if (namedWebViewId !== move.capturedDefinition.id && definitionIds.has(namedWebViewId)) return;
     foldedInDefinitions.push(move.capturedDefinition);
   });
   // `debug`, not `warn`: a move overlapping a whole-app read is an expected, handled condition, and
