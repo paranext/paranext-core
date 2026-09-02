@@ -767,8 +767,8 @@ export function markWindowNotReady(windowId: number): void {
  * The window stays tracked and is deliberately not closed here. It is still on screen holding the
  * user's layout, and taking a window away unasked is not this module's to do — the caller offers
  * the close instead. That offer is safe to make because such a window keeps its persisted entry
- * (see `keepsItsEntryOnClose`), so closing it brings the window back next launch rather than
- * costing the user what it held.
+ * (see `keepsItsEntryOnClose`), so closing it brings the window back — next launch, or sooner on a
+ * switch back to power mode — rather than costing the user what it held.
  *
  * @param windowId Window nothing will ever run in again
  */
