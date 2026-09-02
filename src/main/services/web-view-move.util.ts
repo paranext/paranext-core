@@ -122,7 +122,9 @@ async function findWebViewAdoptedAfterTimeout(
 /**
  * Raise the window a completed move put the web view in. Raising is how the user sees where the web
  * view went — same narrow rule as cross-window opens: only between this app's windows, never taking
- * focus from another application. A new window raises itself when it is created.
+ * focus from another application. A window created for the move is not raised at all: it is
+ * revealed without activation on purpose, so the move does not pull the user out of the window they
+ * are working in.
  */
 function raiseMoveTarget(target: MoveWebViewTarget): void {
   if (target.kind === 'window' && isApplicationFocused()) focusWindow(target.windowId);
@@ -153,6 +155,10 @@ function raiseMoveTarget(target: MoveWebViewTarget): void {
 export async function moveWebView(
   webViewId: WebViewId,
   target: MoveWebViewTarget,
+  // Defaults to "nobody asked for this", the safe answer: a caller that does not say is an
+  // extension moving a view on its own, and a window the user did not ask for must not take the
+  // foreground. The tab context menu, which IS a person asking, says so explicitly.
+  isUserRequested = false,
 ): Promise<WebViewId> {
   // Refused, not queued. A second move of the same web view races the first for a tab only one of
   // them can capture, and the loser is told the tab may have closed while it is safe in the window
@@ -166,7 +172,7 @@ export async function moveWebView(
     throw new Error(`Cannot move webview ${webViewId}: it is already being moved.`);
   movesInProgress.add(webViewId);
   try {
-    return await moveCapturedWebView(webViewId, target);
+    return await moveCapturedWebView(webViewId, target, isUserRequested);
   } finally {
     movesInProgress.delete(webViewId);
   }
@@ -180,6 +186,7 @@ export async function moveWebView(
 async function moveCapturedWebView(
   webViewId: WebViewId,
   target: MoveWebViewTarget,
+  isUserRequested: boolean,
 ): Promise<WebViewId> {
   const matcher: OwnerMatcher = { kind: 'id', webViewId };
   const { owner, hadUnreachableWindows } = await findOwner(matcher, 'move');
@@ -237,11 +244,12 @@ async function moveCapturedWebView(
     // window that never comes up costs the user a wait and an error rather than a web view open in
     // no window at all. It opens nothing: an empty window gives reuse logic nothing to find, so
     // what makes the capture below have to come before the adopt is untouched by doing this early.
-    const freshWindow = await createFreshWindow(webViewId);
+    const freshWindow = await createFreshWindow(webViewId, isUserRequested);
     freshWindowId = freshWindow.windowId;
     adoptIntoDestination = (definition) =>
       freshWindow.runOpen(
-        (shard) => shard.adoptWebView(definition),
+        (shard, activateWithoutDocumentFocus) =>
+          shard.adoptWebView(definition, activateWithoutDocumentFocus),
         (standingWindow) => {
           standingNewWindow = standingWindow;
         },

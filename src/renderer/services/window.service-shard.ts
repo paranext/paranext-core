@@ -54,6 +54,12 @@ import {
 import { isDirectionFromTab } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewId } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
+import {
+  isWindowAwaitingFirstActivation,
+  noteWindowActivated,
+  resetActivationLatchForTesting,
+  takeTabAwaitingDocumentFocus,
+} from '@renderer/services/window-activation.util';
 import { settingsService } from '@shared/services/settings.service';
 
 const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
@@ -298,6 +304,30 @@ onDidCloseWebView(({ webView }) => {
   }
 })();
 
+// A gesture, not a focus event: a window held back from the foreground takes focus by itself when
+// its page first paints, so treating focus as activation would end the withholding before the user
+// had done anything. Pointer and key are the first things a person actually does in a window.
+window.addEventListener('pointerdown', () => {
+  endWithholdingAndCatchUp();
+});
+window.addEventListener('keydown', () => {
+  endWithholdingAndCatchUp();
+});
+
+/** End the withholding on the user's first gesture, and give the waiting tab its focus */
+function endWithholdingAndCatchUp(): void {
+  if (!noteWindowActivated()) return;
+  const tabId = takeTabAwaitingDocumentFocus();
+  if (tabId === undefined) return;
+  // Failure here costs the caret, not the content, so it is logged rather than thrown: the user can
+  // still click into the view.
+  getDockLayout()
+    .then((dockLayout) => dockLayout.focusTab(tabId))
+    .catch((e) => {
+      logger.warn(`Could not focus tab ${tabId} after this window was activated: ${e}`);
+    });
+}
+
 /**
  * What navigation should act on in this window — the resolved target (if any) and this window's
  * layout direction, in one round trip for the main process's navigation commands.
@@ -395,6 +425,7 @@ class WindowDataProviderEngine
   async setFocus(
     newSetFocusSpecifierPossiblyUndefinedSelector: SetFocusSpecifier | undefined,
     newSetFocusSpecifierPossiblyNotProvided?: SetFocusSpecifier,
+    activateWithoutDocumentFocus?: boolean,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
     // The trailing `?? undefined` collapses a `null` arriving in the specifier position. The types
     // say that cannot happen, but arguments cross the process boundary as JSON, where an `undefined`
@@ -478,7 +509,19 @@ class WindowDataProviderEngine
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     }
     // Set the focus in the docking layout to the appropriate tab or WebView
-    else (await getDockLayout()).focusTab(newFocusSubject.id);
+    // The main process answers for content it routes here, and its answer WINS: it watches this
+    // window's focus events, while the latch below only sees gestures in the shell document — a
+    // pointer or key event inside a docked web view's iframe never reaches it, so it can stay set
+    // long after the user has been working here. The latch answers only for the focus requests this
+    // window's own panels and web views make as they mount, which never leave the renderer.
+    else {
+      // Deferred, not dropped: the dock records whatever tab it leaves unfocused, and the
+      // catch-up gives that tab its focus when the user actually arrives.
+      (await getDockLayout()).focusTab(
+        newFocusSubject.id,
+        activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation(),
+      );
+    }
 
     return didChangeFocus;
   }
@@ -627,6 +670,13 @@ export const testingWindowService = {
   implementWindowDataProviderEngine: () => {
     return new WindowDataProviderEngine();
   },
+  /**
+   * Put the activation latch back to "not activated yet".
+   *
+   * The latch is module state that only ever goes one way in a real window, so without this a test
+   * that activates the window decides the answer for every test after it.
+   */
+  resetActivationLatchForTesting,
 };
 
 // This will be needed later for disposing of the data provider, choosing to ignore instead of

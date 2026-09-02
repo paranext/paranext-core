@@ -38,6 +38,7 @@ import {
   WebViewType,
 } from '@shared/models/web-view.model';
 import { Layout } from '@shared/models/docking-framework.model';
+import { shouldContentAvoidDocumentFocus } from '@main/window-activation.util';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -132,13 +133,27 @@ async function openWebViewInOwningWindow(
     throw new Error(
       `Cannot open ${webViewType} in window ${owner.windowId}: that window is closing.`,
     );
-  const openedWebViewId = await owner.shard.openWebView(webViewType, layout, options);
+  const openedWebViewId = await owner.shard.openWebView(
+    webViewType,
+    layout,
+    options,
+    shouldContentAvoidDocumentFocus(owner.windowId),
+  );
   const isCrossWindow = owner.windowId !== getTargetWindowId();
   // A caller who opted out of bringToFront is opting out at the window level too: the shard already
   // honours this for the tab it raises inside its own window, and an OS-level raise the caller did
   // not ask for is the louder half of the same action. Skipping it here is what keeps a passive
   // probe from pulling a window to the front every time it runs.
-  if (openedWebViewId && isCrossWindow && isApplicationFocused() && options?.bringToFront !== false)
+  // A window the platform opened in the background and the user has not been in yet is not raised
+  // either: it was deliberately kept out of the foreground moments ago, and an open landing in it
+  // is not the user asking to go there.
+  if (
+    openedWebViewId &&
+    isCrossWindow &&
+    isApplicationFocused() &&
+    options?.bringToFront !== false &&
+    !shouldContentAvoidDocumentFocus(owner.windowId)
+  )
     focusWindow(owner.windowId);
   return openedWebViewId;
 }
@@ -149,9 +164,14 @@ async function openWebViewInOwningWindow(
  */
 async function openInFreshWindow(
   webViewDescription: string,
-  open: (shard: WebViewServiceShard) => Promise<WebViewId | undefined>,
+  open: (
+    shard: WebViewServiceShard,
+    activateWithoutDocumentFocus: boolean,
+  ) => Promise<WebViewId | undefined>,
 ): Promise<WebViewId | undefined> {
-  const freshWindow = await createFreshWindow(webViewDescription);
+  // A `{ type: 'window' }` open is an extension asking for a window, not a person, so the window it
+  // creates is not one the user asked for.
+  const freshWindow = await createFreshWindow(webViewDescription, false);
   return freshWindow.runOpen(open);
 }
 
@@ -177,12 +197,18 @@ async function openWebViewInNewWindow(
     );
   }
   if (interfaceMode !== 'power') {
+    const targetWindowId = getTargetWindowId();
     const webViewShard = await getTargetWebViewShard();
-    return webViewShard.openWebView(webViewType, { type: 'tab' }, options);
+    return webViewShard.openWebView(
+      webViewType,
+      { type: 'tab' },
+      options,
+      targetWindowId !== undefined && shouldContentAvoidDocumentFocus(targetWindowId),
+    );
   }
 
-  return openInFreshWindow(webViewType, (shard) =>
-    shard.openWebView(webViewType, { type: 'tab' }, options),
+  return openInFreshWindow(webViewType, (shard, activateWithoutDocumentFocus) =>
+    shard.openWebView(webViewType, { type: 'tab' }, options, activateWithoutDocumentFocus),
   );
 }
 
@@ -203,6 +229,15 @@ const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
           required: true,
           summary: 'Web view to move',
           schema: { type: 'string' },
+        },
+        {
+          name: 'isUserRequested',
+          required: false,
+          summary:
+            'Whether a person asked for this move, which decides whether the window it creates ' +
+            'comes to the front. Defaults to false, so a window an extension asks for appears ' +
+            'without interrupting whatever the user is doing',
+          schema: { type: 'boolean' },
         },
       ],
       result: {
@@ -268,10 +303,14 @@ function assertWindowExists(windowId: unknown, operation: string): asserts windo
 }
 
 /** Handle `platform.moveWebViewToNewWindow`. Arguments arrive untyped over the network */
-async function moveWebViewToNewWindow(webViewId: unknown): Promise<WebViewId> {
+async function moveWebViewToNewWindow(
+  webViewId: unknown,
+  isUserRequested: unknown,
+): Promise<WebViewId> {
   if (typeof webViewId !== 'string')
     throw new Error(`platform.moveWebViewToNewWindow needs a web view id; got ${typeof webViewId}`);
-  return moveWebView(webViewId, { kind: 'new' });
+  // Same default and reason as moveWebView's isUserRequested.
+  return moveWebView(webViewId, { kind: 'new' }, isUserRequested === true);
 }
 
 /** Handle `platform.moveWebViewToWindow`. Arguments arrive untyped over the network */
@@ -433,7 +472,12 @@ async function openWebView(
       webViewShards,
       options.targetWindowId,
     );
-    return shard.openWebView(webViewType, effectiveLayout, options);
+    return shard.openWebView(
+      webViewType,
+      effectiveLayout,
+      options,
+      shouldContentAvoidDocumentFocus(options.targetWindowId),
+    );
   }
 
   // A layout naming a tab or tab group names the window that holds it, so it routes the same way an
@@ -471,8 +515,14 @@ async function openWebView(
   }
 
   // No existingId or not found in any window — route to focused window
+  const routedWindowId = getTargetWindowId();
   const webViewShard = await getTargetWebViewShard();
-  return webViewShard.openWebView(webViewType, effectiveLayout, options);
+  return webViewShard.openWebView(
+    webViewType,
+    effectiveLayout,
+    options,
+    routedWindowId !== undefined && shouldContentAvoidDocumentFocus(routedWindowId),
+  );
 }
 
 async function reloadWebView(

@@ -249,7 +249,10 @@ const handleMoveTabToWindow = async (webViewIdToMove: WebViewId, targetWindowId:
 
 const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
   try {
-    await sendCommand('platform.moveWebViewToNewWindow', webViewIdToMove);
+    // A person picked this from the tab's own menu, so the window it creates is one they asked for
+    // and comes to the front. An extension calling the same command does not say so, and its window
+    // appears without taking the foreground.
+    await sendCommand('platform.moveWebViewToNewWindow', webViewIdToMove, true);
   } catch (error) {
     logger.error(
       `Failed to move web view ${webViewIdToMove} to a new window: ${getErrorMessage(error)}`,

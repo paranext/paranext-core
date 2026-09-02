@@ -44,6 +44,7 @@ import {
 
 import { TAB_TYPE_BUTTONS, loadButtonsTab } from '@renderer/testing/test-buttons-panel.component';
 import { TAB_TYPE_TEST, loadTestTab } from '@renderer/testing/test-panel.component';
+import { noteTabAwaitingDocumentFocus } from '@renderer/services/window-activation.util';
 import {
   TAB_TYPE_QUICK_VERSE_HERESY,
   loadQuickVerseHeresyTab,
@@ -796,6 +797,7 @@ export function updateWebViewDefinition(
   updateInfo: WebViewDefinitionUpdateInfo,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
+  activateWithoutDocumentFocus = false,
 ): boolean {
   const [targetTabInfo, targetTabWebViewData] = getWebViewTabInfoById(
     webViewId,
@@ -822,7 +824,13 @@ export function updateWebViewDefinition(
   );
 
   // Update existing tab
-  updateTab(dockLayout, updatedTabData, shouldBringToFront);
+  updateTab(
+    dockLayout,
+    updatedTabData,
+    shouldBringToFront,
+    undefined,
+    activateWithoutDocumentFocus,
+  );
 
   // Only consider the WebView to have updated if its properties actually changed, not just if it was brought to front
   return !!updatedWebViewData;
@@ -888,15 +896,23 @@ export function containsTab(dockLayout: DockLayout, tabOrTabGroupId: string): bo
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
  * @param tabId ID of the tab to set active and focused
+ * @param activateWithoutDocumentFocus If `true`, the tab is made active without taking document
+ *   focus. Every mounted panel and every loaded web view asks to be focused, so this is reached
+ *   without anyone deliberately asking for focus — see
+ *   {@link revealTabGroupAndSetDocumentFocusToTab} for why that matters to a background window
  * @returns `true` if successfully found tab to update, `false` otherwise
  */
-export function focusTab(dockLayout: DockLayout, tabId: string): boolean {
+export function focusTab(
+  dockLayout: DockLayout,
+  tabId: string,
+  activateWithoutDocumentFocus = false,
+): boolean {
   // Bring the tab to front of its tab group
   // `rc-dock` requires null here to mean "don't change the tab data"
   // eslint-disable-next-line no-null/no-null
   const didFindTab = dockLayout.updateTab(tabId, null, true);
 
-  revealTabGroupAndSetDocumentFocusToTab(dockLayout, tabId);
+  revealTabGroupAndSetDocumentFocusToTab(dockLayout, tabId, activateWithoutDocumentFocus);
 
   return didFindTab;
 }
@@ -912,6 +928,8 @@ export function focusTab(dockLayout: DockLayout, tabId: string): boolean {
  *   tabs. Note: you must update the `tabInfo.flashTriggerTime` property before calling this in
  *   order to make the tab flash.
  * @param tabIdToReplace If specified, the tab with this ID will be replaced with the new tab
+ * @param activateWithoutDocumentFocus If `true`, the tab is made active without taking document
+ *   focus. See {@link revealTabGroupAndSetDocumentFocusToTab}
  * @returns `true` if successfully found tab to update, `false` otherwise
  */
 function updateTab(
@@ -919,13 +937,15 @@ function updateTab(
   tabInfo: RCDockTabInfo,
   shouldBringToFront: boolean,
   tabIdToReplace?: string,
+  activateWithoutDocumentFocus = false,
 ): boolean {
   const tabId = tabIdToReplace ?? tabInfo.id;
 
   const didFindTab = dockLayout.updateTab(tabId, tabInfo, shouldBringToFront);
 
   // Make sure the tab is unobscured and focus the tab
-  if (shouldBringToFront) revealTabGroupAndSetDocumentFocusToTab(dockLayout, tabId);
+  if (shouldBringToFront)
+    revealTabGroupAndSetDocumentFocusToTab(dockLayout, tabId, activateWithoutDocumentFocus);
 
   return didFindTab;
 }
@@ -974,6 +994,7 @@ export function addTabToDock(
   layout: Layout,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
+  activateWithoutDocumentFocus = false,
 ): Layout | undefined {
   const tab = loadTab(savedTabInfo, shouldBringToFront);
   let targetTab = dockLayout.find(tab.id);
@@ -985,7 +1006,7 @@ export function addTabToDock(
         `addTabToDock: target tab with id '${targetTab.id}' is not a tab. This should not happen.`,
       );
 
-    updateTab(dockLayout, tab, shouldBringToFront);
+    updateTab(dockLayout, tab, shouldBringToFront, undefined, activateWithoutDocumentFocus);
     previousTabId = tab.id;
 
     // We did not add a tab, so return undefined to indicate that
@@ -1107,7 +1128,15 @@ export function addTabToDock(
       if (!updatedLayout.targetTabId) {
         throw new LogError(`When replacing a tab, targetTabId must be specified`);
       }
-      if (updateTab(dockLayout, tab, shouldBringToFront, updatedLayout.targetTabId))
+      if (
+        updateTab(
+          dockLayout,
+          tab,
+          shouldBringToFront,
+          updatedLayout.targetTabId,
+          activateWithoutDocumentFocus,
+        )
+      )
         didFocusTab = true;
       else
         throw new LogError(
@@ -1134,7 +1163,7 @@ export function addTabToDock(
   }
 
   if (shouldBringToFront && !didFocusTab)
-    revealTabGroupAndSetDocumentFocusToTab(dockLayout, tab.id);
+    revealTabGroupAndSetDocumentFocusToTab(dockLayout, tab.id, activateWithoutDocumentFocus);
 
   // If there was an error loading the tab, we create an error tab. But we also want to throw here
   // so people know there was a problem.
@@ -1167,6 +1196,7 @@ export function addWebViewToDock(
   layout: Layout,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
+  activateWithoutDocumentFocus = false,
 ): Layout | undefined {
   const tabId = webView.id;
   if (!tabId)
@@ -1178,6 +1208,7 @@ export function addWebViewToDock(
     layout,
     shouldBringToFront,
     dockLayout,
+    activateWithoutDocumentFocus,
   );
 }
 
@@ -1192,11 +1223,21 @@ export function addWebViewToDock(
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
  * @param tabId ID of tab in the tab group to reveal
+ * @param activateWithoutDocumentFocus If `true`, the tab group is revealed and the tab is made
+ *   active, but document focus is left where it is. Focusing a tab focuses its web view's iframe,
+ *   and a `focus()` inside a window that does not hold OS focus asks the browser to activate that
+ *   window — which would pull a window opened deliberately in the background to the front as soon
+ *   as content arrived in it.
  */
-function revealTabGroupAndSetDocumentFocusToTab(dockLayout: DockLayout, tabId: string): void {
+function revealTabGroupAndSetDocumentFocusToTab(
+  dockLayout: DockLayout,
+  tabId: string,
+  activateWithoutDocumentFocus = false,
+): void {
   unmaximizeAnyMaximizedTabGroup(dockLayout, tabId);
   bringFloatingTabGroupToFront(dockLayout, tabId);
-  setDocumentFocusToTab(dockLayout, tabId);
+  if (activateWithoutDocumentFocus) noteTabAwaitingDocumentFocus(tabId);
+  else setDocumentFocusToTab(dockLayout, tabId);
 }
 
 /**

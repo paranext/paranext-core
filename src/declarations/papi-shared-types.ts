@@ -163,11 +163,19 @@ declare module 'papi-shared-types' {
      * showing the message to a user — it is there to be classified on, not read.
      *
      * @param webViewId Web view to move
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own: the window that appears does not take the foreground, so it cannot interrupt
+     *   whatever the user is doing. Pass `true` only from a control the user operated
      * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
      *   see above
-     * @experimental
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
      */
-    'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
+    'platform.moveWebViewToNewWindow': (
+      webViewId: WebViewId,
+      isUserRequested?: boolean,
+    ) => Promise<WebViewId>;
     /**
      * Move a web view to an existing window, named by its window id (see
      * `papi.window.getWindowId()` for the id of the window the caller is in, or

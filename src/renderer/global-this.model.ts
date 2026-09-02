@@ -5,6 +5,7 @@ import {
   DEV_MODE_QUERY_PARAMETER,
   LOG_LEVEL_QUERY_PARAMETER,
   STARTUP_MARKS_QUERY_PARAMETER,
+  WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER,
   URL_PARAMETERS,
   WINDOW_ID,
 } from '@shared/data/platform.data';
@@ -55,6 +56,13 @@ globalThis.isNoisyDevModeEnabled = searchParams.get(DEV_MODE_QUERY_PARAMETER) !=
 // null is used in this API meaning the param is not present
 // eslint-disable-next-line no-null/no-null
 globalThis.startupMarks = searchParams.get(STARTUP_MARKS_QUERY_PARAMETER) !== null;
+
+// Whether main created this window without activating it. Content arriving in such a window must
+// not focus itself, since focusing a tab focuses its web view's iframe and that asks the browser to
+// activate the window.
+globalThis.wasWindowCreatedWithoutActivation = searchParams.has(
+  WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER,
+);
 
 // Id of the window this renderer is running in. Read here, once, so that everything downstream
 // holds the same id main routes by — and left `undefined` when the parameter is absent or empty,

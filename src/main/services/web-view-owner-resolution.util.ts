@@ -13,6 +13,7 @@ import {
 } from '@main/services/window-state.service';
 import { clearWindowPendingContent } from '@main/services/window-layout-persistence.service';
 import { resolveShardForWindow } from '@main/services/target-shard-resolver.util';
+import { shouldContentAvoidDocumentFocus } from '@main/window-activation.util';
 import { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
 import { Layout } from '@shared/models/docking-framework.model';
 import { logger } from '@shared/services/logger.service';
@@ -32,8 +33,15 @@ import { getWebViewShard, webViewShards } from '@main/services/web-view-shard-in
  * exists.
  */
 export type WebViewWindowCreator = {
-  /** Create a window that starts truly empty and waits for routed content. Answers its window id */
-  createPendingContentWindow: () => Promise<string>;
+  /**
+   * Create a window that starts truly empty and waits for routed content. Answers its window id
+   *
+   * @param isUserRequested Whether a person in this app asked for the window this content is going
+   *   into — a tab context menu's "Move tab to new window" did, an extension's own web-view open
+   *   did not. A window the user asked for comes to the front; one they did not appears without
+   *   taking the foreground
+   */
+  createPendingContentWindow: (isUserRequested: boolean) => Promise<string>;
   /** Close a window created to hold a moved web view whose content never arrived */
   closeWindow: (windowId: string) => void;
 };
@@ -365,7 +373,10 @@ export type FreshWindow = {
    *   content went may ignore that one
    */
   runOpen: (
-    open: (shard: WebViewServiceShard) => Promise<WebViewId | undefined>,
+    open: (
+      shard: WebViewServiceShard,
+      activateWithoutDocumentFocus: boolean,
+    ) => Promise<WebViewId | undefined>,
     onWindowLeftStanding?: (standingWindow: WindowShard) => void,
   ) => Promise<WebViewId | undefined>;
   /**
@@ -387,8 +398,13 @@ export type FreshWindow = {
  * Never leaks the window: a shard that never arrives closes it again before this throws.
  *
  * @param webViewDescription What the window is being created for, for the errors this raises
+ * @param isUserRequested Whether a person in this app asked for this window — see
+ *   {@link WebViewWindowCreator.createPendingContentWindow}
  */
-export async function createFreshWindow(webViewDescription: string): Promise<FreshWindow> {
+export async function createFreshWindow(
+  webViewDescription: string,
+  isUserRequested: boolean,
+): Promise<FreshWindow> {
   if (!windowCreator) {
     try {
       await waitForWindowCreatorWiring();
@@ -407,7 +423,7 @@ export async function createFreshWindow(webViewDescription: string): Promise<Fre
     throw new Error(
       `Cannot open ${webViewDescription} in a new window: window creation is not wired up`,
     );
-  const windowId = await creator.createPendingContentWindow();
+  const windowId = await creator.createPendingContentWindow(isUserRequested);
 
   // Closes the window this call created, and never lets a failure to close replace the reason the
   // window is being closed in the first place — a window that fails to close is a leak to warn
@@ -491,7 +507,9 @@ export async function createFreshWindow(webViewDescription: string): Promise<Fre
     runOpen: async (open, onWindowLeftStanding) => {
       let openedWebViewId: WebViewId | undefined;
       try {
-        openedWebViewId = await open(shard);
+        // Read now rather than when the window was created: a window the user has activated in the
+        // meantime is an ordinary window, and its content should land focused like any other.
+        openedWebViewId = await open(shard, shouldContentAvoidDocumentFocus(windowId));
       } catch (e) {
         await closeAbandonedWindow(onWindowLeftStanding);
         throw e;

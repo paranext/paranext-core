@@ -76,6 +76,18 @@ declare global {
    */
   var startupMarks: boolean;
   /**
+   * Whether this window was created without being activated, as of the moment it was created. Set
+   * in the renderer process from the URL search params; no other process assigns it, so it reads
+   * `undefined` there.
+   *
+   * This is the window's state at creation, not now: what content should do about it also depends
+   * on whether the user has since done anything in the window, which the renderer tracks
+   * separately.
+   *
+   * @experimental
+   */
+  var wasWindowCreatedWithoutActivation: boolean | undefined;
+  /**
    * Id of the window this code is running in, as the platform assigns them. Set from the URL search
    * params in the renderer process, and `undefined` outside a window — which is how code shared
    * with the extension host tells the two apart, so test it against `undefined` rather than for

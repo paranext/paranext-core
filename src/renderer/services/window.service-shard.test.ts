@@ -9,6 +9,7 @@ import {
   testingWindowService,
 } from '@renderer/services/window.service-shard';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
+import { noteTabAwaitingDocumentFocus } from '@renderer/services/window-activation.util';
 
 type CloseWebViewCallback = (event: { webView: { id: string } }) => void;
 /** The open event's payload is ignored, so this callback takes no arguments */
@@ -23,6 +24,7 @@ const {
   openWebViewCallbacks,
   updateWebViewCallbacks,
   getTabInfoByIdMock,
+  focusTabMock,
   getSavedWebViewDefinitionSyncMock,
   getAllOpenWebViewDefinitionsSyncMock,
   readDirectionMock,
@@ -56,6 +58,8 @@ const {
     openWebViewCallbacks: openCallbacks,
     updateWebViewCallbacks: updateCallbacks,
     getTabInfoByIdMock: tabInfoMock,
+    // Shared across `getDockLayout()` calls so a test can assert what the shard asked the dock for
+    focusTabMock: vi.fn(),
     getSavedWebViewDefinitionSyncMock: definitionMock,
     getAllOpenWebViewDefinitionsSyncMock: allOpenDefinitionsMock,
     readDirectionMock: directionMock,
@@ -64,7 +68,7 @@ const {
 
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   getDockLayout: vi.fn(async () => ({
-    focusTab: vi.fn(),
+    focusTab: focusTabMock,
     getTabInfoByElement: vi.fn(() => undefined),
     getTabInfoById: getTabInfoByIdMock,
     getTabInfoByDirectionFromTab: vi.fn(() => undefined),
@@ -515,5 +519,140 @@ describe('getNavigationContext', () => {
     const isIgnored: unknown = Reflect.get(engine.getNavigationContext, 'isIgnored');
 
     expect(isIgnored).toBe(true);
+  });
+});
+
+/**
+ * A window created without activation is undone by its own content unless the content knows: every
+ * mounted panel and every loaded web view asks this window's service to focus it, and focusing a
+ * tab focuses its web view's iframe, which asks the browser to activate the window. Those calls
+ * resolve this window's own shard by name and never reach the main process, so the shard has to
+ * answer for itself.
+ */
+describe('a window still waiting for its first activation', () => {
+  beforeEach(() => {
+    focusTabMock.mockClear();
+    getTabInfoByIdMock.mockReturnValue({ id: 'tab-1', tabType: 'webView' });
+    // The latch only ever goes one way in a real window, so each test has to start it over —
+    // otherwise the first test to activate the window answers for every test after it.
+    testingWindowService.resetActivationLatchForTesting();
+  });
+
+  afterEach(() => {
+    globalThis.wasWindowCreatedWithoutActivation = false;
+    testingWindowService.resetActivationLatchForTesting();
+  });
+
+  test('tells the dock to activate the tab without taking document focus', async () => {
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
+
+    expect(focusTabMock).toHaveBeenCalledWith('tab-1', true);
+  });
+
+  test('stops withholding the moment the user does something in the window', async () => {
+    // The transition itself, in one test: withheld before the gesture and ordinary after. Split
+    // across two tests this passed for the wrong reason, because the latch is module state and the
+    // first test had already tripped it.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
+    expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', true);
+
+    window.dispatchEvent(new Event('pointerdown'));
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
+    expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', false);
+  });
+
+  test('lets the main process overrule the local latch for content it routes here', async () => {
+    // This window's latch only sees gestures in the shell document — a pointer or key event inside
+    // a docked web view's iframe never reaches it. So the latch can stay set long after the user
+    // has been working in the window, and the main process, which watches the window's own focus
+    // events, is the better-informed of the two. When it states an answer, that answer wins.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' }, undefined, false);
+
+    expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', false);
+  });
+
+  test('keeps withholding when the window merely takes focus by itself', async () => {
+    // The reason the latch is not driven by focus: a window held back from the foreground takes
+    // focus on its own the moment its page first paints. Ending the withholding there would undo it
+    // before the user had done anything at all, which is the defect this whole change exists for.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+
+    window.dispatchEvent(new Event('focus'));
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
+    expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', true);
+  });
+
+  test('gives the waiting tab its focus when the user finally arrives', async () => {
+    // The catch-up half of the withholding. Content docked while nobody was looking was made active
+    // WITHOUT document focus; if nothing restores it, the user activates the window, sees the tab
+    // rendered active, types, and nothing reaches the web view until they click inside it — which a
+    // keyboard or screen-reader user does not do.
+    //
+    // The real dock records the waiting tab as it withholds focus, and this file mocks the dock, so
+    // the record is made directly here. That the dock actually makes it is covered where the dock
+    // is real, in `platform-dock-layout-storage.document-focus.test.ts`.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
+    expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', true);
+    focusTabMock.mockClear();
+    noteTabAwaitingDocumentFocus('tab-1');
+
+    window.dispatchEvent(new Event('pointerdown'));
+    await vi.waitFor(() => expect(focusTabMock).toHaveBeenCalledWith('tab-1'));
+  });
+
+  test('lets the tab the user actually clicked win when it differs from the tab the catch-up is chasing', async () => {
+    // A user whose first gesture in the window is a click on a tab other than the one left waiting
+    // must end up with THAT tab focused — the click is what the user is looking at, and losing it to
+    // a stale catch-up would silently move focus out from under them. `getDockLayout()` resolves an
+    // already-registered dock, so the catch-up's `focusTab` call settles in a microtask ahead of the
+    // click's own `focusTab` call; this pins that ordering, not merely that both calls happened.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+    noteTabAwaitingDocumentFocus('tab-a');
+    focusTabMock.mockClear();
+
+    window.dispatchEvent(new Event('pointerdown'));
+    await engine.setFocus({ focusType: 'tab', id: 'tab-b' });
+
+    await vi.waitFor(() => expect(focusTabMock).toHaveBeenCalledWith('tab-a'));
+    expect(focusTabMock.mock.calls.map((call) => call[0])).toEqual(['tab-a', 'tab-b']);
+  });
+
+  test('has nothing to catch up when no tab was left waiting', async () => {
+    // The positive control: the catch-up must fire because a tab was deferred, not on every gesture.
+    globalThis.wasWindowCreatedWithoutActivation = false;
+    testingWindowService.implementWindowDataProviderEngine();
+
+    window.dispatchEvent(new Event('pointerdown'));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(focusTabMock).not.toHaveBeenCalled();
+  });
+
+  test('focuses normally in a window the user asked for', async () => {
+    // Nothing in the URL bag means an ordinary window, which must be unaffected.
+    globalThis.wasWindowCreatedWithoutActivation = false;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
+
+    expect(focusTabMock).toHaveBeenCalledWith('tab-1', false);
   });
 });
