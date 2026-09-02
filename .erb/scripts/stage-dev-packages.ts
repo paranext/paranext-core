@@ -14,10 +14,13 @@
  * install` on a fresh clone the root postinstall (`postinstall.ts`) detects the gap and re-runs the
  * install once.
  *
- * Staging is skipped when the staged output is already current — each staged folder carries a
- * `.staged-from` marker naming the source commit it was built from — so repeat installs don't pay
- * for a pnpm install and build. The marker is local state, never committed (`dev-packages/` is
- * gitignored); deleting it just makes the next run rebuild.
+ * The dev repos commit their built `dist/`, so staging is normally a copy: running this app needs
+ * nothing from their toolchain — no pnpm, no nx, no build. A build happens only in `--local` mode
+ * or when a checkout has no `dist/` to copy.
+ *
+ * Staging is skipped entirely when the staged output is already current — each staged folder
+ * carries a `.staged-from` marker naming the source commit it came from. The marker is local state,
+ * never committed (`dev-packages/` is gitignored); deleting it just makes the next run re-stage.
  *
  * Modes:
  *
@@ -256,25 +259,32 @@ function getPublishedFiles(packageDir: string): string[] {
 }
 
 /**
- * Rewrites pnpm `workspace:` specifiers in a staged manifest to `file:` paths pointing at the
- * sibling staged package. npm cannot parse the `workspace:` protocol at all, so this rewrite is
- * what makes the staged copy installable.
+ * Shapes a staged package's manifest the way publishing would, and makes it installable by npm.
  *
- * Pointing at the sibling staged copy — rather than resolving to a published version, as a pnpm or
- * yalc publish would — keeps the whole graph on the build we just made. Otherwise a dev repo's
- * internal dependency on its own sibling package would resolve from the npm registry, which both
- * reintroduces a dependency on someone else's published artifact and risks a second copy of that
- * package in the tree.
+ * The dev repo's own `prepublishOnly` does the first part, but running it requires that repo's
+ * toolchain and a full build. Doing it here on the copy instead means a consumer never needs either
+ * — and never mutates the source checkout, which `prepublishOnly` does (it rewrites `package.json`
+ * in place and relies on a `postpublish` git restore).
+ *
+ * - The `development` conditional export points at raw TypeScript source that our bundlers cannot
+ *   consume; publishing drops it, so we do too.
+ * - `devDependencies` are irrelevant to a consumer and would be noise in its lockfile.
+ * - Pnpm `workspace:` specifiers become `file:` paths at the sibling staged package. npm cannot parse
+ *   the `workspace:` protocol at all, so this rewrite is what makes the copy installable. Pointing
+ *   at the sibling staged copy — rather than at a published version, as a pnpm or yalc publish
+ *   would — keeps the whole graph on the build we just staged, instead of pulling someone else's
+ *   published artifact back in and risking a second copy of that package in the tree.
  */
-function resolveWorkspaceSpecifiers(
-  stagingDir: string,
-  stagingFolderByName: Map<string, string>,
-): void {
+function prepareStagedManifest(stagingDir: string, stagingFolderByName: Map<string, string>): void {
   const manifestPath = path.resolve(stagingDir, 'package.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 
-  let rewroteAny = false;
-  ['dependencies', 'devDependencies', 'peerDependencies'].forEach((section) => {
+  delete manifest.exports?.['.']?.development;
+  delete manifest.devDependencies;
+  // Volta pins the dev repo's toolchain; it means nothing in a consumer's tree.
+  delete manifest.volta;
+
+  ['dependencies', 'peerDependencies'].forEach((section) => {
     const deps: Record<string, string> | undefined = manifest[section];
     if (!deps) return;
     Object.entries(deps).forEach(([name, specifier]) => {
@@ -285,23 +295,23 @@ function resolveWorkspaceSpecifiers(
           `${manifestPath} depends on "${name}" with specifier "${specifier}", but "${name}" is not staged. Add it to dev-packages.json so it can be resolved.`,
         );
       deps[name] = `file:../${stagingFolder}`;
-      rewroteAny = true;
     });
   });
 
-  if (rewroteAny) fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, undefined, 2)}\n`);
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, undefined, 2)}\n`);
 }
 
 /**
- * Builds a package, rolls up its type declarations, and copies its publishable files into
- * `dev-packages/staging/<stagingFolder>`.
+ * Copies a package's publishable files into `dev-packages/staging/<stagingFolder>`, building first
+ * only when there is nothing to copy.
  *
- * The build runs through the package's own `prepublishOnly` script so the staged copy matches what
- * the package would publish. That script also rewrites the package's `package.json` in place — most
- * importantly dropping the `development` conditional export, which points at raw TypeScript source
- * that our bundlers cannot consume — so its exact prior content is restored afterward. A byte
- * snapshot rather than `git restore`, because in `--local` mode the developer may have their own
- * uncommitted edits to that manifest, which a git restore would wipe along with the script's.
+ * The dev repos commit their built `dist/`, so staging is normally just a copy: a consumer needs
+ * none of their toolchain — no pnpm, no nx, no build — to run this app. Only someone changing a dev
+ * package builds it, via `npm run build:editor`.
+ *
+ * The build fallback covers the two cases where a copy is not enough: `--local`, where the point is
+ * to pick up uncommitted source edits, and a checkout whose `dist/` is missing (an older revision
+ * from before the build was committed, or a partially cleaned tree).
  */
 function stagePackage(
   repo: DevRepo,
@@ -311,28 +321,31 @@ function stagePackage(
 ): void {
   const packageDir = path.resolve(getDevRepoPath(repo.folder), devPackage.packagePath);
   const stagingDir = path.resolve(STAGING_ROOT, devPackage.stagingFolder);
-  const manifestPath = path.resolve(packageDir, 'package.json');
-  const manifestSnapshot = fs.readFileSync(manifestPath);
+  const hasBuiltDist = fs.existsSync(path.resolve(packageDir, 'dist'));
 
-  console.log(`Building ${devPackage.nxProject}...`);
-  try {
-    runPnpm('run prepublishOnly', packageDir);
-
-    console.log(`Staging ${devPackage.nxProject} into ${stagingDir}...`);
-    // Replace rather than merge so a file deleted upstream does not linger in the staged copy.
-    fs.rmSync(stagingDir, { recursive: true, force: true });
-    getPublishedFiles(packageDir).forEach((file) => {
-      const destination = path.resolve(stagingDir, file);
-      fs.mkdirSync(path.dirname(destination), { recursive: true });
-      fs.copyFileSync(path.resolve(packageDir, file), destination);
-    });
-    resolveWorkspaceSpecifiers(stagingDir, stagingFolderByName);
-    fs.writeFileSync(path.resolve(stagingDir, STAGED_FROM_MARKER), `${sourceStamp}\n`);
-  } finally {
-    // Restore the manifest `prepublishOnly` rewrote, whether or not staging succeeded, so the dev
-    // repo is never left with stray changes (which would block the next run's checkout).
-    fs.writeFileSync(manifestPath, manifestSnapshot);
+  if (isLocalMode || !hasBuiltDist) {
+    console.log(
+      `Building ${devPackage.nxProject}${hasBuiltDist ? '' : ' (no committed dist to copy)'}...`,
+    );
+    // --skip-nx-cache because the dev repos commit their `dist/`, and nx declares that directory as
+    // a cached target output: a cache hit RESTORES nx's copy over the committed one, silently
+    // deleting files the cache predates. A build here must reflect the source, not a cache.
+    runPnpm(
+      `exec nx extract-api ${devPackage.nxProject} --skip-nx-cache`,
+      getDevRepoPath(repo.folder),
+    );
   }
+
+  console.log(`Staging ${devPackage.nxProject} into ${stagingDir}...`);
+  // Replace rather than merge so a file deleted upstream does not linger in the staged copy.
+  fs.rmSync(stagingDir, { recursive: true, force: true });
+  getPublishedFiles(packageDir).forEach((file) => {
+    const destination = path.resolve(stagingDir, file);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.copyFileSync(path.resolve(packageDir, file), destination);
+  });
+  prepareStagedManifest(stagingDir, stagingFolderByName);
+  fs.writeFileSync(path.resolve(stagingDir, STAGED_FROM_MARKER), `${sourceStamp}\n`);
 }
 
 function stageDevPackages(): void {
@@ -354,12 +367,22 @@ function stageDevPackages(): void {
       const sourceStamp = getSourceStamp(repoPath);
 
       if (!isLocalMode && isStagingCurrent(repo, sourceStamp)) {
-        console.log(`${repo.folder} is already staged from ${sourceStamp}; skipping build.`);
+        console.log(`${repo.folder} is already staged from ${sourceStamp}; nothing to do.`);
         return;
       }
 
-      console.log(`Running pnpm install in ${repo.folder}...`);
-      runPnpm('install', repoPath);
+      // Only a build needs the dev repo's dependencies installed, and a build only happens when
+      // there is no committed dist to copy (or in --local mode). Skipping this is the difference
+      // between an install that needs pnpm and one that does not.
+      const willBuild =
+        isLocalMode ||
+        repo.devPackages.some(
+          (devPackage) => !fs.existsSync(path.resolve(repoPath, devPackage.packagePath, 'dist')),
+        );
+      if (willBuild) {
+        console.log(`Running pnpm install in ${repo.folder}...`);
+        runPnpm('install', repoPath);
+      }
 
       // Map every staged package's npm name to its staging folder so a package that depends on a
       // sibling in the same repo can be pointed at that sibling's staged copy.
