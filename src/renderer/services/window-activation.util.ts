@@ -32,7 +32,42 @@ export function noteWindowActivated(): boolean {
   return wasAwaitingActivation;
 }
 
+/**
+ * The tab that was made active without being given document focus, waiting for the user to arrive.
+ *
+ * Only the latest is kept: several arrivals collapse into one catch-up, because focusing each in
+ * turn on activation would end with the same tab focused anyway.
+ */
+let tabAwaitingDocumentFocus: string | undefined;
+
+/**
+ * Remember a tab that was activated without document focus, so it can be given focus when the user
+ * arrives. Withholding focus while nobody is looking is only half the job — without this the user
+ * activates the window, sees the tab rendered active, types, and the keystrokes go nowhere until
+ * they click inside the web view, which is not a path a keyboard or screen-reader user takes.
+ *
+ * Called from wherever the withholding is actually honored rather than from the callers that ask
+ * for it, so a door that reaches the dock without passing through the window service — a reused
+ * view raised to the front, a reload, the Home tab a window falls back to — cannot withhold focus
+ * without also arranging to give it back.
+ */
+export function noteTabAwaitingDocumentFocus(tabId: string): void {
+  tabAwaitingDocumentFocus = tabId;
+}
+
+/**
+ * Take the tab that is waiting for document focus, clearing it.
+ *
+ * @returns The waiting tab's id, or `undefined` if no tab is waiting
+ */
+export function takeTabAwaitingDocumentFocus(): string | undefined {
+  const tabId = tabAwaitingDocumentFocus;
+  tabAwaitingDocumentFocus = undefined;
+  return tabId;
+}
+
 /** Only for tests: put the latch back to how a freshly created window finds it */
 export function resetActivationLatchForTesting(): void {
   hasWindowBeenActivated = false;
+  tabAwaitingDocumentFocus = undefined;
 }

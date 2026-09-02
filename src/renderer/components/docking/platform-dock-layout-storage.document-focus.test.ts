@@ -3,6 +3,10 @@ import DockLayout, { TabData } from 'rc-dock';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import { Layout, WebViewTabProps } from '@shared/models/docking-framework.model';
 
+import {
+  resetActivationLatchForTesting,
+  takeTabAwaitingDocumentFocus,
+} from '@renderer/services/window-activation.util';
 import { addWebViewToDock, focusTab } from './platform-dock-layout-storage.util';
 
 // Same file-level mock set as `platform-dock-layout-storage.util.test.ts` — this file imports the
@@ -41,6 +45,7 @@ describe('taking document focus when a web view is docked', () => {
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     when(localMockDockLayout.find(anything())).thenReturn({ id: TAB_ID, title: TAB_ID } as TabData);
 
+    resetActivationLatchForTesting();
     iframe = document.createElement('iframe');
     iframe.setAttribute('data-web-view-id', TAB_ID);
     document.body.appendChild(iframe);
@@ -87,6 +92,33 @@ describe('taking document focus when a web view is docked', () => {
     // The tab still becomes the active one in its group, so the window shows the right thing
     // whenever the user does come to it.
     verify(localMockDockLayout.updateTab(TAB_ID, anything(), true)).once();
+  });
+
+  it('records the tab it left unfocused, so the user arriving can be given it', () => {
+    // Withholding focus is only half the job, and this is the seam where the other half is set up.
+    // The dock is reached by doors that never touch the window service — a reused view raised to
+    // the front, a reload, the Home tab a window falls back to — so recording here rather than in
+    // the callers is what keeps any of them from withholding focus with nothing to give it back.
+    focusTab(instance(localMockDockLayout), TAB_ID, true);
+
+    expect(takeTabAwaitingDocumentFocus()).toBe(TAB_ID);
+  });
+
+  it('records nothing when it does take document focus', () => {
+    // The control: a tab that was focused normally must not be queued for a catch-up, or the next
+    // gesture anywhere in the window would yank focus back to it.
+    focusTab(instance(localMockDockLayout), TAB_ID);
+
+    expect(takeTabAwaitingDocumentFocus()).toBeUndefined();
+  });
+
+  it('records a newly added web view that was left unfocused', () => {
+    // The add branch, which is the one a window created for a single web view actually takes.
+    whenTabIsAddedRatherThanUpdated();
+
+    addWebViewToDock(webViewToDock(), layout, true, instance(localMockDockLayout), true);
+
+    expect(takeTabAwaitingDocumentFocus()).toBe(TAB_ID);
   });
 
   /**
