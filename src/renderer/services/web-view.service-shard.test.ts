@@ -2303,8 +2303,20 @@ describe('loadLayout when the saved-layout request fails', () => {
       if (requestType === 'windowLayout:get') throw new Error('transport is down again');
       return undefined;
     });
-    await interfaceModeCallback('simple');
-    await interfaceModeCallback('power');
+    // Under fake timers, as `registerWindowThroughRetries` brackets the first episode: this reload
+    // runs the same 3-attempt retry loop, and on real timers the test would sleep out two 2-second
+    // waits against a 5-second default — no margin at all on a loaded runner.
+    // Bracketed the way `registerWindowThroughRetries` brackets the first episode: this reload runs
+    // the same 3-attempt retry loop, and on real timers its two 2-second waits leave the test with
+    // no margin against the 5-second default on a loaded runner.
+    vi.useFakeTimers();
+    const backToSimple = interfaceModeCallback('simple');
+    await vi.advanceTimersByTimeAsync(60_000);
+    await backToSimple;
+    const secondFallbackLoad = interfaceModeCallback('power');
+    await vi.advanceTimersByTimeAsync(60_000);
+    await secondFallbackLoad;
+    vi.useRealTimers();
     await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('held-two'), undefined, undefined);
 
     expect(heldPushWarnings()).toBe(2);
