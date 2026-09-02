@@ -2833,14 +2833,23 @@ step, no automation. Just a record.
   a V8 stack trace, which is LF-separated. **ZWJ attaches to the preceding character** (rule GB9),
   where `stringz` grouped it with the following one; a string ending in ZWJ + space therefore ends
   in a whitespace-only cluster now, so `areUsjContentsEqualExceptWhitespace` trims that space where
-  it previously kept it. Deferred: `unicode-segmenter` exposes `countGraphemes`, which walks a
-  string without building the cluster array and would make `stringLength()` 6-8x cheaper — separable
-  from the correctness fix and not taken here. Residual risk: single maintainer and a smaller user
-  base than `graphemer`, mitigated by the library being small, dependency-free and table-driven, and
-  by every claim above being re-verifiable against the evaluation suite in one command. Note also
-  that Unicode 17 extended the Indic conjunct rule to Khmer, Myanmar, Balinese and Gujarati while
-  Node's bundled ICU 76 implements Unicode 16, so `unicode-segmenter` and `Intl.Segmenter` disagree
-  on Khmer — both correctly, for different Unicode versions.
+  it previously kept it. A single free-function call on a large string costs more than it did,
+  because each one constructs a `GraphemeString` and so segments the whole input for one operation.
+  Measured on a ~7,000-character chapter, segmentation is 100% of `stringLength`'s time and about
+  90% of `indexOf`'s, `startsWith`'s and `substring`'s. That is the design working as intended — the
+  module's guidance is to construct one instance when doing more than one operation — and no in-repo
+  call site does single-shot work on a string that size. Deferred, and worth being precise about
+  what it would and would not buy: `unicode-segmenter` exposes `countGraphemes`, which walks a
+  string without allocating the cluster array and is 5.5x cheaper than segmenting it. That helps
+  `stringLength` and nothing else, since `length` on an existing instance is already a property
+  read. The search and range methods need cluster boundaries and so need the segmentation; making
+  them cheaper single-shot would mean segmenting lazily up to the hit rather than up front, which is
+  a different and larger change. Residual risk: single maintainer and a smaller user base than
+  `graphemer`, mitigated by the library being small, dependency-free and table-driven, and by every
+  claim above being re-verifiable against the evaluation suite in one command. Note also that
+  Unicode 17 extended the Indic conjunct rule to Khmer, Myanmar, Balinese and Gujarati while Node's
+  bundled ICU 76 implements Unicode 16, so `unicode-segmenter` and `Intl.Segmenter` disagree on
+  Khmer — both correctly, for different Unicode versions.
 - **Source:** PT-2626 review follow-up. Evaluation of 14 candidates by Matthew Getgen scored two
   independent ways — Unicode's official `GraphemeBreakTest.txt` at 15.1, 16.0 and 17.0, and a
   56-case corpus across 30 writing systems — with timing from 100 to 1,000,000 UTF-16 code units on
