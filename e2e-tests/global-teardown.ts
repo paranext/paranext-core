@@ -1,9 +1,44 @@
 import type { FullConfig } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { killProcessesUnderRoot, machineOwnershipFlag, runCleanup } from './scoped-cleanup';
 import { restoreAppGlobalState, restoreLeakedSettings } from './fixtures/helpers';
+
+/**
+ * Stops the renderer dev server process global-setup spawned, addressed the way that platform's
+ * spawn actually produced it.
+ *
+ * On POSIX, `detached: true` put it in its own process group, so a negative PID reaches the group;
+ * `pid` alone is the fallback for whatever that missed.
+ *
+ * On Windows, neither POSIX path applies: `detached` does not create a process group `-pid` could
+ * address there, and `shell: true` means `pid` names cmd.exe, not the npm/webpack tree underneath
+ * it — a plain kill of `pid` would stop the shell and orphan everything it spawned, still holding
+ * the port. `taskkill /t` asks Windows to walk that tree instead. NOT YET VERIFIED ON WINDOWS: that
+ * `taskkill /t` actually reaches the grandchild webpack-dev-server process npm spawns underneath
+ * cmd.exe, and frees the port — only a Windows run can confirm that.
+ */
+export function killDevServerProcess(pid: number, platform: NodeJS.Platform): void {
+  if (platform === 'win32') {
+    try {
+      execFileSync('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'pipe' });
+    } catch {
+      // Already stopped
+    }
+    return;
+  }
+  try {
+    // Kill the process group (negative PID kills the group)
+    process.kill(-pid, 'SIGTERM');
+  } catch {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // Already stopped
+    }
+  }
+}
 
 // Playwright global teardown requires this signature even though config is unused
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -19,16 +54,7 @@ export default async function globalTeardown(_config: FullConfig): Promise<void>
       fs.unlinkSync(pidFile);
     } else {
       console.log(`Stopping renderer dev server (PID: ${pid})...`);
-      try {
-        // Kill the process group (negative PID kills the group)
-        process.kill(-pid, 'SIGTERM');
-      } catch {
-        try {
-          process.kill(pid, 'SIGTERM');
-        } catch {
-          // Already stopped
-        }
-      }
+      killDevServerProcess(pid, process.platform);
       fs.unlinkSync(pidFile);
     }
   }

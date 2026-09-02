@@ -47,6 +47,15 @@ function waitForPort(port: number, timeout: number): Promise<void> {
   });
 }
 
+/**
+ * Empties `.dev-server.log` before this run reuses a renderer dev server it did not spawn. Nothing
+ * else in this run writes to that file in that case, so leaving whatever an earlier session left in
+ * it would mislead anyone tailing it to diagnose a failure in THIS run.
+ */
+export function refreshDevServerLog(logPath: string): void {
+  fs.writeFileSync(logPath, '');
+}
+
 /** Last few lines of a file, for putting a process's own words into the error that reports it. */
 function tailFile(filePath: string, lines = 20): string {
   try {
@@ -209,15 +218,16 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   });
 
   // Start the webpack dev server for the renderer if not already running
+  const devServerLogPath = path.join(rootDir, 'e2e-tests', '.dev-server.log');
   if (await isPortInUse(RENDERER_PORT)) {
     console.log(`Renderer dev server already running on port ${RENDERER_PORT}.`);
+    refreshDevServerLog(devServerLogPath);
   } else {
     console.log('Starting renderer dev server...');
     // Log the dev server's output instead of discarding it. When this process dies mid-run, every
     // subsequent test fails with `Window URL: chrome-error://chromewebdata/` — the renderer cannot
     // load — and with `stdio: 'ignore'` there is no record anywhere of why it went. One dead dev
     // server then costs a whole suite's runtime and leaves nothing to diagnose from.
-    const devServerLogPath = path.join(rootDir, 'e2e-tests', '.dev-server.log');
     const devServerLog = fs.openSync(devServerLogPath, 'w');
     const devServer = spawn('npm', ['run', 'start:renderer'], {
       cwd: rootDir,
