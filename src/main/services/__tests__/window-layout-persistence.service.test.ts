@@ -1265,10 +1265,9 @@ describe('window layout persistence service', () => {
     // must still load — the parser reads the keys it knows and ignores the rest, so no conversion
     // and no version bump — and what it writes back must not carry the dead key out again.
     //
-    // A separate "a freshly saved entry has no display record" test was written and dropped: with
-    // the field gone from `WindowBoundsState` nothing in the write path can produce it, so that
-    // assertion cannot fail while the type stands, and if the type is put back this test is the one
-    // that reddens.
+    // This is also the only place the dead key can be asserted about: with the field gone from
+    // `WindowBoundsState` nothing in the write path can produce one, so a test over a freshly saved
+    // entry could not fail while the type stands. Put the field back and this test is what reddens.
     const service = await startService();
     seedFiles({
       structure: {

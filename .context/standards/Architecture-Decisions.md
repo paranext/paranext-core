@@ -3046,6 +3046,7 @@ step, no automation. Just a record.
   becomes primary later — PT-4278's window-manager service is the durable answer for that.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
+
 ## adr-interface-mode-decides-the-window-set: The interface mode decides how many windows exist, and the persisted entry list is that set
 
 - **Date:** 2026-09-02
