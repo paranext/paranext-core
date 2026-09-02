@@ -7,17 +7,6 @@
  * calls in here for what they mean.
  */
 
-/**
- * Service router for the WebView service. Registers under the generic "WebViewService" network
- * object name and routes calls to the focused window's WebView service shard (e.g.
- * "WebViewService-1"). This enables multi-window support by ensuring that operations like
- * openWebView execute in the correct window. It also claims the settings commands, which open a tab
- * in a window's dock layout and so belong to the same shards.
- *
- * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
- * service shard".
- */
-
 import {
   focusWindow,
   isApplicationFocused,
