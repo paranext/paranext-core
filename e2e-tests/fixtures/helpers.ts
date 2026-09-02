@@ -1494,12 +1494,16 @@ export function restoreLeakedSettings(): string[] | undefined {
         ? `Leaving ${settingsBackupPath()} alone: it is unreadable, or predates backups recording ` +
             'which run took them, and it could not be moved aside. Nothing was restored and nothing ' +
             'was deleted, but settings pins will refuse to run until it is gone — inspect it by hand.'
-        : `Moved ${[movedBackup, movedSettings]
+        : // Listing only the path(s) that actually moved, rather than naming both files outright:
+          // one of the two quarantine attempts can fail on its own (e.g. a permission error moving
+          // the backup while the live settings file moves fine), and a message naming both would
+          // misdescribe that case.
+          `Moved ${[movedBackup, movedSettings]
             .filter((moved) => moved !== undefined)
             .join(' and ')} aside: the backup is unreadable, or predates backups recording which ` +
-            'run took them, and the live settings file next to it cannot be trusted as a clean ' +
-            'baseline either. Nothing was restored and nothing was deleted — those bytes are at ' +
-            'those paths if any of it is yours. Runs are no longer blocked.',
+            'run took them, so it cannot be trusted, and anything next to it moved for the same ' +
+            'reason. Nothing was restored and nothing was deleted — those bytes are at those paths ' +
+            'if any of it is yours. Runs are no longer blocked.',
     );
     return undefined;
   }
