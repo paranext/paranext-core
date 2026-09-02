@@ -227,10 +227,9 @@ describe('moveWebView', () => {
   });
 
   test('refuses a second move of the same web view while the first is still running', async () => {
-    // Two moves of one tab race for a capture only one of them can win, and the loser is told the
-    // tab may have closed while it is sitting safely in the window the winner moved it to. Nothing
-    // stopped that: the in-flight register is filled only after the source window answers the
-    // capture, several awaits in, so both calls are past it before either records anything.
+    // Two moves of one tab race for a capture only one of them can win. Nothing stopped that: the
+    // in-flight register is filled only after the source window answers the capture, several
+    // awaits in, so both calls are past it before either records anything.
     //
     // Double-clicking the menu item is enough to reach it — the item has no disabled state — so
     // this is refused at the door instead.
@@ -248,7 +247,12 @@ describe('moveWebView', () => {
     const firstMove = moveWebView('view-1', 3);
     await settle();
 
-    await expect(moveWebView('view-1', 3)).rejects.toThrow('it is already being moved');
+    const refusal = await failedMove(moveWebView('view-1', 3));
+    expect(getErrorMessage(refusal)).toContain('it is already being moved');
+    // The refused call never touched the tab — the still-running first call owns it — so the
+    // caller has to be able to tell this apart from a failure that actually moved or lost the tab,
+    // rather than reading the generic "could not move" fallback a marker-less rejection gets.
+    expect(getWebViewMoveFailureDisposition(refusal)).toBe('already-moving');
     // And it was refused before touching anything: one capture, from the first move only. Without
     // this the second capture is what returns undefined and produces the false "may have closed".
     expect(owner.captureAndCloseWebView).toHaveBeenCalledTimes(1);
