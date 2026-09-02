@@ -72,6 +72,15 @@ export type StartupWindowsPlan =
  * window has gone away while its entry stays (see {@link handleWindowRemoved}).
  */
 type FileSlot = {
+  /**
+   * Identity that survives the list being spliced.
+   *
+   * A slot's POSITION is not identity: a window closing deliberately splices its slot out, shifting
+   * every later index down one, and anything holding an index across an await then reads a
+   * different slot than it meant to. Session-scoped and never reused, so a stale id resolves to
+   * nothing rather than to whatever moved into that position.
+   */
+  slotId: number;
   entry: WindowLayoutEntry;
   windowId?: number;
   /**
@@ -87,6 +96,8 @@ type FileSlot = {
 
 /** Every window's entry in file order — the whole of what a write puts on disk */
 let fileSlots: FileSlot[] = [];
+/** Source of {@link FileSlot.slotId}; never reset, so an id from a previous structure is dead */
+let nextSlotId = 1;
 /** Windows created to receive specific content, until their first layout push arrives */
 const pendingContentWindowIds = new Set<number>();
 /** Bounds the previous keeper saved, seeded into the legacy window so an upgrade keeps placement */
@@ -256,7 +267,10 @@ export async function loadWindowLayouts(): Promise<StartupWindowsPlan> {
         if (index === mainEntryIndex) entry.isMain = true;
         else delete entry.isMain;
       });
-      fileSlots = keptEntries.map((entry) => ({ entry }));
+      fileSlots = keptEntries.map((entry) => {
+        nextSlotId += 1;
+        return { slotId: nextSlotId, entry };
+      });
       return { kind: 'restore', entries: keptEntries, mainEntryIndex };
     }
     logger.warn(
@@ -296,13 +310,20 @@ export function assignEntryToWindow(windowId: number, entryIndex: number): void 
  */
 export function trackLegacyWindow(windowId: number): void {
   if (findSlotByWindowId(windowId)) return;
-  fileSlots.push({ entry: { ...legacyBoundsState }, windowId, usesLegacyLayout: true });
+  nextSlotId += 1;
+  fileSlots.push({
+    slotId: nextSlotId,
+    entry: { ...legacyBoundsState },
+    windowId,
+    usesLegacyLayout: true,
+  });
 }
 
 /** Give a window created mid-session a slot. It has no saved entry, so it starts with an empty one */
 export function trackNewWindow(windowId: number): void {
   if (findSlotByWindowId(windowId)) return;
-  fileSlots.push({ entry: {}, windowId });
+  nextSlotId += 1;
+  fileSlots.push({ slotId: nextSlotId, entry: {}, windowId });
 }
 
 /**
@@ -398,8 +419,10 @@ export function updateWindowBounds(windowId: number, boundsState: WindowBoundsSt
  *
  * - `entry-goes-with-it`: the user closed this window while the app stays up, so it must not come
  *   back next session.
- * - `entry-stays`: the window is going down with the app, so it is not leaving the structure — it has
- *   to be there next session, holding whatever it held when the app went down.
+ * - `entry-stays`: the window is not leaving the structure. Either it is going down with the app and
+ *   has to be there next session holding whatever it held, or the application is fully alive and
+ *   the window is being closed because the interface mode changed — in which case the entry is what
+ *   the switch back re-creates the window from.
  */
 export type RemovedWindowDisposition = 'entry-goes-with-it' | 'entry-stays';
 
@@ -545,18 +568,54 @@ export function setModeSwitchClosePredicate(predicate: (windowId: number) => boo
  *
  * @returns Indexes into the persisted structure, in file order
  */
-export function getPreservedEntryIndexes(): number[] {
-  return fileSlots.reduce<number[]>((indexes, slot, index) => {
-    if (slot.windowId === undefined) indexes.push(index);
-    return indexes;
-  }, []);
+export function getPreservedEntrySlotIds(): number[] {
+  return fileSlots.filter((slot) => slot.windowId === undefined).map((slot) => slot.slotId);
+}
+
+/**
+ * The entry a slot id names, or `undefined` if that slot has left the structure.
+ *
+ * A copy of the entry's own fields, but a SHALLOW one: `bounds`, `displayBounds` and the whole
+ * `layout` tree are the live slot's objects, so a caller that mutates them mutates what the window
+ * is keeping up to date. Callers read placement and pass the layout along untouched, which is all
+ * this promises.
+ *
+ * @param slotId Slot to read
+ */
+export function getEntryBySlotId(slotId: number): WindowLayoutEntry | undefined {
+  const slot = fileSlots.find((candidate) => candidate.slotId === slotId);
+  return slot ? { ...slot.entry } : undefined;
+}
+
+/**
+ * Tie a freshly created window to a slot named by its id rather than its position.
+ *
+ * The reopen path creates windows one at a time, and a window the user closes in between splices
+ * its slot out — so an index captured before the await names a different slot by the time it is
+ * used. Answering by id means a slot that has gone is recognised as gone.
+ *
+ * @param windowId Window that has just been created
+ * @param slotId Slot it restores
+ * @returns Whether the slot was still there to be assigned
+ */
+export function assignEntryToWindowBySlotId(windowId: number, slotId: number): boolean {
+  const entryIndex = fileSlots.findIndex((slot) => slot.slotId === slotId);
+  if (entryIndex < 0) {
+    logger.warn(
+      `Cannot assign window ${windowId} to slot ${slotId}; it is no longer in the structure`,
+    );
+    return false;
+  }
+  assignEntryToWindow(windowId, entryIndex);
+  return true;
 }
 
 /**
  * The entry at a position in the structure, for a caller creating the window that restores it.
  *
- * A copy, so a caller reading a window's saved placement cannot alter the entry the live window is
- * about to start keeping up to date.
+ * A copy of the entry's own fields, but a SHALLOW one: `bounds`, `displayBounds` and the whole
+ * `layout` tree remain the live slot's objects. It protects a caller from replacing fields on the
+ * entry, not from mutating what those fields point at.
  *
  * @param entryIndex Position in the structure
  * @returns The entry, or `undefined` if nothing is at that position
@@ -628,6 +687,12 @@ function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
     logger.warn(`Ignoring layout push from untracked window ${windowId}`);
     return;
   }
+  // This push is the window's real content arriving, so it stops being pending-content whatever
+  // happens to the layout below. Above the mode-switch return deliberately: the mark is read to
+  // decide whether a closing window's entry is worth keeping, and a window still carrying it is
+  // treated as holding nothing — so leaving it set would drop the entry of a window that had just
+  // told us what it holds.
+  if (pendingContentWindowIds.delete(windowId)) handlePendingContentChanged();
   // A window closing because the mode changed is showing the mode it is leaving, so what it pushes
   // from here on would overwrite the layout its entry is being kept for.
   //
@@ -639,10 +704,6 @@ function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
   // Reconcile on arrival so phantom content (duplicate or orphaned tabs, empty panels) cannot
   // enter the persisted structure even when a pusher skipped its own reconciliation
   slot.entry.layout = reconcileSavedLayout(layoutRecord);
-  // This push is the window's real content arriving, so it stops being pending-content — a
-  // second get request must be answered with the entry it just saved, not told to wait again.
-  // Announced like any other change to the mark: the window becomes one routed work can go to.
-  if (pendingContentWindowIds.delete(windowId)) handlePendingContentChanged();
   scheduleWrite();
 }
 
