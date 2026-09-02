@@ -912,8 +912,9 @@ describe('a web view that is between windows on a move', () => {
     // it, which one ordinary drag reaches — see the sibling test about an adopted view reported
     // under the captured name. A duplicate is visible in this list and in the debug line; a drop is
     // not, so this is the direction to fail in. `getAllOpenWebViewDefinitions` documents it on the
-    // public surface, and the fix that removes it — a per-view identity minted at the adopt — is in
-    // the multi-window small-items ledger.
+    // public surface, and the fix that removes it — a per-view identity minted at the adopt — is
+    // recorded in `adr-web-view-id-is-not-an-identity-across-a-move` in
+    // `.context/standards/Architecture-Decisions.md`.
     const owner = sourceWindowShard('view-1', 'view-1', { projectId: 'project-1' });
     const target = windowShard([]);
     let releaseAdopt: (webViewId: WebViewId) => void = () => {};
@@ -1066,8 +1067,9 @@ describe('a web view that is between windows on a move', () => {
     // and a duplicate is visible here and in the debug line, where a drop is not.
     //
     // The real fix is a per-view identity minted at the adopt and carried into the new window,
-    // which changes the adopt path rather than this read. Recorded in the general small-items
-    // ledger with the abandoned attempt's diff.
+    // which changes the adopt path rather than this read. See
+    // `adr-web-view-id-is-not-an-identity-across-a-move` in
+    // `.context/standards/Architecture-Decisions.md`.
     const source = sourceWindowShard('view-1-w2', 'view-1', { projectId: 'project-1' });
     const middle = sourceWindowShard('view-1', 'view-1', { projectId: 'project-1' });
     const target = windowShard([]);
