@@ -27,3 +27,17 @@ export const getTargetWebViewShard = createTargetShardResolver(
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   webViewShards,
 );
+
+/**
+ * Get the WebView service shard for a specific window. Returns undefined if that window has not
+ * registered one — its renderer has not got that far, or the window is gone.
+ *
+ * Exported for `scroll-group-navigation.commands.ts`, which writes a detached reference back to the
+ * window that answered its navigation context and so has to reach the same shards this router
+ * does.
+ *
+ * @param windowId The Electron BrowserWindow ID
+ */
+export async function getWebViewShard(windowId: number): Promise<WebViewServiceShard | undefined> {
+  return webViewShards.getShard(windowId);
+}
