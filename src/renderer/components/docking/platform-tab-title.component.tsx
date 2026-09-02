@@ -148,7 +148,12 @@ function renderTabMenuItems(
     // be extensible — so a second item bearing the same command can arrive in the platform's own
     // group. Repeats are numbered rather than left to collide.
     //
-    // The two forms carry different prefixes so that a position can never be mistaken for an id.
+    // The count is appended to EVERY id, including the first. Numbering only the repeats would
+    // leave an unsuffixed form for an id to impersonate: `a.b`, `a.b`, `a.b-1` would key as
+    // `id-a.b`, `id-a.b-1`, `id-a.b-1` — the third colliding with the second's suffixed form. With
+    // the count always present the two live in different shapes and cannot meet.
+    //
+    // The two forms also carry different prefixes so a position can never be mistaken for an id.
     // Nothing can currently produce that collision — a contributed id must match
     // `^[\w\-]+\.[\w\-]+$`, so it always holds a dot and is never a bare number — which is why
     // no test covers it; the prefixes keep the schema from being the only thing preventing it.
@@ -159,7 +164,7 @@ function renderTabMenuItems(
     } else {
       const timesSeen = timesIdSeen.get(itemId) ?? 0;
       timesIdSeen.set(itemId, timesSeen + 1);
-      key = timesSeen === 0 ? `${keyPrefix}id-${itemId}` : `${keyPrefix}id-${itemId}-${timesSeen}`;
+      key = `${keyPrefix}id-${itemId}-${timesSeen}`;
     }
     if (item.type === 'separator') return <ContextMenuSeparator key={key} />;
     if (item.type === 'submenu')

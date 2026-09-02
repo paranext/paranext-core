@@ -304,6 +304,16 @@ describe('PlatformTabTitle reading its contributed menu', () => {
             order: 200,
             command: 'platform.floatTab',
           },
+          {
+            // The impersonation case: this id is the SECOND item's id with the repeat counter
+            // already spelled into it. If repeats are numbered only from the second occurrence,
+            // this one's unsuffixed key is the same string that item produced.
+            label: 'Float Tab Impostor',
+            localizeNotes: 'An item whose command already ends in the repeat suffix',
+            group: 'platform.tabWindow',
+            order: 300,
+            command: 'platform.floatTab-1',
+          },
         ],
       },
     });
@@ -314,6 +324,7 @@ describe('PlatformTabTitle reading its contributed menu', () => {
     // Both are on screen, and React did not warn about a duplicate key
     expect(screen.getByText('Float Tab')).toBeInTheDocument();
     expect(screen.getByText('Float Tab Again')).toBeInTheDocument();
+    expect(screen.getByText('Float Tab Impostor')).toBeInTheDocument();
     const duplicateKeyWarnings = consoleError.mock.calls.filter((args) =>
       args.some((arg) => typeof arg === 'string' && arg.includes('same key')),
     );
