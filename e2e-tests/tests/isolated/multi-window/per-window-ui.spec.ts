@@ -267,10 +267,6 @@ test.describe('per-window UI isolation', () => {
   // One launch (up to ~180 s worst case) plus a second window and a dozen quick scenarios.
   test.setTimeout(420_000);
 
-  test.beforeAll(() => {});
-
-  test.afterAll(() => {});
-
   test('overlays, dialogs, notifications, and navigation targets stay in their own window', async ({
     electronApp,
     mainPage,

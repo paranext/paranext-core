@@ -285,13 +285,6 @@ test.describe('moving a web view between windows', () => {
   // startups — a move to a new window contains a whole cold renderer start of its own.
   test.setTimeout(480_000);
 
-  test.beforeAll(() => {
-    // Written before any launch and restored after the last test so the developer's own settings
-    // survive the suite. See the file header for why power mode is load-bearing here.
-  });
-
-  test.afterAll(() => {});
-
   test('a tab moved to a new window through its context menu leaves its window, arrives in the new one, and leaves a Home tab behind', async ({
     electronApp,
     mainPage,

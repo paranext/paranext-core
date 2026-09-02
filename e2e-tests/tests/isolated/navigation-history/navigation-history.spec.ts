@@ -91,9 +91,10 @@ test.use({
  * pointer between Playwright's stability check and the actual click (observed to hit the
  * next-chapter quick-nav button instead).
  *
- * @param expectedRef Display-text pattern of the committed reference on the trigger (e.g. /Mark
- *   4\b/i — word-boundary anchored so e.g. "Mark 40" cannot false-pass), asserted at the end to
- *   confirm the navigation landed.
+ * @param expectedRef Display-text pattern of the committed reference (e.g. /Mark 4\b/i —
+ *   word-boundary anchored so e.g. "Mark 40" cannot false-pass). Matched against the cmdk
+ *   highlighted item's rendered text before Enter is pressed, then asserted again against the
+ *   trigger at the end to confirm the navigation landed.
  */
 async function navigateToRef(mainPage: Page, refText: string, expectedRef: RegExp) {
   const trigger = mainPage.locator(BCV_TRIGGER);

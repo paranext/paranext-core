@@ -363,13 +363,6 @@ test.describe('multi-window lifecycle', () => {
   // startups, each of which can take tens of seconds (see the poll budgets below).
   test.setTimeout(420_000);
 
-  test.beforeAll(() => {
-    // Written before any launch and restored after the last test so the developer's own settings
-    // survive the suite. See the file header for why power mode is load-bearing.
-  });
-
-  test.afterAll(() => {});
-
   test('second window opens with Home docked, focus routing follows the focused window, and closing the secondary window does not shut the app down', async ({
     electronApp,
     mainPage,

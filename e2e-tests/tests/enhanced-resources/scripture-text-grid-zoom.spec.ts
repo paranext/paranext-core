@@ -31,8 +31,8 @@ import {
   openScriptureTextGrid,
   restoreScriptureTextGridProjectSettings,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-  FlaggedResourceItem,
 } from './test-helpers';
+import type { FlaggedResourceItem } from './test-helpers';
 
 /**
  * Two synthetic resource IDs for seeding the grid. The `id` values do not need to resolve to
