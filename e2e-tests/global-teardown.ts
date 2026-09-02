@@ -1,7 +1,7 @@
 import type { FullConfig } from '@playwright/test';
-import { execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { isSweepEnabled, killProcessesUnderRoot } from './scoped-cleanup';
 
 // Playwright global teardown requires this signature even though config is unused
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -31,21 +31,24 @@ export default async function globalTeardown(_config: FullConfig): Promise<void>
     }
   }
 
-  // Sweep up any Electron left behind by a crashed fixture. `npm run stop` matches by process
-  // name and kills every electron and dotnet process on the machine, so it is safe only where the
-  // machine belongs to the run. On a developer box it would also kill the app they are working in,
-  // any app a CDP-based suite is attached to, and unrelated dotnet processes. The launch fixtures
-  // already tear down what they started; if something does leak, the port check in global-setup
-  // names `npm run stop` as the manual remedy.
-  if (process.env.CI) {
-    console.log('Running cleanup: npm run stop');
-    try {
-      execSync('npm run stop', { cwd: rootDir, stdio: 'pipe', timeout: 10_000 });
-      console.log('Cleanup completed.');
-    } catch {
-      console.log('Cleanup: No processes to stop or already stopped.');
-    }
-  } else {
-    console.log('Skipping machine-wide process sweep outside CI. Run `npm run stop` if needed.');
+  // Sweep up anything a crashed fixture left behind — but only this checkout's processes, and only
+  // when the machine belongs to the run.
+  //
+  // Selection is by working directory, never by process name: a name match reaches every electron
+  // and dotnet process on the machine, including the developer's own app, any app a CDP-based
+  // suite is attached to, and other checkouts' runs on a shared box. See
+  // e2e-tests/scoped-cleanup.ts.
+  if (!isSweepEnabled(process.env.CI)) {
+    console.log(
+      'Skipping cleanup sweep: CI is not set to a value meaning yes. The launch fixtures already ' +
+        'tear down what they started; run `npm run stop` by hand if something leaked.',
+    );
+    return;
   }
+  const killed = killProcessesUnderRoot(rootDir);
+  console.log(
+    killed.length > 0
+      ? `Cleanup: terminated ${killed.length} process(es) under ${rootDir}: ${killed.join(', ')}`
+      : `Cleanup: no leftover processes under ${rootDir}.`,
+  );
 }
