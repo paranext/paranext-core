@@ -2608,6 +2608,10 @@ async function admitContentToDock(operation: string): Promise<void> {
  *   tab. Does nothing on an existing WebView
  * @param optionsDefaulted Options that affect what this method does. **YOU MUST RUN
  *   {@link getWebViewOptionsDefaults} ON THIS OBJECT BEFORE PASSING IT IN!**
+ * @param activateWithoutDocumentFocus Whether to dock the content without taking document focus.
+ *   Passed by the process that created this window when it created it in the background and the
+ *   user has not activated it since; focusing the new tab would focus its iframe, which asks the
+ *   browser to activate this window.
  * @param isReloadOfAnOpenWebView Whether the caller found this web view in this window's dock and
  *   is asking for it again, which is what makes the same web view's absence at the dock write
  *   meaningful — see the check there. An open and an adopt both name an id no tab here has yet, so
@@ -2625,6 +2629,7 @@ export async function openOrReloadWebView(
   layout: Layout = { type: 'tab' },
   optionsDefaulted: OpenWebViewOptions = {},
   isReloadOfAnOpenWebView = false,
+  activateWithoutDocumentFocus = false,
 ): Promise<WebViewId | undefined> {
   const { webViewType } = savedWebViewDefinition;
 
@@ -3069,6 +3074,7 @@ export async function openOrReloadWebView(
       finalWebView,
       layout,
       optionsDefaulted.bringToFront,
+      activateWithoutDocumentFocus,
     );
   } catch (e) {
     // A throw can leave this web view's own tab in the dock: a definition its tab loader refuses
@@ -3134,6 +3140,7 @@ export const openWebView = async (
   webViewType: WebViewType,
   layout: Layout = { type: 'tab' },
   options: OpenWebViewOptions = {},
+  activateWithoutDocumentFocus = false,
 ): Promise<WebViewId | undefined> => {
   // Ahead of everything, including the provider: a window on its way out must not run a web view
   // provider's side effects for a tab that is about to be destroyed with it
@@ -3207,11 +3214,17 @@ export const openWebView = async (
     id: newGuid(),
   };
 
-  return openOrReloadWebView(newWebViewDefinition, layout, {
-    ...optionsDefaulted,
-    // Always bring new WebViews to the front
-    bringToFront: true,
-  });
+  return openOrReloadWebView(
+    newWebViewDefinition,
+    layout,
+    {
+      ...optionsDefaulted,
+      // Always bring new WebViews to the front
+      bringToFront: true,
+    },
+    false,
+    activateWithoutDocumentFocus,
+  );
 };
 
 /**
@@ -3693,6 +3706,7 @@ async function deleteSeededStateUnlessDocked(webViewId: WebViewId): Promise<void
 /** See {@link WebViewServiceShard.adoptWebView} */
 async function adoptWebView(
   savedWebViewDefinition: SavedWebViewDefinition,
+  activateWithoutDocumentFocus = false,
 ): Promise<WebViewId | undefined> {
   // Ahead of the seeding below, and of anything that reads the bundle: this method is reachable
   // from any process, so an unvalidated bundle would let an arbitrary caller write a state blob
@@ -3754,6 +3768,8 @@ async function adoptWebView(
       savedWebViewDefinition,
       { type: 'tab' },
       getWebViewOptionsDefaults({}),
+      false,
+      activateWithoutDocumentFocus,
     );
     // A provider that declines returns no id, which is a failed adopt like any other: the seed is
     // a write this window would not otherwise have made, and it persists as soon as it is made
