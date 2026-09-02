@@ -677,13 +677,23 @@ export function getWindowById(windowId: string): BrowserWindow | undefined {
 export function removeWindow(window: BrowserWindow, windowId: string): void {
   const trackedIndex = trackedWindows.findIndex((tracked) => tracked.window === window);
   if (trackedIndex >= 0) trackedWindows.splice(trackedIndex, 1);
+
+  // This window is matched by identity, but everything below is keyed by the id alone — and the id
+  // may no longer be this window's. A restore reclaims a durable id from a window Electron has
+  // destroyed (see `addWindow`), which sweeps it from the list; this call is that window's `closed`
+  // handler arriving afterwards. Clearing then would tell the app the LIVE window holding the id is
+  // not ready, was never ready, and holds no focus, while it is on screen. Whoever is tracked under
+  // the id now owns the state under it.
+  if (trackedWindows.some((tracked) => tracked.windowId === windowId)) {
+    announceRoutingTargetIfChanged();
+    return;
+  }
+
   readyWindowIds.delete(windowId);
   // These marks are this window's state, keyed by its id. Left behind they keep answering for a
   // window that no longer exists — anything that still holds the id would be told it is closing,
   // that it had been serving requests and died, or that it had been written off — and they would
-  // accumulate for the life of the process. No window can ever inherit this id and be given those
-  // answers, since ids are never handed out twice; clearing them is about not answering for the
-  // dead and not leaking, which is reason enough on its own.
+  // accumulate for the life of the process.
   closingWindowIds.delete(windowId);
   everReadyWindowIds.delete(windowId);
   abandonedWindowIds.delete(windowId);
