@@ -157,8 +157,15 @@ test.describe('switching interface mode', () => {
     // A window created mid-session deliberately starts empty, so the second window is made by
     // MOVING real content into one: there has to be something to preserve for the round trip to
     // mean anything. The primary reopens Home in its place.
-    const [webViewToMove] = await getHeldWebViewIds(mainPage);
-    expect(webViewToMove).toBeDefined();
+    // Polled rather than read once: the application reporting ready does not mean the primary's
+    // dock has finished loading its layout, and there is nothing to move until it holds something
+    const heldByPrimary = await pollUntil(
+      () => getHeldWebViewIds(mainPage),
+      (webViewIds) => webViewIds.length > 0,
+      SWITCH_SETTLE_TIMEOUT_MS,
+      'the primary window to hold a web view that can be moved out',
+    );
+    const [webViewToMove] = heldByPrimary;
     await sendPapiRequestOnce(
       'command:platform.moveWebViewToNewWindow',
       [webViewToMove],
@@ -221,8 +228,11 @@ test.describe('switching interface mode', () => {
     mainPage,
   }) => {
     // The negative control for the first test: a switch that closed windows without asking which
-    // one is the primary would pass that one and leave the user with nothing here
-    const output = captureAppOutput(electronApp);
+    // one is the primary would pass that one and leave the user with nothing here.
+    //
+    // No fault sweep here, deliberately: `expectNoFaultsWhileRunning` opens with a positive
+    // control that a renderer started during the capture, and the whole point of this test is that
+    // nothing starts. The count and identity below are the assertions.
     await waitForAppReady(mainPage, 180_000);
     const primaryId = getWindowIdOfPage(mainPage);
     expect(getAppPages(electronApp)).toHaveLength(1);
@@ -235,7 +245,6 @@ test.describe('switching interface mode', () => {
       .poll(() => getAppPages(electronApp).length, { timeout: 30_000, intervals: [1_000] })
       .toBe(1);
     expect(getWindowIdOfPage(getAppPages(electronApp)[0])).toBe(primaryId);
-    expectNoFaultsWhileRunning(output);
   });
 
   test('creating a window is refused in simple mode', async ({ electronApp, mainPage }) => {
