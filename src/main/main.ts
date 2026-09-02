@@ -9,6 +9,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   powerMonitor,
   RenderProcessGoneDetails,
@@ -189,6 +190,7 @@ import {
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import * as commandService from '@shared/services/command.service';
+import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -202,6 +204,7 @@ import { CommandNames, SettingTypes } from 'papi-shared-types';
 import {
   getErrorMessage,
   isPlatformError,
+  LocalizeKey,
   serialize,
   ThemeDefinitionExpanded,
   UnsubscriberAsync,
@@ -296,6 +299,15 @@ const PROCESS_CLOSE_TIME_OUT_MS = 2000;
  * screen a moment longer.
  */
 const WINDOW_CLOSE_TIME_OUT_MS = 10000;
+
+/**
+ * How long to wait for the abandoned-window notice's localized strings before showing it in
+ * English.
+ *
+ * Short on purpose: the window is already unreachable and the notice is what tells the user so, and
+ * a wait long enough to notice is worse than untranslated text.
+ */
+const NOTICE_LOCALIZE_TIME_OUT_MS = 3000;
 
 /** How long to coalesce a window's resize/move events before capturing its bounds */
 const BOUNDS_CAPTURE_DEBOUNCE_MS = 100;
@@ -1860,8 +1872,8 @@ async function main() {
             localizationService.getLocalizedStrings({
               localizeKeys: [messageKey, detailKey, closeKey, leaveOpenKey],
             }),
-            wait(CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS).then<never>(() => {
-              throw new Error(`no answer within ${CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS} ms`);
+            wait(NOTICE_LOCALIZE_TIME_OUT_MS).then<never>(() => {
+              throw new Error(`no answer within ${NOTICE_LOCALIZE_TIME_OUT_MS} ms`);
             }),
           ])),
         };
