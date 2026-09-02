@@ -86,9 +86,9 @@ describe('which processes belong to this checkout', () => {
   });
 });
 
-describe('which cleanup a platform gets', () => {
+describe('which cleanup each environment gets', () => {
   /** Records which action ran, so the choice can be asserted without killing anything. */
-  function spyActions() {
+  function spyActions(sweepByProcessName = () => {}) {
     const calls: string[] = [];
     return {
       calls,
@@ -99,45 +99,65 @@ describe('which cleanup a platform gets', () => {
         },
         sweepByProcessName: () => {
           calls.push('by-name');
+          sweepByProcessName();
         },
       },
     };
   }
 
-  it('sweeps nothing when the gate says no, on any platform', () => {
-    const linux = spyActions();
-    expect(
-      runCleanup({ ciFlag: 'false', platform: 'linux', root: ROOT }, linux.actions).swept,
-    ).toBe('none');
-    expect(linux.calls).toEqual([]);
-
-    const mac = spyActions();
-    runCleanup({ ciFlag: undefined, platform: 'darwin', root: ROOT }, mac.actions);
-    expect(mac.calls).toEqual([]);
-  });
-
-  it('uses the scoped kill on Linux, and never the name sweep', () => {
+  function cleanup(ciFlag: string | undefined, platform: NodeJS.Platform) {
     const { calls, actions } = spyActions();
+    const result = runCleanup({ ciFlag, platform, root: ROOT }, actions);
+    return { ...result, calls };
+  }
 
-    const result = runCleanup({ ciFlag: 'true', platform: 'linux', root: ROOT }, actions);
+  it('cleans up this checkout on Linux even when nobody set CI', () => {
+    // The case the whole module exists for. A developer's box is where scoping matters: their run
+    // must clear its own leaked app without touching a peer's checkout or their editor's.
+    const result = cleanup(undefined, 'linux');
 
-    expect(result.swept).toBe('scoped');
+    expect(result.scoped).toBe(true);
     expect(result.pids).toEqual([4242]);
-    expect(calls).toEqual([`scoped:${ROOT}`]);
-    expect(calls).not.toContain('by-name');
+    expect(result.calls).toEqual([`scoped:${ROOT}`]);
+    expect(result.byName).toBe('skipped');
   });
 
-  it('falls back to the name sweep where /proc does not exist', () => {
-    // Selection reads /proc, which only Linux has. Without this branch a macOS or Windows CI runner
-    // would sweep nothing at all — silently losing the cleanup the gate exists to allow. A CI
-    // runner is single-tenant, so matching by name is correct there.
+  it('does the same when CI is explicitly false on Linux', () => {
+    const result = cleanup('false', 'linux');
+
+    expect(result.scoped).toBe(true);
+    expect(result.byName).toBe('skipped');
+  });
+
+  it('also runs the machine-wide sweep on a Linux CI runner', () => {
+    // A CI runner is single-tenant, so the old sweep's wider reach costs nothing there and keeps
+    // its coverage — it matches build watchers by command line, which scoped selection does not.
+    const result = cleanup('true', 'linux');
+
+    expect(result.scoped).toBe(true);
+    expect(result.byName).toBe('ran');
+    expect(result.calls).toEqual([`scoped:${ROOT}`, 'by-name']);
+  });
+
+  it('sweeps by name on a CI runner without /proc', () => {
     (['darwin', 'win32'] as const).forEach((platform) => {
-      const { calls, actions } = spyActions();
+      const result = cleanup('true', platform);
 
-      const result = runCleanup({ ciFlag: 'true', platform, root: ROOT }, actions);
+      expect(result.scoped).toBe(false);
+      expect(result.byName).toBe('ran');
+      expect(result.calls).toEqual(['by-name']);
+    });
+  });
 
-      expect(result.swept).toBe('by-name');
-      expect(calls).toEqual(['by-name']);
+  it('does nothing off CI where it cannot scope', () => {
+    // Nothing can be scoped without /proc, and a machine-wide kill on someone's own Mac or Windows
+    // box is the behaviour this module exists to stop. Doing nothing is the only safe answer.
+    (['darwin', 'win32'] as const).forEach((platform) => {
+      const result = cleanup(undefined, platform);
+
+      expect(result.scoped).toBe(false);
+      expect(result.byName).toBe('skipped');
+      expect(result.calls).toEqual([]);
     });
   });
 });
@@ -202,21 +222,30 @@ describe('process names as the kernel reports them', () => {
 });
 
 describe('a failing name sweep does not fail the run', () => {
+  const throwingActions = {
+    killUnderRoot: () => [4242],
+    sweepByProcessName: () => {
+      throw new Error('npm run stop exited 1');
+    },
+  };
+
   it('reports the failure instead of throwing out of teardown', () => {
     // `npm run stop` shelling out to ps/CIM and fkill can exit non-zero or time out; that was an
     // expected outcome before and must not turn a passing run red.
-    const actions = {
-      killUnderRoot: () => [],
-      sweepByProcessName: () => {
-        throw new Error('npm run stop exited 1');
-      },
-    };
-
     expect(() =>
-      runCleanup({ ciFlag: 'true', platform: 'darwin', root: ROOT }, actions),
+      runCleanup({ ciFlag: 'true', platform: 'darwin', root: ROOT }, throwingActions),
     ).not.toThrow();
-    expect(runCleanup({ ciFlag: 'true', platform: 'darwin', root: ROOT }, actions).swept).toBe(
-      'by-name-failed',
-    );
+    expect(
+      runCleanup({ ciFlag: 'true', platform: 'darwin', root: ROOT }, throwingActions).byName,
+    ).toBe('failed');
+  });
+
+  it('keeps the scoped result when only the name sweep fails', () => {
+    // On a Linux runner both run. A failing name sweep must not discard pids already terminated.
+    const result = runCleanup({ ciFlag: 'true', platform: 'linux', root: ROOT }, throwingActions);
+
+    expect(result.scoped).toBe(true);
+    expect(result.pids).toEqual([4242]);
+    expect(result.byName).toBe('failed');
   });
 });

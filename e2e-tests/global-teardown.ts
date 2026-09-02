@@ -32,14 +32,13 @@ export default async function globalTeardown(_config: FullConfig): Promise<void>
     }
   }
 
-  // Sweep up anything a crashed fixture left behind — this checkout's processes, and only when the
-  // machine belongs to the run.
+  // Sweep up anything a crashed fixture left behind.
   //
-  // Selection is by working directory rather than process name wherever that is possible: a name
-  // match reaches every electron and dotnet process on the machine, including the developer's own
-  // app, any app a CDP-based suite is attached to, and other checkouts' runs on a shared box. See
-  // e2e-tests/scoped-cleanup.ts, which also explains why non-Linux CI runners still match by name.
-  const { swept, pids } = runCleanup(
+  // Selection is by working directory wherever that is possible: a name match reaches every
+  // electron and dotnet process on the machine, including the developer's own app, any app a
+  // CDP-based suite is attached to, and other checkouts' runs on a shared box. See
+  // e2e-tests/scoped-cleanup.ts for which sweeps each environment gets and why.
+  const { scoped, byName, pids } = runCleanup(
     { ciFlag: process.env.CI, platform: process.platform, root: rootDir },
     {
       killUnderRoot: killProcessesUnderRoot,
@@ -49,20 +48,21 @@ export default async function globalTeardown(_config: FullConfig): Promise<void>
     },
   );
 
-  if (swept === 'none') {
+  if (scoped) {
     console.log(
-      'Skipping cleanup sweep: CI is not set to a value meaning yes. The launch fixtures already ' +
-        'tear down what they started; run `npm run stop` by hand if something leaked.',
+      pids.length > 0
+        ? `Cleanup: terminated ${pids.length} process(es) under ${rootDir}: ${pids.join(', ')}`
+        : `Cleanup: no leftover processes under ${rootDir}.`,
     );
-  } else if (swept === 'by-name') {
-    console.log(`Cleanup: swept by process name (${process.platform} has no /proc to scope by).`);
-  } else if (swept === 'by-name-failed') {
-    console.log('Cleanup: the process-name sweep reported nothing to stop, or could not complete.');
-  } else if (pids.length > 0) {
+  } else if (byName === 'skipped') {
     console.log(
-      `Cleanup: terminated ${pids.length} process(es) under ${rootDir}: ${pids.join(', ')}`,
+      `Skipping cleanup sweep: ${process.platform} has no /proc to scope by, and CI is not set ` +
+        'to a value meaning yes. The launch fixtures already tear down what they started; run ' +
+        '`npm run stop` by hand if something leaked.',
     );
-  } else {
-    console.log(`Cleanup: no leftover processes under ${rootDir}.`);
   }
+
+  if (byName === 'ran') console.log('Cleanup: also swept by process name (the machine is ours).');
+  if (byName === 'failed')
+    console.log('Cleanup: the process-name sweep reported nothing to stop, or could not complete.');
 }

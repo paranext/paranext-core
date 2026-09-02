@@ -181,14 +181,31 @@ export type CleanupActions = {
   sweepByProcessName: () => void;
 };
 
+/** What a cleanup did. */
+export type CleanupOutcome = {
+  /** Pids terminated because their working directory is inside this checkout. */
+  pids: number[];
+  /** Whether the working-directory-scoped sweep ran. */
+  scoped: boolean;
+  /** What the machine-wide sweep by process name did. */
+  byName: 'skipped' | 'ran' | 'failed';
+};
+
 /**
  * Decide and perform the cleanup this run should do.
  *
- * Scoped selection reads `/proc`, which only Linux has, so on macOS and Windows it can find nothing
- * at all. Those are CI runners in practice, and a CI runner is single-tenant — nothing else on the
- * machine belongs to anyone — so matching by name is both correct and the only option there.
- * Falling through to "do nothing" instead would quietly drop the cleanup on two of the three
- * platforms CI builds on.
+ * The two sweeps answer different questions and are not alternatives. Scoping answers "which
+ * processes are mine", and matters most on a shared developer machine, where a run must clear its
+ * own leaked app without touching a peer's checkout or the app the developer is using. It reads
+ * `/proc`, so only Linux can do it at all.
+ *
+ * The machine-wide sweep answers "is anything left over", and is safe only where the machine
+ * belongs to the run. On a CI runner it is, so it runs there in addition — it matches build
+ * watchers by command line, which selection by process name cannot reach.
+ *
+ * That leaves one combination with nothing to do: off CI, on a platform without `/proc`, where
+ * scoping is impossible and a machine-wide kill would hit the developer's own processes. Doing
+ * nothing is the only safe answer there.
  */
 export function runCleanup(
   {
@@ -197,16 +214,17 @@ export function runCleanup(
     root,
   }: { ciFlag: string | undefined; platform: NodeJS.Platform; root: string },
   actions: CleanupActions,
-): { swept: 'none' | 'scoped' | 'by-name' | 'by-name-failed'; pids: number[] } {
-  if (!isSweepEnabled(ciFlag)) return { swept: 'none', pids: [] };
-  if (platform === 'linux') return { swept: 'scoped', pids: actions.killUnderRoot(root) };
+): CleanupOutcome {
+  const scoped = platform === 'linux';
+  const pids = scoped ? actions.killUnderRoot(root) : [];
+  if (!isSweepEnabled(ciFlag)) return { pids, scoped, byName: 'skipped' };
   try {
     actions.sweepByProcessName();
   } catch {
     // Having nothing to stop is a routine outcome, and the shell-outs behind it (ps, PowerShell's
     // CIM enumeration, fkill) can also exit non-zero or time out. None of that should turn a run
-    // whose tests all passed into a failed one.
-    return { swept: 'by-name-failed', pids: [] };
+    // whose tests all passed into a failed one, nor discard pids already terminated.
+    return { pids, scoped, byName: 'failed' };
   }
-  return { swept: 'by-name', pids: [] };
+  return { pids, scoped, byName: 'ran' };
 }
