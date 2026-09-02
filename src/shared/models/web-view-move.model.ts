@@ -32,7 +32,14 @@ export type WebViewMoveFailureDisposition =
    * that step can have closed it without handing anything back. Neither "nothing changed" nor "it
    * is gone" can be claimed, so a caller says as much rather than picking one
    */
-  | 'possibly-closed';
+  | 'possibly-closed'
+  /**
+   * Refused before it started: another move of the same web view was already running, and this call
+   * never touched the tab. Distinct from every other disposition here, which names where a move
+   * that DID start left the web view — this one names a move that did not run at all, so the web
+   * view is wherever the still-running move leaves it
+   */
+  | 'already-moving';
 
 /** Every disposition, so a reader can look for each one without a second list to keep in step */
 const ALL_DISPOSITIONS: WebViewMoveFailureDisposition[] = [
@@ -41,6 +48,7 @@ const ALL_DISPOSITIONS: WebViewMoveFailureDisposition[] = [
   'not-reopened',
   'reached-new-window-unconfirmed',
   'possibly-closed',
+  'already-moving',
 ];
 
 /**
