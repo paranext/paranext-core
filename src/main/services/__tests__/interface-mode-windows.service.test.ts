@@ -11,6 +11,7 @@ import {
   isClosingForModeSwitch,
   undoModeSwitchClose,
   resetForTesting,
+  type InterfaceMode,
   type ModeSwitchDependencies,
 } from '@main/services/interface-mode-windows.service';
 
@@ -37,6 +38,7 @@ function makeDeps(overrides: Partial<ModeSwitchDependencies> = {}): ModeSwitchDe
     isAppShuttingDown: () => false,
     getPreservedEntrySlotIds: () => [],
     createWindowForEntry: vi.fn(async () => {}),
+    writeInterfaceModeSetting: vi.fn(async () => {}),
     ...overrides,
   };
 }
@@ -447,6 +449,56 @@ describe('reacting to an interface-mode change', () => {
     await handleInterfaceModeChanged('simple');
 
     expect(getCachedInterfaceMode()).toBe('power');
+  });
+
+  test('a switch to simple that closes nothing writes the setting back to the previous mode', async () => {
+    // The setting on disk was already written to simple by whoever asked for the switch, and every
+    // renderer follows that setting through its own local copy. In simple mode only the window
+    // carrying the primary role saves a layout, and this switch left none carrying it — so without
+    // this write-back every renderer would silently stop saving layout changes until the user
+    // toggled the mode again by hand.
+    const deps = makeDeps({ isWindowAbandoned: (windowId) => windowId === 1 });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(deps.writeInterfaceModeSetting).toHaveBeenCalledWith('power');
+  });
+
+  test('the write-back redelivering the same mode cannot start a second switch', async () => {
+    // The write below stands in for the real settings subscription redelivering the value it just
+    // wrote, calling straight back into the same handler the way the live subscription would.
+    // Nothing about the window set should move a second time: the cache was already rolled back to
+    // the previous mode before the write ran, so the redelivery meets the same-value guard and
+    // returns immediately.
+    const deps = makeDeps({ isWindowAbandoned: (windowId) => windowId === 1 });
+    const writeInterfaceModeSetting = vi.fn(async (mode: InterfaceMode) => {
+      await handleInterfaceModeChanged(mode);
+    });
+    initializeModeSwitchOrchestration({ ...deps, writeInterfaceModeSetting }, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(writeInterfaceModeSetting).toHaveBeenCalledTimes(1);
+    expect(deps.closeWindow).not.toHaveBeenCalled();
+    expect(deps.createWindowForEntry).not.toHaveBeenCalled();
+    expect(getCachedInterfaceMode()).toBe('power');
+  });
+
+  test('a failed write-back is reported rather than swallowed', async () => {
+    const deps = makeDeps({
+      isWindowAbandoned: (windowId) => windowId === 1,
+      writeInterfaceModeSetting: vi.fn(async () => {
+        throw new Error('settings data provider unreachable');
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('settings data provider unreachable'),
+    );
   });
 
   test('a window already on its way out cannot be the window a switch leaves behind', async () => {

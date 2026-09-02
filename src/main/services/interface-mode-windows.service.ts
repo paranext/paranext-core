@@ -67,6 +67,17 @@ export type ModeSwitchDependencies = {
   getPreservedEntrySlotIds: () => number[];
   /** Create a window restoring the persisted entry this slot id names */
   createWindowForEntry: (slotId: number) => Promise<void>;
+  /**
+   * Write the interface-mode setting on disk to a given value.
+   *
+   * Called only when a switch to simple mode closed no window: whatever asked for the switch
+   * already wrote the setting to simple before this ran, and every renderer follows that setting
+   * through its own local copy — in simple mode only the window carrying the primary role saves a
+   * layout, and with no window left to carry it every renderer would silently stop saving until the
+   * user toggled the mode again. Writing the setting back to what it was is what makes the toggle,
+   * and every renderer's local copy, agree with the window set that never actually changed.
+   */
+  writeInterfaceModeSetting: (mode: InterfaceMode) => Promise<void>;
 };
 
 let dependencies: ModeSwitchDependencies | undefined;
@@ -525,6 +536,20 @@ export async function handleInterfaceModeChanged(newMode: InterfaceMode): Promis
         // never happened, or the same-value guard above would swallow every later delivery of
         // this mode — including one that arrives once whatever is blocking the survivor is gone.
         cachedInterfaceMode = modeBeforeSwitch;
+        // The setting on disk still reads simple, and every renderer would keep following it —
+        // silently dropping layout saves, since none of them carries the primary role a switch
+        // like this was supposed to leave behind. Writing it back to modeBeforeSwitch is what
+        // makes the toggle, and every renderer, agree with the window set that never changed. The
+        // write redelivers this same value through the subscription this function is called from,
+        // but the cache was already rolled back above, so that redelivery meets the same-value
+        // guard at the top of this function and starts no second switch.
+        try {
+          await deps.writeInterfaceModeSetting(modeBeforeSwitch);
+        } catch (e) {
+          logger.warn(
+            `Could not write the interface mode setting back to ${modeBeforeSwitch} after a switch to simple closed no window: ${getErrorMessage(e)}`,
+          );
+        }
         return;
       }
       // The window the user was working in may be one of the ones just closed — the mode switcher
