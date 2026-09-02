@@ -613,8 +613,10 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   }
 
   // After the app has closed, so its own shutdown writes cannot land on top of what is restored.
-  // Reached only on the final teardown: a preserved profile returned above, leaving the pin in
-  // place for the next launch in the chain.
+  // Not reached when preserveUserDataDir returned above (an intermediate teardown of a relaunch
+  // chain): that pin is left standing for the chain's next launch to inherit, or — if the chain
+  // never reaches its final, non-preserving teardown — for global teardown's
+  // restoreAppGlobalState()/restoreLeakedSettings() call to recover as a safety net.
   restoreAppGlobalState();
   console.log('[teardown] Complete');
 }
