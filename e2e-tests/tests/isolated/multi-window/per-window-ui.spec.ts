@@ -41,6 +41,7 @@ import type { Frame, Page } from '@playwright/test';
 import WebSocket from 'ws';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
+  PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
   SAMPLE_WEB_PROJECT_ID,
   sendPapiRequestOnce,
   waitForAppReady,
@@ -419,7 +420,7 @@ test.describe('per-window UI isolation', () => {
     await waitForPapiMethodRegistered(
       new RegExp(`^object:DialogService-${window2Id}\\.showDialog$`),
       WEBSOCKET_PORT,
-      60_000,
+      PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
     );
     const dialogPrompt = 'per-window dialog probe';
     const dialogResponsePromise = showModalAlertViaWebSocket(dialogPrompt);
@@ -479,7 +480,7 @@ test.describe('per-window UI isolation', () => {
     await waitForPapiMethodRegistered(
       new RegExp(`^object:NotificationService-${window2Id}\\.send$`),
       WEBSOCKET_PORT,
-      60_000,
+      PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
     );
     // Record (not assert) whether the compositor honored window 1's minimize: WSLg does not
     // reliably reflect a programmatic minimize in isMinimized(), and the behaviour under test —
