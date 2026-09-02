@@ -78,7 +78,7 @@ export type WebViewMoveInFlight = {
  * creates on a miss mints a second copy of one the app means to have exactly one of.
  *
  * Deliberately nothing to wait on. A search that lands in the gap is told the question could not be
- * answered right now — which is what `findOwner`'s (`web-view.owner-resolution.ts`)
+ * answered right now — which is what `findOwner`'s (`web-view-owner-resolution.util.ts`)
  * `hadUnreachableWindows` already means — so every caller keeps the weighing it already applies to
  * that: a passive probe answers not-found, and a caller that creates opens where the user is rather
  * than refuse for the length of a move.
