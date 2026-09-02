@@ -31,6 +31,7 @@ import {
   openScriptureTextGrid,
   restoreScriptureTextGridProjectSettings,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+  FlaggedResourceItem,
 } from './test-helpers';
 
 /**
@@ -51,17 +52,14 @@ const REAL_RESOURCE_IDS = (process.env.E2E_TEST_RESOURCE_IDS ?? '')
   .filter(Boolean);
 
 /** The two resources to seed: prefer real downloaded IDs, fall back to synthetics. */
-function twoResources(): [
-  { type: 'project'; name: string; id: string; isResourceShownByDefault: boolean },
-  { type: 'project'; name: string; id: string; isResourceShownByDefault: boolean },
-] {
+function twoResources(): [FlaggedResourceItem, FlaggedResourceItem] {
   const ids =
     REAL_RESOURCE_IDS.length >= 2
       ? [REAL_RESOURCE_IDS[0], REAL_RESOURCE_IDS[1]]
       : [SYNTHETIC_RESOURCE_A, SYNTHETIC_RESOURCE_B];
   return [
-    { type: 'project', name: 'Zoom A', id: ids[0], isResourceShownByDefault: true },
-    { type: 'project', name: 'Zoom B', id: ids[1], isResourceShownByDefault: true },
+    { type: 'project', name: 'Zoom A', id: ids[0], isInTextCollection: true },
+    { type: 'project', name: 'Zoom B', id: ids[1], isInTextCollection: true },
   ];
 }
 
@@ -107,14 +105,14 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
     test.skip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, twoResources());
-    const frame = await openScriptureTextGrid(mainPage);
+    const stg = await openScriptureTextGrid(mainPage);
 
     // Wait for the grid row (two cells) to be present.
-    await expect(frame.locator('[role="gridcell"]').first()).toBeVisible({ timeout: 15_000 });
-    await expect(frame.locator('[role="gridcell"]')).toHaveCount(2, { timeout: 15_000 });
+    await expect(stg.frame.locator('[role="gridcell"]').first()).toBeVisible({ timeout: 15_000 });
+    await expect(stg.frame.locator('[role="gridcell"]')).toHaveCount(2, { timeout: 15_000 });
 
-    const firstCell = frame.locator('[role="gridcell"]').first();
-    const secondCell = frame.locator('[role="gridcell"]').nth(1);
+    const firstCell = stg.frame.locator('[role="gridcell"]').first();
+    const secondCell = stg.frame.locator('[role="gridcell"]').nth(1);
 
     // Hover the first cell so the kebab button becomes visible (it uses opacity-0 / group-hover).
     await firstCell.hover();
@@ -126,7 +124,7 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
     await zoomKebab.click();
 
     // The dropdown menu item "Zoom In" appears in the Radix DropdownMenuContent.
-    await frame.getByRole('menuitem', { name: /^Zoom In$/i }).click();
+    await stg.frame.getByRole('menuitem', { name: /^Zoom In$/i }).click();
 
     // The content wrapper div inside the first gridcell receives `style="zoom: 1.1"` once the
     // factor moves above the default (1). The actual browser (Chromium inside Electron) serialises
