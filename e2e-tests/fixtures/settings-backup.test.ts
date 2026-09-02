@@ -75,16 +75,18 @@ describe('preConfigureSettings crash recovery', () => {
     expect(readSettings()).toBeUndefined();
   });
 
-  it('reports the leaked setting keys, never the file contents', () => {
+  it("reports the keys the run pinned, not the developer's own settings", () => {
     fs.writeFileSync(SETTINGS_PATH, DEVELOPER_SETTINGS);
     preConfigureSettings({ 'platform.interfaceMode': 'power' });
 
     const leakedKeys = restoreLeakedSettings();
 
-    // Keys only: the file also holds the developer's real settings, including registration details.
-    expect(leakedKeys).toEqual(
-      expect.arrayContaining(['platform.myRealSetting', 'platform.interfaceMode']),
-    );
+    // What a killed run left behind is what it PINNED. The file also holds the developer's own
+    // settings — registration details among them — and naming those as test residue is both wrong
+    // and alarming for whoever reads the recovery message.
+    expect(leakedKeys).toEqual(['platform.interfaceMode']);
+    expect(leakedKeys).not.toContain('platform.myRealSetting');
+    // Keys only, never values.
     expect(JSON.stringify(leakedKeys)).not.toContain('keepme');
   });
 

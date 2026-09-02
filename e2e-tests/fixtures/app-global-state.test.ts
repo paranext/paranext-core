@@ -203,3 +203,42 @@ describe('app-global recovery refuses a backup another run still owns', () => {
     expect(fs.existsSync(`${LIVE_DIR}.e2e-backup.json`)).toBe(true);
   });
 });
+
+describe('app-global pin refuses to empty a store it cannot park', () => {
+  it('leaves the developer state alone when a backup dir stands with no manifest', () => {
+    // A run killed between creating the backup directory and writing its manifest leaves exactly
+    // this: a directory that exists and says nothing. Every later pin sees it, parks nothing —
+    // and must therefore not empty the store either, because nothing could put it back.
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+    writeKey(THEME_KEY, '"dark"');
+
+    pinAppGlobalState();
+
+    expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
+    expect(readKey(THEME_KEY)).toBe('"dark"');
+  });
+
+  it('leaves the developer state alone when the standing backup belongs to a live run', () => {
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+    pinAppGlobalState();
+    giveTheBackupALiveOwner();
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+
+    // Another run owns these files; this one can neither park nor restore them.
+    pinAppGlobalState();
+
+    expect(readKey(SCR_REFS_KEY)).toBe(DEVELOPER_REF);
+  });
+
+  it('still empties the store on a relaunch, where this process owns the standing pin', () => {
+    writeKey(SCR_REFS_KEY, DEVELOPER_REF);
+    pinAppGlobalState();
+    // Launch A's app wrote as it ran; launch B must not inherit that.
+    writeKey(SCR_REFS_KEY, '{"0":{"book":"REV","chapterNum":1,"verseNum":1}}');
+
+    pinAppGlobalState();
+
+    expect(readKey(SCR_REFS_KEY)).toBeUndefined();
+  });
+});

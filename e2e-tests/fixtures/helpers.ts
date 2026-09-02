@@ -973,7 +973,22 @@ export function pinAppGlobalState(): () => void {
       }),
     );
   }
-  storedKeyNames(liveDir).forEach((key) => fs.rmSync(path.join(liveDir, key), { force: true }));
+  // Empty the store ONLY when something can put it back: either this call just parked it, or the
+  // standing backup is one this process took and can still restore. A backup directory left by a
+  // run that died before writing its manifest exists but says nothing, so every later pin would
+  // park nothing and — without this guard — empty the store anyway, permanently, on every run. Same
+  // for a backup another live run owns: we can neither park nor restore, so emptying is pure loss.
+  const standing = readAppGlobalBackup();
+  const canRestoreWhatWeEmpty =
+    createdBackup || (standing !== undefined && classifyBackupOwner(standing.ownerPid) === 'ours');
+  if (canRestoreWhatWeEmpty)
+    storedKeyNames(liveDir).forEach((key) => fs.rmSync(path.join(liveDir, key), { force: true }));
+  else
+    console.warn(
+      `Leaving ${liveDir} as it is: ${mainLocalStorageBackupDir()} stands but this run cannot ` +
+        'restore it, so emptying the store would discard state nothing could put back. A launch ' +
+        'may therefore inherit app-global state from the developer or from an earlier run.',
+    );
 
   return () => {
     // Only the call that wrote the backup may undo it. A relaunch chain pins more than once, and a
@@ -1140,21 +1155,6 @@ function readSettingsBackup(): SettingsBackup | undefined {
 export function restoreLeakedSettings(): string[] | undefined {
   if (!fs.existsSync(settingsBackupPath())) return undefined;
 
-  let leakedKeys: string[] = [];
-  if (fs.existsSync(settingsPath())) {
-    try {
-      // JSON.parse returns `any`; the settings file is a flat key-value object
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const leaked = JSON.parse(fs.readFileSync(settingsPath(), 'utf-8')) as Record<
-        string,
-        unknown
-      >;
-      leakedKeys = Object.keys(leaked);
-    } catch {
-      leakedKeys = ['(unparsable settings file)'];
-    }
-  }
-
   const backup = readSettingsBackup();
   if (backup === undefined) {
     console.warn(
@@ -1195,7 +1195,10 @@ export function restoreLeakedSettings(): string[] | undefined {
   else fs.writeFileSync(settingsPath(), JSON.stringify(reconciled));
 
   fs.rmSync(settingsBackupPath(), { force: true });
-  return leakedKeys;
+  // The keys the killed run PINNED, not every key in the file. The file also holds the developer's
+  // own settings — registration details among them — and naming those as settings a test "left
+  // behind" is both wrong and alarming to read.
+  return backup.pinnedKeys;
 }
 
 /**
