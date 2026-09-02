@@ -511,6 +511,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'footnote-close-markers-menu',
+    purpose: 'Close the inline markers menu in the footnote editor',
+    category: 'Editing',
+    context: 'Footnote editor',
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+    ],
+  },
+  {
     id: 'footnote-new-paragraph',
     purpose: 'Insert a new paragraph (\\fp) within the footnote being edited',
     category: 'Editing',

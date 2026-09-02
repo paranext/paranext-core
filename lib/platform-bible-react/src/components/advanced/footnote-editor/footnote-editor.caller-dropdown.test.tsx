@@ -7,38 +7,19 @@
  * SAVE is what the resulting editor change produces, so with `applyUpdate` stubbed out the chain
  * stops at the first link and every assertion below passes vacuously.
  */
-import { describe, it, expect, beforeAll, vi, type MockedFunction } from 'vitest';
+import { describe, it, expect, vi, type MockedFunction } from 'vitest';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { screen } from '@testing-library/react';
 import type { DeltaOpInsertNoteEmbed } from '@eten-tech-foundation/platform-editor';
-import { renderPopoverAndWaitForInit } from './footnote-editor.test-harness';
+import {
+  CARET_IN_NOTE_TEXT,
+  caretAncestry,
+  installPopoverJsdomStubs,
+  renderPopoverAndWaitForInit,
+} from './footnote-editor.test-harness';
 
-// cmdk and Radix instantiate a ResizeObserver and schedule scrollTo/scrollIntoView on mount;
-// jsdom ships none of these.
-class NoopResizeObserver implements ResizeObserver {
-  private readonly targets = new Set<Element>();
-
-  observe(target: Element) {
-    this.targets.add(target);
-  }
-
-  unobserve(target: Element) {
-    this.targets.delete(target);
-  }
-
-  disconnect() {
-    this.targets.clear();
-  }
-}
-
-beforeAll(() => {
-  if (typeof globalThis.ResizeObserver === 'undefined')
-    globalThis.ResizeObserver = NoopResizeObserver;
-  if (typeof Element.prototype.scrollTo !== 'function') Element.prototype.scrollTo = () => {};
-  if (typeof Element.prototype.scrollIntoView !== 'function')
-    Element.prototype.scrollIntoView = () => {};
-});
+installPopoverJsdomStubs();
 
 const editableView = { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } as const;
 
@@ -86,6 +67,41 @@ describe('footnote caller dropdown', () => {
     const editorInput = document.querySelector('.editor-input');
     expect(editorInput?.textContent).toContain('-');
     expect(editorInput?.textContent).not.toContain('+');
+  });
+
+  it('leaves the caret in the note text and the editor focused after a caller change', async () => {
+    // A caller is applied by replacing the note, which discards the editor's selection — the same
+    // shape as a note-type change. Without the caret restore the caret lands on the note itself,
+    // outside the character runs; without the close-focus hand-off Radix returns focus to this
+    // dropdown's own trigger, so typing goes nowhere even when the caret is right.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView, {});
+    editorInput.focus();
+
+    await user.click(screen.getByRole('button', { name: /callerDropdown/i }));
+    await user.click(screen.getByRole('menuitemcheckbox', { name: /hidden/i }));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+
+    expect(caretAncestry(lexical)).toEqual(CARET_IN_NOTE_TEXT);
+    expect(document.activeElement).toBe(editorInput);
+  });
+
+  it('returns focus to the dropdown when it is dismissed without changing the caller', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { editorInput } = await renderPopoverAndWaitForInit(editableView, {});
+    editorInput.focus();
+    const trigger = screen.getByRole('button', { name: /callerDropdown/i });
+
+    await user.click(trigger);
+    await user.keyboard('{Escape}');
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+
+    // Nothing was committed, so the user keeps their place in the toolbar.
+    expect(document.activeElement).toBe(trigger);
   });
 });
 
