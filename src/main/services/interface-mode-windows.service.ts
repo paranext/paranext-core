@@ -519,11 +519,19 @@ export async function handleInterfaceModeChanged(newMode: InterfaceMode): Promis
   try {
     if (newMode === 'simple') {
       const survivorId = closeSecondaryWindows(deps);
+      if (survivorId === undefined) {
+        // No window could be left open, so closeSecondaryWindows closed none: the window set is
+        // exactly as it was under modeBeforeSwitch. The cache must not describe a switch that
+        // never happened, or the same-value guard above would swallow every later delivery of
+        // this mode — including one that arrives once whatever is blocking the survivor is gone.
+        cachedInterfaceMode = modeBeforeSwitch;
+        return;
+      }
       // The window the user was working in may be one of the ones just closed — the mode switcher
       // is reachable from every window — so the survivor is brought forward rather than leaving
       // the user looking at whatever was behind it. Taken from the close rather than looked up
       // again, so the window brought forward is the one the closes were decided around.
-      if (survivorId !== undefined) deps.focusWindow(survivorId);
+      deps.focusWindow(survivorId);
       return;
     }
 
