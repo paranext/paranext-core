@@ -8972,6 +8972,21 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
   import { PlatformError } from 'platform-bible-utils';
   import { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
   /**
+   * Events of one kind within {@link RUNAWAY_WINDOW_MS} that trip the runaway guard. The threshold is
+   * arbitrary, chosen by observing a dev environment; the guard trips ON this many events, so this
+   * many is one more than it tolerates.
+   */
+  export const RUNAWAY_EVENTS_PER_WINDOW = 100;
+  /** Rolling window the runaway guard measures over */
+  export const RUNAWAY_WINDOW_MS = 1000;
+  /**
+   * How long the guard stays tripped before it re-arms and resubscribes. Long enough that a genuine
+   * loop is throttled to a small fraction of its free-running rate, short enough that a legitimate
+   * burst — a Send/Receive or bulk import — heals without the user closing the tab. See
+   * `adr-runaway-data-hook-guard` for why the trip expires rather than latching.
+   */
+  export const RUNAWAY_COOLDOWN_MS = 5000;
+  /**
    * The final function called as part of the `useData` hook that is the actual React hook
    *
    * This is the `.Greeting(...)` part of `useData('helloSomeone.people').Greeting(...)`
@@ -9132,6 +9147,17 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    *   data.
    * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
    *   provider
+   *
+   * **Throttling.** This hook stops a runaway loop that would otherwise lock up the web view. If one
+   * subscription receives — or resubscribes — about 100 times within a second, the hook drops its
+   * subscription for a few seconds, then re-arms and resubscribes on its own. While throttled it
+   * reports `data` as a {@link PlatformError} whose `code` is `RESOURCE_EXHAUSTED`, `setData` as
+   * `undefined`, and `isLoading` as `true`, and it logs a warning naming the data type. Handle it as
+   * you would any other unresolved state; the usual cause is a `selector` or `dataProviderSource`
+   * that is rebuilt every render instead of being memoized. (`subscriberOptions` is held as a ref and
+   * cannot cause this.) The error's `message` is developer-facing English and is not localized —
+   * branch on the `RESOURCE_EXHAUSTED` code and supply your own localized text rather than rendering
+   * `message` to users.
    */
   export const useData: UseDataHook;
   export default useData;
@@ -9921,7 +9947,9 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    *
    *   - `setting`: The current state of the setting, either `defaultState`, the stored value, or a
    *       `PlatformError` if loading the value fails. Use `isPlatformError()` to check.
-   *   - `setSetting`: Function that updates the setting to a new value
+   *   - `setSetting`: Function that updates the setting to a new value, or `undefined` while there is
+   *       nothing to write through — including while the underlying subscription is throttled, see
+   *       {@link useData} for that state.
    *   - `resetSetting`: Function that removes the setting and resets the value to `defaultState`
    *
    * @throws When subscription callback function is called with an update that has an unexpected
@@ -9933,9 +9961,11 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
     setting: SettingTypes[SettingName] | PlatformError,
-    setSetting: (
-      newData: SettingTypes[SettingName],
-    ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
+    setSetting:
+      | ((
+          newData: SettingTypes[SettingName],
+        ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>)
+      | undefined,
     resetSetting: () => void,
     isLoading: boolean,
   ];
@@ -10091,6 +10121,9 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *   successfully updates data.
    * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
    *   provider
+   *
+   * Subject to the same runaway-loop throttling as {@link useData} — see its docs for what the
+   * returned values look like while throttled.
    */
   export const useProjectData: UseProjectDataHook;
   export default useProjectData;
@@ -10149,6 +10182,8 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
    *       the reset is rejected.
    *   - `isLoading`: whether the setting value is awaiting retrieval from the Project Data Provider
    *
+   *   Subject to the same runaway-loop throttling as {@link useData} — see its docs for what the
+   *   returned values look like while throttled.
    * @throws When subscription callback function is called with an update that has an unexpected
    *   message type
    */

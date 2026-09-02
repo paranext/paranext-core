@@ -2497,3 +2497,101 @@ step, no automation. Just a record.
   worse than a badly-timed foreground.
 - **Source:** PR #2670 review item 6 (2026-08-25) and the review rounds that followed; PT-4465,
   which carries the design, the call-site table and the `show` hazard in full.
+
+## adr-runaway-data-hook-guard: `useData`'s runaway guard counts subscribes and deliveries, degrades rather than throws, and expires
+
+- **Date:** 2026-08-28
+- **Status:** Accepted
+- **Context:** `create-use-data-hook.util.ts` carries a circuit breaker (PT-1561) meant to stop a
+  `useData` consumer from spinning in a render loop. It counted **renders** in a dependency-less
+  effect, then took an early `return` that skipped every hook below it — changing the hook count
+  between renders. React threw mid-render, and because the app has no error boundary, the web view's
+  React root unmounted: the blank editor. The trip path had therefore never once degraded
+  gracefully. Fixing the hook order forced three policy questions about the platform's most-consumed
+  hook, since consumers now observe a tripped state instead of a crash.
+- **Decision:** (1) Count **deliveries and subscribe attempts**, never renders. (2) A trip degrades:
+  the subscription is dropped, `[PlatformError, undefined, true]` is returned, and the error carries
+  the `RESOURCE_EXHAUSTED` code. (3) A trip **expires** after a cooldown, then re-arms and
+  resubscribes. (4) Every hook in the family reports the dropped setter the same way — as
+  `undefined`. `useData` and `useProjectSetting` already did; `useSetting` is widened to match
+  rather than fabricating a substitute setter to keep its published type non-optional.
+- **Alternatives:**
+  - *Keep counting renders* — rejected: a consumer can re-render rapidly for reasons unrelated to
+    this data (a busy parent, a cold-start storm, fast typing), and stopping a healthy subscription
+    over that is wrong. This was the false positive behind the original report.
+  - *Count deliveries only* — rejected once measured: an unstable selector rebuilds the subscription
+    every render, and each subscription is superseded before it resolves, so `useEventAsync` mutes
+    every emission and nothing is ever delivered. A probe produced 201 subscribe attempts in 200ms
+    with zero warnings — invisible to delivery counting, and it is precisely the loop the warning's
+    "memoize your parameters" advice describes.
+  - *Report `isLoading: false` while tripped* — rejected: it tells consumers that gate on loading
+    that this IS the answer, resolving a three-state interface-mode check to the wrong mode and
+    rendering raw localization keys as real strings. The value has not resolved and will be retried,
+    so `true` is the honest report.
+  - *Keep the trip permanent* (PT-1561's behavior) — rejected. Both designs stop the loop; the
+    subscription is dropped the moment the guard trips either way. The only question is whether the
+    stop expires. Priced out: the guard trips at 100 events in a 1s window and then sits tripped for
+    5s with fresh counters, so a genuinely stuck consumer costs ~100 events per ~5.1s ≈ 20/s against
+    a measured free-running ~1000/s — re-arming already removes ~98% of the damage, and latching
+    buys only the remaining ~20 events/s in a state that is already broken and already logging.
+    Against that, latching makes the false-positive case unbounded in time: the guard fires on a
+    *rate* signal, which cannot distinguish a bug from a Send/Receive burst, and a wrong guess under
+    a latch is recoverable only by closing the tab. A large open-ended harm traded for a small
+    closed one. Latching also has an unpaid bill — permanently stopping a pane is a state the user
+    must be told about and given a way out of, and neither PT-1561 nor this change builds that UI,
+    so "permanent" would mean silently unrecoverable. Finally, re-arming's repeated warning is the
+    diagnostic, not the defect: a latched trip warns once and goes quiet, which in the logs is
+    indistinguishable from a burst that resolved on its own, whereas a warning every 5s for as long
+    as the consumer is broken is what actually separates "someone ran an S/R" from "this component
+    has an unstable selector". PT-1561's trip path crashed the web view from the day it shipped and
+    nobody caught it, which is what a once-and-done signal buys.
+  - *Return the last delivered value instead of the error while tripped* — rejected: it removes the
+    only signal consumers have that anything is wrong, and a pane that looks normal while silently
+    refusing writes is more deceptive than one that reports an unresolved state. Note the accepted
+    design does mean a consumer substituting a fallback for a `PlatformError` will visibly swap
+    content for the cooldown's duration.
+  - *Escalating backoff* (5s, 10s, 20s…) — deferred, not rejected. It converges on permanent for a
+    truly stuck consumer while staying cheap for a burst, and is the natural answer to "can we have
+    both?". Not done here because the fixed cooldown already captures the ~50x reduction and backoff
+    adds state that has to be reasoned about and tested. Tracked as `PT-4502`.
+  - *Re-arm on selector or data provider change* — rejected as actively harmful: an unstable
+    selector, the very mistake being reported, gets a new identity every render, so this would reset
+    the counter every render and disarm the guard entirely. Re-arming must be time-based.
+  - *Fabricate a rejecting setter inside `useSetting` so its published tuple can keep promising a
+    callable setter* — rejected. It buys call sites the right to skip a null check by making the
+    published type disagree with the value `useData` actually hands back, and it leaves the three
+    hooks in the family describing the same condition three different ways. Widening the tuple is a
+    breaking type change for every `useSetting` setter call site, in this repo and in extensions,
+    but the break is a compile error at exactly the sites that have a decision to make, and
+    `setSetting?.(…)` is already the established shape at `useProjectSetting` call sites.
+  - *Keep the setter live while tripped* — rejected as destructive: consumers substitute a default
+    value for a `PlatformError`, so a live setter lets the first keystroke overwrite real content
+    with that default.
+- **Consequences:** Consumers of `useData`/`useProjectData`/`useSetting` may now observe a
+  `RESOURCE_EXHAUSTED` error, a temporarily `undefined` setter, and a `true` `isLoading` that later
+  resolves. `useSetting`'s published setter type is now optional, so every setter call site guards
+  it — either `setSetting?.(…)` or an explicit branch that says the control is unavailable, which is
+  what the user-facing ones (the profile popover, the first-run language step) do rather than
+  letting a click land on nothing. A genuine loop is bounded to one burst per cooldown rather than
+  stopped outright, which is a deliberate trade of absolute containment for self-healing.
+
+  **A repeatedly-tripping consumer cycles, and nothing tells the user.** For a transient burst the
+  cost is one cooldown, bounded and singular. For a consumer that is genuinely stuck — an unstable
+  `selector`, the mistake the warning names — it is not an episode but a cycle: trip → cooldown →
+  re-arm → ~100 subscribes → trip, for as long as the view stays open. Concretely, in
+  `platform-scripture-editor.web-view.tsx` a tripped `platform.interfaceMode` subscription means
+  `isInterfaceModeLoading` never resolves to `false`, so the editor renders its spinner branch
+  indefinitely, while `isPowerMode` falls back to `false` on every cycle — a Power user's editor
+  flips between Simple and Power every five seconds. There is no message and no way out but closing
+  the tab. This is the same unpaid bill charged against latching above, paid in flicker rather than
+  in stillness; what still separates them is that a self-expiring trip lets a FALSE positive recover
+  on its own, which a latch cannot. Bounding the cycle is `PT-4502` (escalating backoff), which also
+  carries the option of surfacing a repeated trip to the user.
+
+  The known limit: re-arming bounds *rate*, not *total*. If a stuck consumer accumulates something a trip does not release — memory,
+  subscriptions, IPC backlog — throttling to ~2% moves the wall out rather than removing it. The
+  bet is that a warning appearing in the console every 5s gets the consumer fixed in the session it
+  appears in; a named accumulation that survives a trip would be a real argument for latching (or
+  for `PT-4502`). Revisit if the thresholds prove wrong in the field — they remain
+  arbitrary, inherited from PT-1561.
+- **Source:** PT-4421; resubscribe-storm and burst behavior measured during review of this change.
