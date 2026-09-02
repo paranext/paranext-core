@@ -58,6 +58,16 @@ export type WebViewMoveInFlight = {
    * `namedWebViewId`/`webViewType`/`projectId` alone cannot answer.
    */
   capturedDefinition: SavedWebViewDefinition;
+  /**
+   * Whether a failed move has already put the web view back into a window under the captured id.
+   *
+   * A window reporting the captured spelling is ambiguous from the outside — it may be the target
+   * that adopted the view, or the source a recovery handed it back to — and the two want opposite
+   * treatment: the first is a view reported once and named once, the second is a view already in
+   * the read. Nothing about the ids can tell them apart, so the move records which happened while
+   * it still knows.
+   */
+  recoveredIntoWindow?: boolean;
 };
 
 /**
@@ -73,7 +83,40 @@ export type WebViewMoveInFlight = {
  * that: a passive probe answers not-found, and a caller that creates opens where the user is rather
  * than refuse for the length of a move.
  */
-export const webViewMovesInFlight = new Set<WebViewMoveInFlight>();
+const webViewMovesInFlight = new Set<WebViewMoveInFlight>();
+
+/**
+ * Record that a move has taken a web view out of its window and not yet put it into another. Pair
+ * with {@link deleteMoveInFlight} in a `finally`, so a move that throws still clears.
+ */
+export function addMoveInFlight(move: WebViewMoveInFlight): void {
+  webViewMovesInFlight.add(move);
+}
+
+/** Forget a move's record, once the move has settled either way */
+export function deleteMoveInFlight(move: WebViewMoveInFlight): void {
+  webViewMovesInFlight.delete(move);
+}
+
+/** Visit every open move's record, each exactly once */
+export function forEachMoveInFlight(visit: (move: WebViewMoveInFlight) => void): void {
+  webViewMovesInFlight.forEach(visit);
+}
+
+/**
+ * Put a record in without running a move, so a test can state the situation a read is supposed to
+ * handle. Reachable only through `testingWebViewServiceRouter`: a move that recovers sets its flag
+ * and throws with no await in between, so no test can drive a real move and observe the record it
+ * leaves.
+ */
+export function seedMoveInFlightForTesting(move: WebViewMoveInFlight): void {
+  webViewMovesInFlight.add(move);
+}
+
+/** Drop every record, so one test's unfinished move cannot be read by the next */
+export function clearMovesInFlightForTesting(): void {
+  webViewMovesInFlight.clear();
+}
 
 /** Whether a move in flight is holding the web view a search is looking for */
 export function isMatchedByMoveInFlight(matcher: OwnerMatcher): boolean {
