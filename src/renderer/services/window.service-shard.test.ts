@@ -615,6 +615,24 @@ describe('a window still waiting for its first activation', () => {
     await vi.waitFor(() => expect(focusTabMock).toHaveBeenCalledWith('tab-1'));
   });
 
+  test('lets the tab the user actually clicked win when it differs from the tab the catch-up is chasing', async () => {
+    // A user whose first gesture in the window is a click on a tab other than the one left waiting
+    // must end up with THAT tab focused — the click is what the user is looking at, and losing it to
+    // a stale catch-up would silently move focus out from under them. `getDockLayout()` resolves an
+    // already-registered dock, so the catch-up's `focusTab` call settles in a microtask ahead of the
+    // click's own `focusTab` call; this pins that ordering, not merely that both calls happened.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+    noteTabAwaitingDocumentFocus('tab-a');
+    focusTabMock.mockClear();
+
+    window.dispatchEvent(new Event('pointerdown'));
+    await engine.setFocus({ focusType: 'tab', id: 'tab-b' });
+
+    await vi.waitFor(() => expect(focusTabMock).toHaveBeenCalledWith('tab-a'));
+    expect(focusTabMock.mock.calls.map((call) => call[0])).toEqual(['tab-a', 'tab-b']);
+  });
+
   test('has nothing to catch up when no tab was left waiting', async () => {
     // The positive control: the catch-up must fire because a tab was deferred, not on every gesture.
     globalThis.wasWindowCreatedWithoutActivation = false;
