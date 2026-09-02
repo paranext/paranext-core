@@ -102,13 +102,20 @@ async function navigateToRef(mainPage: Page, refText: string, expectedRef: RegEx
   const commandInput = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await expect(commandInput).toBeVisible({ timeout: 5_000 });
   await commandInput.fill(refText);
-  // Wait for cmdk to highlight the top match (its text starts with the typed reference, e.g.
-  // "MRK 4" → "MRK 4:1"). Only then is Enter guaranteed to activate it. The `\b` anchor keeps a
-  // wrong-chapter highlight from false-passing: "MRK 4\b" accepts "MRK 4:1" but rejects
-  // "MRK 12:1" (and a hypothetical "MRK 40:1").
+  // Wait for cmdk to highlight the top match before pressing Enter, or Enter can activate whatever
+  // was highlighted before this query.
+  //
+  // Matched against `expectedRef`, NOT the typed text: the item renders through
+  // `formatScrRef(..., 'English')`, so typing the book CODE "MRK 4" produces an item reading
+  // "Mark 4:1". A locator built from the typed text can never match its own item, and because the
+  // locator then finds nothing the failure reads as "element(s) not found" — indistinguishable
+  // from the list never loading, and unfixable by any timeout.
+  //
+  // `expectedRef` carries the `\b` anchor that keeps a wrong-chapter highlight from false-passing:
+  // "Mark 4\b" accepts "Mark 4:1" but rejects "Mark 40:1".
   const highlightedTopMatch = mainPage.locator(
     '[data-radix-popper-content-wrapper] [cmdk-item][data-selected="true"]',
-    { hasText: new RegExp(`${refText}\\b`, 'i') },
+    { hasText: expectedRef },
   );
   await expect(highlightedTopMatch).toBeVisible({ timeout: 5_000 });
   await commandInput.press('Enter');
