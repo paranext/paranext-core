@@ -41,16 +41,23 @@ export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
       // events (breaking clicks); smoke tests drive the menubar/toolbar/profile popover and are not
       // about first-run, so they must start past it. Restored after the app closes in teardown.
       const restoreSettings = preConfigureSettings({ 'platform.firstRunComplete': true });
-      const ctx: ElectronAppContext = await launchElectronApp();
-
-      await use(ctx.electronApp);
-
-      console.log('[teardown] Worker-scoped app teardown starting...');
-      await teardownElectronApp(ctx);
-      // Restore only after the app has fully closed so its shutdown writes cannot clobber the
-      // restored contents.
-      restoreSettings();
-      console.log('[teardown] Worker-scoped app teardown complete — worker will exit now');
+      // Inside try/finally: a launch that throws — a bound port, a crash on start — gets no
+      // teardown from Playwright, so without this the pin above stays in CI's dev-appdata settings
+      // file. Same shape as comment.fixture.ts and isolated.fixture.ts.
+      try {
+        const ctx: ElectronAppContext = await launchElectronApp();
+        try {
+          await use(ctx.electronApp);
+        } finally {
+          console.log('[teardown] Worker-scoped app teardown starting...');
+          await teardownElectronApp(ctx);
+          console.log('[teardown] Worker-scoped app teardown complete — worker will exit now');
+        }
+      } finally {
+        // Restore only after the app has fully closed so its shutdown writes cannot clobber the
+        // restored contents.
+        restoreSettings();
+      }
     },
     { scope: 'worker' },
   ],
