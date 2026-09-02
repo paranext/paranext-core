@@ -6,17 +6,28 @@ import {
   ConsoleMessage,
 } from '@playwright/test';
 import {
+  assertInterfaceMode,
   launchElectronApp,
   teardownElectronApp,
   preConfigureSettings,
   ElectronAppContext,
   PROCESS_READY_TIMEOUT,
+  RequiredInterfaceMode,
 } from './helpers';
 
 export { expect } from '@playwright/test';
 
 /** Worker-scoped fixtures — one instance shared across all tests in a worker. */
 export interface WorkerAppFixtures {
+  /**
+   * The `platform.interfaceMode` value seeded into the shared dev-appdata settings file before the
+   * app launches (restored after teardown); set with `test.use({ interfaceMode: 'power' })`.
+   *
+   * Defaults to `'simple'` — the app's own no-pin fallback (`use-interface-mode.hook.ts`) — so a
+   * consumer that does not care about mode keeps the behavior this fixture always produced, now
+   * pinned and asserted rather than merely inherited from whatever the checkout happens to hold.
+   */
+  interfaceMode: RequiredInterfaceMode;
   electronApp: ElectronApplication;
 }
 
@@ -29,21 +40,29 @@ export interface TestAppFixtures {
 export type AppFixtures = WorkerAppFixtures & TestAppFixtures;
 
 export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
+  // Option fixture: see the WorkerAppFixtures doc for why the default is 'simple'.
+  interfaceMode: ['simple', { option: true, scope: 'worker' }],
+
   // Worker-scoped: the Electron process is launched once per worker and shared
   // across all tests, avoiding the process startup/teardown cost per test.
   electronApp: [
-    // Playwright fixtures require destructured parameter even when no dependencies are needed
-    // eslint-disable-next-line no-empty-pattern
-    async ({}, use) => {
+    async ({ interfaceMode }, use) => {
       // Seed platform.firstRunComplete before launch so the first-run wizard overlay (PT-4175) does
       // not gate the app on a fresh CI profile. The wizard is a full-screen modal Dialog that
       // aria-hides the rest of the app (breaking getByRole menu queries) and intercepts pointer
       // events (breaking clicks); smoke tests drive the menubar/toolbar/profile popover and are not
-      // about first-run, so they must start past it. Restored after the app closes in teardown.
-      const restoreSettings = preConfigureSettings({ 'platform.firstRunComplete': true });
-      // Inside try/finally: a launch that throws — a bound port, a crash on start — gets no
-      // teardown from Playwright, so without this the pin above stays in CI's dev-appdata settings
-      // file. Same shape as comment.fixture.ts and isolated.fixture.ts.
+      // about first-run, so they must start past it. interfaceMode and interfaceLanguage are pinned
+      // alongside it so mode-dependent UI and text-based selectors are deterministic regardless of
+      // the developer's saved settings. All restored after the app closes in teardown.
+      const restoreSettings = preConfigureSettings({
+        'platform.firstRunComplete': true,
+        'platform.interfaceMode': interfaceMode,
+        'platform.interfaceLanguage': ['en'],
+      });
+      // Nested try/finally: restoreSettings must run only after teardown has fully finished (so the
+      // app's own shutdown writes cannot clobber it), and must run even if launch, `use`, or
+      // teardown itself throws. A launch that throws gets no teardown from Playwright at all, so
+      // without the outer finally the pins above would stay in CI's dev-appdata settings file.
       try {
         const ctx: ElectronAppContext = await launchElectronApp();
         try {
@@ -54,15 +73,13 @@ export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
           console.log('[teardown] Worker-scoped app teardown complete — worker will exit now');
         }
       } finally {
-        // Restore only after the app has fully closed so its shutdown writes cannot clobber the
-        // restored contents.
         restoreSettings();
       }
     },
     { scope: 'worker' },
   ],
 
-  mainPage: async ({ electronApp }, use, testInfo: TestInfo) => {
+  mainPage: async ({ electronApp, interfaceMode }, use, testInfo: TestInfo) => {
     const page = await electronApp.firstWindow({ timeout: PROCESS_READY_TIMEOUT });
 
     // The Page object is shared within a worker. Use named functions so listeners
@@ -81,6 +98,16 @@ export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
 
     // Wait for React to mount
     await page.waitForSelector('#root', { state: 'attached', timeout: PROCESS_READY_TIMEOUT });
+
+    // Verify the mode this fixture just seeded actually took effect, before any test runs against a
+    // layout it was not written for. The seed merges into a shared settings file and can fail
+    // quietly; when it does, a suite runs in the other mode's layout and fails much later on an
+    // element that mode never renders, which reads as a timeout rather than a setup problem.
+    await assertInterfaceMode(
+      interfaceMode,
+      `This fixture seeded '${interfaceMode}' before launch and the app did not come up in it. ` +
+        `A suite selects its mode with test.use({ interfaceMode }).`,
+    );
 
     await use(page);
 

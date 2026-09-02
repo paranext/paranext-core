@@ -96,21 +96,21 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
         // (its Radix handlers all preventDefault) and aria-hides the rest of the app.
         'platform.firstRunComplete': true,
       });
-      // Inside try/finally: a launch that throws — a bound port, a crash on start — gets no
-      // teardown from Playwright, so without this the pin above stays in the developer's real
-      // settings file. The next run's global setup does recover it, but restoring here means their
-      // own next app start is already correct rather than one run later.
-      let ctx;
+      // Nested try/finally: restoreSettings must run only after teardown has fully finished (so the
+      // app's own shutdown writes cannot clobber it), and must run even if launch, `use`, or
+      // teardown itself throws. A launch that throws gets no teardown from Playwright at all, so
+      // without the outer finally the pins above would stay in the developer's real settings file.
       try {
-        ctx = await launchElectronApp({ envOverrides: { DEV_NOISY: 'false' } });
-        await use(ctx);
+        const ctx = await launchElectronApp({ envOverrides: { DEV_NOISY: 'false' } });
+        try {
+          await use(ctx);
+        } finally {
+          console.log('[teardown] Comment worker-scoped app teardown starting...');
+          await teardownElectronApp(ctx);
+          console.log('[teardown] Comment worker-scoped app teardown complete');
+        }
       } finally {
-        console.log('[teardown] Comment worker-scoped app teardown starting...');
-        if (ctx) await teardownElectronApp(ctx);
-        // Restore the developer's settings file only after the app has fully closed so the app's
-        // own shutdown writes cannot clobber the restored contents.
         restoreSettings();
-        console.log('[teardown] Comment worker-scoped app teardown complete');
       }
     },
     { scope: 'worker' },

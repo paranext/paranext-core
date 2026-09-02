@@ -98,13 +98,12 @@ export const test = appTest.extend<
   // `test.use({ windowSize: { width, height } })`.
   windowSize: [DEFAULT_WINDOW_SIZE, { option: true, scope: 'worker' }],
 
-  // Which interface mode the app is pinned to before launch. Simple is the default because that is
-  // what the Find suite drives; the Replace suite sets `test.use({ interfaceMode: 'power' })`,
-  // because Simple mode renders no Replace surface at all (`hideModeToggle`).
-  //
-  // Worker-scoped, and it must be: it is read before the app launches, and the app is shared by
-  // every test in the worker, so it cannot vary per test.
-  interfaceMode: ['simple', { option: true, scope: 'worker' }],
+  // Overrides app.fixture's own 'simple' default with the same value, kept explicit because this
+  // suite's choice is load-bearing rather than incidental: Simple is what the Find suite drives;
+  // the Replace suite sets `test.use({ interfaceMode: 'power' })`, because Simple mode renders no
+  // Replace surface at all (`hideModeToggle`). Already registered as a worker-scoped option
+  // fixture by app.fixture, so only the default value is redeclared here, not `option: true`.
+  interfaceMode: ['simple', { scope: 'worker' }],
 
   electronApp: [
     async ({ windowSize, interfaceMode }, use) => {
@@ -135,48 +134,43 @@ export const test = appTest.extend<
         'platform.interfaceMode': interfaceMode,
         'platform.interfaceLanguage': ['en'],
       });
-      // Inside its own try: a launch that throws — a bound port, a crash on start — would
-      // otherwise skip the restore and temp-dir cleanup below entirely, leaving the pin in the
-      // developer's settings file and one copied project per failed run in the OS temp dir. The
-      // next run's global setup does recover the settings pin from the backup, but restoring here
-      // means the developer's own next app start is already correct rather than one run later.
-      let ctx;
+      // Nested try/finally: the temp-dir cleanup and restoreSettings must run even if launch, `use`,
+      // or teardown itself throws, and restoreSettings specifically must run only after teardown has
+      // fully finished (so the app's own shutdown writes cannot clobber it). A launch that throws
+      // gets no teardown from Playwright at all, so without the outer finally the pin above would
+      // stay in the developer's settings file and the temp project dir would leak.
       try {
-        ctx = await launchElectronApp({
+        const ctx = await launchElectronApp({
           envOverrides: { DEV_NOISY: 'false', PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: projectsDir },
         });
-      } catch (err) {
-        restoreSettings();
-        fs.rmSync(projectsDir, { recursive: true, force: true });
-        throw err;
-      }
-      try {
-        // Size the window before any test runs. app.fixture (unlike isolated.fixture) never
-        // resizes, so without this the suite runs at whatever size the platform hands out — under a
-        // bare Xvfb that is not the 1280x800 the layout assertions are written against.
-        const page = await ctx.electronApp.firstWindow({ timeout: PROCESS_READY_TIMEOUT });
+        try {
+          // Size the window before any test runs. app.fixture (unlike isolated.fixture) never
+          // resizes, so without this the suite runs at whatever size the platform hands out — under
+          // a bare Xvfb that is not the 1280x800 the layout assertions are written against.
+          const page = await ctx.electronApp.firstWindow({ timeout: PROCESS_READY_TIMEOUT });
 
-        // Verify the pin took before any test runs. The two modes render genuinely different Find
-        // UIs — Simple hides the Find/Replace toggle and the entire Replace surface — so a pin that
-        // silently failed would otherwise surface as a selector timeout deep inside a test.
-        await assertInterfaceMode(
-          interfaceMode,
-          `This fixture pins '${interfaceMode}' before launching its own app, so the pin did not ` +
-            `take: check preConfigureSettings ran before launchElectronApp.`,
-        );
+          // Verify the pin took before any test runs. The two modes render genuinely different Find
+          // UIs — Simple hides the Find/Replace toggle and the entire Replace surface — so a pin
+          // that silently failed would otherwise surface as a selector timeout deep inside a test.
+          await assertInterfaceMode(
+            interfaceMode,
+            `This fixture pins '${interfaceMode}' before launching its own app, so the pin did ` +
+              `not take: check preConfigureSettings ran before launchElectronApp.`,
+          );
 
-        await applyDeclaredWindowSize(
-          ctx.electronApp,
-          page,
-          windowSize,
-          'The find fixture sets this size at launch; check that the window manager is not ' +
-            'overriding it.',
-        );
+          await applyDeclaredWindowSize(
+            ctx.electronApp,
+            page,
+            windowSize,
+            'The find fixture sets this size at launch; check that the window manager is not ' +
+              'overriding it.',
+          );
 
-        await use(ctx.electronApp);
+          await use(ctx.electronApp);
+        } finally {
+          await teardownElectronApp(ctx);
+        }
       } finally {
-        await teardownElectronApp(ctx);
-        // Restore only after the app has fully closed so its shutdown writes cannot clobber it.
         restoreSettings();
         fs.rmSync(projectsDir, { recursive: true, force: true });
       }
