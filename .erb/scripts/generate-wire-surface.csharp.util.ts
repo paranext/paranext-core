@@ -896,12 +896,47 @@ function assertAtMostOneMatch(
 }
 
 /**
+ * The offset, within a class body, of the `(` opening that class's OWN `: base(...)` call — or -1.
+ *
+ * Matched at the body's own nesting depth. A constructor's `: base(...)` sits between its parameter
+ * list and its body, so the class's own is at depth 0, while one belonging to a type nested inside
+ * the class is within that type's braces and deeper. Taking the first match at any depth would let
+ * a nested type declared above the constructor win, which is the same misattribution this scoping
+ * exists to stop, one level further in.
+ */
+function indexOfOwnBaseCall(body: string): number {
+  let i = 0;
+  let depth = 0;
+  while (i < body.length) {
+    const next = skipTrivia(body, i);
+    const ch = body[i];
+    if (next !== i) {
+      i = next;
+    } else if (ch === '(' || ch === '{' || ch === '[') {
+      depth += 1;
+      i += 1;
+    } else if (ch === ')' || ch === '}' || ch === ']') {
+      depth -= 1;
+      i += 1;
+    } else {
+      if (ch === ':' && depth === 0) {
+        const match = BASE_CALL_RE.exec(body.slice(i));
+        if (match?.index === 0) return i + match[0].length - 1;
+      }
+      i += 1;
+    }
+  }
+  return -1;
+}
+
+/**
  * The index of the `(` that opens the traditional-form provider's own `: base(...)` call.
  *
- * Scoped to that class's body. A `: base(` belonging to any other type in the file — a helper class
- * declared above it, say — is not this provider's, and reading one would record whatever that
- * constructor passes first as this provider's wire name: an entry that is confidently wrong, which
- * the live check then reports as a disagreement against correct code.
+ * Scoped to that class's body, and within it to the body's own nesting depth (see
+ * {@link indexOfOwnBaseCall}). A `: base(` belonging to any other type — a helper class declared
+ * above this one in the file, or a type nested inside it — is not this provider's, and reading one
+ * would record whatever that constructor passes first as this provider's wire name: an entry that
+ * is confidently wrong, which the live check then reports as a disagreement against correct code.
  *
  * `DataProvider` declares a single constructor and it takes arguments, so a direct subclass cannot
  * compile without reaching `: base(...)` from inside its own body (directly, or through a `:
@@ -916,14 +951,14 @@ function findBaseCallOpenIndex(
 ): number {
   const bodyStart = masked.indexOf('{', traditionalMatch.index + traditionalMatch[0].length);
   const body = bodyStart === -1 ? undefined : matchBracket(masked, bodyStart);
-  const baseMatch = body ? BASE_CALL_RE.exec(body.inner) : undefined;
-  if (!body || !baseMatch)
+  const relativeIndex = body ? indexOfOwnBaseCall(body.inner) : -1;
+  if (!body || relativeIndex === -1)
     throw new Error(
       `${filePath} declares a DataProvider subclass with no \`: base(\` call in its own class ` +
         `body. That cannot compile, so the class body was read wrong — fix the scanner rather ` +
         `than let the provider vanish from the snapshot.`,
     );
-  return bodyStart + 1 + baseMatch.index + baseMatch[0].length - 1;
+  return bodyStart + 1 + relativeIndex;
 }
 
 /**
