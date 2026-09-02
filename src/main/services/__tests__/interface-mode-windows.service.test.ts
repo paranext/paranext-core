@@ -3,6 +3,7 @@ import { logger } from '@shared/services/logger.service';
 import {
   clearModeSwitchClose,
   getCachedInterfaceMode,
+  seedInterfaceMode,
   handleInterfaceModeChanged,
   initializeModeSwitchOrchestration,
   isAdditionalWindowRefusedInSimpleMode,
@@ -54,6 +55,36 @@ describe('reacting to an interface-mode change', () => {
 
     expect(deps.closeWindow).not.toHaveBeenCalled();
     expect(deps.createWindowForEntry).not.toHaveBeenCalled();
+  });
+
+  test('an ordinary simple launch does not run the switch reaction', async () => {
+    // The launch-path regression this guards: the restore reports the mode it acted on, and the
+    // window set already matches it. Reacting anyway would focus the survivor — which un-minimizes
+    // a window started minimized and pulls a window in front of a user who has moved on.
+    const deps = makeDeps({ getTrackedWindowIds: () => [1] });
+    initializeModeSwitchOrchestration(deps, undefined);
+
+    seedInterfaceMode('simple');
+    await handleInterfaceModeChanged('simple');
+
+    expect(deps.focusWindow).not.toHaveBeenCalled();
+    expect(deps.closeWindow).not.toHaveBeenCalled();
+    expect(deps.createWindowForEntry).not.toHaveBeenCalled();
+  });
+
+  test('a seed records the mode without acting on it', async () => {
+    // The negative control for the test above: seeding must be a record, not a switch — and the
+    // mode it records has to be the one a later change is compared against.
+    const deps = makeDeps({ getPreservedEntrySlotIds: () => [11] });
+    initializeModeSwitchOrchestration(deps, undefined);
+
+    seedInterfaceMode('power');
+
+    expect(getCachedInterfaceMode()).toBe('power');
+    expect(deps.createWindowForEntry).not.toHaveBeenCalled();
+    // …and a real change away from the seeded mode is still acted on
+    await handleInterfaceModeChanged('simple');
+    expect(deps.closeWindow).toHaveBeenCalled();
   });
 
   test('switching to simple closes every window but the primary', async () => {

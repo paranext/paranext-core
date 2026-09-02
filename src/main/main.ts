@@ -141,6 +141,7 @@ import {
   initializeModeSwitchOrchestration,
   isAdditionalWindowRefusedInSimpleMode,
   isClosingForModeSwitch,
+  seedInterfaceMode,
 } from '@main/services/interface-mode-windows.service';
 import { summarizeWindows } from '@main/window-summary.util';
 import {
@@ -1655,12 +1656,34 @@ async function main() {
    * Runs at startup and again on macOS re-activation after the last window closed (the quit-like
    * close path flushed the structure when that window went down).
    */
+  /**
+   * The interface mode, read once a window exists to show the user something.
+   *
+   * Every path through the restore reports what it read, because the mode the restore ACTED on is
+   * what the window orchestration is seeded with. A path that returned nothing would leave the
+   * orchestration's mode unknown, and the first notification to arrive would then look like a
+   * change — running a switch reaction on an ordinary launch, which un-minimizes a window started
+   * minimized and pulls a window in front of a user who has already moved on.
+   */
+  const readInterfaceModeForRestore = async (): Promise<
+    SettingTypes['platform.interfaceMode'] | undefined
+  > => {
+    try {
+      return await settingsService.get('platform.interfaceMode');
+    } catch (e) {
+      logger.warn(
+        `Could not read platform.interfaceMode; restoring only the main window: ${getErrorMessage(e)}`,
+      );
+      return undefined;
+    }
+  };
+
   const restoreWindows = async (): Promise<SettingTypes['platform.interfaceMode'] | undefined> => {
     const plan = await loadWindowLayouts();
     if (plan.kind === 'legacy') {
       const legacyWindow = await createWindow({ kind: 'legacy', boundsState: plan.boundsState });
       setMainWindowId(legacyWindow.id);
-      return undefined;
+      return readInterfaceModeForRestore();
     }
 
     // The main entry's window is created first — before the interface-mode read below, which can
@@ -1673,20 +1696,17 @@ async function main() {
       entry: entries[mainEntryIndex],
     });
     setMainWindowId(mainWindow.id);
-    if (entries.length <= 1) return undefined;
 
     // Simple mode is single-window: restore only the main window no matter how many entries the
     // structure holds. Same when the mode cannot be read — restoring too few is recoverable
     // because an entry not assigned to a window this session is preserved in the structure, while
     // restoring too many would put a Power user's secondary windows on a Simple user's screen.
-    let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
-    try {
-      interfaceMode = await settingsService.get('platform.interfaceMode');
-    } catch (e) {
-      logger.warn(
-        `Could not read platform.interfaceMode; restoring only the main window: ${getErrorMessage(e)}`,
-      );
-    }
+    //
+    // Read even when there is only one entry, which is every Simple user and every fresh install:
+    // the value is what seeds the orchestration, and a single-entry launch that reported nothing
+    // would leave the mode unknown and make the first notification look like a switch.
+    const interfaceMode = await readInterfaceModeForRestore();
+    if (entries.length <= 1) return interfaceMode;
     if (interfaceMode !== 'power') return interfaceMode;
 
     for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
@@ -1916,11 +1936,11 @@ async function main() {
             }
             await handleInterfaceModeChanged(newMode);
           },
-          // Retrieved immediately, so a change made while the restore was still creating windows
-          // — after it read the mode, before this subscription existed — is caught and acted on
-          // rather than missed for the rest of the session. A value matching the seed costs
-          // nothing: the reaction returns at once when the mode has not changed.
-          { retrieveDataImmediately: true },
+          // Not retrieved immediately. The restore reports the mode it acted on and that value is
+          // the seed, so an initial delivery could only ever repeat it — and treating it as a
+          // change would run a switch reaction on an ordinary launch, un-minimizing a window
+          // started minimized and pulling a window in front of a user who has moved on.
+          { retrieveDataImmediately: false },
         );
       } catch (e) {
         logger.warn(`Failed to subscribe to interface mode changes: ${getErrorMessage(e)}`);
@@ -1949,7 +1969,9 @@ async function main() {
             restoreWindowsInFlight = restoreWindows().finally(() => {
               restoreWindowsInFlight = undefined;
             });
-          await restoreWindowsInFlight;
+          // Seeded from this restore too. A session that reactivates with no windows reads the mode
+          // again, and the orchestration has to agree with the window set this restore just built.
+          seedInterfaceMode(await restoreWindowsInFlight);
         } catch (e) {
           logger.error(`Failed to restore windows on activate: ${getErrorMessage(e)}`);
         }
