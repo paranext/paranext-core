@@ -11,6 +11,7 @@ import {
   isClosingForModeSwitch,
   undoModeSwitchClose,
   resetForTesting,
+  type InterfaceMode,
   type ModeSwitchDependencies,
 } from '@main/services/interface-mode-windows.service';
 
@@ -37,6 +38,7 @@ function makeDeps(overrides: Partial<ModeSwitchDependencies> = {}): ModeSwitchDe
     isAppShuttingDown: () => false,
     getPreservedEntryIds: () => [],
     createWindowForEntry: vi.fn(async () => {}),
+    writeInterfaceModeSetting: vi.fn(async () => {}),
     ...overrides,
   };
 }
@@ -89,7 +91,7 @@ describe('reacting to an interface-mode change', () => {
     // for the current value — so the first delivery to arrive is the first this process has seen,
     // whether or not anything changed. Acting on it would run a switch reaction on an ordinary
     // session, off the back of some unrelated setting being written.
-    const deps = makeDeps({ getPreservedEntrySlotIds: () => [11, 12] });
+    const deps = makeDeps({ getPreservedEntryIds: () => ['11', '12'] });
     initializeModeSwitchOrchestration(deps, undefined);
 
     await handleInterfaceModeChanged('simple');
@@ -109,7 +111,7 @@ describe('reacting to an interface-mode change', () => {
     // them has its own path.
     const deps = makeDeps({
       getTrackedWindowIds: () => [],
-      getPreservedEntrySlotIds: () => [11, 12],
+      getPreservedEntryIds: () => ['11', '12'],
     });
     initializeModeSwitchOrchestration(deps, 'simple');
 
@@ -136,7 +138,7 @@ describe('reacting to an interface-mode change', () => {
 
   test('a switch to power with no window counts as one too', async () => {
     // The same rule for the other branch that records a mode without acting on it
-    const deps = makeDeps({ getTrackedWindowIds: () => [], getPreservedEntrySlotIds: () => [11] });
+    const deps = makeDeps({ getTrackedWindowIds: () => [], getPreservedEntryIds: () => ['11'] });
     initializeModeSwitchOrchestration(deps, 'simple');
     const generationBeforeRestore = getSwitchGeneration();
 
@@ -441,12 +443,62 @@ describe('reacting to an interface-mode change', () => {
     // No window closed (the case above), so nothing about the window set changed. A cache moved to
     // simple here would make the same-value guard swallow every later delivery of it — including one
     // that arrives after the abandoned window is gone and a real switch has become possible again.
-    const deps = makeDeps({ isWindowAbandoned: (windowId) => windowId === 1 });
+    const deps = makeDeps({ isWindowAbandoned: (windowId) => windowId === '1' });
     initializeModeSwitchOrchestration(deps, 'power');
 
     await handleInterfaceModeChanged('simple');
 
     expect(getCachedInterfaceMode()).toBe('power');
+  });
+
+  test('a switch to simple that closes nothing writes the setting back to the previous mode', async () => {
+    // The setting on disk was already written to simple by whoever asked for the switch, and every
+    // renderer follows that setting through its own local copy. In simple mode only the window
+    // carrying the primary role saves a layout, and this switch left none carrying it — so without
+    // this write-back every renderer would silently stop saving layout changes until the user
+    // toggled the mode again by hand.
+    const deps = makeDeps({ isWindowAbandoned: (windowId) => windowId === '1' });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(deps.writeInterfaceModeSetting).toHaveBeenCalledWith('power');
+  });
+
+  test('the write-back redelivering the same mode cannot start a second switch', async () => {
+    // The write below stands in for the real settings subscription redelivering the value it just
+    // wrote, calling straight back into the same handler the way the live subscription would.
+    // Nothing about the window set should move a second time: the cache was already rolled back to
+    // the previous mode before the write ran, so the redelivery meets the same-value guard and
+    // returns immediately.
+    const deps = makeDeps({ isWindowAbandoned: (windowId) => windowId === '1' });
+    const writeInterfaceModeSetting = vi.fn(async (mode: InterfaceMode) => {
+      await handleInterfaceModeChanged(mode);
+    });
+    initializeModeSwitchOrchestration({ ...deps, writeInterfaceModeSetting }, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(writeInterfaceModeSetting).toHaveBeenCalledTimes(1);
+    expect(deps.closeWindow).not.toHaveBeenCalled();
+    expect(deps.createWindowForEntry).not.toHaveBeenCalled();
+    expect(getCachedInterfaceMode()).toBe('power');
+  });
+
+  test('a failed write-back is reported rather than swallowed', async () => {
+    const deps = makeDeps({
+      isWindowAbandoned: (windowId) => windowId === '1',
+      writeInterfaceModeSetting: vi.fn(async () => {
+        throw new Error('settings data provider unreachable');
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('settings data provider unreachable'),
+    );
   });
 
   test('a window already on its way out cannot be the window a switch leaves behind', async () => {
@@ -455,7 +507,7 @@ describe('reacting to an interface-mode change', () => {
     // closing the rest ends with no window at all, one close later, which is the outcome the floor
     // above exists to refuse.
     const deps = makeDeps({
-      isWindowClosing: (windowId) => windowId === 1,
+      isWindowClosing: (windowId) => windowId === '1',
     });
     initializeModeSwitchOrchestration(deps, 'power');
 
@@ -611,20 +663,20 @@ describe('reacting to an interface-mode change', () => {
     // A superseded reopen only notices it has been superseded between windows, so it is still
     // creating one when the switch that replaced it arrives. An entry stays preserved until its
     // window exists, so two reopens running together read the same entry and create it twice.
-    const created: number[] = [];
-    let preserved = [11];
+    const created: string[] = [];
+    let preserved = ['11'];
     let releaseFirstWindow = () => {};
     const firstWindowCreated = new Promise<void>((resolve) => {
       releaseFirstWindow = resolve;
     });
     const deps = makeDeps({
-      getTrackedWindowIds: () => [1],
-      getPreservedEntrySlotIds: () => preserved,
-      createWindowForEntry: vi.fn(async (slotId: number) => {
-        created.push(slotId);
-        if (slotId === 11) await firstWindowCreated;
+      getTrackedWindowIds: () => ['1'],
+      getPreservedEntryIds: () => preserved,
+      createWindowForEntry: vi.fn(async (entryWindowId: string) => {
+        created.push(entryWindowId);
+        if (entryWindowId === '11') await firstWindowCreated;
         // A window exists now, so its entry stops being one with nothing on screen
-        preserved = preserved.filter((candidate) => candidate !== slotId);
+        preserved = preserved.filter((candidate) => candidate !== entryWindowId);
       }),
     });
     initializeModeSwitchOrchestration(deps, 'simple');
@@ -639,7 +691,7 @@ describe('reacting to an interface-mode change', () => {
     await firstSwitchBack;
     await secondSwitchBack;
 
-    expect(created).toEqual([11]);
+    expect(created).toEqual(['11']);
   });
 
   test('a close reporting in while the mode still reads simple reopens nothing', async () => {
