@@ -103,6 +103,52 @@ export type IdentifiedDisplayLike = DisplayLike & { id: number };
  * @param msSinceDisplayChange How long the window has been on the display it is on now
  * @returns Whether the placement can be persisted
  */
+/**
+ * What a window's capture remembers about which display it is on, and since when.
+ *
+ * Keyed on the display the bounds lie fully WITHIN — the same question
+ * {@link areCapturedBoundsTrustworthy} asks — and `undefined` while they lie in none, which is the
+ * straddle. Anything looser starts the settle clock while the window is still crossing.
+ */
+export type DisplaySettleState = {
+  /** Display the bounds lie fully within, or `undefined` while they lie in none */
+  displayId: number | undefined;
+  /** When the window was first seen in that state */
+  since: number;
+};
+
+/**
+ * Advance a window's settle state for the placement just captured.
+ *
+ * The clock this returns is what {@link areCapturedBoundsTrustworthy} measures against, so the two
+ * have to agree about what "a different display" means. They agree by construction here: both ask
+ * which display the bounds lie fully WITHIN. Keyed off the nearest display instead — Electron's
+ * `getDisplayMatching`, which flips once the window merely overlaps the new display more than the
+ * old — the clock would start around the halfway point of a crossing rather than at its end, and a
+ * drag the user rests mid-crossing for longer than {@link DISPLAY_SETTLE_MS} would land with the
+ * settle period already spent. The capture taken at that moment is exactly the one the guard exists
+ * to refuse.
+ *
+ * A straddle is a state of its own (`displayId` `undefined`), not a continuation of the display
+ * being left, so landing is always a change and always restarts the clock.
+ *
+ * @param bounds Placement captured just now
+ * @param displays Displays connected right now
+ * @param previous State the last capture returned
+ * @param now Time of this capture
+ * @returns `previous` unchanged while the window stays where it was, or a state starting the clock
+ *   at `now`
+ */
+export function trackDisplaySettle(
+  bounds: WindowRectangle,
+  displays: readonly IdentifiedDisplayLike[],
+  previous: DisplaySettleState,
+  now: number,
+): DisplaySettleState {
+  const displayId = displays.find((display) => isContainedIn(bounds, display))?.id;
+  return displayId === previous.displayId ? previous : { displayId, since: now };
+}
+
 export function areCapturedBoundsTrustworthy(
   bounds: WindowRectangle,
   displays: readonly IdentifiedDisplayLike[],
