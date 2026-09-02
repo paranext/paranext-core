@@ -44,7 +44,10 @@ import {
 
 import { TAB_TYPE_BUTTONS, loadButtonsTab } from '@renderer/testing/test-buttons-panel.component';
 import { TAB_TYPE_TEST, loadTestTab } from '@renderer/testing/test-panel.component';
-import { noteTabAwaitingDocumentFocus } from '@renderer/services/window-activation.util';
+import {
+  isWindowAwaitingFirstActivation,
+  noteTabAwaitingDocumentFocus,
+} from '@renderer/services/window-activation.util';
 import {
   TAB_TYPE_QUICK_VERSE_HERESY,
   loadQuickVerseHeresyTab,
@@ -797,7 +800,7 @@ export function updateWebViewDefinition(
   updateInfo: WebViewDefinitionUpdateInfo,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
-  activateWithoutDocumentFocus = false,
+  activateWithoutDocumentFocus?: boolean,
 ): boolean {
   const [targetTabInfo, targetTabWebViewData] = getWebViewTabInfoById(
     webViewId,
@@ -905,7 +908,7 @@ export function containsTab(dockLayout: DockLayout, tabOrTabGroupId: string): bo
 export function focusTab(
   dockLayout: DockLayout,
   tabId: string,
-  activateWithoutDocumentFocus = false,
+  activateWithoutDocumentFocus?: boolean,
 ): boolean {
   // Bring the tab to front of its tab group
   // `rc-dock` requires null here to mean "don't change the tab data"
@@ -937,7 +940,7 @@ function updateTab(
   tabInfo: RCDockTabInfo,
   shouldBringToFront: boolean,
   tabIdToReplace?: string,
-  activateWithoutDocumentFocus = false,
+  activateWithoutDocumentFocus?: boolean,
 ): boolean {
   const tabId = tabIdToReplace ?? tabInfo.id;
 
@@ -994,7 +997,7 @@ export function addTabToDock(
   layout: Layout,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
-  activateWithoutDocumentFocus = false,
+  activateWithoutDocumentFocus?: boolean,
 ): Layout | undefined {
   const tab = loadTab(savedTabInfo, shouldBringToFront);
   let targetTab = dockLayout.find(tab.id);
@@ -1196,7 +1199,7 @@ export function addWebViewToDock(
   layout: Layout,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
-  activateWithoutDocumentFocus = false,
+  activateWithoutDocumentFocus?: boolean,
 ): Layout | undefined {
   const tabId = webView.id;
   if (!tabId)
@@ -1227,16 +1230,19 @@ export function addWebViewToDock(
  *   active, but document focus is left where it is. Focusing a tab focuses its web view's iframe,
  *   and a `focus()` inside a window that does not hold OS focus asks the browser to activate that
  *   window — which would pull a window opened deliberately in the background to the front as soon
- *   as content arrived in it.
+ *   as content arrived in it. Left unspecified, this defaults to whether this window is still
+ *   awaiting its first activation, so a door into the dock that does not know this parameter exists
+ *   still gets the right answer instead of unconditionally taking focus.
  */
 function revealTabGroupAndSetDocumentFocusToTab(
   dockLayout: DockLayout,
   tabId: string,
-  activateWithoutDocumentFocus = false,
+  activateWithoutDocumentFocus?: boolean,
 ): void {
   unmaximizeAnyMaximizedTabGroup(dockLayout, tabId);
   bringFloatingTabGroupToFront(dockLayout, tabId);
-  if (activateWithoutDocumentFocus) noteTabAwaitingDocumentFocus(tabId);
+  if (activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation())
+    noteTabAwaitingDocumentFocus(tabId);
   else setDocumentFocusToTab(dockLayout, tabId);
 }
 
