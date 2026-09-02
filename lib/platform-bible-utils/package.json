@@ -27,9 +27,7 @@
   "types": "dist/index.d.ts",
   "typesVersions": {
     "*": {
-      "experimental": [
-        "./dist/experimental.d.ts"
-      ]
+      "experimental": ["./dist/experimental.d.ts"]
     }
   },
   "exports": {
@@ -44,9 +42,7 @@
       "require": "./dist/experimental.cjs"
     }
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "start": "vite --host --open",
     "build:basic": "tsc && vite build && dts-bundle-generator --config ./dts-bundle-generator.config.cts",
