@@ -187,13 +187,14 @@ export async function findOwner(
     matches.find((candidate) => candidate.windowId === targetWindowId) ??
     matches.sort((a, b) => a.windowId - b.windowId)[0];
   // Both matchers mean "the one in the app", and they differ in what backs that up rather than in
-  // what they intend. For an `id` matcher it is enforced: `withWindowScopedWebViewIds` suffixes
-  // every id with its window at creation, so two windows answering the same id search means that
-  // scoping was bypassed somehow — worth alarming a log reader over. `existingId: '?'` says the
-  // same thing about a TYPE: callers reach for it precisely for the views the app means to have one
-  // of app-wide. Nothing enforces that one — simple mode loads the same static layout into every
-  // window with no per-window scoping — so a second copy is a state the app can be observed in, not
-  // one it intends. Reported at debug for that reason: it says which copy was picked without
+  // what they intend. For an `id` matcher it is enforced: every web view id is minted fresh and
+  // globally unique at the moment it is created (`openWebView`) or a baked layout constant is
+  // materialized into a window (`mintFreshWebViewIds`), so two windows answering the same id search
+  // means that guarantee was bypassed somehow — worth alarming a log reader over. `existingId: '?'`
+  // says the same thing about a TYPE: callers reach for it precisely for the views the app means to
+  // have one of app-wide. Nothing enforces that one — simple mode materializes a fresh copy of the
+  // same static layout into every window — so a second copy is a state the app can be observed in,
+  // not one it intends. Reported at debug for that reason: it says which copy was picked without
   // claiming something is broken.
   if (matches.length > 1) {
     if (matcher.kind === 'id')
