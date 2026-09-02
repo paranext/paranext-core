@@ -890,6 +890,37 @@ function assertAtMostOneMatch(
 }
 
 /**
+ * The index of the `(` that opens the traditional-form provider's own `: base(...)` call.
+ *
+ * Scoped to that class's body. A `: base(` belonging to any other type in the file — a helper class
+ * declared above it, say — is not this provider's, and reading one would record whatever that
+ * constructor passes first as this provider's wire name: an entry that is confidently wrong, which
+ * the live check then reports as a disagreement against correct code.
+ *
+ * `DataProvider` declares a single constructor and it takes arguments, so a direct subclass cannot
+ * compile without reaching `: base(...)` from inside its own body (directly, or through a `:
+ * this(...)` chain that ends there). A body without one therefore means the body was read wrong,
+ * not that the provider has no name — so this throws rather than return nothing and let the
+ * provider drop out of the snapshot unnoticed.
+ */
+function findBaseCallOpenIndex(
+  masked: string,
+  traditionalMatch: RegExpExecArray,
+  filePath: string,
+): number {
+  const bodyStart = masked.indexOf('{', traditionalMatch.index + traditionalMatch[0].length);
+  const body = bodyStart === -1 ? undefined : matchBracket(masked, bodyStart);
+  const baseMatch = body ? BASE_CALL_RE.exec(body.inner) : undefined;
+  if (!body || !baseMatch)
+    throw new Error(
+      `${filePath} declares a DataProvider subclass with no \`: base(\` call in its own class ` +
+        `body. That cannot compile, so the class body was read wrong — fix the scanner rather ` +
+        `than let the provider vanish from the snapshot.`,
+    );
+  return bodyStart + 1 + baseMatch.index + baseMatch[0].length - 1;
+}
+
+/**
  * A class extending `DataProvider` directly, whose constructor passes its name to the base
  * constructor — either the primary-constructor form (`class X(...) : DataProvider(name, ...)`) or
  * the traditional form (`class X : DataProvider { X(...) : base(name, ...) {} }`).
@@ -914,9 +945,10 @@ function scanDataProviderSubclassConstructors(
   let openIndex: number | undefined;
   if (primaryMatch) {
     openIndex = primaryMatch.index + primaryMatch[0].length - 1;
-  } else if (TRADITIONAL_DATA_PROVIDER_RE.test(masked)) {
-    const baseMatch = BASE_CALL_RE.exec(masked);
-    if (baseMatch) openIndex = baseMatch.index + baseMatch[0].length - 1;
+  } else {
+    assertAtMostOneMatch(TRADITIONAL_DATA_PROVIDER_RE, masked, file.path, 'DataProvider subclass');
+    const traditionalMatch = TRADITIONAL_DATA_PROVIDER_RE.exec(masked);
+    if (traditionalMatch) openIndex = findBaseCallOpenIndex(masked, traditionalMatch, file.path);
   }
   if (openIndex === undefined) return;
 
