@@ -233,6 +233,31 @@ export async function applyDeclaredWindowSize(
   }).toPass({ timeout: 15_000 });
 }
 
+/**
+ * Budget for a wait that gates on a cold app launch — extension host activation, PDP factory
+ * registration, the settings data provider's first read.
+ *
+ * On the coldest first Electron launch after a fresh dev-server start — ts-node transpiling the
+ * extension host, the C# data provider booting, extensions activating — a factory has been observed
+ * taking over 60s to appear in `rpc.discover`, so 60s budgets lose the race and fail runs that
+ * would have passed moments later. Pure patience: these are polling waits, so warm launches return
+ * in seconds and a generous budget costs green runs nothing.
+ */
+export const LAUNCH_PHASE_TIMEOUT_MS = 120_000;
+
+/**
+ * How long ONE attempt inside a polling wait may take, given the budget the whole wait has left.
+ *
+ * A poll that hands its entire remaining budget to each request stops being a poll: one request
+ * that hangs consumes everything and the loop takes exactly one sample, which is the case the retry
+ * was written for. Capped well below any realistic total so the loop always gets more attempts, and
+ * floored so a nearly-spent budget still makes a request worth making rather than one that reports
+ * a timeout it was never given the chance to beat.
+ */
+export function singleAttemptBudgetMs(remainingMs: number): number {
+  return Math.min(10_000, Math.max(1000, remainingMs));
+}
+
 /** The two interface modes a spec can require. Mirrors `SettingTypes['platform.interfaceMode']`. */
 export type RequiredInterfaceMode = 'simple' | 'power';
 
@@ -281,7 +306,7 @@ export type RequiredInterfaceMode = 'simple' | 'power';
 export async function assertInterfaceMode(
   required: RequiredInterfaceMode,
   howToFix: string,
-  timeoutMs = 60_000,
+  timeoutMs = LAUNCH_PHASE_TIMEOUT_MS,
 ): Promise<void> {
   const start = Date.now();
   let actual: string | undefined;
@@ -294,7 +319,7 @@ export async function assertInterfaceMode(
     await expect
       .poll(
         async () => {
-          const remainingForGet = Math.max(1000, timeoutMs - (Date.now() - start));
+          const remainingForGet = singleAttemptBudgetMs(timeoutMs - (Date.now() - start));
           try {
             actual = await sendPapiRequestOnce<string | undefined>(
               SETTINGS_GET_METHOD,
@@ -695,7 +720,7 @@ export async function waitForPapiMethodRegistered(
         GET_METHODS,
         [],
         port,
-        Math.min(10_000, Math.max(1000, remaining)),
+        singleAttemptBudgetMs(remaining),
       );
       if (result.methods?.some((m) => isMatch(m.name))) return;
     } catch {
@@ -759,7 +784,7 @@ export async function waitForProjectMetadata(
         PROJECT_LOOKUP_GET_ALL_PROJECTS_METHOD,
         [],
         port,
-        Math.min(10_000, Math.max(1000, remaining)),
+        singleAttemptBudgetMs(remaining),
       );
       if (Array.isArray(result) && result.some((project) => matches(project ?? {}))) return;
     } catch {

@@ -1,5 +1,10 @@
 import { type Frame, type Page } from '@playwright/test';
-import { SAMPLE_WEB_PROJECT_ID, sendPapiRequestOnce, waitForPapiMethodRegistered } from './helpers';
+import {
+  LAUNCH_PHASE_TIMEOUT_MS,
+  SAMPLE_WEB_PROJECT_ID,
+  sendPapiRequestOnce,
+  waitForPapiMethodRegistered,
+} from './helpers';
 
 // Re-exported so the specs that reach for it through this module keep working: it is defined in
 // helpers.ts, which is the lower-level module and the single home for it.
@@ -19,17 +24,6 @@ export interface OpenScriptureEditorOptions {
 }
 const WEBSOCKET_PORT = 8876;
 const COMMAND_TIMEOUT_MS = 30_000;
-/**
- * Budget for anchors that gate on a cold app launch (extension host activation, Paratext PDP
- * factory registration, dock layout render). On the coldest first Electron launch after a fresh
- * dev-server start — ts-node transpiling the extension host, the C# data provider booting,
- * extensions activating — the Paratext factory has been observed taking over 60s to appear in
- * rpc.discover, so 60s budgets lose the race and fail runs that would have passed moments later.
- * Pure patience: these are polling waits, so warm launches return in seconds and a generous budget
- * costs green runs nothing.
- */
-const LAUNCH_PHASE_TIMEOUT_MS = 120_000;
-
 /**
  * Poll until the ProjectLookupService advertises the bundled sample WEB project. The generic
  * `waitForAtLeastOneProjectMetadata` is NOT sufficient here: other PDP factories (e.g. the lexical
