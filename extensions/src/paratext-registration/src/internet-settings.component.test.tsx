@@ -54,10 +54,10 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%': '',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
   '%paratextRegistration_developer_section_label%': 'Developer only',
-  '%paratextRegistration_label_serverType_option_Production%': 'Production',
-  '%paratextRegistration_label_serverType_option_QualityAssurance%': 'Quality Assurance',
-  '%paratextRegistration_label_serverType_option_Development%': 'Development',
-  '%paratextRegistration_label_serverType_option_Test%': 'Test',
+  '%paratextRegistration_label_serverType_option_Production%': 'Production server',
+  '%paratextRegistration_label_serverType_option_QualityAssurance%': 'Quality Assurance server',
+  '%paratextRegistration_label_serverType_option_Development%': 'Development server',
+  '%paratextRegistration_label_serverType_option_Test%': 'Test server',
 };
 
 const defaultSettings: InternetSettings = {
