@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  areCapturedBoundsTrustworthy,
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
   ensureBoundsVisibleOnSomeDisplay,
@@ -101,5 +102,59 @@ describe('ensureBoundsVisibleOnSomeDisplay', () => {
     ensureBoundsVisibleOnSomeDisplay(savedState, [PRIMARY], PRIMARY);
 
     expect(savedState).toEqual(original);
+  });
+});
+
+/** The displays above, with the ids the trustworthiness check needs to tell them apart */
+const PRIMARY_WITH_ID = { id: 1, bounds: PRIMARY.bounds };
+const SECONDARY_WITH_ID = { id: 2, bounds: SECONDARY.bounds };
+const BOTH_DISPLAYS = [PRIMARY_WITH_ID, SECONDARY_WITH_ID];
+
+describe('areCapturedBoundsTrustworthy', () => {
+  test('bounds straddling two displays are not trustworthy', () => {
+    // While a window spans a boundary between displays of different scale factors, Windows and
+    // Chromium briefly disagree about its DPI and the captured size comes out around 25% too large
+    const straddling = { x: 1800, y: 100, width: 400, height: 600 };
+
+    expect(
+      areCapturedBoundsTrustworthy(straddling, BOTH_DISPLAYS, PRIMARY_WITH_ID.id, 10_000),
+    ).toBe(false);
+  });
+
+  test('bounds on a display the window has only just reached are not trustworthy yet', () => {
+    // The damaging snapshot is the one taken just AFTER the window lands: the geometry is already
+    // on one display, so a containment check alone accepts it, while the two DPI answers have not
+    // yet agreed
+    const onSecondary = { x: 2000, y: 100, width: 800, height: 600 };
+
+    expect(areCapturedBoundsTrustworthy(onSecondary, BOTH_DISPLAYS, PRIMARY_WITH_ID.id, 50)).toBe(
+      false,
+    );
+  });
+
+  test('bounds on a display the window has settled on are trustworthy', () => {
+    const onSecondary = { x: 2000, y: 100, width: 800, height: 600 };
+
+    expect(
+      areCapturedBoundsTrustworthy(onSecondary, BOTH_DISPLAYS, PRIMARY_WITH_ID.id, 10_000),
+    ).toBe(true);
+  });
+
+  test('bounds moved within the same display are trustworthy at once', () => {
+    // The control that keeps the guard from degrading into "never persist": a window moved inside
+    // one display has crossed no boundary, so nothing is owed a settle and its placement must be
+    // saved immediately. Without this, a guard that always refused would pass every test above.
+    const movedWithinPrimary = { x: 300, y: 200, width: 800, height: 600 };
+
+    expect(
+      areCapturedBoundsTrustworthy(movedWithinPrimary, BOTH_DISPLAYS, PRIMARY_WITH_ID.id, 0),
+    ).toBe(true);
+  });
+
+  test('the first capture of a session is trustworthy once it is on a display', () => {
+    // Nothing has been accepted yet, so there is no transition to settle after
+    const onPrimary = { x: 100, y: 50, width: 800, height: 600 };
+
+    expect(areCapturedBoundsTrustworthy(onPrimary, BOTH_DISPLAYS, undefined, 0)).toBe(true);
   });
 });
