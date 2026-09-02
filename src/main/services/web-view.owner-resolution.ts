@@ -27,22 +27,23 @@ import { getWebViewShard, webViewShards } from '@main/services/web-view.shard-in
 
 /**
  * The main-process window facilities the window-layout rung needs. Injected by `main.ts` after it
- * defines its window-creating closure — this router starts before that closure exists.
+ * defines its window-creating closure — the WebView service router starts before that closure
+ * exists.
  */
 export type WebViewWindowCreator = {
   /** Create a window that starts truly empty and waits for routed content. Answers its window id */
   createPendingContentWindow: () => Promise<number>;
-  /** Close a window this router created whose content never arrived */
+  /** Close a window created to hold a moved web view whose content never arrived */
   closeWindow: (windowId: number) => void;
 };
 
 /**
  * Time in ms {@link createFreshWindow} waits for {@link setWebViewWindowCreator} to be called before
- * giving up. This router starts serving `openWebView` (see `startWebViewServiceRouter`) well before
- * `main.ts` wires the creator, so a caller — an extension calling `openWebView({ type: 'window' })`
- * from `activate()`, in particular — can arrive first; sized to match
- * `REGISTER_DATA_PROVIDER_TIMEOUT_MS` elsewhere on the boot path (30 seconds), generous enough for
- * a slow cold boot.
+ * giving up. The WebView service router starts serving `openWebView` (see
+ * `startWebViewServiceRouter`) well before `main.ts` wires the creator, so a caller — an extension
+ * calling `openWebView({ type: 'window' })` from `activate()`, in particular — can arrive first;
+ * sized to match `REGISTER_DATA_PROVIDER_TIMEOUT_MS` elsewhere on the boot path (30 seconds),
+ * generous enough for a slow cold boot.
  */
 export const WINDOW_CREATOR_WIRING_TIMEOUT_MS = 30000;
 

@@ -33,8 +33,8 @@ export const getTargetWebViewShard = createTargetShardResolver(
  * registered one — its renderer has not got that far, or the window is gone.
  *
  * Exported for `scroll-group-navigation.commands.ts`, which writes a detached reference back to the
- * window that answered its navigation context and so has to reach the same shards this router
- * does.
+ * window that answered its navigation context, and for `main.ts`. Both have to reach the same
+ * shards the WebView service router does.
  *
  * @param windowId The Electron BrowserWindow ID
  */
