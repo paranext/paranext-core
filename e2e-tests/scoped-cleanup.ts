@@ -223,12 +223,13 @@ export type CleanupOutcome = {
  * `/proc`, so only Linux can do it at all.
  *
  * The machine-wide sweep answers "is anything left over", and is safe only where the machine
- * belongs to the run. On a CI runner it is, so it runs there in addition — it matches build
- * watchers by command line, which selection by process name cannot reach.
+ * belongs to the run. On a GitHub runner it does, so it runs there in addition — it matches build
+ * watchers by command line, which selection by process name cannot reach. Note the question is
+ * whether the machine is a runner, not whether `CI` is set; see {@link machineOwnershipFlag}.
  *
- * That leaves one combination with nothing to do: off CI, on a platform without `/proc`, where
- * scoping is impossible and a machine-wide kill would hit the developer's own processes. Doing
- * nothing is the only safe answer there.
+ * That leaves one combination with nothing to do: off a GitHub runner, on a platform without
+ * `/proc`, where scoping is impossible and a machine-wide kill would hit the developer's own
+ * processes. Doing nothing is the only safe answer there.
  */
 export function runCleanup(
   {
