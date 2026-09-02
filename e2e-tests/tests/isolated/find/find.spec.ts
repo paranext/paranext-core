@@ -732,9 +732,11 @@ test.describe('Search Results', () => {
 // Tests: Search History
 //
 // `addToHistory` has four callers: the idle debounce, an explicit search (Enter), a search-options
-// change, and unmount. The two covered below are the two this suite can drive — Find is a permanent
-// tab in Simple mode, so it never unmounts, and a covering test would have to live where the panel
-// can be closed.
+// change, and unmount. Three of the four are drivable here — Find is a permanent tab in Simple
+// mode, so it never unmounts, and a covering test would have to live where the panel can be closed.
+// The idle-debounce and explicit-search routes are asserted below; the search-options-change route
+// is also driven, unasserted, by the match-case test (Search Filters) and the scope-switching test
+// (Scope Switching) further down.
 //
 // What is NOT a route matters as much here: neither clearing the box nor opening a result records
 // anything, so a test asserting either would assert behaviour the panel does not have. Two such
