@@ -48,12 +48,34 @@ function waitForPort(port: number, timeout: number): Promise<void> {
 }
 
 /**
- * Empties `.dev-server.log` before this run reuses a renderer dev server it did not spawn. Nothing
- * else in this run writes to that file in that case, so leaving whatever an earlier session left in
- * it would mislead anyone tailing it to diagnose a failure in THIS run.
+ * Marks a run boundary in `.dev-server.log` before this run reuses a renderer dev server it did not
+ * spawn, rather than truncating the file.
+ *
+ * The server that owns the log is still running and still holds it open at its own write offset.
+ * Truncating the path out from under that handle does not move the handle back to the start — its
+ * next write lands past the file's new, shorter end, and the gap in between reads back as NUL bytes
+ * rather than as either run's real output. Appending a boundary line leaves the still-open handle
+ * alone and gives anyone reading the file afterwards, or the next tail, a place to start from.
+ * Truncation itself is still correct — just only before THIS run spawns its own server, where
+ * nothing else holds the file open (see the `fs.openSync(devServerLogPath, 'w')` in globalSetup).
  */
-export function refreshDevServerLog(logPath: string): void {
-  fs.writeFileSync(logPath, '');
+export function markDevServerLogRunBoundary(logPath: string): void {
+  fs.appendFileSync(
+    logPath,
+    `\n=== e2e run boundary ${new Date().toISOString()} (reusing an existing dev server) ===\n`,
+  );
+}
+
+/**
+ * Removes a `.dev-server.pid` file this run did not itself write, if one is there.
+ *
+ * A pid file records ownership: only the run that spawned the server should ever read it back to
+ * kill that server at teardown. A run that reuses an already-running server (this file's only other
+ * caller of this path) must not inherit whatever an earlier, possibly-crashed run left behind — see
+ * the call site in {@link globalSetup} for what inheriting it would risk.
+ */
+export function clearInheritedPidFile(pidFile: string): void {
+  if (fs.existsSync(pidFile)) fs.unlinkSync(pidFile);
 }
 
 /** Last few lines of a file, for putting a process's own words into the error that reports it. */
@@ -221,7 +243,10 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   const devServerLogPath = path.join(rootDir, 'e2e-tests', '.dev-server.log');
   if (await isPortInUse(RENDERER_PORT)) {
     console.log(`Renderer dev server already running on port ${RENDERER_PORT}.`);
-    refreshDevServerLog(devServerLogPath);
+    markDevServerLogRunBoundary(devServerLogPath);
+    // Left in place, an inherited pid file would make this run's own teardown kill a server it
+    // never started: a developer's own `npm start`, or a server another concurrent run still needs.
+    clearInheritedPidFile(path.join(rootDir, 'e2e-tests', '.dev-server.pid'));
   } else {
     console.log('Starting renderer dev server...');
     // Log the dev server's output instead of discarding it. When this process dies mid-run, every

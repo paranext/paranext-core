@@ -6,6 +6,25 @@ import { killProcessesUnderRoot, machineOwnershipFlag, runCleanup } from './scop
 import { restoreAppGlobalState, restoreLeakedSettings } from './fixtures/helpers';
 
 /**
+ * Whether a process with this pid currently exists, without sending it any real signal — signal 0
+ * only asks the OS whether the pid is reachable.
+ *
+ * Checked before `taskkill` so a pid this run's own pid file recorded, but that has long since
+ * exited, is not handed to a forceful, whole-tree kill for nothing. This only rules out killing
+ * something when nothing is there at all: it cannot rule out the pid having been recycled by the OS
+ * to a different, unrelated live process by the time this runs, which is an inherent limit of
+ * tracking a process by pid alone rather than something this check can fully close.
+ */
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Stops the renderer dev server process global-setup spawned, addressed the way that platform's
  * spawn actually produced it.
  *
@@ -15,16 +34,25 @@ import { restoreAppGlobalState, restoreLeakedSettings } from './fixtures/helpers
  * On Windows, neither POSIX path applies: `detached` does not create a process group `-pid` could
  * address there, and `shell: true` means `pid` names cmd.exe, not the npm/webpack tree underneath
  * it — a plain kill of `pid` would stop the shell and orphan everything it spawned, still holding
- * the port. `taskkill /t` asks Windows to walk that tree instead. NOT YET VERIFIED ON WINDOWS: that
- * `taskkill /t` actually reaches the grandchild webpack-dev-server process npm spawns underneath
- * cmd.exe, and frees the port — only a Windows run can confirm that.
+ * the port. `taskkill /t` asks Windows to walk that tree instead, bounded by a timeout so a hung
+ * taskkill cannot hang teardown itself. NOT YET VERIFIED ON WINDOWS: that `taskkill /t` actually
+ * reaches the grandchild webpack-dev-server process npm spawns underneath cmd.exe, and frees the
+ * port — only a Windows run can confirm that.
  */
 export function killDevServerProcess(pid: number, platform: NodeJS.Platform): void {
   if (platform === 'win32') {
+    if (!isProcessAlive(pid)) return;
     try {
-      execFileSync('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'pipe' });
-    } catch {
-      // Already stopped
+      execFileSync('taskkill', ['/pid', String(pid), '/t', '/f'], {
+        stdio: 'pipe',
+        timeout: 10_000,
+      });
+    } catch (error) {
+      console.warn(
+        `taskkill for dev server pid ${pid} did not complete cleanly: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
     return;
   }

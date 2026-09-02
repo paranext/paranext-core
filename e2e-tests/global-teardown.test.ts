@@ -15,38 +15,64 @@ import { killDevServerProcess } from './global-teardown';
 // above at runtime even though it appears below them in source order. The `default` entry is
 // needed for vite-node's CJS interop with this Node builtin — omitting it throws "No 'default'
 // export is defined on the ... mock" from deep inside global-teardown.ts's own import, not here.
+// execSync is mocked alongside execFileSync because global-teardown.ts's default export (not yet
+// covered by a test here) also calls it, for the process-name cleanup sweep — leaving it real would
+// let an eventual test of that path spawn `npm run stop` for real instead of observing the call.
 vi.mock('node:child_process', () => {
   const execFileSyncMock = vi.fn();
+  const execSyncMock = vi.fn();
   return {
     execFileSync: execFileSyncMock,
-    default: { execFileSync: execFileSyncMock },
+    execSync: execSyncMock,
+    default: { execFileSync: execFileSyncMock, execSync: execSyncMock },
   };
 });
 
 afterEach(() => {
-  vi.clearAllMocks();
+  // restoreAllMocks (not clearAllMocks) also puts back the real implementation behind any
+  // vi.spyOn in this file — a safety net for a test that forgets its own .mockRestore(), so a
+  // mocked process.kill or console.warn can never leak into a later test.
+  vi.restoreAllMocks();
 });
 
 describe('stopping the renderer dev server on the platform that spawned it', () => {
-  it('kills the whole tree via taskkill on Windows, not process.kill', () => {
+  it('kills the whole tree via taskkill on Windows, not process.kill, bounded by a timeout', () => {
+    // The liveness check reuses process.kill (signal 0), so this also stands in for "the pid is
+    // alive" — the taskkill-not-called assertion below is what proves it is a genuinely separate
+    // call, not process.kill being used to do the killing.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
 
     killDevServerProcess(4242, 'win32');
 
     expect(execFileSync).toHaveBeenCalledExactlyOnceWith('taskkill', ['/pid', '4242', '/t', '/f'], {
       stdio: 'pipe',
+      timeout: 10_000,
     });
-    expect(killSpy).not.toHaveBeenCalled();
+    expect(killSpy).toHaveBeenCalledExactlyOnceWith(4242, 0);
 
     killSpy.mockRestore();
   });
 
-  it('does not throw when taskkill itself fails on Windows (already stopped)', () => {
+  it('does not call taskkill at all when the pid is not alive', () => {
+    // No mock: pid 4242 is not a real process in the test runner, so the real liveness check
+    // reports it as gone — pinning that a dead pid never reaches taskkill, recycled or not.
+    killDevServerProcess(4242, 'win32');
+
+    expect(execFileSync).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when taskkill itself fails on Windows (already stopped), and logs it', () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.mocked(execFileSync).mockImplementationOnce(() => {
       throw new Error('no such process');
     });
 
     expect(() => killDevServerProcess(4242, 'win32')).not.toThrow();
+    expect(warnSpy).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('no such process'));
+
+    killSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
   it('signals the process group on POSIX, not taskkill', () => {
