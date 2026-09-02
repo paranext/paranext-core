@@ -149,6 +149,15 @@ describe('getMoveTargetWindowId', () => {
     expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}${WINDOW_ID}`)).toBe(WINDOW_ID);
   });
 
+  test('accepts a window id written in upper-case hex', () => {
+    // The shape pattern carries the `i` flag deliberately — see WINDOW_ID_SHAPE_PATTERN_SOURCE —
+    // so a case-sensitive rewrite of this check would refuse ids it must accept, and would do it
+    // silently: the move would simply stop finding its target.
+    const upper = WINDOW_ID.toUpperCase();
+
+    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}${upper}`)).toBe(upper);
+  });
+
   test('ignores an item id that is not a generated target', () => {
     expect(getMoveTargetWindowId('platform.floatTab')).toBeUndefined();
   });

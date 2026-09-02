@@ -589,6 +589,19 @@ export function addWindow(window: BrowserWindow, existingId?: string): string {
     logger.warn(
       `Window id ${existingId} is already tracked, so this window is tracked as ${windowId} instead. Per-window state saved under ${existingId} stays with the window already holding it.`,
     );
+  } else if (existingId !== undefined) {
+    // Reclaiming the id means the window that held it is destroyed and its `closed` handler has
+    // not swept it yet. Sweep it here instead of leaving both: one id names one entry, and every
+    // lookup in this module answers from the FIRST entry with a matching id — so the corpse,
+    // pushed earlier, would answer for the window actually on screen. `focusWindow` would find it,
+    // see a destroyed window and return without raising anything, and `getWindowCreationRank`
+    // would report the dead window's place in the list to the router's tie-break.
+    //
+    // Nothing here can be live: the branch above already established that no live window holds
+    // this id.
+    for (let index = trackedWindows.length - 1; index >= 0; index -= 1) {
+      if (trackedWindows[index].windowId === existingId) trackedWindows.splice(index, 1);
+    }
   }
   trackedWindows.push({ windowId, window });
   announceRoutingTargetIfChanged();
