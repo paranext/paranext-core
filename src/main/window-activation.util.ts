@@ -176,11 +176,18 @@ export function forgetWindowBounce(windowId: number): void {
  * window keeps whatever focus it is given.
  *
  * @param state Whether the window is still waiting to be seen for the first time — a user gesture
- *   in it ends that — and whether its focus has already been handed back once
+ *   in it ends that — whether its focus has already been handed back once, and whether there is
+ *   another window to hand it back to. The last is not always true: a withheld window can be the
+ *   first this process tracks, and routing then answers with the window itself
  */
 export function shouldBounceFocusBack(state: {
   isAwaitingFirstActivation: boolean;
   hasAlreadyBouncedFocusBack: boolean;
+  canReturnFocusElsewhere: boolean;
 }): boolean {
-  return state.isAwaitingFirstActivation && !state.hasAlreadyBouncedFocusBack;
+  return (
+    state.isAwaitingFirstActivation &&
+    !state.hasAlreadyBouncedFocusBack &&
+    state.canReturnFocusElsewhere
+  );
 }

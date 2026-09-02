@@ -854,6 +854,8 @@ async function main() {
         shouldBounceFocusBack({
           isAwaitingFirstActivation: isWindowAwaitingFirstActivation(windowId),
           hasAlreadyBouncedFocusBack: hasWindowBouncedFocusBack(windowId),
+          canReturnFocusElsewhere:
+            windowIdToReturnFocusTo !== undefined && windowIdToReturnFocusTo !== windowId,
         })
       ) {
         noteWindowBouncedFocusBack(windowId);
