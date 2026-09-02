@@ -25,6 +25,12 @@ import {
 // on its own thanks to the localStorage flag. That is the intended behavior; Help > Show the tour
 // again is the deliberate way back to it.
 
+/**
+ * The toolbar's Profile button. The only stop Power mode shares with Simple, so it is both a step
+ * target below and what the readiness gate waits for in Power.
+ */
+const PROFILE_TRIGGER_SELECTOR = '[data-testid="user-profile-popover-trigger"]';
+
 const STEP_LOCALIZE_KEYS: LocalizeKey[] = [
   '%onboardingTour_step_project_title%',
   '%onboardingTour_step_project_description%',
@@ -106,7 +112,7 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
         side: 'bottom',
       },
       {
-        target: '[data-testid="user-profile-popover-trigger"]',
+        target: PROFILE_TRIGGER_SELECTOR,
         title: strings['%onboardingTour_step_profile_title%'] ?? '',
         description: strings['%onboardingTour_step_profile_description%'] ?? '',
         side: 'bottom',
@@ -119,16 +125,27 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
   // mount). Poll for the project panel before opening the tour so Tour's step filter always runs
   // with the layout already in the DOM — otherwise only the 2 always-present toolbar elements are
   // found and the tour shows just 2 of its 5 steps.
-  const mightShow = !isPowerMode && firstRunStatus.kind === 'app' && !tourDone && !isLoading;
-  const [layoutReady, setLayoutReady] = useState(
-    () => !!document.querySelector(`[data-dockid="${SIMPLE_PANEL_ID_PROJECT}"]`),
-  );
+  // Power gets the tour only when the user asks for it. Tour's open-time filter keeps just the
+  // stops whose anchors exist, which in Power is the toolbar's Profile button — the columns and the
+  // Sync button are Simple-only, and their copy ("only ever one project here", "can't be closed or
+  // moved") describes a layout Power does not have. Auto-showing that single stop unprompted to
+  // every Power user would be noise, so the unrequested path stays Simple-only.
+  const mightShow =
+    (!isPowerMode || isReplay) && firstRunStatus.kind === 'app' && !tourDone && !isLoading;
+  // What "ready" means depends on the mode, because the modes anchor to different things: Simple
+  // waits for the dock layout's project panel, Power for the toolbar button its one stop spotlights.
+  // Opening early is not merely ugly — Tour reads an empty step list as a skip and persists the done
+  // flag, consuming the tour instead of showing it.
+  const readySelector = isPowerMode
+    ? PROFILE_TRIGGER_SELECTOR
+    : `[data-dockid="${SIMPLE_PANEL_ID_PROJECT}"]`;
+  const [layoutReady, setLayoutReady] = useState(() => !!document.querySelector(readySelector));
   useEffect(() => {
     if (!mightShow) setLayoutReady(false);
   }, [mightShow]);
   useEffect(() => {
     if (!mightShow || layoutReady) return undefined;
-    const selector = `[data-dockid="${SIMPLE_PANEL_ID_PROJECT}"]`;
+    const selector = readySelector;
     if (document.querySelector(selector)) {
       setLayoutReady(true);
       return undefined;
@@ -152,7 +169,7 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
       observer.disconnect();
       clearTimeout(timeoutId);
     };
-  }, [mightShow, layoutReady]);
+  }, [mightShow, layoutReady, readySelector]);
 
   const isOpen = mightShow && layoutReady;
 

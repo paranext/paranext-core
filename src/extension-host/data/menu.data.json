@@ -77,8 +77,7 @@
         "localizeNotes": "Application main menu > Help > Show the tour again",
         "group": "platform.helpInfo",
         "order": 4,
-        "command": "platform.showOnboardingTour",
-        "hiddenInterfaceModes": ["power"]
+        "command": "platform.showOnboardingTour"
       },
       {
         "label": "%mainMenu_feedbackForm_textArea%",
