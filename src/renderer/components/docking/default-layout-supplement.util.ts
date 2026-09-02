@@ -1,6 +1,7 @@
 import { deepClone, type InterfaceMode } from 'platform-bible-utils';
 import type { BoxData, LayoutBase, PanelData, TabData } from 'rc-dock';
 import type { SavedTabInfo } from '@shared/models/docking-framework.model';
+import { mintFreshWebViewIdInTab } from './mint-web-view-ids.util';
 import type { DefaultLayoutSupplementEntry } from './default-layout-supplement.model';
 
 function isBoxData(node: BoxData | PanelData): node is BoxData {
@@ -39,10 +40,19 @@ function findPanelByWebViewType(box: BoxData, anchor: string): PanelData | undef
   );
 }
 
-function collectTabIds(box: BoxData, ids: Set<string>): void {
+/**
+ * Collect the `webViewType` of every web view tab under `box`, across every panel. A web view
+ * materialized from a baked layout gets a freshly minted id (see `mintFreshWebViewIds`), so a tab's
+ * id is not a stable way to recognize "this supplement entry is already in the layout" across
+ * reloads — its `webViewType` is: the supplement entries are singletons by design (one Scripture
+ * Text Grid tab, not several), so type identity is exactly what "already present" means here.
+ */
+function collectWebViewTypes(box: BoxData, types: Set<string>): void {
   findPanel(box, (panel) => {
-    (panel.tabs ?? []).forEach((t) => t.id && ids.add(t.id));
-    // Always return undefined so the walk visits every panel instead of stopping at the first.
+    (panel.tabs ?? []).forEach((t) => {
+      const type = webViewTypeOf(t);
+      if (type) types.add(type);
+    });
     return undefined;
   });
 }
@@ -144,18 +154,21 @@ export function mergeDefaultLayoutSupplement(
   // dockbox is a BoxData at runtime; LayoutBase types it as the rc-dock union
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const dockbox = layout.dockbox as BoxData;
-  const existingIds = new Set<string>();
+  const existingWebViewTypes = new Set<string>();
   // Dedup across every box, not just the dockbox: rc-dock keeps floated/windowed/maximized tabs in
   // sibling boxes. A supplement tab the user moved out of the dockbox still exists, so scanning only
   // the dockbox would re-inject a duplicate that grows on each load and corrupts the saved layout.
   [dockbox, layout.floatbox, layout.windowbox, layout.maxbox].forEach((box) => {
     // Each optional box is a BoxData at runtime when present; LayoutBase types them as the rc-dock union.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    if (box) collectTabIds(box as BoxData, existingIds);
+    if (box) collectWebViewTypes(box as BoxData, existingWebViewTypes);
   });
 
   entries.forEach((entry) => {
-    if (existingIds.has(entry.tab.id)) return;
+    // entry.tab is a SavedTabInfo; webViewTypeOf reads the same `data.webViewType` shape off either
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const entryWebViewType = webViewTypeOf(entry.tab as unknown as TabData);
+    if (entryWebViewType && existingWebViewTypes.has(entryWebViewType)) return;
     const panel = findPanelByWebViewType(dockbox, entry.anchorWebViewType);
     if (!panel) return;
     const tabs = panel.tabs ?? [];
@@ -165,9 +178,13 @@ export function mergeDefaultLayoutSupplement(
       isSimpleMode && entry.insertBeforeWebViewType
         ? tabs.findIndex((t) => webViewTypeOf(t) === entry.insertBeforeWebViewType)
         : -1;
+    // Materializing a supplement entry mints it a fresh id, the same as any other baked-constant tab
+    // (see `mintFreshWebViewIds`) — the JSON's id is that tab's slot identity, not a runtime one.
     // Our SavedTabInfo satisfies rc-dock TabData at runtime; the generic union prevents direct assign
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const tab = withPinningForMode(entry.tab, isSimpleMode) as unknown as TabData;
+    const tab = mintFreshWebViewIdInTab(
+      withPinningForMode(entry.tab, isSimpleMode),
+    ) as unknown as TabData;
     // Appending is the right fallback, but it is indistinguishable from a successful placement once
     // it has happened, and the two ways to reach it are not equally benign. An entry that asked to
     // be placed before a specific tab and did not find it has a stale or misspelled webViewType —
@@ -191,7 +208,7 @@ export function mergeDefaultLayoutSupplement(
     // panel" — both mean append.
     panel.tabs =
       insertAt < 0 ? [...tabs, tab] : [...tabs.slice(0, insertAt), tab, ...tabs.slice(insertAt)];
-    existingIds.add(entry.tab.id);
+    if (entryWebViewType) existingWebViewTypes.add(entryWebViewType);
   });
 
   return layout;
