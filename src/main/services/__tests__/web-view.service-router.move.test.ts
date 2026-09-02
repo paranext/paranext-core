@@ -911,7 +911,10 @@ describe('a web view that is between windows on a move', () => {
       webViewType: 'test.type',
       projectId: 'project-1',
     };
-    target.getAllOpenWebViewDefinitions.mockResolvedValue([reportedUnderTheOriginalId]);
+    // Reported by the SOURCE window, which is the only window that could answer with this spelling:
+    // a `-w2` suffix is minted by window 2's own layout load. The target would re-scope to its own
+    // window or answer with the stripped id the adopt opened under, never with another window's.
+    owner.getAllOpenWebViewDefinitions.mockResolvedValue([reportedUnderTheOriginalId]);
 
     const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
 
@@ -1075,65 +1078,64 @@ describe('a web view that is between windows on a move', () => {
   });
 
   test.each([
-    ['the scoped view first', 'home-w2', 'home'],
-    ['the adopted view first', 'home', 'home-w2'],
+    ['the scoped view', 'home-w2', 'home'],
+    ['the adopted view', 'home', 'home-w2'],
   ])(
-    'folds in both when a window holds an adopted view and a scoped one, dragging %s',
-    async (_order, firstWebViewId, secondWebViewId) => {
+    'folds the dragged view in when its window still reports the colliding sibling, dragging %s',
+    async (_order, draggedWebViewId, dockedWebViewId) => {
       // Window 2 loaded its layout, so its own Home is `home-w2`. Window 1's Home was moved in
       // earlier and adopted under the capture's already-stripped `home` — an adopt opens the view
       // under `savedWebViewDefinition.id` and never re-scopes it, so one window holds both
-      // spellings for two DIFFERENT views. Drag them both and each move captures `home`. Neither
-      // order may drop one: they are two views and both are missing from every window's answer.
-      const holderWebViewIds = [firstWebViewId, secondWebViewId];
+      // spellings for two DIFFERENT views.
+      //
+      // Drag ONE and leave the other docked. That is what puts the guard in force: the window is
+      // still reporting a view whose id collides with the captured one, so a guard that matched the
+      // captured spelling would read that report as the dragged view and drop it. Dragging both
+      // instead would empty the window, leaving nothing reported and the guard never consulted —
+      // which is no test of it at all.
+      //
+      // The two orders are not symmetric, and only one of them can catch the bug. Dragging the
+      // SCOPED view is the case that discriminates: its named and captured spellings differ, so a
+      // guard reading the wrong one drops it. Dragging the ADOPTED view cannot discriminate — its
+      // named id already IS the captured id, so there is no scoped spelling to confuse and the
+      // guard deliberately does nothing. That row is here to pin exactly that: the no-scope case
+      // must still fold in, and must keep folding in if the guard is ever tightened.
+      const holderWebViewIds = [draggedWebViewId, dockedWebViewId];
       const holder = windowShard(holderWebViewIds);
       holder.captureAndCloseWebView.mockImplementation(async (id) => {
         const index = holderWebViewIds.indexOf(id);
         if (index < 0) return undefined;
-        // The capture closes the tab, so the window stops reporting it. That is what leaves the
-        // view in no window at all, which is the gap this read has to fold back in.
+        // The capture closes the dragged tab, so the window stops reporting that one — and keeps
+        // reporting the other, whose id collides with the captured spelling.
         holderWebViewIds.splice(index, 1);
-        return {
-          id: 'home',
-          webViewType: 'test.type',
-          projectId: id === firstWebViewId ? 'project-first' : 'project-second',
-        };
+        return { id: 'home', webViewType: 'test.type', projectId: 'project-dragged' };
       });
-      const targetA = windowShard([]);
-      const targetB = windowShard([]);
-      let releaseAdoptA: (webViewId: WebViewId) => void = () => {};
-      let releaseAdoptB: (webViewId: WebViewId) => void = () => {};
-      targetA.adoptWebView.mockImplementation(
+      const target = windowShard([]);
+      let releaseAdopt: (webViewId: WebViewId) => void = () => {};
+      target.adoptWebView.mockImplementation(
         async () =>
           new Promise<WebViewId>((resolve) => {
-            releaseAdoptA = resolve;
+            releaseAdopt = resolve;
           }),
       );
-      targetB.adoptWebView.mockImplementation(
-        async () =>
-          new Promise<WebViewId>((resolve) => {
-            releaseAdoptB = resolve;
-          }),
-      );
-      withWindows({ 2: holder, 4: targetA, 5: targetB });
+      withWindows({ 2: holder, 4: target });
 
-      const firstMove = moveWebView(firstWebViewId, 4);
-      await settle();
-      const secondMove = moveWebView(secondWebViewId, 5);
+      const move = moveWebView(draggedWebViewId, 4);
       await settle();
 
       const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
 
+      // The dragged view is in no window and must be folded in; asserted by project, because it and
+      // the sibling the window still reports both answer to `home`.
       expect(definitions).toContainEqual(
-        expect.objectContaining({ id: 'home', projectId: 'project-first' }),
+        expect.objectContaining({ id: 'home', projectId: 'project-dragged' }),
       );
-      expect(definitions).toContainEqual(
-        expect.objectContaining({ id: 'home', projectId: 'project-second' }),
-      );
+      // And the sibling the window kept is still there — so the fold-in added a view rather than
+      // replacing the one that was already reported.
+      expect(definitions.some((definition) => definition.id === dockedWebViewId)).toBe(true);
 
-      releaseAdoptA('home');
-      releaseAdoptB('home');
-      await Promise.all([firstMove, secondMove]);
+      releaseAdopt('home');
+      await Promise.all([move]);
     },
   );
 });
