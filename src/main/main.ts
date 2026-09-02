@@ -136,6 +136,7 @@ import {
   noteWindowBouncedFocusBack,
   noteWindowWithheldFromActivation,
   shouldBounceFocusBack,
+  shouldFlashOnReveal,
   planWindowActivation,
   shouldRevealAfterLoadFailure,
   shouldRevealAfterRendererGone,
@@ -1161,7 +1162,7 @@ async function main() {
         if (activation.revealWhenReady === 'activate') newWindow.show();
         else {
           newWindow.showInactive();
-          newWindow.flashFrame(true);
+          if (shouldFlashOnReveal(activation)) newWindow.flashFrame(true);
           selfFocusWindowClosesAt = Date.now() + SELF_FOCUS_WINDOW_MS;
         }
         // Once-guarded like window-created above: ready-to-show fires again for a re-created window.
