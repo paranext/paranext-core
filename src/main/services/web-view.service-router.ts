@@ -21,10 +21,7 @@ import {
 } from '@main/services/window-state.service';
 import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
 import { clearWindowPendingContent } from '@main/services/window-layout-persistence.service';
-import {
-  createTargetShardResolver,
-  resolveShardForWindow,
-} from '@main/services/target-shard-resolver.util';
+import { resolveShardForWindow } from '@main/services/target-shard-resolver.util';
 import {
   GetWebViewOptions,
   OpenWebViewOptions,
@@ -41,8 +38,6 @@ import { Layout } from '@shared/models/docking-framework.model';
 import { logger } from '@shared/services/logger.service';
 import { AsyncVariable, getErrorMessage, wait } from 'platform-bible-utils';
 import { networkObjectService } from '@shared/services/network-object.service';
-import { createServiceShardIndex } from '@main/services/service-shard-index';
-import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 import { CATEGORY_COMMAND, isRequestTimedOutError } from '@shared/data/rpc.model';
@@ -68,15 +63,7 @@ import {
   type OwnerMatcher,
   type WebViewMoveInFlight,
 } from '@main/services/web-view.ownership';
-
-/**
- * The WebView service shard each window registers, found by network object type and window
- * attribute rather than by rebuilding the window-scoped name the window registered under.
- */
-const webViewShards = createServiceShardIndex<WebViewServiceShard>({
-  objectType: WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
-  resolveShard: (networkObjectId) => networkObjectService.get<WebViewServiceShard>(networkObjectId),
-});
+import { getTargetWebViewShard, webViewShards } from '@main/services/web-view.shard-index';
 
 /**
  * Get the WebView service shard for a specific window. Returns undefined if that window has not
@@ -91,12 +78,6 @@ const webViewShards = createServiceShardIndex<WebViewServiceShard>({
 export async function getWebViewShard(windowId: number): Promise<WebViewServiceShard | undefined> {
   return webViewShards.getShard(windowId);
 }
-
-/** Get the WebView service shard for the currently focused window, throwing if none is available. */
-const getTargetWebViewShard = createTargetShardResolver(
-  NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-  webViewShards,
-);
 
 /**
  * The main-process window facilities the window-layout rung needs. Injected by `main.ts` after it
