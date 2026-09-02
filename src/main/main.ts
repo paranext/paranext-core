@@ -1019,11 +1019,16 @@ async function main() {
         // Nothing awaits this: the handler is synchronous and the window is already dead, so the
         // notice runs on its own and reports its own failures. The user is told what happened and
         // offered the way out — closing it keeps its entry, so the window comes back next launch.
-        const askedBefore = hasAskedAboutAbandonment;
-        hasAskedAboutAbandonment = true;
+        //
+        // The notice records that it asked, rather than this line recording it in advance: a
+        // decision to stay silent, and a box that could not be shown, both leave the question
+        // unasked, and latching either of those would mean the user is never told at all.
+        //
         // Not awaited and deliberately not `.catch`-ed: the notice reports its own failures and
         // never rejects, and swallowing here would hide one if that ever stopped being true
-        offerToCloseAbandonedWindow(newWindow, windowId, askedBefore);
+        offerToCloseAbandonedWindow(newWindow, windowId, hasAskedAboutAbandonment, () => {
+          hasAskedAboutAbandonment = true;
+        });
         return;
       }
       crashReloadBudget = reloadDecision.budget;
@@ -1852,11 +1857,14 @@ async function main() {
    * @param abandonedWindow Window whose renderer was given up on
    * @param abandonedWindowId That window's id
    * @param hasAlreadyAsked Whether the user has been asked about this window before
+   * @param recordAsked Called once the question is actually on screen, so a notice that stayed
+   *   silent or could not be shown leaves the offer available rather than spending it
    */
   async function offerToCloseAbandonedWindow(
     abandonedWindow: BrowserWindow,
     abandonedWindowId: number,
     hasAlreadyAsked: boolean,
+    recordAsked: () => void,
   ): Promise<void> {
     try {
       const decision = decideAbandonedWindowNotice({
@@ -1866,6 +1874,7 @@ async function main() {
         // Asked of the window rather than assumed: a minimized or hidden window would carry the
         // question off screen with it
         isAbandonedWindowVisible: !abandonedWindow.isMinimized() && abandonedWindow.isVisible(),
+        isAbandonedWindowPendingContent: isWindowPendingContent(abandonedWindowId),
       });
       if (decision.kind === 'stay-silent') return;
 
@@ -1921,6 +1930,9 @@ async function main() {
         // without it Windows may render these as command links rather than buttons
         noLink: true,
       };
+      // Recorded here rather than on return: from this line the box is going up, and a second
+      // `render-process-gone` for the same window must not put a duplicate beside it.
+      recordAsked();
       // Unparented when no window can carry it. Every window there is is either the one this is
       // about — off screen, which is why the question is not on it — or gone, and a question the
       // platform floats on its own still reaches the user.
