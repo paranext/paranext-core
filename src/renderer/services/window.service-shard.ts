@@ -306,6 +306,29 @@ onDidCloseWebView(({ webView }) => {
  * `NavigationContext` data type and fails registration for want of a `setNavigationContext`, which
  * is why the engine's copy carries the `ignore` decorator.
  */
+/**
+ * Whether this window has been activated since it was created. Latched on, never off: a window the
+ * user has been in is an ordinary window from then on.
+ */
+let hasWindowBeenActivated = false;
+
+// The window gaining OS focus is what makes it ordinary — the same rule the main process applies to
+// its own copy of this fact, expressed here because the focus requests below never reach it.
+window.addEventListener('focus', () => {
+  hasWindowBeenActivated = true;
+});
+
+/**
+ * Whether content arriving in this window must be shown without taking document focus.
+ *
+ * True only for a window main created without activating, and only until the user activates it.
+ * Read at the moment content asks to be focused rather than at creation, so a window the user has
+ * since clicked into behaves like any other.
+ */
+export function isWindowAwaitingFirstActivation(): boolean {
+  return globalThis.wasWindowCreatedWithoutActivation === true && !hasWindowBeenActivated;
+}
+
 export async function getNavigationContext(): Promise<NavigationContext> {
   const target = getNavigationTargetWebView();
   return {
@@ -478,7 +501,14 @@ class WindowDataProviderEngine
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     }
     // Set the focus in the docking layout to the appropriate tab or WebView
-    else (await getDockLayout()).focusTab(newFocusSubject.id, activateWithoutDocumentFocus);
+    // Either source can withhold document focus: the main process says so for content it routes
+    // here, and this window says so for the focus requests its own panels and web views make as
+    // they mount, which never leave the renderer.
+    else
+      (await getDockLayout()).focusTab(
+        newFocusSubject.id,
+        activateWithoutDocumentFocus || isWindowAwaitingFirstActivation(),
+      );
 
     return didChangeFocus;
   }

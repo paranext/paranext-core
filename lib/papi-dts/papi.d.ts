@@ -1090,6 +1090,17 @@ declare module 'shared/global-this.model' {
      */
     var startupMarks: boolean;
     /**
+     * Whether this window was created without being activated, as of the moment it was created. Read
+     * from the URL search params in the renderer process; `false` in every other process.
+     *
+     * This is the window's state at creation, not now. What content should do about it is
+     * `isWindowAwaitingFirstActivation()` in the window service shard, which stops answering `true`
+     * once the window is activated.
+     *
+     * @experimental
+     */
+    var wasWindowCreatedWithoutActivation: boolean;
+    /**
      * Window id of the Electron browser window as a string (e.g. "1", "2"). This is the stringified
      * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
      * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via
@@ -9198,6 +9209,19 @@ declare module 'shared/data/platform.data' {
   export const WINDOW_ID = 'windowId';
   /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
   export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
+  /**
+   * Query parameter passed to the renderer. Present when the window was created without being
+   * activated and has not been activated since.
+   *
+   * A window told to stay in the background is undone by its own content: every mounted panel and
+   * every loaded web view asks this window's service to focus it, and focusing a tab focuses its web
+   * view's iframe, which asks the browser to activate the window. Those calls resolve this window's
+   * own service shard by name and never reach the main process, so this is how the fact gets to them.
+   * The renderer stops honouring it the first time the window is activated.
+   *
+   * @experimental
+   */
+  export const WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER = 'awaitingFirstActivation';
   /**
    * Query parameter key used to pass the serialized scroll group state main holds at the moment a
    * window is created, so that window's synchronous readers are right on its first render instead of

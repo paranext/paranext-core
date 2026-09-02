@@ -76,6 +76,17 @@ declare global {
    */
   var startupMarks: boolean;
   /**
+   * Whether this window was created without being activated, as of the moment it was created. Read
+   * from the URL search params in the renderer process; `false` in every other process.
+   *
+   * This is the window's state at creation, not now. What content should do about it is
+   * `isWindowAwaitingFirstActivation()` in the window service shard, which stops answering `true`
+   * once the window is activated.
+   *
+   * @experimental
+   */
+  var wasWindowCreatedWithoutActivation: boolean;
+  /**
    * Window id of the Electron browser window as a string (e.g. "1", "2"). This is the stringified
    * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
    * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via

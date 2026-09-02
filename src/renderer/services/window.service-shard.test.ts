@@ -23,6 +23,7 @@ const {
   openWebViewCallbacks,
   updateWebViewCallbacks,
   getTabInfoByIdMock,
+  focusTabMock,
   getSavedWebViewDefinitionSyncMock,
   getAllOpenWebViewDefinitionsSyncMock,
   readDirectionMock,
@@ -56,6 +57,8 @@ const {
     openWebViewCallbacks: openCallbacks,
     updateWebViewCallbacks: updateCallbacks,
     getTabInfoByIdMock: tabInfoMock,
+    // Shared across `getDockLayout()` calls so a test can assert what the shard asked the dock for
+    focusTabMock: vi.fn(),
     getSavedWebViewDefinitionSyncMock: definitionMock,
     getAllOpenWebViewDefinitionsSyncMock: allOpenDefinitionsMock,
     readDirectionMock: directionMock,
@@ -64,7 +67,7 @@ const {
 
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   getDockLayout: vi.fn(async () => ({
-    focusTab: vi.fn(),
+    focusTab: focusTabMock,
     getTabInfoByElement: vi.fn(() => undefined),
     getTabInfoById: getTabInfoByIdMock,
     getTabInfoByDirectionFromTab: vi.fn(() => undefined),
@@ -515,5 +518,56 @@ describe('getNavigationContext', () => {
     const isIgnored: unknown = Reflect.get(engine.getNavigationContext, 'isIgnored');
 
     expect(isIgnored).toBe(true);
+  });
+});
+
+/**
+ * A window created without activation is undone by its own content unless the content knows: every
+ * mounted panel and every loaded web view asks this window's service to focus it, and focusing a
+ * tab focuses its web view's iframe, which asks the browser to activate the window. Those calls
+ * resolve this window's own shard by name and never reach the main process, so the shard has to
+ * answer for itself.
+ */
+describe('a window still waiting for its first activation', () => {
+  beforeEach(() => {
+    focusTabMock.mockClear();
+    getTabInfoByIdMock.mockReturnValue({ id: 'tab-1', tabType: 'webView' });
+  });
+
+  afterEach(() => {
+    globalThis.wasWindowCreatedWithoutActivation = false;
+    // Undo the latch this suite trips, so the flag does not leak into later tests
+    window.dispatchEvent(new Event('focus'));
+  });
+
+  test('tells the dock to activate the tab without taking document focus', async () => {
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
+
+    expect(focusTabMock).toHaveBeenCalledWith('tab-1', true);
+  });
+
+  test('focuses normally once the window has been activated', async () => {
+    // The positive control, and the latch: the same one-argument call, after the window is
+    // activated, focuses like any other.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+    window.dispatchEvent(new Event('focus'));
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
+
+    expect(focusTabMock).toHaveBeenCalledWith('tab-1', false);
+  });
+
+  test('focuses normally in a window the user asked for', async () => {
+    // Nothing in the URL bag means an ordinary window, which must be unaffected.
+    globalThis.wasWindowCreatedWithoutActivation = false;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
+
+    expect(focusTabMock).toHaveBeenCalledWith('tab-1', false);
   });
 });

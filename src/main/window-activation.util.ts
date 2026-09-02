@@ -84,3 +84,46 @@ export function forgetWindowWithholding(windowId: number): void {
 export function shouldContentAvoidDocumentFocus(windowId: number): boolean {
   return windowIdsAwaitingFirstActivation.has(windowId);
 }
+
+/**
+ * Error code Chromium reports when a navigation was superseded or cancelled rather than failing to
+ * arrive — `ERR_ABORTED`. A page that is still coming reports this on its way.
+ */
+const NAVIGATION_ABORTED_ERROR_CODE = -3;
+
+/**
+ * Whether a window that could not load should be revealed anyway.
+ *
+ * The reveal exists for a page that never reaches `ready-to-show`, which is what would otherwise
+ * leave a withheld window tracked, routable and permanently invisible. It is deliberately narrow,
+ * because revealing early shows a window before it can paint — the thing withholding `show` exists
+ * to prevent.
+ *
+ * @param plan What the window was told to do to become visible
+ * @param failure The `did-fail-load` report: whether it was this window's own page, and why it
+ *   failed
+ */
+export function shouldRevealAfterLoadFailure(
+  plan: WindowActivationPlan,
+  failure: { isMainFrame: boolean; errorCode: number },
+): boolean {
+  if (!plan.revealAfterLoadFailure) return false;
+  // Every web view in the app is an in-page iframe of the window's page, so a sub-frame failure is
+  // one web view not loading — the window itself is still on its way to `ready-to-show`.
+  if (!failure.isMainFrame) return false;
+  // Nothing failed to arrive: the navigation was replaced or cancelled, and a page is still coming.
+  if (failure.errorCode === NAVIGATION_ABORTED_ERROR_CODE) return false;
+  return true;
+}
+
+/**
+ * Whether a window whose renderer died should be revealed anyway.
+ *
+ * A renderer that dies before the window can paint emits `render-process-gone` rather than
+ * `did-fail-load`, so without this the window would never be revealed by anything.
+ *
+ * @param plan What the window was told to do to become visible
+ */
+export function shouldRevealAfterRendererGone(plan: WindowActivationPlan): boolean {
+  return plan.revealAfterLoadFailure !== undefined;
+}

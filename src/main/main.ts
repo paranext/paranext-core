@@ -121,6 +121,8 @@ import {
   forgetWindowWithholding,
   noteWindowWithheldFromActivation,
   planWindowActivation,
+  shouldRevealAfterLoadFailure,
+  shouldRevealAfterRendererGone,
 } from '@main/window-activation.util';
 import {
   DEFAULT_WINDOW_HEIGHT,
@@ -154,6 +156,7 @@ import {
   STARTUP_MARK_PROCESS_START,
   STARTUP_MARKS_QUERY_PARAMETER,
   THEME_STATE_QUERY_PARAMETER,
+  WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER,
   WINDOW_ID,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
@@ -857,12 +860,28 @@ async function main() {
     // What this window has spent of its crash-reload budget. Per window, because a crash loop is
     // one window's page failing rather than the app's.
     let crashReloadBudget = NO_RENDERER_CRASH_RELOADS_YET;
+    /**
+     * Show a window that will never reveal itself. A window held back from the constructor is
+     * revealed by `ready-to-show`, which a window that failed before it could paint never reaches:
+     * an empty window the user can see and close is recoverable, where one that exists, is tracked
+     * and routable, and never appears is not. Still inactive — a window nobody asked for does not
+     * earn the foreground by failing.
+     */
+    const revealAfterFailureIfNeeded = (shouldReveal: boolean) => {
+      if (shouldReveal && !newWindow.isDestroyed() && !newWindow.isVisible())
+        newWindow.showInactive();
+    };
+
     newWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) => {
       logger.warn(`Window ${windowId} render process gone: ${JSON.stringify(details)}`);
       // Everything this window registered died with its renderer, so routing has to move to a window
       // that can answer rather than spending the network service's registration retry on handlers
       // that no longer exist.
       markWindowNotReady(windowId);
+      // A renderer that died before the window could paint is the other way a withheld window never
+      // reaches `ready-to-show`. `did-fail-load` does not fire for it, so without this the window
+      // would stay tracked, routable and invisible for the rest of the session.
+      revealAfterFailureIfNeeded(shouldRevealAfterRendererGone(activation));
 
       // Nothing else brings a dead renderer back: Electron leaves the window there with no page in
       // it, and the `onDidRegisterWindowServiceShard` subscription that would mark this window ready
@@ -940,17 +959,9 @@ async function main() {
         // failed to load never reaches. Reveal it here instead: an empty window the user can see and
         // close is recoverable, where one that exists, is tracked and routable, and never appears is
         // not. Still inactive — a window nobody asked for does not earn the foreground by failing.
-        // Only the main frame's failure means the page never arrives. Every web view in the app is
-        // an in-page iframe of this page, so a sub-frame failure says one web view did not load —
-        // the window itself is still on its way to `ready-to-show`, and revealing it here would
-        // show it before it can paint, which is what withholding `show` exists to prevent.
-        if (
-          isMainFrame &&
-          activation.revealAfterLoadFailure &&
-          !newWindow.isDestroyed() &&
-          !newWindow.isVisible()
-        )
-          newWindow.showInactive();
+        revealAfterFailureIfNeeded(
+          shouldRevealAfterLoadFailure(activation, { isMainFrame, errorCode }),
+        );
       },
     );
 
@@ -1310,6 +1321,10 @@ async function main() {
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
     if (globalThis.startupMarks) searchParamsObject[STARTUP_MARKS_QUERY_PARAMETER] = '';
+    // The renderer has to know this for itself: the focus requests that would undo the withholding
+    // are made against this window's own service shard and never reach this process.
+    if (activation.revealWhenReady === 'inactive')
+      searchParamsObject[WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER] = '';
 
     // The scroll group state travels with the window rather than being asked for after it loads, so
     // the toolbar and every scroll-group-following web view render the reference the app is actually
