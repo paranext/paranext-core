@@ -24,6 +24,10 @@ const workspace = defineConfig({
           globals: true,
           environment: 'jsdom',
           setupFiles: [intlWarmupSetup],
+          // Timing-sensitive component tests here wait on React state settling, and on a contended
+          // windows-latest runner that wait crosses the 5 s default while the assertion itself is
+          // sound. 15 s absorbs the contention and still bounds a genuine hang.
+          testTimeout: 15000,
         },
       },
       // Node.js tests for build scripts
