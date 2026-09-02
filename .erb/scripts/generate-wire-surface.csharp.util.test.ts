@@ -294,6 +294,39 @@ describe('scanCSharpFiles: dataProvider shape', () => {
     });
   });
 
+  it('takes the base call of the provider class, not one belonging to a type declared above it', () => {
+    // The `: base(` search ran over the whole file, so the first one in it won — even when it
+    // belonged to some other type. Whatever that constructor passed first was then recorded as this
+    // provider's wire name, and the provider's real name never appeared: a snapshot entry that is
+    // confidently wrong, which the live check reads as a disagreement against correct code.
+    const files: VirtualFile[] = [
+      {
+        path: 'c-sharp/Fixtures/FixtureProviderBelowAHelper.cs',
+        text: `
+          namespace Paranext.DataProvider.Fixtures;
+
+          internal sealed class FixtureHelper : SomeOtherBase
+          {
+              public FixtureHelper(PapiClient papiClient)
+                  : base("fixture-helper-not-the-provider", papiClient) { }
+          }
+
+          internal sealed class FixtureProviderBelowAHelper : NetworkObjects.DataProvider
+          {
+              public FixtureProviderBelowAHelper(PapiClient papiClient)
+                  : base("fixture-provider-below-a-helper", papiClient) { }
+          }
+        `,
+      },
+    ];
+    const { registrations } = scanCSharpFiles(files);
+    expect(findRegistration(registrations, 'fixture-provider-below-a-helper')).toMatchObject({
+      category: 'dataProvider',
+      registeredVia: 'DataProvider(name, papiClient) constructor',
+    });
+    expect(findRegistration(registrations, 'fixture-helper-not-the-provider')).toBeUndefined();
+  });
+
   it("records DataProvider.RegisterDataProviderAsync's own call under dynamicRegistrations (DataProviderName is a computed property, never a literal)", () => {
     const files: VirtualFile[] = [
       {
