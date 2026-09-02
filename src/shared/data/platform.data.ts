@@ -39,6 +39,20 @@ export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
 export const IS_MAIN_WINDOW_QUERY_PARAMETER = 'isMainWindow';
 
 /**
+ * Query parameter passed to the renderer. Present when the window was created without being
+ * activated and has not been activated since.
+ *
+ * A window told to stay in the background is undone by its own content: every mounted panel and
+ * every loaded web view asks this window's service to focus it, and focusing a tab focuses its web
+ * view's iframe, which asks the browser to activate the window. Those calls resolve this window's
+ * own service shard by name and never reach the main process, so this is how the fact gets to them.
+ * The renderer stops honouring it the first time the window is activated.
+ *
+ * @experimental
+ */
+export const WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER = 'awaitingFirstActivation';
+
+/**
  * Query parameter key used to pass the serialized scroll group state main holds at the moment a
  * window is created, so that window's synchronous readers are right on its first render instead of
  * showing the default reference until a round trip returns.
@@ -98,6 +112,7 @@ export const URL_PARAMETERS: Readonly<Record<string, UrlParameterSpec>> = {
   [DEV_MODE_QUERY_PARAMETER]: { kind: 'flag' },
   [WINDOW_ID]: { kind: 'string' },
   [STARTUP_MARKS_QUERY_PARAMETER]: { kind: 'flag' },
+  [WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER]: { kind: 'flag' },
   [SCROLL_GROUP_STATE_QUERY_PARAMETER]: { kind: 'serialized' },
   [THEME_STATE_QUERY_PARAMETER]: { kind: 'serialized' },
   [IS_MAIN_WINDOW_QUERY_PARAMETER]: { kind: 'flag' },

@@ -89,6 +89,17 @@ declare global {
    */
   var windowId: string | undefined;
   /**
+   * Whether this window was created without being activated, as of the moment it was created. Read
+   * from the URL search params in the renderer process; `false` in every other process.
+   *
+   * This is the window's state at creation, not now. What content should do about it is
+   * `isWindowAwaitingFirstActivation()` in the window service shard, which stops answering `true`
+   * once the window is activated.
+   *
+   * @experimental
+   */
+  var wasWindowCreatedWithoutActivation: boolean;
+  /**
    * Whether this renderer is the main window — the one that draws the top-level menu. On Windows
    * and Linux, secondary windows get identical chrome minus that menu; on macOS the top-level menu
    * lives in the OS-level menu bar rather than in-window, so this flag does not remove it there —
