@@ -51,7 +51,6 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     // Polling loop: each iteration depends on the previous result, so awaits must be sequential
-    // eslint-disable-next-line no-await-in-loop
     const match = await page
       .frames()
       .filter((f) => f !== page.mainFrame())
@@ -115,7 +114,6 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
       // this loop is polling through, which Playwright reports as a timeout. A genuinely different
       // failure still propagates — only the expected kind is absorbed here, into the
       // sawHiddenMatch-aware diagnostic below (as its cause) once the deadline is actually reached.
-      // eslint-disable-next-line no-await-in-loop
       lastRecoveryError = await attemptRecovery(
         () => tab.first().click({ timeout: singleAttemptBudgetMs(deadline - Date.now()) }),
         (error) =>
@@ -126,7 +124,6 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
     }
 
     // Polling loop: wait between attempts must be sequential
-    // eslint-disable-next-line no-await-in-loop
     await page.waitForTimeout(500);
   }
 
