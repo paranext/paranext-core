@@ -54,6 +54,26 @@ internal static class SettingsService
         );
     }
 
+    /// <summary>
+    /// Like <see cref="GetSetting{T}"/>, but returns false instead of throwing if the lookup
+    /// fails. A legitimate null result (e.g. no value stored and no default declared) still
+    /// counts as success; only an exception (e.g. a timeout) counts as failure.
+    /// </summary>
+    public static bool TryGetSetting<T>(PapiClient papiClient, string key, out T? value)
+    {
+        try
+        {
+            value = GetSetting<T>(papiClient, key);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting {key}: {ex}");
+            value = default;
+            return false;
+        }
+    }
+
     public static bool SetSetting(PapiClient papiClient, string key, object? settingData)
     {
         string description = $"SettingService.SetSetting for {key}";
