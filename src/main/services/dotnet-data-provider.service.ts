@@ -99,6 +99,18 @@ function startDotnetDataProvider() {
   let args: string[] = ['watch', '--project', 'c-sharp/ParanextDataProvider.csproj'];
   let options: SpawnOptionsWithoutStdio | undefined;
 
+  // `dotnet watch` restores and builds before the provider's `Main()` runs at all, which is the
+  // single largest block of dev startup. Opting out runs the already-built assembly instead, so
+  // that cost moves out of startup — at the price of hot reload on C# edits: you must run
+  // `npm run build:data` yourself after changing C#, or the app silently keeps running the old
+  // build.
+  // `run --no-build` rather than the built assembly directly: the build output path is
+  // runtime-identifier specific (e.g. `bin/Debug/net8.0/linux-x64/`), so letting MSBuild resolve it
+  // keeps this working on every platform without hardcoding that layout.
+  if (!globalThis.isPackaged && process.env.PT_DOTNET_NO_WATCH === 'true') {
+    args = ['run', '--project', 'c-sharp/ParanextDataProvider.csproj', '--no-build'];
+  }
+
   if (globalThis.isPackaged) {
     let dotnetPath: string = path.join(process.resourcesPath, 'dotnet');
     if (process.platform === 'darwin')
