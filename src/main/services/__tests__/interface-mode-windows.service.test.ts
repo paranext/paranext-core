@@ -373,6 +373,21 @@ describe('reacting to an interface-mode change', () => {
     expect(deps.closeWindow).not.toHaveBeenCalled();
   });
 
+  test('a window already on its way out cannot be the window a switch leaves behind', async () => {
+    // The primary role is read from the persisted entry, which a window keeps until it has actually
+    // gone — so a window the user closed a moment ago still answers to it. Leaving that one and
+    // closing the rest ends with no window at all, one close later, which is the outcome the floor
+    // above exists to refuse.
+    const deps = makeDeps({
+      isWindowClosing: (windowId) => windowId === 1,
+    });
+    initializeModeSwitchOrchestration(deps, 'power');
+
+    await handleInterfaceModeChanged('simple');
+
+    expect(deps.closeWindow).not.toHaveBeenCalled();
+  });
+
   test('a window that is alive is still the survivor when another has been given up on', async () => {
     // The negative control for the guard above: refusing whenever ANY window has been given up on
     // would stop the switch working in the ordinary case, and would read as correct from the test
