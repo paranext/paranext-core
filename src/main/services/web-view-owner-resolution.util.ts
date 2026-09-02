@@ -33,8 +33,15 @@ import { getWebViewShard, webViewShards } from '@main/services/web-view-shard-in
  * exists.
  */
 export type WebViewWindowCreator = {
-  /** Create a window that starts truly empty and waits for routed content. Answers its window id */
-  createPendingContentWindow: () => Promise<string>;
+  /**
+   * Create a window that starts truly empty and waits for routed content. Answers its window id
+   *
+   * @param isUserRequested Whether a person in this app asked for the window this content is going
+   *   into — a tab context menu's "Move tab to new window" did, an extension's own web-view open
+   *   did not. A window the user asked for comes to the front; one they did not appears without
+   *   taking the foreground
+   */
+  createPendingContentWindow: (isUserRequested: boolean) => Promise<string>;
   /** Close a window created to hold a moved web view whose content never arrived */
   closeWindow: (windowId: string) => void;
 };
@@ -393,7 +400,10 @@ export type FreshWindow = {
  *
  * @param webViewDescription What the window is being created for, for the errors this raises
  */
-export async function createFreshWindow(webViewDescription: string): Promise<FreshWindow> {
+export async function createFreshWindow(
+  webViewDescription: string,
+  isUserRequested: boolean,
+): Promise<FreshWindow> {
   if (!windowCreator) {
     try {
       await waitForWindowCreatorWiring();
@@ -412,7 +422,7 @@ export async function createFreshWindow(webViewDescription: string): Promise<Fre
     throw new Error(
       `Cannot open ${webViewDescription} in a new window: window creation is not wired up`,
     );
-  const windowId = await creator.createPendingContentWindow();
+  const windowId = await creator.createPendingContentWindow(isUserRequested);
 
   // Closes the window this call created, and never lets a failure to close replace the reason the
   // window is being closed in the first place — a window that fails to close is a leak to warn
