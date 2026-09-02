@@ -11,28 +11,58 @@ import { describe, expect, it } from 'vitest';
 import { decideStuckGateAction } from './helpers';
 
 describe('deciding what a stuck first-run gate needs', () => {
+  it('reports a gate that has gone as cleared, not as the wizard', () => {
+    // The discriminators are read one round-trip after the gate was seen, so a gate that resolves
+    // in between leaves both of them false — which is exactly the wizard's signature, and the
+    // wizard is the one branch that fails the whole run. Whether the gate is still up decides
+    // first, or a healthy app is failed for a settings pin that was fine.
+    expect(
+      decideStuckGateAction({
+        escapeHatchVisible: false,
+        onErrorScreen: false,
+        gateStillShowing: false,
+      }),
+    ).toBe('cleared');
+  });
+
   it('recovers through the escape hatch whenever one is offered', () => {
     // The error screen shows a heading, an alert and a hatch at once. Recovering is right, and must
     // not depend on the hatch being observed before the heading.
-    expect(decideStuckGateAction({ escapeHatchVisible: true, onErrorScreen: true })).toBe(
-      'recoverable',
-    );
+    expect(
+      decideStuckGateAction({
+        escapeHatchVisible: true,
+        onErrorScreen: true,
+        gateStillShowing: true,
+      }),
+    ).toBe('recoverable');
     // The loading branch reveals the same hatch once its probe runs long.
-    expect(decideStuckGateAction({ escapeHatchVisible: true, onErrorScreen: false })).toBe(
-      'recoverable',
-    );
+    expect(
+      decideStuckGateAction({
+        escapeHatchVisible: true,
+        onErrorScreen: false,
+        gateStillShowing: true,
+      }),
+    ).toBe('recoverable');
   });
 
   it('names the wizard when a heading is up with no alert and no way out', () => {
-    expect(decideStuckGateAction({ escapeHatchVisible: false, onErrorScreen: false })).toBe(
-      'wizard',
-    );
+    expect(
+      decideStuckGateAction({
+        escapeHatchVisible: false,
+        onErrorScreen: false,
+        gateStillShowing: true,
+      }),
+    ).toBe('wizard');
   });
 
   it('stays quiet on an error screen that has not offered its hatch', () => {
     // Reporting this as the wizard would name the wrong cause; there is a way out, just not yet.
-    expect(decideStuckGateAction({ escapeHatchVisible: false, onErrorScreen: true })).toBe(
-      'inconclusive',
-    );
+    expect(
+      decideStuckGateAction({
+        escapeHatchVisible: false,
+        onErrorScreen: true,
+        gateStillShowing: true,
+      }),
+    ).toBe('inconclusive');
   });
 });

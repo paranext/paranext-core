@@ -1538,6 +1538,11 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
 interface StuckGateObservations {
   escapeHatchVisible: boolean;
   onErrorScreen: boolean;
+  /**
+   * Whether the gate is still up at the moment the observations finish. Read LAST, after the two
+   * discriminators, because it is the one that says whether they still describe anything.
+   */
+  gateStillShowing: boolean;
 }
 
 /**
@@ -1552,7 +1557,13 @@ interface StuckGateObservations {
 export function decideStuckGateAction({
   escapeHatchVisible,
   onErrorScreen,
-}: StuckGateObservations): 'recoverable' | 'wizard' | 'inconclusive' {
+  gateStillShowing,
+}: StuckGateObservations): 'cleared' | 'recoverable' | 'wizard' | 'inconclusive' {
+  // Decided before anything else. The observations are read a round-trip after the gate was seen,
+  // so a gate that resolves in between leaves both discriminators false — the wizard's exact
+  // signature, and the wizard is the branch that fails the whole run. A healthy app that was merely
+  // slow to resolve must not be reported as a settings pin that did not take.
+  if (!gateStillShowing) return 'cleared';
   // A way out is a way out, whichever branch offered it.
   if (escapeHatchVisible) return 'recoverable';
   // A heading with no alert beside it is the wizard, which offers no way out by design.
@@ -1619,8 +1630,14 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<vo
       ? decideStuckGateAction({
           escapeHatchVisible: await escapeHatch.isVisible(),
           onErrorScreen: (await errorScreen.count()) > 0,
+          // Last on purpose: these are read in source order, and this one is only meaningful once
+          // the other two have been taken.
+          gateStillShowing: await firstRunDialog.isVisible(),
         })
       : 'inconclusive';
+
+  // The gate resolved while it was being examined, which is the outcome this whole step wants.
+  if (action === 'cleared') return;
 
   if (action === 'wizard')
     throw new Error(
