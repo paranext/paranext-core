@@ -11,6 +11,7 @@ import { dataProviderService } from '@shared/services/data-provider.service';
 import {
   forgetWindowWithholding,
   noteWindowWithheldFromActivation,
+  resetWindowActivationForTesting,
 } from '@main/window-activation.util';
 
 /** Handler the engine registers against the routing-target-change event, so tests can fire it */
@@ -105,8 +106,9 @@ function moveRoutingTargetTo(windowId: number | undefined) {
 describe('window service router', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Which windows were created without activation is process state, not a mock.
-    forgetWindowWithholding(1);
+    // Which windows were created without activation, and whose focus has already been handed
+    // back, is process state, not a mock.
+    resetWindowActivationForTesting();
     mocks.routingTargetChangeHandlers.clear();
     mocks.getTargetWindowId.mockReturnValue(1);
   });
