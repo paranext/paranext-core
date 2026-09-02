@@ -2396,6 +2396,9 @@ async function main() {
             }
             await createWindow({ kind: 'preserved-entry', entry });
           },
+          writeInterfaceModeSetting: async (mode) => {
+            await settingsService.set('platform.interfaceMode', mode);
+          },
         },
         startupInterfaceMode,
       );
