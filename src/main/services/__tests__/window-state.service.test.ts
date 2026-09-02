@@ -332,6 +332,27 @@ describe('window state tracking', () => {
       expect(isWindowTracked('entry-durable-id')).toBe(false);
     });
 
+    test('leaves the reclaimer’s state alone when the window it took the id from is finally swept', () => {
+      // The dead window's `closed` handler still runs, and it arrives after the reclaim. Its splice
+      // matches the window object, but the state it clears is keyed by the id alone — which by then
+      // belongs to the live window. Clearing there would tell the app the live window is not ready,
+      // holds no focus, and is not tracked, all while it is on screen.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const destroyed = { id: 1, isDestroyed: () => true } as BrowserWindow;
+      addWindow(destroyed, 'entry-durable-id');
+      const live = raisableWindow(2);
+      addWindow(live.window, 'entry-durable-id');
+      markWindowReady('entry-durable-id');
+      setFocusedWindowId('entry-durable-id');
+
+      removeWindow(destroyed, 'entry-durable-id');
+
+      expect(isWindowTracked('entry-durable-id')).toBe(true);
+      expect(isWindowReady('entry-durable-id')).toBe(true);
+      expect(wasWindowEverReady('entry-durable-id')).toBe(true);
+      expect(getFocusedWindowId()).toBe('entry-durable-id');
+    });
+
     test('says which id it refused and what the window lost when it mints over a duplicate', () => {
       addWindow(fakeWindow(1), 'entry-durable-id');
 
