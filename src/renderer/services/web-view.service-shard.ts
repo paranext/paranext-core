@@ -754,7 +754,7 @@ export function getDockLayout(): Promise<PapiDockLayout> {
  * @returns The papi dock layout
  * @throws If the papi dock layout has not been registered
  */
-function getDockLayoutSync(): PapiDockLayout {
+export function getDockLayoutSync(): PapiDockLayout {
   if (!papiDockLayoutVarSync)
     throw new Error(
       'WebView Service error: Dock layout was requested synchronously, but the dock layout has not been registered!',

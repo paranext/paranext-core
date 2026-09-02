@@ -40,6 +40,7 @@ import {
 } from 'platform-bible-utils';
 import {
   getDockLayout,
+  getDockLayoutSync,
   getSavedWebViewDefinitionSync,
   onDidCloseWebView,
   onDidOpenWebView,
@@ -318,13 +319,16 @@ function endWithholdingAndCatchUp(): void {
   if (!noteWindowActivated()) return;
   const tabId = takeTabAwaitingDocumentFocus();
   if (tabId === undefined) return;
-  // Failure here costs the caret, not the content, so it is logged rather than thrown: the user can
-  // still click into the view.
-  getDockLayout()
-    .then((dockLayout) => dockLayout.focusTab(tabId))
-    .catch((e) => {
-      logger.warn(`Could not focus tab ${tabId} after this window was activated: ${e}`);
-    });
+  // Reached synchronously, within the triggering gesture's own event handling, rather than through
+  // the async `getDockLayout()`: a keystroke's own default action is dispatched as part of that same
+  // gesture, so a focus move that waits for a microtask can land after it, with nothing left to
+  // redirect it to. Failure here costs the caret, not the content, so it is logged rather than
+  // thrown: the user can still click into the view.
+  try {
+    getDockLayoutSync().focusTab(tabId);
+  } catch (e) {
+    logger.warn(`Could not focus tab ${tabId} after this window was activated: ${e}`);
+  }
 }
 
 /**
