@@ -9,7 +9,7 @@
  */
 import path from 'path';
 import { describe, expect, it } from 'vitest';
-import { isSweepEnabled, selectPidsUnderRoot } from './scoped-cleanup';
+import { isSweepEnabled, runCleanup, selectPidsUnderRoot } from './scoped-cleanup';
 
 const ROOT = '/home/dev/paranext-core';
 
@@ -82,5 +82,61 @@ describe('which processes belong to this checkout', () => {
     const ourOwnTooling = { pid: 401, comm: 'npm', cwd: ROOT };
 
     expect(selectPidsUnderRoot(ROOT, [ourOwnTooling], [])).toEqual([]);
+  });
+});
+
+describe('which cleanup a platform gets', () => {
+  /** Records which action ran, so the choice can be asserted without killing anything. */
+  function spyActions() {
+    const calls: string[] = [];
+    return {
+      calls,
+      actions: {
+        killUnderRoot: (root: string) => {
+          calls.push(`scoped:${root}`);
+          return [4242];
+        },
+        sweepByProcessName: () => {
+          calls.push('by-name');
+        },
+      },
+    };
+  }
+
+  it('sweeps nothing when the gate says no, on any platform', () => {
+    const linux = spyActions();
+    expect(
+      runCleanup({ ciFlag: 'false', platform: 'linux', root: ROOT }, linux.actions).swept,
+    ).toBe('none');
+    expect(linux.calls).toEqual([]);
+
+    const mac = spyActions();
+    runCleanup({ ciFlag: undefined, platform: 'darwin', root: ROOT }, mac.actions);
+    expect(mac.calls).toEqual([]);
+  });
+
+  it('uses the scoped kill on Linux, and never the name sweep', () => {
+    const { calls, actions } = spyActions();
+
+    const result = runCleanup({ ciFlag: 'true', platform: 'linux', root: ROOT }, actions);
+
+    expect(result.swept).toBe('scoped');
+    expect(result.pids).toEqual([4242]);
+    expect(calls).toEqual([`scoped:${ROOT}`]);
+    expect(calls).not.toContain('by-name');
+  });
+
+  it('falls back to the name sweep where /proc does not exist', () => {
+    // Selection reads /proc, which only Linux has. Without this branch a macOS or Windows CI runner
+    // would sweep nothing at all — silently losing the cleanup the gate exists to allow. A CI
+    // runner is single-tenant, so matching by name is correct there.
+    (['darwin', 'win32'] as const).forEach((platform) => {
+      const { calls, actions } = spyActions();
+
+      const result = runCleanup({ ciFlag: 'true', platform, root: ROOT }, actions);
+
+      expect(result.swept).toBe('by-name');
+      expect(calls).toEqual(['by-name']);
+    });
   });
 });
