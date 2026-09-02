@@ -1,13 +1,13 @@
 /**
  * Teardown cleanup scoped to the checkout that ran the tests.
  *
- * The suite's teardown used to finish by running `npm run stop`, which kills every process named
- * `electron` or `dotnet` on the machine. That is defensible on a CI runner the run owns, and wrong
- * anywhere else: it takes down the developer's own app, any app a CDP-based suite is attached to,
- * and other checkouts' runs on the same box.
+ * Matching processes by NAME reaches every `electron` and `dotnet` on the machine: the developer's
+ * own app, any app a CDP-based suite is attached to, and other checkouts' runs on a shared box.
+ * Selection here is by working directory instead, so cleanup reaches only what this checkout
+ * started.
  *
- * Two decisions keep it honest, and both live here so they can be tested without killing anything:
- * whether to sweep at all, and which processes belong to this checkout.
+ * Two decisions live here so they can be tested without killing anything: whether to sweep at all,
+ * and which processes belong to this checkout.
  */
 import fs from 'fs';
 import path from 'path';
@@ -16,12 +16,17 @@ import path from 'path';
 export type ProcessCandidate = { pid: number; comm: string; cwd: string | undefined };
 
 /**
- * The process names the machine-wide sweep used to match, and the only ones considered here.
+ * The only process names cleanup considers.
  *
- * Being under the repo root is NOT sufficient on its own: npm, node and the shell running the suite
- * are all rooted there too, and killing them kills the run doing the killing.
+ * Being under the repo root is necessary but NOT sufficient: npm, node and the shell running the
+ * suite are rooted there too, and killing them kills the run doing the killing.
+ *
+ * `dotnet` is the data provider in development (`dotnet watch --project
+ * c-sharp/ParanextDataProvider.csproj`), which is how every e2e run launches it. A packaged build
+ * runs it as a `ParanextDataProvider` executable instead, named here so a packaged app started by
+ * hand in this checkout is not left behind.
  */
-const SWEEPABLE_PROCESS_NAMES = ['electron', 'dotnet'];
+const SWEEPABLE_PROCESS_NAMES = ['electron', 'dotnet', 'ParanextDataProvider'];
 
 /** Values that mean "no" even though they are non-empty strings. */
 const NEGATIVE_FLAG_VALUES = ['0', 'false', 'no', 'off'];
@@ -67,25 +72,32 @@ export function selectPidsUnderRoot(
     .map((candidate) => candidate.pid);
 }
 
+/** The parent of `pid`, or undefined when it cannot be read. */
+function readParentPid(pid: number): number | undefined {
+  try {
+    // /proc/<pid>/stat field 4 is the parent pid. Field 2 is the command name, which can contain
+    // spaces and parentheses, so only the fields after the final ')' can be split safely.
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf-8');
+    const afterComm = stat
+      .slice(stat.lastIndexOf(')') + 1)
+      .trim()
+      .split(/\s+/);
+    const parsed = Number.parseInt(afterComm[1] ?? '', 10);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  } catch {
+    return undefined;
+  }
+}
+
 /** This process and every ancestor of it, so cleanup cannot kill the run performing it. */
 export function selfAndAncestorPids(): number[] {
   const pids: number[] = [];
-  let { pid } = process;
-  while (pid !== undefined && pid > 1 && !pids.includes(pid)) {
-    pids.push(pid);
-    try {
-      // /proc/<pid>/stat field 4 is the parent pid. The command name in field 2 can contain spaces
-      // and parentheses, so the fields after the final ')' are what can be split safely.
-      const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf-8');
-      const afterComm = stat
-        .slice(stat.lastIndexOf(')') + 1)
-        .trim()
-        .split(/\s+/);
-      const parsed = Number.parseInt(afterComm[1] ?? '', 10);
-      pid = Number.isNaN(parsed) ? undefined : parsed;
-    } catch {
-      pid = undefined;
-    }
+  let current = process.pid;
+  while (current > 1 && !pids.includes(current)) {
+    pids.push(current);
+    const parent = readParentPid(current);
+    if (parent === undefined) break;
+    current = parent;
   }
   return pids;
 }
@@ -132,4 +144,35 @@ export function killProcessesUnderRoot(root: string): number[] {
     }
   });
   return pids;
+}
+
+/** What a cleanup pass may do, injected so the choice between them is testable. */
+export type CleanupActions = {
+  /** Terminate this checkout's processes, returning their pids. */
+  killUnderRoot: (root: string) => number[];
+  /** Terminate by process name across the machine. Only ever correct where the machine is ours. */
+  sweepByProcessName: () => void;
+};
+
+/**
+ * Decide and perform the cleanup this run should do.
+ *
+ * Scoped selection reads `/proc`, which only Linux has, so on macOS and Windows it can find nothing
+ * at all. Those are CI runners in practice, and a CI runner is single-tenant — nothing else on the
+ * machine belongs to anyone — so matching by name is both correct and the only option there.
+ * Falling through to "do nothing" instead would quietly drop the cleanup on two of the three
+ * platforms CI builds on.
+ */
+export function runCleanup(
+  {
+    ciFlag,
+    platform,
+    root,
+  }: { ciFlag: string | undefined; platform: NodeJS.Platform; root: string },
+  actions: CleanupActions,
+): { swept: 'none' | 'scoped' | 'by-name'; pids: number[] } {
+  if (!isSweepEnabled(ciFlag)) return { swept: 'none', pids: [] };
+  if (platform === 'linux') return { swept: 'scoped', pids: actions.killUnderRoot(root) };
+  actions.sweepByProcessName();
+  return { swept: 'by-name', pids: [] };
 }
