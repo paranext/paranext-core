@@ -916,6 +916,32 @@ describe('window state tracking', () => {
       expect(isWindowClosing(1)).toBe(false);
     });
 
+    test('reports that a window had been given up on, and clears the mark', () => {
+      // Removing a window clears its marks so nothing is left answering for a window that no longer
+      // exists — which means a caller that needs to know what it WAS cannot ask afterwards, and
+      // asking beforehand is an ordering rule nothing enforces. The removal reports it instead.
+      const window = fakeWindow(1);
+      addWindow(window);
+      markWindowReady(1);
+      markWindowAbandoned(1);
+
+      const { wasAbandoned } = removeWindow(window, 1);
+
+      expect(wasAbandoned).toBe(true);
+      // …and the mark itself is gone, which is why it had to be reported
+      expect(isWindowAbandoned(1)).toBe(false);
+    });
+
+    test('reports that a window had not been given up on when it never was', () => {
+      // The negative control: a rule that answered `true` for every removal would read as working
+      // and would keep the entry of every window the user deliberately closed
+      const window = fakeWindow(1);
+      addWindow(window);
+      markWindowReady(1);
+
+      expect(removeWindow(window, 1).wasAbandoned).toBe(false);
+    });
+
     test('takes a closing mark back, so the window can be routed to again', () => {
       // The counterpart to the mark, and load-bearing: `closingWindowIds` is what
       // `getRoutingTarget` reads to decide a window cannot take new work, so a mark left on a

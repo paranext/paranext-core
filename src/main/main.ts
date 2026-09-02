@@ -1416,18 +1416,12 @@ async function main() {
       // is destroyed by now, and reading a property off it can throw — which would abandon the rest
       // of this teardown, leaving the window tracked forever and the app never told it closed.
       //
-      // What this window's disappearance means for its entry, decided BEFORE `removeWindow` below.
-      // That call clears this window's marks as part of not leaving state behind that answers for a
-      // window which no longer exists — so every one of these reads has to happen while they are
-      // still true. Asked afterwards, `isWindowAbandoned` is always `false` and the entry of a
-      // window that crash-looped would go with it after all.
-      const keepsItsEntry = keepsItsEntryOnClose({
-        isAppGoingDown,
-        isAbandoned: isWindowAbandoned(windowId),
-        isClosingForModeSwitch: isClosingForModeSwitch(windowId),
-        isPendingContent: isWindowPendingContent(windowId),
-      });
-      removeWindow(newWindow, windowId);
+      // The removal reports what this window's marks said, because it is what clears them. Asking
+      // afterwards would answer for a window that is no longer there — which is how the abandoned
+      // mark was lost — and asking beforehand is an ordering rule nothing enforces. Taking it from
+      // the return leaves no order to get wrong. The other two marks below are cleared later, by
+      // `handleWindowRemoved` and `clearModeSwitchClose`, so they are still true here.
+      const { wasAbandoned } = removeWindow(newWindow, windowId);
 
       // What this window's disappearance means for its entry. A deliberate close — the app stays up
       // — takes the entry with it, and the structure is rewritten without it below so the window
@@ -1443,6 +1437,12 @@ async function main() {
       // it does for a window going down with the app. A window still waiting for its content is the
       // exception — its entry holds nothing, so keeping it would resurrect a blank window on every
       // later switch.
+      const keepsItsEntry = keepsItsEntryOnClose({
+        isAppGoingDown,
+        isAbandoned: wasAbandoned,
+        isClosingForModeSwitch: isClosingForModeSwitch(windowId),
+        isPendingContent: isWindowPendingContent(windowId),
+      });
       handleWindowRemoved(windowId, keepsItsEntry ? 'entry-stays' : 'entry-goes-with-it');
       clearModeSwitchClose(windowId);
       // A window told to close counts as gone from the moment it is told, and stops counting for
