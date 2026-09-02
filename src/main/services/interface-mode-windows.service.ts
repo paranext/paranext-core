@@ -194,9 +194,10 @@ export function clearModeSwitchClose(windowId: number): void {
   if (cachedInterfaceMode !== 'power') return;
   const deps = dependencies;
   if (!deps || deps.isAppShuttingDown()) return;
-  // A reopen already running belongs to this same switch — nothing has bumped the generation since
-  // — and re-reads the set every pass, so it picks these entries up itself. Queueing behind it
-  // would create a window per entry a second time.
+  // Something is already going to read the set after this moment, so reading it again here would
+  // create a window per entry twice. Reaching this line means the mode reads power, which means a
+  // switch back to power ran — so the reopen in flight is either that switch's own, which re-reads
+  // the set on every pass, or an earlier one that its `runReopen` is already waiting behind.
   if (reopenInFlight) return;
   // Not awaited: this runs from a window's `closed` handler, which is synchronous and has its own
   // teardown to finish. Failures are reported by the reopen itself, one window at a time.
