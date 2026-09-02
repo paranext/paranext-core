@@ -242,7 +242,7 @@
     },
     {
       "category": "dataProvider",
-      "docsStaticallyResolved": true,
+      "docsStaticallyResolved": false,
       "documented": false,
       "experimental": false,
       "file": "c-sharp/NetworkObjects/TimeDataProvider.cs",
@@ -252,7 +252,7 @@
     },
     {
       "category": "dataProvider",
-      "docsStaticallyResolved": true,
+      "docsStaticallyResolved": false,
       "documented": false,
       "experimental": false,
       "file": "c-sharp/Checks/CheckRunner.cs",
@@ -262,7 +262,7 @@
     },
     {
       "category": "dataProvider",
-      "docsStaticallyResolved": true,
+      "docsStaticallyResolved": false,
       "documented": false,
       "experimental": false,
       "file": "c-sharp/Users/InternetSettingsDataProvider.cs",
@@ -272,7 +272,7 @@
     },
     {
       "category": "dataProvider",
-      "docsStaticallyResolved": true,
+      "docsStaticallyResolved": false,
       "documented": false,
       "experimental": false,
       "file": "c-sharp/Projects/DigitalBibleLibrary/DblDownloadableDataProvider.cs",
@@ -282,7 +282,7 @@
     },
     {
       "category": "dataProvider",
-      "docsStaticallyResolved": true,
+      "docsStaticallyResolved": false,
       "documented": false,
       "experimental": false,
       "file": "c-sharp/Checks/InventoryDataProvider.cs",
