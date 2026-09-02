@@ -3,16 +3,24 @@ import { expect, type FrameLocator, type Locator, type Page } from '@playwright/
 /**
  * Open the user-profile popover and return its "Internet & connectivity" action.
  *
- * The trigger toggles, so the click is only issued while the action is absent and then retried: a
- * click that lands before the toolbar button is interactive (or while a dock rebuild is putting the
- * overlay back up) leaves the popover shut, and a blind second click would close one that did
- * open.
+ * The trigger toggles, so the click is only issued while the popover itself is closed and then
+ * retried: a click that lands before the toolbar button is interactive (or while a dock rebuild is
+ * putting the overlay back up) leaves the popover shut, and a blind second click would close one
+ * that did open.
+ *
+ * Gated on the trigger's own `data-state` (Radix's open/closed state for the popover), not on
+ * whether `action` has rendered yet. The popover can be open with its content still mounting — the
+ * action's own render, or a `PopoverContent` animation — and gating the click on the action's
+ * visibility instead treated that in-between moment as "still closed", so a retry re-clicked the
+ * toggle and closed the popover that had, in fact, just opened. `data-state` reflects Radix's own
+ * open/closed state directly, so a retry only clicks while the popover is actually shut.
  */
 export async function openUserProfilePopover(mainPage: Page): Promise<Locator> {
   const action = mainPage.getByTestId('user-profile-action-network');
+  const trigger = mainPage.getByTestId('user-profile-popover-trigger');
   await expect(async () => {
-    if (!(await action.isVisible()))
-      await mainPage.getByTestId('user-profile-popover-trigger').click({ timeout: 5_000 });
+    if ((await trigger.getAttribute('data-state')) !== 'open')
+      await trigger.click({ timeout: 5_000 });
     await expect(action).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 30_000 });
   return action;
