@@ -16,6 +16,7 @@ import {
   isWindowReady,
   markWindowAbandoned,
   markWindowClosing,
+  markWindowNotClosing,
   markWindowNotReady,
   markWindowReady,
   onDidChangeRoutingTarget,
@@ -911,6 +912,37 @@ describe('window state tracking', () => {
       removeWindow(gone, 1);
 
       markWindowClosing(1);
+
+      expect(isWindowClosing(1)).toBe(false);
+    });
+
+    test('takes a closing mark back, so the window can be routed to again', () => {
+      // The counterpart to the mark, and load-bearing: `closingWindowIds` is what
+      // `getRoutingTarget` reads to decide a window cannot take new work, so a mark left on a
+      // window whose close never happened leaves it permanently unroutable — the failure the
+      // interface-mode switch's recovery exists to prevent. Exercised here against the real
+      // implementation, since the orchestration only ever sees it through an injected mock.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowClosing(1);
+      expect(isWindowClosing(1)).toBe(true);
+
+      markWindowNotClosing(1);
+
+      expect(isWindowClosing(1)).toBe(false);
+      // Only the window named: window 2's close is still going ahead
+      markWindowClosing(2);
+      markWindowNotClosing(1);
+      expect(isWindowClosing(2)).toBe(true);
+    });
+
+    test('taking back a mark a window never had changes nothing', () => {
+      // The recovery calls this for any window it is putting back, including ones whose mark was
+      // never recorded — an untracked id is ignored by the mark itself — so it has to be a no-op
+      // rather than an announcement of a change that did not happen.
+      addWindow(fakeWindow(1));
+
+      expect(() => markWindowNotClosing(1)).not.toThrow();
 
       expect(isWindowClosing(1)).toBe(false);
     });
