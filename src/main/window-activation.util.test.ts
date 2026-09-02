@@ -173,8 +173,25 @@ describe('handing focus back when a withheld window takes it on its own', () => 
   // cannot be stopped from taking focus, focus is handed straight back to where the user was.
   test('hands focus back the first time a withheld window takes it unbidden', () => {
     expect(
-      shouldBounceFocusBack({ isAwaitingFirstActivation: true, hasAlreadyBouncedFocusBack: false }),
+      shouldBounceFocusBack({
+        isAwaitingFirstActivation: true,
+        hasAlreadyBouncedFocusBack: false,
+        canReturnFocusElsewhere: true,
+      }),
     ).toBe(true);
+  });
+
+  test('does nothing when there is no other window to hand focus back to', () => {
+    // The first window in the process can be a withheld one — an extension opening a web view
+    // before any window has been restored. Routing then answers with this window itself, and
+    // handing focus back to the window that has it would be a flash for no reason.
+    expect(
+      shouldBounceFocusBack({
+        isAwaitingFirstActivation: true,
+        hasAlreadyBouncedFocusBack: false,
+        canReturnFocusElsewhere: false,
+      }),
+    ).toBe(false);
   });
 
   test('leaves a window the user has activated alone', () => {
@@ -183,6 +200,7 @@ describe('handing focus back when a withheld window takes it on its own', () => 
       shouldBounceFocusBack({
         isAwaitingFirstActivation: false,
         hasAlreadyBouncedFocusBack: false,
+        canReturnFocusElsewhere: true,
       }),
     ).toBe(false);
   });
@@ -191,7 +209,11 @@ describe('handing focus back when a withheld window takes it on its own', () => 
     // Bouncing twice would be a window the user cannot get into: every attempt would throw them
     // out again.
     expect(
-      shouldBounceFocusBack({ isAwaitingFirstActivation: true, hasAlreadyBouncedFocusBack: true }),
+      shouldBounceFocusBack({
+        isAwaitingFirstActivation: true,
+        hasAlreadyBouncedFocusBack: true,
+        canReturnFocusElsewhere: true,
+      }),
     ).toBe(false);
   });
 });
