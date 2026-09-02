@@ -511,8 +511,8 @@ test.describe('moving a web view between windows', () => {
     // emptied — so this rides the same Electron instance rather than paying for another launch.
     //
     // Each window is named after the tab it is showing, which is what gives it its own OS switcher
-    // entry (NN-3) and what the submenu names its targets by. Every window here shows a Home tab, so
-    // all three are called "Home": the design tolerates that collision deliberately, since nothing
+    // entry and what the submenu names its targets by. Every window here shows a Home tab, so all
+    // three are called "Home": the design tolerates that collision deliberately, since nothing
     // disambiguates windows showing the same thing. So this asserts each window is named after its
     // content — never that the names differ, which would contradict the rule.
     //
