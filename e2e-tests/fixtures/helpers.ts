@@ -1343,15 +1343,28 @@ export function restoreLeakedSettings(): string[] | undefined {
 
   const backup = readSettingsBackup();
   if (backup === undefined) {
-    const moved = quarantineUnreadableBackup(settingsBackupPath());
+    // A baseline whose backup cannot be read cannot be trusted as the developer's own: whatever
+    // wrote a backup this run cannot make sense of may have already merged pinned overrides into
+    // the live file before dying, and an unreadable backup is exactly the case where this run
+    // cannot tell a clean baseline from a polluted one. Quarantine the live file alongside the
+    // backup, under the same stamp, so the next `preConfigureSettings` starts from "no settings"
+    // instead of laundering a leak as though it were legitimate.
+    const stamp = Date.now();
+    const movedBackup = quarantineUnreadableBackup(settingsBackupPath(), stamp);
+    const movedSettings = fs.existsSync(settingsPath())
+      ? quarantineUnreadableBackup(settingsPath(), stamp)
+      : undefined;
     console.warn(
-      moved === undefined
+      movedBackup === undefined && movedSettings === undefined
         ? `Leaving ${settingsBackupPath()} alone: it is unreadable, or predates backups recording ` +
             'which run took them, and it could not be moved aside. Nothing was restored and nothing ' +
             'was deleted, but settings pins will refuse to run until it is gone — inspect it by hand.'
-        : `Moved ${settingsBackupPath()} aside to ${moved}: it is unreadable, or predates backups ` +
-            'recording which run took them. Nothing was restored and nothing was deleted — those ' +
-            'bytes are at that path if any of it is yours. Runs are no longer blocked.',
+        : `Moved ${[movedBackup, movedSettings]
+            .filter((moved) => moved !== undefined)
+            .join(' and ')} aside: the backup is unreadable, or predates backups recording which ` +
+            'run took them, and the live settings file next to it cannot be trusted as a clean ' +
+            'baseline either. Nothing was restored and nothing was deleted — those bytes are at ' +
+            'those paths if any of it is yours. Runs are no longer blocked.',
     );
     return undefined;
   }
