@@ -9,9 +9,11 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { isSweepEnabled, runCleanup, selectPidsUnderRoot } from './scoped-cleanup';
 
+// Working directories come from /proc, so every synthetic one here is POSIX regardless of the host
+// running the tests. The real directories in the symlink test below are the one exception.
 const ROOT = '/home/dev/paranext-core';
 
 describe('whether to sweep at all', () => {
@@ -41,8 +43,8 @@ describe('whether to sweep at all', () => {
 describe('which processes belong to this checkout', () => {
   const candidates = [
     { pid: 101, comm: 'electron', cwd: ROOT },
-    { pid: 102, comm: 'electron', cwd: path.join(ROOT, 'release/app') },
-    { pid: 103, comm: 'dotnet', cwd: path.join(ROOT, 'c-sharp') },
+    { pid: 102, comm: 'electron', cwd: path.posix.join(ROOT, 'release/app') },
+    { pid: 103, comm: 'dotnet', cwd: path.posix.join(ROOT, 'c-sharp') },
   ];
 
   it('selects processes running inside the root', () => {
@@ -171,12 +173,12 @@ describe('processes this checkout must NOT claim', () => {
     const nested = {
       pid: 501,
       comm: 'electron',
-      cwd: path.join(ROOT, '.claude/worktrees/some-branch'),
+      cwd: path.posix.join(ROOT, '.claude/worktrees/some-branch'),
     };
     const deeper = {
       pid: 502,
       comm: 'dotnet',
-      cwd: path.join(ROOT, '.claude/worktrees/some-branch/c-sharp'),
+      cwd: path.posix.join(ROOT, '.claude/worktrees/some-branch/c-sharp'),
     };
 
     expect(selectPidsUnderRoot(ROOT, [nested, deeper], [])).toEqual([]);
@@ -184,7 +186,7 @@ describe('processes this checkout must NOT claim', () => {
 
   it('still claims its own processes when it IS a nested worktree', () => {
     // The run happening inside a worktree must clean up after itself.
-    const worktreeRoot = path.join(ROOT, '.claude/worktrees/some-branch');
+    const worktreeRoot = path.posix.join(ROOT, '.claude/worktrees/some-branch');
     const own = { pid: 503, comm: 'electron', cwd: worktreeRoot };
 
     expect(selectPidsUnderRoot(worktreeRoot, [own], [])).toEqual([503]);
@@ -192,27 +194,28 @@ describe('processes this checkout must NOT claim', () => {
 });
 
 describe('a root reached through a symlink', () => {
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'scoped-cleanup-'));
-  const realRoot = path.join(scratch, 'real-checkout');
-  const linkedRoot = path.join(scratch, 'linked-checkout');
-  fs.mkdirSync(realRoot);
-  fs.symlinkSync(realRoot, linkedRoot);
-
-  afterAll(() => {
-    fs.rmSync(scratch, { recursive: true, force: true });
-  });
-
-  // Skipped off Linux: this is the only test that needs real directories, and a Windows temp path
-  // is not POSIX, so it cannot describe a /proc working directory. Creating a symlink there also
-  // needs privileges the runner may not have.
+  // Linux-only, and every filesystem call lives inside the test rather than the suite body: a
+  // skipped test still has its enclosing describe evaluated during collection, and creating a
+  // symlink on Windows needs privileges a runner may not have. A Windows temp path could not
+  // stand in for a /proc working directory anyway.
   it.skipIf(process.platform !== 'linux')(
     "claims its own processes when the run's root is a symlink",
     () => {
-      // /proc/<pid>/cwd is a resolved path, so a run launched through a symlinked checkout compares
-      // its own processes against a path they can never match, and cleans up nothing at all.
-      const mine = { pid: 301, comm: 'electron', cwd: path.join(realRoot, 'release/app') };
+      const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'scoped-cleanup-'));
+      try {
+        const realRoot = path.join(scratch, 'real-checkout');
+        const linkedRoot = path.join(scratch, 'linked-checkout');
+        fs.mkdirSync(realRoot);
+        fs.symlinkSync(realRoot, linkedRoot);
 
-      expect(selectPidsUnderRoot(linkedRoot, [mine], [])).toEqual([301]);
+        // /proc/<pid>/cwd is a resolved path, so a run launched through a symlinked checkout
+        // compares its own processes against a path they can never match, and cleans up nothing.
+        const mine = { pid: 301, comm: 'electron', cwd: path.join(realRoot, 'release/app') };
+
+        expect(selectPidsUnderRoot(linkedRoot, [mine], [])).toEqual([301]);
+      } finally {
+        fs.rmSync(scratch, { recursive: true, force: true });
+      }
     },
   );
 });
