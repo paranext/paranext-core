@@ -2498,6 +2498,267 @@ step, no automation. Just a record.
 - **Source:** PR #2670 review item 6 (2026-08-25) and the review rounds that followed; PT-4465,
   which carries the design, the call-site table and the `show` hazard in full.
 
+## adr-tab-menu-channel-and-window-naming: The tab context menu is a contribution channel, and a window is named by its content
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** The tab context menu was hard-coded in the renderer and fed by nothing, so
+  neither the platform nor an extension could contribute to it. Two move actions had to be
+  added to it, one of them a submenu listing the open windows — which needed windows to have
+  user-facing names, and every window was showing the same title. Paratext 9 answers the
+  naming half: a floating window takes the title of its active tab, and its Window menu lists
+  windows by content with no ordinals and no de-duplication.
+- **Decision:** The tab menu is a `tabMenu` channel on the existing per-web-view menu
+  contribution system, alongside `topMenu` and `contextMenu`, rather than a data type of its
+  own. Unlike those two it is not opt-in: its items act on the tab frame rather than the web
+  view's contents, so every tab receives the platform items whether or not the web view asked
+  for defaults, and a tab hosting no web view receives them too. Runtime visibility — whether
+  an action applies to this tab, and which windows exist — is resolved in the consuming
+  component, because no contribution can express a fact about the moment a menu opens. A
+  window is named by its first docked panel's active tab, falling back to the next titled tab
+  and then to one localized string, and publishes that as its page title, which Electron
+  carries to the native window title; the move-to-window submenu reads those titles on open.
+- **Alternatives:** A standalone `tabContextMenu` document with its own `MenuDataDataTypes`
+  entry — rejected; it touches the same files and adds a public getter and subscriber for the
+  same result. Hand-rolling the submenu next to the existing items — rejected; the ticket
+  calls for the contribution point and retrofitting one later costs the same with more items
+  to migrate. Naming windows by ordinal — rejected; meaningless to the user and unstable, since
+  closing window 2 of 3 renumbers the third. Naming them by monitor — rejected; Electron's
+  display label is blank or generic on most Windows and Linux displays, and two windows on one
+  display collide immediately. A window data provider pushing names — rejected; a context menu
+  needs them at the moment it opens and never again.
+- **Consequences:** Duplicate window names are possible and accepted, as they are in Paratext
+  9: the cost of choosing wrong is one tab in the wrong window. Nothing in the main process may
+  call `setTitle`, or the native title stops following the page title and the submenu's names
+  go stale. Contributed tab items carry a `command` that may name an action the menu performs
+  itself rather than a registered PAPI command, which the channel's TSDoc states. Float panels
+  are excluded from naming so a modal dialog cannot rename the window; a maximized panel is
+  read first, since it is what the user is looking at.
+- **Source:** PT-4282; design and plan in the PRD folder
+  (`2026-08-25-pt-4282-tab-move-menu-design.md`), Paratext 9 `ParatextFloatWindow.SetText`
+  and `MainForm`'s Window menu.
+
+## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
+
+- **Date:** 2026-08-26
+- **Status:** Superseded by adr-durable-window-ids. Of this entry's three headline claims, "minted
+  by main" and "never reused" still hold; **"numeric on every surface" does not** — ids are GUID
+  strings. Two decisions in the body are also reversed: ids are no longer minted fresh on every
+  launch, and with that the slot indirection described under "Per-window renderer state moves off
+  the window id and onto the slot" and "State whose slot has left the structure is pruned" is gone.
+  Non-reuse survives but stopped being the interesting property: a durable id answers "which window
+  was this", which is the question the slot existed to answer. Read this entry as the reasoning of
+  2026-08-26, not as current guidance — the Alternatives below in particular reject an approach that
+  was subsequently adopted, over blockers that adr-durable-window-ids removed rather than dismissed.
+- **Context:** Every window-id surface exported Electron's `BrowserWindow.id`. Electron assigns
+  those per session and hands the same number to a later window, so every mention of a window id
+  carried a "runtime-only, reused, never persist" caveat, and several behaviours existed only to
+  defend against reuse — the per-window mark cleanup in `removeWindow`, and the refusal to cache a
+  resolved shard in `getWindowServiceShard`. The ids were also two shapes at once: `globalThis.windowId`
+  is a string because it arrives as a URL parameter, while `targetWindowId`, `WindowSummary.windowId`,
+  every wire schema and all of main are numbers. The two shapes met in exactly one place, where a
+  tab menu stringified the number to compare it against the string.
+- **Decision:** Main mints window ids from its own counter and persists the counter, so an id is
+  never handed out twice — across launches as well as within one. `trackedWindows` in
+  `window-state.service.ts` is the one map from platform id to `BrowserWindow`, and `BrowserWindow.fromId`
+  is no longer used to resolve one. The platform id **replaces** Electron's on the PAPI rather than
+  joining it: one namespace, main translating internally. The id is a **number** on every surface,
+  which makes `globalThis.windowId` a number rather than a string — the renderer parses the URL
+  parameter once at the boundary, which is what `URL_PARAMETERS[WINDOW_ID]`'s `kind: 'integer'`
+  already declares and nothing consulted.
+- **Alternatives:** Keep `globalThis.windowId` a string and change only the minting — rejected: it
+  is the cheapest option and leaves the split in place, with one surface disagreeing with the two
+  public ones, with main, and with every wire schema, bridged only by a template literal at a single
+  comparison site. Make the id a string everywhere — rejected on two hard blockers: the move
+  subsystem's `MoveWebViewTarget = number | 'new'` discriminates on number-versus-string-literal, so
+  a string id makes `'new'` a possible id and collapses the union; and `getServiceShardWindowId`
+  returns `undefined` for anything that is not a number, so a half-typed build would route nothing
+  while looking healthy, with only a `logger.warn`. An opaque or uuid id — rejected: three regexes
+  require digits (`/-w\d+$/`, the prefixed dock-layout key, `Number.isInteger` in
+  `getServiceShardAttributes`) and two tie-breaks require creation order. Joining the platform id
+  alongside Electron's — rejected by the lead dev; two namespaces is the thing being removed.
+- **Consequences:** A monotonic counter preserves the creation-order property that the two
+  `a.windowId - b.windowId` tie-breaks and the e2e page sort rely on, so those keep working for the
+  reason they always assumed rather than by luck. Truthiness tests on a window id become wrong —
+  `if (!globalThis.windowId)` in `getWindowService` distinguishes "renderer" from "extension host",
+  and a numeric `0` is falsy, so identity checks must compare against `undefined`; the counter also
+  starts at 1 so no window ever holds 0. Data already on disk is keyed by the old ids — per-window
+  `localStorage` prefixes, `-w{id}` suffixes inside saved layouts, and the legacy prefixed
+  dock-layout keys — so this is a migration, not only a swap. The reuse-defence code may now be
+  simplified, but deliberately: `removeWindow`'s cleanup stays correct as hygiene even though its
+  stated reason is gone. Positional identity for persisted layout slots (PT-4285) is untouched: a
+  never-reused id answers "has this number been handed out", not "which window was this".
+
+  **Per-window renderer state moves off the window id and onto the slot.** Web view state was
+  keyed in `localStorage` by window id, which worked only because Electron's ids restarted at 1
+  each launch, so the same window usually found its own blob. Once an id is never reused, a
+  restored window's id never matches the one that saved its state, and every launch would start
+  empty. Each entry in the persisted structure therefore carries a stable `slotId`, minted when
+  the slot is created — and written to the file by the load that minted it — and never changed.
+  Main settles a window's slot when it tracks the window, ahead of the window's first load, and
+  hands it over on the renderer URL beside the window id: not in the layout-get answer, which
+  Simple mode never asks for and which a routed move into a brand-new window can outrun. The
+  renderer's boot module records it before anything else runs, so per-window storage works from
+  the first render in every interface mode. Storage is keyed by that. It is deliberately not the
+  entry's list position: `handleWindowRemoved` splices entries, so a position can silently come to
+  mean a neighbouring slot's state. This does not reopen PT-4285's decision — position still
+  decides which saved layout and bounds a restored window gets, and the id still names one runtime
+  window rather than a cross-restart identity (PT-4285's sense); what changed is that the id can
+  no longer double as the storage key by coincidence. The blobs already on disk under the old
+  `${windowId}_web-view-state` keys cannot be mapped to slots (nothing recorded the pairing, and
+  windows were never created in slot order), so they are removed on first use and per-tab UI
+  state resets once; layouts, bounds and open tabs live in the structure and are untouched, and so
+  is every other digit-prefixed key — the pre-multi-window dock layout is still read from its
+  window-id-prefixed key, and the renderer's `localStorage` is shared with every web view iframe.
+  The unprefixed blob that predates even the window-id scheme goes with them, because that scheme
+  copied it and left it in place: sweeping only the newer keys would let the legacy migration hand
+  a window state older than the state just dropped, turning a one-time reset into a silent
+  rollback. Existing structures get a `slotId` minted per entry on first load, and every mint —
+  on load, on the legacy startup window, on a window opened mid-session — writes the structure,
+  since an id that exists only in memory orphans whatever the renderer stored under it if the
+  session ends before anything else writes.
+
+  **State whose slot has left the structure is pruned, and the main process decides what has
+  left.** A slot id is never reissued, so a blob under a departed slot can never be read again;
+  under the window-id scheme the key set stayed bounded only because Electron reused ids and a
+  later window overwrote the blob. Each renderer therefore asks main once, at startup, which of
+  the slot ids it actually holds state for no longer have an entry (`windowLayout:filterDeadSlots`)
+  and drops those. Asked rather than worked out locally on two grounds: only main holds the
+  structure, and a renderer filtering against a snapshot could delete the state of a window created
+  while that snapshot was in flight, whereas an answer about ids the renderer already holds cannot
+  name a slot that did not exist when it asked. A process with no slots loaded answers "none", so a
+  caller can never be told that everything is dead.
+- **Source:** PT-4464; lead dev's review of PR #2670 (2026-08-25), item 11. Surface inventory
+  measured against the top of the multi-window stack.
+
+## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** Windows were ruled equal siblings: no hierarchy, no "main window" in API or UX
+  language, and a `primary` role flag allowed only as a reassignable marker for which persisted
+  entry restores first. But the quit decision was still `window-all-closed`, a pure
+  window count that keyed on nothing. Closing the primary window while a secondary was open left
+  the app running on the secondary and spliced the primary's entry out of the persisted
+  structure, so the user's main layout did not return next launch — the NN-6 hole PT-4286's
+  window-close rule closes. Paratext 9 has the same shape: closing the main form closes
+  everything, floating windows close alone.
+- **Decision:** The primary role becomes load-bearing for the application's lifetime, and stays a
+  role. Its ✕, while other windows are open, asks once (in main, `dialog.showMessageBox`, never a
+  renderer modal — a renderer modal open during window close previously left its requester
+  hanging) and on confirm closes every window with each layout kept for next session; alone, it
+  quits as before; a secondary's ✕ closes only that window and its layout is dropped; Cmd+Q, File →
+  Quit and `platform.quit` keep their no-prompt behaviour. The primary is identified by the
+  persisted `isMain` entry: it releases its runtime id in the `closed` handler, one event after the
+  `close` handler where the close path asks, so the answer is present on every pass that asks.
+  On confirm the quit latch is set BEFORE the other windows are told to close, so each reads a quit
+  on its first pass and records `'entry-stays'` by intent rather than by the last-window count
+  happening to flip. A quit already requested is NOT the user's ✕ and never asks: the latch is set
+  before any window's close, and a quit arriving while the question is open takes the question down
+  with it (Electron closes a signalled message box and reports it as cancelled), so the latch — not
+  the reported answer — is what the decision reads. When no live window holds the marked entry at
+  all — the startup restore always leaves one that does, so this means every window it created has
+  gone and something else opened one, as an extension's `platform.createWindow` can while macOS
+  keeps the app resident with none open — the oldest live window answers instead. The marked entry
+  keeps its flag: it names the entry simple mode restores and the only one allowed the legacy
+  layout fallback, so moving it to a window created into that gap would cost the user that layout
+  next launch. An emptied primary never reaches this path at all: moving its last tab out reopens
+  Home, exactly as closing that tab does, so the primary cannot disappear except through its own ✕
+  or Quit.
+- **Alternatives:** A second main-owned live reference alongside the persisted
+  `isMain` entry — rejected as two truths for one role. A renderer-hosted confirm dialog — rejected;
+  see the hanging-requester incident above. Re-electing a new primary when the primary closes —
+  rejected as unreachable: with this rule the primary cannot disappear while secondaries live, so
+  there is nothing to elect. Relying on `areAllWindowsClosing()` flipping to make the secondaries
+  record `'entry-stays'` — rejected; it works by accident of ordering and says nothing about
+  intent. A "don't ask again" — rejected; Cmd+Q is the prompt-free path and stays so.
+- **Consequences:** Amends the equal-siblings ruling without reversing it: the primary window
+  decides the app's lifetime, and nothing else about it is special — no API or UX may call it
+  "the main window", and nothing else may route, gate, or prioritise on the role. Primary
+  re-election is deliberately not implemented and a future need for it would mean this rule has
+  been broken. The dialog's restore promise is user-visible and load-bearing, so the relaunch e2e
+  that asserts every window comes back is what keeps that sentence honest. The mode-switch half
+  of PT-4286 (a live switch to Simple must close the secondaries) is out of this decision's scope; PT-4286
+  carries it. Linux behaviour of the native dialog is best-effort and unverified on real
+  hardware at the time of writing.
+  PR #2702 has the renderer learn whether it is the primary window from a URL parameter fixed at
+  window creation (`isMainWindow`), read for one purpose: whether to draw the top-level menu. No
+  lifecycle, routing or persistence decision consults it, and it cannot describe a window that
+  becomes primary later — PT-4278's window-manager service is the durable answer for that.
+- **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
+  folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
+
+## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** A React render throw inside a web view left the pane blank with nothing actionable in
+  the log — the symptom behind NN-1 "Editor never blanks out" (PT-4422, and PT-3594/PT-3776 before
+  it). The app had **no** error boundary anywhere in `src/` or `extensions/src/`; the only one in the
+  tree was Lexical's internal `LexicalErrorBoundary`. Web views are real iframes with their own
+  React root, so a boundary placed anywhere in the renderer's component tree cannot catch a web
+  view's throw: the shell survives and the iframe blanks. Every React web view mounts through a
+  single `root.render(React.createElement(globalThis.webViewComponent, webViewProps))` in
+  `web-view.service-shard.ts`, in the `default:` branch of the content-type switch (the `HTML` and
+  `URL` branches mount no React root).
+- **Decision:** Wrap that one element in `WebViewErrorBoundary`, exposed to the iframe as a global
+  the same way `createRoot` is (`global-this-web-view.model.ts` assigns it;
+  the generated `imports` script pulls it across with `window.X = window.parent.X`). Three rules the
+  implementation depends on: (1) **the boundary calls no hooks** — a hook there runs above the catch,
+  so if it threw the pane would blank exactly as before and the net would have the hole it exists to
+  close; all localization happens in the fallback, which mounts only after a crash. (2) **The
+  fallback is inline-styled**, not Tailwind/shadcn: a web view's iframe head carries the CSP, fonts,
+  scrollbars and the theme stylesheet, never the renderer's Tailwind build, so `tw:` classes render
+  unstyled there. Theme CSS custom properties do resolve, because the iframe body is given the theme
+  id class. (3) **The fallback falls back to English literals**, not to the localize key, because one
+  known cause of a blank web view is a crash inside `useLocalizedStrings` itself — and, for the same
+  reason, **the part of the fallback that reaches the localization service sits below a second,
+  inner boundary**. React hands an error thrown inside a boundary's own fallback to the *next*
+  boundary up, and above a web view's root there is none, so a throw while localizing the crash
+  panel would blank the pane exactly as an uncaught web view crash does. An unresolved string and a
+  throwing hook are different failure modes: the English literals cover the first, the inner
+  boundary covers the second. Everything above that inner boundary — the panel's markup, styles and
+  focus handling — must therefore stay service-free.
+- **Alternatives:** **A boundary per extension** (the editor extension wrapping its own web view) —
+  rejected: same day of work for a fraction of the coverage, repeated per extension, leaving Text
+  Collection, resource panels, Find and the rest still blanking. **A boundary in the renderer's
+  component tree** — impossible; it cannot reach across the iframe. **A `fallback` prop for
+  genericity** — dropped: the boundary renders its crash view directly so the generated-script call
+  site stays a single `createElement`, which matters because that site has no typecheck, no lint and
+  no test coverage.
+- **Consequences:** All React web views are covered by one change, and the crash message names the
+  offending tab (`savedWebViewDefinition.title`), so a generic boundary still reads as "the editor
+  crashed". Not covered, and worth stating wherever this is relied on: event handlers, async
+  callbacks and unhandled rejections (React boundaries never see those — global `onerror` capture is
+  PT-3776); a data provider returning a `PlatformError` instead of throwing (e.g. the render-rate
+  guard in `create-use-data-hook.util.ts`); and a throw in the part of the fallback above the inner
+  boundary, which is why that part stays service-free. Because the crash unmounts everything
+  focusable in the pane, including its toolbar, there is no in-tree signal that could reset the
+  boundary — hence the reload button and the focus move on mount, both load-bearing rather than
+  polish.
+
+  **A crashed pane stays crashed until the web view is reloaded**, and nothing resets the boundary
+  on a web view definition update. This is deliberate rather than an omission. The generated iframe
+  script re-runs `root.render` against the same boundary instance on every `onDidUpdateWebView`, and
+  `updateWebViewDefinition` is reachable only from a web view's own component (bound to its own id
+  in the generated script; the web view service exposes no cross-web-view update to extensions), so
+  a crashed pane — whose component is unmounted — only ever receives updates from elsewhere in the
+  renderer: `scrollGroupScrRef` on every navigation, `state`, `isClosable`, bring-to-front. Resetting
+  on those would re-run the same failing render on every verse move, costing a crash-and-log cycle
+  each time and never producing a different result. The changes that genuinely mean "show something
+  else in this pane" do not take that path at all: switching a tab's project mints a new web view
+  via `replace-tab`, and re-pointing a related panel calls `reloadWebView` — both build a fresh
+  iframe, hence a fresh React root and a fresh boundary. Reload is therefore the only recovery path
+  that could work, which is why the panel leads with it.
+
+  Editor coverage additionally rests on a cross-package assumption:
+  `@eten-tech-foundation/platform-editor` configures Lexical with `onError(error) { throw error; }`,
+  so Lexical's own boundary re-throws out of `componentDidCatch` and React hands the error up to us.
+  If a future platform-editor release swallows there instead, editor crashes would silently show
+  Lexical's bare "An error was thrown." box; `web-view-error-boundary.component.test.tsx` pins that
+  chain so the change is caught at upgrade time.
+- **Source:** PT-4422 (NN1b), Sprint 89 Simple Quality. Mount-point placement proposed in the PT-4421
+  investigation; the Lexical re-throw chain verified by running it, not by reading it.
 ## adr-runaway-data-hook-guard: `useData`'s runaway guard counts subscribes and deliveries, degrades rather than throws, and expires
 
 - **Date:** 2026-08-28
@@ -2596,74 +2857,80 @@ step, no automation. Just a record.
   arbitrary, inherited from PT-1561.
 - **Source:** PT-4421; resubscribe-storm and burst behavior measured during review of this change.
 
-## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
+## adr-durable-window-ids: Window ids are durable across a restart; the separate persisted-layout "slot" indirection is removed
 
-- **Date:** 2026-08-27
+- **Date:** 2026-08-28
 - **Status:** Accepted
-- **Context:** A React render throw inside a web view left the pane blank with nothing actionable in
-  the log — the symptom behind NN-1 "Editor never blanks out" (PT-4422, and PT-3594/PT-3776 before
-  it). The app had **no** error boundary anywhere in `src/` or `extensions/src/`; the only one in the
-  tree was Lexical's internal `LexicalErrorBoundary`. Web views are real iframes with their own
-  React root, so a boundary placed anywhere in the renderer's component tree cannot catch a web
-  view's throw: the shell survives and the iframe blanks. Every React web view mounts through a
-  single `root.render(React.createElement(globalThis.webViewComponent, webViewProps))` in
-  `web-view.service-shard.ts`, in the `default:` branch of the content-type switch (the `HTML` and
-  `URL` branches mount no React root).
-- **Decision:** Wrap that one element in `WebViewErrorBoundary`, exposed to the iframe as a global
-  the same way `createRoot` is (`global-this-web-view.model.ts` assigns it;
-  the generated `imports` script pulls it across with `window.X = window.parent.X`). Three rules the
-  implementation depends on: (1) **the boundary calls no hooks** — a hook there runs above the catch,
-  so if it threw the pane would blank exactly as before and the net would have the hole it exists to
-  close; all localization happens in the fallback, which mounts only after a crash. (2) **The
-  fallback is inline-styled**, not Tailwind/shadcn: a web view's iframe head carries the CSP, fonts,
-  scrollbars and the theme stylesheet, never the renderer's Tailwind build, so `tw:` classes render
-  unstyled there. Theme CSS custom properties do resolve, because the iframe body is given the theme
-  id class. (3) **The fallback falls back to English literals**, not to the localize key, because one
-  known cause of a blank web view is a crash inside `useLocalizedStrings` itself — and, for the same
-  reason, **the part of the fallback that reaches the localization service sits below a second,
-  inner boundary**. React hands an error thrown inside a boundary's own fallback to the *next*
-  boundary up, and above a web view's root there is none, so a throw while localizing the crash
-  panel would blank the pane exactly as an uncaught web view crash does. An unresolved string and a
-  throwing hook are different failure modes: the English literals cover the first, the inner
-  boundary covers the second. Everything above that inner boundary — the panel's markup, styles and
-  focus handling — must therefore stay service-free.
-- **Alternatives:** **A boundary per extension** (the editor extension wrapping its own web view) —
-  rejected: same day of work for a fraction of the coverage, repeated per extension, leaving Text
-  Collection, resource panels, Find and the rest still blanking. **A boundary in the renderer's
-  component tree** — impossible; it cannot reach across the iframe. **A `fallback` prop for
-  genericity** — dropped: the boundary renders its crash view directly so the generated-script call
-  site stays a single `createElement`, which matters because that site has no typecheck, no lint and
-  no test coverage.
-- **Consequences:** All React web views are covered by one change, and the crash message names the
-  offending tab (`savedWebViewDefinition.title`), so a generic boundary still reads as "the editor
-  crashed". Not covered, and worth stating wherever this is relied on: event handlers, async
-  callbacks and unhandled rejections (React boundaries never see those — global `onerror` capture is
-  PT-3776); a data provider returning a `PlatformError` instead of throwing (e.g. the render-rate
-  guard in `create-use-data-hook.util.ts`); and a throw in the part of the fallback above the inner
-  boundary, which is why that part stays service-free. Because the crash unmounts everything
-  focusable in the pane, including its toolbar, there is no in-tree signal that could reset the
-  boundary — hence the reload button and the focus move on mount, both load-bearing rather than
-  polish.
-
-  **A crashed pane stays crashed until the web view is reloaded**, and nothing resets the boundary
-  on a web view definition update. This is deliberate rather than an omission. The generated iframe
-  script re-runs `root.render` against the same boundary instance on every `onDidUpdateWebView`, and
-  `updateWebViewDefinition` is reachable only from a web view's own component (bound to its own id
-  in the generated script; the web view service exposes no cross-web-view update to extensions), so
-  a crashed pane — whose component is unmounted — only ever receives updates from elsewhere in the
-  renderer: `scrollGroupScrRef` on every navigation, `state`, `isClosable`, bring-to-front. Resetting
-  on those would re-run the same failing render on every verse move, costing a crash-and-log cycle
-  each time and never producing a different result. The changes that genuinely mean "show something
-  else in this pane" do not take that path at all: switching a tab's project mints a new web view
-  via `replace-tab`, and re-pointing a related panel calls `reloadWebView` — both build a fresh
-  iframe, hence a fresh React root and a fresh boundary. Reload is therefore the only recovery path
-  that could work, which is why the panel leads with it.
-
-  Editor coverage additionally rests on a cross-package assumption:
-  `@eten-tech-foundation/platform-editor` configures Lexical with `onError(error) { throw error; }`,
-  so Lexical's own boundary re-throws out of `componentDidCatch` and React hands the error up to us.
-  If a future platform-editor release swallows there instead, editor crashes would silently show
-  Lexical's bare "An error was thrown." box; `web-view-error-boundary.component.test.tsx` pins that
-  chain so the change is caught at upgrade time.
-- **Source:** PT-4422 (NN1b), Sprint 89 Simple Quality. Mount-point placement proposed in the PT-4421
-  investigation; the Lexical re-throw chain verified by running it, not by reading it.
+- **Context:** `adr-platform-minted-window-ids` made ids never-reused but still minted fresh on
+  every launch, so a restored window's id never matched the one that had saved its state. That
+  forced a second identity per window — a `slotId` on the persisted layout entry, handed to the
+  window on a dedicated `WINDOW_SLOT_ID_QUERY_PARAMETER` alongside the ordinary window id, with its
+  own dead-id sweep (`windowLayout:filterDeadSlots`) and its own vocabulary throughout
+  `local-storage.service.ts`, `window-scoped-web-view-ids.util.ts`, and the web view service shard.
+  Two ids naming the same window is exactly the kind of split `adr-platform-minted-window-ids`
+  removed for Electron's id versus the platform's; here it was reintroduced for a reason (id reuse)
+  that a durable id removes at the source. This decision also reverses
+  `adr-platform-minted-window-ids`'s numeric-id decision, which the same PT-4464 work had already
+  carried out a step earlier. That entry rejected an opaque or uuid id over four concrete blockers,
+  and each was removed deliberately rather than found to be untrue. `MoveWebViewTarget` was
+  `number | 'new'`, discriminating a numeric id from a string literal, so a string id would have
+  made `'new'` a possible id and collapsed the union — it is now a tagged union discriminating on a
+  `kind` field, so no id value can collide with `'new'` whatever its type. `getServiceShardWindowId`
+  answered `undefined` for anything non-numeric, so a half-typed build would have routed nothing
+  while looking healthy — `getServiceShardAttributes` now throws on a non-string, moving that
+  failure from silent-at-routing to loud-at-registration. The digit-requiring matchers were
+  retargeted at the GUID shape, and the two tie-breaks that needed `a.windowId - b.windowId` to be
+  arithmetic now read creation order from `getWindowCreationRank` off the creation-ordered window
+  list, which is what they always meant.
+- **Decision:** `mintWindowId` (`window-state.service.ts`) mints a random GUID instead of a
+  counter value, and `addWindow` accepts an optional `existingId` — supplied only when a window is
+  restoring a persisted entry, in which case `main.ts`'s `createWindow` passes
+  `restoreInfo.entry.windowId` rather than letting a fresh one be minted. The persisted entry's own
+  identity field is renamed `slotId` → `windowId` (`WindowLayoutEntry`,
+  `window-layout-persistence.model.ts`): it no longer names a second concept, it IS the window's own
+  durable id. The renderer's `globalThis.windowId` (already on the URL as `WINDOW_ID`) is therefore
+  both the id a restored window is given and the key its per-window storage
+  (`local-storage.service.ts`) uses directly — `WINDOW_SLOT_ID_QUERY_PARAMETER`, `setWindowSlotId`,
+  `getSlotIdOrThrow` and the module-level `windowSlotId` are deleted outright, not merely renamed.
+  `FILTER_DEAD_WINDOW_SLOTS_REQUEST_TYPE` becomes `FILTER_DEAD_WINDOW_IDS_REQUEST_TYPE` (wire name
+  `filterDeadWindowIds`) and answers about window ids instead of slot ids, on the same reasoning as
+  before. `FileSlot.windowId` in `window-layout-persistence.service.ts` — which live window
+  currently occupies a slot, separate from the slot's own persisted identity — is deliberately left
+  alone: collapsing it into the entry is a distinct, separately reviewable step this decision does
+  not take.
+- **Alternatives:** Keep the slot indirection and only stop re-minting the window id on restore —
+  rejected: it still carries two ids per window, one of them (`slotId`) doing nothing a durable
+  window id would not do itself, for the sole remaining reason of the old reuse defence this removes.
+  Collapse `FileSlot.windowId` into the entry at the same time, so a slot's occupancy and its
+  identity are one field — deferred, not rejected: it changes a second, independent axis (whether a
+  preserved entry with no live window can be told apart from one that has one) that deserves its own
+  review rather than riding in on an id-durability change.
+- **Consequences:** The matchers that recognize a *live* window id by requiring digits
+  (`WINDOW_SUFFIX_PATTERN` in `window-scoped-web-view-ids.util.ts`, the per-window storage prune in
+  `local-storage.service.ts`) now take the GUID shape
+  (`WINDOW_ID_SHAPE_PATTERN_SOURCE`, `shared/utils/util.ts`) — deliberately shape-only rather than
+  RFC-4122-strict, since the first builds to persist a window id minted it with `newGuid()`
+  (`platform-bible-utils`), which leaves the variant nibble unconstrained, and profiles carrying
+  those ids are in use. The suffix matcher takes the numeric shape **as well**, because a layout
+  saved by a build that scoped by numeric window id is still on disk and its ids have to strip;
+  the storage prune deliberately does not, because it decides what to delete from storage shared
+  with every web view iframe, where a bare run of digits is a plausible prefix for a key belonging
+  to an extension. One digit-requiring matcher is deliberately
+  left alone: `PREFIXED_DOCK_LAYOUT_KEY_PATTERN` (`web-view.service-shard.ts`) is a one-way reader
+  for pre-multi-window layouts, whose keys were written by builds that scoped storage by *numeric*
+  window id, and `getLegacySavedLayout` picks the lowest such id as the newest saved layout.
+  Widening it to the GUID shape would be a bug twice over — it would make current-scheme keys look
+  like legacy ones, and its `Number(match[1])` ordering would go `NaN`. A matcher that reads only
+  historical data must keep matching the historical shape. The storage prune flips from an exclusion
+  (accept any prefix, reject all-digit ones) to a positive match, closing a real gap where an
+  extension's own `<prefix>_web-view-state` key in the shared origin storage could be swept up as a
+  dead window's. `loadWindowLayouts` tracks whether a structure was actually parsed from disk
+  (`hasStructureBeenLoaded`) and `handleFilterDeadWindowIdsRequest` gates on that instead of
+  `fileSlots.length === 0`: the legacy startup fallback (missing, unreadable, or empty structure
+  file) synchronously tracks one window — giving `fileSlots` a freshly minted entry — before any
+  renderer could ask, so the old empty-list guard never actually fired for the case it existed to
+  guard, and a transient read error would report every id a renderer already held as dead. The
+  pre-slot-era `${windowId}_dock-saved-layout` reader, its lowest-id heuristic, and the
+  `^\d+_web-view-state$` obsolete-key sweep are all untouched: they read numeric-era data no future
+  build can add to, and durability changes nothing about them.
+- **Source:** PT-4464.

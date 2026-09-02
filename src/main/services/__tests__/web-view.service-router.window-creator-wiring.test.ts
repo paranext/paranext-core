@@ -104,7 +104,7 @@ describe('web-view window creator wiring', () => {
     // The window the creator will report as created, already announced as ready so the router does
     // not need to wait on anything but the creator wiring this test is exercising.
     withWindows({ 7: emptyWindowShard() });
-    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
 
     const freshWindowPromise = createFreshWindow('someType');
 
@@ -164,12 +164,43 @@ describe('web-view window creator wiring', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
     setWebViewWindowCreator(creator);
 
     const freshWindow = await waitingAgain;
 
     expect(creator.createPendingContentWindow).toHaveBeenCalledTimes(1);
     expect(freshWindow.discard).toBeTypeOf('function');
+  });
+
+  test('a rollback closes the window while it is still waiting for content, never after that mark is cleared', async () => {
+    // What keeps this close safe is an exclusion two modules away: the window answering for the
+    // application is never one still waiting for content, so this close can never be read as the
+    // primary's and can never raise the close-all question. Here that stays true only because of
+    // the ordering — the content-arrived branch clears the mark and returns, so the path that
+    // reaches `closeWindow` is the one where the mark is still set.
+    //
+    // Clearing before closing would strand a window rather than merely mis-ask: the router does not
+    // await this close, so a close that is refused still reports the rollback as having succeeded,
+    // leaving a blank window with nothing to heal it.
+    resetWindowCreatorForTesting();
+    withWindows({ 7: emptyWindowShard() });
+
+    // Read at the moment of the close rather than after it, which is the only time that answers
+    // the ordering question
+    let clearCallsWhenClosed: number | undefined;
+    const creator = {
+      createPendingContentWindow: vi.fn(async () => '7'),
+      closeWindow: vi.fn(() => {
+        clearCallsWhenClosed = mocks.clearWindowPendingContent.mock.calls.length;
+      }),
+    };
+    setWebViewWindowCreator(creator);
+
+    const freshWindow = await createFreshWindow('someType');
+    await freshWindow.discard();
+
+    expect(creator.closeWindow).toHaveBeenCalledWith('7');
+    expect(clearCallsWhenClosed).toBe(0);
   });
 });

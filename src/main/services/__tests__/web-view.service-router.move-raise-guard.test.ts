@@ -50,10 +50,8 @@ const mocks = vi.hoisted(() => {
 });
 
 /** Wire windows whose WebView service shards are the given objects */
-function withWindows(shardsByWindowId: Record<number, WindowShard>) {
-  Object.entries(shardsByWindowId).forEach(([windowId, shard]) =>
-    shard.setWindowId(Number(windowId)),
-  );
+function withWindows(shardsByWindowId: Record<string, WindowShard>) {
+  Object.entries(shardsByWindowId).forEach(([windowId, shard]) => shard.setWindowId(windowId));
   withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId);
 }
 
@@ -96,9 +94,9 @@ const { moveWebView } = testingWebViewServiceRouter;
  */
 function windowShard(openWebViewIds: string[]) {
   /** Set by `withWindows` from the id the shard is wired under */
-  let windowId = 0;
+  let windowId = '';
   return {
-    setWindowId: (id: number) => {
+    setWindowId: (id: string) => {
       windowId = id;
     },
     getOpenWebViewDefinition: vi.fn(async (id: string) =>
@@ -126,7 +124,7 @@ type WindowShard = ReturnType<typeof windowShard>;
 describe('the cross-application focus guard on a move', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getTargetWindowId.mockReturnValue(1);
+    mocks.getTargetWindowId.mockReturnValue('1');
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
@@ -141,10 +139,10 @@ describe('the cross-application focus guard on a move', () => {
     withWindows({ 2: owner, 3: target });
     // A window held focus at some point, so its id is still on record — but no window of this app
     // holds OS focus now
-    mocks.getFocusedWindowId.mockReturnValue(2);
+    mocks.getFocusedWindowId.mockReturnValue('2');
     mocks.isApplicationFocused.mockReturnValue(false);
 
-    const movedId = await moveWebView('view-1', 3);
+    const movedId = await moveWebView('view-1', { kind: 'window', windowId: '3' });
 
     // Not raising the target does not change what the move answers: the target still holds it under
     // its own scoping of the id
@@ -156,11 +154,11 @@ describe('the cross-application focus guard on a move', () => {
     const owner = windowShard(['view-1']);
     const target = windowShard([]);
     withWindows({ 2: owner, 3: target });
-    mocks.getFocusedWindowId.mockReturnValue(2);
+    mocks.getFocusedWindowId.mockReturnValue('2');
     mocks.isApplicationFocused.mockReturnValue(true);
 
-    await moveWebView('view-1', 3);
+    await moveWebView('view-1', { kind: 'window', windowId: '3' });
 
-    expect(mocks.focusWindow).toHaveBeenCalledWith(3);
+    expect(mocks.focusWindow).toHaveBeenCalledWith('3');
   });
 });

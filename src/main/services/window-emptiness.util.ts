@@ -4,7 +4,9 @@
  * The renderer owns the moment emptiness happens; only the main process knows how many windows
  * exist. A window emptied by removal closes — windows are equal siblings, and one with nothing in
  * it has nothing to be — unless it is the last window standing, which docks Home instead (closing
- * it would exit the application). A window born empty always docks Home.
+ * it would exit the application), or it is the primary window, which docks Home for the same reason
+ * a last window does: only its ✕ and the Quit menu may close it, and moving its last tab out is the
+ * same as closing that tab. A window born empty always docks Home.
  *
  * A report describes a moment that has already passed by the time it is answered, so a close is
  * decided against a fresh reading rather than against the report alone — see
@@ -35,7 +37,7 @@ export type WindowEmptinessHandler = ((
   reason: unknown,
 ) => Promise<WindowEmptiedResponse>) & {
   /** Tell the handler the window with this id is gone. Ids it is not tracking are ignored. */
-  handleWindowGone: (windowId: number) => void;
+  handleWindowGone: (windowId: string) => void;
 };
 
 /** What {@link createWindowEmptinessHandler} needs to answer a window reporting its dock empty */
@@ -47,8 +49,15 @@ export type WindowEmptinessHandlerDependencies = {
    * second version to read and a way to rebuild a count that misses one.
    */
   countWindows: () => number;
+  /**
+   * Whether this window holds the primary role. The primary never closes because it emptied —
+   * moving its last tab out reopens Home, exactly as closing that tab does — since only its ✕ and
+   * the Quit menu may close it. Optional so a caller with no notion of a primary keeps the plain
+   * equal-siblings rule.
+   */
+  isPrimaryWindow?: (windowId: string) => boolean;
   /** Close the window with the given id */
-  closeWindow: (windowId: number) => void;
+  closeWindow: (windowId: string) => void;
   /**
    * Whether the reported id names a window main is actually tracking.
    *
@@ -62,12 +71,12 @@ export type WindowEmptinessHandlerDependencies = {
    * answered `closing` on its first report, never closed, and latched there refusing content for
    * the rest of the session.
    */
-  isWindowTracked: (windowId: number) => boolean;
+  isWindowTracked: (windowId: string) => boolean;
   /**
    * Record that this window's close has been decided, so the count above excludes it from every
    * later decision and nothing routes new content into it while its close is in flight
    */
-  markWindowClosing: (windowId: number) => void;
+  markWindowClosing: (windowId: string) => void;
   /**
    * Whether this window's close has been decided by ANY path — the registry `markWindowClosing`
    * writes to, which the user closing a window with its close button also writes to. The handler's
@@ -76,7 +85,7 @@ export type WindowEmptinessHandlerDependencies = {
    * trips main's force-close escape hatch and abandons the close-time work the first close started.
    * Optional so a caller composing only this handler's own decisions can omit it.
    */
-  isWindowClosing?: (windowId: number) => boolean;
+  isWindowClosing?: (windowId: string) => boolean;
   /**
    * Whether anything reached the reporting window's dock after it sent the report — asked of that
    * window, which is the only place that knows.
@@ -85,15 +94,17 @@ export type WindowEmptinessHandlerDependencies = {
    * routed open or a move's adopt can land in the window while the report is in flight, and closing
    * it then takes content the user is looking at with it.
    *
-   * Answering `false` means "close it", and covers BOTH "still empty" and "could not tell": the
-   * report was the window's own word about its own dock, and a question that could not be asked is
-   * no reason to leave an empty window standing. The wiring is what decides not to ask — a window
-   * that cannot serve a request answers `false` without a round trip.
+   * Answering `false` means the report stands, and covers BOTH "still empty" and "could not tell":
+   * the report was the window's own word about its own dock, and a question that could not be asked
+   * is no reason to treat it as still holding content. What the report standing then leads to
+   * depends on the branch that follows — closing for most windows, docking Home for a born-empty or
+   * primary one. The wiring is what decides not to ask — a window that cannot serve a request
+   * answers `false` without a round trip.
    *
    * Optional so a caller with no way to reach the window can compose the handler without it; every
    * report is then taken at its word.
    */
-  hasContentArrivedSinceEmptyReport?: (windowId: number) => Promise<boolean>;
+  hasContentArrivedSinceEmptyReport?: (windowId: string) => Promise<boolean>;
 };
 
 /**
@@ -140,14 +151,14 @@ export function createWindowEmptinessHandler(
    * away, NOT until its close is handed out: closing a window runs an intercepted close whose async
    * close tasks can take seconds, and the window stays open throughout.
    */
-  const closingWindowIds = new Set<number>();
+  const closingWindowIds = new Set<string>();
 
   /**
    * Ask the reporting window whether content reached it since it sent the report, bounded so one
    * unresponsive window cannot hold up every decision behind it. A throw, a timeout, and a plain
    * "no" all mean the same thing here — see the dependency's own doc comment.
    */
-  const hasContentArrivedSinceEmptyReport = async (windowId: number): Promise<boolean> => {
+  const hasContentArrivedSinceEmptyReport = async (windowId: string): Promise<boolean> => {
     if (!deps.hasContentArrivedSinceEmptyReport) return false;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -176,7 +187,7 @@ export function createWindowEmptinessHandler(
     windowId: unknown,
     reason: unknown,
   ): Promise<WindowEmptiedResponse> => {
-    if (typeof windowId !== 'number' || !isWindowEmptiedReason(reason)) {
+    if (typeof windowId !== 'string' || !isWindowEmptiedReason(reason)) {
       logger.warn(
         `windowLayout:emptied called with invalid arguments (windowId: ${windowId}, reason: ${reason}); answering open-home`,
       );
@@ -255,6 +266,19 @@ export function createWindowEmptinessHandler(
       return { action: 'open-home' };
     }
 
+    // The primary never closes because it emptied — only its ✕ and the Quit menu may close it — so
+    // moving its last tab out reopens Home, as closing that tab would. Checked here, after the
+    // content re-check above rather than ahead of it: content routed into the primary while its
+    // report was in flight already took the `stay` answer, so reaching this point with the primary
+    // still means it is genuinely empty. Checking earlier would dock a stray Home tab beside
+    // whatever just arrived.
+    if (deps.isPrimaryWindow?.(windowId)) {
+      logger.debug(
+        `windowLayout:emptied window ${windowId} reason ${reason}: primary window, answering open-home`,
+      );
+      return { action: 'open-home' };
+    }
+
     logger.debug(
       `windowLayout:emptied window ${windowId} reason ${reason} saw ${windowsLeftAfterRecheck} windows remaining: answering closing`,
     );
@@ -298,7 +322,7 @@ export function createWindowEmptinessHandler(
   };
 
   return Object.assign(handleWindowEmptied, {
-    handleWindowGone: (windowId: number) => {
+    handleWindowGone: (windowId: string) => {
       closingWindowIds.delete(windowId);
     },
   });

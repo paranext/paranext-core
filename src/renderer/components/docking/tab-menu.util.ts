@@ -1,0 +1,109 @@
+import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
+import type { WindowSummary } from '@shared/services/window.service-model';
+import { WINDOW_ID_SHAPE_PATTERN_SOURCE } from '@shared/utils/util';
+
+/** A window id as this app mints them — what a generated move target's suffix must look like */
+const WINDOW_ID_PATTERN = new RegExp(`^${WINDOW_ID_SHAPE_PATTERN_SOURCE}$`, 'i');
+
+/** Contributed id of the submenu whose targets are only known when the menu opens */
+const MOVE_TO_WINDOW_ITEM_ID = 'platform.moveTabToWindow';
+
+/** Contributed command that floats the tab within its own window */
+export const FLOAT_TAB_COMMAND = 'platform.floatTab';
+
+/** Contributed command that moves the tab into a window created for it */
+export const MOVE_TO_NEW_WINDOW_COMMAND = 'platform.moveWebViewToNewWindow';
+
+/**
+ * Marks a generated target in the move-to-window submenu. What follows is the target window's id,
+ * which is how the selection handler learns where the user asked the tab to go.
+ */
+export const MOVE_TO_WINDOW_TARGET_ID_PREFIX = 'platform.moveTabToWindow:';
+
+/** What the tab a menu was opened on can currently do */
+export type TabMenuContext = {
+  /** Web view this tab hosts, or `undefined` when it hosts none — a dialog or an error tab */
+  webViewId: string | undefined;
+  /** Every window except the one this tab is in, in the order to offer them */
+  otherWindows: WindowSummary[];
+  /**
+   * Whether this tab is the only one in a window that would close once it left. Moving it to a new
+   * window would then build an identical window and take this one down with it.
+   *
+   * Main decides a window's fate on emptying by counting the windows that could be the last one,
+   * with one window exempt: the one answering for the application docks Home rather than closing,
+   * however many others are standing. So the question here is both — whether another window is
+   * standing, and whether this one is the window that would survive anyway.
+   */
+  isOnlyTabInWindowThatWouldClose: boolean;
+};
+
+/** Reads the target window id back out of a generated submenu entry, if that is what was selected */
+export function getMoveTargetWindowId(itemId: string): string | undefined {
+  if (!itemId.startsWith(MOVE_TO_WINDOW_TARGET_ID_PREFIX)) return undefined;
+  const windowId = itemId.slice(MOVE_TO_WINDOW_TARGET_ID_PREFIX.length);
+  // Checked rather than trusted: everything under this prefix is generated from a live window's own
+  // id, so a suffix that is not shaped like one did not come from that generation and names no
+  // window. Rejecting it here keeps a malformed contributed id from reaching the move as a target.
+  if (!WINDOW_ID_PATTERN.test(windowId)) return undefined;
+  return windowId;
+}
+
+/** Whether a contributed item is one this tab cannot currently act on */
+function isUnavailable(item: OverlayContextMenuItem, context: TabMenuContext): boolean {
+  const { webViewId, otherWindows, isOnlyTabInWindowThatWouldClose } = context;
+  if (item.type === 'item' && item.id === MOVE_TO_NEW_WINDOW_COMMAND)
+    return !webViewId || isOnlyTabInWindowThatWouldClose;
+  if (item.type === 'submenu' && item.id === MOVE_TO_WINDOW_ITEM_ID)
+    return !webViewId || otherWindows.length === 0;
+  return false;
+}
+
+/** Drop separators that no longer divide anything once items around them have gone */
+function pruneSeparators(items: OverlayContextMenuItem[]): OverlayContextMenuItem[] {
+  return items.filter((item, index) => {
+    if (item.type !== 'separator') return true;
+    const dividesSomethingBefore = items
+      .slice(0, index)
+      .some((other) => other.type !== 'separator');
+    const dividesSomethingAfter = items
+      .slice(index + 1)
+      .some((other) => other.type !== 'separator');
+    const isRepeat = index > 0 && items[index - 1].type === 'separator';
+    return dividesSomethingBefore && dividesSomethingAfter && !isRepeat;
+  });
+}
+
+/**
+ * Turn the contributed tab menu into the items to show on one particular tab.
+ *
+ * Two things no contribution can express are settled here: whether an action applies to this tab at
+ * all, and what the open windows are. Both are facts about the moment the menu opens.
+ *
+ * @param contributedItems The tab menu as contributed, already converted and ordered
+ * @param context What the tab can currently do
+ * @param emptyWindowLabel What to call a window showing nothing titled
+ * @returns The items to render, with unavailable actions removed and window targets filled in
+ */
+export function buildTabMenuItems(
+  contributedItems: OverlayContextMenuItem[],
+  context: TabMenuContext,
+  emptyWindowLabel: string,
+): OverlayContextMenuItem[] {
+  const available = contributedItems.filter((item) => !isUnavailable(item, context));
+
+  const withTargets = available.map((item) => {
+    if (item.type !== 'submenu' || item.id !== MOVE_TO_WINDOW_ITEM_ID) return item;
+    return {
+      ...item,
+      items: context.otherWindows.map((window) => ({
+        type: 'item' as const,
+        id: `${MOVE_TO_WINDOW_TARGET_ID_PREFIX}${window.windowId}`,
+        // Two windows showing the same thing carry the same name, and nothing disambiguates them
+        label: window.label || emptyWindowLabel,
+      })),
+    };
+  });
+
+  return pruneSeparators(withTargets);
+}

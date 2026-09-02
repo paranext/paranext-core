@@ -101,14 +101,14 @@ next to the services that use them. It stays in main, where it has to be; it jus
 the file whose job is routing.
 
 ```
-Renderer (window 1)          Main Process                  Renderer (window 2)
-┌──────────────────────┐    ┌────────────────────────┐    ┌──────────────────────┐
-│ web-view.service-    │    │ web-view.service-      │    │ web-view.service-    │
-│ shard.ts             │◄──►│ router.ts              │◄──►│ shard.ts             │
-│ id: WebViewService-1 │    │ id: WebViewService     │    │ id: WebViewService-2 │
-│ objectType:          │    │ (the generic name      │    │ objectType:          │
-│  webViewServiceShard │    │  consumers call)       │    │  webViewServiceShard │
-└──────────────────────┘    └────────────────────────┘    └──────────────────────┘
+Renderer (window 1)              Main Process                  Renderer (window 2)
+┌───────────────────────────┐    ┌────────────────────────┐    ┌───────────────────────────┐
+│ web-view.service-         │    │ web-view.service-      │    │ web-view.service-         │
+│ shard.ts                  │◄──►│ router.ts              │◄──►│ shard.ts                  │
+│ id: WebViewService-<guid> │    │ id: WebViewService     │    │ id: WebViewService-<guid> │
+│ objectType:               │    │ (the generic name      │    │ objectType:               │
+│  webViewServiceShard      │    │  consumers call)       │    │  webViewServiceShard      │
+└───────────────────────────┘    └────────────────────────┘    └───────────────────────────┘
 ```
 
 Consumers never see any of this: they call the generic name, exactly as they did before there was

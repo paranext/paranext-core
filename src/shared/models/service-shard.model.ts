@@ -39,24 +39,25 @@ export const WINDOW_SERVICE_SHARD_OBJECT_TYPE = 'windowServiceShard';
 
 /** Attributes every service shard registers, so a router can tell which window it belongs to */
 export type ServiceShardAttributes = {
-  /** Electron BrowserWindow ID of the window this shard implements the service for */
-  windowId: number;
+  /** Platform id of the window this shard implements the service for */
+  windowId: string;
 };
 
 /**
  * The attributes a window's shard registers with.
  *
- * @param windowId Electron BrowserWindow ID of the registering window. A renderer receives its own
- *   id as a string query parameter, so a string is accepted and converted — the attribute itself is
- *   always a number, matching the ids the main process routes by.
- * @throws If `windowId` is not a window id, since a shard nothing can be routed to is worse than a
- *   window that fails to finish starting
+ * @param windowId Platform id of the registering window
+ * @throws If `windowId` is not a non-empty string, since a shard nothing can be routed to is worse
+ *   than a window that fails to finish starting
  */
-export function getServiceShardAttributes(windowId: number | string): ServiceShardAttributes {
-  const windowIdNumber = typeof windowId === 'number' ? windowId : Number.parseInt(windowId, 10);
-  if (!Number.isInteger(windowIdNumber))
+export function getServiceShardAttributes(windowId: string): ServiceShardAttributes {
+  // Typed rather than merely truthy: attributes travel over the network, so this is a runtime
+  // boundary the compiler does not hold. A number here is truthy and would register happily, after
+  // which `getServiceShardWindowId` answers `undefined` for it and the shard is unroutable behind
+  // nothing louder than a warning — the failure this throw exists to make obvious.
+  if (typeof windowId !== 'string' || !windowId)
     throw new Error(`Cannot register a service shard for window id "${windowId}"`);
-  return { windowId: windowIdNumber };
+  return { windowId };
 }
 
 /**
@@ -69,7 +70,7 @@ export function getServiceShardAttributes(windowId: number | string): ServiceSha
  */
 export function getServiceShardWindowId(
   networkObjectDetails: NetworkObjectDetails,
-): number | undefined {
+): string | undefined {
   const { windowId } = networkObjectDetails.attributes ?? {};
-  return typeof windowId === 'number' ? windowId : undefined;
+  return typeof windowId === 'string' ? windowId : undefined;
 }

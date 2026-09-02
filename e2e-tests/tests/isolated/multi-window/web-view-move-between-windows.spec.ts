@@ -18,9 +18,17 @@
  *    Home tab of its own, and the app ends with two windows.
  * 2. The COMMAND routes, where the id a move answers with is observable: `moveWebViewToWindow` into an
  *    already-open window, then `moveWebViewToNewWindow` back out of it. The first move empties its
- *    source window while another window is standing, so that window closes; the second move leaves
- *    its source window holding its other tab, so that window stays. Ends with a graceful quit, so
- *    the whole flow is also swept for faults and duplicate registrations.
+ *    source window — the PRIMARY, which docks a Home tab of its own rather than closing, since only
+ *    its ✕ and the Quit menu close it; the second move leaves its source window holding its other
+ *    tab, so that window stays too. It then moves the tab back in through the tab menu's "Move tab
+ *    to window" submenu — the user's route to docking a tab back, and the only route that needs a
+ *    window to be NAMED, so it also pins that each window is called after the tab it shows and that
+ *    a window is never offered as a target for a tab it already holds. Every window is showing a
+ *    Home tab by then, so all are named "Home"; that collision is the designed behaviour, and it is
+ *    what makes the target COUNT rather than the target's label the assertion that catches a window
+ *    wrongly offering itself. That rides this instance because three windows are already standing
+ *    by then. Ends with a graceful quit, so the whole flow is also swept for faults and duplicate
+ *    registrations.
  *
  * ## Asserting identity, not shape
  *
@@ -30,11 +38,11 @@
  * the wrong reason. Everything here is therefore asserted on web view IDS:
  *
  * - The first window's Home tab comes from the fixed-id fallback layout, so before any move it is
- *   `{@link HOME_TAB_UUID}-w{windowId}` — an id no other Home tab in the session can have.
+ *   {@link homeTabWebViewId}`(windowId)` — an id no other Home tab in the session can have.
  * - A Home tab a window docks on the fly gets a freshly minted id (see
  *   {@link expectWindowDockHasOnlyHomeTab}), which can never be that one.
  * - A window that wrongly CLONED another window's layout would render that layout's ids re-scoped to
- *   itself — `{@link HOME_TAB_UUID}-w{itsOwnWindowId}` — ALONGSIDE the web view it received, so a
+ *   itself — {@link homeTabWebViewId}`(itsOwnWindowId)` — ALONGSIDE the web view it received, so a
  *   clone shows up as an EXTRA held id, never as a different value of the moved one. What catches
  *   it is therefore {@link expectWindowToHoldExactly}, which pins the destination's whole set of
  *   held ids: the cloned tab makes that set too big. Comparing the moved id itself against the
@@ -70,11 +78,12 @@ import {
   preConfigureSettings,
   sendPapiRequestOnce,
   waitForAppReady,
+  WINDOW_ID_SHAPE_SOURCE,
 } from '../../../fixtures/helpers';
 import {
   DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
-  HOME_TAB_UUID,
+  MOVE_COMMAND_TIMEOUT_MS,
   RENDERER_STARTING_LOG,
   WEBSOCKET_PORT,
   captureAppOutput,
@@ -82,23 +91,17 @@ import {
   createStepLogger,
   expectWindowDockHasOnlyHomeTab,
   getAppPages,
+  getHeldWebViewIds,
   getWindowIdOfPage,
   homeTabTitle,
+  homeTabWebViewId,
   pollUntil,
   quitAndExpectCleanExit,
   waitForRendererRegistered,
+  webViewTabTitle,
 } from './multi-window.util';
 
 // #region move commands
-
-/**
- * Per-request timeout for a move. A move to a new window pays a whole cold renderer start before it
- * touches the web view — deliberately, so a window that never comes up costs a wait and an error
- * rather than a web view open in no window — and a cold start on a loaded machine can take a
- * minute. A budget shorter than that would report a transport timeout for a move that was still
- * legitimately under way.
- */
-const MOVE_COMMAND_TIMEOUT_MS = 180_000;
 
 /** Move a web view to a window created for it, answering its authoritative id after the move. */
 async function moveWebViewToNewWindow(webViewId: string): Promise<string> {
@@ -111,7 +114,7 @@ async function moveWebViewToNewWindow(webViewId: string): Promise<string> {
 }
 
 /** Move a web view to an already-open window, answering its authoritative id after the move. */
-async function moveWebViewToWindow(webViewId: string, targetWindowId: number): Promise<string> {
+async function moveWebViewToWindow(webViewId: string, targetWindowId: string): Promise<string> {
   return sendPapiRequestOnce<string>(
     'command:platform.moveWebViewToWindow',
     [webViewId, targetWindowId],
@@ -124,9 +127,10 @@ async function moveWebViewToWindow(webViewId: string, targetWindowId: number): P
  * The window-scope suffix a window appends to the web view ids of any layout it loads. Keep in sync
  * with `WINDOW_SUFFIX_PATTERN` in
  * `src/renderer/components/docking/window-scoped-web-view-ids.util.ts` (not imported here — the e2e
- * project cannot resolve the app's path aliases).
+ * project cannot resolve the app's path aliases). Built from the shared
+ * {@link WINDOW_ID_SHAPE_SOURCE} mirror, since the suffix is a window id.
  */
-const WINDOW_SCOPE_SUFFIX_PATTERN = /-w\d+$/;
+const WINDOW_SCOPE_SUFFIX_PATTERN = new RegExp(`-w${WINDOW_ID_SHAPE_SOURCE}$`, 'i');
 
 /**
  * Every id a moved web view may legitimately answer to in its new window, per the move commands'
@@ -149,21 +153,6 @@ function idsMovedWebViewMayAnswerTo(webViewIdBeforeMove: string): string[] {
 // #endregion
 
 // #region window content probes
-
-/**
- * The web view ids a window is holding, read off its dock's tab titles
- * (`platform-tab-title.component.tsx` stamps each web view tab with `data-web-view-id`;
- * non-web-view tabs carry no such attribute and are therefore not matched).
- *
- * Tab titles rather than iframes: every tab in the tab bar renders its title whether or not it has
- * ever been the active tab, while rc-dock mounts a tab's pane — and with it the web view's iframe —
- * lazily. A window holding a tab the user has not looked at yet must still count as holding it.
- */
-async function getHeldWebViewIds(page: Page): Promise<string[]> {
-  return page
-    .locator('.platform-tab-title[data-web-view-id]')
-    .evaluateAll((titles) => titles.map((title) => title.getAttribute('data-web-view-id') ?? ''));
-}
 
 /**
  * Wait until `page` holds exactly one web view out of `candidateIds`, and answer which one.
@@ -279,7 +268,8 @@ test.use({
 
 test.describe('moving a web view between windows', () => {
   // Each test pays full app startup (up to ~180 s worst case) plus one or two extra window
-  // startups — a move to a new window contains a whole cold renderer start of its own.
+  // startups — a move to a new window contains a whole cold renderer start of its own — and the
+  // second test adds a third move and a window close on top of that.
   test.setTimeout(480_000);
 
   let restoreSettings: (() => void) | undefined;
@@ -310,7 +300,7 @@ test.describe('moving a web view between windows', () => {
 
     // The web view about to be moved, identified by the fixed id the fallback layout gives it,
     // suffixed with this window's scope. Nothing else in the session can carry this id.
-    const webViewIdBeforeMove = `${HOME_TAB_UUID}-w${window1Id}`;
+    const webViewIdBeforeMove = homeTabWebViewId(window1Id);
     await expect(homeTabTitle(mainPage, window1Id)).toBeVisible({ timeout: 60_000 });
     await expect(
       mainPage.locator(`iframe[data-web-view-id="${webViewIdBeforeMove}"]`),
@@ -364,18 +354,23 @@ test.describe('moving a web view between windows', () => {
     logStep(`window ${window2Id} holds the moved web view as ${movedWebViewId}`);
 
     // Gone from the window it left — the tab and its iframe both.
-    await expect(
-      mainPage.locator(`.platform-tab-title[data-web-view-id="${webViewIdBeforeMove}"]`),
-    ).toHaveCount(0, { timeout: 60_000 });
+    await expect(webViewTabTitle(mainPage, webViewIdBeforeMove)).toHaveCount(0, {
+      timeout: 60_000,
+    });
     await expect(mainPage.locator(`iframe[data-web-view-id="${webViewIdBeforeMove}"]`)).toHaveCount(
       0,
     );
     logStep(`window ${window1Id} no longer holds ${webViewIdBeforeMove}`);
 
-    // The window it left has nothing of its own to show, and it is the last window that could be
-    // the one the user is left with (the window created for the move is still waiting for content
-    // while the source empties), so it docks Home rather than closing — its own freshly minted Home,
-    // whose id can be neither the moved web view's nor the one the fallback layout used.
+    // The window it left has nothing of its own to show, and it docks Home rather than closing:
+    // its own freshly minted Home tab, an id that is neither the moved web view's nor the one the
+    // fallback layout used.
+    //
+    // Which rule produces that is not observable from here, and this test is not evidence for
+    // either. This window is the only one standing — the window the move created is still waiting
+    // for its content, so it does not count — and it is also the one answering for the application.
+    // Last-one-standing and the primary's exemption both answer Home, so the two are
+    // indistinguishable in this scenario.
     await expectWindowDockHasOnlyHomeTab(mainPage);
     const [dockedHomeWebViewId] = await getHeldWebViewIds(mainPage);
     expect(dockedHomeWebViewId).toBeDefined();
@@ -412,7 +407,7 @@ test.describe('moving a web view between windows', () => {
     const output = captureAppOutput(electronApp);
     await waitForAppReady(mainPage, 180_000);
     const window1Id = getWindowIdOfPage(mainPage);
-    const webViewIdBeforeMove = `${HOME_TAB_UUID}-w${window1Id}`;
+    const webViewIdBeforeMove = homeTabWebViewId(window1Id);
     await expect(homeTabTitle(mainPage, window1Id)).toBeVisible({ timeout: 60_000 });
     logStep(`window ${window1Id} holds web view ${webViewIdBeforeMove}`);
 
@@ -453,18 +448,22 @@ test.describe('moving a web view between windows', () => {
     });
     logStep(`window ${window2Id} holds the moved web view`);
 
-    // Window 1 held nothing else, so moving its one web view out empties it — and with window 2
-    // standing there holding content, it is NOT the last window that could be the one the user is
-    // left with, so it closes rather than docking Home. (Contrast the first test, where the same
-    // move leaves Home behind because the only other window is still waiting for content.)
+    // Window 1 held nothing else, so moving its one web view out empties it — but window 1 is the
+    // PRIMARY, and an emptied primary docks Home rather than closing: moving its last tab out does
+    // the same thing as closing that last tab. Only its ✕ and the Quit menu close it. Were it to
+    // close here, no window would hold the primary role at all, and window 2 — the one the user is
+    // now working in — would be a secondary whose ✕ drops its layout.
     await expectAppWindowCount(
       electronApp,
-      1,
+      2,
       120_000,
-      `window ${window1Id} to close after the move emptied it`,
+      `window ${window1Id} to stay open after the move emptied it`,
     );
-    expect(mainPage.isClosed()).toBe(true);
-    logStep(`window ${window1Id} closed after being emptied`);
+    expect(mainPage.isClosed()).toBe(false);
+    // Docked on the fly, so it carries a freshly minted id rather than the fixed fallback-layout one
+    // `homeTabTitle` builds — see {@link expectWindowDockHasOnlyHomeTab}.
+    await expectWindowDockHasOnlyHomeTab(mainPage);
+    logStep(`window ${window1Id} docked Home after being emptied, as the primary`);
 
     // MOVE BACK OUT, to a window created for it. The source survives this one: it keeps its own
     // Home tab, so it is never empty.
@@ -513,14 +512,99 @@ test.describe('moving a web view between windows', () => {
 
     await expectAppWindowCount(
       electronApp,
-      2,
+      3,
       60_000,
-      'the app to end the second move with exactly two windows',
+      'the app to end the second move with exactly three windows',
     );
+
+    // MOVE BACK IN THROUGH THE SUBMENU — the user's route to what the requirement calls docking a
+    // tab back, and the only one of the three routes that needs a window to be NAMED. Three windows
+    // are already standing at this point — the primary docked Home rather than closing when it was
+    // emptied — so this rides the same Electron instance rather than paying for another launch.
+    //
+    // Each window is named after the tab it is showing, which is what gives it its own OS switcher
+    // entry and what the submenu names its targets by. Every window here shows a Home tab, so all
+    // three are called "Home": the design tolerates that collision deliberately, since nothing
+    // disambiguates windows showing the same thing. So this asserts each window is named after its
+    // content — never that the names differ, which would contradict the rule.
+    //
+    // Auto-retrying, because the title is published asynchronously: a layout change localizes the
+    // label before assigning it, and until that resolves the window still shows the document's
+    // initial title. The expected value is read from the tab each window is showing rather than
+    // written as a literal, which is both the claim being made and immune to an English-string edit.
+    // Located by the id window 2 minted for its own Home tab, not by `homeTabTitle`: no window still
+    // standing at this point carries the fixed fallback-layout id, since the primary re-docked its
+    // own Home when it emptied.
+    const expectedWindowName = (
+      await webViewTabTitle(page2, window2OwnHomeWebViewId).innerText()
+    ).trim();
+    // All three windows must have settled on this title before the submenu opens — its target list
+    // is read once, with no refresh afterwards, so an unsettled window-1 title would leave the
+    // submenu one target short and read as the self-exclusion rule failing rather than as a timing
+    // gap.
+    await expect(mainPage).toHaveTitle(expectedWindowName, { timeout: 30_000 });
+    await expect(page2).toHaveTitle(expectedWindowName, { timeout: 30_000 });
+    await expect(page3).toHaveTitle(expectedWindowName, { timeout: 30_000 });
+    const window2Title = await page2.title();
+    logStep(`all three windows are named after the tab they show: "${window2Title}"`);
+
+    await webViewTabTitle(page3, idAfterSecondMove).click({ button: 'right' });
+    const moveToWindowItem = page3.getByRole('menuitem', { name: 'Move tab to window' });
+    await expect(moveToWindowItem).toBeVisible({ timeout: 30_000 });
+    await moveToWindowItem.hover();
+
+    // TWO targets with three windows open: the window the tab is already in is left out, because
+    // moving it there would do nothing. The COUNT is what proves that rule here — every window is
+    // showing a Home tab, so all three carry the same name, and a submenu wrongly offering this
+    // one would show three entries reading "Home" rather than one with a label to tell it apart.
+    const targetItems = page3.getByRole('menuitem', { name: window2Title, exact: true });
+    await expect(targetItems).toHaveCount(2, { timeout: 30_000 });
+    logStep(
+      `the submenu offers two targets named "${window2Title}", and not the window the tab is in`,
+    );
+
+    // Targets are offered in window order, so the second is window 2 — the one this move aims at.
+    // Where the tab actually landed is asserted below rather than assumed from the click.
+    await targetItems.nth(1).click();
+
+    // Window 2 holds both again, which is the requirement met through the menu rather than the API.
+    // The moved web view's id is asserted against the spellings the contract allows rather than
+    // pinned, for the same reason the API moves above accept either.
+    await expect
+      .poll(async () => (await getHeldWebViewIds(page2)).length, { timeout: 120_000 })
+      .toBe(2);
+    const idsInWindow2AfterSubmenuMove = await getHeldWebViewIds(page2);
+    expect(idsInWindow2AfterSubmenuMove).toContain(window2OwnHomeWebViewId);
+    const [idMovedBySubmenu] = idsInWindow2AfterSubmenuMove.filter(
+      (heldId) => heldId !== window2OwnHomeWebViewId,
+    );
+    expect(idsMovedWebViewMayAnswerTo(idAfterSecondMove)).toContain(idMovedBySubmenu);
+
+    // Held EXACTLY, with the settle the count poll above cannot give: a wrongly-cloned layout
+    // arrives as an extra tab after the count momentarily reads right, which is the whole reason
+    // this file asserts destinations this way rather than by shape
+    await expectWindowToHoldExactly(
+      page2,
+      [window2OwnHomeWebViewId, idMovedBySubmenu],
+      120_000,
+      `window ${window2Id} received the tab back through the submenu`,
+    );
+    logStep(`tab moved back into window ${window2Id} through the submenu as ${idMovedBySubmenu}`);
+
+    // The source side, by the same rule the earlier moves assert: this move emptied window 3 while
+    // window 2 was standing, so window 3 closes rather than docking a Home tab of its own
+    await expectAppWindowCount(
+      electronApp,
+      2,
+      120_000,
+      `window ${window3Id} to close after the submenu move emptied it, leaving the other two`,
+    );
+    expect(page3.isClosed()).toBe(true);
+    logStep(`window ${window3Id} closed after the submenu move emptied it`);
 
     // A real quit after all of that: the app must still go down cleanly, and the epilogue sweeps
     // everything captured — both moves included — for faults and duplicate registrations, with the
     // quit line itself as the positive control that the corpus is not empty.
-    await quitAndExpectCleanExit(electronApp, output, logStep, 'quit after two moves');
+    await quitAndExpectCleanExit(electronApp, output, logStep, 'quit after three moves');
   });
 });

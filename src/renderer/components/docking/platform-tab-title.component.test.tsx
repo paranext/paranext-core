@@ -19,13 +19,34 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%tab_aria_tab%': 'tab',
-      '%tab_contextMenu_floatTab%': 'Float Tab',
+      '%window_label_empty%': 'Empty window',
     },
   ]),
   useData: vi.fn(() => ({
     Focus: () => [mockFocusSubject, vi.fn()],
   })),
   useDataProvider: vi.fn(() => undefined),
+}));
+
+vi.mock('@shared/services/menu-data.service', () => ({
+  menuDataService: {
+    dataProviderName: 'platform.menuDataServiceDataProvider',
+    // Each tab reads its contributed menu once at mount rather than subscribing to it
+    getWebViewMenu: vi.fn(async () => ({
+      includeDefaults: true,
+      tabMenu: {
+        groups: { 'platform.tabWindow': { order: 100, isExtensible: true } },
+        items: [
+          {
+            label: 'Float Tab',
+            group: 'platform.tabWindow',
+            order: 100,
+            command: 'platform.floatTab',
+          },
+        ],
+      },
+    })),
+  },
 }));
 
 vi.mock('@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook', () => ({
@@ -52,6 +73,8 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   floatTab: vi.fn(),
   updateTabPartialSync: vi.fn(),
+  // Two tabs open, so a tab is never the only one in its window unless a test says otherwise
+  getOpenTabCountSync: vi.fn(() => 2),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -345,9 +368,11 @@ describe('PlatformTabTitle context-menu gating', () => {
     vi.mocked(useIsPowerMode).mockReturnValue(true);
   });
 
-  it('power mode: wraps the title in a ContextMenu', () => {
+  it('power mode: wraps the title in a ContextMenu', async () => {
     vi.mocked(useIsPowerMode).mockReturnValue(true);
     render(<PlatformTabTitle text="Tab" id="tab-1" />);
+    // The tab reads its contributed menu when it mounts, and renders no menu until that lands
+    await act(async () => {});
     expect(screen.queryByTestId('context-menu')).toBeInTheDocument();
   });
 

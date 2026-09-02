@@ -1,4 +1,5 @@
 import { TabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
+import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
 
 import { getTabGroup } from './platform-dock-layout-positioning.util';
 import { PlatformPanel } from './platform-panel.component';
@@ -44,6 +45,15 @@ export function createRCDockTabFromTabInfo(
         id={tabInfo.id}
         // For WebView tabs, the tab id IS the web view id
         webViewId={tabInfo.tabType === TAB_TYPE_WEBVIEW ? tabInfo.id : undefined}
+        // Names the contributed menu to show on this tab. A tab hosting no WebView has no such
+        // name, and the menu data service answers that with the platform's own tab items
+        webViewType={
+          tabInfo.tabType === TAB_TYPE_WEBVIEW
+            ? // The tab's data is the web view's saved definition for WebView tabs
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              (tabInfo.data as SavedWebViewDefinition | undefined)?.webViewType
+            : undefined
+        }
       />
     ),
     content: <PlatformPanel id={tabInfo.id}>{tabInfo.content}</PlatformPanel>,

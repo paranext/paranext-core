@@ -145,5 +145,33 @@
       }
     ]
   },
+  "defaultWebViewTabMenu": {
+    "groups": {
+      "platform.tabWindow": { "order": 100, "isExtensible": true, "isExperimental": true }
+    },
+    "items": [
+      {
+        "label": "%tab_contextMenu_floatPanel%",
+        "localizeNotes": "Tab context menu > Float tab",
+        "group": "platform.tabWindow",
+        "order": 100,
+        "command": "platform.floatTab"
+      },
+      {
+        "label": "%tab_contextMenu_moveTabToNewWindow%",
+        "localizeNotes": "Tab context menu > Move tab to new window",
+        "group": "platform.tabWindow",
+        "order": 200,
+        "command": "platform.moveWebViewToNewWindow"
+      },
+      {
+        "id": "platform.moveTabToWindow",
+        "label": "%tab_contextMenu_moveTabToWindow%",
+        "localizeNotes": "Tab context menu > Move tab to window (submenu listing the open windows)",
+        "group": "platform.tabWindow",
+        "order": 300
+      }
+    ]
+  },
   "webViewMenus": {}
 }
