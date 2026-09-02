@@ -672,7 +672,12 @@ describe('web view service router', () => {
       await router.openWebView('someType', { type: 'window' });
 
       expect(creator.createPendingContentWindow).not.toHaveBeenCalled();
-      expect(focused.openWebView).toHaveBeenCalledWith('someType', { type: 'tab' }, undefined);
+      expect(focused.openWebView).toHaveBeenCalledWith(
+        'someType',
+        { type: 'tab' },
+        undefined,
+        false,
+      );
     });
 
     test('degrades to a tab when the interface mode cannot be read', async () => {
@@ -834,6 +839,7 @@ describe('web view service router', () => {
         'comments',
         { type: 'tab' },
         { existingId: '?' },
+        false,
       );
     });
 
@@ -1003,7 +1009,7 @@ describe('web view service router', () => {
       const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
       setWebViewWindowCreator(creator);
       await getRouter();
-      const freshWindow = await createFreshWindow('someType');
+      const freshWindow = await createFreshWindow('someType', false);
 
       await Promise.all([freshWindow.discard(), freshWindow.discard()]);
 

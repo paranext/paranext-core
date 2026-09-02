@@ -22,7 +22,8 @@ export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
 
 /**
  * Query parameter passed to the renderer. Present when the window was created without being
- * activated and has not been activated since.
+ * activated. Written once, at creation, and never removed — whether the user has been in the window
+ * since is the renderer's own to track.
  *
  * A window told to stay in the background is undone by its own content: every mounted panel and
  * every loaded web view asks this window's service to focus it, and focusing a tab focuses its web

@@ -118,6 +118,7 @@ import {
 } from '@main/services/window-layout-persistence.service';
 import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
 import {
+  SELF_FOCUS_WINDOW_MS,
   forgetWindowBounce,
   forgetWindowWithholding,
   hasWindowBouncedFocusBack,
@@ -672,6 +673,24 @@ async function main() {
   }
 
   /** Sets up the electron BrowserWindow renderer process */
+  /**
+   * Whether focus can be handed back to this window right now.
+   *
+   * Asked at the moment of the hand-back rather than when the withheld window was created: the
+   * window that held focus can have closed since, and one the user has minimized is not somewhere
+   * they are working — restoring it would undo their choice, which is the same harm as taking the
+   * foreground, pointed the other way.
+   */
+  const canWindowTakeFocusBack = (
+    windowIdToReturnFocusTo: number | undefined,
+    withheldWindowId: number,
+  ): boolean => {
+    if (windowIdToReturnFocusTo === undefined || windowIdToReturnFocusTo === withheldWindowId)
+      return false;
+    const target = BrowserWindow.fromId(windowIdToReturnFocusTo);
+    return !!target && !target.isDestroyed() && !target.isMinimized();
+  };
+
   const createWindow = async (
     restoreInfo: WindowRestoreInfo | undefined,
     creationOptions: { isUserRequested: boolean; pendingContent?: boolean },
@@ -794,10 +813,19 @@ async function main() {
     // web view focuses its iframe, and a `focus()` inside a window that does not hold OS focus asks
     // the browser to activate that window. Recorded here so the open that follows can say so.
     if (activation.revealWhenReady === 'inactive') noteWindowWithheldFromActivation(windowId);
-    // Where focus goes back to if this window takes it on its own. Read at creation, because by the
-    // time that happens this window is the routing target and the answer would be itself.
+    // Where focus goes back to if this window takes it on its own: the window that actually HELD
+    // focus, not the routing target. They diverge — routing walks past a window that is not ready,
+    // is closing, or is pending content — and handing focus to a window the user was not in is a
+    // worse outcome than the foreground steal being undone. Captured before this window can become
+    // the answer itself; the `!== windowId` guard at the bounce covers the case where it already is.
     const windowIdToReturnFocusTo =
-      activation.revealWhenReady === 'inactive' ? getTargetWindowId() : undefined;
+      activation.revealWhenReady === 'inactive' ? getFocusedWindowId() : undefined;
+    /**
+     * When the page may still take focus for itself. Set at the reveal, because that is the paint
+     * the self-focus rides in on. Outside it, a focus event is a person, and a person's click must
+     * not be undone.
+     */
+    let selfFocusWindowClosesAt: number | undefined;
 
     // Track which window is focused for multi-window command routing
     newWindow.on('focus', () => {
@@ -807,8 +835,12 @@ async function main() {
         shouldBounceFocusBack({
           isAwaitingFirstActivation: isWindowAwaitingFirstActivation(windowId),
           hasAlreadyBouncedFocusBack: hasWindowBouncedFocusBack(windowId),
-          canReturnFocusElsewhere:
-            windowIdToReturnFocusTo !== undefined && windowIdToReturnFocusTo !== windowId,
+          // Re-checked HERE, not at creation: the window focus would go back to can have closed or
+          // been minimized in the meantime, and restoring a window the user put away is the same
+          // harm as stealing the foreground, in the other direction.
+          canReturnFocusElsewhere: canWindowTakeFocusBack(windowIdToReturnFocusTo, windowId),
+          isWithinSelfFocusWindow:
+            selfFocusWindowClosesAt !== undefined && Date.now() <= selfFocusWindowClosesAt,
         })
       ) {
         noteWindowBouncedFocusBack(windowId);
@@ -823,6 +855,9 @@ async function main() {
       // The user is in this window now, so content arriving in it should take focus like anywhere
       // else. One activation is enough — this window stops being a background one for good.
       forgetWindowWithholding(windowId);
+      // Stop asking for attention: they are here. Windows does not cancel a flash on activation on
+      // its own, which is why `focusWindow` pairs its own flash the same way.
+      if (!newWindow.isDestroyed()) newWindow.flashFrame(false);
     });
     // The other half of focus tracking: a blur with no focus following it is the whole application
     // going to the background, which is what isApplicationFocused answers from
@@ -1072,6 +1107,7 @@ async function main() {
         else {
           newWindow.showInactive();
           newWindow.flashFrame(true);
+          selfFocusWindowClosesAt = Date.now() + SELF_FOCUS_WINDOW_MS;
         }
         // Once-guarded like window-created above: ready-to-show fires again for a re-created window.
         markStartupOnce('window-shown');
@@ -1564,8 +1600,8 @@ async function main() {
   // so this must stay wired without first waiting for extension-host readiness: a wait here for an
   // extension-host ready signal would deadlock against that wait.
   setWebViewWindowCreator({
-    createPendingContentWindow: async () =>
-      (await createWindow(undefined, { isUserRequested: false, pendingContent: true })).id,
+    createPendingContentWindow: async (isUserRequested: boolean) =>
+      (await createWindow(undefined, { isUserRequested, pendingContent: true })).id,
     closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
   });
 

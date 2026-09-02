@@ -1094,13 +1094,13 @@ declare module 'shared/global-this.model' {
      * in the renderer process from the URL search params; no other process assigns it, so it reads
      * `undefined` there.
      *
-     * This is the window's state at creation, not now. What content should do about it is
-     * `isWindowAwaitingFirstActivation()` in the window service shard, which stops answering `true`
-     * once the window is activated.
+     * This is the window's state at creation, not now: what content should do about it also depends
+     * on whether the user has since done anything in the window, which the renderer tracks
+     * separately.
      *
      * @experimental
      */
-    var wasWindowCreatedWithoutActivation: boolean;
+    var wasWindowCreatedWithoutActivation: boolean | undefined;
     /**
      * Window id of the Electron browser window as a string (e.g. "1", "2"). This is the stringified
      * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
@@ -5231,11 +5231,19 @@ declare module 'papi-shared-types' {
      * there to be classified on, not read.
      *
      * @param webViewId Web view to move
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own: the window that appears does not take the foreground, so it cannot interrupt
+     *   whatever the user is doing. Pass `true` only from a control the user operated
      * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
      *   see above
-     * @experimental
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
      */
-    'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
+    'platform.moveWebViewToNewWindow': (
+      webViewId: WebViewId,
+      isUserRequested?: boolean,
+    ) => Promise<WebViewId>;
     /**
      * Move a web view to an existing window, named by its runtime window id (see
      * `platform.getFocusedWindowId`; window ids are reused across sessions — never persist one).
@@ -9212,7 +9220,8 @@ declare module 'shared/data/platform.data' {
   export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
   /**
    * Query parameter passed to the renderer. Present when the window was created without being
-   * activated and has not been activated since.
+   * activated. Written once, at creation, and never removed — whether the user has been in the window
+   * since is the renderer's own to track.
    *
    * A window told to stay in the background is undone by its own content: every mounted panel and
    * every loaded web view asks this window's service to focus it, and focusing a tab focuses its web

@@ -324,18 +324,29 @@ test.describe('moving a web view between windows', () => {
     await moveWebViewToNewWindow(webViewId);
     await expectAppWindowCount(electronApp, 2, 60_000, 'the moved web view to get its own window');
 
-    // The new window exists and is visible, but the focused window is still the one the user was in
-    const focusedAfterMove = await getFocusedWindowId();
-    expect(focusedAfterMove).toBe(window1Id);
-    const newWindowIsVisible = await electronApp.evaluate(
+    // OS focus, not the routing target. Routing is the weaker claim of the two and on its own it
+    // cannot see this feature at all: the focus handler returns before recording a bounced window,
+    // so `getFocusedWindowId()` reads the same whether focus was handed back or never taken. Asking
+    // Electron which window the OS considers focused is what makes the hand-back observable.
+    const osFocus = await electronApp.evaluate(
       ({ BrowserWindow }, { id }) => {
         const created = BrowserWindow.getAllWindows().find((win) => win.id !== id);
-        return created ? created.isVisible() : false;
+        return {
+          createdIsFocused: created ? created.isFocused() : undefined,
+          createdIsVisible: created ? created.isVisible() : false,
+          focusedWindowId: BrowserWindow.getFocusedWindow()?.id,
+        };
       },
       { id: window1Id },
     );
-    expect(newWindowIsVisible).toBe(true);
-    logStep(`window ${window1Id} still holds focus; the created window is visible`);
+    expect(osFocus.createdIsFocused).toBe(false);
+    expect(osFocus.focusedWindowId).toBe(window1Id);
+    // Visible as well as unfocused: asserting only the focus half would also pass for a window that
+    // never appeared at all, which is a worse outcome than the one under test.
+    expect(osFocus.createdIsVisible).toBe(true);
+    // Routing follows, and is asserted second because it is the consequence rather than the thing.
+    expect(await getFocusedWindowId()).toBe(window1Id);
+    logStep(`window ${window1Id} holds OS focus; the created window is visible and unfocused`);
   });
 
   test('a tab moved to a new window through its context menu leaves its window, arrives in the new one, and leaves a Home tab behind', async ({

@@ -121,7 +121,12 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     fireEvent.click(screen.getByText('Move tab to new window'));
 
     await waitFor(() =>
-      expect(sendCommand).toHaveBeenCalledWith('platform.moveWebViewToNewWindow', 'web-view-1'),
+      expect(sendCommand).toHaveBeenCalledWith(
+        'platform.moveWebViewToNewWindow',
+        'web-view-1',
+        // A person picked this from the menu, so the window it creates comes to the front
+        true,
+      ),
     );
   });
 
@@ -303,7 +308,12 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     fireEvent.click(screen.getByText('Move tab to new window'));
 
     await waitFor(() =>
-      expect(sendCommand).toHaveBeenCalledWith('platform.moveWebViewToNewWindow', 'web-view-1'),
+      expect(sendCommand).toHaveBeenCalledWith(
+        'platform.moveWebViewToNewWindow',
+        'web-view-1',
+        // A person picked this from the menu, so the window it creates comes to the front
+        true,
+      ),
     );
     expect(notificationService.send).not.toHaveBeenCalled();
   });

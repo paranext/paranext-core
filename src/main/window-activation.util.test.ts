@@ -2,6 +2,9 @@ import { describe, expect, test } from 'vitest';
 import {
   forgetWindowWithholding,
   noteWindowWithheldFromActivation,
+  forgetWindowBounce,
+  hasWindowBouncedFocusBack,
+  noteWindowBouncedFocusBack,
   planWindowActivation,
   shouldBounceFocusBack,
   shouldContentAvoidDocumentFocus,
@@ -163,7 +166,9 @@ describe('revealing a window that failed before it could paint', () => {
   });
 
   test('does nothing when a window that showed itself loses its renderer', () => {
-    expect(shouldRevealAfterRendererGone(asked, false)).toBe(false);
+    // Only the plan gate is turned off here: with `true` for the activation gate, this fails if the
+    // plan check is dropped. Turning both off at once would pass without it.
+    expect(shouldRevealAfterRendererGone(asked, true)).toBe(false);
   });
 });
 
@@ -177,6 +182,7 @@ describe('handing focus back when a withheld window takes it on its own', () => 
         isAwaitingFirstActivation: true,
         hasAlreadyBouncedFocusBack: false,
         canReturnFocusElsewhere: true,
+        isWithinSelfFocusWindow: true,
       }),
     ).toBe(true);
   });
@@ -190,6 +196,7 @@ describe('handing focus back when a withheld window takes it on its own', () => 
         isAwaitingFirstActivation: true,
         hasAlreadyBouncedFocusBack: false,
         canReturnFocusElsewhere: false,
+        isWithinSelfFocusWindow: true,
       }),
     ).toBe(false);
   });
@@ -201,6 +208,21 @@ describe('handing focus back when a withheld window takes it on its own', () => 
         isAwaitingFirstActivation: false,
         hasAlreadyBouncedFocusBack: false,
         canReturnFocusElsewhere: true,
+        isWithinSelfFocusWindow: true,
+      }),
+    ).toBe(false);
+  });
+
+  test('leaves a focus that arrives after the page could have taken it', () => {
+    // Outside the window in which the page takes focus for itself, a focus event is a person
+    // clicking the window. Handing it back would undo their click and read as a window that
+    // refuses to be entered — the failure this bound exists to prevent.
+    expect(
+      shouldBounceFocusBack({
+        isAwaitingFirstActivation: true,
+        hasAlreadyBouncedFocusBack: false,
+        canReturnFocusElsewhere: true,
+        isWithinSelfFocusWindow: false,
       }),
     ).toBe(false);
   });
@@ -213,7 +235,47 @@ describe('handing focus back when a withheld window takes it on its own', () => 
         isAwaitingFirstActivation: true,
         hasAlreadyBouncedFocusBack: true,
         canReturnFocusElsewhere: true,
+        isWithinSelfFocusWindow: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe('remembering which windows have had their focus handed back', () => {
+  // Untested, this latch fails in the worst direction: if recording a bounce did nothing, every
+  // focus attempt on a withheld window would be handed back forever — "a window nobody can get
+  // into", which is the hazard `shouldBounceFocusBack` exists to bound.
+  let nextWindowId = 5000;
+  function freshWindowId(): number {
+    nextWindowId += 1;
+    return nextWindowId;
+  }
+
+  test('a window that has not been handed back reports so', () => {
+    expect(hasWindowBouncedFocusBack(freshWindowId())).toBe(false);
+  });
+
+  test('recording a hand-back is remembered', () => {
+    const windowId = freshWindowId();
+    noteWindowBouncedFocusBack(windowId);
+
+    expect(hasWindowBouncedFocusBack(windowId)).toBe(true);
+  });
+
+  test('one window having been handed back says nothing about another', () => {
+    const bounced = freshWindowId();
+    const untouched = freshWindowId();
+    noteWindowBouncedFocusBack(bounced);
+
+    expect(hasWindowBouncedFocusBack(bounced)).toBe(true);
+    expect(hasWindowBouncedFocusBack(untouched)).toBe(false);
+  });
+
+  test('a window that has gone away is forgotten', () => {
+    const windowId = freshWindowId();
+    noteWindowBouncedFocusBack(windowId);
+    forgetWindowBounce(windowId);
+
+    expect(hasWindowBouncedFocusBack(windowId)).toBe(false);
   });
 });

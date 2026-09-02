@@ -118,8 +118,8 @@ export function shouldRevealAfterLoadFailure(
   failure: { isMainFrame: boolean; errorCode: number; isAwaitingFirstActivation: boolean },
 ): boolean {
   if (!plan.revealAfterLoadFailure) return false;
-  // The window has been on screen and the user put it away since; bringing it back because its
-  // renderer died would undo their choice. The reveal is for a window that has never been seen.
+  // The window has been on screen and the user has been in it since; bringing it back because its
+  // page failed to load would undo where they left it. The reveal is for a window never yet seen.
   if (!failure.isAwaitingFirstActivation) return false;
   // Every web view in the app is an in-page iframe of the window's page, so a sub-frame failure is
   // one web view not loading — the window itself is still on its way to `ready-to-show`.
@@ -176,18 +176,46 @@ export function forgetWindowBounce(windowId: number): void {
  * window keeps whatever focus it is given.
  *
  * @param state Whether the window is still waiting to be seen for the first time — a user gesture
- *   in it ends that — whether its focus has already been handed back once, and whether there is
- *   another window to hand it back to. The last is not always true: a withheld window can be the
- *   first this process tracks, and routing then answers with the window itself
+ *   in it ends that — whether its focus has already been handed back once, whether there is another
+ *   window to hand it back to, and whether the focus arrived inside the short window after first
+ *   paint in which the page takes focus for itself. The third is not always true: a withheld window
+ *   can be the first this process tracks, and routing then answers with the window itself. The
+ *   fourth is what keeps a user's own click from being undone: on a compositor that does not
+ *   self-focus, the FIRST focus event this window ever sees is the user clicking it, and an
+ *   unbounded arm would snap them straight back out
  */
 export function shouldBounceFocusBack(state: {
   isAwaitingFirstActivation: boolean;
   hasAlreadyBouncedFocusBack: boolean;
   canReturnFocusElsewhere: boolean;
+  isWithinSelfFocusWindow: boolean;
 }): boolean {
   return (
     state.isAwaitingFirstActivation &&
     !state.hasAlreadyBouncedFocusBack &&
-    state.canReturnFocusElsewhere
+    state.canReturnFocusElsewhere &&
+    state.isWithinSelfFocusWindow
   );
+}
+
+/**
+ * How long after a window first paints the page may still take focus for itself.
+ *
+ * The self-focus arrives in the same breath as the first paint. Anything later is a person, and a
+ * person's click must not be undone — so the hand-back is armed only for this long. Generous
+ * relative to the event it is waiting for, because the cost of being too short is the defect coming
+ * back, while the cost of being too long is one undone click in a window nobody asked for.
+ */
+export const SELF_FOCUS_WINDOW_MS = 2000;
+
+/**
+ * Forget every window this module is tracking.
+ *
+ * The two sets here are process state that no `vi.clearAllMocks()` touches, and a test that marks a
+ * window and then fails leaves that mark for every test after it — which changes what they exercise
+ * without failing them.
+ */
+export function resetWindowActivationForTesting(): void {
+  windowIdsAwaitingFirstActivation.clear();
+  windowIdsAlreadyBouncedBack.clear();
 }

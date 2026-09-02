@@ -143,7 +143,7 @@ describe('float layouts are untouched by multi-window routing', () => {
     await router.openWebView('someType', FLOAT_LAYOUT);
 
     // Same focused-window rung a bare 'tab' open uses — 'float' gets no rung of its own
-    expect(focused.openWebView).toHaveBeenCalledWith('someType', FLOAT_LAYOUT, undefined);
+    expect(focused.openWebView).toHaveBeenCalledWith('someType', FLOAT_LAYOUT, undefined, false);
     expect(other.openWebView).not.toHaveBeenCalled();
     // A float never creates a window: only the 'window'-layout rung ever calls this
     expect(creator.createPendingContentWindow).not.toHaveBeenCalled();
@@ -177,9 +177,12 @@ describe('float layouts are untouched by multi-window routing', () => {
 
     await router.openWebView('someType', FLOAT_LAYOUT, { existingId: 'existing-view' });
 
-    expect(owner.openWebView).toHaveBeenCalledWith('someType', FLOAT_LAYOUT, {
-      existingId: 'existing-view',
-    });
+    expect(owner.openWebView).toHaveBeenCalledWith(
+      'someType',
+      FLOAT_LAYOUT,
+      { existingId: 'existing-view' },
+      false,
+    );
     expect(focused.openWebView).not.toHaveBeenCalled();
   });
 
@@ -194,6 +197,6 @@ describe('float layouts are untouched by multi-window routing', () => {
     const router = await getRouter();
 
     await expect(router.openWebView('someType', FLOAT_LAYOUT)).resolves.toBe('opened');
-    expect(focused.openWebView).toHaveBeenCalledWith('someType', FLOAT_LAYOUT, undefined);
+    expect(focused.openWebView).toHaveBeenCalledWith('someType', FLOAT_LAYOUT, undefined, false);
   });
 });
