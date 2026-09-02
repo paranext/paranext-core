@@ -918,6 +918,47 @@ describe('a web view that is between windows on a move', () => {
     releaseAdoptB('home');
     await Promise.all([movingA, movingB]);
   });
+
+  test('folds a web view in once when two move records still hold it', async () => {
+    // The window a late-landing adopt delivered to reports the view while the first move's record is
+    // still open — its probe has not confirmed yet — so an owner search finds an owner and never
+    // consults the in-flight set. Nothing stops the user dragging that tab again, which opens a
+    // SECOND record for the same view. Both records then describe one view that no window reports,
+    // and folding both in counts it twice, which the read must not do.
+    const source = sourceWindowShard('view-1-w2', 'view-1', { projectId: 'project-1' });
+    const middle = sourceWindowShard('view-1', 'view-1', { projectId: 'project-1' });
+    const target = windowShard([]);
+    let releaseFirstAdopt: (webViewId: WebViewId) => void = () => {};
+    middle.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseFirstAdopt = resolve;
+        }),
+    );
+    let releaseSecondAdopt: (webViewId: WebViewId) => void = () => {};
+    target.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseSecondAdopt = resolve;
+        }),
+    );
+    withWindows({ 2: source, 3: middle, 4: target });
+
+    const firstMove = moveWebView('view-1-w2', 3);
+    await settle();
+    // The second move starts from the id the first one delivered, which is what makes these two
+    // records describe the same view rather than two views that merely strip alike.
+    const secondMove = moveWebView('view-1', 4);
+    await settle();
+
+    const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
+
+    expect(definitions.filter((definition) => definition.id === 'view-1')).toHaveLength(1);
+
+    releaseFirstAdopt('view-1');
+    releaseSecondAdopt('view-1');
+    await Promise.allSettled([firstMove, secondMove]);
+  });
 });
 
 describe('the move commands', () => {
