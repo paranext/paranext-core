@@ -576,10 +576,23 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   // spelling the move started from rather than the stripped one the target was handed. One match
   // means this view is already in the read under a name of its own.
   const definitionIds = new Set(definitions.map((definition) => definition.id));
+  // What has already been folded in, kept apart from the window-reported ids above and holding only
+  // the spellings that name ONE view. `capturedDefinition.id` has had its window scope stripped, and
+  // stripping is not injective: every window's default Home tab reduces to the same string. Recording
+  // that spelling here would let the first fold-in claim it and the next move read that as "already
+  // reported", dropping a view that really is missing — two Home tabs moved at once is enough.
+  const foldedInIds = new Set<WebViewId>();
   const foldedInDefinitions: SavedWebViewDefinition[] = [];
   webViewMovesInFlight.forEach((move) => {
-    if (move.webViewIds.some((webViewId) => definitionIds.has(webViewId))) return;
-    definitionIds.add(move.capturedDefinition.id);
+    if (
+      move.webViewIds.some(
+        (webViewId) => definitionIds.has(webViewId) || foldedInIds.has(webViewId),
+      )
+    )
+      return;
+    move.webViewIds
+      .filter((webViewId) => webViewId !== move.capturedDefinition.id)
+      .forEach((webViewId) => foldedInIds.add(webViewId));
     foldedInDefinitions.push(move.capturedDefinition);
   });
   // `debug`, not `warn`: a move overlapping a whole-app read is an expected, handled condition, and
