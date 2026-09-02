@@ -37,7 +37,7 @@ export const MAIN_WINDOW_CRASHED_VIEW_STRING_KEYS: readonly LocalizeKey[] = STRI
 export const ENGLISH_DEFAULTS: Readonly<Record<MainWindowCrashedViewStringKey, string>> = {
   [TITLE_KEY]: 'This window stopped working',
   [MESSAGE_KEY]:
-    'Something went wrong and this window could not be displayed. Reloading should bring it back, and your project files are safe.',
+    'Something went wrong and this window could not be displayed. Reloading should bring it back.',
   [RELOAD_BUTTON_KEY]: 'Reload',
 };
 
