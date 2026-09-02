@@ -57,6 +57,7 @@ import {
   isWindowAwaitingFirstActivation,
   noteWindowActivated,
   resetActivationLatchForTesting,
+  takeTabAwaitingDocumentFocus,
 } from '@renderer/services/window-activation.util';
 import { settingsService } from '@shared/services/settings.service';
 
@@ -312,30 +313,10 @@ window.addEventListener('keydown', () => {
   endWithholdingAndCatchUp();
 });
 
-/**
- * The tab that was docked while this window was in the background, and so was made active without
- * being given document focus.
- *
- * Only the latest is kept: several arrivals collapse into one catch-up, because focusing each in
- * turn on activation would end with the same tab focused anyway.
- */
-let tabAwaitingDocumentFocus: string | undefined;
-
-/**
- * Remember a tab that was activated without document focus, so it can be given focus when the user
- * arrives. Withholding focus while nobody is looking is only half the job — without this the user
- * activates the window, sees the tab rendered active, types, and the keystrokes go nowhere until
- * they click inside the web view, which is not a path a keyboard or screen-reader user takes.
- */
-function noteTabAwaitingDocumentFocus(tabId: string): void {
-  tabAwaitingDocumentFocus = tabId;
-}
-
 /** End the withholding on the user's first gesture, and give the waiting tab its focus */
 function endWithholdingAndCatchUp(): void {
   if (!noteWindowActivated()) return;
-  const tabId = tabAwaitingDocumentFocus;
-  tabAwaitingDocumentFocus = undefined;
+  const tabId = takeTabAwaitingDocumentFocus();
   if (tabId === undefined) return;
   // Failure here costs the caret, not the content, so it is logged rather than thrown: the user can
   // still click into the view.
@@ -533,11 +514,12 @@ class WindowDataProviderEngine
     // long after the user has been working here. The latch answers only for the focus requests this
     // window's own panels and web views make as they mount, which never leave the renderer.
     else {
-      const withholdDocumentFocus =
-        activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation();
-      // Deferred, not dropped: whoever is left waiting gets focus when the user actually arrives.
-      if (withholdDocumentFocus) noteTabAwaitingDocumentFocus(newFocusSubject.id);
-      (await getDockLayout()).focusTab(newFocusSubject.id, withholdDocumentFocus);
+      // Deferred, not dropped: the dock records whatever tab it leaves unfocused, and the
+      // catch-up gives that tab its focus when the user actually arrives.
+      (await getDockLayout()).focusTab(
+        newFocusSubject.id,
+        activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation(),
+      );
     }
 
     return didChangeFocus;

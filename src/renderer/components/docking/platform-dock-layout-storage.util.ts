@@ -44,6 +44,7 @@ import {
 
 import { TAB_TYPE_BUTTONS, loadButtonsTab } from '@renderer/testing/test-buttons-panel.component';
 import { TAB_TYPE_TEST, loadTestTab } from '@renderer/testing/test-panel.component';
+import { noteTabAwaitingDocumentFocus } from '@renderer/services/window-activation.util';
 import {
   TAB_TYPE_QUICK_VERSE_HERESY,
   loadQuickVerseHeresyTab,
@@ -1209,7 +1210,8 @@ function revealTabGroupAndSetDocumentFocusToTab(
 ): void {
   unmaximizeAnyMaximizedTabGroup(dockLayout, tabId);
   bringFloatingTabGroupToFront(dockLayout, tabId);
-  if (!activateWithoutDocumentFocus) setDocumentFocusToTab(dockLayout, tabId);
+  if (activateWithoutDocumentFocus) noteTabAwaitingDocumentFocus(tabId);
+  else setDocumentFocusToTab(dockLayout, tabId);
 }
 
 /**
