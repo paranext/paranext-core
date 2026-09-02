@@ -101,8 +101,14 @@ export const test = appTest.extend<
   // Overrides app.fixture's own 'simple' default with the same value, kept explicit because this
   // suite's choice is load-bearing rather than incidental: Simple is what the Find suite drives;
   // the Replace suite sets `test.use({ interfaceMode: 'power' })`, because Simple mode renders no
-  // Replace surface at all (`hideModeToggle`). Already registered as a worker-scoped option
-  // fixture by app.fixture, so only the default value is redeclared here, not `option: true`.
+  // Replace surface at all (`hideModeToggle`). This redeclaration does not repeat `option: true` —
+  // Playwright computes a redeclared fixture's option status fresh from its own tuple rather than
+  // inheriting app.fixture's, so `interfaceMode` is a plain (non-option) fixture for this fixture
+  // list from here on. Nothing in this suite needs option status: no `playwright.config.ts`
+  // project targets `interfaceMode` via `use:`, and `test.use({ interfaceMode: 'power' })` in
+  // replace.spec.ts overrides the default regardless of the flag. `option: true` cannot simply be
+  // added back either — Playwright's types only allow it on a fixture introduced by this same
+  // `.extend()` call's own generic arguments, not on one redeclared from an inherited fixture.
   interfaceMode: ['simple', { scope: 'worker' }],
 
   electronApp: [
