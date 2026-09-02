@@ -339,13 +339,21 @@ export type PapiDockLayout = {
    * @param layout Information about where to put a new webview
    * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
    *   tabs. Defaults to `true`
+   * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+   *   taking document focus. Focusing a tab focuses its web view's iframe, and a `focus()` inside a
+   *   window that does not hold OS focus asks the browser to activate that window — so a window
+   *   opened deliberately in the background must dock its content without it. Left unspecified,
+   *   this defaults to whether this window is still awaiting its first activation.
    * @returns If WebView added, final layout used to display the new webView. If existing webView
    *   updated, `undefined`
+   * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+   *   member is long-established.
    */
   addWebViewToDock: (
     webView: WebViewTabProps,
     layout: Layout,
     shouldBringToFront?: boolean,
+    activateWithoutDocumentFocus?: boolean,
   ) => Layout | undefined;
   /**
    * Remove a tab in the layout
@@ -407,12 +415,19 @@ export type PapiDockLayout = {
    *   doesn't always work well) or merged (so we can remove properties from `state`).
    * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
    *   tabs. Defaults to `false`
+   * @param activateWithoutDocumentFocus If true, a tab brought to the front is made active without
+   *   being given document focus. For content arriving in a window the user has not activated:
+   *   focusing the tab focuses its iframe, which asks the browser to bring that window forward.
+   *   Left unspecified, this defaults to whether this window is still awaiting its first
+   *   activation. **Experimental** — this parameter is the new part of this method
    * @returns True if successfully found the WebView to update; false otherwise
+   * @experimental
    */
   updateWebViewDefinition: (
     webViewId: string,
     updateInfo: WebViewDefinitionUpdateInfo,
     shouldBringToFront?: boolean,
+    activateWithoutDocumentFocus?: boolean,
   ) => boolean;
   /**
    * Gets info for a tab in a direction from the source tab.
@@ -460,9 +475,16 @@ export type PapiDockLayout = {
    * tabs, and sets the document focus in that tab
    *
    * @param tabId ID of the tab to set active and focused
+   * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+   *   taking document focus. Every mounted panel and every loaded web view asks to be focused, so a
+   *   window still waiting for its first activation would otherwise be pulled forward by its own
+   *   content arriving. Left unspecified, this defaults to whether this window is still awaiting
+   *   its first activation.
    * @returns `true` if successfully found tab to update, `false` otherwise
+   * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+   *   member is long-established.
    */
-  focusTab: (tabId: string) => boolean;
+  focusTab: (tabId: string, activateWithoutDocumentFocus?: boolean) => boolean;
   /**
    * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
    *

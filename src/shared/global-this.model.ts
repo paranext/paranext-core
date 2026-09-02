@@ -76,6 +76,18 @@ declare global {
    */
   var startupMarks: boolean;
   /**
+   * Whether this window was created without being activated, as of the moment it was created. Set
+   * in the renderer process from the URL search params; no other process assigns it, so it reads
+   * `undefined` there.
+   *
+   * This is the window's state at creation, not now: what content should do about it also depends
+   * on whether the user has since done anything in the window, which the renderer tracks
+   * separately.
+   *
+   * @experimental
+   */
+  var wasWindowCreatedWithoutActivation: boolean | undefined;
+  /**
    * Window id of the Electron browser window as a string (e.g. "1", "2"). This is the stringified
    * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
    * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via

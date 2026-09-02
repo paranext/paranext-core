@@ -6,6 +6,7 @@ import type {
   WebViewDefinition,
   WebViewId,
 } from '@shared/models/web-view.model';
+import { isWindowAwaitingFirstActivation } from '@renderer/services/window-activation.util';
 
 // The service shard logs through the shared logger, which warns on every call when it cannot tell
 // which process it is running in
@@ -90,7 +91,10 @@ function testTypeWebView(id: WebViewId, projectId?: string): WebViewDefinition {
  * `web-view.service-shard.move.test.ts`'s `shardOverDockLayout`), rather than the underlying
  * rc-dock layout.
  */
-function makeDockLayout(webViews: WebViewDefinition[]): PapiDockLayout {
+function makeDockLayout(
+  webViews: WebViewDefinition[],
+  updateWebViewDefinition: PapiDockLayout['updateWebViewDefinition'] = () => false,
+): PapiDockLayout {
   return {
     onLayoutChangeRef: { current: undefined },
     loadLayout: () => {},
@@ -102,17 +106,34 @@ function makeDockLayout(webViews: WebViewDefinition[]): PapiDockLayout {
           webView.webViewType === webViewType &&
           (projectId === undefined || webView.projectId === projectId),
       ),
-    updateWebViewDefinition: () => false,
+    // The real dock resolves an unspecified `activateWithoutDocumentFocus` through this same
+    // latch; this stand-in does too, so the injected mock's recorded call args are what a real
+    // dock would have been asked for rather than the request this door forwards unresolved.
+    updateWebViewDefinition: (
+      webViewId: WebViewId,
+      updateInfo: Parameters<PapiDockLayout['updateWebViewDefinition']>[1],
+      shouldBringToFront: boolean | undefined,
+      activateWithoutDocumentFocus: boolean | undefined,
+    ) =>
+      updateWebViewDefinition(
+        webViewId,
+        updateInfo,
+        shouldBringToFront,
+        activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation(),
+      ),
     simpleLayout: EMPTY_LAYOUT,
     testLayout: EMPTY_LAYOUT,
   } as unknown as PapiDockLayout;
 }
 
 /** Start the shard and register a dock layout serving the given web views */
-async function openWebViewOver(webViews: WebViewDefinition[]) {
+async function openWebViewOver(
+  webViews: WebViewDefinition[],
+  updateWebViewDefinition?: PapiDockLayout['updateWebViewDefinition'],
+) {
   const module = await import('@renderer/services/web-view.service-shard');
   await module.startWebViewServiceShard();
-  module.registerDockLayout(makeDockLayout(webViews));
+  module.registerDockLayout(makeDockLayout(webViews, updateWebViewDefinition));
   return module;
 }
 
@@ -143,6 +164,7 @@ beforeEach(() => {
   mocks.networkRequest.mockImplementation(async (requestType: string) =>
     requestType === 'windowLayout:get' ? { kind: 'empty' } : undefined,
   );
+  globalThis.wasWindowCreatedWithoutActivation = false;
 });
 
 describe("openWebView's '?' reuse search", () => {
@@ -206,6 +228,38 @@ describe("openWebView's '?' reuse search", () => {
       module.openWebView('test.type', { type: 'tab' } as Layout, { existingProjectId: 'B' }),
     ).rejects.toThrow(/existingProjectId requires existingId/);
   });
+  test('a view reused in a window the user has not activated is raised without document focus', async () => {
+    // A reuse raises an existing tab rather than docking a new one, so it reaches the dock by a
+    // different door than a fresh open. Both doors open into the same window, and a raise that
+    // takes document focus focuses the tab's iframe, which asks the browser for the foreground.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const updateWebViewDefinition = vi.fn(() => true);
+    const module = await openWebViewOver([testTypeWebView('view-a', 'A')], updateWebViewDefinition);
+
+    await module.openWebView(
+      'test.type',
+      { type: 'tab' } as Layout,
+      findOptions({ bringToFront: true }),
+    );
+
+    expect(updateWebViewDefinition).toHaveBeenCalledWith('view-a', {}, true, true);
+  });
+
+  test('a view reused in a window the user has activated is raised normally', async () => {
+    // The control for the test above: withholding focus is the exception, not what a raise does.
+    globalThis.wasWindowCreatedWithoutActivation = false;
+    const updateWebViewDefinition = vi.fn(() => true);
+    const module = await openWebViewOver([testTypeWebView('view-a', 'A')], updateWebViewDefinition);
+
+    await module.openWebView(
+      'test.type',
+      { type: 'tab' } as Layout,
+      findOptions({ bringToFront: true }),
+    );
+
+    expect(updateWebViewDefinition).toHaveBeenCalledWith('view-a', {}, true, false);
+  });
+
   test('a window layout arriving on a create reports a lost race, not a routing-contract break', async () => {
     // Main resolved this window as holding the web view the caller asked to reuse, then the web
     // view left before this call arrived. The dock's own error for a `'window'` layout says the

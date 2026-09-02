@@ -17,6 +17,11 @@ import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard
 import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import type { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
 import { getWebViewMoveFailureDisposition } from '@shared/models/web-view-move.model';
+import {
+  forgetWindowWithholding,
+  noteWindowWithheldFromActivation,
+  resetWindowActivationForTesting,
+} from '@main/window-activation.util';
 import { getErrorMessage } from 'platform-bible-utils';
 import type { InternalRequestHandler } from '@shared/data/rpc.model';
 
@@ -211,6 +216,9 @@ function resolvedShardOfWindowAt(windowId: number): number {
 describe('moveWebView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Which windows were created without activation, and whose focus has already been handed
+    // back, is process state, not a mock — nothing else clears it between tests.
+    resetWindowActivationForTesting();
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
@@ -330,6 +338,7 @@ describe('moveWebView', () => {
     expect(owner.captureAndCloseWebView).toHaveBeenCalledWith('view-1');
     expect(created.adoptWebView).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'view-1', webViewType: 'test.type' }),
+      false,
     );
     // Close-before-adopt holds for the fresh window too: the capture has to finish before the
     // window created for the view adopts it
@@ -339,6 +348,63 @@ describe('moveWebView', () => {
     expect(mocks.clearWindowPendingContent).toHaveBeenCalledWith(7);
     // The window created for it answers with its own scoping of the id, same as any other target
     expect(movedId).toBe('view-1-window-7');
+  });
+
+  test('a move a person asked for creates a window that comes to the front', async () => {
+    // The case this whole mechanism exists to get right, and the one most easily lost: the tab's own
+    // context menu is a person asking, so the window it creates must activate normally. Withholding
+    // here would leave the user's own click producing a window behind the one they are looking at.
+    const owner = windowShard(['view-1']);
+    const created = windowShard([]);
+    withWindows({ 2: owner, 7: created });
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+
+    await moveWebView('view-1', 'new', true);
+
+    expect(creator.createPendingContentWindow).toHaveBeenCalledWith(true);
+  });
+
+  test('a move nobody asked for creates a window that does not', async () => {
+    // The positive control for the case above: omitting the flag must not silently activate.
+    const owner = windowShard(['view-1']);
+    const created = windowShard([]);
+    withWindows({ 2: owner, 7: created });
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+
+    await moveWebView('view-1', 'new');
+
+    expect(creator.createPendingContentWindow).toHaveBeenCalledWith(false);
+  });
+
+  test('a window created without activation adopts the view without taking document focus', async () => {
+    const owner = windowShard(['view-1']);
+    const created = windowShard([]);
+    withWindows({ 2: owner, 7: created });
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+    // What the window creator does for a move: brings the window into being without activating it
+    noteWindowWithheldFromActivation(7);
+
+    await moveWebView('view-1', 'new');
+
+    expect(created.adoptWebView).toHaveBeenCalledWith(expect.anything(), true);
+  });
+
+  test('a window the user has activated adopts the view normally', async () => {
+    const owner = windowShard(['view-1']);
+    const created = windowShard([]);
+    withWindows({ 2: owner, 7: created });
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+    noteWindowWithheldFromActivation(7);
+    // The user clicked into it while the move was still in flight, so it is an ordinary window now
+    forgetWindowWithholding(7);
+
+    await moveWebView('view-1', 'new');
+
+    expect(created.adoptWebView).toHaveBeenCalledWith(expect.anything(), false);
   });
 
   test('a move to a new window waits for that window to be reachable before the source tab closes', async () => {

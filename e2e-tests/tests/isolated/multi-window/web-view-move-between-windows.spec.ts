@@ -81,7 +81,9 @@ import {
   createSecondWindow,
   createStepLogger,
   expectWindowDockHasOnlyHomeTab,
+  focusWindowAndWaitForRouting,
   getAppPages,
+  getFocusedWindowId,
   getWindowIdOfPage,
   homeTabTitle,
   pollUntil,
@@ -298,6 +300,55 @@ test.describe('moving a web view between windows', () => {
     restoreSettings?.();
   });
 
+  test('a window created for a moved web view does not take the foreground', async ({
+    electronApp,
+    mainPage,
+  }) => {
+    // Nobody asked for this window: a move brought it into being, and the user may be working in
+    // another application entirely. It must appear — its content is on the way — without pulling
+    // the foreground away from wherever the user is. The window a person DID ask for is covered by
+    // every other test here, all of which depend on the new window activating normally.
+    const logStep = createStepLogger('withhold-activation');
+    await waitForAppReady(mainPage, 180_000);
+    const window1Id = getWindowIdOfPage(mainPage);
+    const webViewId = `${HOME_TAB_UUID}-w${window1Id}`;
+    await expect(homeTabTitle(mainPage, window1Id)).toBeVisible({ timeout: 60_000 });
+    await expectAppWindowCount(electronApp, 1, 60_000, 'the app to start with exactly one window');
+
+    // Establish the routing target first, so "focus did not move" is a change that could have been
+    // observed rather than a value that was never set.
+    await focusWindowAndWaitForRouting(electronApp, window1Id);
+    expect(await getFocusedWindowId()).toBe(window1Id);
+    logStep(`window ${window1Id} holds focus before the move`);
+
+    await moveWebViewToNewWindow(webViewId);
+    await expectAppWindowCount(electronApp, 2, 60_000, 'the moved web view to get its own window');
+
+    // OS focus, not the routing target. Routing is the weaker claim of the two and on its own it
+    // cannot see this feature at all: the focus handler returns before recording a bounced window,
+    // so `getFocusedWindowId()` reads the same whether focus was handed back or never taken. Asking
+    // Electron which window the OS considers focused is what makes the hand-back observable.
+    const osFocus = await electronApp.evaluate(
+      ({ BrowserWindow }, { id }) => {
+        const created = BrowserWindow.getAllWindows().find((win) => win.id !== id);
+        return {
+          createdIsFocused: created ? created.isFocused() : undefined,
+          createdIsVisible: created ? created.isVisible() : false,
+          focusedWindowId: BrowserWindow.getFocusedWindow()?.id,
+        };
+      },
+      { id: window1Id },
+    );
+    expect(osFocus.createdIsFocused).toBe(false);
+    expect(osFocus.focusedWindowId).toBe(window1Id);
+    // Visible as well as unfocused: asserting only the focus half would also pass for a window that
+    // never appeared at all, which is a worse outcome than the one under test.
+    expect(osFocus.createdIsVisible).toBe(true);
+    // Routing follows, and is asserted second because it is the consequence rather than the thing.
+    expect(await getFocusedWindowId()).toBe(window1Id);
+    logStep(`window ${window1Id} holds OS focus; the created window is visible and unfocused`);
+  });
+
   test('a tab moved to a new window through its context menu leaves its window, arrives in the new one, and leaves a Home tab behind', async ({
     electronApp,
     mainPage,
@@ -362,6 +413,24 @@ test.describe('moving a web view between windows', () => {
       timeout: 120_000,
     });
     logStep(`window ${window2Id} holds the moved web view as ${movedWebViewId}`);
+
+    // The other half of the withholding rule, and the half a test is most likely to lose: this move
+    // came from the tab's OWN CONTEXT MENU, so a person asked for it and the window they asked for
+    // must come to the front. Without this, withholding could be applied to every move — including
+    // the user's own — and the suite would still be green.
+    const menuMoveFocus = await electronApp.evaluate(
+      ({ BrowserWindow }, { id }) => {
+        const created = BrowserWindow.getAllWindows().find((win) => win.id !== id);
+        return {
+          createdIsFocused: created ? created.isFocused() : undefined,
+          focusedWindowId: BrowserWindow.getFocusedWindow()?.id,
+        };
+      },
+      { id: window1Id },
+    );
+    expect(menuMoveFocus.createdIsFocused).toBe(true);
+    expect(menuMoveFocus.focusedWindowId).toBe(window2Id);
+    logStep(`window ${window2Id} took the foreground, as a window the user asked for should`);
 
     // Gone from the window it left — the tab and its iframe both.
     await expect(

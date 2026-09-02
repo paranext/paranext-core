@@ -106,7 +106,7 @@ describe('web-view window creator wiring', () => {
     withWindows({ 7: emptyWindowShard() });
     const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
 
-    const freshWindowPromise = createFreshWindow('someType');
+    const freshWindowPromise = createFreshWindow('someType', false);
 
     // Let pending microtasks run: with nothing wired yet, the call should still be waiting on the
     // wiring latch rather than having thrown or otherwise settled.
@@ -128,7 +128,7 @@ describe('web-view window creator wiring', () => {
     vi.useFakeTimers();
     resetWindowCreatorForTesting();
 
-    const opening = createFreshWindow('someType');
+    const opening = createFreshWindow('someType', false);
     // Take hold of the rejection before advancing the clock, the same way the router suite's own
     // "shard never appears" timeout test does: an unattached rejection during the timer run is
     // reported as an unhandled rejection against the whole file.
@@ -149,7 +149,7 @@ describe('web-view window creator wiring', () => {
     resetWindowCreatorForTesting();
     withWindows({ 7: emptyWindowShard() });
 
-    const spentTheBound = createFreshWindow('someType');
+    const spentTheBound = createFreshWindow('someType', false);
     // Attached before the clock runs, as the test above does and for the same reason.
     spentTheBound.catch(() => undefined);
     await vi.advanceTimersByTimeAsync(WINDOW_CREATOR_WIRING_TIMEOUT_MS);
@@ -159,7 +159,7 @@ describe('web-view window creator wiring', () => {
     // wiring lands immediately after it starts waiting.
     vi.useRealTimers();
 
-    const waitingAgain = createFreshWindow('someType');
+    const waitingAgain = createFreshWindow('someType', false);
     waitingAgain.catch(() => undefined);
     await Promise.resolve();
     await Promise.resolve();

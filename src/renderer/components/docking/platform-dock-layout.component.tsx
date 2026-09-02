@@ -83,8 +83,19 @@ export function PlatformDockLayout() {
         findFirstWebViewDefinitionByType(dockLayoutRef.current, webViewType, projectId),
       addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout, shouldBringToFront = true) =>
         addTabToDock(savedTabInfo, layout, shouldBringToFront, dockLayoutRef.current),
-      addWebViewToDock: (webView: WebViewTabProps, layout: Layout, shouldBringToFront = true) =>
-        addWebViewToDock(webView, layout, shouldBringToFront, dockLayoutRef.current),
+      addWebViewToDock: (
+        webView: WebViewTabProps,
+        layout: Layout,
+        shouldBringToFront = true,
+        activateWithoutDocumentFocus = false,
+      ) =>
+        addWebViewToDock(
+          webView,
+          layout,
+          shouldBringToFront,
+          dockLayoutRef.current,
+          activateWithoutDocumentFocus,
+        ),
       removeTabFromDock: (tabId: string) => {
         const tabToRemove = dockLayoutRef.current.find(tabId);
         // Null required by the external API
@@ -106,8 +117,15 @@ export function PlatformDockLayout() {
         webViewId: string,
         updateInfo: Partial<WebViewDefinitionUpdatableProperties>,
         shouldBringToFront = false,
+        activateWithoutDocumentFocus = false,
       ) =>
-        updateWebViewDefinition(webViewId, updateInfo, shouldBringToFront, dockLayoutRef.current),
+        updateWebViewDefinition(
+          webViewId,
+          updateInfo,
+          shouldBringToFront,
+          dockLayoutRef.current,
+          activateWithoutDocumentFocus,
+        ),
       getTabInfoByDirectionFromTab: (sourceTabId: string, direction: DirectionFromTab) =>
         getTabInfoByDirectionFromTab(dockLayoutRef.current, sourceTabId, direction),
       getTabInfoByElement: (tabElement: Element) =>
@@ -115,7 +133,8 @@ export function PlatformDockLayout() {
       getTabInfoById: (tabId: string) =>
         getTabInfoById(dockLayoutRef.current, tabId, 'external getTabInfoById'),
       containsTab: (tabOrTabGroupId: string) => containsTab(dockLayoutRef.current, tabOrTabGroupId),
-      focusTab: (tabId: string) => focusTab(dockLayoutRef.current, tabId),
+      focusTab: (tabId: string, activateWithoutDocumentFocus = false) =>
+        focusTab(dockLayoutRef.current, tabId, activateWithoutDocumentFocus),
       // `LayoutInfo` is intentionally opaque in the shared model so callers don't need to know
       // about rc-dock's `LayoutBase`. Cross the boundary here at the only place we know the
       // concrete shape.
