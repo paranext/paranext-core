@@ -1,5 +1,5 @@
 import path from 'path';
-import type { FullConfig, FullResult, Reporter, Suite } from '@playwright/test/reporter';
+import type { FullConfig, FullResult, Reporter, Suite, TestError } from '@playwright/test/reporter';
 
 /**
  * The parts of a Playwright `TestCase` this reporter reasons about.
@@ -44,7 +44,30 @@ export function wasLost(test: TestOutcomeLike): boolean {
 }
 
 /**
- * The tests a run lost, given every test it declared and how the run as a whole finished.
+ * Whether an `onError` message is Playwright announcing that `--max-failures` just tripped.
+ *
+ * `Dispatcher._reportTestEnd` (`playwright/lib/runner/dispatcher.js`) sends this exact message —
+ * ANSI color codes and all — the moment the failure count crosses the configured maximum, and only
+ * then (a guard keeps it from firing again for the rest of the run). It is the only signal
+ * `onError` gives for this specific stop reason, since `FullResult.status` for a max-failures stop
+ * is `'failed'` — indistinguishable, on status alone, from a run that simply had a failing test and
+ * carried on to completion.
+ */
+export function isMaxFailuresStopMessage(message: string | undefined): boolean {
+  return message !== undefined && /maximum allowed failures/.test(message);
+}
+
+/** {@link findLostTests}'s result, keeping genuine losses apart from an expected early stop. */
+export interface LostTestsSplit<T> {
+  /** Tests silently dropped with nothing to explain it — the reporter should fail the run. */
+  lost: T[];
+  /** Tests with no results because the run itself stopped before reaching them. */
+  notRunBecauseStoppedEarly: T[];
+}
+
+/**
+ * The tests a run lost, given every test it declared, how the run as a whole finished, and whether
+ * it stopped early (`--max-failures` tripped, or the user interrupted it).
  *
  * Empty when nothing executed at all AND the run itself reports `'passed'`: that combination is
  * what `--list` looks like — Playwright still loads reporters named in config for `--list`
@@ -59,13 +82,30 @@ export function wasLost(test: TestOutcomeLike): boolean {
  * every remaining test also reaches `FailureTracker.onWorkerError` (`_massSkipTestsFromRemaining`
  * in the same file), and an interruption reports `'interrupted'`. Gating the empty-results case on
  * `'passed'` is what stops that real total loss from also reading as `--list` and reporting clean.
+ *
+ * `stoppedEarly` further splits the lost tests. Once `--max-failures` has tripped,
+ * `Dispatcher._massSkipTestsFromRemaining` stops calling `_failTestWithErrors` for anything it
+ * skips, so a test the dispatcher never reached is left with LITERALLY no results — the same shape
+ * `wasLost` uses for "never started". Every OTHER reason a test goes missing (a fatal setup
+ * failure, an unexpected worker exit) still runs `_failTestWithErrors` and leaves a completed
+ * `'skipped'` result behind, which is what makes the split precise: a no-results test during a
+ * stopped-early run is exactly what stopping early looks like, not a silent loss.
  */
 export function findLostTests<T extends TestOutcomeLike>(
   tests: T[],
   runStatus: FullResult['status'],
-): T[] {
-  if (runStatus === 'passed' && !tests.some((test) => test.results.length > 0)) return [];
-  return tests.filter(wasLost);
+  stoppedEarly = false,
+): LostTestsSplit<T> {
+  if (runStatus === 'passed' && !tests.some((test) => test.results.length > 0))
+    return { lost: [], notRunBecauseStoppedEarly: [] };
+
+  const allLost = tests.filter(wasLost);
+  if (!stoppedEarly) return { lost: allLost, notRunBecauseStoppedEarly: [] };
+
+  return {
+    lost: allLost.filter((test) => test.results.length > 0),
+    notRunBecauseStoppedEarly: allLost.filter((test) => test.results.length === 0),
+  };
 }
 
 /**
@@ -88,39 +128,77 @@ export function findLostTests<T extends TestOutcomeLike>(
  * skipped, and Playwright's dispatcher updates that even for a skip decided at runtime. A test that
  * never ran still expects to pass. That difference is the whole check.
  *
+ * A second discriminator, `stoppedEarly` (see {@link findLostTests}), keeps a deliberate early stop
+ * — `--max-failures` tripping, or the run being interrupted — from reading the same as the "1
+ * failed, 22 did not run" rot above. Both leave tests with no results, but an early stop is already
+ * visible through the failure(s) that caused it or through the run's own `interrupted` status, so
+ * reporting its never-reached tests as "lost" would be crying wolf over exactly the behavior
+ * `--max-failures` was configured to produce.
+ *
  * Register this reporter FIRST. The multiplexer runs reporters in array order and applies a
  * reporter's status override only after its `onEnd` returns, so a reporter listed after `html` or
  * `list` lets those write a green report for a run this one then fails — which is the same "looks
  * like housekeeping" confusion it exists to end.
  */
+/** Format one test's file:line and title path for the console list below. */
+function describeTest(
+  test: { location: { file: string; line: number } } & TestOutcomeLike & {
+      titlePath(): string[];
+    },
+): string {
+  return (
+    `  ${path.relative(process.cwd(), test.location.file)}:${test.location.line} › ` +
+    // No `.slice(1)` to drop the project name. Under a config with no `projects` array the
+    // name is an empty string and the filter removes it anyway; under one that names its
+    // projects the name survives and is printed, which is useful rather than wrong. Slicing
+    // unconditionally would eat the outermost describe title in the first case.
+    `${test
+      .titlePath()
+      .filter((segment) => segment && !segment.endsWith('.spec.ts'))
+      .join(' › ')}`
+  );
+}
+
 class NoSilentSkipsReporter implements Reporter {
   private rootSuite: Suite | undefined;
 
+  /**
+   * Set once `Dispatcher._reportTestEnd` announces a `--max-failures` trip via `onError` — the only
+   * signal Playwright gives for that stop reason (see {@link isMaxFailuresStopMessage}).
+   */
+  private sawMaxFailuresStop = false;
+
   onBegin(_config: FullConfig, suite: Suite): void {
     this.rootSuite = suite;
+  }
+
+  onError(error: TestError): void {
+    if (isMaxFailuresStopMessage(error.message)) this.sawMaxFailuresStop = true;
   }
 
   async onEnd(result: FullResult): Promise<{ status?: FullResult['status'] } | undefined> {
     if (!this.rootSuite) return undefined;
 
     const allTests = this.rootSuite.allTests();
-    const lost = findLostTests(allTests, result.status);
+    const stoppedEarly = this.sawMaxFailuresStop || result.status === 'interrupted';
+    const { lost, notRunBecauseStoppedEarly } = findLostTests(
+      allTests,
+      result.status,
+      stoppedEarly,
+    );
+
+    if (notRunBecauseStoppedEarly.length > 0) {
+      // Informational only: an early stop is already visible through the failure(s) that caused
+      // it (or through `result.status === 'interrupted'`), so this does not also fail the run.
+      console.log(
+        `\n${notRunBecauseStoppedEarly.length} test(s) did not run because the run stopped ` +
+          `early:\n${notRunBecauseStoppedEarly.map(describeTest).join('\n')}\n`,
+      );
+    }
+
     if (lost.length === 0) return undefined;
 
-    const listed = lost
-      .map(
-        (test) =>
-          `  ${path.relative(process.cwd(), test.location.file)}:${test.location.line} › ` +
-          // No `.slice(1)` to drop the project name. Under a config with no `projects` array the
-          // name is an empty string and the filter removes it anyway; under one that names its
-          // projects the name survives and is printed, which is useful rather than wrong. Slicing
-          // unconditionally would eat the outermost describe title in the first case.
-          `${test
-            .titlePath()
-            .filter((segment) => segment && !segment.endsWith('.spec.ts'))
-            .join(' › ')}`,
-      )
-      .join('\n');
+    const listed = lost.map(describeTest).join('\n');
 
     // Reported to the console rather than as a test failure: no single test owns this, and the
     // point is that the run as a whole cannot be trusted.
