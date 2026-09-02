@@ -12,6 +12,7 @@ import {
   DEFAULT_WINDOW_SIZE,
   isPopoverTriggerExpanded,
   LAUNCH_PHASE_TIMEOUT_MS,
+  resolveRaceLeg,
 } from './helpers';
 
 /** A stub whose `evaluate` resolves to the given window size, whatever function is passed in. */
@@ -75,5 +76,51 @@ describe('isPopoverTriggerExpanded', () => {
     // case needs an actual null, not undefined.
     // eslint-disable-next-line no-null/no-null
     expect(isPopoverTriggerExpanded(null)).toBe(false);
+  });
+});
+
+describe('resolveRaceLeg', () => {
+  // Playwright's real TargetClosedError never sets `this.name`, so a fixture for it has to be a
+  // distinctly-named subclass — matching `error.name` here would pass even if resolveRaceLeg
+  // regressed to checking the wrong property.
+  class TargetClosedError extends Error {}
+
+  it('reports a plain timeout as inconclusive', () => {
+    const timeoutError = new Error('locator.waitFor: Timeout 5000ms exceeded.');
+    timeoutError.name = 'TimeoutError';
+
+    expect(resolveRaceLeg(timeoutError)).toBe('inconclusive');
+  });
+
+  it('does not match on error.name alone — TargetClosedError never sets it', () => {
+    // Guards the exact regression this function was rewritten to avoid: a real TargetClosedError
+    // reports `.name === "Error"` (inherited from Error.prototype), so a fixture that only sets
+    // `.name` to the string "TargetClosedError" without being that class must NOT match either —
+    // otherwise the test would pass for the wrong reason.
+    const lookalike = new Error('Target page, context or browser has been closed');
+    lookalike.name = 'TargetClosedError';
+
+    expect(resolveRaceLeg(lookalike)).toBe('inconclusive');
+  });
+
+  it('rethrows a TargetClosedError instead of collapsing it to inconclusive', () => {
+    const closedError = new TargetClosedError('Target page, context or browser has been closed');
+
+    expect(() => resolveRaceLeg(closedError)).toThrow(/page, its context, or the browser closed/);
+  });
+
+  it('attaches the original error as the cause of the rethrow', () => {
+    const closedError = new TargetClosedError('Target page, context or browser has been closed');
+
+    let caught: unknown;
+    try {
+      resolveRaceLeg(closedError);
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const cause = caught instanceof Error ? caught.cause : undefined;
+    expect(cause).toBe(closedError);
   });
 });

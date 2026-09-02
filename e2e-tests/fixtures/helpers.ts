@@ -1739,6 +1739,32 @@ export const TOP_LEVEL_ERROR_SELECTOR = '[role="alert"]:has(h1)';
  */
 type FirstRunGateOutcome = 'settled' | 'inconclusive';
 
+/**
+ * What one leg of the stuck-gate race should report, given what it caught.
+ *
+ * A leg timing out just means the gate has not reached that leg's state yet within the budget —
+ * ordinary and quiet. The page, its context, or the browser closing out from under the wait is a
+ * different kind of failure: there is no gate left to be stuck, and reporting `'inconclusive'`
+ * would hide that behind what looks like a merely slow first run. Rethrown, with the original error
+ * attached as `cause`, so it rejects the whole race instead of being collapsed here.
+ *
+ * Told apart by `error.constructor.name`, not `error.name` or the error message: Playwright's
+ * `TargetClosedError` class (`playwright-core/lib/client/errors.js`) never sets `this.name` in its
+ * constructor, unlike its sibling `TimeoutError`, so instances report the inherited `Error.name` of
+ * `"Error"` — a check against `error.name` would silently never match. The class itself is not
+ * exported from `@playwright/test`, so there is nothing to `instanceof` against; its constructor
+ * name survives because Playwright ships this file unminified.
+ */
+export function resolveRaceLeg(error: unknown): 'inconclusive' {
+  if (error instanceof Error && error.constructor.name === 'TargetClosedError')
+    throw new Error(
+      'e2e precondition: the page, its context, or the browser closed while waiting for the ' +
+        'first-run gate to resolve — there is no gate left to recover.',
+      { cause: error },
+    );
+  return 'inconclusive';
+}
+
 async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<FirstRunGateOutcome> {
   const start = Date.now();
   const firstRunDialog = page.getByTestId('first-run-dialog');
@@ -1760,36 +1786,44 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<Fi
   // stuck on is decided afterwards, from the screen itself. Racing the discriminators against each
   // other would let one app state reach either answer depending on which locator settled first.
   //
-  // Each leg swallows its own timeout so the race reports what it SAW rather than rejecting: a
+  // Each leg swallows its own TIMEOUT so the race reports what it SAW rather than rejecting: a
   // rejection makes the gate's ordinary loading flash a hard failure whenever the remaining budget
-  // is short, which is exactly when this is called.
+  // is short, which is exactly when this is called. A leg whose page/context/browser closed out
+  // from under it is a different matter — see resolveRaceLeg — and is left to reject the race.
   const settled = await Promise.race([
     firstRunDialog
       .waitFor({ state: 'hidden', timeout })
       .then(() => 'cleared' as const)
-      .catch(() => 'inconclusive' as const),
+      .catch((err: unknown) => resolveRaceLeg(err)),
     escapeHatch
       .waitFor({ state: 'visible', timeout })
       .then(() => 'stuck' as const)
-      .catch(() => 'inconclusive' as const),
+      .catch((err: unknown) => resolveRaceLeg(err)),
     dialogHeading
       .waitFor({ state: 'visible', timeout })
       .then(() => 'stuck' as const)
-      .catch(() => 'inconclusive' as const),
+      .catch((err: unknown) => resolveRaceLeg(err)),
   ]);
 
   if (settled === 'cleared') return 'settled';
 
-  const action =
-    settled === 'stuck'
-      ? decideStuckGateAction({
-          escapeHatchVisible: await escapeHatch.isVisible(),
-          onErrorScreen: (await errorScreen.count()) > 0,
-          // Last on purpose: these are read in source order, and this one is only meaningful once
-          // the other two have been taken.
-          gateStillShowing: await firstRunDialog.isVisible(),
-        })
-      : 'inconclusive';
+  let action: ReturnType<typeof decideStuckGateAction> | 'inconclusive' = 'inconclusive';
+  if (settled === 'stuck') {
+    // Read concurrently, not one after another: a gate that resolves between two sequential awaits
+    // would leave them describing two different instants, which is exactly the inconsistent
+    // combination decideStuckGateAction's own precedence (gateStillShowing decides first) exists to
+    // rule out — but only if the three readings are actually a single snapshot in time.
+    const [escapeHatchVisible, errorScreenCount, gateStillShowing] = await Promise.all([
+      escapeHatch.isVisible(),
+      errorScreen.count(),
+      firstRunDialog.isVisible(),
+    ]);
+    action = decideStuckGateAction({
+      escapeHatchVisible,
+      onErrorScreen: errorScreenCount > 0,
+      gateStillShowing,
+    });
+  }
 
   // The gate resolved while it was being examined, which is the outcome this whole step wants.
   if (action === 'cleared') return 'settled';
@@ -1819,9 +1853,20 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<Fi
       'finishing setup" escape hatch. This is a workaround for a slow-CI read race in ' +
       'first-run-store.ts, expected to be rare; if it recurs often, that race needs its own fix.',
   );
-  await escapeHatch.click();
-  const remainingForDismiss = Math.max(1000, timeout - (Date.now() - start));
-  await expect(firstRunDialog).not.toBeVisible({ timeout: remainingForDismiss });
+  const remainingForClick = Math.max(1000, timeout - (Date.now() - start));
+  await escapeHatch.click({ timeout: remainingForClick });
+  try {
+    const remainingForDismiss = Math.max(1000, timeout - (Date.now() - start));
+    await expect(firstRunDialog).not.toBeVisible({ timeout: remainingForDismiss });
+  } catch (err) {
+    // Rethrown with the assertion's own error attached as cause, matching assertInterfaceMode's
+    // shape: a bare toBeVisible mismatch reports nothing about which recovery path led here.
+    throw new Error(
+      'e2e precondition: clicked the first-run gate\'s "continue without finishing setup" escape ' +
+        'hatch, but the dialog never closed.',
+      { cause: err },
+    );
+  }
   return 'settled';
 }
 

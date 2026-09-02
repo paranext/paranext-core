@@ -25,6 +25,20 @@ describe('deciding what a stuck first-run gate needs', () => {
     ).toBe('cleared');
   });
 
+  it('reports cleared even when the discriminators would otherwise say recoverable or wizard', () => {
+    // gateStillShowing decides first in decideStuckGateAction's own body. This pins that precedence
+    // against the discriminators themselves disagreeing, not just against them both being false —
+    // the round-trip that reads them can land after the gate resolved but still see stale
+    // escape-hatch/error-screen state from the instant just before.
+    expect(
+      decideStuckGateAction({
+        escapeHatchVisible: true,
+        onErrorScreen: true,
+        gateStillShowing: false,
+      }),
+    ).toBe('cleared');
+  });
+
   it('recovers through the escape hatch whenever one is offered', () => {
     // The error screen shows a heading, an alert and a hatch at once. Recovering is right, and must
     // not depend on the hatch being observed before the heading.
