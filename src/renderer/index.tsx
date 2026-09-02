@@ -4,6 +4,7 @@ import '@renderer/global-this-web-view.model';
 import '@renderer/global-this.model';
 
 import { App } from '@renderer/app.component';
+import { RendererErrorBoundary } from '@renderer/components/renderer-error-boundary.component';
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
 import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
@@ -151,7 +152,11 @@ if (!container) {
 }
 
 const root = createRoot(container);
-root.render(<App />);
+root.render(
+  <RendererErrorBoundary>
+    <App />
+  </RendererErrorBoundary>,
+);
 markStartup('root-render');
 
 // #endregion
