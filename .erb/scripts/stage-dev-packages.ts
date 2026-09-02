@@ -312,20 +312,29 @@ function prepareStagedManifest(stagingDir: string, stagingFolderByName: Map<stri
  * The build fallback covers the two cases where a copy is not enough: `--local`, where the point is
  * to pick up uncommitted source edits, and a checkout whose `dist/` is missing (an older revision
  * from before the build was committed, or a partially cleaned tree).
+ *
+ * `mustBuild` is decided for the repo as a whole, and deliberately cannot be re-derived here from
+ * `dist/` existing. Building one package also builds the workspace dependencies nx resolves for it,
+ * which writes their `dist/` too — but with tsc's per-file declarations, never api-extractor's
+ * rolled-up one. So a package inspected after a sibling built looks already-built while holding a
+ * 13-line re-export stub where its API surface should be, and copying that stages a package whose
+ * types resolve through to its own dependencies' globals. Staging each package immediately after
+ * building it is the other half of this: it captures the rolled-up output before a later sibling's
+ * build can overwrite it.
  */
 function stagePackage(
   repo: DevRepo,
   devPackage: DevPackage,
   stagingFolderByName: Map<string, string>,
   sourceStamp: string,
+  mustBuild: boolean,
 ): void {
   const packageDir = path.resolve(getDevRepoPath(repo.folder), devPackage.packagePath);
   const stagingDir = path.resolve(STAGING_ROOT, devPackage.stagingFolder);
-  const hasBuiltDist = fs.existsSync(path.resolve(packageDir, 'dist'));
 
-  if (isLocalMode || !hasBuiltDist) {
+  if (mustBuild) {
     console.log(
-      `Building ${devPackage.nxProject}${hasBuiltDist ? '' : ' (no committed dist to copy)'}...`,
+      `Building ${devPackage.nxProject}${isLocalMode ? '' : ' (no committed dist to copy)'}...`,
     );
     // --skip-nx-cache because the dev repos commit their `dist/`, and nx declares that directory as
     // a cached target output: a cache hit RESTORES nx's copy over the committed one, silently
@@ -371,15 +380,19 @@ function stageDevPackages(): void {
         return;
       }
 
-      // Only a build needs the dev repo's dependencies installed, and a build only happens when
-      // there is no committed dist to copy (or in --local mode). Skipping this is the difference
-      // between an install that needs pnpm and one that does not.
-      const willBuild =
+      // One decision for the whole repo, made while the checkout is still untouched: if any package
+      // has to be built, build them all. Once a build runs, `dist/` no longer says whether a package
+      // was built as itself or as somebody's dependency (see `stagePackage`), so a per-package
+      // decision taken later reads a tree the earlier builds already rewrote.
+      const mustBuild =
         isLocalMode ||
         repo.devPackages.some(
           (devPackage) => !fs.existsSync(path.resolve(repoPath, devPackage.packagePath, 'dist')),
         );
-      if (willBuild) {
+
+      // Only a build needs the dev repo's dependencies installed. Skipping this is the difference
+      // between an install that needs pnpm and one that does not.
+      if (mustBuild) {
         console.log(`Running pnpm install in ${repo.folder}...`);
         runPnpm('install', repoPath);
       }
@@ -394,7 +407,7 @@ function stageDevPackages(): void {
       );
 
       repo.devPackages.forEach((devPackage) =>
-        stagePackage(repo, devPackage, stagingFolderByName, sourceStamp),
+        stagePackage(repo, devPackage, stagingFolderByName, sourceStamp, mustBuild),
       );
     });
 
