@@ -568,13 +568,20 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   // answered truthfully and the merged read still misses it — the one gap a caller that selects by
   // this list, like the shutdown sync's writable-project selection, cannot see for itself. Folded in
   // by id rather than appended unconditionally: the target may already have adopted while the move
-  // record is still in the set (a late-landing adopt only clears it once its own probe confirms), and
-  // counting that view twice would be as wrong as missing it.
+  // record is still in the set (a late-landing adopt only clears it once its own probe confirms),
+  // and a view the windows have already reported does not need folding in again.
   //
   // Matched against every id the move tracks, not just the captured one: a window scopes web view
   // ids to itself when it loads a layout, so the window holding this view may answer with the
   // spelling the move started from rather than the stripped one the target was handed. One match
   // means this view is already in the read under a name of its own.
+  //
+  // This match is itself keyed on a spelling, and so has the same blind spot the block below
+  // describes, in a narrower form: the ids come from EVERY window, so an unrelated window holding
+  // an unscoped `home` makes a different window's in-flight `home-w2` look already-reported and
+  // drops it. Narrowing it needs the move to record which windows could legitimately be holding
+  // its view — its source and its target — which the record does not carry today. Longstanding
+  // rather than introduced here, and tracked with the per-view identity it shares a cause with.
   const definitionIds = new Set(definitions.map((definition) => definition.id));
   // Deliberately NOT deduped against other move records, only against what the windows reported.
   //

@@ -17,6 +17,7 @@ import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard
 import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import type { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
 import { getWebViewMoveFailureDisposition } from '@shared/models/web-view-move.model';
+import { webViewMovesInFlight } from '@main/services/web-view.ownership';
 import { getErrorMessage } from 'platform-bible-utils';
 import type { InternalRequestHandler } from '@shared/data/rpc.model';
 
@@ -660,6 +661,10 @@ describe('a web view that is between windows on a move', () => {
   }
 
   beforeEach(() => {
+    // The in-flight set is module state shared by every test in this file, and each mid-move test
+    // releases its adopts AFTER its assertions — so one failing test leaves its records behind and
+    // the next test counts them, turning one failure into a cascade of misleading numbers.
+    webViewMovesInFlight.clear();
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
@@ -913,8 +918,9 @@ describe('a web view that is between windows on a move', () => {
     expect(definitions).toContainEqual(
       expect.objectContaining({ id: 'home', projectId: 'project-b' }),
     );
-    // Exactly the two, so this still fails against a read that folds every record in regardless of
-    // what the windows already reported.
+    // Exactly two, no more: this does not discriminate the window-reported check (no window reports
+    // `home` here, so ignoring that check gives the same answer) — it pins the count against a
+    // future fold-in that adds a record more than once.
     expect(definitions.filter((definition) => definition.id === 'home')).toHaveLength(2);
 
     releaseAdoptA('home');
