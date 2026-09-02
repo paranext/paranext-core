@@ -573,15 +573,22 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   //
   // Matched against every id the move tracks, not just the captured one: a window scopes web view
   // ids to itself when it loads a layout, so the window holding this view may answer with the
-  // spelling the move started from rather than the stripped one the target was handed. One match
-  // means this view is already in the read under a name of its own.
+  // spelling the move started from rather than the stripped one the target was handed.
   //
-  // This match is itself keyed on a spelling, and so has the same blind spot the block below
-  // describes, in a narrower form: the ids come from EVERY window, so an unrelated window holding
-  // an unscoped `home` makes a different window's in-flight `home-w2` look already-reported and
-  // drops it. Narrowing it needs the move to record which windows could legitimately be holding
-  // its view — its source and its target — which the record does not carry today. Longstanding
-  // rather than introduced here, and tracked with the per-view identity it shares a cause with.
+  // A match does NOT establish that this view is the one being reported, and the difference is a
+  // live defect rather than a nicety. The captured spelling has had its window scope stripped, and
+  // stripping is not injective — every window's default Home tab reduces to `home` — so a window
+  // reporting some OTHER view under that spelling matches too, and this view is then skipped and
+  // missing from the read. One ordinary drag reaches it: a window that has received an earlier move
+  // holds that view unscoped (the adopt opens under the stripped id and nothing re-scopes it until
+  // the next layout load) alongside its own `home-w2`, and dragging the `home-w2` one out drops it.
+  //
+  // Longstanding rather than introduced here — this line is byte-identical on main — and left as it
+  // is deliberately, not overlooked. Restricting the match to the windows that could legitimately
+  // hold the view does NOT fix it, because the source window is one of those and is exactly the
+  // window reporting the colliding name. What would fix it is a per-view identity minted at the
+  // adopt, which is the same fix the accepted duplicate below wants; both are in the general
+  // small-items ledger.
   const definitionIds = new Set(definitions.map((definition) => definition.id));
   // Deliberately NOT deduped against other move records, only against what the windows reported.
   //
