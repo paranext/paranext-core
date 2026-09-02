@@ -985,7 +985,7 @@ async function main() {
       const reloadDecision = decideRendererCrashReload(crashReloadBudget, Date.now());
       if (!reloadDecision.shouldReload) {
         logger.error(
-          `Window ${windowId} renderer died ${reloadDecision.reloadsAlreadySpent} times in a row despite being reloaded each time, so it is being left down. Closing it keeps what it held, so it comes back on the next launch.`,
+          `Window ${windowId} renderer died ${reloadDecision.reloadsAlreadySpent} times in a row despite being reloaded each time, so it is being left down. Closing it keeps what it held, so it comes back next launch or on a switch back to power mode.`,
         );
         // The reload was the only thing that would ever have put this window back in the app, so
         // the window has to stop being treated as one that is coming back. `markWindowNotReady`
@@ -1825,12 +1825,13 @@ async function main() {
   /**
    * Tell the user a window has been given up on, and offer to close it.
    *
-   * A window whose renderer crash-looped past its budget is left open on purpose — closing it from
-   * under the user would take its saved layout with it. But left alone it is a dead page with no
-   * explanation, absent from `platform.getWindows`, and the only advice we had was a log line
-   * nobody reads. This puts that advice where the user is, with the close made safe:
+   * A window whose renderer crash-looped past its budget is left open on purpose — taking a window
+   * away unasked is not the crash handler's to do. But left alone it is a dead page with no
+   * explanation, absent from `platform.getWindows`, and the only advice for it is a log line nobody
+   * reads. This puts the question to the user instead, and the close is safe to offer:
    * {@link keepsItsEntryOnClose} keeps an abandoned window's entry, so closing it brings the window
-   * back next launch rather than costing them its tabs.
+   * back — next launch, or sooner on a switch back to power mode — rather than costing them its
+   * tabs.
    *
    * Failures are swallowed and logged. The window is already dead either way, and a notice that
    * could not be shown or localized must not also take down the crash handling around it.
