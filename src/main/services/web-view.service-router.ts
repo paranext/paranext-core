@@ -616,7 +616,10 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
   // best-effort read of a system mid-move either way.
   //
   // The real fix is a per-view identity minted where it is actually known — at the adopt, carried
-  // into the new window — which is a change to the adopt path rather than to this read.
+  // into the new window — which is a change to the adopt path rather than to this read. The
+  // reasoning, and why every id-keyed alternative was rejected, is in
+  // `adr-web-view-id-is-not-an-identity-across-a-move` in
+  // `.context/standards/Architecture-Decisions.md`.
   const foldedInDefinitions: SavedWebViewDefinition[] = [];
   forEachMoveInFlight((move) => {
     const { namedWebViewId } = move;
