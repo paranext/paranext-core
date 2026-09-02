@@ -21,9 +21,13 @@ const configuration: webpack.Configuration = {
 
   target: 'electron-main',
 
+  // Main only. The preload the unpackaged app loads is `.erb/dll/preload.js`, built by
+  // `webpack.config.preload.dev.ts` (see `createWindow` in src/main/main.ts); a `preload` entry here
+  // would emit a second, unread `preload.bundle.dev.js` and make `prestart` — which blocks Electron
+  // launching — transpile the preload graph a second time. The production config still bundles both,
+  // because packaging consumes them.
   entry: {
     main: path.join(webpackPaths.srcMainPath, 'main.ts'),
-    preload: path.join(webpackPaths.srcMainPath, 'preload.ts'),
   },
 
   output: {
