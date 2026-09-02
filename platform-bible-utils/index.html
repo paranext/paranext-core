@@ -1,4 +1,196 @@
 <!DOCTYPE html><html class="default" lang="en" data-base="./"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>platform-bible-utils</title><meta name="description" content="Documentation for platform-bible-utils"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="assets/style.css"/><link rel="stylesheet" href="assets/highlight.css"/><script defer src="assets/main.js"></script><script async src="assets/icons.js" id="tsd-icons-script"></script><script async src="assets/search.js" id="tsd-search-script"></script><script async src="assets/navigation.js" id="tsd-nav-script"></script><script async src="assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar"><div class="tsd-toolbar-contents container"><a href="index.html" class="title">platform-bible-utils</a><div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/><ul role="listbox" id="tsd-search-results"></ul><div id="tsd-search-status" aria-live="polite" aria-atomic="true"><div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-menu"></use></svg></a></div></header><div class="container container-main"><div class="col-content"><div class="tsd-page-title"><h1>platform-bible-utils</h1></div><div class="tsd-panel tsd-typography"><h1 id="platformbible-utils" class="tsd-anchor-link">Platform.Bible Utils<a href="#platformbible-utils" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1><p>A set of utility functions, types, and classes for use inside Platform.Bible and extensions.</p>
+<h2 id="behavior-changes" class="tsd-anchor-link">Behavior Changes<a href="#behavior-changes" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>If you consume this package from an extension, read this section before upgrading. The string
+utilities and the new <code>GraphemeString</code> class changed behavior for inputs that were always valid.
+None of it is caught by a type error. Rationale for each decision lives in
+<code>.context/standards/Architecture-Decisions.md</code> under <code>adr-grapheme-string-native-parity</code> and
+<code>adr-grapheme-segmenter-unicode-segmenter</code>.</p>
+<h3 id="1-grapheme-segmentation-is-now-uax-29-conformant" class="tsd-anchor-link">1. Grapheme segmentation is now UAX #29 conformant<a href="#1-grapheme-segmentation-is-now-uax-29-conformant" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>This is the change most likely to affect you, because it changes results for ordinary text rather
+than edge-case arguments. Segmentation moved from <code>stringz</code> to <code>unicode-segmenter</code>. <code>stringz</code> was
+never a UAX #29 implementation — it scored 65.8% on Unicode's own <code>GraphemeBreakTest.txt</code> — so any
+count, index, <code>slice</code>, or search over the following scripts was wrong before and is right now:</p>
+<table>
+<thead>
+<tr>
+<th>Text</th>
+<th>Before</th>
+<th>Now</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>בְּרֵאשִׁית</code> — pointed Hebrew</td>
+<td>11</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>مَرْحَبً</code> — Arabic with harakat</td>
+<td>8</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>ܣܰܘܪ</code> — Syriac with vowel points</td>
+<td>4</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>हिन्दी</code> — Devanagari conjunct</td>
+<td>6</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>กุ๊</code> — Thai base + vowel + tone</td>
+<td>3</td>
+<td>1</td>
+</tr>
+<tr>
+<td>decomposed Hangul jamo</td>
+<td>6</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>\r\n</code></td>
+<td>2</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+<p>Emoji, flags, skin-tone modifiers and Latin diacritics were already correct and are unchanged.</p>
+<p>Two consequences follow from conformance and are worth checking your code against:</p>
+<ul>
+<li><strong><code>\r\n</code> is a single cluster.</strong> Searches only report boundary-aligned hits, so <code>'\n'</code> is not
+findable inside a <code>\r\n</code>, and <code>split(text, '\n')</code> will not break Windows-style lines apart. Use a
+regex matching the whole terminator: <code>split(text, /\r?\n/)</code>.</li>
+<li><strong>A zero-width joiner attaches to the character before it</strong>, not after. A string ending in
+ZWJ + space now ends in a cluster that is entirely whitespace.</li>
+</ul>
+<h3 id="2-bug-fixes--the-old-behavior-was-trying-to-match-native-string-and-failed" class="tsd-anchor-link">2. Bug fixes — the old behavior was trying to match native <code>String</code> and failed<a href="#2-bug-fixes--the-old-behavior-was-trying-to-match-native-string-and-failed" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Before</th>
+<th>Now</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>endsWith(s, needle, endPosition)</code></td>
+<td>required the <em>last</em> occurrence to end at <code>endPosition</code>, so <code>endsWith('abcabc','abc',3)</code> was <code>false</code></td>
+<td><code>true</code></td>
+</tr>
+<tr>
+<td><code>split(s, sep)</code> with a string separator</td>
+<td>compiled the separator as a regex, so <code>split('a.b','.')</code> split on every character</td>
+<td>splits literally</td>
+</tr>
+<tr>
+<td><code>slice(s, 1, 0)</code></td>
+<td>tested <code>indexEnd</code> for truthiness, returning <code>'bcdef'</code></td>
+<td><code>''</code></td>
+</tr>
+<tr>
+<td><code>padStart</code>/<code>padEnd</code> with a multi-grapheme pad</td>
+<td>overshot <code>targetLength</code></td>
+<td>exact</td>
+</tr>
+<tr>
+<td><code>lastIndexOf(s, '')</code></td>
+<td><code>stringLength(s) - 1</code></td>
+<td><code>stringLength(s)</code></td>
+</tr>
+<tr>
+<td><code>split(s, sep, limit)</code> with <code>limit</code> above the match count</td>
+<td>threw <code>RangeError</code></td>
+<td>returns the pieces</td>
+</tr>
+<tr>
+<td><code>indexOf(s, needle, -Infinity)</code></td>
+<td>looped forever</td>
+<td>returns <code>0</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="3-behavior-changes-for-valid-input-adopting-native-string-semantics" class="tsd-anchor-link">3. Behavior changes for valid input, adopting native <code>String</code> semantics<a href="#3-behavior-changes-for-valid-input-adopting-native-string-semantics" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><table>
+<thead>
+<tr>
+<th>Call</th>
+<th>Before</th>
+<th>Now</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>split(s, sep, limit)</code></td>
+<td>kept the unsplit remainder as a final element</td>
+<td><strong>discards</strong> everything past the limit; <code>0</code> → <code>[]</code>, <code>-1</code> → no limit</td>
+</tr>
+<tr>
+<td><code>split(s, /(-)/)</code></td>
+<td>dropped capture groups</td>
+<td>interleaves them, so length and every position shift</td>
+</tr>
+<tr>
+<td><code>split(s, /x/i)</code></td>
+<td>recompiled the source, discarding all flags but <code>g</code></td>
+<td>honors the regex's own flags</td>
+</tr>
+<tr>
+<td><code>substring(s, 5, 2)</code></td>
+<td><code>''</code></td>
+<td><code>'cde'</code> — a backwards range is swapped</td>
+</tr>
+<tr>
+<td><code>endsWith(s, '')</code></td>
+<td><code>false</code></td>
+<td><code>true</code>, for every input</td>
+</tr>
+<tr>
+<td><code>charAt(s, NaN)</code></td>
+<td><code>''</code></td>
+<td>element 0</td>
+</tr>
+<tr>
+<td><code>at(s, -0.5)</code></td>
+<td>last grapheme</td>
+<td>element 0</td>
+</tr>
+<tr>
+<td><code>at(s, stringLength(s))</code></td>
+<td><code>''</code></td>
+<td><code>undefined</code></td>
+</tr>
+<tr>
+<td><code>startsWith('a', 'a', -1)</code></td>
+<td><code>false</code></td>
+<td><code>true</code></td>
+</tr>
+<tr>
+<td><code>indexOf('abc', '', -1)</code></td>
+<td><code>-1</code></td>
+<td><code>0</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Scrutinize the <code>split</code> limit change.</strong> It is the only one that loses text silently:
+<code>split('Look𐐷At🦄This𐐷Thing', '𐐷', 2)</code> was <code>['Look', 'At🦄This𐐷Thing']</code> and is now
+<code>['Look', 'At🦄This']</code>.</p>
+<h3 id="4-one-user-visible-display-change" class="tsd-anchor-link">4. One user-visible display change<a href="#4-one-user-visible-display-change" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p><code>getLocalizedIdFromBookNumber</code> split Chinese book names on <code>'\xff08'</code>. In C# <code>\x</code> consumes up to
+four hex digits, so PT9's <code>Split('\xff08')</code> really does split on the fullwidth left parenthesis
+<code>（</code>; the TypeScript port copied that escape text into a language where <code>\xNN</code> takes exactly two, so
+<code>'\xff08'</code> is the three characters <code>ÿ08</code> and the split never matched. Corrected to <code>'\uff08'</code>, which
+restores PT9's behavior: <strong>a Chinese book name now truncates at <code>（</code></strong>, dropping the parenthesised
+second name.</p>
+<p>Measured against the shipped <code>zh-hans.json</code> and <code>zh-hant.json</code>, that takes the number of book pairs
+whose short names render identically from 3 to 7 — <code>1MA</code>/<code>1MQ</code> → <code>玛加伯上</code>, <code>2MA</code>/<code>2MQ</code>,
+<code>3MA</code>/<code>3MQ</code>, and <code>DNT</code>/<code>DAG</code> → <code>但以理书</code>. Other locales are unaffected: <code>es</code> and <code>fr</code> take an
+earlier return, and no other locale ships parenthesised book names.</p>
+<h3 id="5-two-deliberate-divergences-from-native" class="tsd-anchor-link">5. Two deliberate divergences from native<a href="#5-two-deliberate-divergences-from-native" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><ul>
+<li><code>padStart</code>/<code>padEnd</code> throw <code>RangeError</code> above 2²⁰ graphemes. Native only gives up at V8's string
+limit, which is unreachable here — padding builds an array element per grapheme, so the heap goes
+first.</li>
+<li><code>split(s, regex)</code> yields <code>''</code> where native yields <code>undefined</code> for a capture group that did not
+participate, so the declared <code>string[]</code> is honest. Use <code>GraphemeString.split</code>, which declares
+<code>(GraphemeString | undefined)[]</code>, if you need to tell the two apart.</li>
+</ul>
 <h2 id="scripture-location-types-overview" class="tsd-anchor-link">Scripture Location Types Overview<a href="#scripture-location-types-overview" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>There are many types exported from this package that describe specific positions in a Scripture project.</p>
 <p>The types generally follow this name format:</p>
 <pre><code><span class="hl-0">&lt;</span><span class="hl-1">scripture_format</span><span class="hl-0">&gt;&lt;</span><span class="hl-1">location_format</span><span class="hl-0">?&gt;&lt;</span><span class="hl-1">location_anchor</span><span class="hl-0">?&gt;</span><span class="hl-2">Location</span>
@@ -116,4 +308,4 @@
 
 <p>Do not commit changes after running this basic build. Before committing, always run a full build.</p>
 <h2 id="acknowledgements" class="tsd-anchor-link">Acknowledgements<a href="#acknowledgements" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>Inspired by <a href="https://github.com/jasonsturges/vite-typescript-npm-package">https://github.com/jasonsturges/vite-typescript-npm-package</a></p>
-</div></div><div class="col-sidebar"><div class="page-menu"><div class="tsd-navigation settings"><details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>Settings</h3></summary><div class="tsd-accordion-details"><div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span><ul id="tsd-filter-options"><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-protected" name="protected"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Protected</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div><div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div><details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>On This Page</h3></summary><div class="tsd-accordion-details"><a href="#platformbible-utils"><span>Platform.<wbr/>Bible <wbr/>Utils</span></a><ul><li><a href="#scripture-location-types-overview"><span>Scripture <wbr/>Location <wbr/>Types <wbr/>Overview</span></a></li><li><a href="#development"><span>Development</span></a></li><li><ul><li><a href="#building"><span>Building</span></a></li><li><ul><li><a href="#setting-up"><span>Setting up</span></a></li><li><a href="#building-platform-bible-utils"><span>Building platform-<wbr/>bible-<wbr/>utils</span></a></li></ul></li></ul></li><li><a href="#acknowledgements"><span>Acknowledgements</span></a></li></ul></div></details></div><div class="site-menu"><nav class="tsd-navigation"><a href="modules.html">platform-bible-utils</a><ul class="tsd-small-nested-navigation" id="tsd-nav-container"><li>Loading...</li></ul></nav></div></div></div><footer><p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer><div class="overlay"></div></body></html>
+</div></div><div class="col-sidebar"><div class="page-menu"><div class="tsd-navigation settings"><details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>Settings</h3></summary><div class="tsd-accordion-details"><div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span><ul id="tsd-filter-options"><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-protected" name="protected"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Protected</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div><div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div><details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>On This Page</h3></summary><div class="tsd-accordion-details"><a href="#platformbible-utils"><span>Platform.<wbr/>Bible <wbr/>Utils</span></a><ul><li><a href="#behavior-changes"><span>Behavior <wbr/>Changes</span></a></li><li><ul><li><a href="#1-grapheme-segmentation-is-now-uax-29-conformant"><span>1. <wbr/>Grapheme segmentation is now UAX #29 conformant</span></a></li><li><a href="#2-bug-fixes--the-old-behavior-was-trying-to-match-native-string-and-failed"><span>2. <wbr/>Bug fixes — the old behavior was trying to match native <wbr/>String and failed</span></a></li><li><a href="#3-behavior-changes-for-valid-input-adopting-native-string-semantics"><span>3. <wbr/>Behavior changes for valid input, adopting native <wbr/>String semantics</span></a></li><li><a href="#4-one-user-visible-display-change"><span>4. <wbr/>One user-<wbr/>visible display change</span></a></li><li><a href="#5-two-deliberate-divergences-from-native"><span>5. <wbr/>Two deliberate divergences from native</span></a></li></ul></li><li><a href="#scripture-location-types-overview"><span>Scripture <wbr/>Location <wbr/>Types <wbr/>Overview</span></a></li><li><a href="#development"><span>Development</span></a></li><li><ul><li><a href="#building"><span>Building</span></a></li><li><ul><li><a href="#setting-up"><span>Setting up</span></a></li><li><a href="#building-platform-bible-utils"><span>Building platform-<wbr/>bible-<wbr/>utils</span></a></li></ul></li></ul></li><li><a href="#acknowledgements"><span>Acknowledgements</span></a></li></ul></div></details></div><div class="site-menu"><nav class="tsd-navigation"><a href="modules.html">platform-bible-utils</a><ul class="tsd-small-nested-navigation" id="tsd-nav-container"><li>Loading...</li></ul></nav></div></div></div><footer><p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer><div class="overlay"></div></body></html>
