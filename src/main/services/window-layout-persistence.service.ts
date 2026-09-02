@@ -608,21 +608,6 @@ export function assignEntryToWindowBySlotId(windowId: number, slotId: number): b
 }
 
 /**
- * The entry at a position in the structure, for a caller creating the window that restores it.
- *
- * A copy of the entry's own fields, but a SHALLOW one: `bounds` and the whole `layout` tree remain
- * the live slot's objects. It protects a caller from replacing fields on the entry, not from
- * mutating what those fields point at.
- *
- * @param entryIndex Position in the structure
- * @returns The entry, or `undefined` if nothing is at that position
- */
-export function getEntryAtIndex(entryIndex: number): WindowLayoutEntry | undefined {
-  const slot = fileSlots[entryIndex];
-  return slot ? { ...slot.entry } : undefined;
-}
-
-/**
  * Mark a window as created-for-content: its layout get answers `pending-content` (start truly
  * empty) until the window pushes its first real layout.
  */

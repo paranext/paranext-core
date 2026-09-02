@@ -1482,6 +1482,46 @@ describe('the windows a power session left behind', () => {
     expect(firstTabIdOf(service.getEntryBySlotId(thirdSlotId)?.layout)).toBe('third');
   });
 
+  test('a window is tied to the slot its id names, not the one at that position', async () => {
+    // The assignment half of the identity above, and the half the reopen actually rides on: it
+    // creates windows one at a time, so a splice can land between naming the slot and the window
+    // existing to be tied to it.
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [{ isMain: true }, { layout: layoutWithTab('second') }, { layout: layoutWithTab('third') }],
+      10,
+    );
+    service.handleWindowRemoved(11, 'entry-stays');
+    service.handleWindowRemoved(12, 'entry-stays');
+    const [, thirdSlotId] = service.getPreservedEntrySlotIds();
+
+    // The window living in the FIRST slot goes away deliberately, so that slot is spliced out and
+    // every later entry moves down one position
+    service.handleWindowRemoved(10, 'entry-goes-with-it');
+
+    expect(service.assignEntryToWindowBySlotId(20, thirdSlotId)).toBe(true);
+
+    // Which entry it was tied to, read from the structure: closing that window deliberately takes
+    // its entry with it, so the one it leaves behind names the entry it did NOT hold
+    service.handleWindowRemoved(20, 'entry-goes-with-it');
+    await service.writeNow();
+    expect(writtenStructure().windows.map((entry) => firstTabIdOf(entry.layout))).toEqual([
+      'second',
+    ]);
+  });
+
+  test('a window created for a slot that has gone is told so rather than given another', async () => {
+    // The branch the reopen depends on: answering `false` is what has the caller track the window
+    // as a new one instead of adopting whichever entry sits at that position, which would hand it a
+    // layout belonging to a different window.
+    const service = await startService();
+    await loadAndAssignAll(service, [{ isMain: true }, { layout: layoutWithTab('second') }], 10);
+    service.handleWindowRemoved(11, 'entry-stays');
+
+    expect(service.assignEntryToWindowBySlotId(20, 9999)).toBe(false);
+  });
+
   test('an ordinary secondary close still takes its entry with it', async () => {
     // The negative control that makes the test above non-vacuous: an implementation that
     // preserved every entry would pass that one and resurrect windows the user closed
