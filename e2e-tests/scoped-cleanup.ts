@@ -54,6 +54,10 @@ export function isSweepEnabled(value: string | undefined): boolean {
 /**
  * The pids of sweepable processes running inside `root`, excluding `excludePids`.
  *
+ * Every path here is POSIX. Working directories come from `/proc`, which exists only on Linux, so
+ * both sides of the comparison are POSIX by construction — resolving them with the host's rules
+ * would rewrite them on a platform this selector never really runs on.
+ *
  * Containment is checked against the resolved path with a separator, so a sibling checkout whose
  * path merely starts with the same characters — `paranext-core-other` beside `paranext-core` — is
  * not treated as inside it. A process whose working directory could not be read is left alone:
@@ -64,13 +68,15 @@ export function isSweepEnabled(value: string | undefined): boolean {
  * `dir` with symlinks resolved, falling back to a plain resolve when the path cannot be read.
  *
  * A working directory read from /proc is always fully resolved, so a root that still contains a
- * symlink compares against a path no process can match.
+ * symlink compares against a path no process can match. The fallback covers a root that does not
+ * exist, and every root on a host without /proc.
  */
 function realPathOrResolved(dir: string): string {
+  const resolved = path.posix.resolve(dir);
   try {
-    return fs.realpathSync(path.resolve(dir));
+    return fs.realpathSync(resolved);
   } catch {
-    return path.resolve(dir);
+    return resolved;
   }
 }
 
@@ -80,13 +86,13 @@ export function selectPidsUnderRoot(
   excludePids: number[],
 ): number[] {
   const resolvedRoot = realPathOrResolved(root);
-  const prefix = `${resolvedRoot}${path.sep}`;
+  const prefix = `${resolvedRoot}${path.posix.sep}`;
   // Worktrees of this repository live at <root>/.claude/worktrees/<name>, so they sit INSIDE the
   // root by path while belonging to a different checkout and, usually, a different run. Plain
   // containment would claim all of them, which is the same cross-checkout kill this module exists
   // to prevent. A run whose own root IS such a directory is unaffected: the container it excludes
   // is relative to its own root, not the canonical one.
-  const nestedWorktrees = `${path.join(resolvedRoot, '.claude', 'worktrees')}${path.sep}`;
+  const nestedWorktrees = `${path.posix.join(resolvedRoot, '.claude', 'worktrees')}${path.posix.sep}`;
   return candidates
     .filter((candidate) => !excludePids.includes(candidate.pid))
     .filter((candidate) => SWEEPABLE_PROCESS_NAMES.includes(candidate.comm))
