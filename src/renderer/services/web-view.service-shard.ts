@@ -1339,6 +1339,10 @@ async function getPersistedLayout(
     return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false, isBakedDefault: false };
   }
   isRunningOnFallbackLayout = false;
+  // Cleared with the flag it guards, so a LATER fallback episode says so too. Left latched, a window
+  // that fell back, recovered, and fell back again would hold every push with nothing logged — and
+  // the warning is the only sign the user's layout changes are being dropped.
+  hasLoggedHeldLayoutPushes = false;
   if (response.kind === 'entry')
     return { layout: response.layout, isPendingContent: false, isBakedDefault: false };
   if (response.kind === 'empty')
