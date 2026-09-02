@@ -146,6 +146,39 @@ const inFlightWindowCloseSyncs = new Set<Promise<void>>();
  * @param closingWindowId Window that is closing
  */
 export async function performWindowCloseTasks(closingWindowId: number): Promise<void> {
+  await beginWindowCloseSync(closingWindowId);
+}
+
+/**
+ * Start a closing window's sync and let the window go without waiting for it.
+ *
+ * For a window closing because the interface mode changed. Such a window is coming back — its entry
+ * is kept and the next switch recreates it — so holding it on screen for the length of a
+ * send/receive would make changing mode take as long as a sync, once per window. What the window
+ * had open is still worth pushing, though, so the sync is started while the window is still alive
+ * to be asked what that was.
+ *
+ * The sync joins {@link inFlightWindowCloseSyncs} exactly as an awaited one does, which is what
+ * keeps it from being lost: {@link performSimpleModeShutdownSync} waits on that set before
+ * cancelling anything, so a quit arriving mid-sync still lets it finish.
+ *
+ * @param closingWindowId Window that is closing
+ */
+export function startWindowCloseTasksWithoutWaiting(closingWindowId: number): void {
+  // Deliberately not awaited and not returned: the caller closes the window now. Failures are
+  // already swallowed and logged inside the sync itself.
+  void beginWindowCloseSync(closingWindowId);
+}
+
+/**
+ * Run a closing window's sync, registered in {@link inFlightWindowCloseSyncs} for as long as it
+ * takes. The one place that set is maintained, so an awaited close and one that lets go of the
+ * window cannot drift apart.
+ *
+ * @param closingWindowId Window that is closing
+ * @returns The sync, which never rejects
+ */
+function beginWindowCloseSync(closingWindowId: number): Promise<void> {
   const windowCloseSync = (async () => {
     try {
       await performWindowCloseTasksInternal(closingWindowId);
@@ -154,11 +187,9 @@ export async function performWindowCloseTasks(closingWindowId: number): Promise<
     }
   })();
   inFlightWindowCloseSyncs.add(windowCloseSync);
-  try {
-    await windowCloseSync;
-  } finally {
+  return windowCloseSync.finally(() => {
     inFlightWindowCloseSyncs.delete(windowCloseSync);
-  }
+  });
 }
 
 async function performWindowCloseTasksInternal(closingWindowId: number): Promise<void> {

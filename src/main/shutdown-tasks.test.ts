@@ -7,7 +7,11 @@ import {
   getOpenWebViewDefinitionsForWindow,
 } from '@main/services/web-view.service-router';
 import { logger } from '@shared/services/logger.service';
-import { performShutdownTasks, performWindowCloseTasks } from './shutdown-tasks';
+import {
+  performShutdownTasks,
+  performWindowCloseTasks,
+  startWindowCloseTasksWithoutWaiting,
+} from './shutdown-tasks';
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn() },
@@ -608,6 +612,87 @@ describe('performWindowCloseTasks', () => {
     await shutdownTasks;
 
     // Only once the window's sync had finished
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+  });
+});
+
+describe('startWindowCloseTasksWithoutWaiting', () => {
+  const writableEditor = (projectId: string) => ({
+    webViewType: 'platformScriptureEditor.react',
+    state: { isReadOnly: false },
+    projectId,
+  });
+
+  /** The fixtures above as the definitions the selection reads, which needs only three fields */
+  function windowWebViews(definitions: object[]) {
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return definitions as Awaited<ReturnType<typeof getOpenWebViewDefinitionsForWindow>>;
+  }
+
+  /** A sendReceiveProjects that hangs until the returned release is called */
+  function holdTheSync(): () => void {
+    let release = () => {};
+    mockRequestNoRetry.mockImplementation(async (requestType) => {
+      if (`${requestType}`.includes('sendReceiveProjects'))
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      return undefined;
+    });
+    return () => release();
+  }
+
+  it('lets the window go before the sync settles', async () => {
+    // A window that is only changing mode comes back, so it must not sit on screen for as long as a
+    // send/receive takes — once per window
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([writableEditor('p1')]));
+    const release = holdTheSync();
+
+    // Nothing to await: the contract is what makes the window close promptly, so a caller cannot
+    // turn this back into a wait by accident. A version that returned its sync would hand one back.
+    expect(startWindowCloseTasksWithoutWaiting(2)).toBeUndefined();
+
+    await vi.waitFor(() =>
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['p1'],
+      ),
+    );
+    // …and the sync it started is still running while the caller has already moved on
+    expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
+    release();
+  });
+
+  it('registers the sync as in flight, so a quit waits for it rather than cancelling it', async () => {
+    // This is what keeps a sync nobody is awaiting from being lost: the shutdown waits on the
+    // in-flight set before it cancels anything
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([writableEditor('p1')]));
+    const release = holdTheSync();
+
+    startWindowCloseTasksWithoutWaiting(2);
+    await vi.waitFor(() =>
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['p1'],
+      ),
+    );
+
+    const shutdownTasks = performShutdownTasks();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    // Nothing cancelled while the unawaited sync is still going
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).not.toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+
+    release();
+    await shutdownTasks;
+
     expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).toContainEqual(
       expect.stringContaining('cancelSync'),
     );

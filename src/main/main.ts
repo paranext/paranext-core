@@ -45,8 +45,15 @@ import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { registerPowerMonitorListeners } from '@main/services/power-monitor-logging.service';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
-import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
-import type { WindowCloseDecision } from '@main/services/window-close-decision.service';
+import {
+  performShutdownTasks,
+  performWindowCloseTasks,
+  startWindowCloseTasksWithoutWaiting,
+} from '@main/shutdown-tasks';
+import type {
+  CloseAllAnswer,
+  WindowCloseDecision,
+} from '@main/services/window-close-decision.service';
 import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationServiceRouter } from '@main/services/notification.service-router';
 import {
@@ -1269,16 +1276,28 @@ async function main() {
           // On a multi-window quit every window reaches this line, so the tasks are shared rather
           // than run once per window — each window waits on the same run before destroying itself.
           await runShutdownTasksOnce(performShutdownTasks);
-        } else {
+        } else if (isClosingForModeSwitch(windowId)) {
           // A window closing because the interface mode changed keeps its entry, so that entry has
           // to hold where the window actually is. Its placement is captured here because the
           // debounced capture is cancelled once the window has gone, and nothing else on this path
           // records it — so without this a window moved just before the switch would come back at
-          // its old position.
-          if (isClosingForModeSwitch(windowId)) {
+          // its old position. Wrapped, because the window can be destroyed underneath this: a
+          // capture that throws must not take the rest of the close with it.
+          try {
             cancelPendingBoundsCapture();
             updateWindowBounds(windowId, captureWindowBoundsState());
+          } catch (e) {
+            logger.warn(
+              `Could not capture the placement of window ${windowId} as the interface mode changed: ${getErrorMessage(e)}`,
+            );
           }
+          // Started, but not waited for. The close tasks are a send/receive of what this window
+          // had open, and that is still worth pushing — but this window is only changing mode, not
+          // going away for good, so holding it on screen for the length of a sync would make a mode
+          // change take as long as a send/receive, once per window. The sync is registered as
+          // in-flight, so a quit arriving mid-sync still waits for it rather than cancelling it.
+          startWindowCloseTasksWithoutWaiting(windowId);
+        } else {
           // The app stays up, but this window's editors go with it. Only this window can say what
           // it had open, so a sync that runs after it is gone can never cover it — the fan-out asks
           // the windows that are still there. Held open for the sync for the same reason the app
