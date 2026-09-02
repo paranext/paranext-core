@@ -4483,10 +4483,11 @@ declare module 'shared/services/web-view.service-model' {
      *   being moved between windows is included even though it is docked in neither of them for the
      *   length of the move, so that a caller selecting from this list cannot silently miss it; treat
      *   the result as what is open in the app, not as what is docked in some window right now. For
-     *   the same reason a web view can appear TWICE for a few seconds: a move whose target has
-     *   adopted but whose record has not cleared yet, while the user moves that web view again, is
-     *   two records describing one web view, and both are included rather than risk dropping one.
-     *   Dedupe by id if you need each web view once.
+     *   the same reason a web view can appear TWICE for a few seconds, whenever a move's target has
+     *   taken the web view but the move has not finished recording that: the window reports it and
+     *   the move still names it. Both are included rather than risk dropping one, because a duplicate
+     *   is something a caller can see and a missing web view is not. Dedupe by id if you need each
+     *   web view once.
      * @throws If any window could not be asked what it has open. Callers read this as the complete
      *   picture, and a window that could not answer is indistinguishable in the result from one with
      *   nothing open, so a short list is refused rather than passed off as the whole landscape.
