@@ -103,6 +103,15 @@ let switchGeneration = 0;
 const modeSwitchClosingWindowIds = new Set<number>();
 
 /**
+ * Whether a reopen is running right now.
+ *
+ * A reopen re-reads the preserved set on every pass, so one already running picks up entries freed
+ * while it runs. What that cannot cover is an entry freed when no reopen is running — which is what
+ * {@link clearModeSwitchClose} starts one for, and why it has to know not to start a second.
+ */
+let isReopenInFlight = false;
+
+/**
  * Wire the collaborators and seed the mode. Called once during startup, after the window restore
  * has read the mode, so the seed is the value the restore acted on.
  *
@@ -166,10 +175,33 @@ export function isClosingForModeSwitch(windowId: number): boolean {
  * Forget that a window was closing for a mode switch. Called once the window has actually gone, so
  * the set never outlives the windows in it.
  *
+ * Also where a switch back to power that overtook these closes is finished. A window lets go of its
+ * entry one Electron close AFTER the switch asks it to close, so a switch back arriving in that gap
+ * finds nothing preserved and reopens nothing — and the reopen's per-pass re-read cannot help,
+ * because with an empty set it never takes a pass. The last close reporting in is the moment those
+ * entries exist, so it is the moment to look again.
+ *
  * @param windowId Window that has gone away
  */
 export function clearModeSwitchClose(windowId: number): void {
-  modeSwitchClosingWindowIds.delete(windowId);
+  if (!modeSwitchClosingWindowIds.delete(windowId)) return;
+  // Only once they have all reported: reopening between two closes would create windows while the
+  // switch that closed them is still running
+  if (modeSwitchClosingWindowIds.size > 0) return;
+  // Only when the mode has moved on. The ordinary end of a switch TO simple runs this same path,
+  // and a reopen fired from it would put back the windows the switch had just closed.
+  if (cachedInterfaceMode !== 'power') return;
+  const deps = dependencies;
+  if (!deps || deps.isAppShuttingDown()) return;
+  // A reopen already running re-reads the set each pass, so it picks these up on its own
+  if (isReopenInFlight) return;
+  // Not awaited: this runs from a window's `closed` handler, which is synchronous and has its own
+  // teardown to finish. Failures are reported by the reopen itself, one window at a time.
+  runReopen(deps, switchGeneration).catch((e: unknown) => {
+    logger.warn(
+      `Could not reopen the windows a switch back to power outran: ${getErrorMessage(e)}`,
+    );
+  });
 }
 
 /**
@@ -369,6 +401,24 @@ async function reopenPreservedWindows(
 }
 
 /**
+ * {@link reopenPreservedWindows}, with the flag that keeps two of them from running at once.
+ *
+ * Both callers go through here, so the flag cannot be set by one route and read by another that
+ * never sets it.
+ *
+ * @param deps Collaborators to act through
+ * @param generation Switch this reopen belongs to
+ */
+async function runReopen(deps: ModeSwitchDependencies, generation: number): Promise<void> {
+  isReopenInFlight = true;
+  try {
+    await reopenPreservedWindows(deps, generation);
+  } finally {
+    isReopenInFlight = false;
+  }
+}
+
+/**
  * React to the interface mode changing.
  *
  * @param newMode Mode the application has changed to
@@ -410,7 +460,7 @@ export async function handleInterfaceModeChanged(newMode: InterfaceMode): Promis
       return;
     }
 
-    await reopenPreservedWindows(deps, generation);
+    await runReopen(deps, generation);
   } catch (e) {
     // Only the reopen is put back. A switch to simple that failed part-way still CLOSED every
     // window whose close succeeded, and the setting on disk already reads simple — so describing
@@ -436,5 +486,6 @@ export function resetForTesting(): void {
   dependencies = undefined;
   cachedInterfaceMode = undefined;
   switchGeneration = 0;
+  isReopenInFlight = false;
   modeSwitchClosingWindowIds.clear();
 }
