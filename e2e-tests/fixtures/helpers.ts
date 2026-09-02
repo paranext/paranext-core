@@ -1150,8 +1150,19 @@ export function pinAppGlobalState(): () => void {
   // tell it apart from a backup that finished. Move it aside before deciding anything else, so this
   // call starts from either a complete backup or none — never from one it would otherwise trust by
   // pid alone.
+  //
+  // An incomplete backup owned by a *different, still-live* process is not this worker's own stale
+  // leftover — it is another run's copy loop still in flight. Quarantining it out from under that
+  // run would let this call believe it created the backup and go on to empty the live store while
+  // the other run's app is still using it, so liveness is checked before completeness here too (the
+  // same ordering `restoreAppGlobalState` uses).
   const standingBeforeQuarantine = readAppGlobalBackup();
-  if (fs.existsSync(backupDir) && standingBeforeQuarantine?.complete !== true) {
+  if (
+    fs.existsSync(backupDir) &&
+    standingBeforeQuarantine?.complete !== true &&
+    (standingBeforeQuarantine === undefined ||
+      classifyBackupOwner(standingBeforeQuarantine.ownerPid) !== 'live')
+  ) {
     const stamp = Date.now();
     const movedDir = quarantineUnreadableBackup(backupDir, stamp);
     const movedManifest = fs.existsSync(mainLocalStorageBackupManifestPath())

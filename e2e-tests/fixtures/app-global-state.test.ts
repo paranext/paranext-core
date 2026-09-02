@@ -419,6 +419,37 @@ describe('app-global recovery refuses a backup another run still owns', () => {
   });
 });
 
+describe('app-global pin leaves another live run in-flight backup alone', () => {
+  it('does not quarantine a live owner incomplete backup, and does not empty the store because of it', () => {
+    // A live worker mid-copy: its backup directory holds only whichever keys the loop has reached so
+    // far, and its manifest stays `complete: false` until every key has copied. A second worker's own
+    // pinAppGlobalState() call must not read "incomplete" as "abandoned" and quarantine what is
+    // actually still in progress -- doing so would let the second call believe IT created the backup,
+    // and go on to empty the live store while the first worker's app is still running against it.
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    fs.writeFileSync(path.join(BACKUP_DIR, SCR_REFS_KEY), DEVELOPER_REF);
+    fs.writeFileSync(
+      `${LIVE_DIR}.e2e-backup.json`,
+      JSON.stringify({
+        ownerPid: process.ppid,
+        createdAt: new Date().toISOString(),
+        pinnedKeys: [SCR_REFS_KEY, THEME_KEY],
+        complete: false,
+      }),
+    );
+    // Stand in for the live owner's app having already written past what its own backup captured.
+    writeKey(SCR_REFS_KEY, '{"0":{"book":"REV","chapterNum":1,"verseNum":1}}');
+    writeKey(THEME_KEY, '"dark"');
+
+    pinAppGlobalState();
+
+    expect(quarantinedBackups()).toEqual([]);
+    expect(fs.existsSync(BACKUP_DIR)).toBe(true);
+    expect(readKey(SCR_REFS_KEY)).toBe('{"0":{"book":"REV","chapterNum":1,"verseNum":1}}');
+    expect(readKey(THEME_KEY)).toBe('"dark"');
+  });
+});
+
 describe('app-global pin refuses to empty a store it cannot park', () => {
   it('leaves the developer state alone when a stale manifest outlives its backup directory', () => {
     // A restore copies the keys back, removes the backup directory, and THEN removes the manifest.
