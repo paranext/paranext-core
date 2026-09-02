@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { logger } from '@shared/services/logger.service';
 import * as resolver from './resolve-registration-validity';
 import { RegistrationValidity } from './first-run.model';
 import {
@@ -252,6 +253,35 @@ describe('listener isolation', () => {
     expect(laterListener).toHaveBeenCalled();
     unsubscribeThrower();
     unsubscribeLater();
+  });
+
+  it('names the throwing subscriber in the warning when it was given a label', async () => {
+    const unsubscribe = subscribeToRegistrationValidity(() => {
+      throw new Error('subscriber blew up');
+    }, 'the-reminder-dot');
+    mockResolveReg.mockResolvedValue('invalid');
+
+    await refreshRegistrationValidity();
+
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('the-reminder-dot'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('subscriber blew up'));
+    unsubscribe();
+  });
+
+  it('still warns, without a name, when an unlabeled subscriber throws', async () => {
+    const unsubscribe = subscribeToRegistrationValidity(() => {
+      throw new Error('anonymous blew up');
+    });
+    mockResolveReg.mockResolvedValue('invalid');
+
+    await refreshRegistrationValidity();
+
+    // No parenthetical is appended when there is no label — the message must not read as though a
+    // subscriber called "undefined" threw.
+    expect(logger.warn).toHaveBeenCalledWith(
+      'A registration-validity listener threw: anonymous blew up',
+    );
+    unsubscribe();
   });
 
   it('keeps subscribers across a reset so a mounted consumer is not detached', () => {

@@ -44,6 +44,10 @@ function withRegistration(
         case 'paratextRegistration.showInternetSettings':
           return undefined;
         default:
+          // The throw alone is invisible here: the resolver turns a rejected probe into
+          // `'unknown'`, so an unhandled command renders as a plausible no-dot state rather than
+          // failing. Name it in the console so it reads as a story bug.
+          console.error(`user-profile-popover story: unexpected command "${commandName}"`);
           throw new Error(`Unexpected command: ${commandName}`);
       }
     });
@@ -152,7 +156,11 @@ export const RegistrationNeededWithProfile: Story = {
 export const ValidityUnknown: Story = {
   beforeEach: () => {
     resetRegistrationValidityStore();
-    setCommandServiceMock(() => {
+    setCommandServiceMock((commandName) => {
+      // This story renders identically to the registered state on purpose, so the console is the
+      // only place the reject path is observable. Log it, or there is no way to tell a refused
+      // probe from a mock that was never asked.
+      console.warn(`ValidityUnknown story: refusing "${commandName}" to force 'unknown'`);
       throw new Error('Registration provider is not available');
     });
     return () => {

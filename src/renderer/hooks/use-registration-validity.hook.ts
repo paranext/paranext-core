@@ -21,6 +21,13 @@ export interface RegistrationValidityState {
 }
 
 /**
+ * Module-level so its identity is stable: `useSyncExternalStore` re-subscribes whenever the
+ * subscribe function changes, so a per-render closure would detach and re-attach every render.
+ */
+const subscribe = (listener: () => void) =>
+  subscribeToRegistrationValidity(listener, 'useRegistrationValidity');
+
+/**
  * The user's Paratext registration validity, kept live from `registration-validity-store`.
  *
  * Mounting kicks the session's probe if nothing has resolved one yet. That is not just convenience:
@@ -34,7 +41,7 @@ export interface RegistrationValidityState {
  * stays `'unknown'` there, which renders as no reminder.
  */
 export function useRegistrationValidity(): RegistrationValidityState {
-  const validity = useSyncExternalStore(subscribeToRegistrationValidity, getRegistrationValidity);
+  const validity = useSyncExternalStore(subscribe, getRegistrationValidity);
 
   const refresh = useCallback((force: boolean) => {
     if (isDemoMode()) return;

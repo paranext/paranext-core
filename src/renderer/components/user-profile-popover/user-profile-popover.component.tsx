@@ -111,8 +111,9 @@ function ReminderDot({ testId, className }: { testId: string; className?: string
       data-testid={testId}
       aria-hidden="true"
       className={cn(
-        // `shrink-0` is in the base: every caller so far places the dot in a flex row beside text,
-        // where a fixed 8px circle must never be the item that gives.
+        // `shrink-0` is in the base because callers place the dot in a flex row beside text (e.g.
+        // the toolbar trigger, the "Profile & registration" row), where a fixed 8px circle must
+        // never be the item that gives.
         'tw:size-2 tw:shrink-0 tw:rounded-full tw:bg-primary',
         // Raw class, not a `tw:forced-colors:` utility — that variant emits no CSS in this build
         // (verified against the built stylesheet). See the rule in the companion .css file.

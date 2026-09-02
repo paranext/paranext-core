@@ -1,6 +1,6 @@
 /**
  * The session's answer to "is this user's Paratext registration valid?", shared by every UI
- * affordance that reacts to it (currently the user-profile popover's reminder dot).
+ * affordance that reacts to it (e.g. the user-profile popover's reminder dot).
  *
  * This store owns the session's ONE registration probe; the first-run gate consumes it instead of
  * probing separately. That sharing is load-bearing, not tidiness. The larger reason is correctness:
@@ -44,17 +44,23 @@ let generation = 0;
  */
 let inFlightId = 0;
 
-const listeners = new Set<() => void>();
+/**
+ * Subscribers, each mapped to an optional label used only to name it if it throws. Keyed by the
+ * listener, so a repeat subscribe replaces its entry rather than adding a second one.
+ */
+const listeners = new Map<() => void, string | undefined>();
 
 function notifyListeners(): void {
-  listeners.forEach((listener) => {
+  listeners.forEach((label, listener) => {
     // A throwing subscriber must not escape into the shared probe promise: the first-run gate awaits
     // it, so an exception from a decorative dot would strand the user on the "couldn't verify
     // registration" screen. Isolate each listener and keep going.
     try {
       listener();
     } catch (e) {
-      logger.warn(`A registration-validity listener threw: ${getErrorMessage(e)}`);
+      logger.warn(
+        `A registration-validity listener threw${label ? ` (${label})` : ''}: ${getErrorMessage(e)}`,
+      );
     }
   });
 }
@@ -73,9 +79,20 @@ export function getRegistrationValidity(): RegistrationValidity {
   return validity;
 }
 
-/** Subscribe to validity changes. Returns an unsubscribe function. */
-export function subscribeToRegistrationValidity(listener: () => void): () => void {
-  listeners.add(listener);
+/**
+ * Subscribe to validity changes. Returns an unsubscribe function.
+ *
+ * `label` names the subscriber in the warning logged if it throws — a listener is an anonymous
+ * closure by the time {@link notifyListeners} sees it, so without one the log says only that
+ * _something_ threw. Pass a stable subscribe function to `useSyncExternalStore`, not a fresh
+ * closure per render, or React re-subscribes on every render.
+ *
+ * @param listener Called on every validity change.
+ * @param label Optional name for this subscriber, used only in the throwing-listener warning.
+ * @returns Unsubscribe function.
+ */
+export function subscribeToRegistrationValidity(listener: () => void, label?: string): () => void {
+  listeners.set(listener, label);
   return () => {
     listeners.delete(listener);
   };
