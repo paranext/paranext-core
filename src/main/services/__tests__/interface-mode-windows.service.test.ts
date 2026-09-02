@@ -516,6 +516,41 @@ describe('reacting to an interface-mode change', () => {
     expect(created).toEqual([33, 22]);
   });
 
+  test('a second switch to power waits for the reopen the first one left running', async () => {
+    // A superseded reopen only notices it has been superseded between windows, so it is still
+    // creating one when the switch that replaced it arrives. An entry stays preserved until its
+    // window exists, so two reopens running together read the same entry and create it twice.
+    const created: number[] = [];
+    let preserved = [11];
+    let releaseFirstWindow = () => {};
+    const firstWindowCreated = new Promise<void>((resolve) => {
+      releaseFirstWindow = resolve;
+    });
+    const deps = makeDeps({
+      getTrackedWindowIds: () => [1],
+      getPreservedEntrySlotIds: () => preserved,
+      createWindowForEntry: vi.fn(async (slotId: number) => {
+        created.push(slotId);
+        if (slotId === 11) await firstWindowCreated;
+        // A window exists now, so its entry stops being one with nothing on screen
+        preserved = preserved.filter((candidate) => candidate !== slotId);
+      }),
+    });
+    initializeModeSwitchOrchestration(deps, 'simple');
+
+    const firstSwitchBack = handleInterfaceModeChanged('power');
+    await settle();
+    await handleInterfaceModeChanged('simple');
+    const secondSwitchBack = handleInterfaceModeChanged('power');
+    await settle();
+
+    releaseFirstWindow();
+    await firstSwitchBack;
+    await secondSwitchBack;
+
+    expect(created).toEqual([11]);
+  });
+
   test('a close reporting in while the mode still reads simple reopens nothing', async () => {
     // The negative control: the ordinary end of a switch to simple runs exactly this path, and a
     // reopen fired from it would put back the window the switch had just closed.
