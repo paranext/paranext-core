@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
+  trackDisplaySettle,
+  type DisplaySettleState,
   areCapturedBoundsTrustworthy,
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
@@ -156,5 +158,47 @@ describe('areCapturedBoundsTrustworthy', () => {
     const onPrimary = { x: 100, y: 50, width: 800, height: 600 };
 
     expect(areCapturedBoundsTrustworthy(onPrimary, BOTH_DISPLAYS, undefined, 0)).toBe(true);
+  });
+});
+
+describe('trackDisplaySettle', () => {
+  test('a pause mid-drag does not spend the settle period the landing is meant to start', () => {
+    // The clock has to key off the display the bounds lie fully WITHIN, not the one they merely
+    // overlap most. Keyed off the nearest display it starts at roughly the halfway point of the
+    // crossing, so a user who rests the window mid-drag for longer than the settle period lands
+    // with that period already spent — and the capture is accepted at exactly the moment the two
+    // DPI answers have not yet met, which is the moment this guard exists to refuse.
+    const onPrimary = { x: 100, y: 100, width: 800, height: 600 };
+    const straddling = { x: 1800, y: 100, width: 400, height: 600 };
+    const landed = { x: 2000, y: 100, width: 800, height: 600 };
+
+    let state: DisplaySettleState = { displayId: PRIMARY_WITH_ID.id, since: 0 };
+    state = trackDisplaySettle(onPrimary, BOTH_DISPLAYS, state, 0);
+    // Far enough across that the nearest display is already the secondary, but not yet contained
+    state = trackDisplaySettle(straddling, BOTH_DISPLAYS, state, 100);
+    // The user rests the window there, well past the settle period
+    state = trackDisplaySettle(straddling, BOTH_DISPLAYS, state, 5_000);
+    // ...and then completes the crossing
+    state = trackDisplaySettle(landed, BOTH_DISPLAYS, state, 5_100);
+
+    expect(
+      areCapturedBoundsTrustworthy(landed, BOTH_DISPLAYS, PRIMARY_WITH_ID.id, 5_100 - state.since),
+    ).toBe(false);
+  });
+
+  test('a window moved within one display keeps the clock it already had', () => {
+    // Crossing nothing must not restart the settle period, or an ordinary drag inside one display
+    // would spend its life untrusted and the saved placement would freeze.
+    const onPrimary = { x: 100, y: 100, width: 800, height: 600 };
+    const alsoOnPrimary = { x: 300, y: 200, width: 800, height: 600 };
+
+    const state = trackDisplaySettle(
+      alsoOnPrimary,
+      BOTH_DISPLAYS,
+      trackDisplaySettle(onPrimary, BOTH_DISPLAYS, { displayId: undefined, since: 0 }, 1_000),
+      9_000,
+    );
+
+    expect(state).toEqual({ displayId: PRIMARY_WITH_ID.id, since: 1_000 });
   });
 });
