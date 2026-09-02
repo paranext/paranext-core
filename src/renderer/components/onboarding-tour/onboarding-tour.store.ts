@@ -19,9 +19,53 @@ export function readTourDone(): boolean {
   return readBooleanFlag(ONBOARDING_TOUR_DONE_KEY);
 }
 
+/**
+ * Fired in THIS window when the flag changes here. The browser's own `storage` event reaches every
+ * same-origin window except the one that performed the write, so a store listening only for that
+ * would report every window's writes but its own.
+ */
+const TOUR_DONE_SYNC_EVENT = 'platform-bible.onboardingTourDoneChanged';
+
+const tourDoneListeners = new Set<() => void>();
+
+function notifyTourDoneListeners() {
+  tourDoneListeners.forEach((listener) => listener());
+}
+
 /** Records that the onboarding tour has been completed or skipped. */
 export function writeTourDone(): void {
   writeBooleanFlag(ONBOARDING_TOUR_DONE_KEY, true);
+  window.dispatchEvent(new Event(TOUR_DONE_SYNC_EVENT));
+}
+
+/**
+ * Subscribes to changes in the completion flag, in this window or any other. Returns the
+ * unsubscriber `useSyncExternalStore` expects; pair it with {@link readTourDone} as the snapshot.
+ *
+ * `localStorage` is shared across same-origin renderers but writes fire no event in the writing
+ * window, and nothing collapses a Power user's extra windows when they switch to Simple — so
+ * without this, finishing the tour in one window leaves the others' overlays up until something
+ * unrelated happens to re-render them.
+ */
+export function subscribeToTourDone(listener: () => void): () => void {
+  if (tourDoneListeners.size === 0) {
+    window.addEventListener('storage', handleStorageEvent);
+    window.addEventListener(TOUR_DONE_SYNC_EVENT, notifyTourDoneListeners);
+  }
+  tourDoneListeners.add(listener);
+  return () => {
+    tourDoneListeners.delete(listener);
+    if (tourDoneListeners.size === 0) {
+      window.removeEventListener('storage', handleStorageEvent);
+      window.removeEventListener(TOUR_DONE_SYNC_EVENT, notifyTourDoneListeners);
+    }
+  };
+}
+
+/** Another window wrote to storage. Only this one key concerns the tour. */
+function handleStorageEvent(event: StorageEvent) {
+  if (event.key !== ONBOARDING_TOUR_DONE_KEY) return;
+  notifyTourDoneListeners();
 }
 
 /**

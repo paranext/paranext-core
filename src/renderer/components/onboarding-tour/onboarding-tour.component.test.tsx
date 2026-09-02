@@ -17,6 +17,15 @@ let mockIsPowerMode = false;
 let mockIsLocalizationLoading = false;
 
 let mockTourDone = false;
+// Mirrors the real store's done-flag subscription, which exists so a write in another window
+// reaches this one. Tests drive it through `recordTourDoneElsewhere`.
+const mockTourDoneListeners = new Set<() => void>();
+
+/** Another window finished the tour: the shared flag flips and every window is notified. */
+function recordTourDoneElsewhere() {
+  mockTourDone = true;
+  mockTourDoneListeners.forEach((listener) => listener());
+}
 
 // Stands in for the store's replay channel — a count plus its listeners, exactly as the real one.
 let mockReplayCount = 0;
@@ -31,6 +40,13 @@ vi.mock('./onboarding-tour.store', () => ({
   readTourDone: () => mockTourDone,
   writeTourDone: () => {
     mockTourDone = true;
+    mockTourDoneListeners.forEach((listener) => listener());
+  },
+  subscribeToTourDone: (listener: () => void) => {
+    mockTourDoneListeners.add(listener);
+    return () => {
+      mockTourDoneListeners.delete(listener);
+    };
   },
   getTourReplayCount: () => mockReplayCount,
   subscribeToTourReplay: (listener: () => void) => {
@@ -114,6 +130,7 @@ beforeEach(() => {
   mockIsLocalizationLoading = false;
   mockTourDone = false;
   mockReplayCount = 0;
+  mockTourDoneListeners.clear();
 
   layoutPanelEl = document.createElement('div');
   layoutPanelEl.setAttribute('data-dockid', SIMPLE_PANEL_ID_PROJECT);
@@ -330,5 +347,20 @@ describe('OnboardingTour', () => {
       await Promise.resolve();
     });
     expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+  });
+
+  it('closes when another window records the tour as done', () => {
+    // Simple mode is single-window by design, but nothing collapses a Power user's extra windows
+    // when they switch to Simple, and the completion flag is shared across renderers. Each window
+    // would otherwise keep its own overlay up, at its own step, until something unrelated
+    // re-rendered it.
+    render(<OnboardingTour />);
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+
+    act(() => {
+      recordTourDoneElsewhere();
+    });
+
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
 });
