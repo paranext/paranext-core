@@ -17,7 +17,6 @@ import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard
 import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import type { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
 import { getWebViewMoveFailureDisposition } from '@shared/models/web-view-move.model';
-import { webViewMovesInFlight } from '@main/services/web-view.ownership';
 import { getErrorMessage } from 'platform-bible-utils';
 import type { InternalRequestHandler } from '@shared/data/rpc.model';
 
@@ -112,7 +111,8 @@ vi.mock('@shared/services/logger.service', () => ({
   },
 }));
 
-const { moveWebView } = testingWebViewServiceRouter;
+const { moveWebView, seedMoveInFlightForTesting, clearMovesInFlightForTesting } =
+  testingWebViewServiceRouter;
 
 /** Start the router and hand back the object it registered under the generic name */
 async function getRouter() {
@@ -664,7 +664,7 @@ describe('a web view that is between windows on a move', () => {
     // The in-flight set is module state shared by every test in this file, and each mid-move test
     // releases its adopts AFTER its assertions — so one failing test leaves its records behind and
     // the next test counts them, turning one failure into a cascade of misleading numbers.
-    webViewMovesInFlight.clear();
+    clearMovesInFlightForTesting();
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
@@ -793,6 +793,48 @@ describe('a web view that is between windows on a move', () => {
 
     releaseAdopt('view-1');
     await moving;
+  });
+
+  test('reports a recovered web view once, not twice, when the window it went back to reports it', async () => {
+    // A failed move puts the web view back under the captured id, and the window then reports it.
+    // From the read that is indistinguishable from a target that adopted — same id, same window
+    // shape — and the two want opposite treatment: the adopted view is folded in (the accepted
+    // duplicate below), the recovered one must not be, because it is already in the list.
+    //
+    // Nothing about the ids can tell them apart, so the move records which happened while it still
+    // knows. Seeded rather than driven: a recovering move sets its flag and throws with no await in
+    // between, so no test can hold a real move open at the moment the record says "recovered".
+    const source = windowShard(['view-1']);
+    withWindows({ 2: source });
+    seedMoveInFlightForTesting({
+      namedWebViewId: 'view-1',
+      webViewType: 'test.type',
+      projectId: 'project-1',
+      capturedDefinition: { id: 'view-1', webViewType: 'test.type', projectId: 'project-1' },
+      recoveredIntoWindow: true,
+    });
+
+    const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
+
+    expect(definitions.filter((definition) => definition.id === 'view-1')).toHaveLength(1);
+  });
+
+  test('reports the same web view twice when the identical situation has NOT been recovered', async () => {
+    // The control for the test above, and the reason its single entry is attributable to the flag
+    // rather than to anything else in the setup: identical window, identical record, flag absent.
+    // If this pair ever stops disagreeing, the guard has stopped doing anything.
+    const source = windowShard(['view-1']);
+    withWindows({ 2: source });
+    seedMoveInFlightForTesting({
+      namedWebViewId: 'view-1',
+      webViewType: 'test.type',
+      projectId: 'project-1',
+      capturedDefinition: { id: 'view-1', webViewType: 'test.type', projectId: 'project-1' },
+    });
+
+    const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
+
+    expect(definitions.filter((definition) => definition.id === 'view-1')).toHaveLength(2);
   });
 
   test('reports a web view twice while the target already has it and the move record is still open', async () => {
@@ -986,19 +1028,21 @@ describe('a web view that is between windows on a move', () => {
 
     releaseFirstAdopt('view-1');
     releaseSecondAdopt('view-1');
-    await Promise.allSettled([firstMove, secondMove]);
+    await Promise.all([firstMove, secondMove]);
   });
 
   test('folds in a dragged view whose window still reports an adopted sibling under the captured name', async () => {
     // Window 2 holds its own `home-w2` and, from an earlier move, window 1's Home adopted under the
     // capture's already-stripped `home` — the state any window is in after receiving a move. Drag
-    // ONLY `home-w2`. Its capture strips to `home`, so the in-flight record's ids are
-    // ['home-w2', 'home'] — and window 2 still reports the OTHER view under `home`. The
-    // window-reported guard matches on that spelling and suppresses, so the dragged view, which is
-    // open in no window at all, is left out of the read entirely.
+    // ONLY `home-w2`. Its capture strips to `home`, so the record names `home-w2` and carries a
+    // captured definition whose id is `home` — and window 2 still reports the OTHER view under
+    // `home`. The
+    // A guard that matched the captured spelling would read that report as this view and suppress
+    // it, leaving the dragged view — open in no window at all — out of the read entirely.
     //
-    // Two different views, one spelling. The guard has to match the captured SCOPED spelling rather
-    // than the stripped one for this to come out right.
+    // Two different views, one spelling. The guard has to match the id the move was ASKED for,
+    // which still carries its window scope, and never the captured one, which has had that scope
+    // stripped.
     const holderWebViewIds = ['home-w2', 'home'];
     const holder = windowShard(holderWebViewIds);
     holder.captureAndCloseWebView.mockImplementation(async (id) => {
@@ -1027,7 +1071,7 @@ describe('a web view that is between windows on a move', () => {
     expect(definitions.some((definition) => definition.projectId === 'project-dragged')).toBe(true);
 
     releaseAdopt('home');
-    await Promise.allSettled([move]);
+    await Promise.all([move]);
   });
 
   test.each([
@@ -1089,7 +1133,7 @@ describe('a web view that is between windows on a move', () => {
 
       releaseAdoptA('home');
       releaseAdoptB('home');
-      await Promise.allSettled([firstMove, secondMove]);
+      await Promise.all([firstMove, secondMove]);
     },
   );
 });
