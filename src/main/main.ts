@@ -118,9 +118,13 @@ import {
 } from '@main/services/window-layout-persistence.service';
 import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
 import {
+  forgetWindowBounce,
   forgetWindowWithholding,
+  hasWindowBouncedFocusBack,
   isWindowAwaitingFirstActivation,
+  noteWindowBouncedFocusBack,
   noteWindowWithheldFromActivation,
+  shouldBounceFocusBack,
   planWindowActivation,
   shouldRevealAfterLoadFailure,
   shouldRevealAfterRendererGone,
@@ -790,9 +794,29 @@ async function main() {
     // web view focuses its iframe, and a `focus()` inside a window that does not hold OS focus asks
     // the browser to activate that window. Recorded here so the open that follows can say so.
     if (activation.revealWhenReady === 'inactive') noteWindowWithheldFromActivation(windowId);
+    // Where focus goes back to if this window takes it on its own. Read at creation, because by the
+    // time that happens this window is the routing target and the answer would be itself.
+    const windowIdToReturnFocusTo =
+      activation.revealWhenReady === 'inactive' ? getTargetWindowId() : undefined;
 
     // Track which window is focused for multi-window command routing
     newWindow.on('focus', () => {
+      // A window held back from the foreground takes focus anyway when its page first paints —
+      // nothing in either process calls for it, so it cannot be prevented here, only handed back.
+      if (
+        shouldBounceFocusBack({
+          isAwaitingFirstActivation: isWindowAwaitingFirstActivation(windowId),
+          hasAlreadyBouncedFocusBack: hasWindowBouncedFocusBack(windowId),
+        })
+      ) {
+        noteWindowBouncedFocusBack(windowId);
+        // Deliberately NOT recorded as the routing target: this window holds focus for the moment
+        // it takes to give it back, and pointing routing at it in that gap would send whatever a
+        // caller asks for next to a window the user is not in. The withholding also stays on — the
+        // user has still not been in this window.
+        if (windowIdToReturnFocusTo !== undefined) focusWindow(windowIdToReturnFocusTo);
+        return;
+      }
       setFocusedWindowId(windowId);
       // The user is in this window now, so content arriving in it should take focus like anywhere
       // else. One activation is enough — this window stops being a background one for good.
@@ -1270,9 +1294,10 @@ async function main() {
       // is destroyed by now, and reading a property off it can throw — which would abandon the rest
       // of this teardown, leaving the window tracked forever and the app never told it closed.
       removeWindow(newWindow, windowId);
-      // Nothing will ask about this window again, and the set should not grow for the life of the
+      // Nothing will ask about this window again, and the sets should not grow for the life of the
       // process.
       forgetWindowWithholding(windowId);
+      forgetWindowBounce(windowId);
 
       // What this window's disappearance means for its entry. A deliberate close — the app stays up
       // — takes the entry with it, and the structure is rewritten without it below so the window

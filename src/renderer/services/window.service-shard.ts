@@ -312,9 +312,13 @@ onDidCloseWebView(({ webView }) => {
  */
 let hasWindowBeenActivated = false;
 
-// The window gaining OS focus is what makes it ordinary — the same rule the main process applies to
-// its own copy of this fact, expressed here because the focus requests below never reach it.
-window.addEventListener('focus', () => {
+// A gesture, not a focus event: a window held back from the foreground takes focus by itself when
+// its page first paints, so treating focus as activation would end the withholding before the user
+// had done anything. Pointer and key are the first things a person actually does in a window.
+window.addEventListener('pointerdown', () => {
+  hasWindowBeenActivated = true;
+});
+window.addEventListener('keydown', () => {
   hasWindowBeenActivated = true;
 });
 
