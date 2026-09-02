@@ -950,7 +950,22 @@ async function main() {
       boundsCaptureTimeout = setTimeout(() => {
         boundsCaptureTimeout = undefined;
         if (newWindow.isDestroyed()) return;
-        updateWindowBounds(windowId, captureWindowBoundsState());
+        const capturedState = captureWindowBoundsState();
+        updateWindowBounds(windowId, capturedState);
+        // A placement withheld only because the window has just reached this display is not lost:
+        // nothing else will ask again — the window is sitting still, so no further resize or move
+        // is coming — so look once more when the settle period is up. The conditions are exactly
+        // the ones under which bounds are withheld for that reason and no other, which is what
+        // keeps a straddling window (no containing display) or a minimized one from re-arming
+        // this forever.
+        if (
+          !capturedState.bounds &&
+          !capturedState.isMaximized &&
+          !capturedState.isFullScreen &&
+          !newWindow.isMinimized() &&
+          displaySettle.displayId !== undefined
+        )
+          captureBoundsSoon();
       }, BOUNDS_CAPTURE_DEBOUNCE_MS);
     };
     newWindow.on('resize', captureBoundsSoon);
@@ -1253,7 +1268,15 @@ async function main() {
       // logout) is ignored here too — the question is taken down by that same quit and the
       // decision resolves from it, so the shutdown work runs from THAT pass and this one has
       // nothing to add.
-      if (isAskingAboutClose) return;
+      //
+      // An interface-mode switch's close lands here too, and for it this return IS the close not
+      // happening — so its claim comes off, exactly as at the `stay-open` exit below. The question
+      // already open decides this window's fate now; leaving it claimed would hold it off screen
+      // behind a dialog about it. Does nothing for a window the switch never claimed.
+      if (isAskingAboutClose) {
+        undoModeSwitchClose(windowId);
+        return;
+      }
 
       // Closing the primary window while others are open takes every window with it, so the user
       // is asked first. Decided before anything is marked closing: a cancelled close is not a close
