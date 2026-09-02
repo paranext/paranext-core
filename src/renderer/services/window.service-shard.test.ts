@@ -567,6 +567,19 @@ describe('a window still waiting for its first activation', () => {
     expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', false);
   });
 
+  test('lets the main process overrule the local latch for content it routes here', async () => {
+    // This window's latch only sees gestures in the shell document — a pointer or key event inside
+    // a docked web view's iframe never reaches it. So the latch can stay set long after the user
+    // has been working in the window, and the main process, which watches the window's own focus
+    // events, is the better-informed of the two. When it states an answer, that answer wins.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    const engine = testingWindowService.implementWindowDataProviderEngine();
+
+    await engine.setFocus({ focusType: 'tab', id: 'tab-1' }, undefined, false);
+
+    expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', false);
+  });
+
   test('keeps withholding when the window merely takes focus by itself', async () => {
     // The reason the latch is not driven by focus: a window held back from the foreground takes
     // focus on its own the moment its page first paints. Ending the withholding there would undo it
