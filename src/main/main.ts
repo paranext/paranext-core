@@ -125,8 +125,8 @@ import {
   loadWindowLayouts,
   markWindowPendingContent,
   isPrimaryWindow,
-  getEntryAtIndex,
-  getPreservedEntryIndexes,
+  getEntryByWindowId,
+  getPreservedEntryIds,
   setMainWindowId,
   setModeSwitchClosePredicate,
   setPendingContentChangeListener,
@@ -302,6 +302,8 @@ const BOUNDS_CAPTURE_DEBOUNCE_MS = 100;
  */
 type WindowRestoreInfo =
   | { kind: 'entry'; entry: WindowLayoutEntry }
+  /** A window re-created for an entry a previous power session left behind. */
+  | { kind: 'preserved-entry'; entry: WindowLayoutEntry }
   | { kind: 'legacy'; boundsState?: WindowBoundsState };
 
 /** Height of the custom title bar buttons on Windows */
@@ -757,7 +759,9 @@ async function main() {
     // legacy startup — validated against the displays connected right now so a window can never
     // come back on a monitor that is gone. A window with no saved placement gets defaults.
     const savedBoundsState =
-      restoreInfo?.kind === 'entry' ? restoreInfo.entry : restoreInfo?.boundsState;
+      restoreInfo?.kind === 'entry' || restoreInfo?.kind === 'preserved-entry'
+        ? restoreInfo.entry
+        : restoreInfo?.boundsState;
     const boundsState = savedBoundsState
       ? ensureBoundsVisibleOnSomeDisplay(
           savedBoundsState,
@@ -837,11 +841,17 @@ async function main() {
     // restart.
     const windowId = addWindow(
       newWindow,
-      restoreInfo?.kind === 'entry' ? restoreInfo.entry.windowId : undefined,
+      restoreInfo?.kind === 'entry' || restoreInfo?.kind === 'preserved-entry'
+        ? restoreInfo.entry.windowId
+        : undefined,
     );
 
-    // Tie the window to its persisted identity so layout persistence can serve and save it
-    if (restoreInfo?.kind === 'entry') assignEntryToWindow(windowId, restoreInfo.entry.windowId);
+    // Tie the window to its persisted identity so layout persistence can serve and save it. If the
+    // entry has gone (the user closed it while this window was starting), `assignEntryToWindow`
+    // falls back to tracking this window as a new one rather than adopting whatever moved into its
+    // former position.
+    if (restoreInfo?.kind === 'entry' || restoreInfo?.kind === 'preserved-entry')
+      assignEntryToWindow(windowId, restoreInfo.entry.windowId);
     else if (restoreInfo?.kind === 'legacy') trackLegacyWindow(windowId);
     else trackNewWindow(windowId);
 
@@ -1896,23 +1906,29 @@ async function main() {
       setModeSwitchClosePredicate(isClosingForModeSwitch);
       initializeModeSwitchOrchestration(
         {
-          getTrackedWindowIds: () => getWindows().map((window) => window.id),
+          getTrackedWindowIds: () => getTrackedWindows().map((tracked) => tracked.windowId),
           isPrimaryWindow,
           isWindowClosing: isWindowMarkedClosing,
           markWindowClosing,
-          closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+          hideWindow: (windowId) => getWindowById(windowId)?.hide(),
+          closeWindow: (windowId) => {
+            const window = getWindowById(windowId);
+            if (!window) return false;
+            window.close();
+            return true;
+          },
           focusWindow,
           isAppShuttingDown,
-          getPreservedEntryIndexes,
-          createWindowForEntry: async (entryIndex) => {
-            const entry = getEntryAtIndex(entryIndex);
+          getPreservedEntryIds,
+          createWindowForEntry: async (entryWindowId) => {
+            const entry = getEntryByWindowId(entryWindowId);
             if (!entry) {
               logger.warn(
-                `Not reopening window entry ${entryIndex}; it is no longer in the structure`,
+                `Not reopening window entry ${entryWindowId}; it is no longer in the structure`,
               );
               return;
             }
-            await createWindow({ kind: 'entry', entryIndex, entry });
+            await createWindow({ kind: 'preserved-entry', entry });
           },
         },
         startupInterfaceMode,
