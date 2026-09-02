@@ -3,26 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { execFileSync, execSync } from 'node:child_process';
 import { killProcessesUnderRoot, machineOwnershipFlag, runCleanup } from './scoped-cleanup';
-import { restoreAppGlobalState, restoreLeakedSettings } from './fixtures/helpers';
-
-/**
- * Whether a process with this pid currently exists, without sending it any real signal — signal 0
- * only asks the OS whether the pid is reachable.
- *
- * Checked before `taskkill` so a pid this run's own pid file recorded, but that has long since
- * exited, is not handed to a forceful, whole-tree kill for nothing. This only rules out killing
- * something when nothing is there at all: it cannot rule out the pid having been recycled by the OS
- * to a different, unrelated live process by the time this runs, which is an inherent limit of
- * tracking a process by pid alone rather than something this check can fully close.
- */
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
+import { isPidAlive, restoreAppGlobalState, restoreLeakedSettings } from './fixtures/helpers';
 
 /**
  * Stops the renderer dev server process global-setup spawned, addressed the way that platform's
@@ -41,7 +22,7 @@ function isProcessAlive(pid: number): boolean {
  */
 export function killDevServerProcess(pid: number, platform: NodeJS.Platform): void {
   if (platform === 'win32') {
-    if (!isProcessAlive(pid)) return;
+    if (!isPidAlive(pid)) return;
     try {
       execFileSync('taskkill', ['/pid', String(pid), '/t', '/f'], {
         stdio: 'pipe',

@@ -61,6 +61,27 @@ describe('stopping the renderer dev server on the platform that spawned it', () 
     expect(execFileSync).not.toHaveBeenCalled();
   });
 
+  it('still calls taskkill when the liveness probe is refused with EPERM', () => {
+    // A refused signal (Windows, or a pid owned by another user) proves the process EXISTS — the
+    // same EPERM-is-alive reading `isPidAlive` in fixtures/helpers.ts makes for the backup-ownership
+    // checks. Reading it as dead here would skip taskkill for a dev server that is actually still
+    // running under a different permission context, leaving it holding the port.
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      const error: NodeJS.ErrnoException = new Error('operation not permitted');
+      error.code = 'EPERM';
+      throw error;
+    });
+
+    killDevServerProcess(4242, 'win32');
+
+    expect(execFileSync).toHaveBeenCalledExactlyOnceWith('taskkill', ['/pid', '4242', '/t', '/f'], {
+      stdio: 'pipe',
+      timeout: 10_000,
+    });
+
+    killSpy.mockRestore();
+  });
+
   it('does not throw when taskkill itself fails on Windows (already stopped), and logs it', () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
