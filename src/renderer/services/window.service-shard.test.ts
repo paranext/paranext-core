@@ -9,6 +9,7 @@ import {
   testingWindowService,
 } from '@renderer/services/window.service-shard';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
+import { noteTabAwaitingDocumentFocus } from '@renderer/services/window-activation.util';
 
 type CloseWebViewCallback = (event: { webView: { id: string } }) => void;
 /** The open event's payload is ignored, so this callback takes no arguments */
@@ -598,12 +599,17 @@ describe('a window still waiting for its first activation', () => {
     // WITHOUT document focus; if nothing restores it, the user activates the window, sees the tab
     // rendered active, types, and nothing reaches the web view until they click inside it — which a
     // keyboard or screen-reader user does not do.
+    //
+    // The real dock records the waiting tab as it withholds focus, and this file mocks the dock, so
+    // the record is made directly here. That the dock actually makes it is covered where the dock
+    // is real, in `platform-dock-layout-storage.document-focus.test.ts`.
     globalThis.wasWindowCreatedWithoutActivation = true;
     const engine = testingWindowService.implementWindowDataProviderEngine();
 
     await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
     expect(focusTabMock).toHaveBeenLastCalledWith('tab-1', true);
     focusTabMock.mockClear();
+    noteTabAwaitingDocumentFocus('tab-1');
 
     window.dispatchEvent(new Event('pointerdown'));
     await vi.waitFor(() => expect(focusTabMock).toHaveBeenCalledWith('tab-1'));
