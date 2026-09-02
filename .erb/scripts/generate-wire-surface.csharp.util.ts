@@ -578,14 +578,20 @@ const ALWAYS_EXPERIMENTAL_HELPER_RE =
 
 /**
  * Which object shape {@link resolveDocumentationArgument} should expect its argument to unpack to.
+ *
  * `'networkObjectStyle'` (the default) is `NetworkObjectDocumentation`'s shape, whose object-level
- * `Experimental` flag sits at the argument's own top level. `'notificationStyle'` is
- * `OpenRpcSingleNotificationDocumentation`'s shape (the `network:registerEvent` idiom's
- * documentation argument), whose object-level flag instead sits nested one level down, under
- * `Notification.Experimental` — mirroring the TypeScript scan's
- * `DOCS_EXPERIMENTAL_PATH.networkEvent = ['notification', 'x-experimental']`. Both shapes can be
- * written as a target-typed `new() { ... }` at the call site, so the caller must say which one it
- * is expecting rather than this function guessing from the text alone.
+ * `Experimental` flag sits at the argument's own top level.
+ *
+ * The rest are envelope shapes, whose flag sits nested one level down instead — see
+ * {@link NESTED_DOCUMENTATION_SHAPES} for the wrapper each one unpacks: `'notificationStyle'` is
+ * `OpenRpcSingleNotificationDocumentation` (the `network:registerEvent` idiom's documentation
+ * argument), flag at `Notification.Experimental`, mirroring the TypeScript scan's
+ * `DOCS_EXPERIMENTAL_PATH.networkEvent = ['notification', 'x-experimental']`; `'methodStyle'` is
+ * `OpenRpcSingleMethodDocumentation` (what `RegisterRequestHandlerAsync` takes), flag at
+ * `Method.Experimental`.
+ *
+ * Every shape can be written as a target-typed `new() { ... }` at the call site, so the caller must
+ * say which one it is expecting rather than this function guessing from the text alone.
  */
 type DocumentationShape = 'networkObjectStyle' | 'notificationStyle' | 'methodStyle';
 
@@ -620,9 +626,9 @@ const NESTED_DOCUMENTATION_SHAPES = {
  * (deliberately not descending into a nested `Methods = { ... }` property, which can itself carry
  * per-method `Experimental` flags that must not be confused with the object-level one; matches this
  * generator's established policy of recording one entry per declared registration, not expanding
- * the per-method fan-out), or the nested `Notification.Experimental` property for
- * `'notificationStyle'`. Anything else (an arbitrary expression, a referenced-but-unrecognised
- * identifier) is reported present-but-uncertain rather than guessed.
+ * the per-method fan-out), and for every envelope shape reading the flag at the nesting
+ * {@link NESTED_DOCUMENTATION_SHAPES} gives for it. Anything else (an arbitrary expression, a
+ * referenced-but-unrecognised identifier) is reported present-but-uncertain rather than guessed.
  */
 function resolveDocumentationArgument(
   argText: string | undefined,
