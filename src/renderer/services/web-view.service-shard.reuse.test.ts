@@ -6,6 +6,7 @@ import type {
   WebViewDefinition,
   WebViewId,
 } from '@shared/models/web-view.model';
+import { isWindowAwaitingFirstActivation } from '@renderer/services/window-activation.util';
 
 // The service shard logs through the shared logger, which warns on every call when it cannot tell
 // which process it is running in
@@ -105,7 +106,21 @@ function makeDockLayout(
           webView.webViewType === webViewType &&
           (projectId === undefined || webView.projectId === projectId),
       ),
-    updateWebViewDefinition,
+    // The real dock resolves an unspecified `activateWithoutDocumentFocus` through this same
+    // latch; this stand-in does too, so the injected mock's recorded call args are what a real
+    // dock would have been asked for rather than the request this door forwards unresolved.
+    updateWebViewDefinition: (
+      webViewId: WebViewId,
+      updateInfo: Parameters<PapiDockLayout['updateWebViewDefinition']>[1],
+      shouldBringToFront: boolean | undefined,
+      activateWithoutDocumentFocus: boolean | undefined,
+    ) =>
+      updateWebViewDefinition(
+        webViewId,
+        updateInfo,
+        shouldBringToFront,
+        activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation(),
+      ),
     simpleLayout: EMPTY_LAYOUT,
     testLayout: EMPTY_LAYOUT,
   } as unknown as PapiDockLayout;

@@ -55,6 +55,7 @@ describe('taking document focus when a web view is docked', () => {
 
   afterEach(() => {
     iframe.remove();
+    globalThis.wasWindowCreatedWithoutActivation = false;
   });
 
   /** The web view being docked, reduced to the fields this path reads */
@@ -160,5 +161,29 @@ describe('taking document focus when a web view is docked', () => {
     // The tab must still become the active one in its group — a background window the user switches
     // to should show the view that arrived, not whatever was in front before it.
     verify(localMockDockLayout.updateTab(TAB_ID, anything(), true)).once();
+  });
+
+  /**
+   * Not every door that reaches the dock knows about withholding — a post-close focus move and the
+   * plain `addTabToDock` used by dialogs and the settings tab pass nothing for this parameter at
+   * all. Whether the window is still awaiting its first activation has to be the answer such a
+   * caller gets, not merely the answer a caller can ask for.
+   */
+  it('leaves document focus alone by default, with no caller asking, when the window awaits its first activation', () => {
+    globalThis.wasWindowCreatedWithoutActivation = true;
+
+    focusTab(instance(localMockDockLayout), TAB_ID);
+
+    expect(focusSpy).not.toHaveBeenCalled();
+  });
+
+  it('records a newly added web view left unfocused by that same default, with no caller asking', () => {
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    whenTabIsAddedRatherThanUpdated();
+
+    addWebViewToDock(webViewToDock(), layout, true, instance(localMockDockLayout));
+
+    expect(focusSpy).not.toHaveBeenCalled();
+    expect(takeTabAwaitingDocumentFocus()).toBe(TAB_ID);
   });
 });

@@ -6,6 +6,7 @@ import type {
   WebViewDefinition,
   WebViewId,
 } from '@shared/models/web-view.model';
+import { isWindowAwaitingFirstActivation } from '@renderer/services/window-activation.util';
 
 // The service shard logs through the shared logger, which warns on every call when it cannot tell
 // which process it is running in
@@ -97,13 +98,29 @@ type ReloadShard = {
 async function shardOverDockRecordingAdds() {
   const module = await import('@renderer/services/web-view.service-shard');
   const { networkObjectService } = await import('@shared/services/network-object.service');
-  const addWebViewToDock = vi.fn(() => ({ type: 'tab' }));
+  const addWebViewToDock = vi.fn<(...args: unknown[]) => { type: string }>(() => ({
+    type: 'tab',
+  }));
   const dockLayout = {
     onLayoutChangeRef: { current: undefined },
     loadLayout: () => {},
     getAllWebViewDefinitions: () => [],
     getWebViewDefinition: () => LIVE_DEFINITION,
-    addWebViewToDock,
+    // The real dock resolves an unspecified `activateWithoutDocumentFocus` through this same
+    // latch; this stand-in does too, so `addWebViewToDock`'s recorded call args are what a real
+    // dock would have been asked for rather than the request this door forwards unresolved.
+    addWebViewToDock: (
+      webView: Parameters<PapiDockLayout['addWebViewToDock']>[0],
+      layout: Parameters<PapiDockLayout['addWebViewToDock']>[1],
+      shouldBringToFront: boolean | undefined,
+      activateWithoutDocumentFocus: boolean | undefined,
+    ) =>
+      addWebViewToDock(
+        webView,
+        layout,
+        shouldBringToFront,
+        activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation(),
+      ),
     simpleLayout: EMPTY_LAYOUT,
     testLayout: EMPTY_LAYOUT,
   } as unknown as PapiDockLayout;

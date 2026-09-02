@@ -119,7 +119,6 @@ import {
   VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
 } from '@renderer/components/docking/simple-layout.builder';
 import { trackSimpleLayoutTabsResolved as trackSimpleLayoutTabsResolvedImpl } from '@renderer/services/simple-layout-tabs-resolved.tracker';
-import { isWindowAwaitingFirstActivation } from '@renderer/services/window-activation.util';
 import {
   GET_WINDOW_LAYOUT_REQUEST_TYPE,
   SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
@@ -3036,7 +3035,7 @@ export async function openOrReloadWebView(
       finalWebView,
       layout,
       optionsDefaulted.bringToFront,
-      activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation(),
+      activateWithoutDocumentFocus,
     );
   } catch (e) {
     // A throw can leave this web view's own tab in the dock: a definition its tab loader refuses
@@ -3150,12 +3149,7 @@ export const openWebView = async (
       // it also takes document focus follows the same rule as a fresh open, so reusing a view in a
       // window the user has not been in yet does not pull the caret there.
       if (optionsDefaulted.bringToFront)
-        updateWebViewDefinitionSync(
-          existingWebView.id,
-          {},
-          true,
-          activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation(),
-        );
+        updateWebViewDefinitionSync(existingWebView.id, {}, true, activateWithoutDocumentFocus);
 
       // We found an existing WebView, so no need to do anything else
       return existingWebView.id;
