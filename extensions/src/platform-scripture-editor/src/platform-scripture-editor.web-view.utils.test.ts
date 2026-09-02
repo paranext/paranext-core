@@ -8,7 +8,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { MutableRefObject } from 'react';
 import type { EditorRef, SelectionRange, StyleInfo } from '@eten-tech-foundation/platform-editor';
-import { isLocalizeKey } from 'platform-bible-utils';
+import { isLocalizeKey, type LanguageStrings } from 'platform-bible-utils';
 import {
   generateInlineMarkerMenuListItems,
   getChapterKey,
@@ -38,41 +38,151 @@ describe('generateInlineMarkerMenuListItems', () => {
   const noop = () => {};
 
   // Minimal project-stylesheet fixture (as if merged from usfm.sty + custom.sty and serialized by
-  // the host): 'p' the parent paragraph, 'v' a verse marker (the library classifies it as
-  // styleType "character", but `isBlockMarker` special-cases 'v' as structural — same as PT9), 'f'
-  // a note marker, and 'nd' a plain inline character marker. `wj` is deliberately absent here and
-  // added back per-test to exercise stylesheet-driven inclusion/exclusion.
+  // the host), carrying one of each styleType the menu has to handle: 'p' the parent paragraph and
+  // 'q1'/'s1' two more block styles, 'v' a verse marker (the library classifies it as styleType
+  // "character", but `isBlockMarker` special-cases 'v' as structural — same as PT9), 'f' a note
+  // marker, and 'nd' a plain inline character marker. `wj` is deliberately absent here and added
+  // back per-test to exercise stylesheet-driven inclusion/exclusion.
   const BASE_STYLE_INFO: StyleInfo = {
     markers: {
       p: { marker: 'p', styleType: 'paragraph' },
+      q1: { marker: 'q1', styleType: 'paragraph', description: 'Poetic line' },
+      s1: { marker: 's1', styleType: 'paragraph', description: 'Section heading' },
       v: { marker: 'v', styleType: 'character' },
       f: { marker: 'f', styleType: 'note', endMarker: 'f*', description: 'A Footnote text item' },
       nd: { marker: 'nd', styleType: 'character', description: 'For name of deity' },
     },
   };
 
-  it('when protected: block-marker item (v) is disallowed and its action notifies without inserting', () => {
+  /** Invoke the generator with the fixture stylesheet, overriding only what a test cares about. */
+  function generate({
+    localizedStrings = {},
+    isStructureProtected = false,
+    notifyStructureProtected = vi.fn(),
+    restoreSelection,
+    parentMarker = PARENT,
+    styleInfo = BASE_STYLE_INFO,
+    ref = makeMockEditorRef().ref,
+    closeMarkersMenu = vi.fn(),
+  }: {
+    localizedStrings?: LanguageStrings;
+    isStructureProtected?: boolean;
+    notifyStructureProtected?: () => void;
+    restoreSelection?: () => void;
+    parentMarker?: string;
+    styleInfo?: StyleInfo;
+    ref?: MutableRefObject<EditorRef | null>;
+    closeMarkersMenu?: () => void;
+  } = {}) {
+    return generateInlineMarkerMenuListItems(
+      ref,
+      closeMarkersMenu,
+      localizedStrings,
+      isStructureProtected,
+      notifyStructureProtected,
+      restoreSelection,
+      parentMarker,
+      styleInfo,
+    );
+  }
+
+  it('offers BOTH block and inline markers, so `\\` in the Formatted view reaches the whole stylesheet', () => {
+    const markers = generate().map((item) => item.marker);
+
+    // The two kinds the menu exists to combine. `nd` is a character style, `p`/`q1`/`s1` are block
+    // styles — the library's own `character` and `paragraph` sources are mutually exclusive, so a
+    // list holding both can only have come from merging them.
+    expect(markers).toEqual(expect.arrayContaining(['nd', 'f', 'p', 'q1', 's1']));
+  });
+
+  it('omits block markers when the caret is in a character span, which cannot start a paragraph', () => {
+    // Positive control: this same stylesheet DOES yield block markers from a block context, so an
+    // absent block half below is the gate doing its job, not the block half having gone missing.
+    expect(generate({ parentMarker: PARENT }).map((item) => item.marker)).toContain('q1');
+
+    const markers = generate({ parentMarker: 'nd' }).map((item) => item.marker);
+
+    // ...and the character half still arrives, so this is not merely an empty menu.
+    expect(markers).toContain('nd');
+    expect(markers).not.toContain('p');
+    expect(markers).not.toContain('q1');
+    expect(markers).not.toContain('s1');
+  });
+
+  it('omits block markers when the caret is in a note, which cannot contain a paragraph', () => {
+    expect(generate({ parentMarker: PARENT }).map((item) => item.marker)).toContain('q1');
+
+    const markers = generate({ parentMarker: 'f' }).map((item) => item.marker);
+
+    expect(markers).toContain('nd');
+    expect(markers).not.toContain('p');
+    expect(markers).not.toContain('q1');
+    expect(markers).not.toContain('s1');
+  });
+
+  it('offers block markers under any block context, not just the caret paragraph itself', () => {
+    // Guards against a merge that only ever echoes `parentMarker` back: asking from inside `\s1`
+    // must still offer `p` and `q1`.
+    const markers = generate({ parentMarker: 's1' }).map((item) => item.marker);
+
+    expect(markers).toEqual(expect.arrayContaining(['p', 'q1', 's1', 'nd']));
+  });
+
+  it('when protected: every block marker is disallowed while inline markers stay insertable', () => {
+    const items = generate({ isStructureProtected: true });
+    const isDisallowed = (marker: string) => items.find((i) => i.marker === marker)?.isDisallowed;
+
+    expect(isDisallowed('p')).toBe(true);
+    expect(isDisallowed('q1')).toBe(true);
+    expect(isDisallowed('s1')).toBe(true);
+    expect(isDisallowed('nd')).toBeFalsy();
+    expect(isDisallowed('f')).toBeFalsy();
+  });
+
+  it('keeps basic markers ahead of non-basic ones across the merged list', () => {
+    // `(basic)` in a stylesheet Description is what PT9's ScrTag.IsBasic reads, and the library
+    // lifts it into its ordering. A naive concatenation would strand a basic block marker behind
+    // every non-basic character marker.
+    const items = generate({
+      styleInfo: {
+        markers: {
+          ...BASE_STYLE_INFO.markers,
+          q1: { marker: 'q1', styleType: 'paragraph', description: 'Poetic line (basic)' },
+          nd: { marker: 'nd', styleType: 'character', description: 'For name of deity' },
+        },
+      },
+    });
+    const markers = items.map((item) => item.marker);
+
+    expect(markers.indexOf('q1')).toBeLessThan(markers.indexOf('nd'));
+  });
+
+  it('when protected: a block-marker item is disallowed and its action notifies without inserting', () => {
     const { ref, insertMarker } = makeMockEditorRef();
     const notify = vi.fn();
     const close = vi.fn();
-    const items = generateInlineMarkerMenuListItems(
+    const items = generate({
       ref,
-      close,
-      {},
-      true,
-      notify,
-      undefined,
-      PARENT,
-      BASE_STYLE_INFO,
-    );
+      closeMarkersMenu: close,
+      isStructureProtected: true,
+      notifyStructureProtected: notify,
+    });
 
-    const blockItem = items.find((i) => i.marker === 'v');
+    const blockItem = items.find((i) => i.marker === 'p');
     expect(blockItem?.isDisallowed).toBe(true);
 
     blockItem?.action?.();
     expect(notify).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(1);
     expect(insertMarker).not.toHaveBeenCalled();
+  });
+
+  it('when protected: the verse marker is disallowed too, though the sheet types it as a character', () => {
+    const items = generate({ isStructureProtected: true });
+
+    // `isBlockMarker` special-cases `v` as structural, same as PT9 — so it is blocked while
+    // structure protection is on even though it arrives via the character source.
+    expect(items.find((i) => i.marker === 'v')?.isDisallowed).toBe(true);
   });
 
   it('when protected: inline-marker item (f) is allowed and its action inserts', () => {
@@ -308,6 +418,23 @@ describe('generateInlineMarkerMenuListItems', () => {
     // fixture above, so this can only pass if the no-styleInfo path is actually wired up.
     expect(items.length).toBeGreaterThan(Object.keys(BASE_STYLE_INFO.markers).length);
     expect(items.some((i) => i.marker === 'wj')).toBe(true);
+  });
+
+  it('offers both kinds against the real bundled stylesheet, not just the test fixture', () => {
+    const { ref } = makeMockEditorRef();
+    const markers = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      {},
+      false,
+      vi.fn(),
+      undefined,
+      PARENT,
+    ).map((item) => item.marker);
+
+    // The user-facing shape of this menu, pinned against the stylesheet that actually ships:
+    // inline styles (`nd`, `wj`), note styles (`f`), and block styles (`p`, `q1`, `s1`) together.
+    expect(markers).toEqual(expect.arrayContaining(['nd', 'wj', 'f', 'p', 'q1', 's1']));
   });
 });
 

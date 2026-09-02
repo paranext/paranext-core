@@ -62,12 +62,39 @@ function resolveMarkerMenuItemTitle(
 }
 
 /**
+ * Whether the marker the caret sits in is a block (paragraph-styleType) context, and so a place
+ * where inserting another block marker makes sense.
+ *
+ * `Object.hasOwn`, not a bare index: a document marked `\toString` (or any other `Object.prototype`
+ * member name) would otherwise resolve to the inherited function and be read as a stylesheet entry
+ * the sheet never declared.
+ */
+function isBlockContext(styleInfo: StyleInfo, marker: string): boolean {
+  if (!Object.hasOwn(styleInfo.markers, marker)) return false;
+  return styleInfo.markers[marker]?.styleType === 'paragraph';
+}
+
+/**
  * Function that generates the inline marker menu items that will update as the cursor location
  * changes. Sourced from the project's stylesheet (usfm.sty + custom.sty, merged and serialized by
  * the host) via the shared library's `getMarkerMenuItems` — the same PT9-derived classification
  * used by the standard-view `\`/Enter palettes — so a project's custom.sty markers are offered and
  * markers the project's stylesheet doesn't define are not, instead of walking a static built-in
  * marker list.
+ *
+ * This is the palette the Formatted and Markers views open on `\`, and it offers BOTH kinds of
+ * marker: the character/note styles from the library's `character` source, plus the block styles
+ * from its `paragraph` source. It has to combine them itself because those two sources are mutually
+ * exclusive by design — PT9 picks between them by where the caret sits relative to the paragraph's
+ * marker glyph, which is the rule the standard-view `\` palette follows. These views render no
+ * marker glyphs at all, so no caret position in them can ever reach the paragraph source, and
+ * offering only one of the two would put half the stylesheet permanently out of reach.
+ *
+ * The block half is offered only in a block context ({@link isBlockContext}) — a caret inside a
+ * character span or a note is not a position another paragraph can start at. Item order is the
+ * library's PT9-derived one, with a final stable basic-first pass over the combined list so basic
+ * markers of both kinds lead, matching what the library itself does when it merges close tags into
+ * the character source.
  *
  * @param editorRef The ref for the editor component to be able to insert markers
  * @param closeMarkersMenu Callback to close the markers menu after an action
@@ -98,13 +125,31 @@ export function generateInlineMarkerMenuListItems(
 ): MarkerMenuItem[] {
   if (!parentMarker) return [];
 
-  const items = getMarkerMenuItems(styleInfo ?? defaultStyleInfo, {
-    source: 'character',
+  const effectiveStyleInfo = styleInfo ?? defaultStyleInfo;
+  const context = {
     paraMarker: parentMarker,
     previousParaMarkers: [],
     openCharMarkers: [],
     hasTextSelection: false,
     inMarkerText: false,
+  };
+
+  const characterItems = getMarkerMenuItems(effectiveStyleInfo, {
+    ...context,
+    source: 'character',
+  });
+  // No `previousParaMarkers`, so the library's validity replay starts from an empty stack and every
+  // block marker the sheet declares is offered. This menu deliberately does not narrow by document
+  // position: it is an insert palette the user searches, not PT9's caret-shape-driven `\` popup.
+  const paragraphItems = isBlockContext(effectiveStyleInfo, parentMarker)
+    ? getMarkerMenuItems(effectiveStyleInfo, { ...context, source: 'paragraph' })
+    : [];
+
+  // `Array.prototype.sort` is stable, so each source keeps its own PT9-derived ordering within the
+  // basic and non-basic groups.
+  const items = [...characterItems, ...paragraphItems].sort((a, b) => {
+    if (a.isBasic === b.isBasic) return 0;
+    return a.isBasic ? -1 : 1;
   });
 
   return items.map((item): MarkerMenuItem => {
