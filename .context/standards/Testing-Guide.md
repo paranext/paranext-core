@@ -1176,7 +1176,9 @@ End-to-end testing verifies complete user workflows across all processes (Electr
 
 E2E tests that verify user flows MUST interact through visible UI only:
 
-- Use `cdp.fixture` for all per-feature E2E tests (connects to the running app via CDP).
+- Pick the fixture from how the test gets its app: `isolated.fixture` for a spec under
+  `tests/isolated/` (a fresh Electron per test), `cdp.fixture` for one under `tests/attached/`
+  (attaches to an app you started yourself).
 - Click menu items, buttons, and fill forms through the UI.
 - NEVER use `papi.fixture` or `app.fixture` for per-feature tests.
 - NEVER send JSON-RPC commands to set up UI state.
@@ -1250,34 +1252,47 @@ async function clickEditorMenuItem(page: Page, projectName: string, itemLabel: R
 
 ### Test Location
 
-Create E2E tests in: `e2e-tests/tests/{feature}/`
+Where a spec lives is decided by how it gets its app, and that choice also picks its config:
+
+- `tests/isolated/{feature}/` — the default. Each test launches its own Electron, so specs are
+  self-contained and can run in CI. Uses `isolated.fixture` and `playwright.config.ts`.
+- `tests/attached/` — for specs that must attach to an app you started yourself (`refresh.sh`),
+  because they cannot own its lifecycle. Uses `cdp.fixture` and `playwright-cdp.config.ts`.
+  Deliberately not a project in `playwright.config.ts`: its `globalSetup` refuses to run while
+  port 8876 is bound, which is exactly the state these specs need.
+- `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
+  tests.
 
 ```
 e2e-tests/
 ├── fixtures/
-│   ├── cdp.fixture.ts           # Connects to running app via CDP (DEFAULT for features)
+│   ├── cdp.fixture.ts           # Connects to running app via CDP (for tests/attached/)
 │   ├── app.fixture.ts           # Launches fresh Electron (CI smoke tests only)
 │   ├── papi.fixture.ts          # @deprecated — CI smoke tests only
 │   ├── papi-live.fixture.ts     # Connects to already-running app's WebSocket (command-surface verification)
-│   ├── isolated.fixture.ts      # Per-test isolated Electron instance (state-mutating tests)
+│   ├── isolated.fixture.ts      # Per-test isolated Electron instance (DEFAULT for features)
 │   ├── comment.fixture.ts       # Comment-testing fixture (+ comment-test-helpers.ts)
 │   └── helpers.ts               # waitForAppReady(), sendPapiCommand()  (tree non-exhaustive)
 ├── playwright-cdp.config.ts     # Config for CDP mode (no setup/teardown)
 ├── playwright.config.ts         # Config for standalone mode (with setup/teardown)
 └── tests/
-    └── {feature}/
-        └── {feature}.spec.ts
+    ├── isolated/                 # Default: one Electron per test (playwright.config.ts)
+    │   └── {feature}/
+    │       └── {feature}.spec.ts
+    ├── attached/                 # Attaches to an app you started (playwright-cdp.config.ts)
+    ├── smoke/                    # What CI runs
+    └── _example/                 # Templates
 ```
 
 ### Fixture Selection
 
 | Fixture       | Mode                               | When to Use                               | Provides                  |
 | ------------- | ---------------------------------- | ----------------------------------------- | ------------------------- |
-| `cdp.fixture`      | Connects to running app (CDP 9223)        | **Default for all per-feature E2E tests** | `mainPage`                |
+| `cdp.fixture`      | Connects to running app (CDP 9223)        | Specs under `tests/attached/` only        | `mainPage`                |
 | `app.fixture`      | Launches fresh Electron                   | CI smoke tests, standalone testing        | `electronApp`, `mainPage` |
 | `papi.fixture`     | Extends app.fixture + WebSocket           | **Deprecated** — CI smoke tests only      | `papiClient` + app.fixture |
 | `papi-live.fixture`| Connects to already-running app (WS 8876) | Command-surface verification only (see below) | `papiLive`                |
-| `isolated.fixture` | Launches an isolated Electron per test    | Tests that mutate application state       | fresh app per test        |
+| `isolated.fixture` | Launches an isolated Electron per test    | **Default for all per-feature E2E tests** | fresh app per test        |
 
 ### Command-Surface Verification (papi-live.fixture)
 
@@ -1322,7 +1337,7 @@ if (res.error) expect(RESERVED, res.error.message).not.toContain(res.error.code)
 
 ### E2E Test Templates
 
-**UI Interaction Tests (cdp.fixture — default for per-feature tests):**
+**UI Interaction Tests (cdp.fixture — for specs under `tests/attached/`):**
 
 ```typescript
 import { test, expect } from '../../fixtures/cdp.fixture';
@@ -1398,10 +1413,10 @@ A cross-screen journey test that only checks `toBeVisible()` proves the page ren
 
 ```bash
 # CDP mode (default — app already running via ./.erb/scripts/refresh.sh)
-npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright-cdp.config.ts --reporter=list
+npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=list
 
 # CDP mode with HTML report
-npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright-cdp.config.ts --reporter=html
+npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=html
 npx playwright show-report e2e-tests/playwright-report
 
 # Standalone mode (launches its own Electron, port 8876 must be free). Each project in
