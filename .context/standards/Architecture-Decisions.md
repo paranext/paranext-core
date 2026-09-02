@@ -1559,8 +1559,15 @@ step, no automation. Just a record.
 ## adr-layout-persistence-guard-retirement: Two layout-persistence guards kept side by side pending deliberate retirement of the older one
 
 - **Formerly:** ADR-0024
-- **Date:** 2026-08-20
-- **Status:** Accepted (interim — retirement of the superseded guard is deferred, not decided against)
+- **Date:** 2026-08-20 (content-based guard retired 2026-09-03, PR #2758)
+- **Status:** Retirement completed. `saveLayout` (now in `web-view.service-shard.ts`, the renamed
+  and relocated `web-view.service-host.ts`) carries only the structural guard
+  (`layoutLoadGenerationInDock !== layoutLoadGeneration`) plus the simple-mode skip; the
+  content-based `SIMPLE_LAYOUT_TAB_IDS`-keyed early return this entry's "Consequences" marked for
+  deletion is gone from `saveLayout`, per the deliberate follow-up this entry called for rather than
+  a silent drop. `collectWebViewIdsFromLayoutInfo` itself outlived the guard it was written for — it
+  now backs `emitCloseEventsForWebViewsRemovedByLayoutLoad` instead, an unrelated use of the same
+  "which web view ids does this layout info contain" primitive.
 - **Context:** Two PRs independently added a guard to `saveLayout` in
   `src/renderer/services/web-view.service-host.ts` to stop a stale/wrong layout from being persisted
   during a Power↔Simple interface-mode switch. PR #2425 ("Improve performance when switching to
@@ -2856,67 +2863,72 @@ step, no automation. Just a record.
   `~/repos/test/grapheme-segmentation`, `npm run all`. Memory, non-V8 engines and browser runtimes
   were not measured.
 
-## adr-web-view-id-is-not-an-identity-across-a-move: A web view's id does not identify it across a move, so reads report repeats rather than deduplicate
+## adr-web-view-id-is-not-an-identity-across-a-move: RETIRED — see adr-web-view-ids-are-unique-from-birth
 
-- **Date:** 2026-09-02
-- **Status:** Accepted — durable fix (identity minted at the adopt) deferred
-- **Context:** A cross-window move takes a web view out of one window and puts it into another, and
-  the id it answers to changes twice on the way. The capture strips the source window's scope, the
-  adopt reopens the view under that stripped spelling, and the next layout load re-scopes it to the
-  new window. So one view wears three names across a move. Worse, the stripping is not injective:
-  every window's default Home tab reduces to the same `home`, so two different views can share a
-  spelling indefinitely — an adopted view keeps the stripped one until its window loads a layout
-  again. There is also no other field that separates them. `webViewType` plus `projectId` collides
-  on exactly the same case, because two windows each showing their own Home tab are identical under
-  it. The definition simply carries nothing that is unique to a view.
+- **Date:** 2026-09-02 (retired 2026-09-03)
+- **Status:** Superseded by `adr-web-view-ids-are-unique-from-birth`.
+- **Note:** This slug named a "tolerate duplicate reads, never deduplicate" design built around a
+  captured id that changed spelling across a move. That design is gone, not merely amended — a web
+  view now keeps one globally-unique id, minted once, for its whole life across any number of moves
+  — so the entry is deleted outright rather than kept as a superseded record: its "deduplicating by
+  id is unsound" reasoning and its "mint an identity at the adopt" deferred alternative would read as
+  live prior art for a design this PR replaced. See `adr-web-view-ids-are-unique-from-birth` for the
+  current decision. Slug retired, not reused; the original text is in git history.
 
-  This surfaced in `getAllOpenWebViewDefinitionsWithReachability`, which folds views that are
-  mid-move into its read because such a view is open in no window and every window answers
-  truthfully without it. Three successive attempts to make that fold-in deduplicate correctly were
-  written and each was wrong in a different order of events, because all three keyed on a spelling.
-- **Decision:** Stop trying to establish identity from ids. Two consequences follow, and both are
-  deliberate.
+## adr-web-view-ids-are-unique-from-birth: A web view id is minted once, globally unique, and never rewritten again
 
-  A read may report the same web view more than once. The fold-in skips a view only when a window
-  still reports the id the move was **asked for** — which is scoped, and therefore does name one
-  view in the whole application — and never on the captured, scope-stripped one. Where that leaves a
-  repeat, the repeat is kept.
-
-  Callers are told not to deduplicate. `getAllOpenWebViewDefinitions` documents that the list can
-  contain a view twice, and instructs callers not to collapse by id and not by web view type plus
-  project either, because both can merge two real web views into one.
-
-  The direction of failure is the whole point: a duplicate is visible in the result and in the debug
-  line, and a caller that cannot tolerate one can see it. A drop is invisible — the caller receives a
-  shorter list and has no way to know it is short.
+- **Date:** 2026-09-03
+- **Status:** Accepted.
+- **Context:** `adr-web-view-id-is-not-an-identity-across-a-move` (retired above) accepted that a
+  captured id changed spelling twice across a move — stripped on capture, re-scoped on the next
+  layout load — and built a "tolerate duplicate reads" contract around that instability rather than
+  fix it, deferring "mint an identity at the adopt" as the real fix. That instability traced back one
+  step further than the move path itself: a window-scoped id (`<constant-id>-w<windowId>`) was never
+  minted once and kept; it was *derived* from a baked layout constant's id every time that constant
+  was materialized into a window (`simple-layout.data.ts`, the test layout, the default-layout
+  supplement), so the same constant produced a different id per window, and a move (which relocates a
+  view without knowing which window it started in) had no scope left to preserve and stripped it
+  instead. Runtime `openWebView` never had this problem — it already minted a fresh id per call — so
+  the defect was specifically in how a **baked** constant became a **live** tab's id.
+- **Decision:** Mint a fresh, globally-unique id (`newGuid()`) exactly once, at the moment a baked
+  layout constant is materialized into an actual window's layout — the constant itself keeps its own
+  id in the data file, unchanged, as the slot's identity, not the runtime tab's. `openWebView` is
+  unaffected; it already did this. `mint-web-view-ids.util.ts` (replacing
+  `window-scoped-web-view-ids.util.ts`) does the minting for the renderer's three materialization
+  sites: `simple-layout.builder.ts` building a Simple-mode layout, the default-layout supplement's
+  merge (re-keyed by `webViewType`, since a minted id can no longer serve as "is this entry already
+  present" — see the PR's commit re-keying `default-layout-supplement.util.ts`), and the test-layout
+  helper. A **persisted** id — anything loaded from a saved layout — is left exactly as saved: there
+  is no migration, and none is needed, because a persisted id was never window-scoped or stripped in
+  the first place under this scheme; it is just an ordinary string. Once minted, a view's id is never
+  rewritten again for any reason, including a move: capture returns the id it already had, and adopt
+  answers with the same id it was handed. The main-process move/fold-in logic
+  (`web-view-ownership.util.ts`, `web-view-move.util.ts`, `web-view.service-router.ts`) is simplified
+  to match — `WebViewMoveInFlight` drops the caller's-spelling and recovery-flag fields it needed only
+  to compensate for id instability, and the fold-in's "already reporting it?" check becomes an exact
+  id match.
 - **Alternatives:**
-  - *Deduplicate by the captured id.* Rejected: it is the non-injective spelling, so it drops a
-    different view whenever two share it, which one ordinary drag reaches.
-  - *Deduplicate across move records as well as against what windows reported.* Rejected after three
-    attempts. Every variant answered "have I already seen this view?" with a string comparison, and
-    the string does not identify the view.
-  - *Deduplicate by web view type plus project.* Rejected: identical for two windows' Home tabs.
-  - *Have the read wait for moves to settle.* Rejected: a move can take about two minutes when the
-    target has stopped answering (four probe attempts, each able to wait out a 30-second request
-    timeout, with three-second gaps), and this read is on the shutdown path.
-  - *Mint an identity at the adopt and carry it into the new window.* Correct, and deferred — it
-    changes the web view contract across processes, which is more than the read that exposed it can
-    carry.
-- **Consequences:** One transient duplicate remains by design: a target that has adopted reports the
-  view under the stripped spelling, which the guard does not match, so the view is both reported and
-  folded in until the move's record clears. It is bounded by the move.
-
-  Because no field on a definition distinguishes a residual duplicate from two genuinely distinct
-  views, no caller-side rule can be recommended beyond tolerating repeats. That is what makes the
-  deferred identity the real fix rather than a refinement.
-
-  A recovery duplicate is *not* accepted: a failed move puts the view back under the captured id and
-  the window then reports it, which is indistinguishable from an adopt at read time, so the move
-  records which happened while it still knows and the read trusts that.
-
-  Anything else in this subsystem that compares ids to decide whether it is looking at the same view
-  inherits the same defect. The late-adopt probe does exactly that, and is recorded as a known limit
-  rather than fixed here.
-- **Source:** PR #2758 (PT-4463), the fold-in defect reported on #2670, and the review rounds on
-  both. The deferred identity and the move-lifecycle cases that share this root cause are ledgered
-  as A16 and A17 in the multi-window small-items ledger.
+  - *Keep window-scoped ids, and fix the fold-in/move-identity problem entirely on the read side*
+    (the retired ADR's approach). Rejected: it treated the read as the site of the defect, when the
+    defect was upstream, in how baked constants got their ids in the first place; every read-side fix
+    inherited an id that could not tell two views apart.
+  - *Re-scope a moved view's id to its new window after the move, instead of stripping.* Rejected: it
+    keeps ids window-derived, so a persisted layout captured mid-move, or a search racing a move,
+    still has to reason about which of several spellings names the same view.
+  - *Migrate pre-release persisted layouts to some canonical id shape.* Rejected as unnecessary and
+    out of scope: no released version of the app has shipped a persisted layout yet, and a persisted
+    id was never scoped under the old scheme either — it is already an ordinary string with nothing to
+    migrate. Loading an old saved layout does not crash under the new scheme; it just works, because
+    the mint step only ever touches tabs seeded from a baked constant, never one carrying a saved id.
+- **Consequences:** A web view has a real identity for its whole life, so the "tolerate duplicate
+  reads" contract on `getAllOpenWebViewDefinitions` is gone: a caller may deduplicate by id, or trust
+  that the same id read twice really is the same view. `getAllOpenWebViewDefinitions` is still not
+  deduplicated by `webViewType` plus `projectId` — two open web views can genuinely share both — but
+  that was never an id-instability problem to begin with. Two purely timing-based races in the move
+  path — a move record added after the view leaves the dock, and a target's adopt landing before the
+  move's reply reaches main — are unaffected by this change and remain open (ledgered as A17
+  mechanisms 3 and 4 in the multi-window small-items ledger); they are about *when* state updates
+  land, not about what a view's id is.
+- **Source:** PR #2758 (PT-4463), TJ's review direction on #2758 (comment 5516318337) accepted by
+  Rolf. The retired ADR and the move-lifecycle cases sharing this root cause are ledgered as A16 and
+  A17 in the multi-window small-items ledger.
