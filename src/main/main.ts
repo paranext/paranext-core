@@ -151,6 +151,8 @@ import {
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
   areCapturedBoundsTrustworthy,
+  trackDisplaySettle,
+  type DisplaySettleState,
   ensureBoundsVisibleOnSomeDisplay,
 } from '@main/window-bounds.util';
 import {
@@ -875,10 +877,8 @@ async function main() {
      */
     /** Display the last accepted placement was on, so a move between displays can be recognized */
     let lastAcceptedDisplayId: number | undefined;
-    /** When this window was first seen on the display it is on now */
-    let currentDisplaySince = Date.now();
-    /** Display this window was last seen on, whether or not that placement was accepted */
-    let lastSeenDisplayId: number | undefined;
+    /** Which display this window's bounds lie within, and since when — see `trackDisplaySettle` */
+    let displaySettle: DisplaySettleState = { displayId: undefined, since: Date.now() };
 
     const captureWindowBoundsState = (): WindowBoundsState => {
       const isMaximized = newWindow.isMaximized();
@@ -888,11 +888,8 @@ async function main() {
         const { x, y, width, height } = newWindow.getBounds();
         const bounds = { x, y, width, height };
         const displays = screen.getAllDisplays();
-        const seenDisplayId = screen.getDisplayMatching(bounds).id;
-        if (seenDisplayId !== lastSeenDisplayId) {
-          lastSeenDisplayId = seenDisplayId;
-          currentDisplaySince = Date.now();
-        }
+        const now = Date.now();
+        displaySettle = trackDisplaySettle(bounds, displays, displaySettle, now);
         // A placement the platform has not finished agreeing about is left out entirely, the same
         // way a maximized or minimized window's is: `updateWindowBounds` keeps the last one it was
         // given when a capture carries none, so the window keeps the placement it last held rather
@@ -902,12 +899,12 @@ async function main() {
             bounds,
             displays,
             lastAcceptedDisplayId,
-            Date.now() - currentDisplaySince,
+            now - displaySettle.since,
           )
         ) {
           capturedState.bounds = bounds;
           capturedState.displayBounds = { ...screen.getDisplayMatching(bounds).bounds };
-          lastAcceptedDisplayId = seenDisplayId;
+          lastAcceptedDisplayId = displaySettle.displayId;
         }
       }
       return capturedState;
