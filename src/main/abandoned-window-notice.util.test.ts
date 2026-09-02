@@ -11,6 +11,7 @@ const ASKABLE: AbandonedWindowNoticeInput = {
   isWindowClosing: false,
   hasAlreadyAsked: false,
   isAbandonedWindowVisible: true,
+  isAbandonedWindowPendingContent: false,
 };
 
 describe('decideAbandonedWindowNotice', () => {
@@ -53,6 +54,14 @@ describe('decideAbandonedWindowNotice', () => {
     expect(decideAbandonedWindowNotice({ ...ASKABLE, hasAlreadyAsked: true })).toEqual({
       kind: 'stay-silent',
     });
+  });
+
+  test('says nothing about a window that never received the content it was made for', () => {
+    // Such a window's entry holds nothing, so it is not kept when the window closes — the offer's
+    // promise that the window comes back would be false, and there is nothing to bring back anyway
+    expect(
+      decideAbandonedWindowNotice({ ...ASKABLE, isAbandonedWindowPendingContent: true }),
+    ).toEqual({ kind: 'stay-silent' });
   });
 
   test('a window that is both invisible and already asked about stays silent', () => {
