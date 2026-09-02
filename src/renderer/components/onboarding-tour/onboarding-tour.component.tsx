@@ -125,10 +125,6 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
     [strings],
   );
 
-  // The dock layout initializes asynchronously (loadLayout() is a PAPI round-trip that fires after
-  // mount). Poll for the project panel before opening the tour so Tour's step filter always runs
-  // with the layout already in the DOM — otherwise only the 2 always-present toolbar elements are
-  // found and the tour shows just 2 of its 5 steps.
   // Power gets the tour only when the user asks for it. Tour's open-time filter keeps just the
   // stops whose anchors exist, which in Power is the toolbar's Profile button — the columns and the
   // Sync button are Simple-only, and their copy ("only ever one project here", "can't be closed or
@@ -138,7 +134,10 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
     (!isPowerMode || isReplay) && firstRunStatus.kind === 'app' && !tourDone && !isLoading;
   // What "ready" means depends on the mode, because the modes anchor to different things: Simple
   // waits for the dock layout's project panel, Power for the toolbar button its one stop spotlights.
-  // Opening early is not merely ugly — Tour reads an empty step list as a skip and persists the done
+  // The wait exists because the dock layout initializes asynchronously (loadLayout() is a PAPI
+  // round-trip that fires after mount), so Tour's open-time filter would otherwise snapshot a DOM
+  // holding only the always-present toolbar elements and drop every column stop. Opening early is
+  // not merely ugly at the extreme: Tour reads an empty step list as a skip and persists the done
   // flag, consuming the tour instead of showing it.
   const readySelector = isPowerMode
     ? PROFILE_TRIGGER_SELECTOR
@@ -149,14 +148,13 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
   }, [mightShow]);
   useEffect(() => {
     if (!mightShow || layoutReady) return undefined;
-    const selector = readySelector;
-    if (document.querySelector(selector)) {
+    if (document.querySelector(readySelector)) {
       setLayoutReady(true);
       return undefined;
     }
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const observer = new MutationObserver(() => {
-      if (document.querySelector(selector)) {
+      if (document.querySelector(readySelector)) {
         observer.disconnect();
         clearTimeout(timeoutId);
         setLayoutReady(true);
