@@ -1,4 +1,3 @@
-import { stripWindowScopeFromWebViewId } from '@renderer/components/docking/window-scoped-web-view-ids.util';
 import { deserialize, serialize } from 'platform-bible-utils';
 import localWindowStorage from './local-storage.service';
 
@@ -6,13 +5,10 @@ const WEBVIEW_STATE_KEY = 'web-view-state';
 /**
  * State for every web view, keyed on the id its web view was minted with.
  *
- * The docking layout scopes web view ids to the window that loaded them, so the same web view is
- * addressed as `<id>` while it is being created and as `<id>-w<window>` once a layout carrying it
- * has been reloaded. Storage is already per window — `localWindowStorage` prefixes every key with
- * the window id — so this store drops the window scope from the ids it is handed and keys purely on
- * the minted id. Keying on the scoped id instead would file a web view's state under one key and
- * then look for it under another, both across a restart and whenever a window comes back with a
- * different id.
+ * A web view keeps the same id for its whole life, including across a move to another window (see
+ * `mint-web-view-ids.util.ts`), so that minted id is also stable storage key across a restart.
+ * Storage is per window — `localWindowStorage` prefixes every key with the window id — but the id
+ * itself never changes shape depending on which window is asking.
  */
 const stateMap = new Map<string, Record<string, unknown>>();
 const idsLookedUp = new Set<string>();
@@ -26,9 +22,7 @@ function loadIfNeeded(): void {
 
   const entries: [[string, Record<string, unknown>]] = deserialize(serializedState);
   entries.forEach(([key, value]) => {
-    // Drop the window scope off stored keys too, so every key in the map is comparable to every id
-    // looked up and `cleanupOldWebViewState` can tell "stale" from "stored under another spelling"
-    if (key && value) stateMap.set(stripWindowScopeFromWebViewId(key), value);
+    if (key && value) stateMap.set(key, value);
   });
 }
 
@@ -63,7 +57,7 @@ function getRecord(id: string): Record<string, unknown> {
  */
 export function getFullWebViewStateById(id: string): Record<string, unknown> {
   if (!id) throw new Error('id must be provided to get webview state');
-  return getRecord(stripWindowScopeFromWebViewId(id));
+  return getRecord(id);
 }
 
 /**
@@ -77,10 +71,9 @@ export function getFullWebViewStateById(id: string): Record<string, unknown> {
  */
 export function setFullWebViewStateById(id: string, state: Record<string, unknown>): void {
   if (!id || !state) throw new Error('id and state must be provided to set webview state');
-  const mintedId = stripWindowScopeFromWebViewId(id);
   loadIfNeeded();
-  idsLookedUp.add(mintedId);
-  stateMap.set(mintedId, state);
+  idsLookedUp.add(id);
+  stateMap.set(id, state);
   save();
 }
 
@@ -91,10 +84,9 @@ export function setFullWebViewStateById(id: string, state: Record<string, unknow
  */
 export function deleteFullWebViewStateById(id: string): void {
   if (!id) throw new Error('id must be provided to delete webview state');
-  const mintedId = stripWindowScopeFromWebViewId(id);
   loadIfNeeded();
-  idsLookedUp.add(mintedId);
-  stateMap.delete(mintedId);
+  idsLookedUp.add(id);
+  stateMap.delete(id);
   save();
 }
 
