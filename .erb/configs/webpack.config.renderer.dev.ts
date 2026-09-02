@@ -56,6 +56,33 @@ const configuration: webpack.Configuration = {
     },
   },
 
+  // Persistent caching, so the dev server's FIRST compile can reuse the previous run's work. The
+  // window created by the main process is blank until this compile finishes, so this compile is
+  // directly on the path to first paint. Watch rebuilds are unaffected - they run off webpack's
+  // in-memory cache, and `buildDependencies` below invalidates the whole cache when anything
+  // outside the module graph that shapes the output changes.
+  cache: {
+    type: 'filesystem',
+    // Distinct from the production renderer's `webpack-renderer` directory: same source tree, very
+    // different output (mode, devtool, DLL reference), so they must not share a cache.
+    cacheDirectory: path.join(
+      webpackPaths.rootPath,
+      'node_modules',
+      '.cache',
+      'webpack-renderer-dev',
+    ),
+    buildDependencies: {
+      config: [__filename, path.resolve(__dirname, 'webpack.config.base.ts')],
+      tsconfig: [path.resolve(webpackPaths.rootPath, 'tsconfig.json')],
+      // This config reads the DLL manifest at load time and `DllReferencePlugin` bakes its module
+      // ids into the output, so a rebuilt DLL must invalidate the cache. Omitted when the DLL is
+      // skipped, since `buildDependencies` entries must be files that exist.
+      ...(skipDLLs ? {} : { dll: [manifest] }),
+    },
+    compression: 'gzip',
+    maxMemoryGenerations: 5,
+  },
+
   module: {
     rules: [
       {

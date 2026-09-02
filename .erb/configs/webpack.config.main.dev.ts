@@ -34,6 +34,21 @@ const configuration: webpack.Configuration = {
     },
   },
 
+  // Persistent caching. This config is built twice per `npm start`: once blocking in `prestart` (so
+  // the bundle exists before `electronmon` launches Electron) and again by `start:main` in watch
+  // mode (which is what hot-reloads main). Both builds are unavoidable, so cache them instead -
+  // otherwise the same work is done from scratch twice while the renderer is compiling.
+  cache: {
+    type: 'filesystem',
+    cacheDirectory: path.join(webpackPaths.rootPath, 'node_modules', '.cache', 'webpack-main-dev'),
+    buildDependencies: {
+      config: [__filename, path.resolve(__dirname, 'webpack.config.base.ts')],
+      tsconfig: [path.resolve(webpackPaths.rootPath, 'tsconfig.json')],
+    },
+    compression: 'gzip',
+    maxMemoryGenerations: 5,
+  },
+
   plugins: [
     new BundleAnalyzerPlugin({
       analyzerMode: process.env.ANALYZE === 'true' ? 'server' : 'disabled',
