@@ -13,4 +13,32 @@
   // Fill the bar's full height (matching the "+" button) rather than just its own flex-centered
   // content box, so the drop target isn't a thin sliver.
   align-self: stretch;
+
+  // Set only while a drag is in progress (`tab-bar-drop-zone.component.tsx`'s
+  // `claimLastTabOverlap`/`clearLastTabOverlap`). rc-dock's own per-tab handler
+  // (`TabCache.onDragOver` in `node_modules/rc-dock/src/DockTabs.tsx`) claims the last tab's
+  // trailing half as an `after-tab` drop target via a pointer-vs-midpoint test, and rc-dock's
+  // hit-testing always defers to whichever registered element paints topmost under the pointer —
+  // so pulling this zone's own start edge back to cover that half, for the duration of a drag only,
+  // is the only way to present a single drop target there without patching rc-dock.
+  &[data-dragging] {
+    // Flex items already paint in order-modified (not raw DOM) order, so `.dock-extra-content`
+    // (`order: 2` in `dock-layout-wrapper.component.scss`) already paints over `.dock-nav-wrap`
+    // (`order: 1`) without this — z-index makes that outcome explicit rather than relying on an
+    // implicit flex-painting rule.
+    position: relative;
+    z-index: 1;
+    margin-inline-start: calc(-1 * var(--tab-bar-drop-zone-overlap, 0px));
+  }
+}
+
+// A separate element from the zone above: `DockContext.setDropRect` reads its target's own
+// `getBoundingClientRect()` to position the global drop-indicator overlay, so the visible indicator
+// needs its own box — confined to the last tab's trailing edge through the "+" — distinct from the
+// zone's wider, tab-covering one that hit-testing uses during a drag.
+.platform-tab-bar-drop-zone-indicator {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  inset-inline-start: var(--tab-bar-drop-zone-indicator-inset, 0);
 }
