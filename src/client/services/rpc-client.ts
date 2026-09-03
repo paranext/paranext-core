@@ -65,7 +65,7 @@ export class RpcClient implements IRpcMethodRegistrar {
    *
    * @experimental
    */
-  readonly onDidLoseConnection: PlatformEvent<undefined>;
+  readonly onDidLoseConnection: PlatformEvent<void>;
   /**
    * Whether {@link onWebSocketClose} has already run for the current socket.
    *
@@ -98,7 +98,7 @@ export class RpcClient implements IRpcMethodRegistrar {
   // Reconnect needs an unblocked path to the PAPI port for this client.
   private readonly connectionComplete = new AsyncVariable<void>('websocket connected');
   private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
-  private readonly connectionLostEmitter = new PlatformEventEmitter<undefined>();
+  private readonly connectionLostEmitter = new PlatformEventEmitter<void>();
   /**
    * Label identifying this process in connection log lines, so multi-window logs stay readable.
    *
@@ -381,13 +381,22 @@ export class RpcClient implements IRpcMethodRegistrar {
     this.jsonRpcClientServer.rejectAllPendingRequests('The web socket has closed');
     const detail = describeWebSocketCloseEvent(ev);
     const summary = `Websocket for ${this.peerName} closed (${detail})`;
-    // Intent travels in the close code, so a close that arrives after an intentional
-    // disconnect is still reported honestly if the socket actually died.
-    if (isCleanCloseEvent(ev)) logger.info(summary);
-    else logger.warn(summary);
-    // A close the app asked for is not a loss; intent travels in the close code, which
-    // `isCleanCloseEvent` reads. The early return above means this fires at most once per socket.
-    if (!isCleanCloseEvent(ev)) this.connectionLostEmitter.emit(undefined);
+    // Intent travels in the close code, so a close that arrives after an intentional disconnect is
+    // still reported honestly if the socket actually died — and a close the app asked for is not a
+    // loss. The early return above means the loss fires at most once per socket.
+    if (isCleanCloseEvent(ev)) {
+      logger.info(summary);
+    } else {
+      logger.warn(summary);
+      // One subscriber that throws must not cost the others the news, and must not cost this
+      // socket the teardown below: this is the only time subscribers are told, and for a UI
+      // subscriber it is the difference between a visible failure and a silent one.
+      this.connectionLostEmitter.emitIsolated(undefined, (error) => {
+        logger.error(
+          `A subscriber threw while being told the websocket for ${this.peerName} lost its connection; the rest were still told: ${getErrorMessage(error)}`,
+        );
+      });
+    }
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
   }

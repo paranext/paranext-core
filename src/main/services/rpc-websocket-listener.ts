@@ -69,7 +69,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
    *
    * @experimental
    */
-  readonly onDidLoseConnection: PlatformEvent<undefined>;
+  readonly onDidLoseConnection: PlatformEvent<void>;
   private localEventHandler: EventHandler | undefined;
   private webSocketServer: WebSocketServer | undefined;
   private nextSocketNumber = 1;
@@ -90,7 +90,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
    */
   private readonly warnedForeignAnnouncements = new Set<string>();
   private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
-  private readonly connectionLostEmitter = new PlatformEventEmitter<undefined>();
+  private readonly connectionLostEmitter = new PlatformEventEmitter<void>();
 
   constructor() {
     bindClassMethods.call(this);

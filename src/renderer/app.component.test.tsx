@@ -34,6 +34,17 @@ vi.mock('./components/first-run/first-run-overlay.component', () => ({
 vi.mock('./services/workspace-updating-service', () => ({
   initWorkspaceUpdatingService: () => () => {},
 }));
+// `initConnectionLostStore` is the only thing that subscribes the store to `onDidLoseConnection`,
+// so without it the connection-lost state never appears however the socket dies — and rendering
+// `<ConnectionLostOverlay />` does not prove the subscription happened. Mocked (rather than left
+// real, which also pulled the network service into this suite) so the call itself can be asserted.
+const connectionLostStore = vi.hoisted(() => {
+  const teardown = vi.fn();
+  return { teardown, init: vi.fn(() => teardown) };
+});
+vi.mock('./services/connection-lost-store', () => ({
+  initConnectionLostStore: connectionLostStore.init,
+}));
 vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
   useIsPowerMode: vi.fn(() => false),
 }));
@@ -61,6 +72,18 @@ describe('App first-run wiring', () => {
     // notice if <ConnectionLostOverlay /> were removed from Main's JSX. Removing the mount must fail.
     render(<App />);
     expect(screen.getByTestId('connection-lost-overlay')).toBeInTheDocument();
+  });
+
+  it('subscribes the connection-lost store on mount and unsubscribes on unmount', () => {
+    connectionLostStore.init.mockClear();
+    connectionLostStore.teardown.mockClear();
+
+    const { unmount } = render(<App />);
+    expect(connectionLostStore.init).toHaveBeenCalledTimes(1);
+    expect(connectionLostStore.teardown).not.toHaveBeenCalled();
+
+    unmount();
+    expect(connectionLostStore.teardown).toHaveBeenCalledTimes(1);
   });
 
   it('sets data-interface-mode="simple" on document.body when not in power mode', () => {

@@ -3105,25 +3105,39 @@ step, no automation. Just a record.
     listening from startup"), the same pattern already used to pin `<FirstRunOverlay />`'s presence
     in the same file.
   - **Scrim:** a blocking scrim, not a `pointer-events: none` dimming, covering the toolbar as well
-    as the dock (`overlay-connection-lost.component.tsx:114-126`, `tw:fixed tw:inset-0` at
+    as the dock (`overlay-connection-lost.component.tsx`, `tw:fixed tw:inset-0` at
     `Z_INDEX_CONNECTION_LOST`). Every toolbar control — project selector, reference, sync, menus —
     reaches the rest of the app over the same dead socket, so leaving the toolbar clickable would
     leave the exact silent failure NN-6 exists to end: controls that look live but do nothing.
-  - **Keyboard gate:** a scrim stops pointers only, so the fixed layer is also a modal —
-    `role="alertdialog"` + `aria-modal="true"` (`overlay-connection-lost.component.tsx:115-118`) with a
-    document-level Tab/Shift+Tab handler that returns focus to Reload (lines 97-110). Reload is the
-    layer's only focusable element, so the cycle is one stop and needs no focus-trap library; a Radix `Dialog` (the
-    `FirstRunOverlay` precedent) was not used because its `DialogContent` owns the layout, and this
-    state is a banner pinned under the toolbar over a full-window scrim, not a centered panel.
-    Without the gate, Tab off Reload reaches the toolbar and dock, where every control is still
-    focusable and Enter-activatable — the same silent failure by keyboard.
+  - **Keyboard gate:** a scrim stops pointers only, so the state is a Radix modal `Dialog` with
+    `role="alertdialog"`, following the `FirstRunOverlay` precedent. Radix's `FocusScope` supplies
+    the trap and focuses Reload on open. Without the gate, Tab off Reload reaches the toolbar and
+    dock, where every control is still focusable and Enter-activatable — the same silent failure by
+    keyboard. A hand-rolled document-level Tab handler was tried first and rejected: a `document`
+    listener cannot see keydowns raised inside a web view's iframe, which has its own document, so
+    focus starting inside a web view would not have been contained. `DialogContent`'s own backdrop
+    renders at `Z_INDEX_MODAL_BACKDROP` (450) and accepts no `style`, so it cannot be raised to
+    `Z_INDEX_CONNECTION_LOST` (800); the full-viewport content is therefore itself the scrim, which
+    is the same override `FirstRunOverlay` applies to that card for the same reason.
+  - **Banner composition:** the banner is the exported `Alert`/`AlertTitle`/`AlertDescription`/
+    `AlertAction` family with `variant="destructive"`, not hand-rolled utility classes, so the
+    destructive tone tokens and the icon size slot come from the design system. `DialogTitle` and
+    `DialogDescription` wrap the banner's own title and message with `asChild`, so the dialog's
+    accessible name is the visible text rather than a hidden second copy that could drift from it.
+    `AlertAction` had to be added to `platform-bible-react`'s public index; it existed but was
+    unexported while its three siblings were.
+  - **Reload label:** "Reload anyway", not a bare "Reload". Reloading discards whatever the message
+    just warned may be unsaved, and the scrim means the user cannot select and copy that text out
+    first, so the label carries the consequence — the `Guidelines/Applying Changes` rule that a
+    control which discards work must state or confirm it. A confirmation step was rejected: a second
+    dialog in a state where nothing else works is one more thing to get stuck in.
   - **English fallback:** `localizedOrEnglish`
-    (`overlay-connection-lost.component.tsx:42-49`) substitutes the `en.json` text when a value is
+    (`overlay-connection-lost.component.tsx`) substitutes the `en.json` text when a value is
     still the raw key. The unconditional mount is necessary but not sufficient: a socket that dies
     before localization has answered leaves `useLocalizedStrings` returning `defaultState`, and
     there is no live PAPI left to wait for.
   - **Recovery:** the Reload button calls `window.location.reload()` directly
-    (`overlay-connection-lost.component.tsx:182-187`) — no command, no main-process round trip,
+    (`overlay-connection-lost.component.tsx`) — no command, no main-process round trip,
     because both are unreachable by definition once the socket is dead. A page load also reruns
     every method registration the renderer made, which is what makes reload a genuine recovery
     rather than a cosmetic one; PT-4434 verified this empirically (a broken renderer's reload logged
@@ -3179,8 +3193,8 @@ step, no automation. Just a record.
     `src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts` (a premature `Connected`
     status, a permanently-fatal timed-out first connect, and stacking `applyMiddleware` calls) are
     untouched by this work and remain the reconnect branch's problem to resolve.
-  - `Z_INDEX_CONNECTION_LOST = 800` (`lib/platform-bible-react/src/components/z-index.ts:54`) sits
-    above `Z_INDEX_FIRST_RUN = 700` (`z-index.ts:44`) rather than below it. The first-run wizard is
+  - `Z_INDEX_CONNECTION_LOST = 800` (`lib/platform-bible-react/src/components/z-index.ts`) sits
+    above `Z_INDEX_FIRST_RUN = 700` in the same module rather than below it. The first-run wizard is
     itself entirely PAPI-driven, so a socket death mid-wizard would otherwise strand a brand-new user
     in a form that can no longer submit, with no visible explanation why. Pinned by
     `z-index.test.ts`.

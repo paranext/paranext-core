@@ -2848,6 +2848,8 @@ export declare function Alert({ className, variant, ...props }: React$1.Componen
 export declare function AlertTitle({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Alert */
 export declare function AlertDescription({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/** @inheritdoc Alert */
+export declare function AlertAction({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /**
  * The Avatar component displays a user's profile picture or initials. The component is built and
  * styled by Shadcn UI.
@@ -4046,8 +4048,8 @@ export declare const Z_INDEX_FIRST_RUN = 700;
  *
  * When the websocket to the rest of the app dies, every layer beneath this one is inert — the
  * first-run wizard cannot submit, modals cannot resolve, the toolbar cannot navigate. Anything
- * rendering over this state would be offering the user a control that silently does nothing.
- * Pinned by `z-index.test.ts`.
+ * rendering over this state would be offering the user a control that silently does nothing. Pinned
+ * by `z-index.test.ts`.
  */
 export declare const Z_INDEX_CONNECTION_LOST = 800;
 /**

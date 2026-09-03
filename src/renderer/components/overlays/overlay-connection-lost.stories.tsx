@@ -1,5 +1,11 @@
 import type { Decorator, Meta, StoryObj } from '@storybook/react-webpack5';
-import { ConnectionLostOverlayPresentational } from './overlay-connection-lost.component';
+import {
+  CONNECTION_LOST_MESSAGE_KEY,
+  CONNECTION_LOST_RELOAD_KEY,
+  CONNECTION_LOST_TITLE_KEY,
+  ConnectionLostOverlayPresentational,
+  ENGLISH_FALLBACKS,
+} from './overlay-connection-lost.component';
 
 /** Renders a toolbar-height strip and some body text so the story shows what the state covers. */
 function WithSimulatedApp(Story: Parameters<Decorator>[0]): ReturnType<Decorator> {
@@ -37,11 +43,12 @@ const meta: Meta<typeof ConnectionLostOverlayPresentational> = {
 export default meta;
 type Story = StoryObj<typeof ConnectionLostOverlayPresentational>;
 
+// Taken from the component's own English fallbacks rather than restated, so the stories cannot
+// drift from the text the app actually renders.
 const ARGS = {
-  title: 'Connection lost.',
-  message:
-    "Platform.Bible can't reach its background services. Anything you changed just now may not be saved.",
-  reloadLabel: 'Reload',
+  title: ENGLISH_FALLBACKS[CONNECTION_LOST_TITLE_KEY],
+  message: ENGLISH_FALLBACKS[CONNECTION_LOST_MESSAGE_KEY],
+  reloadLabel: ENGLISH_FALLBACKS[CONNECTION_LOST_RELOAD_KEY],
   onReload: () => {},
 };
 

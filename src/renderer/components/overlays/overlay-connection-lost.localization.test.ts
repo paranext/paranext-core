@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { LOCALIZED_STRING_KEYS } from './overlay-connection-lost.component';
+import {
+  ENGLISH_FALLBACKS,
+  LOCALIZED_STRING_KEYS,
+  PRODUCT_NAME_KEY,
+} from './overlay-connection-lost.component';
+
+/**
+ * The keys that must carry a translation in every shipped locale. `%product_name%` is excluded: it
+ * is a proper noun, so no locale translates it, and only `en.json` defines it — every other locale
+ * resolves it through the fallback chain. Requiring it per-locale would demand a redundant entry in
+ * each one.
+ */
+const KEYS_REQUIRING_TRANSLATION = LOCALIZED_STRING_KEYS.filter((key) => key !== PRODUCT_NAME_KEY);
 
 // Resolved from this file's location rather than `process.cwd()` so the test is not sensitive to
 // the directory `vitest` happens to be invoked from.
@@ -19,8 +31,8 @@ function readStrings(fileName: string): { [key: string]: unknown } {
  * Keys whose value is missing, empty, or the key itself. The localization service returns the key
  * when a translation is missing, so such a key renders as literal `%key%` text.
  */
-function findUnusableKeys(strings: { [key: string]: unknown }) {
-  return LOCALIZED_STRING_KEYS.filter((key) => {
+function findUnusableKeys(strings: { [key: string]: unknown }, keys = LOCALIZED_STRING_KEYS) {
+  return keys.filter((key) => {
     const value = strings[key];
     return typeof value !== 'string' || value.length === 0 || value === key;
   });
@@ -46,7 +58,10 @@ describe('ConnectionLostOverlay localization keys', () => {
   // that falls back to English. Guarding both arms is what catches that at the moment the key is
   // added.
   it('has a non-empty Spanish translation for every key ConnectionLostOverlay can request', () => {
-    const missingOrInvalidKeys = findUnusableKeys(readStrings('es.json'));
+    const missingOrInvalidKeys = findUnusableKeys(
+      readStrings('es.json'),
+      KEYS_REQUIRING_TRANSLATION,
+    );
 
     if (missingOrInvalidKeys.length > 0)
       throw new Error(
@@ -56,5 +71,23 @@ describe('ConnectionLostOverlay localization keys', () => {
       );
 
     expect(missingOrInvalidKeys).toHaveLength(0);
+  });
+
+  // `ENGLISH_FALLBACKS` is the copy the user actually reads when the socket dies before
+  // localization resolves, so it drifting from `en.json` means the failure state shows different
+  // wording than the rest of the app. Nothing else compares the two.
+  it('has an English fallback that matches en.json exactly for every key', () => {
+    const englishStrings = readStrings('en.json');
+
+    // Compared as whole objects rather than key by key, so a mismatch reports every drifted key at
+    // once and names the key in the diff.
+    const fallbacks = Object.fromEntries(
+      LOCALIZED_STRING_KEYS.map((key) => [key, ENGLISH_FALLBACKS[key]]),
+    );
+    const shippedEnglish = Object.fromEntries(
+      LOCALIZED_STRING_KEYS.map((key) => [key, englishStrings[key]]),
+    );
+
+    expect(fallbacks).toEqual(shippedEnglish);
   });
 });
