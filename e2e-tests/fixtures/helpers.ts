@@ -1656,6 +1656,33 @@ export function smokeAppSettingsOverrides(
 }
 
 /**
+ * The dev-appdata settings `isolated.fixture`'s `electronApp` pins before every test-scoped launch,
+ * before the spec's own `seedSettings` is spread over them.
+ *
+ * `platform.showRegistrationReminderOnStartup: false` is pinned for the same reason as
+ * {@link smokeAppSettingsOverrides}: whenever a spec's `seedSettings` sets
+ * `platform.firstRunComplete: true`, `first-run-store.ts`'s `startBackgroundRegistrationRecheck`
+ * fires, and — unless suppressed — can still replace an already-loaded app with the first-run
+ * wizard's re-registration step once it resolves the machine's Paratext registration as invalid,
+ * which every CI-like runner's is. `firstRunComplete` itself stays out of this base (unlike
+ * {@link smokeAppSettingsOverrides}): it is each spec's own `seedSettings` choice, since the
+ * first-run-wizard specs deliberately seed it `false` to exercise the wizard, and the recheck this
+ * suppresses only ever runs once it is `true`.
+ *
+ * Exported as a plain function, separate from the fixture that calls it, so its exact contents can
+ * be pinned by a unit test without booting Electron.
+ */
+export function isolatedFixtureBaseSettings(
+  interfaceMode: RequiredInterfaceMode,
+): Record<string, unknown> {
+  return {
+    'platform.interfaceMode': interfaceMode,
+    'platform.interfaceLanguage': ['en'],
+    'platform.showRegistrationReminderOnStartup': false,
+  };
+}
+
+/**
  * Merge the given key-value pairs into the dev-appdata settings file before launching the app.
  * Preserves any existing settings (e.g. `platform.verseRef`) so the app session starts from the
  * developer's saved state plus the overrides.
@@ -1876,7 +1903,8 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
  * 15 s, so a budget shorter than that can never see it), or `first-run-store.ts`'s
  * `startBackgroundRegistrationRecheck` swaps a fully-loaded, already-running app onto the wizard's
  * identify step at `allowContinueWithoutRegistration: true` once it resolves the machine's Paratext
- * registration as invalid — that step renders the same kind of button unconditionally, in the same
+ * registration as invalid — that step renders the same kind of button only when it has no `onBack`
+ * handler AND `allowContinueWithoutRegistration` is true (both hold for this route), in the same
  * commit as its heading, before its own localized strings resolve (see `ESCAPE_HATCH_NAME_PATTERN`
  * for why a raw `%key%` label still counts). The setup wizard's stepper appearing with NO escape
  * hatch at all is the one state genuinely stuck: only `first-run.reducer.ts`'s `startWizard`

@@ -9,6 +9,7 @@ import {
   applyDeclaredWindowSize,
   assertInterfaceMode,
   DEFAULT_WINDOW_SIZE,
+  isolatedFixtureBaseSettings,
   launchElectronApp,
   LaunchElectronAppOptions,
   preConfigureSettings,
@@ -104,10 +105,12 @@ export const test = base.extend<IsolatedFixtures>({
     // and `navigateToolbarBcv`'s English book names (no app code passes `localizedBookNames`, so
     // `BookChapterControl` renders `formatScrRef`'s explicit 'English' fallback) — are
     // deterministic regardless of the developer's saved locale. Same both-settings seeding as
-    // comment.fixture.ts. workers=1 (playwright.config.ts) means no other test can race this shared file.
+    // comment.fixture.ts. workers=1 (playwright.config.ts) means no other test can race this shared
+    // file. `isolatedFixtureBaseSettings` also suppresses the background registration reminder (see
+    // its doc in helpers.ts), so a spec that seeds `firstRunComplete: true` through `seedSettings`
+    // cannot be pulled onto the first-run wizard mid-test.
     const restoreSettings = preConfigureSettings({
-      'platform.interfaceMode': interfaceMode,
-      'platform.interfaceLanguage': ['en'],
+      ...isolatedFixtureBaseSettings(interfaceMode),
       ...seedSettings,
     });
     try {
