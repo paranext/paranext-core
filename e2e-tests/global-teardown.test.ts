@@ -54,11 +54,20 @@ describe('stopping the renderer dev server on the platform that spawned it', () 
   });
 
   it('does not call taskkill at all when the pid is not alive', () => {
-    // No mock: pid 4242 is not a real process in the test runner, so the real liveness check
-    // reports it as gone — pinning that a dead pid never reaches taskkill, recycled or not.
+    // A dead pid is one whose probe reports ESRCH — the pid number itself is arbitrary and must
+    // never be relied on to be unused on the test runner; pids recycle, so a real process can hold
+    // this exact number.
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      const error: NodeJS.ErrnoException = new Error('no such process');
+      error.code = 'ESRCH';
+      throw error;
+    });
+
     killDevServerProcess(4242, 'win32');
 
     expect(execFileSync).not.toHaveBeenCalled();
+
+    killSpy.mockRestore();
   });
 
   it('still calls taskkill when the liveness probe is refused with EPERM', () => {

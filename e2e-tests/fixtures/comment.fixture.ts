@@ -95,6 +95,9 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
         // first-run wizard, and power bypasses it. The wizard is a modal that cannot be dismissed
         // (its Radix handlers all preventDefault) and aria-hides the rest of the app.
         'platform.firstRunComplete': true,
+        // See smokeAppSettingsOverrides in helpers.ts for why this is pinned alongside
+        // firstRunComplete rather than left to the app's default.
+        'platform.showRegistrationReminderOnStartup': false,
       });
       // Nested try/finally: restoreSettings must run only after teardown has fully finished (so the
       // app's own shutdown writes cannot clobber it), and must run even if launch, `use`, or

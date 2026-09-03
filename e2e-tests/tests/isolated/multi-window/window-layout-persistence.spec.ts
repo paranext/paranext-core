@@ -400,6 +400,10 @@ test.describe('window layout persistence', () => {
     // which would make phase 2's both-windows assertion fail for configuration reasons.
     restoreSettings = preConfigureSettings({
       'platform.firstRunComplete': true,
+      // See smokeAppSettingsOverrides in helpers.ts: without this, the background registration
+      // recheck can swap this suite's already-loaded app onto the wizard mid-run — and this test's
+      // three-launch, several-minute runtime gives it far longer to do so than a typical spec.
+      'platform.showRegistrationReminderOnStartup': false,
       'platform.interfaceLanguage': ['en'],
       'platform.interfaceMode': 'power',
     });

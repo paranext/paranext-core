@@ -130,6 +130,9 @@ export const test = appTest.extend<
       //   that aria-hides the rest of the app and intercepts pointer events, blocking beforeAll
       //   before it can warm the findInScripture PDP. app.fixture seeds this; this fixture replaces
       //   app.fixture's worker-scoped electronApp wholesale, so it must seed it too.
+      // - showRegistrationReminderOnStartup: pinned alongside firstRunComplete for the same reason
+      //   as smokeAppSettingsOverrides in helpers.ts — otherwise the background registration
+      //   recheck can still swap this suite's already-loaded app onto the wizard mid-run.
       // - interfaceMode: the Find UI differs by mode — Simple mode hides the Find/Replace toggle
       //   and the whole Replace surface (`hideModeToggle`), and makes Find a permanent,
       //   non-closable tab. This suite is written against Simple mode and must declare it rather
@@ -137,6 +140,7 @@ export const test = appTest.extend<
       // - interfaceLanguage: every text-based selector here is English-only.
       const restoreSettings = preConfigureSettings({
         'platform.firstRunComplete': true,
+        'platform.showRegistrationReminderOnStartup': false,
         'platform.interfaceMode': interfaceMode,
         'platform.interfaceLanguage': ['en'],
       });

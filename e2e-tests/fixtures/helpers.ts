@@ -1870,14 +1870,18 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
  * dock-layout wait above.
  *
  * This tells three states apart. The gate clearing is the normal path — resolution settles and the
- * brief `'loading'` flash goes. The "continue without finishing setup" button appearing means the
- * resolve is slow but recoverable: the app reveals that button itself once its startup probe runs
- * long (`REGISTRATION_SLOW_REVEAL_MS` in `first-run-overlay.component.tsx`, 15 s), so a budget
- * shorter than that can never see it. The setup wizard's stepper appearing means the gate is stuck
- * in the one state with no escape hatch at all — a registration that resolves as invalid routes
- * there (`first-run.reducer.ts` -> `startWizard`), and that branch renders no such button by design
- * — so this fails immediately naming the cause instead of waiting out a budget it cannot recover
- * from.
+ * brief `'loading'` flash goes. An escape-hatch button appearing means the resolve is slow but
+ * recoverable, and it can come from either of two places: the loading branch reveals its own once
+ * its startup probe runs long (`REGISTRATION_SLOW_REVEAL_MS` in `first-run-overlay.component.tsx`,
+ * 15 s, so a budget shorter than that can never see it), or `first-run-store.ts`'s
+ * `startBackgroundRegistrationRecheck` swaps a fully-loaded, already-running app onto the wizard's
+ * identify step at `allowContinueWithoutRegistration: true` once it resolves the machine's Paratext
+ * registration as invalid — that step renders the same kind of button unconditionally, in the same
+ * commit as its heading, before its own localized strings resolve (see `ESCAPE_HATCH_NAME_PATTERN`
+ * for why a raw `%key%` label still counts). The setup wizard's stepper appearing with NO escape
+ * hatch at all is the one state genuinely stuck: only `first-run.reducer.ts`'s `startWizard`
+ * reaches it, and that branch renders no such button by design — so this fails immediately naming
+ * the cause instead of waiting out a budget it cannot recover from.
  *
  * Anything else within the budget is inconclusive and returns quietly, because this is a recovery
  * step: the readiness waits after it will fail with their own message if something is genuinely
@@ -1982,11 +1986,26 @@ export function resolveRaceLeg(error: unknown): 'inconclusive' {
   return 'inconclusive';
 }
 
+/**
+ * Matches the escape-hatch button's accessible name, whichever step renders it (`identify-step.
+ * component.tsx`'s `%firstRun_button_continueWithoutRegistration%` or `first-run-overlay.component.
+ * tsx`'s `%firstRun_button_continueWithoutFinishingSetup%`) and whether or not its own localized
+ * strings have resolved yet.
+ *
+ * `useLocalizedStrings` returns the raw `%key%` placeholder until its own PAPI round trip resolves,
+ * but the button is already mounted, visible, and clickable at that point — a freshly mounted step
+ * shows the key literally for a beat, not blank or disabled. Matching only the resolved English
+ * text misses that real, interactable button and reads an escape hatch as absent, so this matches
+ * either the localized text or either raw key.
+ */
+export const ESCAPE_HATCH_NAME_PATTERN =
+  /continue without (finishing setup|registration)|%firstRun_button_continueWithout(FinishingSetup|Registration)%/i;
+
 async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<FirstRunGateOutcome> {
   const start = Date.now();
   const firstRunDialog = page.getByTestId('first-run-dialog');
   const escapeHatch = page.getByRole('button', {
-    name: /continue without (finishing setup|registration)/i,
+    name: ESCAPE_HATCH_NAME_PATTERN,
   });
   // The wizard branch renders the setup shell and NO escape hatch, so it is the one stuck state
   // this cannot recover from — worth telling apart rather than waiting out.
@@ -2047,11 +2066,13 @@ async function dismissStuckFirstRunGate(page: Page, timeout: number): Promise<Fi
 
   if (action === 'wizard')
     throw new Error(
-      'e2e precondition: the app started its first-run setup wizard, so the pin that should have ' +
-        'skipped it did not take. Check that platform.firstRunComplete is seeded before launch — ' +
-        "through the fixture's seedSettings option, not a preConfigureSettings call in a hook. " +
-        'The wizard renders no "continue without finishing setup" button, by design, so nothing ' +
-        'here can dismiss it.',
+      'e2e precondition: the first-run gate is stuck on a step with no escape hatch at all, which ' +
+        "is only reachable through first-run.reducer.ts's startWizard action — check that " +
+        "platform.firstRunComplete is seeded before launch, through the fixture's seedSettings " +
+        "option rather than a preConfigureSettings call in a hook. (The wizard's identify step can " +
+        "also appear later, via first-run-store.ts's startBackgroundRegistrationRecheck, but that " +
+        'route always renders an escape hatch and is caught by the "recoverable" branch above, not ' +
+        'this one.)',
     );
 
   // Nothing recognisable within the budget, or an error screen that has not offered its way out
