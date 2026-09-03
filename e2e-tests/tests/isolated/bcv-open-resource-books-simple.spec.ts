@@ -4,6 +4,7 @@ import {
   preConfigureSettings,
   sendPapiRequestOnce,
   waitForAppReady,
+  waitForOpenWebViewIdByType,
   waitForOverlayGone,
   waitForPapiMethodRegistered,
 } from '../../fixtures/helpers';
@@ -66,16 +67,18 @@ const GENESIS_ITEM = bookItemSelector('Genesis', 'GEN');
 const DIMMED_BOOK_CLASS_PATTERN = /tw:text-muted-foreground\/50/;
 
 /**
- * Fixed simple-layout tab ids, from `src/renderer/components/docking/simple-layout.data.ts`.
- * Matched as a PREFIX because the renderer suffixes ids loaded from a shared layout with the window
- * they were loaded into (`-w1`, ...), so the rendered attribute is the UUID plus that suffix.
+ * `webViewType`s of the fixed Column 2 scripture-editor slot and Column 3 Bible-texts panel in the
+ * simple layout (`src/renderer/components/docking/simple-layout.data.ts`). Every materialization of
+ * a baked layout mints each web view a fresh id (`mintFreshWebViewIds` in
+ * `src/renderer/components/docking/mint-web-view-ids.util.ts`), so a slot can only be identified by
+ * type — its id is read live via {@link waitForOpenWebViewIdByType}.
  *
  * The Scripture editor slot must be in the dock state before `openScriptureEditor` is called —
  * simple mode routes the open to that slot as a tab replacement, which fails outright if the target
  * tab is not there yet.
  */
-const SCRIPTURE_EDITOR_SLOT_UUID = '3cf575f0-2cc2-464b-8765-b588f216dfce';
-const BIBLE_TEXTS_PANEL_UUID = '27616073-bf60-4f2b-9518-922d1a7d3601';
+const SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 
 /**
  * `openScriptureEditor` sequentially awaits the `openOrUpdateRelatedPanels` commands — five for an
@@ -173,14 +176,19 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
 
     // The fixed layout has to be in the dock before either open below: the editor open replaces the
     // Column 2 slot, and the resource open re-points the Column 3 Bible-texts panel. Neither can
-    // find its target until the dock has processed the simple layout.
+    // find its target until the dock has processed the simple layout. Each slot's id is minted fresh
+    // at materialization, so it is read live by type, then confirmed on screen by that id.
+    const [scriptureEditorSlotId, bibleTextsPanelId] = await Promise.all([
+      waitForOpenWebViewIdByType(mainPage, SCRIPTURE_EDITOR_SLOT_WEBVIEW_TYPE),
+      waitForOpenWebViewIdByType(mainPage, BIBLE_TEXTS_PANEL_WEBVIEW_TYPE),
+    ]);
     await Promise.all([
       expect(
-        mainPage.locator(`.platform-tab-title[data-web-view-id^="${SCRIPTURE_EDITOR_SLOT_UUID}"]`),
-      ).toBeAttached({ timeout: 120_000 }),
+        mainPage.locator(`.platform-tab-title[data-web-view-id="${scriptureEditorSlotId}"]`),
+      ).toBeAttached({ timeout: 60_000 }),
       expect(
-        mainPage.locator(`.platform-tab-title[data-web-view-id^="${BIBLE_TEXTS_PANEL_UUID}"]`),
-      ).toBeAttached({ timeout: 120_000 }),
+        mainPage.locator(`.platform-tab-title[data-web-view-id="${bibleTextsPanelId}"]`),
+      ).toBeAttached({ timeout: 60_000 }),
     ]);
     // The "Updating project view" overlay intercepts pointer events, so no click below can land
     // while a dock rebuild is in flight.
