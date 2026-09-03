@@ -1302,8 +1302,8 @@ export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: stri
  *   regardless, but the continuation that calls `persistUserAddition` dies with the realm, leaving
  *   the resource installed on disk and absent from the collection, with no notification and no log
  *   (the post-await `sourcesRef` check is a staleness re-read, not a liveness check). Recoverable
- *   by re-adding the resource, which then succeeds immediately. The fix belongs in the install path
- *   — persist the addition somewhere that survives a reload — and is out of scope here.
+ *   by re-adding the resource, which then succeeds immediately. TODO(PT-4510): fix in the install
+ *   path — persist the addition somewhere that survives a reload.
  * - Never brings the panel to front. This runs as part of re-pointing the whole column, not because
  *   anyone asked for the Text Collection, and the admin's shared layout chooses the front tab
  *   immediately afterward.

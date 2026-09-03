@@ -2292,7 +2292,7 @@ step, no automation. Just a record.
   an install flow, so it is the only one where a re-point can lose work rather than just view state.
   Accepted for now as a narrow window with a recoverable outcome (re-adding the resource succeeds
   immediately); the real fix belongs in the install path, which should persist the addition somewhere
-  that survives a reload. The reload also
+  that survives a reload — tracked as PT-4510. The reload also
   reopens the panel's load window on every switch, not just at first mount, so the grid body now
   renders the shared `LoadingView` for that window instead of an empty container — matching the three
   sibling panels re-pointed by the same mechanism. If a sixth Column 3 panel appears, the rule to apply is this one: add it to
