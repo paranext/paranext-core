@@ -373,7 +373,17 @@ test.describe('window close rule', () => {
       });
       const restored = await waitForAppPages(ctx.electronApp, 2, 240_000);
       expect(restored).toHaveLength(2);
-      const [restoredMain, restoredSecond] = restored;
+      // The primary is picked out by matching the id it held before the quit, not by taking the
+      // first page: window ids are durable, so the window that restores the primary comes back
+      // under that same id, while the order the two windows appear in is a race and means nothing.
+      const restoredMain = restored.find((page) => getWindowIdOfPage(page) === primaryId);
+      const restoredSecond = restored.find((page) => getWindowIdOfPage(page) !== primaryId);
+      if (!restoredMain || !restoredSecond)
+        throw new Error(
+          `the primary did not come back under its own id ${primaryId} — restored ids were ${restored
+            .map(getWindowIdOfPage)
+            .join(', ')}`,
+        );
       await waitForAppReady(restoredMain, 180_000);
       await waitForRendererRegistered(getWindowIdOfPage(restoredSecond), 120_000);
       logStep('phase 2: both windows restored');
