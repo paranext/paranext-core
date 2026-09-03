@@ -834,6 +834,7 @@ test.describe('Search History', () => {
     await searchInput.fill(secondTerm);
     const matchCaseCheckbox = frame.locator('#matchCase');
     await matchCaseCheckbox.click();
+    await expect(matchCaseCheckbox).toBeChecked();
     await matchCaseCheckbox.press('Escape');
 
     // Typing secondTerm above also (re)armed the 5-second idle debounce that writes to history on
