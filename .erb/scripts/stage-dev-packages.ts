@@ -60,12 +60,6 @@ const STAGING_FORMAT = 2;
 /** Build from the current checkout state instead of the pinned revision; always rebuild. */
 const isLocalMode: boolean = process.argv.includes('--local');
 
-/**
- * Set when a checkout was left on a branch of its own rather than moved to the pinned revision, so
- * the staged copy is marked as not being the pinned build.
- */
-let isStagingOffPin = false;
-
 /** Resolve the pinned revision against the checkout's existing refs rather than fetching. */
 const isFetchSkipped: boolean =
   process.argv.includes('--skip-fetch') || !!process.env.PT_SKIP_DEV_PACKAGE_FETCH;
@@ -303,7 +297,6 @@ function checkoutRevision(repo: DevRepo): void {
     currentBranch !== 'HEAD' && currentBranch !== 'main' && currentBranch !== repo.revision;
 
   if (isSomebodysBranch) {
-    isStagingOffPin = true;
     console.warn(
       `\nWARNING: ${repoPath} is on "${currentBranch}", not the pinned "${repo.revision}".\n` +
         `Leaving it alone and staging what it has, so nothing you are working on is lost.\n` +
@@ -314,9 +307,12 @@ function checkoutRevision(repo: DevRepo): void {
   }
 
   if (isRemoteBranch) {
-    // `-B` moves the local branch of that name onto the remote's tip and checks it out, so the
-    // checkout ends up on a branch rather than detached. The local branch is disposable: this one
-    // exists to track a branch that is rebased and force-pushed upstream as a matter of course.
+    // Check out the branch and force it to the remote's tip, in one command. Naming
+    // `origin/<branch>` explicitly rather than letting a bare `git checkout <branch>` guess the
+    // remote is what makes this work here: when the dev repo moves organizations, `verifyOrigin`
+    // has you keep the old URL as a second remote, and with the same branch on two remotes git
+    // refuses to guess (exit 128). The local branch is disposable in any case — it tracks a branch
+    // that is rebased and force-pushed upstream as a matter of course.
     console.log(`Updating ${repo.folder} to ${target}...`);
     execSync(`git checkout -B "${repo.revision}" "${target}"`, { stdio: 'inherit', cwd: repoPath });
     return;
@@ -341,8 +337,7 @@ function getSourceStamp(repoPath: string): string {
 
 /** What a marker written by this version of the script, for this source state, would say. */
 function getExpectedMarker(sourceStamp: string): string {
-  const provisional = `${isLocalMode ? '-local' : ''}${isStagingOffPin ? '-offpin' : ''}`;
-  return `${sourceStamp}${provisional} format=${STAGING_FORMAT}`;
+  return `${sourceStamp}${isLocalMode ? '-local' : ''} format=${STAGING_FORMAT}`;
 }
 
 /**

@@ -36,23 +36,24 @@ echo "No secrets found"
 # ============================================
 # Provisional dev-package builds (ALL branches)
 # ============================================
-# A staged dev package is provisional when it did not come from the revision dev-packages.json
-# pins: `npm run build:editor` stages your uncommitted working tree, a dirty checkout stages
-# whatever it holds, and a checkout left on its own branch stages that branch. `npm install` then
-# records THAT package's dependency closure in package-lock.json, and committing the result
-# publishes a lockfile nobody else can reproduce. Staging marks all three in its `.staged-from`
-# marker, so this is exact: it fires only when a provisional build is staged and the lockfile is
-# going in.
+# `npm run build:editor` stages your uncommitted scripture-editors working tree, and a dirty
+# checkout stages whatever it happens to hold. `npm install` then records THAT package's dependency
+# closure in package-lock.json, and committing the result publishes a lockfile built from work that
+# exists only on your machine.
+#
+# Deliberately only those two. Staging a checkout that sits on a pushed feature branch is a normal
+# way to develop both repos at once, and the lockfile that comes out of it is reproducible by
+# anyone with that branch — so it is committable, and this does not block it.
 if git diff --cached --name-only --diff-filter=ACMR | grep -qx 'package-lock.json'; then
   PROVISIONAL=$(find dev-packages/staging -maxdepth 2 -name .staged-from \
-    -exec grep -l -e '-local' -e '-dirty' -e '-offpin' {} + 2>/dev/null || true)
+    -exec grep -l -e '-local' -e '-dirty' {} + 2>/dev/null || true)
   if [ -n "$PROVISIONAL" ]; then
     echo ""
     echo "=========================================="
     echo "PROVISIONAL DEV PACKAGE STAGED — commit blocked"
     echo "=========================================="
-    echo "package-lock.json is staged, but these dev packages were not staged from the revision"
-    echo "dev-packages.json pins:"
+    echo "package-lock.json is staged, but these dev packages were staged from a local or dirty"
+    echo "build rather than from a commit:"
     echo ""
     echo "$PROVISIONAL" | sed 's|/.staged-from$||;s|^|  |'
     echo ""
