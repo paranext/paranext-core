@@ -2431,6 +2431,8 @@ describe('syncOnProjectSwitch', () => {
 
 // #region finalizeProjectSwitch
 
+const GRID_WEBVIEW_ID = 'text-collection-1';
+
 function createFinalizeMockPapi() {
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
   const mockWarn = vi.fn();
@@ -2444,21 +2446,39 @@ function createFinalizeMockPapi() {
   // Defaults to 'simple' - matches the common case (the switch this replays side effects for only
   // ever originates from a Power -> Simple mode change), so most tests don't need to set it.
   const mockSettingsGet = vi.fn().mockResolvedValue('simple');
+  // The Text Collection re-point runs from here, so the mock needs a webViews surface; without one
+  // it would take the swallowed-failure path and the assertions below would pass vacuously.
+  const mockGetAllOpenWebViewDefinitions = vi
+    .fn()
+    .mockResolvedValue([
+      { id: GRID_WEBVIEW_ID, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, projectId: undefined },
+    ]);
+  // Resolves an id: `reloadWebView` returning undefined means the re-point did not take, which the
+  // implementation now reports as an error.
+  const mockReloadWebView = vi.fn().mockResolvedValue(GRID_WEBVIEW_ID);
+  const mockError = vi.fn();
   // Must cast since the mock only includes the papi properties finalizeProjectSwitch uses.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
     commands: { sendCommand: mockSendCommand },
     dataProviders: { get: mockDataProvidersGet },
     settings: { get: mockSettingsGet },
-    logger: { warn: mockWarn },
+    webViews: {
+      getAllOpenWebViewDefinitions: mockGetAllOpenWebViewDefinitions,
+      reloadWebView: mockReloadWebView,
+    },
+    logger: { warn: mockWarn, error: mockError },
   } as unknown as typeof PapiBackend;
   return {
     papi,
     mockSendCommand,
     mockWarn,
+    mockError,
     mockRecordProjectOpened,
     mockDataProvidersGet,
     mockSettingsGet,
+    mockGetAllOpenWebViewDefinitions,
+    mockReloadWebView,
   };
 }
 
@@ -2486,6 +2506,44 @@ describe('finalizeProjectSwitch', () => {
 
     expect(applyForProject).toHaveBeenCalledWith('proj-1');
     expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('re-points the Text Collection, which the rebuilt Simple layout leaves unbound', async () => {
+    // PT-4238 on the mode-switch path: buildSimpleLayoutForProject stamps projectId onto the static
+    // layout's tabs, but the Text Collection is merged in afterwards from the supplement with none.
+    const { papi, mockReloadWebView } = createFinalizeMockPapi();
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockReloadWebView).toHaveBeenCalledWith(
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      GRID_WEBVIEW_ID,
+      { projectId: 'proj-1', bringToFront: false },
+    );
+  });
+
+  it('re-points the Text Collection before the shared layout picks the front tab', async () => {
+    const { papi, mockReloadWebView } = createFinalizeMockPapi();
+    const order: string[] = [];
+    mockReloadWebView.mockImplementation(async () => {
+      order.push('reload');
+    });
+    const applyForProject = vi.fn().mockImplementation(async () => {
+      order.push('applyForProject');
+    });
+
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
+
+    expect(order).toEqual(['reload', 'applyForProject']);
+  });
+
+  it('does not re-point the Text Collection once the user is back in Power mode', async () => {
+    const { papi, mockReloadWebView, mockSettingsGet } = createFinalizeMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
   });
 
   it('calls applyForProject when still in Simple mode', async () => {
@@ -3271,8 +3329,6 @@ describe('formatEditorTitle', () => {
 
 // #region updateRelatedTextCollectionPanel
 
-const GRID_WEBVIEW_ID = 'text-collection-1';
-
 /**
  * Mock papi exposing the webViews reads/writes the Column 3 re-point helpers use, plus a
  * `sendCommand` spy for the four command-driven panels.
@@ -3282,9 +3338,12 @@ const GRID_WEBVIEW_ID = 'text-collection-1';
 function createRelatedPanelsMockPapi(openDefs: Array<Partial<SavedWebViewDefinition>> = []) {
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
   const mockGetAllOpenWebViewDefinitions = vi.fn().mockResolvedValue(openDefs);
-  const mockReloadWebView = vi.fn().mockResolvedValue(undefined);
+  // Resolves an id: `reloadWebView` returning undefined means the re-point did not take, which the
+  // implementation now reports as an error.
+  const mockReloadWebView = vi.fn().mockResolvedValue(GRID_WEBVIEW_ID);
   const mockOpenWebView = vi.fn().mockResolvedValue(undefined);
   const mockWarn = vi.fn();
+  const mockError = vi.fn();
   // Must cast since the mock only includes the papi properties these helpers use.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
@@ -3294,7 +3353,7 @@ function createRelatedPanelsMockPapi(openDefs: Array<Partial<SavedWebViewDefinit
       reloadWebView: mockReloadWebView,
       openWebView: mockOpenWebView,
     },
-    logger: { warn: mockWarn },
+    logger: { warn: mockWarn, error: mockError },
   } as unknown as typeof PapiBackend;
   return {
     papi,
@@ -3303,6 +3362,7 @@ function createRelatedPanelsMockPapi(openDefs: Array<Partial<SavedWebViewDefinit
     mockReloadWebView,
     mockOpenWebView,
     mockWarn,
+    mockError,
   };
 }
 
@@ -3374,20 +3434,45 @@ describe('updateRelatedTextCollectionPanel', () => {
     expect(mockOpenWebView).not.toHaveBeenCalled();
   });
 
-  it('resolves without throwing and warns when the reload fails', async () => {
-    const { papi, mockReloadWebView, mockWarn } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+  it('skips the reload when the open panel already shows the project in different casing', async () => {
+    // Ids reach here verbatim from a resource reference while the .NET side canonicalizes to
+    // uppercase, so a raw === would reload needlessly and discard the panel's in-memory state.
+    const { papi, mockReloadWebView } = createRelatedPanelsMockPapi([gridDef('PROJ-A')]);
+
+    await updateRelatedTextCollectionPanel(papi, 'proj-a');
+
+    expect(mockReloadWebView).not.toHaveBeenCalled();
+  });
+
+  it('resolves without throwing and reports an error when the reload rejects', async () => {
+    const { papi, mockReloadWebView, mockError } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
     mockReloadWebView.mockRejectedValue(new Error('reload failed'));
 
     await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
-    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('reload failed'));
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('reload failed'));
+    // Names the project left on screen, so the log says what the user is actually looking at.
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('proj-a'));
   });
 
-  it('resolves without throwing and warns when the open-web-view probe fails', async () => {
-    const { papi, mockGetAllOpenWebViewDefinitions, mockWarn } = createRelatedPanelsMockPapi();
+  it('reports an error when the reload resolves no id, which it does instead of throwing', async () => {
+    // `reloadWebView` resolves undefined when the definition has gone or the provider declines. The
+    // re-point is the panel's only project signal now, so a silent no-op here is not acceptable.
+    const { papi, mockReloadWebView, mockError } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
+    mockReloadWebView.mockResolvedValue(undefined);
+
+    await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('did not take'));
+  });
+
+  it('resolves without throwing and reports an error when the open-web-view probe fails', async () => {
+    const { papi, mockGetAllOpenWebViewDefinitions, mockError } = createRelatedPanelsMockPapi();
     mockGetAllOpenWebViewDefinitions.mockRejectedValue(new Error('probe failed'));
 
     await expect(updateRelatedTextCollectionPanel(papi, 'proj-b')).resolves.toBeUndefined();
-    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('probe failed'));
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('probe failed'));
+    // Distinct from "no panel is open": the router rejects when a window is unreachable, so what is
+    // open is unknown rather than empty.
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('could not establish'));
   });
 });
 
@@ -3430,11 +3515,13 @@ describe('openOrUpdateRelatedPanels', () => {
 
     await openOrUpdateRelatedPanels(papi, 'proj-b');
 
-    expect(mockSendCommand.mock.calls.map(([command]) => command)).toEqual([
-      'platformScriptureEditor.openModelText',
-      'platformScriptureEditor.openResourceText',
-      'platformScriptureEditor.openResourceText',
-      'legacyCommentManager.openCommentListPanel',
+    // Full arguments, not just command names: the names alone pass even if the resource types are
+    // swapped or every panel is handed the outgoing projectId, which is the routing this covers.
+    expect(mockSendCommand.mock.calls).toEqual([
+      ['platformScriptureEditor.openModelText', 'proj-b'],
+      ['platformScriptureEditor.openResourceText', 'CommentaryResource', 'proj-b'],
+      ['platformScriptureEditor.openResourceText', 'ScriptureResource', 'proj-b'],
+      ['legacyCommentManager.openCommentListPanel', 'proj-b'],
     ]);
   });
 });

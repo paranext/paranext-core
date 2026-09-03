@@ -1177,6 +1177,14 @@ export async function finalizeProjectSwitch(
   // tab within it.
   syncOnProjectSwitch(papi, projectId, undefined);
   if ((await papi.settings.get('platform.interfaceMode')) === 'simple') {
+    // The rebuilt Simple layout stamps `projectId` onto the tabs of the static layout, but the Text
+    // Collection is merged in afterwards from the default-layout supplement, which carries none — so
+    // this is the one Column 3 panel that arrives unbound from a mode switch and would otherwise
+    // fall back to the scroll group's (outgoing) source project. Ordered before `applyForProject`
+    // for the same reason the editor-column switch is: the re-point settles the panel's content
+    // before the shared layout picks which tab to front. It swallows its own failures, so no
+    // try/catch here.
+    await updateRelatedTextCollectionPanel(papi, projectId);
     await applyForProject?.(projectId);
   }
   try {
@@ -1252,10 +1260,12 @@ export async function openOrUpdateRelatedPanels(
  * because an inline literal would trip TypeScript's excess-property check.
  *
  * Exported so `scriptureTextGridWebViewProvider` in `main.ts` types its `openWebViewOptions` with
- * this same type: the writer here and the reader there are otherwise linked only by the field name,
- * so renaming or dropping `projectId` on one side would leave `typecheck` green and silently stop
- * the panel following project switches. (Mirrors `FindWebViewOptions`, which Find exports once and
- * uses on both sides.)
+ * this same type, which catches a _rename_ of `projectId` on either side via the object literal's
+ * excess-property check. It does NOT catch an omission: `projectId` has to stay optional, so `{
+ * bringToFront: false }` still typechecks and the provider's `openWebViewOptions.projectId ??
+ * savedWebView.projectId` would quietly fall back to the stale saved id — reintroducing PT-4238
+ * with `typecheck` green. Only a test on the provider side would catch that, and none exists.
+ * (Mirrors `FindWebViewOptions`, which Find exports once and uses on both sides.)
  */
 export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
 
@@ -1284,9 +1294,16 @@ export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: stri
  *   project switch should reverse. (In practice the sole caller is Simple-mode-only, so this guard
  *   is a contract, not a hot path.)
  * - Skips the reload when the panel already shows `projectId`, because rebuilding the iframe drops
- *   the grid's in-memory React state (an open chapter-context split, in-flight "Installing…" rows)
- *   for no gain. State held through `useWebViewState` — `viewMode`, per-cell zoom — survives, since
- *   a reload reuses the same web view id.
+ *   the grid's in-memory React state for no gain. State held through `useWebViewState` —
+ *   `viewMode`, per-cell zoom — survives, since a reload reuses the same web view id.
+ *
+ *   Not all of that loss is cosmetic. The reload destroys the iframe's JS realm, so a DBL install
+ *   running in the grid is abandoned mid-flight: `installDblResource` proxies to .NET and completes
+ *   regardless, but the continuation that calls `persistUserAddition` dies with the realm, leaving
+ *   the resource installed on disk and absent from the collection, with no notification and no log
+ *   (the post-await `sourcesRef` check is a staleness re-read, not a liveness check). Recoverable
+ *   by re-adding the resource, which then succeeds immediately. The fix belongs in the install path
+ *   — persist the addition somewhere that survives a reload — and is out of scope here.
  * - Never brings the panel to front. This runs as part of re-pointing the whole column, not because
  *   anyone asked for the Text Collection, and the admin's shared layout chooses the front tab
  *   immediately afterward.
@@ -1301,21 +1318,55 @@ export async function updateRelatedTextCollectionPanel(
   papi: typeof PapiBackend,
   projectId: string,
 ): Promise<void> {
+  let existingPanel: SavedWebViewDefinition | undefined;
   try {
     const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-    const existingPanel = allOpenDefs.find(
-      (def) => def.webViewType === SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+    existingPanel = allOpenDefs.find((def) => def.webViewType === SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
+  } catch (e) {
+    // The router rejects this outright when any window is unreachable, so this is "what is open is
+    // unknown", not "no panel is open" — distinct from the no-panel case below, which is normal.
+    papi.logger.error(
+      `Text Collection re-point to ${projectId} aborted: could not establish which web views are open (${getErrorMessage(e)}). The panel may still show a previous project.`,
     );
-    if (!existingPanel || existingPanel.projectId === projectId) return;
+    return;
+  }
 
+  // Normalized on both sides, as this module does everywhere else it compares ids: they arrive
+  // verbatim from a resource reference while the .NET side canonicalizes to uppercase, so a raw
+  // `===` would read a case-differing id as a different project and reload on every switch back —
+  // discarding exactly the in-memory state this guard exists to protect.
+  if (
+    !existingPanel ||
+    (existingPanel.projectId !== undefined &&
+      normalizeProjectId(existingPanel.projectId) === normalizeProjectId(projectId))
+  )
+    return;
+
+  try {
     // Hidden case: Simple mode shows one Column 3 tab at a time, so this usually lands on an
     // inactive tab. That is fine and needs no catch-up — the reload remounts the panel and its
     // render is entirely data-driven (no geometry reads, no scrollIntoView), so it produces the
     // right content while hidden and is simply revealed when the tab is next activated.
     const options: TextCollectionPanelOptions = { projectId, bringToFront: false };
-    await papi.webViews.reloadWebView(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, existingPanel.id, options);
+    const reloadedId = await papi.webViews.reloadWebView(
+      SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+      existingPanel.id,
+      options,
+    );
+    // `reloadWebView` resolves `undefined` rather than throwing when the definition has gone or the
+    // provider declines to supply one. Worth an error rather than silence: a failed re-point is not
+    // self-correcting. `projectId` is not in `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS`, so once any
+    // re-point has succeeded the panel's saved definition carries a project and `explicitProjectId`
+    // wins in `resolveTextCollectionProjectId` from then on — the scroll-group fallback that used to
+    // correct a stale panel on the next navigation no longer runs.
+    if (reloadedId === undefined)
+      papi.logger.error(
+        `Text Collection re-point to ${projectId} did not take: reloadWebView returned no id for panel ${existingPanel.id}. The panel is left showing ${existingPanel.projectId ?? 'no project'}.`,
+      );
   } catch (e) {
-    papi.logger.warn(`Error updating text collection panel project: ${getErrorMessage(e)}`);
+    papi.logger.error(
+      `Text Collection re-point to ${projectId} failed for panel ${existingPanel.id}: ${getErrorMessage(e)}. The panel is left showing ${existingPanel.projectId ?? 'no project'}.`,
+    );
   }
 }
 

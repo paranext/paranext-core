@@ -46,3 +46,60 @@ export function resolveTextCollectionProjectId(
   if (candidateIsOwnResource) return previous;
   return candidateProjectId;
 }
+
+/** What the Text Collection grid's body should render. */
+export type GridBodyState = 'cells' | 'loading' | 'empty' | 'error';
+
+/** Inputs for {@link resolveGridBodyState}. */
+export type GridBodyStateInput = {
+  /** Whether `toGridResources` produced at least one cell to render. */
+  hasResources: boolean;
+  /** Whether the grid currently has a project to show a collection for. */
+  hasProject: boolean;
+  /** Whether {@link useTextCollectionSources} has finished assembling its four sources. */
+  areSourcesResolved: boolean;
+  /** Whether the sources resolved to a failure rather than a value. Terminal. */
+  hasSourcesError: boolean;
+  /** Whether the cached DBL resource list is still in flight. */
+  isLoadingCachedResources: boolean;
+  /** Whether the localized strings this body renders are still resolving. */
+  isLoadingLocalizedStrings: boolean;
+};
+
+/**
+ * Decides which of the grid body's four states to render.
+ *
+ * Extracted as a pure function for the same reason `resolveResourceContentState` is: the sibling
+ * Column 3 panels keep this decision out of the render so it can be unit-tested without a web view
+ * harness, which the repo does not have.
+ *
+ * Two rules carry the weight:
+ *
+ * - **Cells win over loading.** `toGridResources` maps every chosen reference — unresolved DBL ones
+ *   become placeholders — so there are cells to show as soon as the sources land, even while the
+ *   cached DBL list is still in flight. Each cell renders its own loading/unavailable state, so
+ *   showing the text that is ready beats hiding the whole grid behind a spinner.
+ * - **Only a bound project can be loading.** With no project there is no
+ *   `platformScripture.textConnectionSettings` provider, so the sources never resolve and a spinner
+ *   would never end. No project is a steady state, and so is a sources failure — the same rule
+ *   `resource-panel-readiness.utils.ts` states as "an unreadable setting is its own answer — never
+ *   hide it behind a spinner that cannot end."
+ *
+ * @param input See {@link GridBodyStateInput}.
+ * @returns The body state to render.
+ */
+export function resolveGridBodyState({
+  hasResources,
+  hasProject,
+  areSourcesResolved,
+  hasSourcesError,
+  isLoadingCachedResources,
+  isLoadingLocalizedStrings,
+}: GridBodyStateInput): GridBodyState {
+  if (hasResources) return 'cells';
+  if (hasSourcesError) return 'error';
+  if (!hasProject) return 'empty';
+  if (!areSourcesResolved || isLoadingCachedResources || isLoadingLocalizedStrings)
+    return 'loading';
+  return 'empty';
+}

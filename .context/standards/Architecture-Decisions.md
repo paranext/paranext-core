@@ -959,7 +959,10 @@ step, no automation. Just a record.
 - **Status:** Accepted
 - **Context:** Simple mode's Column 3 panels follow the *active translation project*: the editor gates
   `openOrUpdateRelatedPanels` on `projectForWebView.isEditable` precisely so that opening a published
-  resource in the editor column does not switch the related panels over to the resource. Making Find a
+  resource in the editor column does not switch the related panels over to the resource. **(No longer
+  true as of PR #2425, which deleted that gate; the related panels now do follow a published
+  resource opened in the editor column. Recorded in
+  `adr-column-3-panels-are-told-their-project`. The reasoning below is preserved as written.)** Making Find a
   permanent Column 3 tab put it inside that contract for the first time, and it was the one panel
   exempt from it — `openFind` took whatever project the triggering editor held, with no editability
   check, so Ctrl+F on a resource re-pointed the always-visible Find tab at the resource while its
@@ -2220,10 +2223,12 @@ step, no automation. Just a record.
 
 - **Date:** 2026-08-27
 - **Status:** Accepted
-- **Context:** Simple mode's Column 3 holds five panels, and a project switch re-pointed four of them
-  explicitly (`openOrUpdateRelatedPanels` sends `openModelText`, two `openResourceText` calls, and
-  `openCommentListPanel`) plus Find separately (`updateRelatedFindPanel`, which waits for the new
-  editor's web view id). The Text Collection was the one panel left to work its project out for
+- **Context:** Simple mode's Column 3 holds exactly five panels — Bible Texts, Commentaries,
+  Comments, the Text Collection, and Find — pinned by `shipped-simple-layout-order.test.ts`. A
+  project switch re-pointed three of them explicitly (`openOrUpdateRelatedPanels` sends two
+  `openResourceText` calls and `openCommentListPanel`; its fourth command, `openModelText`, targets
+  the **Column 1** Model Text panel, not Column 3 — see `simple-layout.data.ts`) plus Find
+  separately (`updateRelatedFindPanel`, which waits for the new editor's web view id). The Text Collection was the one panel left to work its project out for
   itself: opened by the shipped layout with no `projectId`, it fell back to the 5th tuple member of
   `useWebViewScrollGroupScrRef` — which is the scroll group's **source** project, "whichever project
   last SET the group's reference", a signal that exists for versification conversion
@@ -2236,9 +2241,18 @@ step, no automation. Just a record.
 - **Decision:** Every Column 3 panel is **told** its project by the switch; none infers one. The Text
   Collection is re-pointed by `updateRelatedTextCollectionPanel`, called directly from
   `openOrUpdateRelatedPanels` (same module, so no command indirection is needed — unlike the four
-  panels whose handlers live in `main.ts`). It follows Find's variant of the mechanism rather than the
-  older three: re-point by `reloadWebView`, never open a panel that is not already there, skip the
-  reload when the panel already shows the project, and never bring the tab to front. Reload rather
+  panels whose handlers live in `main.ts`). There are **two** switch paths and both must call it:
+  the editor-column switch via `openOrUpdateRelatedPanels`, and the Power→Simple mode switch via
+  `finalizeProjectSwitch`. The mode switch needs its own call because `buildSimpleLayoutForProject`
+  stamps `projectId` only onto the static layout's tabs, while the Text Collection is merged in
+  afterwards from the default-layout supplement, which carries none — so it is the one panel that
+  arrives unbound from a mode switch. Its *shape* — `getAllOpenWebViewDefinitions()` → `.find(webViewType)` →
+  `reloadWebView` — is the one `openResourceText` already uses (`main.ts`), not something novel. What
+  it takes from **Find** is the *policy*: never open a panel that is not already there, skip the
+  reload when the panel already shows the project, and never bring the tab to front. Find's own
+  distinguishing feature — the `openWebView(…, { existingId: '?', createNewIfNotFound: false })`
+  probe, which routes through `findOwner` and so reaches the panel in whichever window holds it — is
+  deliberately **not** adopted here; see the multi-window note in Consequences. Reload rather
   than an in-place `projectId` update for two reasons — `papi.webViews` exposes no
   definition-updating call at all (only a web view can update its *own* definition, so from the
   service side a reload is the only route), and, more bindingly, the grid reads admin layout settings
@@ -2266,14 +2280,51 @@ step, no automation. Just a record.
   it should be re-pointed explicitly instead. Note that `adr-find-follows-editor-to-read-only`
   records Find as "the only Column 3 panel that command re-points without also being able to open
   it" — that is no longer the only such panel, though the Text Collection is re-pointed by a direct
-  call rather than a command. Reloading the grid drops its in-memory React state (an open
-  chapter-context split, in-flight "Installing…" rows); state held through `useWebViewState` —
-  `viewMode`, per-cell zoom — survives, because a reload reuses the same web view id. The loss is
-  accepted, because the collection's contents legitimately change on a project switch anyway, and the
-  skip-if-unchanged guard keeps it from happening when the project did not change. The reload also
+  call rather than a command. Reloading the grid drops its in-memory React state (for example an
+  open chapter-context split); state held through `useWebViewState` — `viewMode`, per-cell zoom —
+  survives, because a reload reuses the same web view id. That loss is accepted, because the
+  collection's contents legitimately change on a project switch anyway, and the skip-if-unchanged
+  guard keeps it from happening when the project did not change. **One part of it is not cosmetic:**
+  the reload destroys the iframe's JS realm, so a DBL install in flight in the grid is abandoned —
+  `installDblResource` proxies to .NET and finishes, but the continuation that calls
+  `persistUserAddition` never runs, leaving the resource installed on disk and absent from the
+  collection with no notification and no log. The Text Collection is the only Column 3 panel hosting
+  an install flow, so it is the only one where a re-point can lose work rather than just view state.
+  Accepted for now as a narrow window with a recoverable outcome (re-adding the resource succeeds
+  immediately); the real fix belongs in the install path, which should persist the addition somewhere
+  that survives a reload. The reload also
   reopens the panel's load window on every switch, not just at first mount, so the grid body now
-  renders a labelled spinner for that window instead of an empty container — matching the three
+  renders the shared `LoadingView` for that window instead of an empty container — matching the three
   sibling panels re-pointed by the same mechanism. If a sixth Column 3 panel appears, the rule to apply is this one: add it to
   `openOrUpdateRelatedPanels` (or, if it needs the new editor's id, beside `updateRelatedFindPanel`)
-  rather than giving it a signal to infer from.
+  rather than giving it a signal to infer from. Three limits of this decision are recorded
+  deliberately rather than left to be re-derived:
+  - **Read-only resources are followed.** PR #2425 removed the `isEditable` gate from the
+    `openOrUpdateRelatedPanels` call site, so opening a published resource in the editor column now
+    re-points the Text Collection at it. A resource project does advertise
+    `platformScripture.textConnectionSettings` (`c-sharp/Projects/LocalParatextProjects.cs`), so the
+    grid resolves to an empty collection and lands on its empty state rather than hanging. This also
+    falsifies `adr-find-follows-editor-to-read-only`'s Context, which still states as fact that "the
+    editor gates `openOrUpdateRelatedPanels` on `projectForWebView.isEditable`" — untrue since
+    #2425. The Find call site retains its own `isEditable` guard, so Find and the other five panels
+    now disagree, and the comment at that call site claiming the two guards match is stale.
+  - **The re-point targets one window.** `getAllOpenWebViewDefinitions()` flattens across every
+    window, so `.find()` returns whichever Text Collection comes first, not the one in the window
+    that switched. If that panel already shows the target project the skip guard returns early and a
+    second window's panel is never re-pointed. `openResourceText` has the same limitation, so this
+    is consistent with the siblings rather than newly broken; Find avoids it via the `findOwner`
+    probe noted in the Decision.
+  - **A failed re-point no longer self-corrects.** `projectId` is not in
+    `SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS`, so once any re-point succeeds the panel's saved
+    definition carries a project and `explicitProjectId` wins from then on — the scroll-group
+    fallback that used to fix a stale panel on the next navigation stops running. Because of that,
+    `updateRelatedTextCollectionPanel` checks `reloadWebView`'s return (it resolves `undefined`
+    rather than throwing when the definition has gone or the provider declines) and logs failures at
+    **error**, naming the project left on screen. It still does not recover; it just stops failing
+    silently.
+  - **The stale-held-setting path is narrowed, not closed.** Whenever the grid is still unbound it
+    continues to change `projectId` in place through its latch effect, which is exactly the usage
+    `useBufferedLayoutSetting` warns about: `shouldApply` is already `false` after the first apply,
+    so the held admin list can stay on the outgoing project while the per-user list and overlay
+    resubscribe to the incoming one.
 - **Source:** PT-4423, which fixes PT-4238.
