@@ -2733,3 +2733,62 @@ step, no automation. Just a record.
   **Revisit** if a third consumer appears that cannot build the editor or sit beside a built
   `paranext-core`, which is the point at which publishing earns its cost.
 - **Source:** PT-4500, forking `scripture-editors` into the paranext organization.
+
+## adr-staged-closure-owned-by-core: paranext-core owns the editor's dependency closure; every other consumer resolves through it
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** `adr-dev-packages-staged-file-deps` records *that* the staged copy has to live
+  inside this repo. It does not record *why* the same
+  `file:` specifier behaves differently one directory up, or what that means for the ten repos in
+  the organization that depend on `lib/platform-bible-react` and `lib/platform-bible-utils`. Both
+  questions came up again when a consumer's CI broke, and both were answered by measurement rather
+  than by reading npm's documentation, so the measurements belong here.
+
+  npm treats a `file:` dependency two entirely different ways depending on whether its target is
+  inside the depending project:
+
+  | Target | What npm does | `npm ci` when the target's manifest gains a dependency |
+  | --- | --- | --- |
+  | `file:dev-packages/staging/platform-editor` (inside) | real install: the target's whole dependency closure lands in this repo's `node_modules` | **fails**, `EUSAGE … Missing: <dep> from lock file` |
+  | `file:../scripture-editors/packages/platform` (outside) | bare symlink; the closure is never installed | **exits 0**, dependency silently absent |
+
+  Node and webpack resolve a symlinked package from its **real path**, so a package reached by
+  symlink looks for its own dependencies where it physically sits, not where the link is. Those two
+  facts together explain everything downstream.
+
+- **Decision:** Exactly one repository installs the editor's dependency closure, and that repository
+  is paranext-core, which is why the staged copy must sit inside it. Everything else reaches the
+  editor by symlink and resolves its dependencies out of core's `node_modules` through the real
+  path. No other repository declares, installs, or gates on that closure.
+
+  Concretely, an extension repo depends on `file:../paranext-core/lib/platform-bible-react`, which
+  npm links rather than installs. Its lockfile records PBR's dependency *declaration* — including
+  the editor — but resolves nothing from it and never validates it. When the extension's webpack
+  bundles PBR (PBR is not in the extension template's `externals`; `platform-bible-utils` is), the
+  editor import resolves from `paranext-core/lib/platform-bible-react/` upward into
+  `paranext-core/node_modules/`, which core's own install populated for real.
+
+- **Alternatives:** **Point core at the source checkout instead of copying** (`file:` one directory
+  up) — rejected, and this is the failure that motivated the copy: npm installs no closure for an
+  out-of-tree target, so the editor's dependencies stay in `scripture-editors/node_modules` under
+  pnpm's layout and nothing in core can resolve them. **Gate `platform-yalc` on every dependent
+  repo's lockfile** — rejected: it would enforce a constraint that does not exist. An editor
+  dependency change invalidates exactly one lockfile, core's, which
+  `verify-consumer-lockfile-sync.mjs` already checks on every push to `platform-yalc`. Scanning the
+  organization would turn each editor dependency bump into an N-way lockstep merge, growing with
+  every new consumer, to protect lockfiles that install nothing.
+
+- **Consequences:** Adding a consumer costs nothing: it needs no lockfile refresh when the editor's
+  dependencies change, and no entry in any list. What it does need is for core's `node_modules` to
+  be genuinely populated, which is why every consumer CI job that installs core with
+  `--ignore-scripts` must run `node .erb/scripts/stage-dev-packages.ts` first — without it npm links
+  a target that does not exist, `npm ci` still exits 0, and
+  `node_modules/@eten-tech-foundation/platform-editor` is left a dangling symlink. That surfaces far
+  away, as an unresolved module during a consumer's lint or typecheck (PBR imports the editor in 28
+  files, PBU in 10), which is a long way from the cause.
+
+  The reasoning holds only while consumers reach core from **outside** it. A repo that vendored core
+  inside itself, or that added a staged package as an in-tree `file:` dependency of its own, would
+  join core in the hard-coupled class and would then need its lockfile kept in sync.
+- **Source:** PT-4500, review of #2745.
