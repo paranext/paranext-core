@@ -88,6 +88,13 @@ vi.mock('./use-effective-resource-reference-list.hook', () => ({
   default: (...args: unknown[]) => mockUseEffectiveResourceReferenceList(...args),
 }));
 
+// The picker list is a source the panel waits on: while it is loading the panel renders a spinner
+// instead of any empty state, so it has to be settled for the disclosure to be reachable at all.
+vi.mock('./use-resource-picker-resources.hook', () => ({
+  useResourcePickerResources: vi.fn(() => [[], false]),
+  default: vi.fn(() => [[], false]),
+}));
+
 vi.mock('./use-commentary-marker-styles.hook', () => ({
   useCommentaryMarkerStyles: vi.fn(),
   default: vi.fn(),
@@ -180,11 +187,12 @@ function getResourceTextPanel(): React.ComponentType<WebViewProps> {
 
 /** Renders the component with zero-state (empty filteredResources list). */
 function renderZeroState(resourceType: 'ScriptureResource' | 'Commentary' = 'ScriptureResource') {
-  // effectiveResources is defined (not undefined) so it won't spinner, but items is empty
-  mockUseEffectiveResourceReferenceList.mockReturnValue([
-    { dataVersion: '1.0.0', items: [] },
-    false,
-  ]);
+  // The list has arrived — `ready` is the only status that lets a panel render an empty prompt —
+  // and it carries no items, which is the genuine "nothing is configured" state.
+  mockUseEffectiveResourceReferenceList.mockReturnValue({
+    status: 'ready',
+    list: { dataVersion: '1.0.0', items: [] },
+  });
 
   const props = makeProps({
     useWebViewState: vi.fn(
