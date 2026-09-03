@@ -8,14 +8,19 @@ import {
   JSONRPCServerMiddlewareNext,
 } from 'json-rpc-2.0';
 import { logger } from '@shared/services/logger.service';
-import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
+import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from '@shared/models/rpc.interface';
 import {
+  ANNOUNCE_PEER,
   ConnectionStatus,
   createErrorResponse,
   createRequest,
+  describeWebSocketCloseEvent,
+  describeWebSocketErrorEvent,
   deserializeMessage,
   EventHandler,
+  INTENTIONAL_CLOSE_CODE,
   InternalRequestHandler,
+  isCleanCloseEvent,
   REGISTER_EVENT,
   REGISTER_METHOD,
   RequestParams,
@@ -25,7 +30,14 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { createWebSocket } from '@client/services/web-socket.factory';
-import { AsyncVariable, getErrorMessage, Mutex, MutexMap } from 'platform-bible-utils';
+import {
+  AsyncVariable,
+  getErrorMessage,
+  Mutex,
+  MutexMap,
+  PlatformEvent,
+  PlatformEventEmitter,
+} from 'platform-bible-utils';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
 import {
   SingleMethodDocumentation,
@@ -39,6 +51,25 @@ import {
  */
 export class RpcClient implements IRpcMethodRegistrar {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
+  /**
+   * Never fires here. Only the process that owns the websocket server sees a connection being lost;
+   * this end of the seam exists so shared code can subscribe in any process without asking which
+   * one it is running in.
+   *
+   * @experimental
+   */
+  readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+  /**
+   * Whether {@link onWebSocketClose} has already run for the current socket.
+   *
+   * A closed socket's listener is already removed, but a caller holding a stale reference to the
+   * bound handler could still invoke it directly; this makes a second call a no-op rather than
+   * double-logging and re-running teardown. Deliberately its own field rather than a read of
+   * `connectionStatus`, which is public and mutable: keyed off that, the natural future edit of
+   * setting `Disconnected` in `disconnect()` would skip teardown for the close that follows and
+   * permanently leak everything the socket had registered.
+   */
+  private hasCompletedTeardown = false;
   private ws: WebSocket | undefined;
   private requestId: number = 1;
   /** Refers to the current process that created this object (i.e., not main) */
@@ -48,10 +79,32 @@ export class RpcClient implements IRpcMethodRegistrar {
   private readonly jsonRpcClientServer: JSONRPCServerAndClient;
   private readonly connectionMutex: Mutex = new Mutex();
   private readonly registrationMutexMap: MutexMap = new MutexMap();
+  // TODO(PT-4435): `AsyncVariable` is single-shot and freezes itself once settled, so this
+  // field cannot be reused across connection attempts — a second connect() resolves
+  // instantly and reports Connected before the handshake finishes. Recreate it per attempt
+  // (and move applyMiddleware to the constructor) before adding reconnect.
+  //
+  // TODO(PT-4435): A fourth blocker sits outside this class and outside its tests, which mock the
+  // socket factory: in the renderer, `blockWebSocketsToPapiNetwork()` runs after the initial
+  // connect (`src/renderer/index.tsx`), so any later reconnect throws `Invalid URL` from
+  // `PapiRendererWebSocket`'s constructor and never reaches the `AsyncVariable` problems above.
+  // Reconnect needs an unblocked path to the PAPI port for this client.
   private readonly connectionComplete = new AsyncVariable<void>('websocket connected');
+  private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
+  /**
+   * Label identifying this process in connection log lines, so multi-window logs stay readable.
+   *
+   * The logger already prefixes every line with a per-process-type tag (`[rend]`/`[exth]`), so
+   * `peerName` alone (e.g. plain `'renderer'`) would add nothing. Each `BrowserWindow` is its own
+   * renderer process, so two windows would otherwise emit identical lines; a per-instance
+   * discriminator is appended so they can be told apart.
+   */
+  private readonly peerName: string;
 
-  constructor() {
+  constructor(peerName: string = 'client') {
     bindClassMethods.call(this);
+    this.onDidDisconnectClient = this.clientDisconnectEmitter.event;
+    this.peerName = `${peerName}#${RpcClient.getPeerDiscriminator()}`;
     this.jsonRpcServer = new JSONRPCServer();
     this.jsonRpcClient = new JSONRPCClient(
       (payload) => sendPayloadToWebSocket(this.ws, payload),
@@ -66,8 +119,22 @@ export class RpcClient implements IRpcMethodRegistrar {
     logger.error(`${message}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
   }
 
-  private static onError(ev: Event): void {
-    RpcClient.handleError('Client websocket error event occurred', ev);
+  /**
+   * A discriminator distinguishing this client from another of the same type, for the `peerName`
+   * label.
+   *
+   * Prefers `globalThis.windowId`, the id main assigns each `BrowserWindow` and passes in by query
+   * parameter, because it is the only one of the three that is STABLE: it survives a reload, so
+   * "the same window reconnected" reads differently from "a second window appeared". The renderer
+   * has no access to `process` (see `identifyCaller` in `logger.utils.ts`), so a pid would never be
+   * reached there anyway; it is kept for the extension host, which has a pid and no window. The
+   * random id is a last resort so the label never reads `undefined`; being per-instance, it cannot
+   * be correlated across a reload.
+   */
+  private static getPeerDiscriminator(): string {
+    if (globalThis.windowId) return globalThis.windowId;
+    if (typeof process !== 'undefined' && typeof process.pid === 'number') return `${process.pid}`;
+    return Math.random().toString(36).slice(2, 8);
   }
 
   async connect(localEventHandler: EventHandler): Promise<boolean> {
@@ -93,17 +160,42 @@ export class RpcClient implements IRpcMethodRegistrar {
 
       try {
         this.connectionStatus = ConnectionStatus.Connecting;
+        this.hasCompletedTeardown = false;
         this.ws = await createWebSocket(`ws://localhost:${WEBSOCKET_PORT}`);
         this.addEventListenersToWebSocket();
+        // Captured before the await: a close interleaving with the resolution below runs
+        // onWebSocketClose, which nulls `this.ws`, and the resumed continuation would then throw on
+        // `this.ws.url` — reported by the catch as a connection error that never happened.
+        const { url } = this.ws;
 
         // Wait for the socket to finish connecting before continuing (0 means connecting)
         if (this.ws.readyState !== 0) this.connectionComplete.resolveToValue();
         await this.connectionComplete.promise;
 
+        // The socket can die while this await is parked: onWebSocketClose then runs to completion,
+        // removing the listeners, nulling `this.ws` and setting Disconnected. Writing Connected over
+        // that teardown strands the client — it reports healthy with no socket, every send throws,
+        // and it can never retry, because the guard at the top of this method returns true on
+        // Connected and only onWebSocketClose (now latched, and unsubscribed) clears it.
+        if (this.hasCompletedTeardown) {
+          logger.warn(`Websocket for ${this.peerName} closed while connecting to ${url}`);
+          return false;
+        }
+
         this.connectionStatus = ConnectionStatus.Connected;
-        logger.info(`Websocket connected to ${this.ws.url}`);
+        logger.info(`Websocket connected to ${url}`);
+        this.announcePeerToServer();
       } catch (error) {
-        RpcClient.handleError(`RPC client connection error: ${getErrorMessage(error)}`, this.ws);
+        // Log the peer and the failure text; the socket object itself carries no own
+        // properties worth serializing.
+        RpcClient.handleError(
+          `RPC client connection error for ${this.peerName}`,
+          getErrorMessage(error),
+        );
+        // TODO(PT-4435): The socket itself is never closed here, only forgotten — leaving a live,
+        // listener-less socket and a server-side RpcServer whose registered methods are never
+        // reaped. That is the startup-race shape recorded in the ADR. Closing it changes what a
+        // failed connect does to a live socket, so it belongs with the reconnect work.
         this.removeEventListenersFromWebSocket();
         this.connectionStatus = ConnectionStatus.Disconnected;
         this.ws = undefined;
@@ -114,6 +206,11 @@ export class RpcClient implements IRpcMethodRegistrar {
     });
   }
 
+  // TODO(PT-4435): No client peer reaches this method today. `IRpcHandler.disconnect` is called
+  // only from `networkService.shutdown()`, which runs in main, where the handler is an
+  // `RpcWebSocketListener` — so a renderer or extension host currently dies with its socket rather
+  // than closing it, and `INTENTIONAL_CLOSE_CODE` never leaves a client. Wiring a client-side
+  // shutdown belongs with the reconnect work, which needs a deliberate teardown path anyway.
   async disconnect(): Promise<void> {
     return this.connectionMutex.runExclusive(async () => {
       if (this.connectionStatus === ConnectionStatus.Disconnected) return;
@@ -125,8 +222,8 @@ export class RpcClient implements IRpcMethodRegistrar {
         logger.warn(`Client connected but websocket is not set`);
         return;
       }
-      logger.info(`Websocket disconnecting from ${this.ws.url}`);
-      this.ws.close();
+      logger.info(`Websocket for ${this.peerName} disconnecting from ${this.ws.url}`);
+      this.ws.close(INTENTIONAL_CLOSE_CODE, 'app shutdown');
     });
   }
 
@@ -221,7 +318,7 @@ export class RpcClient implements IRpcMethodRegistrar {
   private addEventListenersToWebSocket() {
     if (this.ws) {
       this.ws.addEventListener('close', this.onWebSocketClose);
-      this.ws.addEventListener('error', RpcClient.onError);
+      this.ws.addEventListener('error', this.onError);
       this.ws.addEventListener('message', this.onMessageReceivedByWebSocket);
       this.ws.addEventListener('open', this.onWebSocketOpen);
     }
@@ -230,19 +327,55 @@ export class RpcClient implements IRpcMethodRegistrar {
   private removeEventListenersFromWebSocket() {
     if (this.ws) {
       this.ws.removeEventListener('close', this.onWebSocketClose);
-      this.ws.removeEventListener('error', RpcClient.onError);
+      this.ws.removeEventListener('error', this.onError);
       this.ws.removeEventListener('message', this.onMessageReceivedByWebSocket);
       this.ws.removeEventListener('open', this.onWebSocketOpen);
       this.ws = undefined;
     }
   }
 
+  /**
+   * Tell main which peer owns this socket. Main labels sockets with an incrementing id that appears
+   * nowhere in this process's logs, so without this a close line on each end cannot be joined to
+   * the other.
+   *
+   * Deliberately not awaited: this is diagnostic metadata, so neither a slow response nor a peer
+   * that does not implement the method may delay or fail a connection that is already up.
+   */
+  private announcePeerToServer(): void {
+    this.request(ANNOUNCE_PEER, [this.peerName]).catch((error) => {
+      logger.debug(`Could not announce peer name ${this.peerName}. ${getErrorMessage(error)}`);
+    });
+  }
+
+  /**
+   * An error event is usually the FIRST symptom of a socket going bad, so it needs the peer label
+   * as much as the close line does — in the renderer the event carries no detail at all by
+   * specification, leaving the peer as the only thing separating one window's error from another's.
+   * An instance method (bound by `bindClassMethods`) rather than a static one for that reason.
+   */
+  private onError(ev: Event): void {
+    RpcClient.handleError(
+      `Client websocket error event occurred for ${this.peerName}`,
+      describeWebSocketErrorEvent(ev),
+    );
+  }
+
   private onWebSocketOpen(): void {
     this.connectionComplete.resolveToValue();
   }
 
-  private onWebSocketClose(): void {
+  private onWebSocketClose(ev: CloseEvent): void {
+    if (this.hasCompletedTeardown) return;
+    this.hasCompletedTeardown = true;
+
     this.jsonRpcClientServer.rejectAllPendingRequests('The web socket has closed');
+    const detail = describeWebSocketCloseEvent(ev);
+    const summary = `Websocket for ${this.peerName} closed (${detail})`;
+    // Intent travels in the close code, so a close that arrives after an intentional
+    // disconnect is still reported honestly if the socket actually died.
+    if (isCleanCloseEvent(ev)) logger.info(summary);
+    else logger.warn(summary);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
   }

@@ -21,7 +21,6 @@ function buildOptions(overrides: Overrides = {}): FindSearchTriggersOptions {
     searchTermRef: ref(''),
     pendingProjectSwitchRerunRef: ref(false),
     initialSearchTriggeredRef: ref(false),
-    explicitSearchPendingRef: ref(false),
     startSearch: vi.fn(),
     ...overrides,
   };
@@ -220,6 +219,52 @@ describe('useFindSearchTriggers — restore-time fallback', () => {
         searchTerm: '  ',
       }),
     );
+    expect(startSearch).not.toHaveBeenCalled();
+  });
+});
+
+describe('useFindSearchTriggers — restore-time fallback is one-shot', () => {
+  /** A session that opened with a restored term and has already run its fallback search. */
+  function renderAfterFallback() {
+    const startSearch = vi.fn();
+    const options = buildOptions({
+      findPdp: { id: 'pdp' },
+      findPdpAvailability: 'ready',
+      initialSearchTriggeredRef: ref(true),
+      searchStatus: undefined,
+      searchTerm: 'God',
+      startSearch,
+    });
+    const { rerender } = renderHook(
+      (props: FindSearchTriggersOptions) => useFindSearchTriggers(props),
+      { initialProps: options },
+    );
+    expect(startSearch).toHaveBeenCalledTimes(1);
+    startSearch.mockClear();
+    return { startSearch, options, rerender };
+  }
+
+  // THE REGRESSION THIS EXISTS FOR: `searchStatus === undefined` is not unique to mount time —
+  // clearing the results resets it. Left un-consumed, this fallback then fired on the very next
+  // character typed, running an immediate un-debounced whole-scope search for a one-character term
+  // (and a second, debounced one 500 ms later).
+  it('does not fire again on the first character typed after a clear', () => {
+    const { startSearch, options, rerender } = renderAfterFallback();
+
+    // The clear: status back to undefined, term emptied.
+    rerender({ ...options, searchTerm: '' });
+    // The user types one character.
+    rerender({ ...options, searchTerm: 'a' });
+
+    expect(startSearch).not.toHaveBeenCalled();
+  });
+
+  it('does not fire again when the provider reconnects later in the session', () => {
+    const { startSearch, options, rerender } = renderAfterFallback();
+
+    rerender({ ...options, findPdpAvailability: 'unavailable' });
+    rerender({ ...options, findPdpAvailability: 'ready' });
+
     expect(startSearch).not.toHaveBeenCalled();
   });
 });

@@ -147,7 +147,7 @@ class MenuDataDataProviderEngine
    * live if the user switches modes without restarting. Fire-and-forget (the constructor can't be
    * async): failures are logged, not thrown, and `isDisposed` guards against setting state or
    * leaking a subscription if this engine is disposed before the async work resolves — mirrors the
-   * `subscribeToInterfaceMode` pattern in `web-view.service-host.ts`'s `registerDockLayout`.
+   * `subscribeToInterfaceMode` pattern in `web-view.service-shard.ts`'s `registerDockLayout`.
    */
   #subscribeToInterfaceMode(): void {
     const subscribe = async () => {

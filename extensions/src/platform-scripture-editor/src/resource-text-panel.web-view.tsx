@@ -19,11 +19,10 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Spinner,
-  usePromise,
   useExtraValidMarkers,
   useTabIconSelection,
   type TabIconUrls,
+  Spinner,
 } from 'platform-bible-react';
 import {
   DblResourceData,
@@ -33,15 +32,21 @@ import {
   LocalizeKey,
   ResourceType,
 } from 'platform-bible-utils';
+import { Canon } from '@sillsdev/scripture';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  DblResourceReference,
-  EffectiveResourceReference,
-  ResourceReferenceList,
-} from 'platform-scripture';
+import type { ResourceReferenceList } from 'platform-scripture';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import { useResourcePickerResources } from './use-resource-picker-resources.hook';
+import type { PickerResource } from './downloaded-resources.utils';
+import {
+  canPublishResourcePanelProjectIds,
+  getResourcePanelReadiness,
+  type ResourcePanelReadiness,
+} from './resource-panel-readiness.utils';
+import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
+import { PanelReadinessView } from './panel-readiness-view.component';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
@@ -50,29 +55,50 @@ import {
   isDblResourceReference,
   isProjectReference,
   getRefLabel,
+  getResourceReferenceRowId,
 } from './resource-reference.utils';
+import { resolveResourceSelection } from './resource-selection.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
-import { InstallFailedView, InstallingView } from './install-state-views.component';
+import { ResourceBookNotAvailable } from './resource-book-not-available.component';
+import { ResourceBlankChapter } from './resource-blank-chapter.component';
+import { ResourceTextUnavailable } from './resource-text-unavailable.component';
+import {
+  isBlankChapterOnScreen,
+  isMissingBookError,
+  resolveResourceContentState,
+} from './platform-scripture-editor.utils';
+import {
+  RESOURCE_PANEL_TYPED_STRING_KEYS,
+  resolveResourcePanelStringKeys,
+} from './resource-panel-strings.utils';
+import { RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
+import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
+// The per-resource-type keys come from `RESOURCE_PANEL_TYPED_STRING_KEYS` rather than being listed
+// again here. `useLocalizedStrings` seeds key-to-key defaults only for the keys in the array it is
+// given, so a hand-maintained second list is a silent hole: add a field to `ResourcePanelStringKeys`,
+// forget the array, and the render site reads `undefined` and announces an empty message.
 const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
+  // Shared with the model text panel's blank-chapter branch. Distinct from the editable
+  // `..._emptyChapter_message%`, which sits beside an "Add chapter number" action these read-only
+  // panels must not offer. The missing-book wording is per resource type and comes from
+  // `RESOURCE_PANEL_TYPED_STRING_KEYS` below; a blank chapter reads the same either way.
+  '%webView_platformScriptureEditor_emptyChapter_messageResource%',
   '%webView_resourcePanel_noProject%',
   '%webView_resourcePanel_installing%',
   '%webView_resourcePanel_selecting%',
   '%webView_resourcePanel_installFailed%',
   '%webView_resourcePanel_installFailedOffline%',
   '%webView_resourcePanel_retry%',
+  '%webView_resourcePanel_settingsUnavailable%',
+  '%webView_resourcePanel_loading%',
+  '%webView_resourcePanel_catalogUnavailable%',
   '%webView_resourcePanel_downloadResources%',
-  '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
-  '%webView_resourcePanel_bibleTexts_pick%',
-  '%webView_resourcePanel_bibleTexts_title%',
-  '%webView_resourcePanel_bibleTexts_title_withResource%',
-  '%webView_resourcePanel_commentaries_emptyState_prompt%',
-  '%webView_resourcePanel_commentaries_pick%',
-  '%webView_resourcePanel_commentaries_title%',
-  '%webView_resourcePanel_commentaries_title_withResource%',
+  '%webView_resourcePanel_textUnavailable%',
+  ...RESOURCE_PANEL_TYPED_STRING_KEYS,
 ];
 
 const BIBLE_TEXTS_ICON_URLS: TabIconUrls = {
@@ -89,17 +115,13 @@ const COMMENTARIES_ICON_URLS: TabIconUrls = {
   lightUnselected: 'papi-extension://platformScriptureEditor/assets/file-text-unselected.svg',
 };
 
-/** Returns the `id` field for reference types that have one, or `undefined` for others. */
-function getRefId(ref: EffectiveResourceReference): string | undefined {
-  if (isDblResourceReference(ref) || isProjectReference(ref)) {
-    return ref.id;
-  }
-  return undefined;
-}
+// This panel offers locally-downloaded resources alongside the ones already in the text
+// collection, so its rows are the union of both.
+const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
 
 type ResourceSelectorDropdownProps = {
-  filteredResources: EffectiveResourceReference[];
-  selectedRef: EffectiveResourceReference | undefined;
+  filteredResources: PickerResource[];
+  selectedRef: PickerResource | undefined;
   dblResources: DblResourceData[];
   onSelectResource: (id: string) => void;
   onShowResourcePicker: () => void;
@@ -123,23 +145,26 @@ function ResourceSelectorDropdown({
             className="tw:h-8 tw:w-full tw:justify-between tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap"
           >
             <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
-              {selectedRef ? getRefLabel(selectedRef, dblResources) : ''}
+              {selectedRef ? getRefLabel(selectedRef.reference, dblResources) : ''}
             </span>
             <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="tw:w-72">
           {filteredResources.map((ref) => {
-            const refId = getRefId(ref);
+            const refId = getResourceReferenceRowId(ref.reference);
             return (
               <DropdownMenuCheckboxItem
                 key={refId}
-                checked={refId === (selectedRef ? getRefId(selectedRef) : undefined)}
+                checked={
+                  refId ===
+                  (selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined)
+                }
                 onCheckedChange={() => {
-                  if (refId) onSelectResource(refId);
+                  onSelectResource(refId);
                 }}
               >
-                {getRefLabel(ref, dblResources)}
+                {getRefLabel(ref.reference, dblResources)}
               </DropdownMenuCheckboxItem>
             );
           })}
@@ -226,7 +251,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Data sources
 
-  const [effectiveResources] = useEffectiveResourceReferenceList(
+  const effectiveResourcesState = useEffectiveResourceReferenceList(
     projectId,
     'platformScripture.referencedProjectsAndResources',
   );
@@ -236,24 +261,13 @@ globalThis.webViewComponent = function ResourceTextPanel({
     projectId,
   );
 
-  const [fetchResources, setFetchResources] = useState(true);
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
-    useCallback(async () => {
-      if (fetchResources) {
-        // Sets the `fetchResources` flag to false which will trigger the promise again next render
-        // to fetch the resources
-        setFetchResources(false);
-        return Promise.resolve(undefined);
-      }
-
-      return papi.commands.sendCommand('platformGetResources.getCachedResources');
-    }, [fetchResources]),
-    undefined,
-  );
-  const dblResources = useMemo(
-    () => resourcesPossiblyUndefined ?? [],
-    [resourcesPossiblyUndefined],
+  const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
+  const [pickerResources, arePickerResourcesLoading] = useResourcePickerResources(
+    projectId,
+    RESOURCE_PICKER_OPTIONS,
+    dblResources,
+    isCatalogReady || hasCatalogError,
   );
   const getUserResourceTexts = useCallback(
     async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
@@ -269,76 +283,76 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // installed and renders; the install itself lives in the shared hook. Returns a no-op until the
   // provider resolves — its identity change then re-fires the auto-install effect for the real
   // install.
-  const markResourcesStale = useCallback(() => setFetchResources(true), []);
   const installResource = useInstallDblResource(
     dblResourcesProvider,
     'resource text panel',
-    markResourcesStale,
+    refetchCatalog,
   );
 
   // #endregion
 
   // #region Filter list based on resourceType
 
-  const filteredResources = useMemo((): EffectiveResourceReference[] => {
-    if (!effectiveResources) return [];
-    return effectiveResources.items.filter((ref) => {
-      if (isDblResourceReference(ref)) {
-        return dblResources.find((r) => r.dblEntryUid === ref.id)?.type === resourceType;
-      }
-      if (isProjectReference(ref)) {
-        // ProjectReferences only appear in the Bible Texts tab
-        return resourceType === 'ScriptureResource';
-      }
-      return false;
-    });
-  }, [effectiveResources, dblResources, resourceType]);
+  const filteredResources = useMemo<PickerResource[]>(
+    () => (pickerResources ?? []).filter((row) => row.type === resourceType),
+    [pickerResources, resourceType],
+  );
+
+  // Readiness is decided from whether the sources have ARRIVED, never from whether the filtered
+  // result came out empty — see `getResourcePanelReadiness`.
+  const listReadiness = getResourcePanelReadiness({
+    listState: effectiveResourcesState,
+    isCatalogReady,
+    hasCatalogError,
+    matchingCount: filteredResources.length,
+  });
+
+  // `getResourcePanelReadiness` answers "is anything configured?" from the referenced list alone.
+  // This panel also offers locally-downloaded resources that are not referenced yet, so an empty
+  // referenced list is only genuinely empty once those rows have arrived and none of them matched.
+  let readiness: ResourcePanelReadiness = listReadiness;
+  if (listReadiness === 'empty') {
+    if (arePickerResourcesLoading) readiness = 'loading';
+    else if (filteredResources.length > 0) readiness = 'configured';
+  }
 
   // #endregion
 
   // #region Selection management
 
-  // Holds the ID of a resource just selected from the picker while it propagates through the
-  // reactive settings chain and into filteredResources. Prevents the auto-correct below from
-  // resetting the selection before the new resource has arrived in the list.
+  // Holds the row id of a resource just selected from the picker while it propagates through the
+  // reactive settings chain and into filteredResources. Written from the reference
+  // `selectTextConnection` actually stored, so it is comparable to the row ids of the list.
   const [pendingResourceId, setPendingResourceId] = useState<string | undefined>(undefined);
 
-  // Once the pending resource appears in filteredResources, commit it as the active selection.
-  useEffect(() => {
-    if (!pendingResourceId) return;
-    const found = filteredResources.find((r) => getRefId(r) === pendingResourceId);
-    if (found) {
-      setSelectedResourceId(pendingResourceId);
-      setPendingResourceId(undefined);
-    }
-  }, [filteredResources, pendingResourceId, setSelectedResourceId]);
+  // Committing a pick, holding still while one is in flight, migrating a legacy bare id and
+  // falling back when the selection leaves the list are one decision, not four effects that can
+  // disagree across renders. `resolveResourceSelection` makes it, and is tested directly.
+  const selection = resolveResourceSelection(
+    filteredResources,
+    selectedResourceId,
+    pendingResourceId,
+  );
+  const selectedRef = selection.selectedRow;
 
-  // Auto-correct selectedResourceId when the selected item leaves the filtered list.
-  // Skipped while a pending selection is in-flight to avoid overriding it prematurely.
   useEffect(() => {
-    if (filteredResources.length === 0) return;
-    if (pendingResourceId) return;
-    const currentId = filteredResources.find((r) => getRefId(r) === selectedResourceId);
-    if (!currentId) setSelectedResourceId(getRefId(filteredResources[0]));
-  }, [filteredResources, selectedResourceId, setSelectedResourceId, pendingResourceId]);
-
-  const selectedRef =
-    filteredResources.find((r) => getRefId(r) === selectedResourceId) ?? filteredResources[0];
+    if (selection.nextSelectedResourceId !== undefined)
+      setSelectedResourceId(selection.nextSelectedResourceId);
+    if (selection.shouldClearPending) setPendingResourceId(undefined);
+  }, [selection.nextSelectedResourceId, selection.shouldClearPending, setSelectedResourceId]);
 
   const [isSelecting, setIsSelecting] = useState(false);
 
   // resourceProjectId is the search source passed to Find: the project of the resource this panel
   // is displaying, NOT the panel's own `projectId` prop (that is the container project whose
-  // reference list is shown).
-  let resourceProjectId: string | undefined;
-  let dblMatch: (typeof dblResources)[number] | undefined;
+  // reference list is shown). `PickerResource` resolves it for every reference kind.
+  const resourceProjectId = selectedRef?.projectId;
 
-  if (isDblResourceReference(selectedRef)) {
-    dblMatch = findCachedDblResource(selectedRef, dblResources);
-    resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
-  } else if (isProjectReference(selectedRef)) {
-    resourceProjectId = selectedRef.id;
-  }
+  // The catalog entry behind the selection, for the dynamic title's display name.
+  const dblMatch =
+    selectedRef && isDblResourceReference(selectedRef.reference)
+      ? findCachedDblResource(selectedRef.reference, dblResources)
+      : undefined;
 
   // Auto-install a selected DBL resource matched in the catalog but not installed locally yet
   // (shared with the model-text panel); without it the panel spins forever. Skipped while a manual
@@ -358,25 +372,40 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // Ctrl+F opens Find for the displayed resource.
   useOpenFindShortcut(webViewId, resourceProjectId);
 
+  // This web view's definition `projectId` is the container project whose reference list is shown,
+  // so the displayed resource is invisible to global navigation UI unless declared here.
+  usePublishNavigableProjectIds(
+    useWebViewState,
+    resourceProjectId ? [resourceProjectId] : [],
+    canPublishResourcePanelProjectIds(
+      effectiveResourcesState,
+      isCatalogReady,
+      pickerResources !== undefined,
+    ),
+  );
+
   // #endregion
 
   // #region Dynamic title
 
   let resourceShortName: string | undefined;
-  if (isDblResourceReference(selectedRef) && dblMatch?.installed) {
-    resourceShortName = dblMatch.displayName;
-  } else if (isProjectReference(selectedRef)) {
-    resourceShortName = selectedRef?.name;
+  if (selectedRef) {
+    const { reference } = selectedRef;
+    if (isDblResourceReference(reference) && dblMatch?.installed) {
+      resourceShortName = dblMatch.displayName;
+    } else if (isProjectReference(reference)) {
+      resourceShortName = reference.name;
+    }
   }
 
-  const titleKey =
-    resourceType === 'ScriptureResource'
-      ? '%webView_resourcePanel_bibleTexts_title%'
-      : '%webView_resourcePanel_commentaries_title%';
-  const titleWithResourceKey =
-    resourceType === 'ScriptureResource'
-      ? '%webView_resourcePanel_bibleTexts_title_withResource%'
-      : '%webView_resourcePanel_commentaries_title_withResource%';
+  // One resource type, one matched set of strings. See `resolveResourcePanelStringKeys`.
+  const {
+    titleKey,
+    titleWithResourceKey,
+    emptyStatePromptKey,
+    bookNotAvailableKey,
+    pickButtonKey,
+  } = resolveResourcePanelStringKeys(resourceType);
 
   useEffect(() => {
     const baseTitle = localizedStrings[titleKey];
@@ -406,10 +435,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // #region USJ Fetch
 
   // Chapter view: the whole chapter goes to Editorial, which navigates to scrRef. Deliberately NOT
-  // sliced by scripture-text-grid/verse-display.utils — slicing would blank the verse-0 front matter
-  // (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve verse 0
-  // to verse 1; whole-chapter surfaces like this one must not (see ADR-0019).
-  const [usjPossiblyError] = useProjectData(
+  // sliced by scripture-text-grid/verse-display.utils — slicing would blank the verse-0 front
+  // matter (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve
+  // verse 0 to verse 1; whole-chapter surfaces like this one must not (see
+  // `adr-single-verse-surfaces-resolve-verse-zero-to-one`).
+  const [usjPossiblyError, , isUsjLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
     resourceProjectId,
   ).ChapterUSJ(
@@ -426,6 +456,48 @@ globalThis.webViewComponent = function ResourceTextPanel({
   );
 
   const usjFromPdp = !isPlatformError(usjPossiblyError) ? usjPossiblyError : undefined;
+
+  // A chapter the resource HAS but with nothing in it. Gated on the load having finished because
+  // `useProjectData`'s underlying `useData` hook doesn't reset to its default when the selector
+  // (here, `scrRef`) changes — it keeps the previous chapter's USJ until the new subscription's
+  // first update lands, and its default is `EMPTY_USJ`, which is itself blank. Without the gate the
+  // panel would claim "empty" over a chapter that is still arriving, and again on first mount.
+  //
+  // Chapter 0 is front matter rather than a chapter; `isBlankChapterOnScreen` has that rationale.
+  const isBlankChapter = useMemo(
+    () => !isUsjLoading && isBlankChapterOnScreen(usjFromPdp, scrRef.chapterNum),
+    [usjFromPdp, isUsjLoading, scrRef.chapterNum],
+  );
+
+  // The book-not-available message is withheld unless the failure names the book AND project on
+  // screen right now, so a result still describing the reference the user just left cannot be
+  // misattributed to this one. See `resolveResourceContentState`. Derived here rather than in the
+  // render body below so the editor-feeding effect can depend on it.
+  const contentState = useMemo(
+    () =>
+      resolveResourceContentState({
+        resourceProjectId,
+        usjPossiblyError,
+        currentBookNum: Canon.bookIdToNumber(scrRef.book),
+      }),
+    [resourceProjectId, usjPossiblyError, scrRef.book],
+  );
+
+  // A chapter read that fails is otherwise invisible outside the UI, and the state it produces — a
+  // named, terminal message — looks the same whatever went wrong, so the log is the only place the
+  // cause survives. Keyed on the error alone so paging through books on a sticky failure does not
+  // re-emit it once per book.
+  //
+  // A missing book is ordinary navigation rather than a fault and is already explained on screen, so
+  // it goes to `debug`, which packaged builds drop. If detection ever broke, the same failure would
+  // fall to `error` below and be loud in production rather than silent.
+  useEffect(() => {
+    if (!isPlatformError(usjPossiblyError)) return;
+    const message = getErrorMessage(usjPossiblyError);
+    if (isMissingBookError(usjPossiblyError))
+      logger.debug(`Book not found in resource text: ${message}`);
+    else logger.error(`Error getting resource chapter USJ: ${message}`);
+  }, [usjPossiblyError]);
 
   // #endregion
 
@@ -450,14 +522,19 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Resource picker dialog
 
-  // Only DblResourceReference IDs are passed to the Resource Picker as pre-selected
+  // The IDs the Resource Picker shows as already INCLUDED. Rows sourced from `downloaded` are
+  // installed locally but not in the text collection, so they belong in the picker's INSTALLED
+  // section instead. Drawn from every picker row rather than the type-filtered ones so a resource
+  // of another type that is in the text collection (a commentary alongside Bible texts) is not
+  // re-offered as INSTALLED.
   const currentFilteredDblIds = useMemo(() => {
-    return filteredResources
-      .filter(
-        (r): r is EffectiveResourceReference & DblResourceReference => r.type === 'dblResource',
-      )
-      .map((r) => r.id);
-  }, [filteredResources]);
+    return (pickerResources ?? []).flatMap((r) => {
+      if (r.source === 'downloaded') return [];
+      const { reference } = r;
+      if (isDblResourceReference(reference) || isProjectReference(reference)) return [reference.id];
+      return [];
+    });
+  }, [pickerResources]);
 
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
@@ -480,7 +557,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
               throw e;
             }
           },
-          (dblEntryUid: string) => setPendingResourceId(dblEntryUid),
+          (writtenReference) => setPendingResourceId(getResourceReferenceRowId(writtenReference)),
         );
       } finally {
         setIsSelecting(false);
@@ -530,23 +607,18 @@ globalThis.webViewComponent = function ResourceTextPanel({
     [textDirection, extraValidMarkers],
   );
 
+  // `contentState` and `isBlankChapter` are deps because the branches below UNMOUNT `Editorial`
+  // rather than hiding it. A remounted editor holds nothing, and this effect is its only feed — so
+  // without re-running when the panel comes back to the editor, the reader gets Lexical's "Enter
+  // some Scripture…" placeholder (an edit invitation in a text they cannot edit) until the next USJ
+  // happens to arrive.
   useEffect(() => {
     if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
-  }, [usjFromPdp]);
+  }, [usjFromPdp, contentState, isBlankChapter]);
 
   // #endregion
 
   // #region Render
-
-  const emptyStatePromptKey =
-    resourceType === 'ScriptureResource'
-      ? '%webView_resourcePanel_bibleTexts_emptyState_prompt%'
-      : '%webView_resourcePanel_commentaries_emptyState_prompt%';
-
-  const pickButtonKey =
-    resourceType === 'ScriptureResource'
-      ? '%webView_resourcePanel_bibleTexts_pick%'
-      : '%webView_resourcePanel_commentaries_pick%';
 
   if (!projectId) {
     return (
@@ -556,23 +628,23 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Also shows spinner for if loading resources, except if there is no resources then it should
-  // directly show the button to pick a resource bellow
-  if (!effectiveResources || (isLoadingResources && filteredResources.length !== 0)) {
+  // Front of the state machine: still resolving, unreadable setting, or genuinely nothing
+  // configured. Driven by one readiness value so the empty prompt can only appear once emptiness is
+  // actually known — the loading branch deliberately outlasts the catalog fetch when something is
+  // configured, which is the window the old guard let fall through to the empty state.
+  if (readiness !== 'configured') {
     return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <Spinner />
-      </div>
-    );
-  }
-
-  // Zero state: the filtered list is empty (nothing configured for this resourceType)
-  if (filteredResources.length === 0) {
-    return (
-      <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        <p>{localizedStrings[emptyStatePromptKey]}</p>
-        <Button onClick={() => showResourcePicker()}>{localizedStrings[pickButtonKey]}</Button>
-      </div>
+      <PanelReadinessView
+        readiness={readiness}
+        errorMessage={localizedStrings['%webView_resourcePanel_settingsUnavailable%']}
+        emptyPrompt={localizedStrings[emptyStatePromptKey]}
+        catalogErrorMessage={localizedStrings['%webView_resourcePanel_catalogUnavailable%']}
+        loadingLabel={localizedStrings['%webView_resourcePanel_loading%']}
+        pickLabel={localizedStrings[pickButtonKey]}
+        retryLabel={localizedStrings['%webView_resourcePanel_retry%']}
+        onPick={() => showResourcePicker()}
+        onRetryCatalog={refetchCatalog}
+      />
     );
   }
 
@@ -581,7 +653,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // (the usual first-run cause), hint at the connection.
   if (installFailed) {
     return (
-      <InstallFailedView
+      <RetryableErrorView
         message={
           localizedStrings[
             isOnline
@@ -601,7 +673,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // downloading — reads "Installing…".
   if (isSelecting || isInstalling) {
     return (
-      <InstallingView
+      <LoadingView
         label={
           localizedStrings[
             isSelecting ? '%webView_resourcePanel_selecting%' : '%webView_resourcePanel_installing%'
@@ -611,14 +683,87 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Loading state: USJ not yet available
-  if (!resourceProjectId || usjPossiblyError === undefined) {
+  // Scripture content, or the reason there is none: nothing has arrived yet, the resource has no
+  // such book, or it has the book but the chapter is blank. A blank chapter arrives as a successful,
+  // empty USJ rather than as an error, so it is invisible to `contentState` and needs its own check;
+  // the missing book is tested first because it is the more specific claim. Every branch beats
+  // letting `Editorial` render with no scripture set, which shows its "enter some Scripture" prompt
+  // — an edit invitation in a text the reader cannot edit.
+  //
+  // These are the panel's CONTENT area only. The selector header stays mounted above all of them,
+  // including the spinner: a resource missing a book has no remedy inside this panel, so the only
+  // thing the user can do about it is switch to a text that has the book, and taking the selector
+  // away while a chapter loads would remove that between every navigation.
+  //
+  // Only the editor gets `dir`. That is the RESOURCE's text direction, and the messages are app
+  // chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the
+  // resource is RTL.
+  const renderContent = () => {
+    if (contentState === 'loading')
+      return (
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+          <Spinner />
+        </div>
+      );
+
+    if (contentState === 'bookNotAvailable')
+      return (
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceBookNotAvailable
+            message={localizedStrings[bookNotAvailableKey]}
+            announcementKey={`${resourceProjectId}:${scrRef.book}`}
+          />
+        </div>
+      );
+
+    if (isBlankChapter)
+      return (
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceBlankChapter
+            message={
+              localizedStrings['%webView_platformScriptureEditor_emptyChapter_messageResource%']
+            }
+            announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+          />
+        </div>
+      );
+
+    // A failure that is not a missing book in the text on screen. Terminal, because the value in
+    // hand is an error rather than USJ and nothing re-emits until the data provider does — so a
+    // spinner here would claim progress that never arrives.
+    if (contentState === 'failed')
+      return (
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceTextUnavailable
+            message={localizedStrings['%webView_resourcePanel_textUnavailable%']}
+            announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+          />
+        </div>
+      );
+
+    // No USJ in hand for the reference on screen, and no failure to name: the chapter is still on
+    // its way. Keep waiting rather than mounting `Editorial` with nothing set, which paints
+    // Lexical's "Enter some Scripture…" placeholder — an edit invitation in a text the reader
+    // cannot edit.
+    if (!usjFromPdp)
+      return (
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+          <Spinner />
+        </div>
+      );
+
     return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <Spinner />
+      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
+        <Editorial
+          ref={editorRef}
+          scrRef={scrRef}
+          onScrRefChange={setScrRef}
+          options={options}
+          logger={logger}
+        />
       </div>
     );
-  }
+  };
 
   // Active state: resource is installed and USJ is available
   // This panel (Bible Texts / Commentaries) is Simple-mode-only, so `editor-container-simple`
@@ -635,16 +780,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
         downloadResourcesLabel={localizedStrings['%webView_resourcePanel_downloadResources%']}
       />
 
-      {/* Scripture content */}
-      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={setScrRef}
-          options={options}
-          logger={logger}
-        />
-      </div>
+      {renderContent()}
     </div>
   );
 

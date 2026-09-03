@@ -2,10 +2,16 @@
 // Disabling no-irregular-whitespace: test data includes irregular whitespace that we test on purpose.
 // Disabling camelcase and naming-convention: test data uses 3_1 to indicate USFM 3.1.
 /* eslint-disable no-useless-escape, no-irregular-whitespace, camelcase, @typescript-eslint/naming-convention */
-import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
+import {
+  MarkerObject,
+  Usj,
+  USJ_TYPE,
+  USJ_VERSION,
+} from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import fs from 'fs';
 import path from 'path';
+import { vi } from 'vitest';
 import { usjMat1 } from './footnote-util-test.usj.data';
 import { USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0 } from './markers-maps/markers-map-3.0.model';
 import { USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_1 } from './markers-maps/markers-map-3.1.model';
@@ -32,6 +38,19 @@ import {
   UsjVerseRefBookLocation,
   UsjVerseRefChapterLocation,
 } from './usj-reader-writer.model';
+
+/**
+ * `closed` is a USX/USJ attribute ParatextData records on closer-less char spans (`\fr`, `\ft`,
+ * ...). It is not declared on `MarkerObject`, so build such spans through a widened local type —
+ * scripture-editors models it the same way with its own `ClosableMarkerObject`.
+ */
+type ClosableMarkerObject = MarkerObject & { closed?: string };
+
+/** A char marker span carrying `closed="false"`, i.e. one the source USFM never closed. */
+function closedFalseChar(marker: string, content: string[]): MarkerObject {
+  const char: ClosableMarkerObject = { type: 'char', marker, closed: 'false', content };
+  return char;
+}
 
 // #region set up file path variables
 
@@ -1874,6 +1893,138 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh3Usfm);
+  });
+
+  // Pins closing-marker suppression for implicitly closed char markers. ParatextData emits
+  // `closed="false"` on char markers whose closing marker is absent in the source USFM (common for
+  // footnote/cross-reference content like \fr and \ft), and editors that skip rendering those
+  // closing glyphs record the same attribute. Emitting explicit closing markers for such spans
+  // would fabricate closers the original text never had. The `closed` attribute itself must not
+  // leak into the USFM output either. The contrast span without `closed` proves the suppression
+  // comes from `closed="false"` (this markers map sets `shouldOptionalClosingMarkersBePresent`, so
+  // optional closing markers are otherwise emitted).
+  test('omits explicit closing markers for closed="false" char markers but keeps them otherwise', () => {
+    const usjWithImplicitlyClosedChars: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            closedFalseChar('bd', ['implicitly closed']),
+            ' then ',
+            { type: 'char', marker: 'bd', content: ['explicitly closed'] },
+            {
+              type: 'note',
+              marker: 'f',
+              caller: '+',
+              content: [closedFalseChar('fr', ['1.1 ']), closedFalseChar('ft', ['note text'])],
+            },
+            ' after.',
+          ],
+        },
+      ],
+    };
+    const usjDoc = new UsjReaderWriter(
+      usjWithImplicitlyClosedChars,
+      usjReaderWriterOptionsParatext3_0,
+    );
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(
+      '\\p \\bd implicitly closed then \\bd explicitly closed\\bd*\\f + \\fr 1.1 \\ft note text\\f* after.\n',
+    );
+  });
+
+  // Pins that a note holding consecutive \fp (footnote-paragraph) spans stays a single inline
+  // run: the editor renders each \fp as a paragraph start via a CSS-generated line break only,
+  // so the USFM must keep the whole note on one line with no newline characters anywhere inside
+  // it. \fp spans carry closed="false" (they never have their own closing markers), matching
+  // what ParatextData and the editor record for footnote content.
+  test('keeps a note with \\fp footnote paragraphs on one line with no newline characters', () => {
+    const usjWithFpNote: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            {
+              type: 'note',
+              marker: 'f',
+              caller: '+',
+              content: [
+                closedFalseChar('fr', ['1:1 ']),
+                closedFalseChar('ft', ['a ']),
+                closedFalseChar('fp', ['b ']),
+                closedFalseChar('fp', ['c']),
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const usjDoc = new UsjReaderWriter(usjWithFpNote, usjReaderWriterOptionsParatext3_0);
+
+    const resultingUsfm = usjDoc.toUsfm();
+
+    expect(resultingUsfm).toBe('\\p \\f + \\fr 1:1 \\ft a \\fp b \\fp c\\f*\n');
+    // The only newline is the paragraph terminator — nothing inside the note.
+    expect(resultingUsfm.slice(0, -1)).not.toContain('\n');
+  });
+
+  // Pins the invariant behind the `\ca`-after-a-chapter-marker special case in
+  // `addMarkerUsfmToString`: the two-character "is the last marker `\c `?" probe and the backslash
+  // index it is taken from MUST be read from the SAME string. That string is the running
+  // `usfmOutput`, never the untouched `usfm` parameter, because branches earlier in the same call
+  // can shorten `usfmOutput` (both by calling `removeEndSpace` on it — the "closing marker is
+  // supposed to be empty" branch and the "marker output starts with a newline" branch). Once one
+  // of them fires the two strings are off by one character, and a probe sliced from `usfm` at an
+  // index computed against `usfmOutput` reads shifted bytes, so the `\c 1\n \ca ...` Standard
+  // View spelling gets emitted (or skipped) for the wrong reason.
+  //
+  // The document below is deliberately odd, because that is the only shape where reading the wrong
+  // string is observable. `removeEndSpace` drops the LAST character, so the mistake only changes
+  // the answer when the probe window straddles the dropped space — i.e. when the trimmed output
+  // ends in exactly `\c`. That takes both of these at once:
+  //   1. a chapter marker with no number, so the output so far is `\c ` rather than `\c 1 `; and
+  //   2. a `ca` marker whose USJ `type` disagrees with the markers map (which types `ca` as
+  //      `char`), sending the writer down its documented "mismatching marker type ... using the
+  //      type from the USJ content" fallback. `chapter` carries `hasNewlineBefore`, so `\ca`'s
+  //      output starts with a newline and the newline branch eats the trailing space first.
+  // Reading the probe from `usfm` then sees `'c '` where `usfmOutput` holds only `'c'`, and the
+  // writer inserts a spurious `\n ` (a line containing a lone space) before the `\ca`.
+  test('reads the last-marker probe from the same string as the index it uses, even after an earlier branch trims the output', () => {
+    const usjWithNumberlessChapterThenMistypedCa: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        { type: 'chapter', marker: 'c' },
+        // Intentionally mistyped: the markers map types `ca` as `char`. See the comment above.
+        { type: 'chapter', marker: 'ca', content: ['2'] },
+      ],
+    };
+    // The mismatching type is the point of the fixture, so the writer's warning about it is
+    // expected. Silence it to keep the test output readable.
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    let resultingUsfm: string;
+    try {
+      const usjDoc = new UsjReaderWriter(
+        usjWithNumberlessChapterThenMistypedCa,
+        usjReaderWriterOptionsParatext3_0,
+      );
+      resultingUsfm = usjDoc.toUsfm();
+    } finally {
+      consoleWarnSpy.mockRestore();
+    }
+
+    expect(resultingUsfm).toBe('\\c\n\\ca 2\n');
+    // The failure this pins looks like `\c\n \n\ca 2\n`: a line holding nothing but a space,
+    // inserted because the probe answered about the wrong bytes.
+    expect(resultingUsfm).not.toContain('\n \n');
   });
 });
 

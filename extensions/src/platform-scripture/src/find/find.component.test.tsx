@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { useRef, useState } from 'react';
 import '@testing-library/jest-dom';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -119,6 +120,8 @@ function buildProps(overrides: Partial<FindProps> = {}): FindProps {
     selectedBookIds: [],
     localizedBookData: LOCALIZED_BOOK_DATA,
     shouldMatchCase: false,
+    ignoreWhitespaceDifferences: false,
+    ignoreDiacritics: false,
     searchTextType: 'all',
     wordRestriction: 'none',
     isRegexAllowed: false,
@@ -146,6 +149,8 @@ function buildProps(overrides: Partial<FindProps> = {}): FindProps {
     setSearchTextType: vi.fn(),
     setWordRestriction: vi.fn(),
     setShouldMatchCase: vi.fn(),
+    setIgnoreWhitespaceDifferences: vi.fn(),
+    setIgnoreDiacritics: vi.fn(),
     setIsRegexAllowed: vi.fn(),
     onToggleMode: vi.fn(),
     onReplaceTermChange: vi.fn(),
@@ -381,6 +386,11 @@ const STRINGS = {
   '%webView_find_capitalization%': 'Capitalization',
   '%webView_find_pattern%': 'Pattern',
   '%webView_find_matchCase%': 'Match case',
+  '%webView_find_flexibility%': 'Match flexibility',
+  '%webView_find_ignoreDiacritics%': 'Ignore diacritics',
+  '%webView_find_ignoreWhitespaceDifferences%': 'Ignore whitespace differences',
+  '%webView_find_ignoreWhitespaceDifferences_tooltip%':
+    'Match any run of spaces in the text where the search has spaces.',
   '%webView_find_allowRegex%': 'Allow regex',
   '%webView_find_showing%': 'Showing',
   '%webView_find_findTab%': 'Find',
@@ -629,6 +639,85 @@ describe('Find — permission-blocked Replace (per-result button)', () => {
 
 // #endregion
 
+describe('Find — clear search button', () => {
+  it('empties the search term when clicked', async () => {
+    const user = setupUser();
+    const onSearchTermChange = vi.fn();
+    render(<Find {...buildLifecycleProps({ searchTerm: 'God', onSearchTermChange })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }));
+
+    expect(onSearchTermChange).toHaveBeenCalledWith('');
+  });
+
+  // Emptying the term is the whole contract: the container's empty-term effect is what clears the
+  // results and abandons a running job. If this button stopped the search itself, the mouse route
+  // would clear results by a path the keyboard routes (select-all + delete, backspacing) do not
+  // have, which is the split this button's behavior was collapsed to avoid.
+  it('leaves stopping the search to the container rather than calling onStopSearch itself', async () => {
+    const user = setupUser();
+    const onStopSearch = vi.fn();
+    render(<Find {...buildLifecycleProps({ searchTerm: 'God', onStopSearch })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }));
+
+    expect(onStopSearch).not.toHaveBeenCalled();
+  });
+
+  // THE REGRESSION THIS EXISTS FOR: the button only renders while there is a term to clear, so
+  // emptying the term unmounts the element the user just activated. Without an explicit focus
+  // return, focus falls to the document body and a keyboard user is left with nothing focused and
+  // no way back to the box but the mouse. Wired like the container — a real ref, real state, and a
+  // callback that actually focuses — so the term genuinely empties, the button genuinely unmounts,
+  // and the assertion is on where focus landed rather than on a callback having been called.
+  it('hands focus back to the search box, which clearing unmounts this button from', async () => {
+    const user = setupUser();
+
+    function ClearingFindHarness() {
+      const [searchTerm, setSearchTerm] = useState('God');
+      // useRef requires null as the initial value when used with a DOM element ref
+      // eslint-disable-next-line no-null/no-null
+      const searchInputRef = useRef<HTMLInputElement>(null);
+      return (
+        <Find
+          {...buildLifecycleProps({
+            searchTerm,
+            onSearchTermChange: setSearchTerm,
+            searchInputRef,
+            onFocusSearchInput: () => searchInputRef.current?.focus(),
+          })}
+        />
+      );
+    }
+
+    render(<ClearingFindHarness />);
+    const searchInput = screen.getByPlaceholderText('Enter search text…');
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }));
+
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(searchInput);
+  });
+
+  // Falsifies the tests above: the same query finds nothing when the box is already empty, so
+  // they are detecting a real button rather than a name that never matches.
+  it('renders no clear button when the box is already empty', () => {
+    render(<Find {...buildLifecycleProps({ searchTerm: '' })} />);
+
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+  });
+
+  // A whitespace-only term is an invalid query, so the results area shows the idle prompt — but the
+  // box still visibly holds characters, and the button is the only way to empty it with a mouse.
+  // Keying the button off the trimmed term instead would strand a mouse user in that state.
+  it('still offers the clear button for a whitespace-only term the box visibly holds', () => {
+    render(<Find {...buildLifecycleProps({ searchTerm: '   ' })} />);
+
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
+    expect(screen.getByText('Enter search text to find results')).toBeInTheDocument();
+  });
+});
+
 describe('Find — books-scope summary in the "Showing" trigger', () => {
   // The real BooksPresent setting is one character per canon book. These tests pin their own
   // full-length string so the expected summaries don't depend on buildProps' default.
@@ -728,4 +817,68 @@ describe('Find — an unrunnable query with results still on screen', () => {
     expect(screen.getByRole('button', { name: 'Replace all' })).toBeEnabled();
     expect(screen.queryByText('Select at least one book to search')).not.toBeInTheDocument();
   });
+
+  // The placeholder is meant to REPLACE the stale rows, not sit above them. Rendering both says
+  // "this query can't run" while still offering the previous query's results to click.
+  it('replaces the stale result rows rather than rendering the prompt above them', () => {
+    render(<Find {...buildEmptiedSelectionProps()} />);
+
+    expect(screen.queryByText(RESULT_MATCH_TEXT)).not.toBeInTheDocument();
+  });
+
+  // THE REGRESSION THIS EXISTS FOR: an emptied box is the other route into an unrunnable query, and
+  // it has to reach the same outcome as an emptied book selection. The container also abandons the
+  // job, but the display must not wait on that effect landing — otherwise there is a window showing
+  // the last query's results under an empty search box, which is the bug this all exists to fix.
+  it('shows the idle prompt instead of stale results when the box is emptied', () => {
+    render(<Find {...buildEmptiedSelectionProps({ scope: 'book', searchTerm: '' })} />);
+
+    expect(screen.getByText('Enter search text to find results')).toBeInTheDocument();
+    expect(screen.queryByText(RESULT_MATCH_TEXT)).not.toBeInTheDocument();
+  });
+});
+
+// The reason these exist: the whole point of this pair of options is that they are reachable and
+// default to off. A regression that dropped the wiring — or shipped either one enabled — would
+// silently change every search, and nothing else in this suite would notice.
+describe('Find — whitespace and diacritic tolerance toggles', () => {
+  /** Opens the filters dropdown, which is where both toggles live */
+  async function openFilters(user: ReturnType<typeof setupUser>) {
+    await user.click(screen.getByRole('button', { name: 'Toggle filters' }));
+  }
+
+  it.each([
+    ['Ignore whitespace differences', 'setIgnoreWhitespaceDifferences'] as const,
+    ['Ignore diacritics', 'setIgnoreDiacritics'] as const,
+  ])('reports %s being turned on', async (label, setterName) => {
+    const user = setupUser();
+    const setter = vi.fn();
+    render(<Find {...buildLifecycleProps({ [setterName]: setter })} />);
+
+    await openFilters(user);
+    await user.click(screen.getByRole('checkbox', { name: label }));
+
+    expect(setter).toHaveBeenCalledWith(true);
+  });
+
+  it.each([['Ignore whitespace differences'], ['Ignore diacritics']])(
+    'renders %s unchecked, so a search is exact unless the user opts out',
+    async (label) => {
+      const user = setupUser();
+      render(<Find {...buildLifecycleProps({})} />);
+
+      await openFilters(user);
+
+      expect(screen.getByRole('checkbox', { name: label })).not.toBeChecked();
+    },
+  );
+
+  it.each([['ignoreWhitespaceDifferences'] as const, ['ignoreDiacritics'] as const])(
+    'marks the filters button active while %s is on',
+    async (propName) => {
+      render(<Find {...buildLifecycleProps({ [propName]: true })} />);
+
+      expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveClass('tw:bg-muted');
+    },
+  );
 });

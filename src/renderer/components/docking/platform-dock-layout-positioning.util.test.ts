@@ -26,7 +26,7 @@ function makeWebViewTabInfo(webViewType: string, isClosable?: boolean): TabInfo 
 }
 
 vi.mock('../../../shared/services/logger.service');
-vi.mock('@renderer/services/theme.service-host', () => ({
+vi.mock('@renderer/services/theme.service', () => ({
   __esModule: true,
   localThemeService: {},
 }));

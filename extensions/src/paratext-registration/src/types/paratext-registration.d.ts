@@ -25,7 +25,11 @@ declare module 'paratext-registration' {
   };
 
   /**
-   * Set of servers to which to connect in `ParatextData.dll`
+   * The server environment `ParatextData.dll` operates in. Selecting one picks the whole matching
+   * set of back ends — Send/Receive archive, Paratext Registry, Paratext Live, and Digital Bible
+   * Library — not just a single server. `ParatextData.dll` owns those mappings, and several
+   * environments deliberately share a back end (for example, Development, Test, and
+   * QualityAssurance all use the same registry).
    *
    * Equivalent to C# `ServerType`
    */
@@ -155,6 +159,13 @@ declare module 'papi-shared-types' {
     'paratextRegistration.setParatextDataInternetSettings': (
       newInternetSettings: InternetSettings,
     ) => Promise<void>;
+    /**
+     * Gets the Paratext Registry website URL for the currently-selected server environment.
+     *
+     * @returns The registry site URL (e.g. `https://registry.paratext.org`) for the environment
+     *   currently selected in ParatextData internet settings.
+     */
+    'paratextRegistration.getParatextRegistryUrl': () => Promise<string>;
   }
 
   export interface DataProviders {

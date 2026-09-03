@@ -247,8 +247,28 @@ interface ReplaceTabLayout {
   targetTabId: string;
 }
 
+/**
+ * Information about opening a tab in its own application window.
+ *
+ * In Simple mode — which is single-window by design — this degrades to `'tab'`: the web view opens
+ * as a normal tab in the window the user is working in. An interface mode that cannot be read takes
+ * the same degraded path rather than failing the open, so a caller in Power mode can get a tab
+ * instead of a window when the mode read fails.
+ *
+ * It degrades the same way for an open that also passed `existingId: '?'` whose reuse search could
+ * not be answered because some window was unreachable. Such an open goes ahead rather than failing,
+ * accepting that it may be making a second copy of a web view that already exists somewhere — and a
+ * duplicate as a tab is one the user can see and close, where a duplicate as a window takes the
+ * screen and OS focus and can hide the original behind it.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export interface WindowLayout {
+  type: 'window';
+}
+
 /** Information about how a Platform.Bible tab fits into the dock layout */
-export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
+export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout | WindowLayout;
 
 /** Props that are passed to the web view tab component */
 export type WebViewTabProps = WebViewDefinition;
@@ -287,10 +307,16 @@ export type PapiDockLayout = {
    * Find the ID of the first open web view whose `webViewType` matches the one supplied.
    *
    * @param webViewType The web view type to search for
+   * @param projectId Optionally limits the search to web views showing a given project
    * @returns The WebViewDefinition of the matching web view, or `undefined` if no web view of that
    *   type is open
+   * @experimental The optional `projectId` filter is new; the rest of this member is
+   *   long-established.
    */
-  findFirstWebViewDefinitionByType: (webViewType: string) => WebViewDefinition | undefined;
+  findFirstWebViewDefinitionByType: (
+    webViewType: string,
+    projectId?: string,
+  ) => WebViewDefinition | undefined;
   /**
    * Add or update a tab in the layout
    *
@@ -418,6 +444,17 @@ export type PapiDockLayout = {
    * @throws If the item found in the dock layout with the specified ID is not a tab
    */
   getTabInfoById: (tabId: string) => TabInfo | undefined;
+  /**
+   * Whether this dock holds the tab or tab group with the given ID.
+   *
+   * Tabs and tab groups are looked up the same way, so one question answers for either kind of ID.
+   * Every kind of tab counts, not only WebView tabs.
+   *
+   * @param tabOrTabGroupId ID of the tab or tab group to look for
+   * @returns `true` if this dock holds it, `false` otherwise
+   * @experimental
+   */
+  containsTab: (tabOrTabGroupId: string) => boolean;
   /**
    * Sets an existing tab as the active tab in its tab group, makes sure it is unobscured by other
    * tabs, and sets the document focus in that tab

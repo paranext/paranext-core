@@ -15,8 +15,9 @@ Is this narrow view, parts of the ui may not be visible, truncated or wrapped.
 
 Things that get hidden need to be accessible in another way. Examples
 
-- When controls are hidden from a [toolbar](#toolbar), they are still accessible from e.g. a menu
 - When text is truncated or table columns are hidden, there is either a [Tooltip](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/shadcn-tooltip--docs) or any details view, that shows the full information
+
+[Toolbars](#toolbar) are the exception: they do not hide items at all. Their items shrink and truncate instead.
 
 When width is small, there should be maximum one horizontal scrollbar. When height is small, there should be maximum two vertical scrollbars (if content includes a list or table, otherwise one)
 
@@ -24,8 +25,12 @@ When width is small, there should be maximum one horizontal scrollbar. When heig
 
 ### Buttons
 
-In narrow widths use icon-only buttons; when width allows for, use icon and text. Use container querys to determine available width.
+In narrow widths use icon-only buttons; when width allows for, use icon and text.
 Always use [Tooltips](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/shadcn-tooltip--docs).
+
+Buttons carrying **user-generated text** — a project name, a scripture reference — are the exception: shorten the text rather than falling back to an icon. A user recognises `TP1` far faster than a generic glyph.
+
+Determine available width with the `useShrinkStep` hook rather than a CSS container query. Tailwind's container-query *variants* have repeatedly failed to be emitted into extension web view bundles, and they fail silently — the class is simply absent and the element keeps its base style at every width.
 
 ### Lists
 
@@ -74,12 +79,32 @@ Which component to use for single and multi select popoverse, see
 
 ### Toolbar
 
-Toolbars shrink and finally hide items in smaller widths. It is imporant to always keep the menu button visible. As mentioned above, hidden items need to be accessible elsewhere.
+Toolbar items shrink and truncate. They are never hidden, never moved into an overflow menu, and never clipped away — at any width the app supports, every item is still there. The menu button is always visible.
 
 Toolbars do **not** automatically or partially overflow into overflow menus. Instead duplicate functionality may always exists in there.
+
+#### Absorbing and rigid regions
+
+Mark each region of a toolbar as one of two kinds:
+
+- **Absorbing** — may shrink. Give it `tw:min-w-0`, which is what allows a flex item to go below its content width. Without it, `min-width: auto` pins the region at its content's minimum and the space is taken out of its siblings instead — which is how items end up clipped away.
+- **Rigid** — must not shrink. Give it `tw:shrink-0`. Icon-only buttons and menu triggers belong here: they have no shorter form to fall back to.
+
+#### Stepped shrinking
+
+Items carrying two fields shrink in steps, and the **second field is always the truncation target**:
+
+1. Full label — `Genesis 1:1`
+2. Abbreviated primary field — `GEN 1:1`
+3. Second field clipped with an ellipsis — `GEN 1:…`
+4. Second field dropped — `GEN`
+
+Use `ToolbarCompoundLabel` for this; it takes the two fields and handles the ellipsis, the drop, and the tooltip. Steps 1, 2 and 4 come from the toolbar's `useShrinkStep` value; step 3 is plain CSS.
+
+Reserve a **fixed slot** for anything whose content varies in length, so switching projects or references cannot shift the items beside it.
 
 Lightweight filter toolbars, may wrap into two, maximum three rows instead of hiding elements.
 
 ### Tabs
 
-Tab Headsers overflow into an overflow menu. Also see [Interactions/Tab Navigation](./guidelines/application-interactions.mdx#tab-navigation)
+Tab Headers overflow into an overflow menu. Also see [Interactions/Tab Navigation](?path=/docs/guidelines-interactions--docs#tab-navigation)

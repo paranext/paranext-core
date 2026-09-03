@@ -42,13 +42,50 @@ export const FAULT_MARKERS = [
 ];
 
 /**
- * A warn/error-severity line reporting a name collision in the central registry. The same phrases
- * appear at debug severity on the EXPECTED step-aside paths (a second window losing the app-global
- * hosting race logs "… already registered" as debug), so severity is part of the pattern: only
- * warn/error occurrences indicate a window failing to scope its per-window services.
+ * A warn/error-severity line reporting a name collision in the central registry: a window failing
+ * to scope its per-window services.
+ *
+ * Severity is part of the pattern because these phrases reach the captured output two different
+ * ways. They are LOGGED, at warn, by `rpc-client.ts` (`registerMethod`, when a client already has
+ * the method) and by `rpc-websocket-listener.ts` (a method and a network event colliding on one
+ * name) — a logger line is the registry reporting a collision, which is the fault this hunts. They
+ * are also THROWN, inside error messages built by `network-object.service.ts`,
+ * `data-provider.service.ts`, `web-view-provider.service.ts` and `network.service.ts`, and thrown
+ * text reaches this capture at whatever severity its catcher chooses to print it, or untagged
+ * inside a stack trace. Bounding the match to warn/error keeps it on the lines that REPORT a
+ * collision rather than on the same words quoted in passing.
  */
 export const DUPLICATE_REGISTRATION_PATTERN =
   /\[(warn|error)\][^\n]*(already registered|rejected by the central registry)/;
+
+/**
+ * Logged by `main.ts` on the way down — the positive control for a collision sweep that runs after
+ * a quit.
+ *
+ * `expect(log).not.toMatch(...)` passes just as happily against output that never arrived, so each
+ * sweep asserts something present first, to prove it examined a real corpus.
+ *
+ * A control must be emitted AFTER {@link captureAppOutput} attaches, not merely be certain to
+ * happen. The capture hooks `electronApp.process().stdout` once the app is already running, so
+ * every main-process startup line — service registrations included — is emitted before it and is
+ * never in the corpus at all. This line is not: {@link quitAndExpectCleanExit} performs the quit
+ * that produces it, so it always lands mid-capture.
+ */
+export const APP_QUITTING_LOG = 'Main process is quitting';
+
+/**
+ * The first thing any renderer logs (`src/renderer/index.tsx`) — the positive control for any sweep
+ * whose corpus begins before a window is created during the test, whether that corpus is a slice
+ * taken from a mark or the whole log of a test that has not quit.
+ *
+ * {@link APP_QUITTING_LOG} controls sweeps taken after a quit; this one controls the sweeps where
+ * the quit has not happened yet. A mark taken a moment too late would otherwise yield an empty
+ * slice and a passing assertion.
+ *
+ * Note the window this refers to is created DURING the test, so its renderer's first line lands
+ * well after the capture attached — which is what makes it usable as a control at all.
+ */
+export const RENDERER_STARTING_LOG = 'Starting renderer';
 
 // #endregion
 
@@ -100,8 +137,8 @@ export function countOccurrences(haystack: string, needle: string): number {
 
 /**
  * Per-test elapsed-time step logger, so the runner output records how long each phase actually took
- * — the evidence for judging whether a pass exercised the intended waits (e.g. a hosting takeover
- * that includes an unreachability probe) or short-circuited.
+ * — the evidence for judging whether a pass exercised the intended waits (e.g. a second window's
+ * services genuinely coming up) or short-circuited.
  */
 export function createStepLogger(prefix: string): (label: string) => void {
   const start = Date.now();
@@ -301,63 +338,145 @@ export async function createSecondWindow(electronApp: ElectronApplication): Prom
 }
 
 /**
- * Wait until a window's renderer has registered its window-scoped services with the main process:
- * its scoped `platform.about-{windowId}` command (the last of the renderer's command registrations)
- * and its scoped window service (what the routing proxies forward to). Only then can generic-name
- * calls be routed to this window.
+ * Renderer width, in CSS pixels, at or above which a window's toolbar still renders the chapter and
+ * verse of a reference.
+ *
+ * The toolbar walks a shrink ladder as its content row narrows (`APP_TOOLBAR_SHRINK_THRESHOLDS_PX`
+ * in `lib/platform-bible-react/src/components/advanced/toolbar.component.tsx`), and at the ladder's
+ * narrowest rung it drops the chapter and verse entirely, leaving the book alone. This sits above
+ * that rung's threshold rather than on it, because the observed content row is narrower than the
+ * window by its own padding.
+ */
+const TOOLBAR_REFERENCE_MIN_CSS_PX = 800;
+
+/**
+ * Widen a window until its toolbar has room to show a reference in full, and return the renderer
+ * width that achieved it.
+ *
+ * A window narrow enough to reach the shrink ladder's narrowest rung shows the book alone, so a
+ * spec reading a reference off that toolbar cannot see a chapter or verse there however correctly
+ * the navigation reached the window. Every window whose toolbar text is asserted needs this first.
+ *
+ * Sized to the work area rather than to a fixed number, and size only: this compositor honors sizes
+ * exactly but assigns positions itself, and the display is not guaranteed to be any given size.
+ */
+export async function widenWindowForToolbarReference(
+  electronApp: ElectronApplication,
+  page: Page,
+): Promise<number> {
+  const windowId = getWindowIdOfPage(page);
+  await electronApp.evaluate(
+    ({ BrowserWindow, screen }, { id }) => {
+      const win = BrowserWindow.fromId(id);
+      if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+      // An unmapped window reports stale bounds and ignores the resize.
+      if (win.isMinimized()) win.restore();
+      const { workArea } = screen.getPrimaryDisplay();
+      const { height, y } = win.getBounds();
+      win.setBounds({ x: workArea.x, y, width: workArea.width, height });
+    },
+    { id: windowId },
+  );
+  // The shrink step comes from a `ResizeObserver`, so the label re-renders after the resize lands
+  // rather than with it.
+  let rendererWidth = 0;
+  await expect(async () => {
+    rendererWidth = await page.evaluate(() => window.innerWidth);
+    expect(rendererWidth).toBeGreaterThanOrEqual(TOOLBAR_REFERENCE_MIN_CSS_PX);
+  }).toPass({ timeout: 30_000, intervals: [500] });
+  return rendererWidth;
+}
+
+/**
+ * The window-scoped shard methods a renderer registers, as patterns taking the window id.
+ *
+ * One per service the main process's routers forward a command or request to. A renderer starts
+ * them together, so any one of them proves only that the batch is under way — a spec that drives a
+ * command at this window right after the gate needs the shard behind THAT command to have arrived.
+ */
+const SCOPED_SHARD_METHOD_PATTERNS = [
+  (windowId: number) => `^object:DialogService-${windowId}\\.showDialog$`,
+  (windowId: number) => `^object:UsersnapService-${windowId}\\.submitIdea$`,
+  (windowId: number) => `^object:BookChapterControlService-${windowId}\\.open$`,
+  (windowId: number) => `^object:WebViewService-${windowId}\\.openSettingsTab$`,
+  (windowId: number) => `^object:platform\\.windowServiceDataProvider-${windowId}-data\\.`,
+];
+
+/**
+ * Wait until a window's renderer has registered every window-scoped service the main process's
+ * routers forward to. Only then can generic-name calls be routed to this window.
  */
 export async function waitForRendererRegistered(
   windowId: number,
   timeoutMs: number,
 ): Promise<void> {
-  await waitForPapiMethodRegistered(
-    new RegExp(`^command:platform\\.about-${windowId}$`),
-    WEBSOCKET_PORT,
-    timeoutMs,
-  );
-  await waitForPapiMethodRegistered(
-    new RegExp(`^object:platform\\.windowServiceDataProvider-${windowId}-data\\.`),
-    WEBSOCKET_PORT,
-    timeoutMs,
+  // Waited on together: the renderer starts them together too, so they arrive within a poll of one
+  // another and waiting one after another would spend the timeout budget several times over
+  await Promise.all(
+    SCOPED_SHARD_METHOD_PATTERNS.map((buildPattern) =>
+      waitForPapiMethodRegistered(new RegExp(buildPattern(windowId)), WEBSOCKET_PORT, timeoutMs),
+    ),
   );
 }
 
-/** Locator for a window's Home tab title, which carries the window-scoped web view id. */
+/**
+ * Locator for a window's Home tab title BY ITS FIXED FALLBACK-LAYOUT ID — only valid for a window
+ * that loaded the single-Home-tab fallback layout ({@link HOME_TAB_UUID}), i.e. the first window of
+ * a fresh profile or one restored from a saved layout that already carried that id. A window whose
+ * Home tab was docked on the fly (see {@link expectWindowDockHasOnlyHomeTab}) gets a freshly
+ * generated web view id each time, so this locator will not find it — identify that one by title
+ * text instead.
+ */
 export function homeTabTitle(page: Page, windowId: number) {
   return page.locator(`.platform-tab-title[data-web-view-id="${HOME_TAB_UUID}-w${windowId}"]`);
 }
 
 /**
- * How long {@link expectWindowDockEmpty} waits after the window's UI is up before asserting
- * emptiness. An empty dock and a dock about to load tabs look identical for a moment — the dock
- * container renders before any layout content arrives — so asserting zero tabs immediately could
- * pass vacuously while a wrongly-loaded layout (a clone of another window's, or a default) is still
- * on its way. The window's startup overlay clearing already signals initialization is done; this
- * settle is headroom on top of that for stragglers.
+ * How long {@link expectWindowDockHasOnlyHomeTab} waits after the Home tab attaches before asserting
+ * it is the ONLY thing docked. A dock that is about to receive more than Home — e.g. a
+ * wrongly-cloned copy of another window's layout landing alongside the docked Home tab — can look
+ * identical to a Home-only dock for a moment, since the extra content can arrive after Home does;
+ * this settle gives a wrongly-added tab time to appear before the count assertions below.
  */
-const EMPTY_DOCK_SETTLE_MS = 5_000;
+const HOME_ONLY_SETTLE_MS = 5_000;
 
 /**
- * Assert that a window's dock UI is genuinely up and renders NO content: zero dock tabs, zero tab
- * titles, zero web view iframes. This is the observable shape of a window that starts (or is
- * restored) with an empty layout.
+ * Assert that a window's dock UI is genuinely up and renders EXACTLY the Home tab: one dock tab,
+ * one tab title, one web view iframe, and that tab/iframe is Home. This is the observable shape of
+ * a window that starts (or is restored) with nothing of its own to show — see
+ * `src/main/services/window-emptiness.util.ts`: a window born empty, or emptied down to nothing,
+ * docks Home instead of staying empty.
  *
- * Fails if the window renders any tab — which is exactly what a regression to loading a default
- * layout, or to cloning another window's layout into this one, would produce.
+ * A freshly docked Home tab is not restored from any saved layout, so it gets a new web view id
+ * each time — identity here is asserted by title text ("Home"), not by a fixed id. That text is
+ * locale-independent in these suites because they pin `platform.interfaceLanguage` to English.
+ * Contrast {@link homeTabTitle}, which locates a Home tab that came from the fixed-id fallback
+ * layout.
+ *
+ * Fails if the window renders zero tabs (Home never got docked) or more than one tab (something
+ * besides Home is also present) — which is exactly what a regression to failing the dock-Home
+ * decision, or to loading a default/cloned layout alongside it, would produce.
  */
-export async function expectWindowDockEmpty(page: Page): Promise<void> {
+export async function expectWindowDockHasOnlyHomeTab(page: Page): Promise<void> {
   // The dock container itself must render — "no tabs because the UI never came up" must fail, not
   // pass. Then the startup overlay must clear, signalling async initialization (settings, theme,
   // layout load) finished.
   await expect(page.locator('div[class*="dock-layout"]')).toBeAttached({ timeout: 120_000 });
   await waitForOverlayGone(page, 120_000);
-  // Give a wrongly-loaded layout time to become observable before asserting absence.
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, EMPTY_DOCK_SETTLE_MS);
+  // Wait for Home itself as the readiness signal, rather than a blind settle before asserting
+  // content: the dock-Home decision and the tab's own load both happen asynchronously after the
+  // dock container first renders.
+  await expect(page.locator('.dock-tab', { hasText: 'Home' })).toHaveCount(1, {
+    timeout: 60_000,
   });
-  await expect(page.locator('.dock-tab')).toHaveCount(0);
-  await expect(page.locator('.platform-tab-title')).toHaveCount(0);
-  await expect(page.locator('iframe[data-web-view-id]')).toHaveCount(0);
+  // Give a wrongly-added extra tab time to become observable before asserting Home is the ONLY one.
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, HOME_ONLY_SETTLE_MS);
+  });
+  await expect(page.locator('.dock-tab')).toHaveCount(1);
+  await expect(page.locator('.platform-tab-title')).toHaveCount(1);
+  await expect(page.locator('iframe[data-web-view-id]')).toHaveCount(1);
+  await expect(page.locator('iframe[title="Home"]')).toHaveCount(1);
 }
 
 // #endregion
@@ -443,8 +562,10 @@ export async function quitAppAndWaitForExit(
 /**
  * The graceful-quit epilogue shared by the multi-window suites: trigger a real quit and wait for
  * the OS process to exit (see {@link quitAppAndWaitForExit}), assert the exit was clean (code 0, no
- * signal), then sweep everything the given capture recorded for {@link FAULT_MARKERS} and for
- * warn/error-severity duplicate registrations ({@link DUPLICATE_REGISTRATION_PATTERN}).
+ * signal), assert the capture actually saw the quit ({@link APP_QUITTING_LOG}, so the sweeps that
+ * follow cannot pass vacuously against an empty corpus), then sweep everything the given capture
+ * recorded for {@link FAULT_MARKERS} and for warn/error-severity duplicate registrations
+ * ({@link DUPLICATE_REGISTRATION_PATTERN}).
  *
  * @param label Prefix for the step-log line recording the exit (e.g. `'phase 1'`).
  */
@@ -460,6 +581,11 @@ export async function quitAndExpectCleanExit(
   expect(exitResult.code).toBe(0);
 
   const log = output.text();
+  // Positive control before BOTH negative sweeps: the quit above produces this line, so its
+  // absence means the capture holds nothing and everything below would pass without examining
+  // anything. It has to precede the fault sweep too — that sweep is a negative assertion this
+  // control backs, not an exception to it.
+  expect(log).toContain(APP_QUITTING_LOG);
   FAULT_MARKERS.forEach((marker) => expect(log).not.toContain(marker));
   expect(log).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
 }

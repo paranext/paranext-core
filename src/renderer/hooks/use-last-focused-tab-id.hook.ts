@@ -1,7 +1,7 @@
 import {
   getLastFocusedTabId,
   onDidChangeLastFocusedTabId,
-} from '@renderer/services/window.service-host';
+} from '@renderer/services/window.service-shard';
 import { useSyncExternalStore } from 'react';
 
 /** Subscribe function for {@link useSyncExternalStore} — module-level so its identity is stable */

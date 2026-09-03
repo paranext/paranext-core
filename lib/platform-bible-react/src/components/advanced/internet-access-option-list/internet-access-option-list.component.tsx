@@ -82,6 +82,13 @@ export type InternetAccessOptionListProps = {
   onChange: (value: InternetUse) => void;
   /** When true, all rows are non-interactive (loading or saving in progress). */
   disabled: boolean;
+  /**
+   * Whether to show the "disabled options are planned for future updates" note below the rows.
+   * Defaults to true. Set false where vertical space is tight (the first-run wizard step, whose
+   * heading and Next button compete for the same fold) — the per-row "Coming soon" badges still
+   * convey that those options are not yet available.
+   */
+  showFooter?: boolean;
 };
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
@@ -90,6 +97,7 @@ export function InternetAccessOptionList({
   value,
   onChange,
   disabled,
+  showFooter = true,
 }: InternetAccessOptionListProps) {
   return (
     <div className="tw:flex tw:flex-col tw:gap-1">
@@ -142,9 +150,11 @@ export function InternetAccessOptionList({
           </div>
         ))}
       </RadioGroup>
-      <p className="tw:px-2 tw:text-xs tw:text-muted-foreground">
-        {localizedStrings['%paratextRegistration_internetUse_footer%']}
-      </p>
+      {showFooter && (
+        <p className="tw:px-2 tw:text-xs tw:text-muted-foreground">
+          {localizedStrings['%paratextRegistration_internetUse_footer%']}
+        </p>
+      )}
     </div>
   );
 }

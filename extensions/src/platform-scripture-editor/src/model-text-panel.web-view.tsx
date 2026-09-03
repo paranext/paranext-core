@@ -8,19 +8,21 @@ import {
   useScrollGroupScrRef,
 } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { usePromise } from 'platform-bible-react';
 import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { isDblResourceReference } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
+import { canPublishResourcePanelProjectIds } from './resource-panel-readiness.utils';
+import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -48,40 +50,26 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   projectId,
   scrollGroupScrRef,
   updateWebViewDefinition,
+  useWebViewState,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => ALL_STRING_KEYS, []));
 
   // --- Raw data sources ---
 
-  const [effectiveModelTexts, isEffectiveModelTextsLoading] = useEffectiveResourceReferenceList(
+  const effectiveModelTextsState = useEffectiveResourceReferenceList(
     projectId,
     'platformScripture.modelTexts',
   );
+  const effectiveModelTexts =
+    effectiveModelTextsState.status === 'ready' ? effectiveModelTextsState.list : undefined;
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
     projectId,
   );
 
-  const [fetchResources, setFetchResources] = useState(true);
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
-    useCallback(async () => {
-      if (fetchResources) {
-        // Sets the `fetchResources` flag to false which will trigger the promise again next render
-        // to fetch the resources
-        setFetchResources(false);
-        return Promise.resolve(undefined);
-      }
-
-      return papi.commands.sendCommand('platformGetResources.getCachedResources');
-    }, [fetchResources]),
-    undefined,
-  );
-  const dblResources = useMemo(
-    () => resourcesPossiblyUndefined ?? [],
-    [resourcesPossiblyUndefined],
-  );
+  const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
 
   // --- Dynamic title: "Model text: {displayName}" when a resource is loaded ---
   // Computed inline (rather than in the presentational component) because updateWebViewDefinition
@@ -134,17 +122,24 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   // Ctrl+F opens Find for the displayed model resource.
   useOpenFindShortcut(webViewId, modelResourceProjectId);
 
+  // This web view's definition `projectId` is the editable project whose model-text setting is
+  // read, so the displayed resource is invisible to global navigation UI unless declared here.
+  usePublishNavigableProjectIds(
+    useWebViewState,
+    modelResourceProjectId ? [modelResourceProjectId] : [],
+    canPublishResourcePanelProjectIds(effectiveModelTextsState, isCatalogReady),
+  );
+
   // --- Operation callbacks ---
 
   // Re-resolve the cached resource list once an install completes so the resource flips to
   // installed and renders; the install itself lives in the shared hook. Returns a no-op until the
   // provider resolves — its identity change then re-fires the panel's auto-install effect for the
   // real install.
-  const markResourcesStale = useCallback(() => setFetchResources(true), []);
   const installResource = useInstallDblResource(
     dblResourcesProvider,
     'model text panel',
-    markResourcesStale,
+    refetchCatalog,
   );
 
   const setUserModelTexts = useCallback(
@@ -162,9 +157,9 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   const showResourcePicker = useCallback(
     (selectedResourceIds: string[]) =>
       papi.dialogs.showDialog('platform.resourcePicker', {
-        resourceType: 'ScriptureResource',
         selectedResourceIds,
         isModal: true,
+        resourceType: 'ScriptureResource',
       }),
     [],
   );
@@ -201,10 +196,11 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     <ModelTextPanel
       localizedStrings={localizedStrings}
       hasProject={projectId !== undefined}
-      effectiveModelTexts={effectiveModelTexts}
-      isEffectiveModelTextsLoading={isEffectiveModelTextsLoading}
+      modelTextsState={effectiveModelTextsState}
       dblResources={dblResources}
-      isLoadingResources={isLoadingResources}
+      isCatalogReady={isCatalogReady}
+      hasCatalogError={hasCatalogError}
+      onRetryCatalog={refetchCatalog}
       getUserModelTexts={getUserModelTexts}
       scrRef={scrRef}
       onScrRefChange={setScrRef}

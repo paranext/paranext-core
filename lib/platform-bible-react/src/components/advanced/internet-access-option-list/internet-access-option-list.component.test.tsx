@@ -68,6 +68,12 @@ describe('InternetAccessOptionList', () => {
     expect(screen.getByText('Footer text sentinel')).toBeInTheDocument();
   });
 
+  test('showFooter={false} hides the footer but keeps the coming-soon badges', () => {
+    renderList({ showFooter: false });
+    expect(screen.queryByText('Footer text sentinel')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Coming soon')).toHaveLength(3);
+  });
+
   test('clicking an active option calls onChange with the correct value', () => {
     const onChange = vi.fn();
     renderList({ value: 'VpnRequired', onChange });

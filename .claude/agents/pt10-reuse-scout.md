@@ -68,7 +68,10 @@ Read **these**, and treat them as complementary:
 3. `.context/standards/Architecture-Decisions.md` — the append-only log of prior **significant
    architecture decisions** + rationale (placement, deferred platform capabilities, chosen patterns).
    Honor decisions that already apply to this aspect, and flag it as an open question if this aspect
-   plausibly reverses or supersedes one.
+   plausibly reverses or supersedes one. The log is append-only but for one carve-out: an entry whose
+   approach is no longer available may be deleted and its number retired, leaving a stub. A retired
+   number is a deliberate gap, not a missing decision to go hunting for — and the approach it held is
+   not prior art you may propose.
 
 If `paratext-10-orientation.md` isn't present, rely on Architecture.md plus a direct `ls` sweep
 of each repo.

@@ -4,19 +4,12 @@ import { AlertCircle } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { FootnoteItemProps } from './footnotes.types';
 
-function makeKey(parentMarker: string | undefined, content?: MarkerContent[]): string {
-  if (!content || content.length === 0) return parentMarker ?? 'empty';
-
-  const firstString = content.find((part) => typeof part === 'string');
-  if (firstString) {
-    return `key-${parentMarker ?? 'unknown'}-${firstString.slice(0, 10)}`;
-  }
-
-  // Fallback: combine markers
-  const firstMarker =
-    typeof content[0] === 'string' ? 'impossible' : (content[0].marker ?? 'unknown');
-  return `key-${parentMarker ?? 'unknown'}-${firstMarker}`;
-}
+// Keys below are POSITIONAL (the child's index within its own siblings), not derived from the
+// content. A footnote's parts are frequently indistinguishable by content — two `\fp` paragraphs,
+// or two spans sharing a marker and leading text — so a content-derived key collides, and React
+// then duplicates or omits children. Position is unique among siblings by construction, which is
+// the only uniqueness React requires. These lists are a read-only projection re-rendered wholesale
+// from `footnote`, so there is no reordering for a positional key to lose identity across.
 
 function renderParagraphs(
   parentMarker: string | undefined,
@@ -48,7 +41,12 @@ function renderParagraphs(
   return paragraphs.map((para, i) => {
     const isLast = i === paragraphs.length - 1;
     return (
-      <p key={makeKey(parentMarker, para)}>
+      // A footnote's paragraphs have no stable id, and keying on their CONTENT is what produced
+      // duplicate keys (two `\fp` paragraphs collide). This list is a read-only projection
+      // re-rendered wholesale and never reordered, so the identity the rule protects cannot be
+      // lost here. See the note above.
+      // eslint-disable-next-line react/no-array-index-key
+      <p key={`para-${i}`}>
         {renderContent(parentMarker, para, showMarkers, true, markerHierarchy)}
         {isLast && footnoteClosing}
       </p>
@@ -65,10 +63,9 @@ function renderContent(
 ): React.ReactNode {
   if (!content || content.length === 0) return undefined;
 
-  return content.map((footnotePart) => {
+  return content.map((footnotePart, partIndex) => {
+    const key = `part-${partIndex}`;
     if (typeof footnotePart === 'string') {
-      // Build a key based on the hierarchy and text
-      const key = `${parentMarker}-text-${footnotePart.slice(0, 10)}`;
       if (allowUnmarkedText) {
         const classes = cn(`usfm_${parentMarker}`);
         return (
@@ -89,12 +86,10 @@ function renderContent(
       );
     }
 
-    return renderMarkerObject(
-      footnotePart,
-      makeKey(`${parentMarker}\\${footnotePart.marker}`, [footnotePart]),
-      showMarkers,
-      [...markerHierarchy, parentMarker ?? 'unknown'],
-    );
+    return renderMarkerObject(footnotePart, key, showMarkers, [
+      ...markerHierarchy,
+      parentMarker ?? 'unknown',
+    ]);
   });
 }
 
@@ -148,7 +143,7 @@ export function FootnoteItem({
   }
 
   const footnoteOpening = showMarkers ? (
-    <span className="marker">{`\\${footnote.marker} `}</span>
+    <span className="marker">{`\\${footnote.marker}`}</span>
   ) : undefined;
 
   const footnoteClosing = showMarkers ? (
@@ -159,12 +154,34 @@ export function FootnoteItem({
     // USFM does not specify a marker for caller, so instead of a usfm_* class, we use a
     // specific class name in case styling is needed.
     <span className={cn('note-caller tw:inline-block', { formatted: isCallerFormatted })}>
-      {caller}{' '}
+      {caller}
+    </span>
+  );
+  // The category is the one part of a footnote that never appears in `content`: it rides in the
+  // file as a `\cat` run directly after the caller (`\f + \cat People\cat*\fr 1.1 …`), and the USJ
+  // parser folds it onto the note as a field — so nothing renders it unless the note's own field
+  // is read. Placed after the caller so the pane reads in the file's order. Given its own class
+  // rather than a `usfm_*` one for the same reason the caller has one: `\cat` delimits the value
+  // but is not a style for it.
+  const footnoteCategory = footnote.category && (
+    <span className="note-category tw:inline-block">
+      {showMarkers && <span className="marker">{`\\cat `}</span>}
+      {footnote.category}
+      {showMarkers && <span className="marker">{`\\cat*`}</span>}
     </span>
   );
   const footnoteTargetRef = targetRef && (
     <>{renderContent(footnote.marker, [targetRef], showMarkers, false)} </>
   );
+
+  // The spaces separating the header's parts belong BETWEEN them, not inside them: CSS removes a
+  // collapsible space at the end of an inline-block's last line, so a trailing space in the caller
+  // or category box is in the DOM and yet invisible, running the two together (`+People`). Keeping
+  // them out here also draws them at the header's own size rather than the 0.7em the `.marker`
+  // glyphs use, which is what makes `\f + \cat People\cat*` read as separated rather than `\f+`.
+  const hasOpening = !!footnoteOpening;
+  const hasCaller = !!footnoteCaller;
+  const hasCategory = !!footnoteCategory;
 
   const layoutClass = layout === 'horizontal' ? 'horizontal' : 'vertical';
   const markerClass = showMarkers ? 'marker-visible' : '';
@@ -176,7 +193,10 @@ export function FootnoteItem({
     <>
       <div className={cn('textual-note-header tw:col-span-1 tw:w-fit tw:text-nowrap', baseClasses)}>
         {footnoteOpening}
+        {hasOpening && (hasCaller || hasCategory) && ' '}
         {footnoteCaller}
+        {hasCaller && hasCategory && ' '}
+        {footnoteCategory}
       </div>
       <div className={cn('textual-note-header tw:col-span-1 tw:w-fit tw:text-nowrap', baseClasses)}>
         {footnoteTargetRef}

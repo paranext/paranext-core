@@ -40,7 +40,8 @@ export function getExtensionUri(
  * sequentially after discovery, so an activation-based list answers "is extension X part of this
  * build?" with a `false` that is temporary during startup — or permanent, if that extension times
  * out or throws while activating. Discovery happens once, up front, so every caller gets the same
- * answer whenever it asks. See ADR-0013 in `.context/standards/Architecture-Decisions.md`.
+ * answer whenever it asks. See `adr-packaged-extensions-are-discovered` in
+ * `.context/standards/Architecture-Decisions.md`.
  *
  * Reports each extension name at most once. Discovery can find the same extension in more than one
  * folder — a dev checkout passed with `--extensions` shadowing the bundled copy — and only the

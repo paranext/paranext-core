@@ -1,6 +1,9 @@
 import { test, expect } from '../../../fixtures/comment.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
-import { openScriptureEditorForProject } from '../../../fixtures/scripture-editor-helpers';
+import {
+  navigateToolbarBcv,
+  openScriptureEditorForProject,
+} from '../../../fixtures/scripture-editor-helpers';
 import {
   cleanupCommentTestProject,
   createCommentTestProject,
@@ -19,6 +22,9 @@ import {
 // The top toolbar's BookChapterControl trigger is the first one in the DOM (the toolbar
 // renders above the dock layout)
 const BCV_TRIGGER = '[aria-label="book-chapter-trigger"]';
+// The control's search box is a plain input inside the Radix popper: the control renders cmdk
+// items for its grids but no cmdk input (its own unit test asserts `[cmdk-input]` is absent).
+const BCV_SEARCH_INPUT = '[data-radix-popper-content-wrapper] input';
 
 /** Chapter:verse tail of the trigger label, e.g. "GEN 5:3" -> { chapterNum: 5, verseNum: 3 } */
 function parseChapterVerse(label: string): { chapterNum: number; verseNum: number } {
@@ -52,24 +58,17 @@ test.describe('verse navigation keyboard shortcuts', () => {
     // whole spec's coverage.
     await expect(trigger).toBeEnabled({ timeout: 15_000 });
 
-    // Navigate to a reference that is NOT the app default (GEN 1:1) first, so the assertion
+    // Navigate to a reference that is NOT the app default (Genesis 1:1) first, so the assertion
     // proves the submit flow actually changes state — asserting only the default reference
-    // could pass even if submit silently broke.
-    await trigger.click();
-    let searchInput = mainPage.locator('[cmdk-input]');
-    await expect(searchInput).toBeVisible();
-    await searchInput.fill('EXO 2:3');
-    await mainPage.keyboard.press('Enter');
+    // could pass even if submit silently broke. The helper waits out cmdk's async highlight
+    // before committing (an immediate Enter activates the PREVIOUS highlight).
+    await navigateToolbarBcv(mainPage, 'Exodus 2:3');
     await expect(trigger).toContainText('2:3');
     const exodusLabel = (await trigger.innerText()).trim();
 
     // Now navigate back to GEN 1:1 — a second real transition (book, chapter, and verse all
     // change), asserting both the chapter:verse tail and the Genesis book name
-    await trigger.click();
-    searchInput = mainPage.locator('[cmdk-input]');
-    await expect(searchInput).toBeVisible();
-    await searchInput.fill('GEN 1:1');
-    await mainPage.keyboard.press('Enter');
+    await navigateToolbarBcv(mainPage, 'Genesis 1:1');
     await expect(trigger).toContainText('1:1');
     await expect(trigger).toContainText(/Genesis|GEN/);
     const genesisLabel = (await trigger.innerText()).trim();
@@ -100,11 +99,7 @@ test.describe('verse navigation keyboard shortcuts', () => {
     await expect(trigger).toBeEnabled({ timeout: 15_000 });
 
     // Normalize to a known reference via the UI so navigation targets are predictable
-    await trigger.click();
-    const searchInput = mainPage.locator('[cmdk-input]');
-    await expect(searchInput).toBeVisible();
-    await searchInput.fill('GEN 1:1');
-    await mainPage.keyboard.press('Enter');
+    await navigateToolbarBcv(mainPage, 'Genesis 1:1');
     await expect(trigger).toContainText('1:1');
     const baseLabel = (await trigger.innerText()).trim();
 
@@ -130,8 +125,8 @@ test.describe('verse navigation keyboard shortcuts', () => {
 
     // Ctrl+B opens the control with the search input focused
     await mainPage.keyboard.press('Control+b');
-    await expect(mainPage.locator('[cmdk-input]')).toBeVisible();
-    await expect(mainPage.locator('[cmdk-input]')).toBeFocused();
+    await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeVisible();
+    await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeFocused();
     await mainPage.keyboard.press('Escape');
   });
 });

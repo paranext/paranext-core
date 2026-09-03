@@ -1,7 +1,7 @@
 import {
   getAllOpenWebViewDefinitionsSync,
   getSavedWebViewDefinitionSync,
-} from '@renderer/services/web-view.service-host';
+} from '@renderer/services/web-view.service-shard';
 import {
   findFirstEditorWebViewDefinition,
   SavedWebViewDefinition,
@@ -76,7 +76,7 @@ function resolveMainEditorWebView(): ResolvedWebView | undefined {
  * Resolves the web view that BCV navigation should DRIVE — the web view whose reference the top
  * toolbar's book/chapter/verse controls (`platform-bible-toolbar.tsx`) and the `platform.goTo*`
  * command handlers (`scroll-group-navigation.commands.ts`) read and write. Both consumers read the
- * one resolved value (cached in `window.service-host`) so they can never disagree on the target.
+ * one resolved value (cached in `window.service-shard`) so they can never disagree on the target.
  *
  * This is DISTINCT from the "last selected scripture-navigable web view"
  * ({@link isScriptureNavigableWebViewDefinition} / `getLastSelectedScriptureNavigableWebViewId`),

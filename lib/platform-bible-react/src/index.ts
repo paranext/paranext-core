@@ -77,7 +77,11 @@ export type {
 export {
   default as FootnoteEditor,
   type FootnoteEditorProps,
+  type FootnoteEditorMarkerPalette,
+  markerMenuItemToPaletteItem,
 } from './components/advanced/footnote-editor/footnote-editor.component';
+// The marker-palette session/keydown/filter utilities are exported from `./experimental.ts` —
+// they are new, still-moving API surface.
 export {
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteEditorLocalizedStrings,
@@ -163,6 +167,10 @@ export {
 } from './components/advanced/tab-navigation-content-search.component';
 export { default as Toolbar } from './components/advanced/toolbar.component';
 export type { ToolbarProps } from './components/advanced/toolbar.component';
+export {
+  ToolbarCompoundLabel,
+  type ToolbarCompoundLabelProps,
+} from './components/advanced/toolbar-compound-label/toolbar-compound-label.component';
 export {
   default as UiLanguageSelector,
   type LanguageInfo,
@@ -327,12 +335,20 @@ export {
   type UseListboxProps,
   type ListboxOption,
 } from './hooks/listbox-keyboard-navigation.hook';
+// `getShrinkStep` and `SHRINK_STEP_HYSTERESIS_PX` are deliberately NOT re-exported: they are the
+// hook's internals, and the per-toolbar threshold constants are tuning values the ADR expects to
+// move. Exporting either would make changing them a consumer-visible change. Tests import them by
+// module path instead.
+export { useShrinkStep } from './hooks/use-shrink-step.hook';
+
+// Contexts
+export { ShrinkStepContext, useShrinkStepValue, SHRINK_STEP } from './context/shrink-step.context';
 
 // Z-index scale
 export {
   Z_INDEX_ABOVE_DOCK,
   Z_INDEX_FIRST_RUN,
-  Z_INDEX_FOOTNOTE_EDITOR,
+  Z_INDEX_ABOVE_POPOVER,
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,

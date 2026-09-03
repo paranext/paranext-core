@@ -12,7 +12,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [{}]),
 }));
 
-vi.mock('@renderer/services/scroll-group.service-host', () => ({
+vi.mock('@renderer/services/scroll-group.service', () => ({
   getReferenceHistorySync: vi.fn(() => ({ current: undefined, back: [], forward: [] })),
   navigateReferenceHistorySync: vi.fn(() => false),
   onDidChangeReferenceHistory: vi.fn(() => vi.fn()),

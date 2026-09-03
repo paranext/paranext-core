@@ -8,7 +8,7 @@ import {
   ScrollGroupId,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
-import { FindJobStatusReport, FindOptions } from 'platform-scripture';
+import { FindJobStatus, FindJobStatusReport, FindOptions } from 'platform-scripture';
 import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
@@ -214,6 +214,24 @@ export function gateStartSearch(params: {
     return { action: 'skip', shouldRetryWhenPdpReady: true };
   }
   return { action: 'run' };
+}
+
+/**
+ * Whether the query becoming invalid should clear the results area and abandon the find job. Making
+ * the query invalid is a request to stop searching, but it is not one the {@link gateStartSearch}
+ * path can express: the search an invalid query would start is gated off, so nothing on that path
+ * ever stops the job.
+ *
+ * Requires something to actually clear so mounting with an empty box (the common first-open case)
+ * does not abandon a job that was never started.
+ */
+export function shouldClearResultsForInvalidQuery(params: {
+  isSearchQueryValid: boolean;
+  hasResults: boolean;
+  searchStatus: FindJobStatus | undefined;
+}): boolean {
+  if (params.isSearchQueryValid) return false;
+  return params.hasResults || params.searchStatus !== undefined;
 }
 
 /**

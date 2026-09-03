@@ -67,6 +67,32 @@ git stash pop
 
 **If a test passes without the implementation, it proves nothing and must be rewritten.**
 
+#### Exception: `test.fails` tripwires for a KNOWN, deliberately unfixed defect
+
+A `test.fails` case inverts Vitest's verdict: the case passes while the body throws and turns **red
+the moment the defect it names is fixed**. That makes it a tripwire, not a broken test — the way to
+record a defect you have deliberately chosen not to fix yet so that fixing it cannot pass unnoticed.
+It is the one place where "a case that goes green without an implementation change" is the intended
+alarm rather than a bug in the test.
+
+Use it only for a defect that is **known, reproduced, and deferred to a named ticket**, and only with
+all three of:
+
+- A `TODO(PT-XXXX)` on the case itself naming the specific defect it pins — not only on the
+  `describe` block, and not only in the production file. Whoever fixes the ticket must meet the
+  reference in the case they are about to turn red.
+- An instruction in that comment to **drop the `.fails`, not delete the case**, once the defect is
+  fixed. Deleting it throws away the coverage the tripwire was standing in for.
+- An assertion specific enough that the documented failure is the one being pinned. `test.fails`
+  passes when the body throws for **any** reason, so a case can stay green while no longer pinning
+  the bug it names — prefer asserting on the specific failure over letting an arbitrary throw count.
+
+Do NOT reach for it to park a test that is merely inconvenient, flaky, or unfinished. A test with no
+named defect and no ticket is a skipped test wearing a disguise; skip it explicitly instead.
+
+Live example: the three reconnect blockers in
+`src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts`, all pinned to PT-4435.
+
 ### Continuous Testing Frequency
 
 | Trigger               | Scope                   | Time Budget |
@@ -432,6 +458,16 @@ npm run test --workspace=lib/platform-bible-react
 npm run test:core -- --coverage
 ```
 
+**`npm test` needs Playwright's browsers installed.** `lib/platform-bible-react`'s vitest config
+includes a `storybook (chromium)` project that runs stories in a real browser, so a checkout that
+has never run `npx playwright install` fails there rather than in any `.test.ts` file. CI installs
+them before running tests; locally, run it once.
+
+That project is also the repo's main source of flaky test runs: its story files are timing-sensitive
+under parallel load, and a full `npm test` can fail a different handful of them each time while every
+one passes in isolation. Before chasing a story failure, re-run that project on its own with
+`--no-file-parallelism` — if it goes green, the failure was contention, not a regression.
+
 ---
 
 ## C# Testing
@@ -796,27 +832,66 @@ internal class DummyPapiClient : PapiClient
 
 ### TypeScript: Service Testing with Mocks
 
+> This example is executable and is meant to stay that way — it has shipped broken repeatedly
+> while being corrected by eye. `npm run verify:testing-guide` extracts the fence **verbatim**
+> and typechecks, lints and runs it; lint-staged runs it automatically whenever this file is
+> staged, so it does not depend on anyone remembering.
+
 ```typescript
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as networkService from '@shared/services/network.service';
+import { initialize as initializeSharedStore } from '@shared/services/shared-store.service';
 
+// Mock EVERY member the code under test touches, not just the one being asserted on — a missing
+// member is `undefined` at the call site, and the resulting throw is usually swallowed by the
+// service's own try/catch and surfaces only as a rejected promise.
 vi.mock('@shared/services/network.service', () => ({
-  createNetworkEventEmitter: vi.fn(),
+  createCoreMultiSourceEventEmitter: vi.fn(),
   getNetworkEvent: vi.fn(),
   request: vi.fn(),
+  registerRequestHandler: vi.fn(),
+}));
+
+// The same rule applies to collaborators, not just the module under assertion. `initialize` logs,
+// and the real logger module configures transports at import time, so leaving it unmocked gives a
+// copied test load-time side effects it never asked for.
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 describe('sharedStoreService', () => {
-  const mockEmitter = { emit: vi.fn(), subscribe: vi.fn(), dispose: vi.fn() };
+  // `event` matters as much as `emit`: the service subscribes through it during initialization.
+  const mockEmitter = {
+    emit: vi.fn(),
+    event: vi.fn(),
+    subscribe: vi.fn(),
+    subscribeOnce: vi.fn(),
+    dispose: vi.fn(),
+    emitLocal: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(networkService.createNetworkEventEmitter).mockReturnValue(mockEmitter);
+    // The factory returns the emitter alongside a promise for its central registration; the
+    // service consumes that promise in the background, so a mock must supply both. The cast is
+    // unavoidable: `PlatformEventEmitter` has private fields, so no object literal is assignable
+    // to it and the mock will not typecheck without it.
+    vi.mocked(networkService.createCoreMultiSourceEventEmitter).mockReturnValue(
+      // Needed for testing
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      {
+        emitter: mockEmitter,
+        registeredEmitterPromise: Promise.resolve(mockEmitter),
+      } as unknown as ReturnType<typeof networkService.createCoreMultiSourceEventEmitter>,
+    );
   });
 
   it('should initialize with network event emitter', async () => {
     await initializeSharedStore(networkService);
-    expect(networkService.createNetworkEventEmitter).toHaveBeenCalledWith('shared-store:change');
+    expect(networkService.createCoreMultiSourceEventEmitter).toHaveBeenCalledWith(
+      'shared-store:change',
+      expect.anything(),
+    );
   });
 });
 ```
@@ -1108,6 +1183,12 @@ E2E tests that verify user flows MUST interact through visible UI only:
 - NEVER import `sendPapiCommand` from helpers in per-feature tests.
 
 Note: `app.fixture` is retained for CI smoke tests only (launches standalone Electron).
+
+**Isolated-suite setup exception:** specs under `e2e-tests/tests/isolated/` run against a fresh
+temp profile with no projects and no project-open UI, so their *setup* necessarily goes through
+PAPI (`sendPapiCommandWhenRegistered` to open an editor, flip `platform.isEditable`, etc.). The
+rule still governs the behavior under test: once setup completes, the asserted user flow itself
+must be driven and observed through visible UI only.
 
 ### Opening a Project and Its Tool Menus (PT10 Navigation Pattern)
 

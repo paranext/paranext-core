@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ScriptureRangeUsjChapterOrUsfmVerseLocation } from 'platform-scripture';
+import { FindResult, ScriptureRangeUsjChapterOrUsfmVerseLocation } from 'platform-scripture';
 import papi from '@papi/backend';
 import {
   ScriptureFinderProjectDataProviderEngine,
@@ -206,6 +206,111 @@ function createMockPdps(): ScriptureFinderOverlayPDPs {
       subscribeChapterUSFM: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
     },
   } as unknown as ScriptureFinderOverlayPDPs;
+}
+
+/**
+ * Creates mock PDPs that serve the given USX for every book and chapter read. For tests that need
+ * verse text containing specific characters rather than the shared {@link TEST_BOOK_USX} fixture.
+ */
+function createSingleUsxMockPdps(usx: string): ScriptureFinderOverlayPDPs {
+  // We only need this much of the PDPs for these tests
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return {
+    'platform.base': {
+      getSetting: vi.fn().mockImplementation((key: string) => {
+        if (key === 'platformScripture.baseCharacterClassRegex')
+          return Promise.resolve('\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}\\p{Cn}');
+        if (key === 'platformScripture.diacriticCharacterClassRegex')
+          return Promise.resolve('\\p{Mn}\\p{Mc}\\p{Lm}');
+        if (key === 'platformScripture.wordMedialCharacterRegex') return Promise.resolve('');
+        if (key === 'platformScripture.allowInvisibleCharacters') return Promise.resolve(false);
+        if (key === 'platformScripture.wordBreakRegex') return Promise.resolve('\\s+');
+        return Promise.resolve(undefined);
+      }),
+      subscribeSetting: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+    },
+    'platformScripture.USX_Book': {
+      getBookUSX: vi.fn().mockResolvedValue(usx),
+      setBookUSX: vi.fn().mockResolvedValue(true),
+      subscribeBookUSX: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+    },
+    'platformScripture.USX_Chapter': {
+      getChapterUSX: vi.fn().mockResolvedValue(usx),
+      setChapterUSX: vi.fn().mockResolvedValue(true),
+      subscribeChapterUSX: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+    },
+    'platformScripture.USFM_Book': {
+      getBookUSFM: vi.fn().mockResolvedValue(''),
+      setBookUSFM: vi.fn().mockResolvedValue(true),
+      subscribeBookUSFM: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+    },
+    'platformScripture.USFM_Chapter': {
+      getChapterUSFM: vi.fn().mockResolvedValue(''),
+      setChapterUSFM: vi.fn().mockResolvedValue(true),
+      subscribeChapterUSFM: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+    },
+  } as unknown as ScriptureFinderOverlayPDPs;
+}
+
+/**
+ * Maximum polls before a find job is treated as hung. Bounds the loop so a job that never leaves
+ * 'running' fails the test instead of hanging the suite.
+ */
+const MAX_POLL_ATTEMPTS = 200;
+
+/**
+ * Runs a find job to completion and returns every match it reported, across all batches.
+ *
+ * `retrieveFindJobUpdate` drains its pending results on each call, so results must be accumulated
+ * as they arrive — reading only the final report silently discards every earlier batch.
+ *
+ * Throws unless the job reaches 'completed'. A job that errors, is stopped, or exceeds its result
+ * limit reports no results, so returning an empty array for those statuses would turn any "finds
+ * nothing" assertion into a no-op that passes for the wrong reason.
+ */
+async function pollFindJob(
+  engine: ScriptureFinderProjectDataProviderEngine,
+  options: Parameters<ScriptureFinderProjectDataProviderEngine['beginFindJob']>[0],
+): Promise<FindResult[]> {
+  const jobId = await engine.beginFindJob(options);
+  const results: FindResult[] = [];
+  let report = await engine.retrieveFindJobUpdate(jobId, 1000);
+  results.push(...(report.nextResults ?? []));
+  let attempts = 0;
+  while (report.status === 'running') {
+    attempts += 1;
+    if (attempts > MAX_POLL_ATTEMPTS)
+      throw new Error(`Find job ${jobId} was still running after ${MAX_POLL_ATTEMPTS} polls`);
+    // Polling requires sequential awaits; parallelizing would race against job completion.
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
+    // Sequential await required to get updated status after each polling delay.
+    // eslint-disable-next-line no-await-in-loop
+    report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    results.push(...(report.nextResults ?? []));
+  }
+  if (report.status !== 'completed')
+    throw new Error(`Find job ${jobId} ended with status '${report.status}', expected 'completed'`);
+  return results;
+}
+
+/** Runs a find job to completion and returns the text of every match it reported */
+async function pollFindJobTexts(
+  engine: ScriptureFinderProjectDataProviderEngine,
+  options: Parameters<ScriptureFinderProjectDataProviderEngine['beginFindJob']>[0],
+): Promise<string[]> {
+  return (await pollFindJob(engine, options)).map((r) => r.text);
+}
+
+/** Runs a find job to completion and returns the set of book ids its matches landed in */
+async function pollFindJobBooks(
+  engine: ScriptureFinderProjectDataProviderEngine,
+  options: Parameters<ScriptureFinderProjectDataProviderEngine['beginFindJob']>[0],
+): Promise<Set<string>> {
+  const results = await pollFindJob(engine, options);
+  return new Set(results.map((r) => r.start.verseRef.book));
 }
 
 describe('ScriptureFinderProjectDataProviderEngine.replace', () => {
@@ -2004,27 +2109,12 @@ describe('ScriptureFinderProjectDataProviderEngine word restriction', () => {
     searchString: string,
     options?: Partial<Omit<Parameters<typeof engine.beginFindJob>[0], 'searchString' | 'scope'>>,
   ): Promise<string[]> {
-    const jobId = await engine.beginFindJob({
+    return pollFindJobTexts(engine, {
       searchString,
       scope: [{ bookId: 'MAT' }],
       caseInsensitive: true,
       ...options,
     });
-
-    // Poll until job completes
-    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
-    while (report.status === 'running') {
-      // Polling requires sequential awaits; parallelizing would race against job completion.
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise((resolve) => {
-        setTimeout(resolve, 10);
-      });
-      // Sequential await required to get updated status after each polling delay.
-      // eslint-disable-next-line no-await-in-loop
-      report = await engine.retrieveFindJobUpdate(jobId, 1000);
-    }
-
-    return (report.nextResults ?? []).map((r) => r.text);
   }
 
   // Test USFM verse text:
@@ -2153,33 +2243,19 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
   });
 
   it('should return no results when the search string has no matches', async () => {
-    const jobId = await engine.beginFindJob({
+    // pollFindJob throws unless the job completes, so an empty result here cannot be an error in
+    // disguise.
+    const results = await pollFindJob(engine, {
       searchString: 'ZZZNOMATCH',
       scope: [{ bookId: 'MAT' }],
       caseInsensitive: false,
     });
 
-    let resultCount = 0;
-    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
-    resultCount += (report.nextResults ?? []).length;
-    while (report.status === 'running') {
-      // Polling requires sequential awaits; parallelizing would race against job completion.
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 10);
-      });
-      // Sequential await required to get updated status after each polling delay.
-      // eslint-disable-next-line no-await-in-loop
-      report = await engine.retrieveFindJobUpdate(jobId, 1000);
-      resultCount += (report.nextResults ?? []).length;
-    }
-
-    expect(report.status).toBe('completed');
-    expect(resultCount).toBe(0);
+    expect(results).toEqual([]);
   });
 
   it('should find results from both books when scope spans MAT and MRK', async () => {
-    const jobId = await engine.beginFindJob({
+    const foundBooks = await pollFindJobBooks(engine, {
       searchString: 'Jesus',
       scope: [
         { bookId: 'MAT', chapter: 1 },
@@ -2188,22 +2264,6 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
       caseInsensitive: false,
     });
 
-    const foundBooks = new Set<string>();
-    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
-    (report.nextResults ?? []).forEach((r) => foundBooks.add(r.start.verseRef.book));
-    while (report.status === 'running') {
-      // Polling requires sequential awaits; parallelizing would race against job completion.
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 10);
-      });
-      // Sequential await required to get updated status after each polling delay.
-      // eslint-disable-next-line no-await-in-loop
-      report = await engine.retrieveFindJobUpdate(jobId, 1000);
-      (report.nextResults ?? []).forEach((r) => foundBooks.add(r.start.verseRef.book));
-    }
-
-    expect(report.status).toBe('completed');
     expect(foundBooks.has('MAT')).toBe(true);
     expect(foundBooks.has('MRK')).toBe(true);
   });
@@ -2220,30 +2280,14 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
     );
 
     // GEN (absent) is listed FIRST so the pre-fix behavior aborts the job before MAT is ever searched.
-    const jobId = await engine.beginFindJob({
+    // An absent scoped book must not abort the job: pollFindJob throws on any status other than
+    // 'completed', so a job errored by GEN fails this test rather than reporting zero MAT hits.
+    const foundBooks = await pollFindJobBooks(engine, {
       searchString: 'Jesus',
       scope: [{ bookId: 'GEN' }, { bookId: 'MAT' }],
       caseInsensitive: false,
     });
 
-    const foundBooks = new Set<string>();
-    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
-    (report.nextResults ?? []).forEach((r) => foundBooks.add(r.start.verseRef.book));
-    while (report.status === 'running') {
-      // Polling requires sequential awaits; parallelizing would race against job completion.
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 10);
-      });
-      // Sequential await required to get updated status after each polling delay.
-      // eslint-disable-next-line no-await-in-loop
-      report = await engine.retrieveFindJobUpdate(jobId, 1000);
-      (report.nextResults ?? []).forEach((r) => foundBooks.add(r.start.verseRef.book));
-    }
-
-    // Before the fix: the absent GEN scope throws "No scripture found", aborting the entire job
-    // (status 'errored', no MAT results). After the fix: GEN is skipped and MAT still returns hits.
-    expect(report.status).toBe('completed');
     expect(foundBooks.has('MAT')).toBe(true);
     expect(foundBooks.has('GEN')).toBe(false);
   });
@@ -2251,9 +2295,10 @@ describe('ScriptureFinderProjectDataProviderEngine find job API', () => {
 
 describe('ScriptureFinderProjectDataProviderEngine ignoreDiacritics', () => {
   // USX whose verse text contains pre-composed NFC characters (é = U+00E9, not decomposed).
-  // Before the fix, searching for 'e' with ignoreDiacritics would fail to find U+00E9 because
-  // UsjReaderWriter.search did not NFD-normalize the source text before applying the regex.
-  // "Hébreux résumé" contains: é (NFC) in Hébreux, plain e in breux, and é (NFC) ×2 in résumé.
+  // Searching for 'e' with ignoreDiacritics matches the accented 'é' as well as the plain 'e',
+  // because UsjReaderWriter.search NFD-normalizes the source text before applying the regex.
+  // "Hébreux résumé" contains: é (NFC) in Hébreux, plain e in breux, and é (NFC) ×2 in résumé,
+  // so the search reports all five: ['e', 'é', 'e', 'é', 'é'].
   const NFC_CHAPTER_USX = `<?xml version="1.0" encoding="utf-8"?>
 <usx version="3.0">
   <book code="MAT" style="id">Matthew</book>
@@ -2267,78 +2312,26 @@ describe('ScriptureFinderProjectDataProviderEngine ignoreDiacritics', () => {
   let engine: ScriptureFinderProjectDataProviderEngine;
 
   beforeEach(() => {
-    // Mock PDPs are plain objects cast to the interface type for test setup convenience.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const mockPdps = {
-      'platform.base': {
-        getSetting: vi.fn().mockImplementation((key: string) => {
-          if (key === 'platformScripture.baseCharacterClassRegex')
-            return Promise.resolve('\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}\\p{Cn}');
-          if (key === 'platformScripture.diacriticCharacterClassRegex')
-            return Promise.resolve('\\p{Mn}\\p{Mc}\\p{Lm}');
-          if (key === 'platformScripture.wordMedialCharacterRegex') return Promise.resolve('');
-          if (key === 'platformScripture.allowInvisibleCharacters') return Promise.resolve(false);
-          if (key === 'platformScripture.wordBreakRegex') return Promise.resolve('\\s+');
-          return Promise.resolve(undefined);
-        }),
-        subscribeSetting: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
-      },
-      'platformScripture.USX_Book': {
-        getBookUSX: vi.fn().mockResolvedValue(NFC_CHAPTER_USX),
-        setBookUSX: vi.fn().mockResolvedValue(true),
-        subscribeBookUSX: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
-      },
-      'platformScripture.USX_Chapter': {
-        getChapterUSX: vi.fn().mockResolvedValue(NFC_CHAPTER_USX),
-        setChapterUSX: vi.fn().mockResolvedValue(true),
-        subscribeChapterUSX: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
-      },
-      'platformScripture.USFM_Book': {
-        getBookUSFM: vi.fn().mockResolvedValue(''),
-        setBookUSFM: vi.fn().mockResolvedValue(true),
-        subscribeBookUSFM: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
-      },
-      'platformScripture.USFM_Chapter': {
-        getChapterUSFM: vi.fn().mockResolvedValue(''),
-        setChapterUSFM: vi.fn().mockResolvedValue(true),
-        subscribeChapterUSFM: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
-      },
-    } as unknown as ScriptureFinderOverlayPDPs;
-    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
+    engine = new ScriptureFinderProjectDataProviderEngine(createSingleUsxMockPdps(NFC_CHAPTER_USX));
   });
 
-  async function findTexts(
+  function findTexts(
     searchString: string,
     options?: Partial<Omit<Parameters<typeof engine.beginFindJob>[0], 'searchString' | 'scope'>>,
   ): Promise<string[]> {
-    const jobId = await engine.beginFindJob({
+    return pollFindJobTexts(engine, {
       searchString,
       scope: [{ bookId: 'MAT', chapter: 1 }],
       ...options,
     });
-    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
-    while (report.status === 'running') {
-      // Polling requires sequential awaits; parallelizing would race against job completion.
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise((resolve) => {
-        setTimeout(resolve, 10);
-      });
-      // Sequential await required to get updated status after each polling delay.
-      // eslint-disable-next-line no-await-in-loop
-      report = await engine.retrieveFindJobUpdate(jobId, 1000);
-    }
-    return (report.nextResults ?? []).map((r) => r.text);
   }
 
   it('finds NFC pre-composed accented characters when ignoreDiacritics is true', async () => {
     // "Hébreux résumé" — é (U+00E9) is pre-composed NFC; e is a plain e in "breux"
     // With ignoreDiacritics the search for 'e' must match both plain 'e' and accented 'é'.
     const results = await findTexts('e', { ignoreDiacritics: true, caseInsensitive: false });
-    // Must find at least the NFC é characters (would find 0 before the fix)
-    expect(results.length).toBeGreaterThan(0);
-    // The accented character should be returned as the original NFC character, not decomposed
-    const hasAccented = results.some((t) => t === '\u00E9');
-    expect(hasAccented).toBe(true);
+    // Accented characters come back as the original NFC character, not decomposed.
+    expect(results).toEqual(['e', '\u00E9', 'e', '\u00E9', '\u00E9']);
   });
 
   it('does not match NFC accented chars when searching for the plain base char without ignoreDiacritics', async () => {
@@ -2348,5 +2341,123 @@ describe('ScriptureFinderProjectDataProviderEngine ignoreDiacritics', () => {
     expect(results.some((t) => t === 'e')).toBe(true);
     // Pre-composed 'é' must NOT be found
     expect(results.some((t) => t === '\u00E9')).toBe(false);
+  });
+});
+
+describe('ScriptureFinderProjectDataProviderEngine whitespace matching', () => {
+  const SINGLE_SPACED_CHAPTER_USX = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 1:1"/>In the beginning was the Word.<verse eid="MAT 1:1"/>
+  </para>
+  <chapter eid="MAT 1"/>
+</usx>`;
+
+  // Find searches USJ, whose adjacent text nodes are concatenated with no separator (see
+  // UsjReaderWriter's `textChunks.join('')`). A trailing space in one node followed by a leading
+  // space in the next therefore produces a genuine double space in the searched text, even though
+  // no single USFM token contains one.
+  const DOUBLE_SPACED_CHAPTER_USX = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 1:1"/>JESUS, <char style="it" closed="false">Salvador. </char><unmatched marker="f*" /> porque he saved.<verse eid="MAT 1:1"/>
+  </para>
+  <chapter eid="MAT 1"/>
+</usx>`;
+
+  const SCOPE = [{ bookId: 'MAT', chapter: 1 }];
+
+  function findIn(
+    usx: string,
+    searchString: string,
+    options?: Partial<
+      Omit<
+        Parameters<ScriptureFinderProjectDataProviderEngine['beginFindJob']>[0],
+        'searchString' | 'scope'
+      >
+    >,
+  ): Promise<string[]> {
+    const engine = new ScriptureFinderProjectDataProviderEngine(createSingleUsxMockPdps(usx));
+    return pollFindJobTexts(engine, {
+      searchString,
+      scope: SCOPE,
+      caseInsensitive: true,
+      ...options,
+    });
+  }
+
+  describe('by default, whitespace is matched exactly', () => {
+    it('finds a real run of consecutive spaces in the text', async () => {
+      const results = await findIn(DOUBLE_SPACED_CHAPTER_USX, 'Salvador.  porque');
+      expect(results).toEqual(['Salvador.  porque']);
+    });
+
+    it('does not match single-spaced text when the query has extra spaces', async () => {
+      const results = await findIn(SINGLE_SPACED_CHAPTER_USX, 'the   Word');
+      expect(results).toEqual([]);
+    });
+
+    it('does not match an ordinary space when the query is an invisible character', async () => {
+      // U+00A0 no-break space between two words separated by a plain space in the text
+      const results = await findIn(SINGLE_SPACED_CHAPTER_USX, 'the\u00A0Word');
+      expect(results).toEqual([]);
+    });
+  });
+
+  describe('ignoreWhitespaceDifferences', () => {
+    it('matches single-spaced text when the query has extra spaces between words', async () => {
+      const results = await findIn(SINGLE_SPACED_CHAPTER_USX, 'the   Word', {
+        ignoreWhitespaceDifferences: true,
+      });
+      expect(results).toEqual(['the Word']);
+    });
+
+    it('matches a real run of consecutive spaces too, so no text becomes unreachable', async () => {
+      const results = await findIn(DOUBLE_SPACED_CHAPTER_USX, 'Salvador. porque', {
+        ignoreWhitespaceDifferences: true,
+      });
+      expect(results).toEqual(['Salvador.  porque']);
+    });
+
+    it('matches an ordinary space when the query is an invisible character', async () => {
+      // The cost of the option, pinned deliberately: it is why the default is off.
+      const results = await findIn(SINGLE_SPACED_CHAPTER_USX, 'the\u00A0Word', {
+        ignoreWhitespaceDifferences: true,
+      });
+      expect(results).toEqual(['the Word']);
+    });
+
+    // A padded query matches a span that includes the surrounding spaces, so replacing it would
+    // splice those spaces away and fuse the neighboring words. Trimming is the user's job; the
+    // engine must report exactly the span it matched.
+    it('reports the surrounding spaces as part of the match for a padded query', async () => {
+      const results = await findIn(SINGLE_SPACED_CHAPTER_USX, '   beginning    ', {
+        ignoreWhitespaceDifferences: true,
+      });
+      expect(results).toEqual([' beginning ']);
+    });
+
+    it.each(['wholeWord', 'startOfWord', 'endOfWord'] as const)(
+      'still matches under the %s restriction',
+      async (wordRestriction) => {
+        const results = await findIn(SINGLE_SPACED_CHAPTER_USX, 'the   Word', {
+          ignoreWhitespaceDifferences: true,
+          wordRestriction,
+        });
+        expect(results).toEqual(['the Word']);
+      },
+    );
+
+    it('is not applied in regex mode, where the pattern must mean exactly what the user wrote', async () => {
+      const results = await findIn(SINGLE_SPACED_CHAPTER_USX, 'the {3}Word', {
+        ignoreWhitespaceDifferences: true,
+        useRegex: true,
+      });
+      expect(results).toEqual([]);
+    });
   });
 });

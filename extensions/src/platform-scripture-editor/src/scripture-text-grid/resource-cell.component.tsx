@@ -4,7 +4,7 @@ import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
 import { useExtraValidMarkers } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { deriveCellState } from './resource-cell.utils';
 import {
@@ -15,6 +15,7 @@ import {
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.utils';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 import { resolveDisplayVerseNum, sliceUsjToVerse } from './verse-display.utils';
+import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
@@ -70,6 +71,12 @@ export function ResourceCell({
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
+  // The grid's picker offers commentaries, so a cell can be rendering handbook/notes markers. Load
+  // that resource's marker stylesheet the same way the resource panel does; without it the markers
+  // render unstyled. A no-op for any project that is not a supported commentary, and each cell owns
+  // the `<style>` element it injects, so cells showing different commentaries do not fight.
+  useCommentaryMarkerStyles(resourceRef.projectId);
+
   // #region Chapter fetch — data method returns [data, setData, isLoading]; isLoading is index 2.
   // `projectId` may be undefined for unavailable resources; both hooks must still be called
   // unconditionally (Rules of Hooks). The hooks accept undefined and return loading/empty state.
@@ -111,8 +118,13 @@ export function ResourceCell({
     () =>
       resourceRef.projectId === undefined
         ? 'unavailable'
-        : deriveCellState({ usjPossiblyError, isLoading }),
-    [resourceRef.projectId, usjPossiblyError, isLoading],
+        : deriveCellState({
+            usjPossiblyError,
+            isLoading,
+            currentBookNum: Canon.bookIdToNumber(scrRef.book),
+            projectId: resourceRef.projectId,
+          }),
+    [resourceRef.projectId, usjPossiblyError, isLoading, scrRef.book],
   );
 
   // #region Zoom — computed here so the callbacks and bound-state are available for the view's
@@ -146,6 +158,12 @@ export function ResourceCell({
     () => (isPlatformError(usjPossiblyError) ? undefined : usjPossiblyError),
     [usjPossiblyError],
   );
+  useEffect(() => {
+    if (isPlatformError(usjPossiblyError))
+      logger.warn(
+        `ScriptureTextGrid: chapter data error for ${resourceRef.resourceId}: ${getErrorMessage(usjPossiblyError)}`,
+      );
+  }, [usjPossiblyError, resourceRef.resourceId]);
   const extraValidMarkers = useExtraValidMarkers(usj);
   const options: EditorOptions = useMemo(
     () => ({
@@ -184,7 +202,7 @@ export function ResourceCell({
   // Resource Viewer depend on, both feeding a whole chapter so the document is addressable — would
   // go with it. A read-only editor reporting its caret is correct; the bug would be ours, since WE
   // told it a reference we then contradicted. Full reasoning, and what a future single-verse surface
-  // must copy: ADR-0019.
+  // must copy: `adr-single-verse-surfaces-resolve-verse-zero-to-one`.
   const handleScrRefChange = useCallback(
     (nextScrRef: SerializedVerseRef) => {
       if (viewMode === 'verse' && isFallenForward) return;

@@ -34,7 +34,7 @@ function getEndChapterWithFallback(book: string, bounds?: ScriptureBounds): numb
  */
 export function findAdjacentPresentBook(
   book: string,
-  availableBooks: string[],
+  availableBooks: readonly string[],
   direction: 'next' | 'previous',
 ): string | undefined {
   const bookNum = Canon.bookIdToNumber(book);
@@ -73,7 +73,7 @@ export function findAdjacentPresentBook(
  */
 export function getPreviousChapterRef(
   scrRef: SerializedVerseRef,
-  availableBooks: string[],
+  availableBooks: readonly string[],
   bounds?: ScriptureBounds,
 ): SerializedVerseRef | undefined {
   const { book, chapterNum } = scrRef;
@@ -108,7 +108,7 @@ export function getPreviousChapterRef(
  */
 export function getNextChapterRef(
   scrRef: SerializedVerseRef,
-  availableBooks: string[],
+  availableBooks: readonly string[],
   bounds?: ScriptureBounds,
 ): SerializedVerseRef | undefined {
   const { book, chapterNum } = scrRef;
@@ -134,7 +134,7 @@ export function getNextChapterRef(
  */
 export function getPreviousBookRef(
   scrRef: SerializedVerseRef,
-  availableBooks: string[],
+  availableBooks: readonly string[],
 ): SerializedVerseRef | undefined {
   const previousBook = findAdjacentPresentBook(scrRef.book, availableBooks, 'previous');
   if (!previousBook) return undefined;
@@ -152,7 +152,7 @@ export function getPreviousBookRef(
  */
 export function getNextBookRef(
   scrRef: SerializedVerseRef,
-  availableBooks: string[],
+  availableBooks: readonly string[],
 ): SerializedVerseRef | undefined {
   const nextBook = findAdjacentPresentBook(scrRef.book, availableBooks, 'next');
   if (!nextBook) return undefined;
@@ -184,7 +184,7 @@ export function getNextBookRef(
  */
 export function getPreviousVerseRef(
   scrRef: SerializedVerseRef,
-  availableBooks?: string[],
+  availableBooks?: readonly string[],
   bounds?: ScriptureBounds,
 ): SerializedVerseRef | undefined {
   const { book, chapterNum, verseNum } = scrRef;
@@ -237,7 +237,7 @@ export function getPreviousVerseRef(
  */
 export function getNextVerseRef(
   scrRef: SerializedVerseRef,
-  availableBooks?: string[],
+  availableBooks?: readonly string[],
   bounds?: ScriptureBounds,
 ): SerializedVerseRef | undefined {
   const { book, chapterNum, verseNum } = scrRef;

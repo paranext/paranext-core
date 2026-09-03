@@ -19,7 +19,6 @@ import {
   PlatformEvent,
   PlatformEventEmitter,
   deepEqual,
-  endsWith,
   getAllObjectFunctionNames,
   getErrorMessage,
   groupBy,
@@ -27,7 +26,6 @@ import {
   isErrorMessageAboutRegistryAuthFailure,
   isString,
   newPlatformError,
-  startsWith,
 } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
@@ -69,9 +67,15 @@ const SUBSCRIBE_PLACEHOLDER = {};
 /**
  * Gets the id for the data provider network object with the given name Don't add the suffix to the
  * provider name if it's already there to avoid duplication
+ *
+ * Exported because anything that has a provider NAME and needs to recognize that provider's network
+ * object — `useDataProvider`'s re-lookup listener, for one — has to derive the id the same way this
+ * service does rather than assume the name is the id.
+ *
+ * @experimental
  */
-const getDataProviderObjectId = (providerName: string) => {
-  return endsWith(providerName, `-${DATA_PROVIDER_LABEL}`)
+export const getDataProviderObjectId = (providerName: string) => {
+  return providerName.endsWith(`-${DATA_PROVIDER_LABEL}`)
     ? providerName
     : `${providerName}-${DATA_PROVIDER_LABEL}`;
 };
@@ -395,8 +399,12 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
         let newDataProviderMethod: // eslint-disable-next-line @typescript-eslint/no-explicit-any
         DataProviderInternal<DataProviderTypes[DataProviderName]>[any] | undefined;
 
-        // If they want a subscriber, build a subscribe function specific to the data type used
-        if (isString(prop) && startsWith(prop, 'subscribe')) {
+        // If they want a subscriber, build a subscribe function specific to the data type used.
+        // Native `startsWith` — property name and prefix are both ASCII by construction; see
+        // `.claude/rules/code-quality/native-string-vs-grapheme-helpers.md`. Reusing one
+        // `GraphemeString` is not an option either: this trap runs on every property access and
+        // receives a fresh key string each time.
+        if (isString(prop) && prop.startsWith('subscribe')) {
           const dataType =
             getDataProviderDataTypeFromFunctionName<DataProviderTypes[DataProviderName]>(prop);
           // Subscribe to run the callback when data changes. Also immediately calls callback with the current value
@@ -446,7 +454,7 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
         // These request functions should not have to change after they're set for the first time.
         if (
           isString(prop) &&
-          (startsWith(prop, 'get') || startsWith(prop, 'subscribe') || prop === 'notifyUpdate') &&
+          (prop.startsWith('get') || prop.startsWith('subscribe') || prop === 'notifyUpdate') &&
           (prop in obj || prop in dataProviderInternal)
         )
           return false;
@@ -462,7 +470,7 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
       has(obj, prop) {
         if (prop in dataProviderInternal) return true;
         // This proxy provides subscribe methods, so make sure they seem to exist
-        if (isString(prop) && startsWith(prop, 'subscribe')) return true;
+        if (isString(prop) && prop.startsWith('subscribe')) return true;
         return prop in obj;
       },
     },
@@ -689,8 +697,8 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
       // If the function was decorated with @ignore, do not consider it a special function
       if (dataProviderEngineUntyped[fnName].isIgnored) return 'other';
 
-      if (startsWith(fnName, 'get')) return 'get';
-      if (startsWith(fnName, 'set')) return 'set';
+      if (fnName.startsWith('get')) return 'get';
+      if (fnName.startsWith('set')) return 'set';
       return 'other';
     },
     (fnName, fnType) => {

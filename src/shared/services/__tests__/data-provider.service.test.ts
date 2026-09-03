@@ -108,6 +108,61 @@ describe('dataProviderService.registerEngine — documentation forwarding', () =
     expect(networkObjectService.set).toHaveBeenCalledTimes(1);
     expect(vi.mocked(networkObjectService.set).mock.calls[0][4]).toBe(documentation);
   });
+
+  it('exposes an ignored get___ method as a plain method rather than a data type getter', async () => {
+    // The window service shard reaches the main process's navigation commands this way: a
+    // `get___` method that is not a data type at all, kept off the get/set matching check by the
+    // `ignore` decorator. Both sides of that join are otherwise tested against mocks — the shard's
+    // suite stubs the decorator out, and the router's stubs the shard — so nothing else exercises
+    // what registration actually does with it. Without the decorator this registration throws for
+    // want of a matching setter, taking every window's startup with it.
+    const engine = {
+      getData: async () => 1,
+      setData: async () => true,
+      getSomethingThatIsNotADataType: async () => 'answer',
+    };
+    dataProviderService.decorators.ignore(engine.getSomethingThatIsNotADataType);
+
+    await dataProviderService.registerEngine(
+      // The name/engine are generic in this test context; cast to satisfy the typed signature.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      'test.ignoredGetter' as never,
+      // The name/engine are generic in this test context; cast to satisfy the typed signature.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      engine as never,
+    );
+
+    const registeredObject = vi.mocked(networkObjectService.set).mock.calls[0][1];
+    // Called through `Reflect.apply` rather than behind an `instanceof` guard, so a method that is
+    // not on the registered object at all fails here instead of skipping the assertion
+    const exposedMethod: unknown = Reflect.get(registeredObject, 'getSomethingThatIsNotADataType');
+
+    // Reachable over the network, which is the whole point of putting it on the engine
+    await expect(Reflect.apply(Function.prototype.call, exposedMethod, [undefined])).resolves.toBe(
+      'answer',
+    );
+  });
+
+  it('refuses to register an unignored get___ method with no matching setter', async () => {
+    // The other half: registration failing this way is what the decorator is holding back, so a
+    // decorator quietly dropped from a shard is a window that cannot start
+    const engine = {
+      getData: async () => 1,
+      setData: async () => true,
+      getSomethingThatIsNotADataType: async () => 'answer',
+    };
+
+    await expect(
+      dataProviderService.registerEngine(
+        // The name/engine are generic in this test context; cast to satisfy the typed signature.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        'test.unignoredGetter' as never,
+        // The name/engine are generic in this test context; cast to satisfy the typed signature.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        engine as never,
+      ),
+    ).rejects.toThrow('matching get and set functions');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -129,8 +184,9 @@ describe('dataProviderService.registerEngine — failure does not leak a pending
     // `buildDataProvider` creates an AsyncVariable with a long timeout BEFORE the awaits that can
     // fail. A failure after that point used to leave it pending, so it rejected on its own timer
     // long after the fact with nothing listening — an unhandled rejection pointing nowhere near the
-    // cause. This is reachable whenever a name is free but its update event is not, which is what a
-    // window taking over an app-global service hits.
+    // cause. This is reachable whenever a name is free but its update event is not — what a
+    // restarted extension host hits when it registers the same provider names while the departed
+    // process's event registrations are still being torn down.
     vi.useFakeTimers();
     const unhandled: unknown[] = [];
     const recordUnhandled = (reason: unknown) => unhandled.push(reason);

@@ -2730,16 +2730,31 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       }
     }
 
-    // Special case: `ca` after chapter marker needs a newline and space before in Paratext USFM for
-    // some reason
-    // Note that there is not a newline and space before `ca` after importing from USX in Paratext,
-    // so maybe we should just remove the newline and space in the PDP
+    // Special case: `ca` after a chapter marker gets a newline plus one leading space —
+    // `\c 1\n \ca 2\ca*` — because that is what Paratext 9's STANDARD VIEW writes on save, and
+    // Standard View is how the overwhelming majority of real USFM files get saved. Its display
+    // structure is the reason (ParatextInternalShared/ScriptureViews/Standard.xslt): the chapter
+    // renders as a block `div` and the `\ca` span sits OUTSIDE that div as its following
+    // sibling, so the HTML -> USFM save emits the chapter's line break before the `\ca` bytes.
+    // Preserving that shape keeps this writer's output byte-faithful to the files users have.
+    //
+    // Two facts that must not be misread as reasons to remove this again:
+    // - ParatextData's own USX -> USFM write (`SetChapterUsx` -> `GetChapterUsfm`) puts `\ca` on
+    //   the SAME line (`\c 1 \ca 2\ca*`) — captured in
+    //   c-sharp-tests/Projects/VerseAttributeFoldRoundTripCaptureTests.cs — so a chapter saved
+    //   THROUGH ParatextData normalizes to same-line on disk regardless of what this writer
+    //   emits. The two writers genuinely disagree; this one sides with Standard View.
+    // - The two spellings PARSE identically (line-break whitespace before an attribute marker is
+    //   structural; the fold happens either way — same capture suite), so nothing downstream can
+    //   distinguish them semantically. The choice here is byte fidelity only.
     if (this.markersMap.isSpaceAfterAttributeMarkersContent && markerNameOriginal === 'ca') {
-      // Find the last marker in the current USFM output
+      // Find the last marker in the current USFM output. Both the index and the slice read
+      // `usfmOutput` — the string earlier branches may have trimmed — never the untouched `usfm`
+      // parameter, which can have diverged from it by the time this runs.
       const lastMarkerBackslashIndex = usfmOutput.lastIndexOf('\\');
       if (lastMarkerBackslashIndex >= 0) {
-        // We just want to know if it's a chapter marker, so we can just get two characters, c and space
-        const lastMarker = usfm.substring(
+        // We just want to know if it's a chapter marker, so two characters (`c` + space) suffice.
+        const lastMarker = usfmOutput.substring(
           lastMarkerBackslashIndex + 1,
           lastMarkerBackslashIndex + 3,
         );

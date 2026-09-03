@@ -4,8 +4,7 @@
 // and its bundled extensions can talk to Send/Receive with real types.
 //
 // Derived from
-// https://github.com/paranext/paratext-bible-internal-extensions/blob/b50ebb16505f8069fd517af39dea29de7d7569bb/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
-// TODO(PT-4233): Update the SHA above to the companion PR's merged commit once it lands.
+// https://github.com/paranext/paratext-bible-internal-extensions/blob/0d01d96b71f43af0e94749e5092728831072dba4/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
 // When the Send/Receive contract changes, re-sync the parts declared here from that file.
 // NOTE: Preserve any types that exist here but not in the upstream file (structural refinements
 // added in core before the upstream adopts them). Do not replace the module block wholesale.
@@ -13,10 +12,14 @@
 // declaration here (extra doc detail or type refinements) to a poorer upstream one — merge the
 // two, and upstream the improvement instead.
 // DELIBERATE DIVERGENCE — do not "restore" these to match upstream on a re-sync. Each is optional
-// here and required upstream because a shipped Paratext 10 Studio build answers without it; making
-// it required again turns each consumer's `?? fallback` into a lint-flagged unnecessary coalesce,
-// and removing that coalesce crashes an older Studio build on the missing value:
-//   * `SyncState.syncingProjectIds`
+// here because a shipped Paratext 10 Studio build answers without it; making it required turns each
+// consumer's `?? fallback` into a lint-flagged unnecessary coalesce, and removing that coalesce
+// crashes an older Studio build on the missing value:
+//   * `SyncState.syncingProjectIds` — required in the upstream file above.
+//   * `SyncActivitySnapshot.projectIds` — no upstream declaration to diverge from yet; this whole
+//     type, `getSyncActivity` and `onSyncActivityChanged` are declared here ahead of the Paratext 10
+//     Studio patch that raises the signal, the same way the write-gate seam
+//     (`getAutoSyncBlocking` / `onSyncWriteLockChanged`) is.
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
@@ -281,7 +284,8 @@ declare module 'paratext-bible-send-receive' {
    * commands directly are invisible here — nothing in `c-sharp/` emits `onSyncStateChanged` — so
    * treat this as best-effort rather than ground truth. Making this authoritative would take a
    * signal derived from the C# sync semaphore itself, which is upstream work in the Send/Receive
-   * extension; see ADR-0024 in `.context/standards/Architecture-Decisions.md`.
+   * extension; see `adr-toolbar-sync-status-is-local` in
+   * `.context/standards/Architecture-Decisions.md`.
    *
    * Two core paths are on the invisible side today, both worth knowing before relying on this for a
    * startup status:
@@ -348,6 +352,42 @@ declare module 'paratext-bible-send-receive' {
   };
 
   /**
+   * Snapshot of Send/Receive run activity from the dotnet backend, carried by
+   * `paratextBibleSendReceive.onSyncActivityChanged` and returned by
+   * `paratextBibleSendReceive.getSyncActivity`.
+   *
+   * Unlike {@link SyncState}, this is derived from the C# sync run marker rather than the
+   * Send/Receive extension's claim map, so it covers EVERY sync path — including callers that reach
+   * the dotnet `syncProjects`/`sendReceiveProjects` commands directly and raise no claim
+   * (`main/startup-tasks.ts` and `syncOnProjectSwitch`). That is what makes a Simple-mode startup
+   * sync visible.
+   *
+   * Only a Paratext 10 Studio build emits this. Public Platform.Bible carries this declaration but
+   * no implementation behind it, so both surfaces are absent there and a consumer must fall back
+   * rather than assume idle.
+   *
+   * @experimental This type is unstable and may change shape or disappear without notice
+   */
+  export type SyncActivitySnapshot = {
+    /** Whether a sync run currently owns the backend's exclusive-sync state. */
+    isSyncing: boolean;
+    /**
+     * The projects the running sync covers, once known.
+     *
+     * Empty while `isSyncing` is `true` on the scheduled path before the backend resolves its merge
+     * set — the set is genuinely not yet determined, so a consumer must render "syncing, projects
+     * unknown" rather than reading empty as "nothing is syncing". Always empty when `isSyncing` is
+     * `false`.
+     *
+     * Optional for the same reason as {@link SyncState.syncingProjectIds}: a build predating the
+     * field answers without it, so a consumer that treats an absent value as "not yet known" reads
+     * every build correctly, while one that requires it gets `undefined` where its types promised
+     * an array. See the DELIBERATE DIVERGENCE note at the top of this file.
+     */
+    projectIds?: string[];
+  };
+
+  /**
    * Backend-authoritative snapshot of which projects an automatic Send/Receive is blocking edits on
    * (the wire shape of the C# `SendReceiveBlockState`). Carried identically by both the
    * `paratextBibleSendReceive.onSyncWriteLockChanged` network event and the
@@ -366,6 +406,7 @@ declare module 'paratext-bible-send-receive' {
 declare module 'papi-shared-types' {
   import type {
     ResultsData,
+    SyncActivitySnapshot,
     SyncProgressDetail,
     SyncProgressEvent,
     SyncState,
@@ -439,8 +480,34 @@ declare module 'papi-shared-types' {
      *   Studio build predating that field answers without it, so treat missing as "the syncing
      *   projects are unknown" rather than as "nothing is syncing" — `isSyncing` is what answers the
      *   latter.
+     * @throws `PlatformUnimplementedException` when the Send/Receive extension is not part of this
+     *   build, which is the case for public Platform.Bible.
+     * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.getSyncState': () => Promise<SyncState>;
+
+    /**
+     * Returns the current {@link SyncActivitySnapshot} so a consumer can seed its sync-activity
+     * status on mount rather than waiting for the next
+     * `paratextBibleSendReceive.onSyncActivityChanged` event.
+     *
+     * Note: this command is served from the dotnet process. Like
+     * {@link CommandHandlers['paratextBibleSendReceive.getAutoSyncBlocking']} and unlike most
+     * Send/Receive commands, it is registered by core's own `SyncActivityNotifierService` rather
+     * than the extension, so it is answered on plain Platform.Bible too — always an idle snapshot
+     * there, since only the Paratext 10 Studio patch carries the run bracket that reports
+     * activity.
+     *
+     * An in-memory read; cheap enough to call on mount and on each state change. The realistic
+     * failure mode is a cold-start race: if the dotnet process has not registered the command
+     * within main's retry budget (~9s), the request rejects. A caller must keep its existing state
+     * on failure rather than reading a rejection as "no sync is running", and should retry rather
+     * than treat one rejection as the final answer.
+     *
+     * @returns The current {@link SyncActivitySnapshot}
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.getSyncActivity': () => Promise<SyncActivitySnapshot>;
 
     /**
      * Commits changes in the specified project to the version history. Unless `forceCommit` is
@@ -589,5 +656,25 @@ declare module 'papi-shared-types' {
      * @experimental This event is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.onSyncWriteLockChanged': SyncWriteLockSnapshot;
+    /**
+     * Emitted by the dotnet process whenever a sync run starts or ends (the sync run owning the
+     * backend's exclusive-sync state), carrying the current {@link SyncActivitySnapshot}. Fires for
+     * ALL sync types (manual + scheduled + session + direct command callers). Unlike
+     * `onSyncStateChanged`, this covers syncs that reach the dotnet `syncProjects`/
+     * `sendReceiveProjects` commands directly and raise no Send/Receive extension claim.
+     *
+     * Registered by core's own `SyncActivityNotifierService`, so EVERY build emits it — an idle
+     * baseline once per backend (re)start, exactly like `onSyncWriteLockChanged`. Only Paratext 10
+     * Studio builds carry the run bracket that reports real activity, so in public Platform.Bible
+     * the baseline is all a subscriber ever hears.
+     *
+     * That baseline fires ONCE PER BACKEND START, not once per subscriber, and this event carries
+     * no replay: a subscriber that starts mid-sync has already missed it, and the next thing it
+     * hears is the CLOSING snapshot. A consumer that needs to be correct from the moment it starts
+     * must seed from `paratextBibleSendReceive.getSyncActivity` rather than subscribing alone.
+     *
+     * @experimental This event is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.onSyncActivityChanged': SyncActivitySnapshot;
   }
 }

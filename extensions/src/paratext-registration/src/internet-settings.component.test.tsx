@@ -56,7 +56,9 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_internetUse_footer%': 'Footer sentinel',
   '%paratextRegistration_developer_section_label%': 'Developer only',
   '%paratextRegistration_label_serverType_option_Production%': 'Production',
+  '%paratextRegistration_label_serverType_option_QualityAssurance%': 'Quality Assurance',
   '%paratextRegistration_label_serverType_option_Development%': 'Development',
+  '%paratextRegistration_label_serverType_option_Test%': 'Test',
 };
 
 const defaultSettings: InternetSettings = {

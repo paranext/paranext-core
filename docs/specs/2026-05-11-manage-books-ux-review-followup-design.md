@@ -161,7 +161,7 @@ Stage 0 is the setup stage; no per-stage investigation needed since the spec its
 
 Each item below is small and file-scoped. Group into logical commits (one per file or per concern).
 
-- **#28** `extensions/src/platform-scripture/src/main.ts:252` — change `{ type: 'tab' }` → `{ type: 'float', position: 'center', floatSize: { width: 1100, height: 720 } }` (Settings precedent: `src/renderer/services/web-view.service-host.ts:1805`)
+- **#28** `extensions/src/platform-scripture/src/main.ts:252` — change `{ type: 'tab' }` → `{ type: 'float', position: 'center', floatSize: { width: 1100, height: 720 } }` (Settings precedent: `src/renderer/services/web-view.service-shard.ts:1805`)
 - **#30** Header `<ProjectSelector>` trigger gets a tooltip showing the active project's `fullName` (use existing `Tooltip` component; data already available)
 - **#31** When `groups.length === 1`, render the group header as a static `<span>` (no chevron, no `<Button>`, always expanded). Toggle behavior + collapse state remain wired but unused. `book-grid.component.tsx`
 - **#32** When a header is collapsed, add `tw-border tw-border-border tw-rounded-md tw-px-2` around the header row so the checkbox feels grouped with the label

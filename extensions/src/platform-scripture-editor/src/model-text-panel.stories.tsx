@@ -25,6 +25,7 @@ import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
    in by relative path; this mirrors src/stories/platform/ten-layout-shared.tsx. */
 import '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css';
 /* eslint-enable import/no-relative-packages */
+import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 
 /**
@@ -111,7 +112,26 @@ type DecoratorConfig = {
   disableInstall?: boolean;
   /** Make install reject so the recoverable install-failed state is observable. */
   failInstall?: boolean;
+  /** Hold the configured list in its loading state so the resolving spinner is observable. */
+  isListLoading?: boolean;
+  /** Make the configured-list read fail so the settings-error state is observable. */
+  hasSettingsError?: boolean;
+  /** Hold the DBL catalog as not-yet-arrived so the pre-catalog spinner is observable. */
+  isCatalogReady?: boolean;
+  /** Fail the DBL catalog fetch so the recoverable catalog-error state is observable. */
+  hasCatalogError?: boolean;
 };
+
+/** Maps the story's flags to the discriminated list state the panel consumes. */
+function modelTextsStateFor(
+  config: DecoratorConfig,
+  list: EffectiveResourceReferenceList,
+): EffectiveResourceReferenceListState {
+  if (config.hasSettingsError) return { status: 'error' };
+  if (config.isListLoading) return { status: 'loading' };
+
+  return { status: 'ready', list };
+}
 
 /**
  * Thin in-memory service container: holds the resources + the admin/user model-text lists, derives
@@ -169,10 +189,15 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
       <ModelTextPanel
         localizedStrings={localizedStrings}
         hasProject={config.hasProject ?? true}
-        effectiveModelTexts={effectiveModelTexts}
-        isEffectiveModelTextsLoading={false}
+        modelTextsState={modelTextsStateFor(config, effectiveModelTexts)}
         dblResources={resources}
-        isLoadingResources={false}
+        isCatalogReady={config.isCatalogReady ?? true}
+        hasCatalogError={config.hasCatalogError ?? false}
+        onRetryCatalog={() => {
+          // Catalog re-fetch — logged; these stories pin the state so the control stays observable.
+          // eslint-disable-next-line no-console
+          console.log('onRetryCatalog');
+        }}
         getUserModelTexts={async () => undefined}
         scrRef={scrRef}
         onScrRefChange={setScrRef}
@@ -272,4 +297,39 @@ export const NoProject: Story = {
 /** A non-admin user picks a model text — it persists at the user level (logged to console). */
 export const NonAdminPick: Story = {
   decorators: [createDecorator({ canWriteProjectSettings: false })],
+};
+
+/** The configured list is still resolving — the panel must not guess at an empty state. */
+export const Loading: Story = {
+  decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[0])], isListLoading: true })],
+};
+
+/**
+ * The configured-model-text setting can't be read. Deliberately offers no control: nothing in the
+ * panel can re-drive that read, so the message carries the recovery expectation instead.
+ */
+export const SettingsError: Story = {
+  decorators: [
+    createDecorator({ initialAdmin: [dblRef(seedResources[0])], hasSettingsError: true }),
+  ],
+};
+
+/**
+ * A model text is configured but the DBL catalog hasn't arrived. It must spin rather than claim the
+ * resource could not be found.
+ */
+export const ResolvingCatalog: Story = {
+  decorators: [
+    createDecorator({ initialAdmin: [dblRef(seedResources[0])], isCatalogReady: false }),
+  ],
+};
+
+/**
+ * The DBL resource catalog failed to load, so a configured model text can't be resolved. Unlike the
+ * settings error this is recoverable, so it offers a retry that re-runs the fetch.
+ */
+export const CatalogError: Story = {
+  decorators: [
+    createDecorator({ initialAdmin: [dblRef(seedResources[0])], hasCatalogError: true }),
+  ],
 };

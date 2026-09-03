@@ -2,11 +2,18 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
-import { useData, useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
+import {
+  useData,
+  useProjectSetting,
+  useScrollGroupScrRef,
+  useSetting,
+} from '@renderer/hooks/papi-hooks';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
+import { useOpenProjectBookIds } from '@renderer/hooks/use-open-project-book-ids.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
-import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
+import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
+import { resetSyncActivity, setSyncActivity } from '@renderer/services/sync-activity-store';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { menuDataService } from '@shared/services/menu-data.service';
@@ -14,6 +21,7 @@ import {
   SEND_RECEIVE_UNKNOWN_GRACE_MS,
   useSendReceiveAvailability,
 } from '@renderer/hooks/use-send-receive-availability.hook';
+import { SHRINK_STEP, ShrinkStepContext } from 'platform-bible-react';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
 
 // Mock asset
@@ -30,6 +38,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_open_status%': 'Test Sync status',
       '%toolbar_sync_status_synced%': 'Test Synced',
       '%toolbar_sync_status_syncing%': 'Test Syncing',
+      '%toolbar_sync_status_unknown%': 'Test Sync status unavailable',
       '%mainMenu_openHome%': 'Home',
     },
   ]),
@@ -72,11 +81,15 @@ vi.mock('@renderer/hooks/use-send-receive-availability.hook', async (importOrigi
   return { ...actual, useSendReceiveAvailability: vi.fn((): boolean | undefined => true) };
 });
 
+vi.mock('@renderer/hooks/use-open-project-book-ids.hook', () => ({
+  useOpenProjectBookIds: vi.fn(() => ['REV']),
+}));
+
 vi.mock('@renderer/hooks/use-window-controls-overlay.hook', () => ({
   useWindowControlsOverlay: vi.fn((): DOMRect | undefined => undefined),
 }));
 
-vi.mock('@renderer/services/web-view.service-host', () => ({
+vi.mock('@renderer/services/web-view.service-shard', () => ({
   updateWebViewDefinitionSync: vi.fn(() => true),
 }));
 
@@ -97,7 +110,7 @@ vi.mock('@renderer/services/papi-frontend.service', () => ({
   },
 }));
 
-vi.mock('@renderer/services/theme.service-host', () => ({
+vi.mock('@renderer/services/theme.service', () => ({
   localThemeService: {
     getCurrentThemeSync: vi.fn(() => ({
       type: 'light',
@@ -109,7 +122,7 @@ vi.mock('@renderer/services/theme.service-host', () => ({
   },
 }));
 
-vi.mock('@renderer/services/scroll-group.service-host', () => ({
+vi.mock('@renderer/services/scroll-group.service', () => ({
   availableScrollGroupIds: [1, 2, 3, 4, 5],
   getReferenceHistorySync: vi.fn(() => ({ current: undefined, back: [], forward: [] })),
   navigateReferenceHistorySync: vi.fn(() => false),
@@ -126,6 +139,9 @@ vi.mock('@shared/services/command.service', () => ({
 
 vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: vi.fn(() => vi.fn(() => vi.fn())),
+  // network-object.service subscribes to this at module load so a process that leaves during
+  // startup is still announced, and this test reaches that module on its import path.
+  onDidDisconnectClient: vi.fn(() => vi.fn()),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -138,7 +154,7 @@ vi.mock('@shared/services/notification.service', () => ({
 
 vi.mock('@renderer/hooks/use-project-picker-data.hook', () => ({
   useProjectPickerData: vi.fn(() => ({
-    currentProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+    currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
     recentProjects: [{ id: 'proj-1', fullName: 'Test Project', shortName: 'TP' }],
     allProjects: [],
     isLoading: false,
@@ -173,11 +189,13 @@ vi.mock('platform-bible-react', async (importOriginal) => {
       className,
       triggerVariant,
       showTriggerChevron,
+      getAdditionalBookIds,
     }: {
       disabled?: boolean;
       className?: string;
       triggerVariant?: string;
       showTriggerChevron?: boolean;
+      getAdditionalBookIds?: () => string[];
     }) => (
       <button
         type="button"
@@ -187,6 +205,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
         data-classname={className}
         data-trigger-variant={triggerVariant}
         data-show-chevron={showTriggerChevron}
+        data-additional-books={getAdditionalBookIds ? getAdditionalBookIds().join(',') : undefined}
       />
     ),
     ScrollGroupSelector: () => <div data-testid="scroll-group-selector" />,
@@ -207,7 +226,16 @@ vi.mock('platform-bible-react', async (importOriginal) => {
       <div data-value={value}>{children}</div>
     ),
     SelectSeparator: () => <hr />,
-    SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
+    // Renders children when there are any, mirroring Radix: the real `SelectValue` shows the
+    // placeholder only while nothing is selected. Dropping them would hide the project label
+    // entirely and make every assertion about it vacuous.
+    SelectValue: ({
+      placeholder,
+      children,
+    }: {
+      placeholder?: string;
+      children?: React.ReactNode;
+    }) => <span data-testid="project-picker-value">{children ?? placeholder}</span>,
   };
 });
 
@@ -215,16 +243,20 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 // Sync-button block last set would leak into every describe that follows.
 beforeEach(() => {
   vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
+  vi.mocked(useOpenProjectBookIds).mockReturnValue(['REV']);
 });
 
-const mockSendCommand = (
+const mockSendCommandWithSyncStates = (
   isSendReceiveAvailable: boolean,
   /**
-   * What `getSyncState` answers. The sync status refuses to report success without evidence of it,
-   * so a test driving a sync to completion has to supply the results that say it succeeded.
+   * What successive `getSyncState` calls answer, in order; the final entry answers every call after
+   * it. A test that drives a sync from one state to another needs this, because the read that
+   * follows a sync-state event has to describe the state the sync has just moved TO — answering
+   * every call with the mount-time state would silently undo the transition under test.
    */
-  syncState?: unknown,
+  syncStates: unknown[],
 ) => {
+  let syncStateCallCount = 0;
   vi.mocked(sendCommand).mockImplementation(
     // sendCommand has a complex generic signature; cast is required for the mock implementation
     // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
@@ -233,12 +265,28 @@ const mockSendCommand = (
         return isSendReceiveAvailable;
       if (commandName === 'platform.getOSPlatform') return 'win32';
       if (commandName === 'platform.isFullScreen') return false;
-      if (commandName === 'paratextBibleSendReceive.getSyncState') return syncState;
+      if (commandName === 'paratextBibleSendReceive.getSyncState') {
+        const syncState = syncStates[Math.min(syncStateCallCount, syncStates.length - 1)];
+        syncStateCallCount += 1;
+        return syncState;
+      }
       return undefined;
       // sendCommand has a complex generic signature; cast is required for the mock implementation
       // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
     }) as any,
   );
+};
+
+const mockSendCommand = (
+  isSendReceiveAvailable: boolean,
+  /**
+   * What `getSyncState` answers, for every call. The sync status refuses to report success without
+   * evidence of it, so a test driving a sync to completion has to supply the results that say it
+   * succeeded.
+   */
+  syncState?: unknown,
+) => {
+  mockSendCommandWithSyncStates(isSendReceiveAvailable, [syncState]);
 };
 
 describe('PlatformBibleToolbar — Sync button', () => {
@@ -251,6 +299,8 @@ describe('PlatformBibleToolbar — Sync button', () => {
     // deviation from that.
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
     vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
+    // The backend sync-activity signal is a module-level store, so it outlives a test unless reset.
+    resetSyncActivity();
   });
 
   it('is not rendered when send/receive is unavailable', async () => {
@@ -266,6 +316,51 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
+  it('is rendered despite unavailable send/receive once the backend reports a sync', async () => {
+    // Syncs also start from paths that never touch the send/receive extension — `startup-tasks.ts`
+    // calls the dotnet `syncProjects` command directly. In Simple mode the persistent toast is
+    // suppressed in favour of this indicator, so hiding it on a settled `false` would leave a real,
+    // multi-minute sync with no surface and no way to cancel.
+    vi.mocked(useSendReceiveAvailability).mockReturnValue(false);
+    mockSendCommand(false);
+    render(<PlatformBibleToolbar />);
+
+    // Hidden to begin with — nothing has said a sync is running yet
+    await waitFor(() => {
+      expect(
+        document.querySelector('button[data-testid="toolbar-sync-button"]'),
+      ).not.toBeInTheDocument();
+    });
+
+    act(() => setSyncActivity({ isSyncing: true, projectIds: [] }));
+
+    await waitFor(() => {
+      expect(
+        document.querySelector('button[data-testid="toolbar-sync-button"]'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('keeps the indicator mounted after the sync finishes', async () => {
+    // The gate is sticky, not live. Driving it from "is syncing right now" unmounts the control in
+    // the same commit the closing snapshot arrives, so the outcome the user was waiting for is never
+    // painted, the live region never announces it, and the status hook's seed loop is torn down
+    // mid-flight.
+    vi.mocked(useSendReceiveAvailability).mockReturnValue(false);
+    mockSendCommand(false);
+    render(<PlatformBibleToolbar />);
+
+    act(() => setSyncActivity({ isSyncing: true, projectIds: [] }));
+    await waitFor(() => {
+      expect(
+        document.querySelector('button[data-testid="toolbar-sync-button"]'),
+      ).toBeInTheDocument();
+    });
+
+    act(() => setSyncActivity({ isSyncing: false, projectIds: [] }));
+
+    expect(document.querySelector('button[data-testid="toolbar-sync-button"]')).toBeInTheDocument();
+  });
   it('is visible and interactive while send/receive availability is unknown (fail-open)', async () => {
     // Availability is unknown while the extension host is busy or send/receive is still activating.
     // The button must stay visible through that — only a settled `false` hides it.
@@ -274,7 +369,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
     render(<PlatformBibleToolbar />);
 
     // Reachable via the accessibility tree and keyboard, and shows the idle label
-    const btn = screen.getByRole('button', { name: 'Sync' });
+    const btn = screen.getByRole('button', { name: /Sync/ });
     expect(btn).toBeInTheDocument();
     expect(btn).not.toHaveAttribute('aria-hidden');
     expect(btn).not.toHaveAttribute('tabIndex');
@@ -312,12 +407,12 @@ describe('PlatformBibleToolbar — Sync button', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sync/ })).toBeInTheDocument();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(SEND_RECEIVE_UNKNOWN_GRACE_MS);
     });
-    expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Sync/ })).toBeInTheDocument();
     vi.useRealTimers();
   });
 
@@ -363,17 +458,17 @@ describe('PlatformBibleToolbar — Sync button', () => {
     mockSendCommand(true);
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      const btn = screen.getByRole('button', { name: 'Sync' });
+      const btn = screen.getByRole('button', { name: /Sync/ });
       expect(btn).toBeInTheDocument();
       expect(btn).toHaveTextContent('Sync');
     });
   });
 
-  // The button's own behavior — the popover, Cancel, project names, failure reporting — is covered
-  // by sync-status-button.component.test.tsx, which drives the real component. What stays here is
-  // the toolbar's question: whether the button appears at all, and whether the status the toolbar
-  // renders it with tracks the sync-state event, since the toolbar is what mounts it (and mounts it
-  // before send/receive availability has settled).
+  // Scope of this block: the toolbar's own questions — whether the sync button appears at all, and
+  // whether the status it renders with tracks the sync-state event. The toolbar is what mounts the
+  // button, and it mounts it before send/receive availability has settled. The button's own
+  // behavior — popover, Cancel, project names, failure reporting — is covered by
+  // sync-status-button.component.test.tsx, which drives the real component.
 
   it('shows Syncing label when onSyncStateChanged fires with isSyncing: true', async () => {
     let capturedSyncStateCallback: ((arg: { isSyncing: boolean }) => void) | undefined;
@@ -396,7 +491,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
     render(<PlatformBibleToolbar />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Sync/ })).toBeInTheDocument();
     });
 
     expect(capturedSyncStateCallback).toBeDefined();
@@ -430,46 +525,33 @@ describe('PlatformBibleToolbar — Sync button', () => {
       }) as any,
     );
 
-    // Seeded MID-SYNC, so the label has to change for this to pass: a seed that already said
-    // "Synced" would render the asserted label whether or not the event was ever delivered.
-    // `syncingProjectIds` absent on purpose: a build predating that field still reports a running
-    // sync, and the bare "Syncing" label it produces is all this test needs to change.
-    let syncState: unknown = { isSyncing: true, lastRequestedProjectIds: [] };
-    mockSendCommand(true, undefined);
-    vi.mocked(sendCommand).mockImplementation(
-      // sendCommand has a complex generic signature; cast is required for the mock implementation
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      (async (commandName: string) => {
-        if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
-        if (commandName === 'platform.getOSPlatform') return 'win32';
-        if (commandName === 'platform.isFullScreen') return false;
-        if (commandName === 'paratextBibleSendReceive.getSyncState') return syncState;
-        return undefined;
-        // sendCommand has a complex generic signature; cast is required for the mock implementation
-        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      }) as any,
-    );
+    // Seeded mid-sync, NOT already synced: the event has to be what drives the transition, or this
+    // test would pass with the component's event handling deleted.
+    mockSendCommandWithSyncStates(true, [
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: [] },
+      // A sync that ENDED is only "Synced" if it succeeded, which the results are what establish —
+      // and only the read that follows the event carries them.
+      {
+        isSyncing: false,
+        lastRequestedProjectIds: ['proj1'],
+        syncingProjectIds: [],
+        lastResults: {
+          sendReceiveDate: '2026-08-19T00:00:00Z',
+          resultsInfo: { proj1: { id: 'proj1', resultStatus: 'succeeded' } },
+        },
+      },
+    ]);
     render(<PlatformBibleToolbar />);
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Test Syncing' })).toBeInTheDocument();
     });
+    expect(screen.queryByRole('button', { name: 'Test Synced' })).not.toBeInTheDocument();
 
     expect(capturedSyncStateCallback).toBeDefined();
     if (!capturedSyncStateCallback)
       throw new Error('capturedSyncStateCallback was not set by mock');
 
-    // A sync that ENDED is only "Synced" if it succeeded, which the results are what establish. The
-    // event carries no outcome, so the follow-up read is what has to supply it.
-    syncState = {
-      isSyncing: false,
-      lastRequestedProjectIds: ['proj1'],
-      syncingProjectIds: [],
-      lastResults: {
-        sendReceiveDate: '2026-08-19T00:00:00Z',
-        resultsInfo: { proj1: { id: 'proj1', resultStatus: 'succeeded' } },
-      },
-    };
     const syncStateCallback = capturedSyncStateCallback;
     act(() => {
       syncStateCallback({ isSyncing: false });
@@ -777,6 +859,77 @@ describe('PlatformBibleToolbar — top BCV and project selector styling by inter
   });
 });
 
+describe('PlatformBibleToolbar — books beyond the active project', () => {
+  /** `platformScripture.booksPresent` bit string with only Genesis (canon book 1) set. */
+  const GENESIS_ONLY_BOOKS_PRESENT = '1';
+
+  const mockCurrentBook = (book: string) => {
+    vi.mocked(useScrollGroupScrRef).mockReturnValue([
+      { book, chapterNum: 1, verseNum: 1 },
+      vi.fn(),
+      0,
+      vi.fn(),
+      undefined,
+    ]);
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendCommand(true);
+    // clearAllMocks() does not reset a prior test's mockReturnValue (see precedent above), so state
+    // the whole starting position: simple mode, an active project holding only Genesis, the
+    // reference sitting in Genesis, and Revelation open as a resource.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    vi.mocked(useProjectSetting).mockReturnValue([
+      GENESIS_ONLY_BOOKS_PRESENT,
+      vi.fn(),
+      vi.fn(),
+      false,
+    ]);
+    mockCurrentBook('GEN');
+    vi.mocked(useOpenProjectBookIds).mockReturnValue(['REV']);
+  });
+
+  it('offers books from open resources to the book chapter control', async () => {
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).toHaveAttribute('data-additional-books', 'REV');
+  });
+
+  it('offers nothing beyond the active project in power mode', async () => {
+    // Power mode's book/chapter/verse controls are out of scope for this widening, so the toolbar
+    // must not hand them additional books even when open resources have some.
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).not.toHaveAttribute('data-additional-books');
+  });
+
+  it('offers the current book when the active project does not have it', async () => {
+    // BookChapterControl renders exactly the book list it is given, so a reference on a book the
+    // active project lacks is only in its own picker because the toolbar adds it.
+    vi.mocked(useOpenProjectBookIds).mockReturnValue([]);
+    mockCurrentBook('JHN');
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).toHaveAttribute('data-additional-books', 'JHN');
+  });
+
+  it('passes no additional books callback when there are none', async () => {
+    vi.mocked(useOpenProjectBookIds).mockReturnValue([]);
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).not.toHaveAttribute('data-additional-books');
+  });
+
+  it('does not repeat the current book when an open resource already offers it', async () => {
+    mockCurrentBook('REV');
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).toHaveAttribute('data-additional-books', 'REV');
+  });
+});
+
 describe('PlatformBibleToolbar — main menu data stays live', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -894,5 +1047,121 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
     expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:ps-[85px]');
     expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:border-0');
     expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-0');
+  });
+});
+
+describe('PlatformBibleToolbar project selector label', () => {
+  /** Renders the toolbar with the project selector's shrink step forced, since jsdom cannot measure. */
+  function renderAtStep(shrinkStep: number) {
+    return render(
+      <ShrinkStepContext.Provider value={shrinkStep}>
+        <PlatformBibleToolbar />
+      </ShrinkStepContext.Provider>,
+    );
+  }
+
+  it('shows the full project name and short name when there is room', () => {
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    const trigger = screen.getByTestId('project-picker-value');
+    expect(trigger).toHaveTextContent('Test Project');
+    expect(trigger).toHaveTextContent('TP');
+  });
+
+  it('drops the full name at the narrowest step, keeping the identifying short name', () => {
+    renderAtStep(SHRINK_STEP.MINIMUM);
+
+    const trigger = screen.getByTestId('project-picker-value');
+    expect(trigger).toHaveTextContent('TP');
+    expect(trigger).not.toHaveTextContent('Test Project');
+  });
+
+  it('keeps the project name and short name readable as one string', () => {
+    // Split across two spans, so without a real separator this reads "Test Project(TP)".
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('Test Project (TP)');
+  });
+
+  it('shows an error in place of the label, not alongside it', async () => {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValueOnce({
+      currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      recentProjects: [],
+      allProjects: [],
+      currentSimpleProjectError: 'Project failed to load',
+      isLoading: false,
+    });
+
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    const trigger = screen.getByTestId('project-picker-value');
+    expect(trigger).toHaveTextContent('Project failed to load');
+    expect(trigger).not.toHaveTextContent('Test Project');
+  });
+
+  it('lowers the trigger width floor at the narrowest step, so dropping the full name actually frees space', () => {
+    // Without this the label just gets shorter inside a box still reserving 192px, and the room the
+    // abbreviation was supposed to buy comes out of the reference control instead.
+    const { unmount } = renderAtStep(SHRINK_STEP.WIDE);
+    const wideTrigger = document
+      .querySelector('[data-select-trigger-classname]')
+      ?.getAttribute('data-select-trigger-classname');
+    unmount();
+
+    renderAtStep(SHRINK_STEP.MINIMUM);
+    const narrowTrigger = document
+      .querySelector('[data-select-trigger-classname]')
+      ?.getAttribute('data-select-trigger-classname');
+
+    expect(wideTrigger).toMatch(/(?:^|\s)tw:min-w-48(?:\s|$)/);
+    expect(narrowTrigger).toMatch(/(?:^|\s)tw:min-w-24(?:\s|$)/);
+    expect(narrowTrigger).not.toMatch(/(?:^|\s)tw:min-w-48(?:\s|$)/);
+  });
+
+  it('re-enables pointer events on the label, which Radix SelectValue switches off for its whole subtree', async () => {
+    // Verified against the real Radix component: `SelectValue` renders
+    // `<span data-slot="select-value" style="pointer-events: none;">` and discards any className or
+    // style handed to it. Everything inside is then invisible to the pointer — no hover, so the
+    // abbreviated label's tooltip never opens and the error's native `title` never shows. The fix
+    // has to sit on the descendant, which is the one thing Radix does not control.
+    // (The mock above renders a plain span, so only the class can be checked here.)
+    renderAtStep(SHRINK_STEP.MINIMUM);
+
+    const label = screen.getByTestId('project-picker-value').firstElementChild;
+    expect(label?.className).toMatch(/(?:^|\s)tw:pointer-events-auto(?:\s|$)/);
+  });
+
+  it('re-enables pointer events on the error label too, so its title can be read', async () => {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValueOnce({
+      currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      recentProjects: [],
+      allProjects: [],
+      currentSimpleProjectError: 'Project failed to load',
+      isLoading: false,
+    });
+
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    const errorLabel = screen.getByTitle('Project failed to load');
+    expect(errorLabel.className).toMatch(/(?:^|\s)tw:pointer-events-auto(?:\s|$)/);
+  });
+
+  it('keeps an error visible at the narrowest step, where the project name would be dropped', async () => {
+    // Routing the error through the label's droppable field would leave the user with a red short
+    // name and no statement of what went wrong.
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValueOnce({
+      currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      recentProjects: [],
+      allProjects: [],
+      currentSimpleProjectError: 'Project failed to load',
+      isLoading: false,
+    });
+
+    renderAtStep(SHRINK_STEP.MINIMUM);
+
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('Project failed to load');
   });
 });

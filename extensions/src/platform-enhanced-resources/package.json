@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@sillsdev/scripture": "^2.0.5",
+    "@xmldom/xmldom": "^0.8.10",
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {

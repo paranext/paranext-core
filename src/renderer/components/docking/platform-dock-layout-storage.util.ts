@@ -40,7 +40,7 @@ import {
 import {
   mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent,
   saveTabInfoBase,
-} from '@renderer/services/web-view.service-host';
+} from '@renderer/services/web-view.service-shard';
 
 import { TAB_TYPE_BUTTONS, loadButtonsTab } from '@renderer/testing/test-buttons-panel.component';
 import { TAB_TYPE_TEST, loadTestTab } from '@renderer/testing/test-panel.component';
@@ -671,12 +671,16 @@ export function getWebViewDefinition(
  *
  * @param dockLayout The rc-dock dock layout React component ref
  * @param webViewType The web view type to search for
+ * @param projectId Optionally limits the search to web views showing a given project
  * @returns The WebViewDefinition of a matching web view, or `undefined` if no web view of that type
  *   is open
+ * @experimental The optional `projectId` filter is new; the rest of this function is
+ *   long-established.
  */
 export function findFirstWebViewDefinitionByType(
   dockLayout: DockLayout,
   webViewType: string,
+  projectId?: string,
 ): WebViewDefinition | undefined {
   const found = dockLayout.find((item) => {
     // Still have to check isTab because of a bug https://github.com/ticlo/rc-dock/pull/253
@@ -689,10 +693,14 @@ export function findFirstWebViewDefinitionByType(
     const tabInfo = item as RCDockTabInfo;
     if (tabInfo.tabType !== TAB_TYPE_WEBVIEW) return false;
 
-    return (
-      getWebViewDefinitionFromTab(tabInfo, 'findFirstWebViewDefinitionByType').webViewType ===
-      webViewType
+    const definitionCandidate = getWebViewDefinitionFromTab(
+      tabInfo,
+      'findFirstWebViewDefinitionByType',
     );
+    if (definitionCandidate.webViewType !== webViewType) return false;
+    if (projectId !== undefined && definitionCandidate.projectId !== projectId) return false;
+
+    return true;
   }, Filter.AnyTab);
 
   if (!found || !isTab(found)) return undefined;
@@ -827,6 +835,21 @@ export function findPreviousTab(dockLayout: DockLayout) {
   // available tab. Assert the more specific type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return dockLayout.find((tabData) => isTab(tabData)) as TabData;
+}
+
+/**
+ * Whether this dock holds the tab or tab group with the specified ID.
+ *
+ * `find` matches tabs and tab groups alike — docked, floating, windowed or maximized — so one
+ * question answers for either kind of ID and for every kind of tab, not just WebView tabs.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tabOrTabGroupId ID of the tab or tab group to look for
+ * @returns `true` if this dock holds it, `false` otherwise
+ */
+export function containsTab(dockLayout: DockLayout, tabOrTabGroupId: string): boolean {
+  return !!dockLayout.find(tabOrTabGroupId);
 }
 
 /**
@@ -965,6 +988,13 @@ export function addTabToDock(
           previousTabId = tab.id;
           break;
         }
+        // Placing the tab as if no group had been named keeps the user's command producing a tab,
+        // which refusing the whole add does not — the same trade-off the `panel` case below makes.
+        // Saying so is what keeps a tab that landed somewhere else from looking like a placement
+        // the caller asked for.
+        logger.warn(
+          `When adding a tab, parent tab group '${updatedLayout.parentTabGroupId}' is not in this window. Adding the tab without it.`,
+        );
       }
 
       const isDockBoxEmpty =
@@ -1011,10 +1041,22 @@ export function addTabToDock(
       if (updatedLayout.targetTabId !== undefined) {
         // Look for a specific tab
         targetTab = dockLayout.find(updatedLayout.targetTabId);
-        if (!isTab(targetTab))
-          throw new LogError(
-            `When adding a panel, unknown target tab: '${updatedLayout.targetTabId}'`,
+        // Every caller that names a target tab today goes through the WebView service router, which
+        // sends the open to whichever window holds that tab — so a target missing here is a target
+        // no window claimed: it closed, or the caller is holding an id it read a while ago.
+        // Alternatively, a caller may explicitly specify targetWindowId to route the panel to a
+        // particular window where the target tab is not present.
+        // Placing the panel as if no target had been asked for keeps the user's command producing a
+        // tab, which refusing the whole add does not; the same fall-through already covers a `tab`
+        // layout whose `parentTabGroupId` is not here. A caller that reached this function without
+        // going through the router gets the same placement rather than an error, so a wrong id
+        // shows up as a tab in an odd spot and a log line rather than as nothing at all.
+        if (!isTab(targetTab)) {
+          logger.warn(
+            `When adding a panel, target tab '${updatedLayout.targetTabId}' is not in this window. Adding the panel without it.`,
           );
+          targetTab = findPreviousTab(dockLayout);
+        }
       }
       // Didn't ask for a specific tab, so just get the previous tab and go from there
       else targetTab = findPreviousTab(dockLayout);
@@ -1050,11 +1092,19 @@ export function addTabToDock(
 
       break;
 
-    default:
-      // Type assert here because TypeScript thinks this layout is `never` because the switch has
-      // covered all its options (if JS were statically typed, this `default` would never hit)
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      throw new LogError(`Unknown layoutType: '${(updatedLayout as Layout).type}'`);
+    case 'window':
+      // The main-process router intercepts window layouts and rewrites them as tab opens routed
+      // to the window it created, so one arriving here means the routing contract broke
+      throw new LogError(
+        `addTabToDock received a 'window' layout; these are handled by the main process`,
+      );
+
+    default: {
+      // Compile-time exhaustiveness: adding a Layout member without a case above makes this
+      // assignment a type error instead of a runtime throw
+      const unhandledLayout: never = updatedLayout;
+      throw new LogError(`Unknown layout: ${JSON.stringify(unhandledLayout)}`);
+    }
   }
 
   if (shouldBringToFront && !didFocusTab)

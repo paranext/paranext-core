@@ -1,4 +1,5 @@
 import { createUseNetworkObjectHook } from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
+import { PDP_FACTORY_OBJECT_TYPE } from '@shared/models/project-data-provider-factory.interface';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
 
@@ -45,6 +46,14 @@ function mapParametersToProjectDataProviderSource<ProjectInterface extends Proje
 export const useProjectDataProvider = createUseNetworkObjectHook(
   papiFrontendProjectDataProviderService.get,
   mapParametersToProjectDataProviderSource,
+  // There is no id to compare against for this hook. It is handed a project id, and the PDP it ends
+  // up with is registered under a nonce that nothing outside the platform can predict — a PDP does
+  // not even exist until someone asks a factory to make one. What CAN be watched for is the factory
+  // arriving: a project becomes resolvable again when the process taking an app-global PDP factory
+  // over publishes it, which is precisely the gap this listener exists to close. Watching for the
+  // PDP itself instead would only catch a project that some other consumer had already brought
+  // back, which is the case that needs no help.
+  (networkObjectDetails) => networkObjectDetails.objectType === PDP_FACTORY_OBJECT_TYPE,
 ) as <ProjectInterface extends ProjectInterfaces>(
   projectInterface: ProjectInterface,
   projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,

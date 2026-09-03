@@ -13,13 +13,14 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | Topic                   | File                                                                      | Key Content                                                  |
 | ----------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | Architecture            | [Architecture.md](.context/standards/Architecture.md)                     | Multi-process architecture, core services, IPC, key patterns |
-| Architecture Decisions  | [Architecture-Decisions.md](.context/standards/Architecture-Decisions.md) | Append-only log of significant architecture decisions + rationale; **update it whenever you make one** (see "Recording Architecture Decisions") |
+| Architecture Decisions  | [Architecture-Decisions.md](.context/standards/Architecture-Decisions.md) | Append-only log (one carve-out, stated in the log) of significant architecture decisions + rationale; **update it whenever you make one** (see "Recording Architecture Decisions") |
 | Code Style              | [Code-Style-Guide.md](.context/standards/Code-Style-Guide.md)             | TypeScript/C# conventions, API-surface TSDoc, localization, components, shadcn/ui |
 | Implementation Patterns | [Paranext-Core-Patterns.md](.context/standards/Paranext-Core-Patterns.md) | C# service/DataProvider/NetworkObject patterns, PAPI event registration, concurrency, extension structure, command naming |
 | Testing                 | [Testing-Guide.md](.context/standards/Testing-Guide.md)                   | Vitest/NUnit, TDD (outside-in), testing trophy, mutation/coverage, E2E, mocking, CI, platform gotchas |
 | Extensions              | [Extension-Development-Guide.md](.context/standards/Extension-Development-Guide.md) | Extension anatomy, PAPI, data providers, WebViews, contributions, type declarations |
 | Entry Points            | [Entry-Point-Guide.md](.context/standards/Entry-Point-Guide.md)           | Menus, commands, command handlers, WebView layout options    |
 | UI Components           | [Component-Selection-Quick-Reference.md](.context/standards/Component-Selection-Quick-Reference.md) · [Component-Builder-Patterns.md](.context/standards/Component-Builder-Patterns.md) | platform-bible-react component selection, styling, forms; web-view/provider/PAPI/styling patterns |
+| Standard View           | [Standard-View-Invariants.md](.context/standards/Standard-View-Invariants.md) | **Read before touching anything Standard view depends on here** — the USJ/USFM writer contract, the markers map, the marker palette key table, the footnote editor, the C# serialization approval gate. The editor engine's own invariants live in the `scripture-editors` repo at `docs/standard-view-invariants.md`; each half is readable alone |
 | Localization            | [Localization-Guide.md](.context/standards/Localization-Guide.md)         | i18n store/APIs, fallback chain, RTL, immutable strings, C# localization |
 | Git and GitHub          | [Git-Guide.md](.context/standards/Git-Guide.md)                           | Branch structure, squash-merge, template merges              |
 | Code Review             | [Code-Review-Guide.md](.context/standards/Code-Review-Guide.md)           | Reviewable, code-steward, review workflow, auto-merge        |
@@ -209,7 +210,9 @@ deciding where a feature lives — record it in
 work, not just `/investigate-prd`.
 
 - **Capture the decision** as an append-only entry (date · status · context · decision · alternatives
-  · consequences). Mark superseded decisions rather than deleting them.
+  · consequences). Mark superseded decisions rather than deleting them — with the one carve-out the
+  log itself states: delete a superseded entry when leaving it would keep a dead approach readable as
+  available prior art, retire its number instead of reusing it, and leave a stub explaining the gap.
 - **Promote settled conventions:** when a decision hardens into a rule everyone should follow, also
   fold it into the relevant standard (`Architecture.md`, `Paranext-Core-Patterns.md`) or a
   `.claude/rules/` file — that is what the agents read and enforce on the next feature. The log keeps
