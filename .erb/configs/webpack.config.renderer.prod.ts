@@ -120,7 +120,16 @@ const configuration: webpack.Configuration = {
 
   optimization: {
     minimize: true,
-    minimizer: [new TerserPlugin(), new CssMinimizerPlugin()],
+    minimizer: [
+      new TerserPlugin({
+        // React builds the component stack that the error boundaries log out of function and class
+        // names, so mangling them turns every field crash report into meaningless two-letter
+        // identifiers. Keeping the names costs a little bundle size and is the only thing that makes
+        // a packaged-build crash report name the component that threw.
+        terserOptions: { keep_classnames: true, keep_fnames: true },
+      }),
+      new CssMinimizerPlugin(),
+    ],
   },
 
   plugins: [
