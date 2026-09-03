@@ -19,11 +19,14 @@ import {
 export const WEBSOCKET_PORT = 8876;
 
 /**
- * Fixed web view id of the Home tab in the non-noisy dev layout. Source:
- * `src/renderer/testing/test-layout.data.ts` (the `DEV_NOISY=false` branch). The renderer suffixes
- * every web view id from a shared layout with the window it loads into (`-w1`, `-w2`, …; see
- * `src/renderer/components/docking/window-scoped-web-view-ids.util.ts`), so the rendered
- * `data-web-view-id` is this UUID plus that suffix.
+ * Baked web view id of the Home tab slot in the non-noisy dev layout — its identity in the data
+ * file (`src/renderer/testing/test-layout.data.ts`, the `DEV_NOISY=false` branch), not a runtime
+ * id. Every materialization of a baked layout mints a fresh id for its web views (see
+ * `mintFreshWebViewIds` in `src/renderer/components/docking/mint-web-view-ids.util.ts`), so this
+ * value never appears in a live `data-web-view-id` — read a window's actual Home tab id off the DOM
+ * with {@link getHomeTabWebViewId} instead. Still useful as a literal to embed in a hand-built
+ * legacy-layout fixture that predates minting (see `buildTwoTabLegacyLayout` in
+ * `window-layout-persistence.spec.ts`).
  */
 export const HOME_TAB_UUID = '7fc0e34a-d601-4995-fadc-92daa9ef713f';
 
@@ -420,15 +423,36 @@ export async function waitForRendererRegistered(
 }
 
 /**
- * Locator for a window's Home tab title BY ITS FIXED FALLBACK-LAYOUT ID — only valid for a window
- * that loaded the single-Home-tab fallback layout ({@link HOME_TAB_UUID}), i.e. the first window of
- * a fresh profile or one restored from a saved layout that already carried that id. A window whose
- * Home tab was docked on the fly (see {@link expectWindowDockHasOnlyHomeTab}) gets a freshly
- * generated web view id each time, so this locator will not find it — identify that one by title
- * text instead.
+ * Locator for a window's Home tab title, BY ITS TAB TEXT. Every Home tab renders the same title
+ * ("Home") whatever id it was minted with, so title text is what identifies it whether it came from
+ * the first window's fallback layout or was docked on the fly (see
+ * {@link expectWindowDockHasOnlyHomeTab}) — no fixed id survives to key on (see
+ * {@link HOME_TAB_UUID}). Locale-independent in these suites because they pin
+ * `platform.interfaceLanguage` to English.
+ *
+ * Scoped to `page` already identifies THAT window's Home tab: each `BrowserWindow` gets its own
+ * Playwright `Page`, so page-scoping is the identity boundary, not the tab's id. Matches more than
+ * one element only in a window deliberately holding two Home-titled tabs at once (a legacy-layout
+ * clone, for instance) — such a site must not use this locator unmodified; see its caller in
+ * `window-layout-persistence.spec.ts`'s upgrade test for the pattern that excludes the clone.
  */
-export function homeTabTitle(page: Page, windowId: number) {
-  return page.locator(`.platform-tab-title[data-web-view-id="${HOME_TAB_UUID}-w${windowId}"]`);
+export function homeTabTitle(page: Page) {
+  return page.locator('.platform-tab-title', { hasText: 'Home' });
+}
+
+/**
+ * Read the web view id a window's Home tab is CURRENTLY rendering under. Every materialization of
+ * the Home tab mints a fresh id (see {@link HOME_TAB_UUID}'s doc), so no fixed constant identifies
+ * it — callers that need the id (to prove focus, a persisted layout, or a move tracks THIS Home tab
+ * and not some other one) must read it off the live DOM once and compare against the captured value
+ * from then on.
+ */
+export async function getHomeTabWebViewId(page: Page): Promise<string> {
+  const title = homeTabTitle(page);
+  await expect(title).toBeAttached({ timeout: 60_000 });
+  const id = await title.getAttribute('data-web-view-id');
+  if (!id) throw new Error('Home tab title has no data-web-view-id attribute');
+  return id;
 }
 
 /**
@@ -448,10 +472,8 @@ const HOME_ONLY_SETTLE_MS = 5_000;
  * docks Home instead of staying empty.
  *
  * A freshly docked Home tab is not restored from any saved layout, so it gets a new web view id
- * each time — identity here is asserted by title text ("Home"), not by a fixed id. That text is
- * locale-independent in these suites because they pin `platform.interfaceLanguage` to English.
- * Contrast {@link homeTabTitle}, which locates a Home tab that came from the fixed-id fallback
- * layout.
+ * each time — identity here is asserted by title text ("Home"), the same way {@link homeTabTitle}
+ * locates any window's Home tab.
  *
  * Fails if the window renders zero tabs (Home never got docked) or more than one tab (something
  * besides Home is also present) — which is exactly what a regression to failing the dock-Home
