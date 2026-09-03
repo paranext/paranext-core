@@ -60,6 +60,12 @@ const STAGING_FORMAT = 2;
 /** Build from the current checkout state instead of the pinned revision; always rebuild. */
 const isLocalMode: boolean = process.argv.includes('--local');
 
+/**
+ * Set when a checkout was left on a branch of its own rather than moved to the pinned revision, so
+ * the staged copy is marked as not being the pinned build.
+ */
+let isStagingOffPin = false;
+
 /** Resolve the pinned revision against the checkout's existing refs rather than fetching. */
 const isFetchSkipped: boolean =
   process.argv.includes('--skip-fetch') || !!process.env.PT_SKIP_DEV_PACKAGE_FETCH;
@@ -109,15 +115,6 @@ function getDevRepoPath(folder: string): string {
   const inRepo = path.resolve(REPO_ROOT, 'dev-packages', folder);
   if (fs.existsSync(inRepo)) return inRepo;
   return path.resolve(REPO_ROOT, '..', folder);
-}
-
-/**
- * Whether this checkout is one this repo cloned and manages, under `dev-packages/`, rather than a
- * developer's own clone found beside this repo. What this script may do to a checkout depends on
- * which it is: it moves its own freely, and never moves someone else's off their branch.
- */
-function isCheckoutOwnedByThisRepo(folder: string): boolean {
-  return getDevRepoPath(folder) === path.resolve(REPO_ROOT, 'dev-packages', folder);
 }
 
 /** Environment for commands run inside a dev repo. */
@@ -224,8 +221,12 @@ function verifyOrigin(repo: DevRepo, repoPath: string): void {
 }
 
 /**
- * Checks out the configured revision in a dev repo. Fetches from origin first, then pulls if the
- * revision is a branch. Throws if the repo has uncommitted working changes.
+ * Brings a dev repo's checkout to the pinned revision, without ever discarding work.
+ *
+ * Refuses to touch a checkout with uncommitted changes at all. Otherwise it updates the checkout
+ * only when it is somewhere nothing is being kept — detached, on `main`, or on the pinned branch
+ * itself, which is force-pushed upstream by design. On any other branch it leaves the checkout
+ * exactly as it is and stages that instead, saying so.
  */
 function checkoutRevision(repo: DevRepo): void {
   const repoPath = getDevRepoPath(repo.folder);
@@ -284,37 +285,47 @@ function checkoutRevision(repo: DevRepo): void {
   }
 
   if (resolve('HEAD') === targetCommit) {
-    console.log(`${repo.folder} is already at ${repo.revision}; leaving the checkout as it is.`);
+    console.log(`${repo.folder} is already at ${repo.revision}.`);
     return;
   }
 
-  // `git rev-parse --abbrev-ref HEAD` answers `HEAD` when the checkout is already detached.
+  // `git rev-parse --abbrev-ref HEAD` answers `HEAD` when the checkout is detached.
   const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
     cwd: repoPath,
     encoding: 'utf8',
   }).trim();
 
-  // Sitting on the branch we are pinned to is the normal developer case: move it forward. `--hard`
-  // is safe and necessary here — the working tree is already known clean, and `platform-yalc` is
-  // force-pushed by design, so a merge or fast-forward would fail exactly when it matters.
-  if (currentBranch === repo.revision) {
-    console.log(`Updating ${repo.folder}'s ${currentBranch} to ${target}...`);
-    execSync(`git reset --hard "${target}"`, { stdio: 'inherit', cwd: repoPath });
+  // Only move a checkout that is not somewhere deliberate. A detached HEAD is where a previous run
+  // left it, `main` is where a fresh clone starts, and the pinned branch is force-pushed upstream
+  // by design — none of the three is work worth protecting. Any other branch is somebody's, and
+  // this script has no business moving it, wherever the checkout lives.
+  const isSomebodysBranch =
+    currentBranch !== 'HEAD' && currentBranch !== 'main' && currentBranch !== repo.revision;
+
+  if (isSomebodysBranch) {
+    isStagingOffPin = true;
+    console.warn(
+      `\nWARNING: ${repoPath} is on "${currentBranch}", not the pinned "${repo.revision}".\n` +
+        `Leaving it alone and staging what it has, so nothing you are working on is lost.\n` +
+        `Whatever this app runs is built from that branch, not from the pinned revision.\n` +
+        `To stage the pinned revision instead: git -C "${repoPath}" checkout ${repo.revision}\n`,
+    );
     return;
   }
 
-  // Somebody else's checkout, on a branch of their own: say what is wrong and stop, rather than
-  // moving them off it. An `npm install` here may well have been run for something unrelated.
-  if (!isCheckoutOwnedByThisRepo(repo.folder)) {
-    throw new Error(
-      `${repoPath} is on "${currentBranch}", but dev-packages.json pins ${repo.folder} to "${repo.revision}".\n\nThat checkout is yours, not this repo's, so nothing here will move it. Pick one:\n\n  - Switch it yourself:            git -C "${repoPath}" checkout ${repo.revision}\n  - Stage what it has right now:  npm run build:editor\n  - Leave it alone and let this repo keep its own clone:\n        git clone "${repo.cloneUrl}" "${path.resolve(REPO_ROOT, 'dev-packages', repo.folder)}"\n`,
-    );
+  if (isRemoteBranch) {
+    // `-B` moves the local branch of that name onto the remote's tip and checks it out, so the
+    // checkout ends up on a branch rather than detached. The local branch is disposable: this one
+    // exists to track a branch that is rebased and force-pushed upstream as a matter of course.
+    console.log(`Updating ${repo.folder} to ${target}...`);
+    execSync(`git checkout -B "${repo.revision}" "${target}"`, { stdio: 'inherit', cwd: repoPath });
+    return;
   }
 
-  // This repo's own clone: detached, so the local branches stay untouched and a force-push
-  // upstream can never leave it wedged on a commit that no longer exists.
+  // A tag or a commit hash. There is no branch to be on, so this is the one case where a detached
+  // HEAD is not a choice.
   console.log(`Checking out ${repo.revision} in ${repo.folder}...`);
-  execSync(`git checkout --detach "${target}"`, { stdio: 'inherit', cwd: repoPath });
+  execSync(`git checkout --detach "${repo.revision}"`, { stdio: 'inherit', cwd: repoPath });
 }
 
 /**
@@ -330,7 +341,8 @@ function getSourceStamp(repoPath: string): string {
 
 /** What a marker written by this version of the script, for this source state, would say. */
 function getExpectedMarker(sourceStamp: string): string {
-  return `${sourceStamp}${isLocalMode ? '-local' : ''} format=${STAGING_FORMAT}`;
+  const provisional = `${isLocalMode ? '-local' : ''}${isStagingOffPin ? '-offpin' : ''}`;
+  return `${sourceStamp}${provisional} format=${STAGING_FORMAT}`;
 }
 
 /**
