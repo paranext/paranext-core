@@ -78,6 +78,7 @@ import {
   APP_QUITTING_LOG,
   DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
+  OS_FOCUS_COOPERATION_BUDGET_MS,
   RENDERER_STARTING_LOG,
   WEBSOCKET_PORT,
   captureAppOutput,
@@ -389,10 +390,9 @@ async function waitForWindowToBeRaised(
   timeoutMs: number,
 ): Promise<void> {
   const startTime = Date.now();
-  const cooperationBudgetMs = 10_000;
   await pollUntil(
     async () => {
-      if (Date.now() - startTime >= cooperationBudgetMs) {
+      if (Date.now() - startTime >= OS_FOCUS_COOPERATION_BUDGET_MS) {
         await electronApp.evaluate(({ BrowserWindow }, id) => {
           BrowserWindow.fromId(id)?.emit('focus');
         }, windowId);
