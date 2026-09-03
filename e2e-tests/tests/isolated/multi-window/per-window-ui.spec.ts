@@ -285,7 +285,7 @@ test.describe('per-window UI isolation', () => {
     const output = captureAppOutput(electronApp);
     await waitForAppReady(mainPage, 180_000);
     const window1Id = getWindowIdOfPage(mainPage);
-    await expect(homeTabTitle(mainPage, window1Id)).toBeAttached({ timeout: 60_000 });
+    await expect(homeTabTitle(mainPage)).toBeAttached({ timeout: 60_000 });
     // The scroll-group section below reads references off both windows' toolbars, which show the
     // book alone at the toolbar shrink ladder's narrowest rung.
     await widenWindowForToolbarReference(electronApp, mainPage);
