@@ -7,7 +7,7 @@
  * WebSocket, page content, and log lines describing user-visible outcomes — so the implementation
  * underneath can be refactored while these tests keep guarding the behaviour.
  *
- * Three tests, each launching its own Electron instance (the isolated fixture is test-scoped and
+ * Four tests, each launching its own Electron instance (the isolated fixture is test-scoped and
  * each launch costs 30+ seconds, so related assertions are grouped into one instance):
  *
  * 1. Second-window lifecycle: a window created mid-session that would otherwise be born empty docks
@@ -23,6 +23,12 @@
  *    ever talks to main and would pass even if no window heard anything.
  * 3. Quit with two windows: the shutdown tasks run exactly once (not once per window, not zero times)
  *    and the process exits cleanly.
+ * 4. Per-window focus ring and cross-window reveal catch-up: the active-tab focus ring
+ *    (`platform-dock-tab-window-focus`) shows only in the window main broadcasts as focused — never
+ *    in every window at once — and follows focus between windows; and a web view routed to an
+ *    already-open owner in a backgrounded window (the same `existingId: '?'` reuse search behind
+ *    "Open Comments", "Get Resources", and "Find") catches focus up onto the revealed tab once that
+ *    window is raised, with no click required after the reveal.
  *
  * Shared plumbing (output capture, window helpers, the graceful-quit pattern) lives in
  * `multi-window.util.ts`, which `window-layout-persistence.spec.ts` also uses.
@@ -61,7 +67,7 @@
  *
  * `npm run test:e2e:isolated multi-window`
  */
-import type { Page } from '@playwright/test';
+import type { ElectronApplication, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   preConfigureSettings,
@@ -332,6 +338,70 @@ async function waitForGenericFocusToReportWindow(windowId: number): Promise<Focu
     (focus) => typeof focus?.id === 'string' && focus.id.endsWith(`-w${windowId}`),
     30_000,
     `generic getFocus to report a web view of window ${windowId}`,
+  );
+}
+
+/**
+ * Click into a window's Home web view without depending on a fixed web view id — for a window whose
+ * Home tab was docked on the fly (see {@link expectWindowDockHasOnlyHomeTab}) rather than loaded
+ * from the fixed-id fallback layout {@link clickIntoHomeWebView} targets.
+ */
+async function clickIntoWindowsHomeIframe(page: Page): Promise<void> {
+  const homeIframe = page.locator('iframe[title="Home"]');
+  await expect(homeIframe).toBeVisible({ timeout: 60_000 });
+  await page
+    .frameLocator('iframe[title="Home"]')
+    .locator('body')
+    .click({ position: { x: 10, y: 10 } });
+}
+
+/**
+ * Whether the given window renders the active-tab focus ring — `platform-tab-title.component.tsx`'s
+ * `platform-dock-tab-window-focus` class on `.dock-tab-active`, applied only while this window is
+ * the one main broadcasts as focused AND the window's own Focus subject names this tab — on the tab
+ * whose title contains `tabTitleText`. Scoped by title text rather than a fixed id because a
+ * mid-session window's own docked tabs (its freshly minted Home tab, or a web view opened into it
+ * later) carry no fixed id to key on.
+ */
+async function tabHasWindowFocusRing(page: Page, tabTitleText: string): Promise<boolean> {
+  return page.evaluate((titleText) => {
+    const titleEl = Array.from(document.querySelectorAll<HTMLElement>('.platform-tab-title')).find(
+      (el) => el.textContent?.includes(titleText),
+    );
+    const header = titleEl?.closest('.dock-tab-active');
+    return header?.classList.contains('platform-dock-tab-window-focus') ?? false;
+  }, tabTitleText);
+}
+
+/**
+ * Wait for the main process to route to `windowId` after something INSIDE THE APP already asked the
+ * OS to raise it (`web-view.service-router.ts`'s cross-window reveal calling `focusWindow`) —
+ * deliberately never drives focus itself the way {@link focusWindowAndWaitForRouting} does, since
+ * doing so would prove this test's own focus-forcing worked rather than the app's raise. Simulates
+ * the compositor's own focus delivery only once a cooperation budget elapses without it, for the
+ * same reason {@link focusWindowAndWaitForRouting} does: this suite's WSLg/Weston compositor is
+ * known to sometimes ignore programmatic re-activation of an already-shown window, regardless of
+ * which code inside the app asked for it.
+ */
+async function waitForWindowToBeRaised(
+  electronApp: ElectronApplication,
+  windowId: number,
+  timeoutMs: number,
+): Promise<void> {
+  const startTime = Date.now();
+  const cooperationBudgetMs = 10_000;
+  await pollUntil(
+    async () => {
+      if (Date.now() - startTime >= cooperationBudgetMs) {
+        await electronApp.evaluate(({ BrowserWindow }, id) => {
+          BrowserWindow.fromId(id)?.emit('focus');
+        }, windowId);
+      }
+      return getFocusedWindowId();
+    },
+    (focusedId) => focusedId === windowId,
+    timeoutMs,
+    `main process to route to window ${windowId} after it was asked to be raised`,
   );
 }
 
@@ -687,5 +757,97 @@ test.describe('multi-window lifecycle', () => {
     // that needs the S/R extension and lives beyond this repository.
     expect(countOccurrences(log, SHUTDOWN_SYNC_ATTEMPT_MARKER)).toBe(1);
     // The fault-marker sweep (whole log, so the quit window included) ran in the epilogue above.
+  });
+
+  test('the active-tab focus ring belongs to the window main broadcasts as focused, and a cross-window web-view reveal catches focus up onto the revealed tab', async ({
+    electronApp,
+    mainPage,
+  }) => {
+    const logStep = createStepLogger('multi-window');
+    const output = captureAppOutput(electronApp);
+    await waitForAppReady(mainPage, 180_000);
+    const window1Id = getWindowIdOfPage(mainPage);
+    logStep(`window ${window1Id} ready`);
+
+    // --- The ring is keyed off the window main broadcasts as focused, not merely off which tab
+    // holds a window's own Focus subject (every window tracks that independently). ---
+    await focusWindowAndWaitForRouting(electronApp, window1Id);
+    await clickIntoHomeWebView(mainPage, window1Id);
+    await expect(async () => {
+      expect(await tabHasWindowFocusRing(mainPage, 'Home')).toBe(true);
+    }).toPass({ timeout: 30_000, intervals: [500] });
+    logStep(`ring shows in window ${window1Id}`);
+
+    const page2 = await createSecondWindow(electronApp);
+    const window2Id = getWindowIdOfPage(page2);
+    await waitForRendererRegistered(window2Id, 120_000);
+    await expectWindowDockHasOnlyHomeTab(page2);
+    logStep(`window ${window2Id} up with its own Home tab`);
+
+    await focusWindowAndWaitForRouting(electronApp, window2Id);
+    await clickIntoWindowsHomeIframe(page2);
+    await expect(async () => {
+      expect(await tabHasWindowFocusRing(page2, 'Home')).toBe(true);
+    }).toPass({ timeout: 30_000, intervals: [500] });
+    // THE HEADLINE ASSERTION: window 1's own Focus subject still names its Home web view (a
+    // background window's focus subject is retained while inactive — see the first test in this
+    // file), yet its ring must be gone now that window 1 is no longer the window main broadcasts as
+    // focused — the ring is gated on that broadcast, not merely on a window's own local Focus state,
+    // so it can never show in more than one window at a time.
+    expect(await tabHasWindowFocusRing(mainPage, 'Home')).toBe(false);
+    logStep(`ring moved to window ${window2Id} and left window ${window1Id}`);
+
+    // --- A web view routed to a backgrounded owner window catches focus up onto the revealed tab
+    // once that window is raised, with no extra click. `platformGetResources.openGetResources` is
+    // the real, shipped command behind the "Get Resources" entry point — one of the exact
+    // `existingId: '?'` reuse-search callers (alongside "Open Comments" and "Find") named in
+    // `openWebView`'s own comment in `web-view.service-router.ts` — so this exercises the production
+    // cross-window-raise code path rather than a synthetic stand-in. ---
+    const openGetResources = () =>
+      sendPapiRequestOnce<string | undefined>(
+        'command:platformGetResources.openGetResources',
+        [],
+        WEBSOCKET_PORT,
+        PAPI_ATTEMPT_TIMEOUT_MS,
+      );
+
+    // First call: no owner exists yet, so it opens where the user is looking — window 2, which is
+    // still focused from the assertions above.
+    await openGetResources();
+    await expect(page2.locator('.dock-tab', { hasText: 'Get Resources' })).toBeAttached({
+      timeout: 30_000,
+    });
+    logStep(`Get Resources opened in window ${window2Id}`);
+
+    // Move focus to window 1 and confirm the ring followed back — re-establishing the baseline the
+    // cross-window reveal below is measured against.
+    await focusWindowAndWaitForRouting(electronApp, window1Id);
+    await expect(async () => {
+      expect(await tabHasWindowFocusRing(mainPage, 'Home')).toBe(true);
+    }).toPass({ timeout: 30_000, intervals: [500] });
+    expect(await tabHasWindowFocusRing(page2, 'Get Resources')).toBe(false);
+    logStep(`ring back in window ${window1Id}`);
+
+    // Second call, now from window 1: the reuse search finds window 2 as the sole owner of the
+    // already-open Get Resources view, which is not the target window (window 1) while the app
+    // holds focus — the exact condition `willLikelyRaiseAcrossWindows` gates on. Document focus is
+    // withheld in window 2 until it is actually raised, so nothing here except the app's own raise
+    // and catch-up is what can land the ring below.
+    await openGetResources();
+    await waitForWindowToBeRaised(electronApp, window2Id, 30_000);
+    logStep(`window ${window2Id} raised by the cross-window reveal`);
+
+    // THE HEADLINE ASSERTION: the revealed tab gets the ring automatically, within the bounded
+    // catch-up window, with no click anywhere in this test after the reveal — the cross-window
+    // raise's withheld document focus lands on the revealed tab as soon as this window is actually
+    // raised, rather than needing the user to click into it themselves.
+    await expect(async () => {
+      expect(await tabHasWindowFocusRing(page2, 'Get Resources')).toBe(true);
+    }).toPass({ timeout: 10_000, intervals: [250] });
+    expect(await tabHasWindowFocusRing(mainPage, 'Home')).toBe(false);
+    logStep(`ring caught up onto the revealed tab in window ${window2Id} without a click`);
+
+    const wholeLog = output.text();
+    FAULT_MARKERS.forEach((marker) => expect(wholeLog).not.toContain(marker));
   });
 });
