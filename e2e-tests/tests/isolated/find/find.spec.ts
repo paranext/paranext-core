@@ -806,7 +806,16 @@ test.describe('Search History', () => {
     const firstTerm = `histtest-optionschange-a-${Date.now()}`;
     const secondTerm = `histtest-optionschange-b-${Date.now()}`;
 
-    await fillSearchAndWaitForResults(frame, firstTerm);
+    // Both terms are synthetic and match nothing in the project, so the explicit search that
+    // records firstTerm always finishes as "no results" — the results counter never renders for a
+    // zero-match search (only the no-results paragraph does), so waiting on it here the way
+    // fillSearchAndWaitForResults does for a real search term would hang for the full search
+    // timeout instead of ever proceeding.
+    const searchInput = frame.locator('#search-term');
+    await searchInput.fill(firstTerm);
+    await searchInput.press('Enter');
+    await expect(frame.getByText(/no results found/i)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+
     await openFiltersPanel(frame);
 
     // First option change: the box still holds firstTerm, the same term the explicit search above
@@ -822,12 +831,23 @@ test.describe('Search History', () => {
     // 5s idle wait), then change a second option. Only a term change makes the dedupe key differ
     // from what is already recorded, so a write reaching history here can only be explained by the
     // options-change effect itself.
-    await frame.locator('#search-term').fill(secondTerm);
+    await searchInput.fill(secondTerm);
     const matchCaseCheckbox = frame.locator('#matchCase');
-    await expect(matchCaseCheckbox).toBeVisible({ timeout: 5_000 });
     await matchCaseCheckbox.click();
-    await expect(matchCaseCheckbox).toBeChecked();
     await matchCaseCheckbox.press('Escape');
+
+    // Typing secondTerm above also (re)armed the 5-second idle debounce that writes to history on
+    // its own (see "should add search term to history after 5 seconds of inactivity" above) — left
+    // alone, that debounce could independently write secondTerm and pass this test even with the
+    // options-change effect broken, the exact case this test exists to catch. Clearing the box
+    // defuses it rather than racing it: the debounce effect is keyed off the current search term
+    // and clears its pending timer on every change (find.web-view.tsx's `[searchTerm]` effect), so
+    // once the box reads empty there is no armed timer left that could ever write secondTerm. The
+    // options-change effect above already read secondTerm from a ref and kicked off its own write
+    // before this clear runs, so that write is unaffected — only the debounce's independent route
+    // is cut off. From here, a wait of any length is safe: if secondTerm reaches history, the
+    // options-change effect is the only route that could have put it there.
+    await searchInput.fill('');
 
     await openHistoryDropdown(frame);
     await expect(frame.getByRole('option', { name: secondTerm })).toBeVisible({ timeout: 5_000 });
