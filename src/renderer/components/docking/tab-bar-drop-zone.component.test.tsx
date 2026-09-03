@@ -259,7 +259,7 @@ describe('TabBarDropZone', () => {
     expect(context.setDropRect).not.toHaveBeenCalled();
   });
 
-  it("accepts a tab dragged onto its own panel's empty area even when it is that panel's only tab", () => {
+  it("rejects a panel's own last tab dragged over its empty area: no indicator, no move on drop", () => {
     const panel = createPanel();
     const tab = createTab({ parent: panel });
     panel.tabs = [tab];
@@ -268,14 +268,13 @@ describe('TabBarDropZone', () => {
     const { onDragOverT, onDropT } = getCapturedHandlers();
 
     const state = createDragState({ tab }, DOCK_ID);
-    const acceptSpy = vi.spyOn(state, 'accept');
+    const rejectSpy = vi.spyOn(state, 'reject');
 
     onDragOverT?.(state);
-    expect(acceptSpy).toHaveBeenCalled();
+    expect(rejectSpy).toHaveBeenCalled();
+    expect(context.setDropRect).not.toHaveBeenCalled();
 
-    // Resolves to a no-op move (the tab is already this panel's only/last tab) — accepted anyway,
-    // matching `TabCache.onDragOver`'s own precedent; see `tab-bar-drop-zone.util.ts`'s TSDoc.
     onDropT?.(state);
-    expect(context.dockMove).toHaveBeenCalledWith(tab, panel, 'middle');
+    expect(context.dockMove).not.toHaveBeenCalled();
   });
 });

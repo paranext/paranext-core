@@ -238,6 +238,19 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
   }
 }
 
+// While a tab or tab group of this group is being dragged, move the "+" button to the far end of
+// the bar so the drop zone grows into ONE continuous area between the last tab and "+", the way
+// Chrome's tab strip behaves — otherwise the "+" sits between rc-dock's own after-last-tab strip
+// and the zone as a dead spot that quietly ignores a drop. rc-dock appends a `.dragging-layer`
+// carrying the dragged group's `dock-style-*` classes to `<body>` for tab and tab-group drags
+// only (a divider drag carries no group), so the button never moves while a panel is resized.
+body:has(> .dragging-layer.dock-style-platform-bible)
+  .dock-nav
+  > .dock-extra-content
+  > .new-tab-button {
+  order: 1;
+}
+
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-wrap {
   padding-top: unset;
   transform: unset;
