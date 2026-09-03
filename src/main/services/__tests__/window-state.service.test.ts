@@ -353,6 +353,27 @@ describe('window state tracking', () => {
       expect(getFocusedWindowId()).toBe('entry-durable-id');
     });
 
+    test('clears the dead window’s closing and ever-ready marks when its late close reaches the id after a reclaim', () => {
+      // The corpse began closing and had gone ready before it died — both marks are keyed by the
+      // id alone, and the id now belongs to the window that reclaimed it. Left set, they would go
+      // on answering for a window that is no longer there: the reclaiming window would read as
+      // still closing and as having registered its renderer already, neither of which is true of
+      // it yet.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const destroyed = { id: 1, isDestroyed: () => true } as BrowserWindow;
+      addWindow(destroyed, 'entry-durable-id');
+      markWindowReady('entry-durable-id');
+      markWindowClosing('entry-durable-id');
+
+      addWindow(fakeWindow(2), 'entry-durable-id');
+      // The corpse's own `closed` handler finally reaches `removeWindow`, after the reclaim above
+      // already gave the id to the new window
+      removeWindow(destroyed, 'entry-durable-id');
+
+      expect(isWindowClosing('entry-durable-id')).toBe(false);
+      expect(wasWindowEverReady('entry-durable-id')).toBe(false);
+    });
+
     test('says which id it refused and what the window lost when it mints over a duplicate', () => {
       addWindow(fakeWindow(1), 'entry-durable-id');
 

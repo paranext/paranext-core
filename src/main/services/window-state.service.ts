@@ -602,6 +602,13 @@ export function addWindow(window: BrowserWindow, existingId?: string): string {
     for (let index = trackedWindows.length - 1; index >= 0; index -= 1) {
       if (trackedWindows[index].windowId === existingId) trackedWindows.splice(index, 1);
     }
+    // The corpse's own `closed` handler still runs after this, but by then the id below already
+    // names the window pushed here — {@link removeWindow} finds a tracked entry under the id and
+    // returns before reaching its clears. Clear its closing and ever-ready marks here instead,
+    // while the corpse is the one still known to be dead: left set, they would go on answering
+    // for the window that just took the id, which is neither closing nor yet ready.
+    closingWindowIds.delete(existingId);
+    everReadyWindowIds.delete(existingId);
   }
   trackedWindows.push({ windowId, window });
   announceRoutingTargetIfChanged();
