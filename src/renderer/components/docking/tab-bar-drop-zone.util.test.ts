@@ -78,14 +78,32 @@ describe('resolveTabBarDropZoneSource', () => {
     expect(resolveTabBarDropZoneSource(createContext(), createPanel())).toBeUndefined();
   });
 
-  it("accepts a tab dragged onto its own panel, even as that panel's only (last) tab", () => {
+  it("rejects a tab dragged onto its own panel's bar when it is already that panel's last tab", () => {
+    const panel = createPanel();
+    const first = createTab({ id: 'tab-0', parent: panel });
+    const tab = createTab({ parent: panel });
+    panel.tabs = [first, tab];
+    seedDragState({ tab }, DOCK_ID);
+
+    expect(resolveTabBarDropZoneSource(createContext(), panel)).toBeUndefined();
+  });
+
+  it("rejects a tab dragged onto its own panel's bar when it is that panel's only tab", () => {
     const panel = createPanel();
     const tab = createTab({ parent: panel });
     panel.tabs = [tab];
     seedDragState({ tab }, DOCK_ID);
 
-    // Accepted (not a special-cased reject) even though `dockMove` will resolve to a no-op —
-    // see the util's TSDoc for why this matches `TabCache.onDragOver`'s own precedent.
+    expect(resolveTabBarDropZoneSource(createContext(), panel)).toBeUndefined();
+  });
+
+  it("accepts a tab dragged onto its own panel's bar when it is not the last tab (moves it to the end)", () => {
+    const panel = createPanel();
+    const tab = createTab({ parent: panel });
+    const last = createTab({ id: 'tab-2', parent: panel });
+    panel.tabs = [tab, last];
+    seedDragState({ tab }, DOCK_ID);
+
     expect(resolveTabBarDropZoneSource(createContext(), panel)).toBe(tab);
   });
 

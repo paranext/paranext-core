@@ -9,11 +9,8 @@ import { DockContext, DragState, PanelData, TabData } from 'rc-dock';
  * Mirrors two existing rc-dock call sites rather than inventing new rules:
  *
  * - `TabCache.onDragOver` (`node_modules/rc-dock/src/DockTabs.tsx`) for a single-tab drag: same
- *   `group` only. A tab dragged onto its own panel's empty area is accepted even when the tab is
- *   already last (a true no-op after `dockMove`), matching `TabCache.onDragOver` already accepting
- *   a same-panel drop next to a tab's own neighbor, which can equally resolve to a no-op position —
- *   rejecting only this one placement would be an inconsistent special case for no functional
- *   benefit, and the indicator honestly shows "append to this panel" either way.
+ *   `group` only. On top of that, a tab that already is the last tab of `targetPanel` is rejected:
+ *   appending it would change nothing, so offering a drop target there would only mislead.
  * - `DockPanel.render`'s gate on its own tabs-square (`node_modules/rc-dock/src/DockPanel.tsx`) for a
  *   whole-panel drag (including a re-docked float — a single-tab float panel drags as a `panel`,
  *   not a `tab`; see `TabCache.onDragStart`'s single-tab-float branch): reject `panelLock`ed
@@ -25,6 +22,13 @@ import { DockContext, DragState, PanelData, TabData } from 'rc-dock';
  * ordinary tab-to-tab drop (`TabCache.onDragOver`, which never checks `tabLocked`) — this only
  * narrows the coarse "append to the end" gesture this zone offers, not tab movement in general.
  */
+/** Whether `tab` already sits at the end of `panel`, so appending it there would change nothing. */
+function isLastTabOfPanel(tab: TabData, panel: PanelData): boolean {
+  if (tab.parent?.id !== panel.id) return false;
+  const lastTab = panel.tabs[panel.tabs.length - 1];
+  return lastTab?.id === tab.id;
+}
+
 export function resolveTabBarDropZoneSource(
   context: DockContext,
   targetPanel: PanelData,
@@ -35,6 +39,7 @@ export function resolveTabBarDropZoneSource(
   if (tab) {
     if (!tab.group || tab.group !== targetPanel.group) return undefined;
     if (context.getGroup(tab.group).tabLocked) return undefined;
+    if (isLastTabOfPanel(tab, targetPanel)) return undefined;
     return tab;
   }
 
