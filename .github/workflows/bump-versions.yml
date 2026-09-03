@@ -40,6 +40,9 @@ jobs:
         with:
           file_path: 'package.json'
 
+      - name: Install Volta and toolchain
+        uses: volta-cli/action@v4
+
       - name: Install Node and NPM
         uses: actions/setup-node@v4
         with:

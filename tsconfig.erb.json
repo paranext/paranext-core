@@ -1,8 +1,10 @@
 {
-  // Type-check gate for the startup-waterfall parser + CLI under .erb/scripts, which the root
-  // tsconfig's `include` ("src", "assets") leaves out. Without this, a type error in the parser or
-  // CLI would keep CI green and surface only at manual runtime. Scoped to these files (not all of
-  // .erb/scripts) because the older scripts there carry pre-existing type issues from their own
+  // Type-check gate for the hand-written scripts under .erb/scripts that the root tsconfig's
+  // `include` ("src", "assets") leaves out: the startup-waterfall parser + CLI, and the two
+  // install-path scripts npm runs as `preinstall`/`postinstall`. Without this, a type error in any
+  // of them would keep CI green and surface only at runtime — and for the install scripts, that
+  // runtime is every developer's and every CI job's `npm install`. Scoped to these files (not all
+  // of .erb/scripts) because the older scripts there carry pre-existing type issues from their own
   // heavy deps and are out of scope for this gate. The colocated *.util.test.ts is not listed for
   // the same reason the root config excludes all `*.test.ts`: test files rely on Vitest's runtime
   // (which exercises this parser via its own 9 tests), not tsc. Referenced by `npm run typecheck`
@@ -15,8 +17,18 @@
   "compilerOptions": {
     "noEmit": true,
     "incremental": false,
-    "types": ["node"]
+    "types": ["node"],
+    // The install scripts are plain CommonJS with no import or export, so TypeScript would put
+    // their top-level declarations in one shared global scope and report every name they have in
+    // common as a redeclaration. Node decides CommonJS-vs-ESM from package.json, never from file
+    // contents, so giving each file its own scope here changes nothing about how they run.
+    "moduleDetection": "force"
   },
-  "include": [".erb/scripts/startup-waterfall.ts", ".erb/scripts/startup-waterfall.util.ts"],
+  "include": [
+    ".erb/scripts/startup-waterfall.ts",
+    ".erb/scripts/startup-waterfall.util.ts",
+    ".erb/scripts/stage-dev-packages.ts",
+    ".erb/scripts/postinstall.ts"
+  ],
   "exclude": ["node_modules"]
 }
