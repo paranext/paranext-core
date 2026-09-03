@@ -39,17 +39,33 @@ type Manifest = {
   dependencies?: Record<string, string>;
 };
 
+/** The staging folder names `dev-packages.json` declares, which are the only ones that count. */
+function getDeclaredStagingFolders(): string[] {
+  const config: { repos?: { devPackages?: { stagingFolder?: string }[] }[] } = JSON.parse(
+    fs.readFileSync(path.resolve(REPO_ROOT, 'dev-packages.json'), 'utf8'),
+  );
+  return (config.repos ?? []).flatMap((repo) =>
+    (repo.devPackages ?? [])
+      .map((devPackage) => devPackage.stagingFolder)
+      .filter((folder): folder is string => !!folder),
+  );
+}
+
 /**
  * Returns the names of dependencies declared by staged packages that do not resolve in this repo's
  * `node_modules`. Only `dependencies` are checked: those are what npm installs for a `file:`
  * package. Peer dependencies are the host's responsibility and are declared in this repo's own
  * manifests already.
+ *
+ * Driven by `dev-packages.json` rather than by what is on disk. Nothing removes a staging folder
+ * when a package is renamed or dropped, and reading a leftover one would report its dependencies —
+ * which this repo has correctly stopped installing — as missing.
  */
 function getMissingStagedDependencies(): string[] {
   if (!fs.existsSync(STAGING_ROOT)) return [];
 
   const missing = new Set<string>();
-  fs.readdirSync(STAGING_ROOT).forEach((folder: string) => {
+  getDeclaredStagingFolders().forEach((folder: string) => {
     const manifestPath = path.resolve(STAGING_ROOT, folder, 'package.json');
     if (!fs.existsSync(manifestPath)) return;
     const manifest: Manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
