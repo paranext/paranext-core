@@ -228,7 +228,7 @@ git rebase origin/main
 git push --force-with-lease
 ```
 
-To manually set up `scripture-editors` to be linked locally (this should all be done automatically during `npm install`):
+To manually set up `scripture-editors` to be staged locally (this should all be done automatically during `npm install`):
 
 1. Clone `scripture-editors` as a sibling to this repo (alternatively, clone it in `paranext-core/dev-packages`):
    ```bash
@@ -250,7 +250,7 @@ To manually set up `scripture-editors` to be linked locally (this should all be 
    ```
 3. Run `npm install` in this repo. The preinstall script builds each package in `scripture-editors` and stages it into `dev-packages/staging/`.
 
-### Getting your `scripture-editors` changes into this repo
+#### Getting your `scripture-editors` changes into this repo
 
 After editing `scripture-editors`, rebuild and re-stage it with:
 
@@ -263,8 +263,6 @@ That builds **whatever your `scripture-editors` checkout currently contains — 
 If you only need the staged copy refreshed — for tests, typecheck, or a production build — `npm run stage-dev-packages -- --local` does that part alone. (Without `--local`, `stage-dev-packages` builds the _pinned revision_, refusing to run while your checkout has uncommitted changes.)
 
 Run `npm install` as well if your change **added, removed, or bumped one of `scripture-editors`' own dependencies**, so npm updates this repo's tree and `package-lock.json` to match. Nothing here restates those dependencies; the staged package's own manifest is what npm reads.
-
-Note that staging checks out the revision named in [`dev-packages.json`](./dev-packages.json) and refuses to run if your `scripture-editors` checkout has uncommitted changes, so commit (or stash) there first.
 
 #### Install and build
 

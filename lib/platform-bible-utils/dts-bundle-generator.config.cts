@@ -1,7 +1,8 @@
 const config = {
   compilationOptions: {
     // Stops dts-bundle-generator from trying to inline symlinked packages, which causes issues
-    // when using yalc links to local dev packages
+    // with the staged dev packages, which npm symlinks into `node_modules` from
+    // `dev-packages/staging/`
     followSymlinks: false,
     // Required when there is more than one entry — otherwise dts-bundle-generator errors with
     // "Cannot find tsconfig for multiple files."

@@ -847,13 +847,13 @@ step, no automation. Just a record.
 
     Verified 2026-08-16 against `@eten-tech-foundation/platform-editor` **0.8.15**, in both places it
     can be read: the published npm package, and `dev-packages/scripture-editors` `packages/platform`,
-    which `postinstall` → `link-dev-packages` builds and yalc-links over `node_modules`. They agree
-    on this mechanism (the vendored copy trails published 0.8.15 by one caret-placement line in
-    `$moveCaretToVerseStart`). **Verify against the linked build, not `package-lock.json`** — the lock
-    still named 0.8.14 when this was written, and reading that stale tarball is exactly how an earlier
-    draft of this ADR came to describe `$findAndSetChapterAndVerse` and its chapter-1 fallback as the
-    live mechanism. That was wrong; that plugin does not exist in 0.8.15. Corrected in review of
-    #2663.
+    which `preinstall` builds and stages into `dev-packages/staging/platform-editor`, where npm
+    installs it from. They agree on this mechanism (the staged copy trails published 0.8.15 by one
+    caret-placement line in `$moveCaretToVerseStart`). **Verify against the staged build, not
+    `package-lock.json`** — the lock still named 0.8.14 when this was written, and reading that stale
+    tarball is exactly how an earlier draft of this ADR came to describe `$findAndSetChapterAndVerse`
+    and its chapter-1 fallback as the live mechanism. That was wrong; that plugin does not exist in
+    0.8.15. Corrected in review of #2663.
 
     **The guard belongs in the consumer, not upstream in the plugin.** Gating the plugin on
     `isReadonly` was considered and is rejected on the merits, not merely deferred: the plugin is

@@ -9,7 +9,7 @@ const searchTerms = ['electronmon', 'esbuild', 'nodemon', 'vite', 'webpack', 'ex
 // Paths to exclude - processes with these in their path will not be killed
 const excludePaths = [
   'vitest',
-  // Exclude processes from `eten-tech-foundation/scripture-editors` repo.
+  // Exclude processes from the `scripture-editors` repo.
   '/scripture-editors/node_modules/',
   '\\scripture-editors\\node_modules\\',
   '\\WINDOWS\\system32\\cmd.exe',
