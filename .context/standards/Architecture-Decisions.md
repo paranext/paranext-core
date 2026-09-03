@@ -3239,10 +3239,11 @@ step, no automation. Just a record.
 - **Consequences:** The tour's step list is now a superset that each mode filters, so what a user
   sees depends on what their layout renders — a stop added later without a Power-safe anchor simply
   will not appear there, silently. That is the same degradation the component already relies on for
-  the Sync button (absent until `PT-4007`), so the behavior is not new, but it does mean stop count
-  is not a fixed number and tests assert on the filtered list rather than a constant. Copy for any
-  future stop must be true in every mode the stop can appear in, since the filter selects on anchor
-  presence and cannot know whether prose applies.
+  the Sync button (absent wherever Send/Receive is not installed, which is every build but
+  Paratext 10 Studio), so the behavior is not new, but it does mean stop count is not a fixed
+  number and tests assert on the filtered list rather than a constant. Copy for any future stop
+  must be true in every mode the stop can appear in, since the filter selects on anchor presence
+  and cannot know whether prose applies.
 - **Source:** PT-4262 review (PR #2632), where the Help entry was found to ship Simple-only against
   an explicit request for both modes.
 
