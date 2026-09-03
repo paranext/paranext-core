@@ -879,6 +879,18 @@ declare module 'shared/models/web-view.model' {
      */
     existingId?: string | '?';
     /**
+     * Limit an `existingId: '?'` search to web views showing this project.
+     *
+     * Only meaningful with `existingId: '?'` — a concrete `existingId` already names one exact web
+     * view, so combining it with a project filter is contradictory and is rejected as an error.
+     * Without this, `'?'` matches any web view of the type regardless of project. Providing this
+     * without any `existingId` at all is the same contradiction — there is no `'?'` search for it to
+     * limit — and is rejected the same way.
+     *
+     * @experimental
+     */
+    existingProjectId?: string;
+    /**
      * Whether to create a WebView with a new ID if a WebView with ID `existingId` was not found. Only
      * relevant if `existingId` is provided. If `existingId` is not provided, this property is
      * ignored.
@@ -900,6 +912,21 @@ declare module 'shared/models/web-view.model' {
      * looking at.
      */
     bringToFront?: boolean;
+    /**
+     * Id of the application window to open the web view in, instead of the window the user is working
+     * in. Applies to `tab`, `panel`, and `float` layouts; combining it with a `'window'` layout
+     * (which asks for a NEW window) is an error. The open fails if no such window is serving web
+     * views — a caller that names a window wants that window, not a guess.
+     *
+     * Combining it with a 'replace-tab' layout is likewise an error — the tab being replaced already
+     * names the window.
+     *
+     * This is a runtime-only handle: window ids are reused across sessions, so never persist one. Get
+     * the current window's id via the `platform.getFocusedWindowId` command.
+     *
+     * @experimental This option is unstable and may change or disappear without notice
+     */
+    targetWindowId?: number;
   };
   /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */
   export type GetWebViewOptions = OpenWebViewOptions;
@@ -1230,6 +1257,98 @@ declare module 'shared/data/rpc.model' {
     errorCode?: JSONRPCErrorCode,
     requestId?: RequestId,
   ): JSONRPCErrorResponse;
+  /**
+   * Maximum characters retained from a single logged detail that can originate from a remote peer (a
+   * close `reason`, an error `message`)
+   */
+  export const MAX_LOGGED_DETAIL_LENGTH = 200;
+  /**
+   * Maximum characters retained from a logged stack trace.
+   *
+   * Far more generous than {@link MAX_LOGGED_DETAIL_LENGTH} because a stack is generated locally
+   * rather than supplied by a peer, so the flood-protection rationale does not apply — and because a
+   * stack bounded to a couple of hundred characters is one or two frames, which is rarely the frame
+   * that explains a disconnect.
+   */
+  export const MAX_LOGGED_STACK_LENGTH = 4000;
+  /**
+   * Close code used when we close a PAPI socket on purpose (shutdown, teardown). The WebSocket spec
+   * reserves 3000-4999 for application use, so carrying intent in the code itself lets a close
+   * handler tell a deliberate shutdown from a connection that died, with no extra state to keep in
+   * sync.
+   */
+  export const INTENTIONAL_CLOSE_CODE = 4000;
+  /**
+   * Whether a WebSocket close `code` represents a clean, expected shutdown rather than a connection
+   * that died.
+   *
+   * Clean codes: 1000 (normal), 1001 (going away — a page or window navigating away or closing), 1005
+   * (no status code was present in the close frame, which a plain `close()` with no arguments
+   * produces), and {@link INTENTIONAL_CLOSE_CODE}, this codebase's own marker for a close we initiated
+   * on purpose. What all four have in common is that a closing handshake completed. The code that
+   * matters is 1006: no close frame was ever received, the fingerprint of a connection that died
+   * rather than being closed — the shape a suspend produces.
+   *
+   * Shared so the client and server close handlers cannot independently drift on which codes count as
+   * clean. {@link isCleanCloseEvent} is the predicate to use where the event itself is in hand.
+   *
+   * @param code `code` from a WebSocket `close` event
+   * @returns `true` if the code indicates a completed closing handshake, `false` otherwise (including
+   *   for a non-numeric code)
+   */
+  export function isCleanCloseCode(code: unknown): boolean;
+  /**
+   * Whether a close event represents an orderly shutdown rather than a connection that died.
+   *
+   * `wasClean` is the authoritative answer — it reports whether a closing handshake completed — so it
+   * wins whenever the event carries it. Both Chromium and the `ws` library always set it; the
+   * {@link isCleanCloseCode} fallback covers a partial or foreign event shape that does not.
+   *
+   * Deciding on the code alone would misreport a close frame that carried no status: that arrives as
+   * 1005 with `wasClean` true, which a plain `close()` produces on every window close and page
+   * reload. Marking those abnormal would bury a genuine socket death under routine noise.
+   *
+   * @param ev A WebSocket `close` event, or anything at all — a non-event is reported as not clean
+   * @returns Whether a closing handshake completed
+   */
+  export function isCleanCloseEvent(ev: unknown): boolean;
+  /**
+   * Describe a WebSocket `close` event for a log line.
+   *
+   * Chromium and the `ws` library deliver structurally different close events, and both keep
+   * `code`/`reason`/`wasClean` as accessors on the prototype rather than own properties — so
+   * `JSON.stringify` on one yields `{}`. Read the fields explicitly instead.
+   *
+   * `code` is the single most diagnostic field: 1006 (no close frame) means the connection died
+   * rather than being closed politely. A reader should not need the WebSocket code table memorized to
+   * see that, so an event that {@link isCleanCloseEvent} rejects also carries an `abnormal=true` pair.
+   * The marker is its own pair rather than a parenthetical inside `code=` so the whole detail stays a
+   * sequence of space-separated `key=value` pairs.
+   *
+   * @param ev A WebSocket `close` event, or anything at all
+   * @returns Space-separated `key=value` pairs — `code`, `abnormal` (only when the connection died),
+   *   `reason` (JSON-quoted, so a reason containing a quote or a bracket cannot forge the surrounding
+   *   log line) and `wasClean`. A field that cannot be read is reported as `n/a`, so a non-event
+   *   yields `code=n/a reason=n/a wasClean=n/a` rather than throwing.
+   */
+  export function describeWebSocketCloseEvent(ev: unknown): string;
+  /**
+   * Describe a WebSocket `error` event for a log line.
+   *
+   * The `ws` library's `ErrorEvent` keeps `message` and `error` as accessors on the prototype, so
+   * `JSON.stringify` on the event yields `{}` — only own properties are serialized. Read the fields
+   * explicitly.
+   *
+   * Note a browser `WebSocket` fires a plain `Event` on error, carrying no detail at all by
+   * specification, so `message=unknown` is the expected result on the renderer end.
+   *
+   * @param ev A WebSocket `error` event, or anything at all
+   * @returns A single log line holding `message=`, `code=` and, when the error carried one, a
+   *   `stack:` section. Never contains a line break, so an error keeps the one-record-per-line shape
+   *   every other line here has; a field that cannot be read is reported as `unknown`/`n/a` rather
+   *   than throwing.
+   */
+  export function describeWebSocketErrorEvent(ev: unknown): string;
   /** Serialize a payload, if needed, and send it over the provided WebSocket */
   export function sendPayloadToWebSocket(ws: WebSocket | undefined, payload: unknown): void;
   /**
@@ -1277,6 +1396,12 @@ declare module 'shared/data/rpc.model' {
    */
   export const UNREGISTER_METHOD = 'network:unregisterMethod';
   /**
+   * Tell main which peer is on the other end of this socket, so main's connection log lines can be
+   * joined to the client's own. Main labels each socket with an incrementing id, which appears
+   * nowhere in the client's logs; the client labels itself with a name it alone knows.
+   */
+  export const ANNOUNCE_PEER = 'network:announcePeer';
+  /**
    * Register a network event emitter with the main process so that the event is tracked centrally.
    * Multi-source vs. single-source semantics are determined by looking up the event name in
    * `MULTI_SOURCE_EVENT_NAMES`.
@@ -1311,6 +1436,35 @@ declare module 'shared/data/rpc.model' {
    */
   export function getJsonRpcRequestErrorMessagePrefix(code: number): string;
   /**
+   * Whether `error` is what `networkService`'s request plumbing (`doRequest` in `network.service.ts`)
+   * throws for a JSON-RPC "method not found" response — i.e. no handler for the requested method has
+   * registered anywhere on the network.
+   *
+   * Callers that want to treat "nobody is listening" as a benign outcome must key off the JSON-RPC
+   * error _code_, never off the human-readable text that follows it. The two producers of a
+   * method-not-found response word that text differently (`'<method>' not found` in `rpc-server.ts`,
+   * `No handler found for <method>` in `rpc-websocket-listener.ts`), and matching the text alone also
+   * matches an unrelated failure from a handler that _did_ run and threw a message with the same
+   * words in it — turning "no validator, allow it" into "the validator rejected this, allow it
+   * anyway". The code is the only part that distinguishes the two.
+   *
+   * The code has to be read back out of the message because `doRequest` flattens every RPC-level
+   * error — method-not-found and a handler throwing alike — into a thrown value whose `message` is
+   * `JSON-RPC Request error (${code}): ${message}`, with no other machine-readable marker (the richer
+   * `platformErrorCode` field is populated only for C# `PlatformErrorCodes.WithCode` throws, which a
+   * "no handler yet" response never carries — it has no `error.data` at all). Deriving the format
+   * from {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
+   * with, keeps this matcher in lockstep with any reformat there.
+   *
+   * @param error Error thrown by a `networkService` request
+   * @param requestType If provided, additionally require the error to name this request type, so a
+   *   method-not-found response for some _other_ request cannot be mistaken for this one's. Both
+   *   producers embed the raw request type in their message.
+   * @returns Whether `error` is a method-not-found response (for `requestType`, when given)
+   * @experimental
+   */
+  export function isJsonRpcMethodNotFoundError(error: unknown, requestType?: string): boolean;
+  /**
    * Prefix that `network.service`'s `doRequest` embeds in the message it throws when a request times
    * out client-side before any response arrives. Exported for the same drift-prevention reason as
    * {@link getJsonRpcRequestErrorMessagePrefix}.
@@ -1318,6 +1472,17 @@ declare module 'shared/data/rpc.model' {
    * @experimental
    */
   export const JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX = 'JSON-RPC Request timed out:';
+  /**
+   * Whether `error` is what `network.service`'s request plumbing throws when a request expires
+   * client-side before any answer arrives (`doRequest` builds `JSON-RPC Request timed out:
+   * <requestType> <args>` when its per-request wait runs out). Matched by message substring — no
+   * richer machine-readable marker exists for this failure — deriving the format from its one
+   * producer ({@link JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX}), so a reformat there cannot silently
+   * stop this matcher from matching.
+   *
+   * @experimental
+   */
+  export function isRequestTimedOutError(error: unknown): boolean;
 }
 declare module 'shared/models/openrpc.model' {
   import type { JSONSchema7 } from 'json-schema';
@@ -2065,6 +2230,17 @@ declare module 'client/services/rpc-client' {
      * @experimental
      */
     readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
+    /**
+     * Whether {@link onWebSocketClose} has already run for the current socket.
+     *
+     * A closed socket's listener is already removed, but a caller holding a stale reference to the
+     * bound handler could still invoke it directly; this makes a second call a no-op rather than
+     * double-logging and re-running teardown. Deliberately its own field rather than a read of
+     * `connectionStatus`, which is public and mutable: keyed off that, the natural future edit of
+     * setting `Disconnected` in `disconnect()` would skip teardown for the close that follows and
+     * permanently leak everything the socket had registered.
+     */
+    private hasCompletedTeardown;
     private ws;
     private requestId;
     /** Refers to the current process that created this object (i.e., not main) */
@@ -2076,9 +2252,30 @@ declare module 'client/services/rpc-client' {
     private readonly registrationMutexMap;
     private readonly connectionComplete;
     private readonly clientDisconnectEmitter;
-    constructor();
+    /**
+     * Label identifying this process in connection log lines, so multi-window logs stay readable.
+     *
+     * The logger already prefixes every line with a per-process-type tag (`[rend]`/`[exth]`), so
+     * `peerName` alone (e.g. plain `'renderer'`) would add nothing. Each `BrowserWindow` is its own
+     * renderer process, so two windows would otherwise emit identical lines; a per-instance
+     * discriminator is appended so they can be told apart.
+     */
+    private readonly peerName;
+    constructor(peerName?: string);
     private static handleError;
-    private static onError;
+    /**
+     * A discriminator distinguishing this client from another of the same type, for the `peerName`
+     * label.
+     *
+     * Prefers `globalThis.windowId`, the id main assigns each `BrowserWindow` and passes in by query
+     * parameter, because it is the only one of the three that is STABLE: it survives a reload, so
+     * "the same window reconnected" reads differently from "a second window appeared". The renderer
+     * has no access to `process` (see `identifyCaller` in `logger.utils.ts`), so a pid would never be
+     * reached there anyway; it is kept for the extension host, which has a pid and no window. The
+     * random id is a last resort so the label never reads `undefined`; being per-instance, it cannot
+     * be correlated across a reload.
+     */
+    private static getPeerDiscriminator;
     connect(localEventHandler: EventHandler): Promise<boolean>;
     disconnect(): Promise<void>;
     request(
@@ -2100,6 +2297,22 @@ declare module 'client/services/rpc-client' {
     private createNextRequestId;
     private addEventListenersToWebSocket;
     private removeEventListenersFromWebSocket;
+    /**
+     * Tell main which peer owns this socket. Main labels sockets with an incrementing id that appears
+     * nowhere in this process's logs, so without this a close line on each end cannot be joined to
+     * the other.
+     *
+     * Deliberately not awaited: this is diagnostic metadata, so neither a slow response nor a peer
+     * that does not implement the method may delay or fail a connection that is already up.
+     */
+    private announcePeerToServer;
+    /**
+     * An error event is usually the FIRST symptom of a socket going bad, so it needs the peer label
+     * as much as the close line does — in the renderer the event carries no detail at all by
+     * specification, leaving the peer as the only thing separating one window's error from another's.
+     * An instance method (bound by `bindClassMethods`) rather than a static one for that reason.
+     */
+    private onError;
     private onWebSocketOpen;
     private onWebSocketClose;
     private onMessageReceivedByWebSocket;
@@ -2119,6 +2332,15 @@ declare module 'main/services/rpc-server' {
     SingleMethodDocumentation,
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
+  /**
+   * Tell socket-close severity how to ask whether the app is shutting down.
+   *
+   * Called once by the process that owns the answer, before the network starts. See
+   * {@link isAppShuttingDown} for why this is wired in rather than imported.
+   *
+   * @param signal Returns whether the app is currently coming down
+   */
+  export function setAppShutdownSignal(signal: () => boolean): void;
   type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
   /** Called by an RpcServer with the method names its client's departure removed from the registry */
   type AnnounceClientDisconnectMethod = (removedMethodNames: string[]) => void;
@@ -2131,10 +2353,27 @@ declare module 'main/services/rpc-server' {
    */
   export class RpcServer implements IRpcHandler {
     connectionStatus: ConnectionStatus;
+    /**
+     * Whether {@link onWebSocketClose} has already run for the current socket.
+     *
+     * A closed socket's listener is already removed, but a caller holding a stale reference to the
+     * bound handler could still invoke it directly; this makes a second call a no-op rather than
+     * double-logging and re-running teardown. Deliberately its own field rather than a read of
+     * `connectionStatus`, which is public and mutable: keyed off that, the natural future edit of
+     * setting `Disconnected` in `disconnect()` would skip teardown for the close that follows and
+     * permanently leak everything the socket had registered.
+     */
+    private hasCompletedTeardown;
     private ws;
     private requestId;
     /** Only used for logging to differentiate from other RpcServer objects */
     private readonly name;
+    /**
+     * How the peer on the other end of this socket labels itself in its own logs, once it has said so
+     * (see {@link ANNOUNCE_PEER}). Undefined until then, and for a peer that never announces — the
+     * .NET data provider does not.
+     */
+    private peerName;
     /** Refers to the main process */
     private readonly jsonRpcServer;
     /** Refers to any process that connected to main over the websocket */
@@ -2168,9 +2407,28 @@ declare module 'main/services/rpc-server' {
       documentation?: SingleNotificationDocumentation,
     ): boolean;
     unregisterRemoteEvent(eventName: string): boolean;
+    /**
+     * Record how the peer on the other end labels itself, so this socket's log lines can be joined to
+     * that process's own. Called remotely by a connecting client; see {@link ANNOUNCE_PEER}.
+     *
+     * A socket gets to say this once. Accepting later announcements would let a peer relabel itself
+     * mid-session — so log lines already attributed to one name could be continued under another —
+     * and would let it re-log this line as often as it liked.
+     *
+     * @param peerName The peer's label for itself
+     * @returns Whether a usable label was recorded
+     */
+    setPeerName(peerName: string): boolean;
     private createNextRequestId;
     private addMethodToRpcServer;
     private handleError;
+    /**
+     * How to name this socket in a log line: main's own incrementing id, plus the peer's self-applied
+     * label once it has announced one. Both halves are needed — the id is what main's other lines
+     * use, and the label is the only thing that ties a line here to the same disconnect as reported
+     * by the process that owns the other end.
+     */
+    private describePeer;
     private addEventListenersToWebSocket;
     private removeEventListenersFromWebSocket;
     private onWebSocketClose;
@@ -3815,8 +4073,27 @@ declare module 'shared/models/docking-framework.model' {
     /** The ID of the tab to replace */
     targetTabId: string;
   }
+  /**
+   * Information about opening a tab in its own application window.
+   *
+   * In Simple mode — which is single-window by design — this degrades to `'tab'`: the web view opens
+   * as a normal tab in the window the user is working in. An interface mode that cannot be read takes
+   * the same degraded path rather than failing the open, so a caller in Power mode can get a tab
+   * instead of a window when the mode read fails.
+   *
+   * It degrades the same way for an open that also passed `existingId: '?'` whose reuse search could
+   * not be answered because some window was unreachable. Such an open goes ahead rather than failing,
+   * accepting that it may be making a second copy of a web view that already exists somewhere — and a
+   * duplicate as a tab is one the user can see and close, where a duplicate as a window takes the
+   * screen and OS focus and can hide the original behind it.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export interface WindowLayout {
+    type: 'window';
+  }
   /** Information about how a Platform.Bible tab fits into the dock layout */
-  export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
+  export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout | WindowLayout;
   /** Props that are passed to the web view tab component */
   export type WebViewTabProps = WebViewDefinition;
   /**
@@ -3852,10 +4129,16 @@ declare module 'shared/models/docking-framework.model' {
      * Find the ID of the first open web view whose `webViewType` matches the one supplied.
      *
      * @param webViewType The web view type to search for
+     * @param projectId Optionally limits the search to web views showing a given project
      * @returns The WebViewDefinition of the matching web view, or `undefined` if no web view of that
      *   type is open
+     * @experimental The optional `projectId` filter is new; the rest of this member is
+     *   long-established.
      */
-    findFirstWebViewDefinitionByType: (webViewType: string) => WebViewDefinition | undefined;
+    findFirstWebViewDefinitionByType: (
+      webViewType: string,
+      projectId?: string,
+    ) => WebViewDefinition | undefined;
     /**
      * Add or update a tab in the layout
      *
@@ -4196,7 +4479,10 @@ declare module 'shared/services/web-view.service-model' {
      * view definitions themselves. Changing properties on returned definitions does not affect the
      * actual WebView definitions.
      *
-     * @returns Saved properties of every open WebView. Empty array if no WebViews are open.
+     * @returns Saved properties of every open WebView. Empty array if no WebViews are open. A WebView
+     *   being moved between windows is included even though it is docked in neither of them for the
+     *   length of the move, so that a caller selecting from this list cannot silently miss it; treat
+     *   the result as what is open in the app, not as what is docked in some window right now.
      * @throws If any window could not be asked what it has open. Callers read this as the complete
      *   picture, and a window that could not answer is indistinguishable in the result from one with
      *   nothing open, so a short list is refused rather than passed off as the whole landscape.
@@ -4266,6 +4552,256 @@ declare module 'shared/services/web-view.service-model' {
     webView: SavedWebViewDefinition;
   };
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
+}
+declare module 'shared/services/window.service-model' {
+  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { DirectionFromTab } from 'shared/models/docking-framework.model';
+  /**
+   *
+   * This name is used to register the window data provider on the papi. You can use this name to
+   * find the data provider when accessing it using the useData hook
+   */
+  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
+  export const windowServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the window data provider on the papi. You can use this name to
+     * find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.windowServiceDataProvider';
+  }>;
+  /** Focus of the window is on a WebView iframe with the specified id */
+  export type FocusSubjectWebView = {
+    focusType: 'webView';
+    /** ID of the WebView in focus (its tab ID is the same) */
+    id: string;
+  };
+  /**
+   * Focus of the window is somewhere in a tab (header, toolbar, menu, content, etc.)
+   *
+   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
+   * focused in the WebView's iframe
+   */
+  export type FocusSubjectTab = {
+    focusType: 'tab';
+    /** The type of tab. `webView` if it is a WebView tab. */
+    tabType: 'webView' | string;
+    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
+    id: string;
+  };
+  /** Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.) */
+  export type FocusSubjectOther = {
+    focusType: 'other';
+  };
+  /** Current item that is the subject of top-level focus in the window */
+  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
+  /**
+   * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
+   * itself (`focusType: 'webView'`) or a web view's tab (`focusType: 'tab'` with
+   * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns `undefined`
+   * for focus subjects that do not refer to a web view.
+   *
+   * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
+   * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
+   * focus subject shapes change.
+   */
+  export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
+  /**
+   * A raw input gesture in the app window that transient overlays (context menus, command palettes,
+   * dismissable popovers) treat as a request to dismiss.
+   *
+   * - `'mouseDown'` — a mouse button went down anywhere in the window
+   * - `'escape'` — the Escape key went down anywhere in the window
+   *
+   * These two gestures are deliberately the ONLY inputs this type can describe. Do not add other keys
+   * or richer mouse detail — see the security note on {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT}.
+   *
+   * @experimental
+   */
+  export type AppWindowInputKind = 'mouseDown' | 'escape';
+  /**
+   * Payload of the {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} network event.
+   *
+   * Deliberately carries nothing but which of the two gestures happened — no key identity, no mouse
+   * coordinates, button, or target. See the security note on
+   * {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} before adding fields.
+   *
+   * @experimental
+   */
+  export type AppWindowInputEvent = {
+    /** Which input gesture happened */
+    kind: AppWindowInputKind;
+  };
+  /**
+   * Name of the network event the main process emits for every mouse-down and every Escape key-down
+   * in the app window.
+   *
+   * The main process's `before-mouse-event`/`before-input-event` hooks see input in EVERY frame,
+   * including WebView iframes whose events never reach the parent document. Overlays render in the
+   * parent document, so this event is the only way they learn that a click landed inside a WebView.
+   * Escape is announced without `preventDefault`, so the focused frame still receives the key and can
+   * act on it too.
+   *
+   * SECURITY: network events are visible to every process and every extension, and the hooks feeding
+   * this one see ALL input in the window — including keystrokes typed into other extensions' web
+   * views. The announcement is therefore restricted to the two overlay-dismissal gestures, with no
+   * key identity, coordinates, or any other detail, so the event cannot be used as a keylogger or to
+   * surveil user input. Do not broaden what is announced here without a security review.
+   */
+  export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
+  /** Specific item that is intended to be focused in the top-level app window */
+  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
+  /** Instructions that indicate how to change the focus within the window */
+  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
+  export type WindowDataTypes = {
+    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+    /**
+     *
+     * Get the id of the project the active Scripture editor in this window is showing — the same
+     * project BCV navigation currently drives (the top toolbar's book/chapter/verse controls and the
+     * `platform.goTo*` commands) — or `undefined` when there is nothing to navigate. Read-only: use
+     * this to follow which project is active, not to interpret a Scripture reference's versification
+     * frame (that is what a scroll group's own source project is for).
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns The active project id, or `undefined`
+     * @experimental
+     */
+    ActiveEditorProjectId: DataProviderDataType<undefined, string | undefined, never>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [windowServiceProviderName]: IWindowService;
+    }
+  }
+  /**
+   *
+   * Service that allows to interact with the current application window
+   */
+  export type IWindowService = {
+    /**
+     *
+     * Get information about the current subject of focus in the current window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the current window's current subject of focus
+     */
+    getFocus(selector: undefined): Promise<FocusSubject>;
+    /**
+     *
+     * Get information about the current subject of focus in the current window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the current window's current subject of focus
+     */
+    getFocus(): Promise<FocusSubject>;
+    /**
+     * Sets the subject of focus in the current window.
+     *
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
+     *   the window to update the current focus based on what is actually focused in the window (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Sets the subject of focus in the current window.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
+     *   the window to update the current focus based on what is actually focused in the window (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     *
+     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
+     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
+     *   `'detect'`.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      selector: undefined,
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the current window's subject of focus is changed
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param callback Function to run with the updated localized menuContent for this selector. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeFocus(
+      selector: undefined,
+      callback: (focusSubject: FocusSubject | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     *
+     * Get the id of the project the active Scripture editor in this window is showing — the same
+     * project BCV navigation currently drives (the top toolbar's book/chapter/verse controls and the
+     * `platform.goTo*` commands) — or `undefined` when there is nothing to navigate. Read-only: use
+     * this to follow which project is active, not to interpret a Scripture reference's versification
+     * frame (that is what a scroll group's own source project is for).
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns The active project id, or `undefined`
+     * @experimental
+     */
+    getActiveEditorProjectId(selector: undefined): Promise<string | undefined>;
+    /**
+     *
+     * Get the id of the project the active Scripture editor in this window is showing — the same
+     * project BCV navigation currently drives (the top toolbar's book/chapter/verse controls and the
+     * `platform.goTo*` commands) — or `undefined` when there is nothing to navigate. Read-only: use
+     * this to follow which project is active, not to interpret a Scripture reference's versification
+     * frame (that is what a scroll group's own source project is for).
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns The active project id, or `undefined`
+     * @experimental
+     */
+    getActiveEditorProjectId(): Promise<string | undefined>;
+    /**
+     * Read-only; does nothing and always resolves `false`. Provided to match
+     * `getActiveEditorProjectId`.
+     *
+     * @returns `false`
+     * @experimental
+     */
+    setActiveEditorProjectId(): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the active Scripture editor's project changes.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param callback Function to run with the new active project id. If there is an error while
+     *   retrieving the updated data, the function will run with a {@link PlatformError} instead of the
+     *   data. You can call {@link isPlatformError} on this value to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     * @experimental
+     */
+    subscribeActiveEditorProjectId(
+      selector: undefined,
+      callback: (projectId: string | undefined | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof windowServiceObjectToProxy &
+    IDataProvider<WindowDataTypes>;
 }
 declare module 'shared/models/web-view-provider.model' {
   import {
@@ -4633,6 +5169,7 @@ declare module 'papi-shared-types' {
     OpenWebViewEvent,
     UpdateWebViewEvent,
   } from 'shared/services/web-view.service-model';
+  import type { AppWindowInputEvent } from 'shared/services/window.service-model';
   import { WebViewId } from 'shared/models/web-view.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
@@ -4708,6 +5245,54 @@ declare module 'papi-shared-types' {
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+    /**
+     * Move a web view to a window created for it.
+     *
+     * A move closes the web view in the window that holds it and reopens it — same
+     * `useWebViewState` state — in the target window. Consumers see a close event in the source and
+     * an open event in the target, and the web view controller is disposed and re-created: a held
+     * controller reference must be re-acquired after a move. The returned id is the authoritative
+     * id of the web view after the move, and it can differ from the id passed in: a web view
+     * restored from a persisted layout carries a window-scoped id, and a move does not carry that
+     * scope along — so use the returned id for anything after the move. In Simple mode —
+     * single-window by design — there is no other window to move to, and this does nothing.
+     *
+     * A move that fails once it has taken the web view out of its window says where it left it, as
+     * a machine-readable marker at the front of the error message: `[webViewMoveFailure:<where>]`,
+     * where `<where>` is `reopened-in-source-window` (nothing about where it lives changed),
+     * `reopened-in-focused-window` (it did move, just not to the window that was asked for),
+     * `not-reopened` (it is open in no window, and only the log holds what it was), or
+     * `possibly-closed` (taking it out of its window is what failed, so where it is cannot be
+     * told). The marker rides in the message because a rejection that crosses processes reaches its
+     * caller as a code and a message and nothing else. A failure decided before the move touches
+     * the web view carries no marker. Strip the marker before showing the message to a user — it is
+     * there to be classified on, not read.
+     *
+     * @param webViewId Web view to move
+     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
+     *   see above
+     * @experimental
+     */
+    'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
+    /**
+     * Move a web view to an existing window, named by its runtime window id (see
+     * `platform.getFocusedWindowId`; window ids are reused across sessions — never persist one).
+     *
+     * Same semantics as `platform.moveWebViewToNewWindow` — including the marker a failed move
+     * carries to say where it left the web view — and: moving a web view to the window it is
+     * already in does nothing, and naming a window that does not exist is an error that leaves the
+     * web view where it is.
+     *
+     * @param webViewId Web view to move
+     * @param targetWindowId Window to move it to
+     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
+     *   see `platform.moveWebViewToNewWindow`
+     * @experimental
+     */
+    'platform.moveWebViewToWindow': (
+      webViewId: WebViewId,
+      targetWindowId: number,
+    ) => Promise<WebViewId>;
     /** Open a dialog that displays essential information about the application */
     'platform.about': () => Promise<void>;
     /** Open Usersnap feedback form to submit an idea */
@@ -5521,6 +6106,14 @@ declare module 'papi-shared-types' {
   interface NetworkEvents extends MultiSourceNetworkEvents {
     /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
     'platform.onDidReloadExtensions': boolean;
+    /**
+     * Emitted by the main process for every mouse-down and every Escape key-down anywhere in the
+     * app window, including inside WebView iframes. Transient overlays (context menus, command
+     * palettes, dismissable popovers) dismiss on it.
+     *
+     * @experimental
+     */
+    'platform.onDidAppWindowInput': AppWindowInputEvent;
   }
   /** Union of all known network event names (keys of {@link NetworkEvents}). */
   type NetworkEventTypes = keyof NetworkEvents;
@@ -7563,10 +8156,22 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    *   It is not yet a stable contract.
    */
   export type ResourcePickerDialogOptions = DialogOptions & {
-    /** If provided, only resources of this type are shown */
-    resourceType?: ResourceType;
+    /** If provided, only resources of this type (or any of the listed types) are shown */
+    resourceType?: ResourceType | ResourceType[];
     /** IDs of resources already selected in the calling panel */
     selectedResourceIds?: string[];
+    /**
+     * Already-localized sentence shown above the resource list explaining something the caller knows
+     * that limits what picking a resource will do. Shown ahead of any explanation the dialog itself
+     * has for an incomplete list.
+     */
+    notice?: string;
+    /**
+     * When false, resources already installed on this computer are shown but cannot be picked. Use it
+     * when the caller can act on a resource that still needs installing but has nothing to do with
+     * one that is already on disk. Defaults to true.
+     */
+    allowSelectingInstalled?: boolean;
   };
   /**
    * Options to provide when showing the Project Picker dialog (no extra options needed)
@@ -8430,6 +9035,21 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
   import { PlatformError } from 'platform-bible-utils';
   import { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
   /**
+   * Events of one kind within {@link RUNAWAY_WINDOW_MS} that trip the runaway guard. The threshold is
+   * arbitrary, chosen by observing a dev environment; the guard trips ON this many events, so this
+   * many is one more than it tolerates.
+   */
+  export const RUNAWAY_EVENTS_PER_WINDOW = 100;
+  /** Rolling window the runaway guard measures over */
+  export const RUNAWAY_WINDOW_MS = 1000;
+  /**
+   * How long the guard stays tripped before it re-arms and resubscribes. Long enough that a genuine
+   * loop is throttled to a small fraction of its free-running rate, short enough that a legitimate
+   * burst — a Send/Receive or bulk import — heals without the user closing the tab. See
+   * `adr-runaway-data-hook-guard` for why the trip expires rather than latching.
+   */
+  export const RUNAWAY_COOLDOWN_MS = 5000;
+  /**
    * The final function called as part of the `useData` hook that is the actual React hook
    *
    * This is the `.Greeting(...)` part of `useData('helloSomeone.people').Greeting(...)`
@@ -8590,6 +9210,17 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    *   data.
    * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
    *   provider
+   *
+   * **Throttling.** This hook stops a runaway loop that would otherwise lock up the web view. If one
+   * subscription receives — or resubscribes — about 100 times within a second, the hook drops its
+   * subscription for a few seconds, then re-arms and resubscribes on its own. While throttled it
+   * reports `data` as a {@link PlatformError} whose `code` is `RESOURCE_EXHAUSTED`, `setData` as
+   * `undefined`, and `isLoading` as `true`, and it logs a warning naming the data type. Handle it as
+   * you would any other unresolved state; the usual cause is a `selector` or `dataProviderSource`
+   * that is rebuilt every render instead of being memoized. (`subscriberOptions` is held as a ref and
+   * cannot cause this.) The error's `message` is developer-facing English and is not localized —
+   * branch on the `RESOURCE_EXHAUSTED` code and supply your own localized text rather than rendering
+   * `message` to users.
    */
   export const useData: UseDataHook;
   export default useData;
@@ -9379,7 +10010,9 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    *
    *   - `setting`: The current state of the setting, either `defaultState`, the stored value, or a
    *       `PlatformError` if loading the value fails. Use `isPlatformError()` to check.
-   *   - `setSetting`: Function that updates the setting to a new value
+   *   - `setSetting`: Function that updates the setting to a new value, or `undefined` while there is
+   *       nothing to write through — including while the underlying subscription is throttled, see
+   *       {@link useData} for that state.
    *   - `resetSetting`: Function that removes the setting and resets the value to `defaultState`
    *
    * @throws When subscription callback function is called with an update that has an unexpected
@@ -9391,9 +10024,11 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
     setting: SettingTypes[SettingName] | PlatformError,
-    setSetting: (
-      newData: SettingTypes[SettingName],
-    ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
+    setSetting:
+      | ((
+          newData: SettingTypes[SettingName],
+        ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>)
+      | undefined,
     resetSetting: () => void,
     isLoading: boolean,
   ];
@@ -9549,6 +10184,9 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *   successfully updates data.
    * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
    *   provider
+   *
+   * Subject to the same runaway-loop throttling as {@link useData} — see its docs for what the
+   * returned values look like while throttled.
    */
   export const useProjectData: UseProjectDataHook;
   export default useProjectData;
@@ -9607,6 +10245,8 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
    *       the reset is rejected.
    *   - `isLoading`: whether the setting value is awaiting retrieval from the Project Data Provider
    *
+   *   Subject to the same runaway-loop throttling as {@link useData} — see its docs for what the
+   *   returned values look like while throttled.
    * @throws When subscription callback function is called with an update that has an unexpected
    *   message type
    */
@@ -9808,6 +10448,16 @@ declare module 'renderer/services/overlays/overlay-store' {
   /** Get a specific overlay by id, or undefined if not found */
   export function getOverlayById(id: string): OverlayEntry | undefined;
   /**
+   * Get the most recently created overlay matching `predicate` — the topmost of the overlays it
+   * accepts, since a newer overlay always renders over an older one.
+   *
+   * @param predicate Which overlays to consider
+   * @returns The newest matching overlay, or undefined if none match
+   */
+  export function getTopmostOverlay(
+    predicate: (overlay: OverlayEntry) => boolean,
+  ): OverlayEntry | undefined;
+  /**
    * Removes all overlays from the store and notifies listeners.
    *
    * WARNING: Test-only. Does not resolve or reject pending overlay promises. Using this in production
@@ -9822,6 +10472,30 @@ declare module 'renderer/services/overlays/overlay-store' {
    * @returns True if the overlay was found and updated, false otherwise
    */
   export function updateOverlayContent(id: string, content: PopoverContent): boolean;
+  /**
+   * Updates the mutable `filterText`/`selectedIndex` state of a command palette overlay and notifies
+   * subscribers. `selectedIndex` is always clamped to `[0, itemCount - 1]` (or `0` when `itemCount`
+   * is `0`) — both when moved by `selectedIndexDelta` and when left alone, since a `filterText`
+   * change can shrink the filtered list out from under the previous index.
+   *
+   * @param id The overlay id to update
+   * @param patch `filterText` replaces the stored filter text (omit to leave it unchanged; the empty
+   *   string is normalized to undefined so the entry never stores `''`); `selectedIndex` sets the
+   *   highlighted index ABSOLUTELY (the active palette mirrors cmdk's arrow-key highlight this way —
+   *   it knows the resulting index, not a delta); `selectedIndexDelta` moves the current index by
+   *   this many items; both clamp; `itemCount` is the length of the filtered item list used to clamp
+   *   `selectedIndex`
+   * @returns True if the overlay was found and updated, false otherwise
+   */
+  export function updateCommandPaletteState(
+    id: string,
+    patch: {
+      filterText?: string;
+      selectedIndex?: number;
+      selectedIndexDelta?: number;
+      itemCount: number;
+    },
+  ): boolean;
 }
 declare module 'renderer/components/overlays/overlay-context-menu.component' {
   import { OverlayEntry } from 'renderer/services/overlays/overlay.service-model';
@@ -9914,7 +10588,9 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * so this service provides a way for them to request overlays that the renderer hosts on their
    * behalf.
    */
-  import { LocalizeKey, PlatformError } from 'platform-bible-utils';
+  import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
+  import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
+  import type { PaletteFilterMode } from 'platform-bible-react/experimental';
   import type { ReactElement } from 'react';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
   /**
@@ -10001,27 +10677,52 @@ declare module 'renderer/services/overlays/overlay.service-model' {
   /**
    * A single item in a command palette. Items are displayed in a searchable, filterable list. The
    * user types to filter and selects one item.
+   *
+   * Extends the shared {@link PaletteItem} contract (id/label/description/badge/disabled/muted) with
+   * the presentation extras only this overlay renders.
    */
-  export type CommandPaletteItem = {
-    /** Unique identifier returned when this item is selected */
-    id: string;
-    /** Primary display text (e.g., marker code like "ft" or command name) */
-    label: string | LocalizeKey;
-    /** Secondary description text displayed below the label */
-    description?: string | LocalizeKey;
+  export type CommandPaletteItem = PaletteItem & {
     /** Optional icon displayed to the left of the label */
     icon?: string;
-    /** Optional badge text (e.g., "Deprecated", "Disallowed") */
-    badge?: string | LocalizeKey;
     /** Optional group key for visual sectioning with group headers */
     group?: string;
-    /** Whether the item is grayed out and non-selectable. Defaults to false. */
-    disabled?: boolean;
   };
+  /**
+   * A {@link CommandPaletteItem} text field that palette filtering may match against. See
+   * {@link CommandPaletteRequest.searchFields}.
+   */
+  export type PaletteSearchField = 'label' | 'description' | 'badge';
   /** Request payload for {@link IOverlayService.showCommandPalette}. */
   export interface CommandPaletteRequest {
     /** The selectable items to display */
     items: CommandPaletteItem[];
+    /**
+     * Which item text fields the filter text matches against. Defaults to `['label', 'description',
+     * 'badge']` — every text field the palette displays — which suits general command palettes (a
+     * command is often found by a word from its description). Palettes whose label is the whole
+     * identity opt into `['label']`: for marker palettes the label IS the marker code, and
+     * description matching buried exact typed markers under description hits.
+     *
+     * Matching and ranking: label matches come first, ranked exact-first (see
+     * {@link PaletteFilterMode}); items matching only on the OTHER searched fields follow in their
+     * original order. Passive palettes prefix-match the label only regardless of this option (PT9
+     * marker-dropdown semantics — the passive flavor exists for in-document marker typing).
+     */
+    searchFields?: readonly PaletteSearchField[];
+    /**
+     * When `true`, the palette matches by plain CONTAINMENT only (whole-phrase, then all-words),
+     * never by cmdk's per-character fuzzy scoring. Defaults to `false`: an ordinary focused palette
+     * fuzzy-matches, so `gcb` finds "Git: Create Branch".
+     *
+     * Set this when an exact, predictable match list matters more than forgiving lookup — marker
+     * palettes do, because the rendered list participates in commit semantics (typing a marker and
+     * pressing Space must agree byte-for-byte with what is displayed). Palettes with
+     * {@link CommandPaletteRequest.keyForwarding} and passive palettes always match by containment
+     * regardless of this option: their filtered list is resolved by the HOST (commits and forwarded
+     * keys are answered from it), and the host's filter must agree exactly with what is on screen —
+     * cmdk's scorer is not reimplemented host-side.
+     */
+    disableFuzzyMatching?: boolean;
     /**
      * Anchor position in pixels relative to the requesting WebView's iframe origin. The palette is
      * positioned adjacent to this point. If omitted, centers in the viewport.
@@ -10042,7 +10743,67 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     maxHeight?: number;
     /** Whether clicking outside dismisses the palette. Defaults to true. */
     dismissOnClickOutside?: boolean;
+    /**
+     * When true, renders without a search input and without stealing focus from the requesting
+     * WebView. Filter text and the highlighted selection are driven externally via
+     * {@link IOverlayService.updateCommandPalette} and committed via
+     * {@link IOverlayService.commitCommandPaletteSelection} instead of the palette's own search box
+     * and keyboard handling. Defaults to false (the palette owns its own search input and focus, as
+     * today).
+     *
+     * @remarks
+     * Passive-palette filtering and commit resolution match the externally supplied filter text
+     * case-insensitively against the PREFIX of each item's `label`: a leading `+` in the filter is
+     * stripped first (so `"+w"` matches the same items as `"w"`), and an empty or omitted filter
+     * shows every item. `LocalizeKey` labels are resolved to localized text when the palette is
+     * shown, so matching always runs against the same label text the palette displays.
+     */
+    passive?: boolean;
+    /**
+     * Keys the REQUESTING session claims while this palette is open, and where to send them.
+     *
+     * The palette and the session that opened it live in different documents, so whichever holds
+     * focus is the only one that sees a keystroke. A palette that takes focus therefore silently
+     * takes the session's keys with it: its commit semantics stop running, and a local default (e.g.
+     * cmdk's own navigation) answers instead. Declaring the claimed keys closes that — the palette
+     * forwards exactly those to {@link PaletteKeyForwarding.onKey} and acts on none of them itself.
+     *
+     * A focus-stealing (non-passive) palette is what makes this necessary; a passive one never takes
+     * focus, so its requester already receives every key and forwarding is inert there. Requesters
+     * still declare it for both, so one code path covers a palette that unexpectedly receives a key.
+     * Omit it entirely and the palette behaves exactly as it did before forwarding existed.
+     *
+     * @remarks
+     * The handler is called synchronously, in the palette's own document. This is a direct function
+     * reference rather than serialized data: the overlay service is renderer-only and a requesting
+     * WebView is a same-origin iframe sharing the renderer's `papi`, so no boundary is crossed. The
+     * forwarded value is a plain `ForwardedPaletteKeyEvent` rather than a live DOM event, which keeps
+     * it free of the requester's realm.
+     */
+    keyForwarding?: PaletteKeyForwarding;
   }
+  /**
+   * How `filterPaletteItems` (overlay-palette-filter.util.ts) matches filter text against items — one
+   * mode per palette flavor:
+   *
+   * - `'passive'` — case-insensitive PREFIX match on `label` only, whatever
+   *   {@link CommandPaletteRequest.searchFields} says. Passive palettes show bare marker codes (`f`,
+   *   `fe`, `fig`) filtered by the marker prefix the user has typed into the document, mirroring
+   *   PT9's marker dropdown (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in the filter
+   *   text is stripped before matching, so `"+w"` matches the same items as `"w"`.
+   * - `'active'` — case-insensitive CONTAINMENT match over the request's
+   *   {@link CommandPaletteRequest.searchFields} (default: label, description, and badge). Label
+   *   matches rank first, exact-first, so an exact marker match cannot be buried under items whose
+   *   descriptions happen to contain the typed letter; marker palettes additionally opt into
+   *   label-only matching.
+   *
+   * Label matches rank exact-first in both modes — see `filterPaletteItems`.
+   *
+   * Re-exported from `platform-bible-react`, the home of the `filterAndRankPaletteItems` that
+   * `filterPaletteItems` delegates label matching to, so the mode this service accepts and the mode
+   * that function implements cannot drift apart.
+   */
+  export type { PaletteFilterMode };
   /**
    *
    * Service for showing overlays (context menus, popovers, command palettes) that render outside
@@ -10130,6 +10891,10 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * Shows a command palette with searchable/filterable items. Returns a promise that resolves with
      * the selected item's `id`, or `undefined` if dismissed.
      *
+     * `LocalizeKey` item text (`label`/`description`/`badge`) is resolved to localized strings when
+     * the palette is shown, so all filtering — the palette's own search box and text forwarded via
+     * {@link updateCommandPalette} — matches against the text the user actually sees.
+     *
      * @param request The items, optional anchor position, and display options
      * @param webViewId The ID of the WebView requesting the command palette
      * @returns The selected item's ID, or `undefined` if dismissed
@@ -10141,6 +10906,51 @@ declare module 'renderer/services/overlays/overlay.service-model' {
       request: CommandPaletteRequest,
       webViewId: string,
     ): Promise<string | undefined>;
+    /**
+     * Updates the filter text and/or moves the highlighted selection of the active command palette
+     * for the given WebView. No-op if no command palette is active for that WebView.
+     *
+     * Unlike the popover family above (keyed by the overlay ID returned from `showPopover`), the
+     * command palette mutators are keyed by `webViewId` instead. The service enforces one command
+     * palette per WebView at a time (see this interface's class docs), so the requesting WebView's
+     * own ID is a sufficient handle — passive-mode callers drive the palette without ever seeing an
+     * overlay ID.
+     *
+     * @param webViewId The ID of the WebView whose command palette should be updated
+     * @param update `filterText` and/or `moveSelection` (clamped to the filtered list's bounds).
+     *   `filterText` drives passive palettes' list directly and, for ACTIVE palettes, the
+     *   (controlled) search input — callers forward keystrokes this way when the cross-frame focus
+     *   handoff loses and the user's typing lands in their WebView instead of the palette.
+     */
+    updateCommandPalette(
+      webViewId: string,
+      update: {
+        filterText?: string;
+        moveSelection?: number;
+      },
+    ): Promise<void>;
+    /**
+     * Commits the currently highlighted item of the active command palette for the given WebView,
+     * resolving its `showCommandPalette` promise with that item's `id` (mirrors how a click on a
+     * command palette item resolves the promise). If the highlighted item is `disabled`, moves
+     * forward to the next enabled item in the filtered list; if none are enabled, no-ops. No-op if no
+     * command palette is active for that WebView.
+     *
+     * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+     *
+     * @param webViewId The ID of the WebView whose command palette selection should be committed
+     */
+    commitCommandPaletteSelection(webViewId: string): Promise<void>;
+    /**
+     * Dismisses the active command palette for the given WebView, resolving its `showCommandPalette`
+     * promise with `undefined`. Works for both active and passive palettes. No-op if no command
+     * palette is active for that WebView.
+     *
+     * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+     *
+     * @param webViewId The ID of the WebView whose command palette should be dismissed
+     */
+    dismissCommandPalette(webViewId: string): Promise<void>;
   }
   /**
    * Internal representation of an active overlay stored in the overlay store. Each entry holds the
@@ -10225,8 +11035,26 @@ declare module 'renderer/services/overlays/overlay.service-model' {
         webViewId: string;
         /** The original request */
         request: CommandPaletteRequest;
-        /** Items to render */
+        /**
+         * Items to render, with any `LocalizeKey` `label`/`description`/`badge` text already resolved
+         * to localized strings at show time — filtering, commit resolution, and rendering all read
+         * from here so they always agree on each item's text.
+         */
         items: CommandPaletteItem[];
+        /**
+         * Current filter text. Mutable — updated in place by `updateCommandPalette` for BOTH passive
+         * and active palettes: a passive palette's list is driven by this filter text directly, while
+         * an active palette uses it to drive its controlled cmdk input from forwarded keystrokes.
+         * Undefined when unset or cleared — never the empty string (the store normalizes `''` to
+         * undefined).
+         */
+        filterText?: string;
+        /**
+         * Index of the highlighted item within `filterPaletteItems(items, filterText)`. Mutable —
+         * updated in place by `updateCommandPalette`'s `moveSelection`, clamped to the filtered
+         * list's bounds. Defaults to 0 at creation.
+         */
+        selectedIndex: number;
         /** Document-relative position (translated + clamped), or undefined for centered */
         position?: {
           x: number;
@@ -10896,213 +11724,6 @@ declare module 'shared/services/theme-data.service-model' {
     typeof themeDataServiceObjectToProxy &
     IDataProvider<ThemeDataDataTypes>;
 }
-declare module 'shared/services/window.service-model' {
-  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
-  import {
-    DataProviderDataType,
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { IDataProvider } from 'shared/models/data-provider.interface';
-  import { DirectionFromTab } from 'shared/models/docking-framework.model';
-  /**
-   *
-   * This name is used to register the window data provider on the papi. You can use this name to
-   * find the data provider when accessing it using the useData hook
-   */
-  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
-  export const windowServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the window data provider on the papi. You can use this name to
-     * find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.windowServiceDataProvider';
-  }>;
-  /** Focus of the window is on a WebView iframe with the specified id */
-  export type FocusSubjectWebView = {
-    focusType: 'webView';
-    /** ID of the WebView in focus (its tab ID is the same) */
-    id: string;
-  };
-  /**
-   * Focus of the window is somewhere in a tab (header, toolbar, menu, content, etc.)
-   *
-   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
-   * focused in the WebView's iframe
-   */
-  export type FocusSubjectTab = {
-    focusType: 'tab';
-    /** The type of tab. `webView` if it is a WebView tab. */
-    tabType: 'webView' | string;
-    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
-    id: string;
-  };
-  /** Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.) */
-  export type FocusSubjectOther = {
-    focusType: 'other';
-  };
-  /** Current item that is the subject of top-level focus in the window */
-  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
-  /**
-   * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
-   * itself (`focusType: 'webView'`) or a web view's tab (`focusType: 'tab'` with
-   * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns `undefined`
-   * for focus subjects that do not refer to a web view.
-   *
-   * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
-   * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
-   * focus subject shapes change.
-   */
-  export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
-  /** Specific item that is intended to be focused at the top level of the window */
-  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
-  /** Instructions that indicate how to change the focus within the window */
-  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
-  export type WindowDataTypes = {
-    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
-    /**
-     *
-     * Get the id of the project the active Scripture editor in this window is showing — the same
-     * project BCV navigation currently drives (the top toolbar's book/chapter/verse controls and the
-     * `platform.goTo*` commands) — or `undefined` when there is nothing to navigate. Read-only: use
-     * this to follow which project is active, not to interpret a Scripture reference's versification
-     * frame (that is what a scroll group's own source project is for).
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns The active project id, or `undefined`
-     * @experimental
-     */
-    ActiveEditorProjectId: DataProviderDataType<undefined, string | undefined, never>;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [windowServiceProviderName]: IWindowService;
-    }
-  }
-  /**
-   *
-   * Service that allows to interact with the current application window
-   */
-  export type IWindowService = {
-    /**
-     *
-     * Get information about the current subject of focus in the current window
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the current window's current subject of focus
-     */
-    getFocus(selector: undefined): Promise<FocusSubject>;
-    /**
-     *
-     * Get information about the current subject of focus in the current window
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the current window's current subject of focus
-     */
-    getFocus(): Promise<FocusSubject>;
-    /**
-     * Sets the subject of focus in the current window.
-     *
-     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    setFocus(
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Sets the subject of focus in the current window.
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     *
-     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
-     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
-     *   `'detect'`.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    setFocus(
-      selector: undefined,
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Subscribe to run a callback function when the current window's subject of focus is changed
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param callback Function to run with the updated localized menuContent for this selector. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-     */
-    subscribeFocus(
-      selector: undefined,
-      callback: (focusSubject: FocusSubject | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-    /**
-     *
-     * Get the id of the project the active Scripture editor in this window is showing — the same
-     * project BCV navigation currently drives (the top toolbar's book/chapter/verse controls and the
-     * `platform.goTo*` commands) — or `undefined` when there is nothing to navigate. Read-only: use
-     * this to follow which project is active, not to interpret a Scripture reference's versification
-     * frame (that is what a scroll group's own source project is for).
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns The active project id, or `undefined`
-     * @experimental
-     */
-    getActiveEditorProjectId(selector: undefined): Promise<string | undefined>;
-    /**
-     *
-     * Get the id of the project the active Scripture editor in this window is showing — the same
-     * project BCV navigation currently drives (the top toolbar's book/chapter/verse controls and the
-     * `platform.goTo*` commands) — or `undefined` when there is nothing to navigate. Read-only: use
-     * this to follow which project is active, not to interpret a Scripture reference's versification
-     * frame (that is what a scroll group's own source project is for).
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns The active project id, or `undefined`
-     * @experimental
-     */
-    getActiveEditorProjectId(): Promise<string | undefined>;
-    /**
-     * Read-only; does nothing and always resolves `false`. Provided to match
-     * `getActiveEditorProjectId`.
-     *
-     * @returns `false`
-     * @experimental
-     */
-    setActiveEditorProjectId(): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Subscribe to run a callback function when the active Scripture editor's project changes.
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param callback Function to run with the new active project id. If there is an error while
-     *   retrieving the updated data, the function will run with a {@link PlatformError} instead of the
-     *   data. You can call {@link isPlatformError} on this value to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-     * @experimental
-     */
-    subscribeActiveEditorProjectId(
-      selector: undefined,
-      callback: (projectId: string | undefined | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-  } & OnDidDispose &
-    typeof windowServiceObjectToProxy &
-    IDataProvider<WindowDataTypes>;
-}
 declare module '@papi/core' {
   /** Exporting empty object so people don't have to put 'type' in their import statements */
   const core: {};
@@ -11135,6 +11756,9 @@ declare module '@papi/core' {
   export type {
     DirectionFromTab,
     DirectionFromTabAdjacent,
+    FloatLayout,
+    Layout,
+    WindowLayout,
   } from 'shared/models/docking-framework.model';
   export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
   export type {
@@ -11229,6 +11853,8 @@ declare module '@papi/core' {
     ThemeDataDataTypes,
   } from 'shared/services/theme-data.service-model';
   export type {
+    AppWindowInputEvent,
+    AppWindowInputKind,
     FocusSubject,
     SetFocusSubject,
     SetFocusSpecifier,
@@ -12488,6 +13114,80 @@ declare module 'extension-host/extension-types/extension.interface' {
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
 }
+declare module 'renderer/services/overlays/overlay-palette-filter.util' {
+  /**
+   * Renderer-side palette filtering for the overlay service — the IMPLEMENTATION half that
+   * `overlay.service-model.ts` must not carry: the service model is a cross-process CONTRACT, and a
+   * runtime value import from `platform-bible-react` there pulled the component library into every
+   * consumer of the contract's types.
+   */
+  import { type PaletteFilterMode } from 'platform-bible-react/experimental';
+  import type {
+    CommandPaletteItem,
+    PaletteSearchField,
+  } from 'renderer/services/overlays/overlay.service-model';
+  /**
+   * The fields searched when a request declares no `searchFields` of its own: every text field a
+   * palette item displays. This is the historical behavior general command palettes rely on (a
+   * command is often found by a word from its description); palettes whose label is the whole
+   * identity (marker palettes) opt into `['label']` per request instead.
+   */
+  export const DEFAULT_PALETTE_SEARCH_FIELDS: readonly PaletteSearchField[];
+  /**
+   * Filters command palette items by matching `filterText` against each item's text, with
+   * per-{@link PaletteFilterMode} semantics and the request's `searchFields` deciding which fields
+   * participate. Every leg — including the label leg — runs only when the effective search fields
+   * include its field, so a request declaring e.g. `searchFields: ['description']` gets no label
+   * matches.
+   *
+   * - `'passive'` prefix-matches the `label` and never searches the other fields — PT9 marker-dropdown
+   *   semantics for in-document marker typing.
+   * - `'active'` containment-matches over `searchFields` (default
+   *   {@link DEFAULT_PALETTE_SEARCH_FIELDS}): label matches come FIRST, ranked exact-first (exact
+   *   label match, then prefix matches, then containment matches, ties keeping their original context
+   *   order); items matching only on the other searched fields follow in their original order, so an
+   *   exact label match can never be buried under description/badge hits. A MULTI-WORD query
+   *   additionally matches items where every whitespace-separated token is contained in SOME searched
+   *   field ("insert foot" finds an "Insert footnote" whose phrase appears in no single field); those
+   *   token matches follow the whole-phrase matches in their original order.
+   *
+   * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input should
+   * never be case-picky), and every leg strips the `+` marker-nesting prefix from the filter before
+   * comparing (the label leg strips it from labels too — see `stripMarkerNestingPrefix`), so the legs
+   * all match the same typed text. Returns `items` unchanged when `filterText` is empty or
+   * undefined.
+   *
+   * Label matching delegates to `filterAndRankPaletteItems` (platform-bible-react), which wraps the
+   * editor package's own `filterAndRankItems` — the exact ranking behind the in-editor `\` palette —
+   * so the host palette and the editor palette can never disagree about label ordering, and the
+   * marker-palette keydown table's zero-match detection counts with the same semantics.
+   *
+   * This is the single filtering implementation shared by the host-side
+   * `commitCommandPaletteSelection` (to resolve the highlighted item) and the command palette
+   * component (to render the filtered list) — using one function for both keeps host-side selection
+   * and on-screen rendering from disagreeing about which items are visible. Callers thread the
+   * request's `searchFields` through so those sites also agree on WHICH fields match.
+   *
+   * @remarks
+   * Matching operates directly on the strings in `items` with no localization of its own. Both
+   * callers pass items whose `LocalizeKey` text was already resolved to localized strings when the
+   * palette was shown (see `IOverlayService.showCommandPalette`), so host-side filtering, commit
+   * resolution, and the rendered list all match against the same display text.
+   * @param items The full, unfiltered list of command palette items
+   * @param filterText The current filter text, or undefined/empty for no filtering
+   * @param mode Which palette flavor's matching semantics to apply
+   * @param searchFields Which item text fields to match against; defaults to
+   *   {@link DEFAULT_PALETTE_SEARCH_FIELDS}
+   * @returns The items matching the filter text under the given mode, label matches ranked
+   *   exact-first ahead of other-field matches
+   */
+  export function filterPaletteItems(
+    items: CommandPaletteItem[],
+    filterText: string | undefined,
+    mode: PaletteFilterMode,
+    searchFields?: readonly PaletteSearchField[],
+  ): CommandPaletteItem[];
+}
 declare module 'renderer/services/overlays/overlay-menu-converter' {
   /**
    * Converts menu data service contributions (SingleColumnMenu) into the overlay service's
@@ -12637,8 +13337,32 @@ declare module 'renderer/services/overlays/overlay.service-host' {
     onOverlayCreated?: (overlayId: string) => void,
     webViewId?: string,
   ): Promise<TReturn | undefined>;
+  /**
+   * Rejects every modal dialog overlay this window is currently showing, for a window that is going
+   * away.
+   *
+   * A modal dialog's promise is handed out by {@link showModalDialogOverlay} and lives nowhere else.
+   * It is not in the dialog service's map of live requests, so the rejection that fails this window's
+   * docked dialogs does not reach it, and the main process lifts the request timeout on `showDialog`,
+   * so nothing expires it either. A window destroyed with a modal on screen therefore leaves its
+   * requestor — usually in a process that outlives the window — waiting on an answer nobody is left
+   * to give.
+   *
+   * Deliberately narrower than the general dismissal this module does internally: the only caller is
+   * the dialog service's unload handler, and what it needs is exactly the modal dialogs this window
+   * will never answer, not an arbitrary set of overlay types.
+   *
+   * @param reason Message the requestors' promises are rejected with
+   * @internal
+   */
+  export function rejectModalDialogOverlaysOnShutdown(reason: string): void;
   /** The overlay service instance exposed on papi */
   export const overlayService: IOverlayService;
+  /**
+   * Resets the parent-document pointerdown record. Exported for use in tests only, so one test's
+   * recorded click cannot correlate with the next test's input signal. @internal
+   */
+  export function resetAppWindowInputState(): void;
   /** Initialize the overlay service. Called during renderer startup. */
   export function startOverlayService(): Promise<void>;
 }

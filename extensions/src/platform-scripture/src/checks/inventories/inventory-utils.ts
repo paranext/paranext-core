@@ -1,5 +1,3 @@
-import { codePointAt } from 'platform-bible-utils';
-
 /**
  * Converts a character to its Unicode hexadecimal representation
  *
@@ -9,7 +7,7 @@ import { codePointAt } from 'platform-bible-utils';
  */
 export function getUnicodeValue(char: string): string {
   if (!char || char.length === 0) return '0000';
-  const codePoint = codePointAt(char, 0);
+  const codePoint = char.codePointAt(0);
   if (codePoint === undefined) return '0000';
   return codePoint.toString(16).toUpperCase().padStart(4, '0');
 }

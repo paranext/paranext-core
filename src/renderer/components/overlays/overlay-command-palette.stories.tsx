@@ -108,3 +108,49 @@ export const Centered: Story = {
     placeholder: 'Type a command...',
   },
 };
+
+export const Passive: Story = {
+  args: {
+    passive: true,
+    filterText: 'q',
+    selectedIndex: 2,
+    items: [
+      { id: 'q', label: 'q', description: 'Poetry Line' },
+      { id: 'q1', label: 'q1', description: 'Poetry Line 1' },
+      { id: 'q2', label: 'q2', description: 'Poetry Line 2' },
+      { id: 'qa', label: 'qa', description: 'Acrostic Heading' },
+      { id: 'qc', label: 'qc', description: 'Centered Poetry Line' },
+      { id: 'p', label: 'p', description: 'Paragraph' },
+    ],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Passive mode never takes focus: the search input is a read-only display of the marker text the user is typing in the editor that requested the palette, and both filtering and highlighting come from props instead of the input. Here `filterText` is `q`, which prefix-filters the list (`p` drops out) and ranks the exact match first, and `selectedIndex` of 2 highlights the third remaining item (`q2`) rather than the default first one.',
+      },
+    },
+  },
+};
+
+export const MutedItems: Story = {
+  args: {
+    items: [
+      { id: 'p', label: 'Paragraph (p)' },
+      { id: 'pc', label: 'Centered Paragraph (pc)', muted: true },
+      { id: 'q1', label: 'Poetry Line 1 (q1)' },
+      { id: 'qd', label: 'Hebrew Note (qd)', muted: true },
+      { id: 's', label: 'Section Heading (s)' },
+      { id: 'pmo', label: 'Embedded Text Opening (pmo)', muted: true },
+    ],
+    placeholder: 'Search markers...',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Muted items alternate with normal ones so the de-emphasis is comparable side by side. A muted item is one the palette offers but does not consider basic, so its text is dimmed as a cue — unlike the disabled items in WithBadges, it can still be highlighted and selected.',
+      },
+    },
+  },
+};

@@ -173,6 +173,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("getCanUserEditScripture", GetCanUserEditScripture));
 
         retVal.Add(("getMarkerNames", GetMarkerNames));
+        retVal.Add(("getStyleInfo", GetStyleInfo));
 
         retVal.Add(("getFinalVerseNumber", GetFinalVerseNumber));
         retVal.Add(("setFinalVerseNumber", SetFinalVerseNumber));
@@ -1681,6 +1682,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (paratextSettingName == ProjectSettingsNames.PT_TEXT_DIRECTION)
             return scrText.RightToLeft ? "rtl" : "ltr";
 
+        // Caller sequences come from the project's LANGUAGE (writing-system character sets in the
+        // ldml file), not from Settings.xml — PT9's Standard view reads
+        // scrText.Language.FootnoteCallers / .CrossReferenceCallers
+        // (ParatextInternalShared/ScriptureEditor/ViewUsfmXhtmlConverter.cs:73-74). Returned
+        // verbatim, possibly "": consumers apply PT9's own fallbacks (a-z for footnotes per
+        // UsfmXsltExtensions.GetNthCaller, "†" for cross-references).
+        if (settingName == ProjectSettingsNames.PB_FOOTNOTE_CALLERS)
+            return scrText.Language.FootnoteCallers;
+        if (settingName == ProjectSettingsNames.PB_CROSS_REF_CALLERS)
+            return scrText.Language.CrossReferenceCallers;
+
         // BooksPresent in Settings.xml isn't always 123 characters, but this way of getting it is always
         if (paratextSettingName == ProjectSettingsNames.PT_BOOKS_PRESENT)
             return scrText.BooksPresentSet.Books;
@@ -1831,6 +1843,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (paratextSettingName == ProjectSettingsNames.PT_LANGUAGE_TAG)
             throw new Exception(
                 "Cannot set the language tag this way. Must edit the language definition ldml file"
+            );
+
+        // Caller sequences come from the project's language definition (writing-system character
+        // sets), not from Settings.xml — read-only here, like text direction above.
+        if (
+            settingName == ProjectSettingsNames.PB_FOOTNOTE_CALLERS
+            || settingName == ProjectSettingsNames.PB_CROSS_REF_CALLERS
+        )
+            throw new Exception(
+                "Cannot set caller sequences this way. Must edit the language definition ldml file"
             );
 
         // BooksPresentSet is changed by adding and removing books, not setting the setting value
@@ -2552,6 +2574,39 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             scrText.ScrStylesheet(bookNum)
             ?? throw new InvalidDataException($"ScrStylesheet for book number '{bookNum}' is null");
         return scrStylesheet.Tags.Where(tag => tag != null).Select(tag => tag.Name).ToArray();
+    }
+
+    /// <summary>
+    /// Gets the full style info (merged usfm.sty + custom.sty) for the book's stylesheet.
+    /// Resolves the custom-stylesheet @todo on getMarkerNames: ScrStylesheet already merges
+    /// custom.sty per-property (ParatextData ScrStylesheet.CreateTag).
+    /// </summary>
+    public PlatformStyleInfo GetStyleInfo(int bookNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        ScrStylesheet scrStylesheet =
+            scrText.ScrStylesheet(bookNum)
+            ?? throw new InvalidDataException($"ScrStylesheet for book number '{bookNum}' is null");
+        Dictionary<string, PlatformMarkerStyleInfo> markers = [];
+        foreach (var tag in scrStylesheet.Tags)
+        {
+            if (tag == null)
+                continue;
+            // Derived end tags and unknown placeholders are not real stylesheet entries:
+            // endMarker on the base entry carries closer knowledge (spec: closers are
+            // recognized by syntax, not lookup).
+            if (
+                tag.StyleType == ScrStyleType.scEndStyle
+                || tag.StyleType == ScrStyleType.scMilestoneEnd
+                || tag.StyleType == ScrStyleType.scUnknownStyle
+            )
+                continue;
+            markers[tag.Marker] = new PlatformMarkerStyleInfo(tag);
+        }
+        // Default font/size: same ScrText accessors PT9's CSSCreator.CreateUsfmCss(ScrText, ...)
+        // reads — ScrText has no DefaultFont/DefaultFontSize properties; the language's font is the
+        // project's default font.
+        return new PlatformStyleInfo(scrText.Language.FontName, scrText.Language.FontSize, markers);
     }
 
     #endregion

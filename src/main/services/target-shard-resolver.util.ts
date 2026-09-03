@@ -67,6 +67,65 @@ export type TargetWindowShard<T> = {
 };
 
 /**
+ * Resolve the shard of one specific window, waiting out registration skew the same way routed calls
+ * do. For callers that already know which window must answer — a window they just created, or one a
+ * caller named — rather than "whichever window the user is working in".
+ *
+ * @param serviceName Name the service is known by, for the errors this raises
+ * @param shardIndex The router's index of the service's shards
+ * @param windowId The window whose shard to resolve
+ * @throws When the window's shard is not available and does not announce within the grace period
+ */
+export async function resolveShardForWindow<T>(
+  serviceName: string,
+  shardIndex: ServiceShardIndex<T>,
+  windowId: number,
+): Promise<T> {
+  // Read before resolving rather than after: an entry evicted while the resolve was in flight was
+  // still a registration that failed to resolve, not a window that never registered one
+  const isIndexed = shardIndex.getShardWindowIds().includes(windowId);
+  // Routing picked this window because it registered its WINDOW service, and a renderer starts
+  // its shards together in one batch — so a window can be routable while the shard this call
+  // needs is a moment behind. Failing on first look would turn that ordinary skew into an error
+  // for anything fired at a window in its first instants, which is exactly when a keyboard
+  // shortcut or an activating extension is most likely to fire one.
+  const shardAnnouncement = isIndexed ? undefined : watchForShardAnnouncement(shardIndex, windowId);
+
+  try {
+    let shard = await shardIndex.getShard(windowId);
+
+    if (!shard && shardAnnouncement) {
+      logger.debug(
+        `${serviceName} for window ${windowId} has not been announced yet; waiting for it before giving up`,
+      );
+      await shardAnnouncement.announced;
+      shard = await shardIndex.getShard(windowId);
+    }
+
+    if (shard) return shard;
+
+    if (!isIndexed)
+      throw new Error(
+        `${serviceName} for window ${windowId} is not available. The renderer may not have started yet.`,
+      );
+
+    // The window did register a shard, so "the renderer has not started yet" is the one thing
+    // this is not. `networkObjectService.get` reports a genuinely absent object, a request that
+    // timed out, and a handler that threw as the same `undefined`, so which of those happened
+    // cannot be told from here — but a registered shard failing to resolve means something is
+    // wrong beyond startup timing, and nothing else on this path says so.
+    logger.warn(
+      `The ${serviceName} shard registered by window ${windowId} could not be resolved. The window may have stopped answering, or its shard may have gone away between being found and being called.`,
+    );
+    throw new Error(
+      `${serviceName} for window ${windowId} is registered but could not be resolved.`,
+    );
+  } finally {
+    shardAnnouncement?.stopWatching();
+  }
+}
+
+/**
  * Resolve the shard of the window a routed call should currently run in, along with the window that
  * serves it.
  *
@@ -90,51 +149,10 @@ export function createTargetWindowShardResolver<T>(
     const targetWindowId = getTargetWindowId();
     if (targetWindowId === undefined)
       throw new Error(`No windows available to route ${serviceName} call`);
-
-    // Read before resolving rather than after: an entry evicted while the resolve was in flight was
-    // still a registration that failed to resolve, not a window that never registered one
-    const isIndexed = shardIndex.getShardWindowIds().includes(targetWindowId);
-    // Routing picked this window because it registered its WINDOW service, and a renderer starts
-    // its shards together in one batch — so a window can be routable while the shard this call
-    // needs is a moment behind. Failing on first look would turn that ordinary skew into an error
-    // for anything fired at a window in its first instants, which is exactly when a keyboard
-    // shortcut or an activating extension is most likely to fire one.
-    const shardAnnouncement = isIndexed
-      ? undefined
-      : watchForShardAnnouncement(shardIndex, targetWindowId);
-
-    try {
-      let shard = await shardIndex.getShard(targetWindowId);
-
-      if (!shard && shardAnnouncement) {
-        logger.debug(
-          `${serviceName} for window ${targetWindowId} has not been announced yet; waiting for it before giving up`,
-        );
-        await shardAnnouncement.announced;
-        shard = await shardIndex.getShard(targetWindowId);
-      }
-
-      if (shard) return { windowId: targetWindowId, shard };
-
-      if (!isIndexed)
-        throw new Error(
-          `${serviceName} for window ${targetWindowId} is not available. The renderer may not have started yet.`,
-        );
-
-      // The window did register a shard, so "the renderer has not started yet" is the one thing
-      // this is not. `networkObjectService.get` reports a genuinely absent object, a request that
-      // timed out, and a handler that threw as the same `undefined`, so which of those happened
-      // cannot be told from here — but a registered shard failing to resolve means something is
-      // wrong beyond startup timing, and nothing else on this path says so.
-      logger.warn(
-        `The ${serviceName} shard registered by window ${targetWindowId} could not be resolved. The window may have stopped answering, or its shard may have gone away between being found and being called.`,
-      );
-      throw new Error(
-        `${serviceName} for window ${targetWindowId} is registered but could not be resolved.`,
-      );
-    } finally {
-      shardAnnouncement?.stopWatching();
-    }
+    return {
+      windowId: targetWindowId,
+      shard: await resolveShardForWindow(serviceName, shardIndex, targetWindowId),
+    };
   };
 }
 

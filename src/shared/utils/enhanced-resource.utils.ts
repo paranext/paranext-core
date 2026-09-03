@@ -11,7 +11,6 @@
 // can be announced, so this comment is the canonical experimental notice for it.
 // Do not depend on `papi-er://` as a stable URL scheme. See the experimental APIs
 // wiki page for what "experimental" means.
-import { startsWith, stringLength, substring } from 'platform-bible-utils';
 
 /**
  * Protocol scheme for Enhanced Resources binary assets.
@@ -49,12 +48,12 @@ export type EnhancedResourceUriInfo = {
  * @throws Error if the URI is malformed or uses an unsupported pathType / size
  */
 export function parseEnhancedResourceUri(uri: string): EnhancedResourceUriInfo {
-  if (!startsWith(uri, `${ENHANCED_RESOURCE_PROTOCOL_NAME}://`))
+  if (!uri.startsWith(`${ENHANCED_RESOURCE_PROTOCOL_NAME}://`))
     throw new Error(
       `Invalid papi-er URI - needs to start with "${ENHANCED_RESOURCE_PROTOCOL_NAME}://"`,
     );
 
-  const withoutScheme = substring(uri, stringLength(`${ENHANCED_RESOURCE_PROTOCOL_NAME}://`));
+  const withoutScheme = uri.substring(`${ENHANCED_RESOURCE_PROTOCOL_NAME}://`.length);
 
   const firstSlash = withoutScheme.indexOf('/');
   if (firstSlash <= 0)

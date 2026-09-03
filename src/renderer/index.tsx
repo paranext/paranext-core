@@ -5,6 +5,7 @@ import '@renderer/global-this.model';
 
 import { App } from '@renderer/app.component';
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
+import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
 import { startBookChapterControlServiceShard } from '@renderer/services/book-chapter-control.service-shard';
 import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
@@ -128,6 +129,13 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     // reload during an in-flight sync seeds the store instead of assuming unblocked.
     initAutoSyncBlockingService();
     initAutoSyncEditBlockDriver();
+
+    // Drives the backend sync-activity store, which decides whether the toolbar's sync indicator is
+    // mounted and supplies one of the two inputs `useSyncStatus` unions. Started here rather than
+    // from a hook so one subscription and one seed serve every consumer, and so the seed runs once
+    // at startup instead of restarting on each Simple/Power toggle. Also returns an unsubscriber we
+    // intentionally never call — it runs for the renderer's lifetime.
+    initSyncActivityService();
   } catch (e) {
     logger.error(`Service(s) failed to initialize! Error: ${e}`);
   }

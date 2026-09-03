@@ -10,11 +10,11 @@
  * Three tests, each launching its own Electron instance (the isolated fixture is test-scoped and
  * each launch costs 30+ seconds, so related assertions are grouped into one instance):
  *
- * 1. Second-window lifecycle: a window created mid-session starts EMPTY — an empty dock with no tabs
- *    (it must not clone the first window's layout or load a default layout) — while its per-window
- *    services register under scoped names with no collisions, generic window-service calls route to
- *    whichever window has focus, and closing the secondary window neither quits the app nor runs
- *    shutdown tasks.
+ * 1. Second-window lifecycle: a window created mid-session that would otherwise be born empty docks
+ *    Home instead — one tab, one web view, nothing else (it must not clone the first window's
+ *    layout or load some OTHER default layout) — while its per-window services register under
+ *    scoped names with no collisions, generic window-service calls route to whichever window has
+ *    focus, and closing the secondary window neither quits the app nor runs shutdown tasks.
  * 2. App-global state across windows, and surviving any window's close: a scroll group change and a
  *    theme change each reach every open window, a window created afterwards starts on the current
  *    reference and the current theme rather than the defaults, and then window 1 — no longer
@@ -45,8 +45,9 @@
  * With `DEV_NOISY=false` and no saved layout (fresh user-data dir per test), the FIRST window loads
  * the single-Home-tab layout from `src/renderer/testing/test-layout.data.ts` (the fallback for a
  * profile with no saved window structure), whose fixed web view id makes the per-window
- * `-w{windowId}` scoping suffix directly observable. A window created mid-session starts with an
- * EMPTY dock layout — no tabs — by design, so window 2 in these tests renders no content.
+ * `-w{windowId}` scoping suffix directly observable. A window created mid-session docks Home by
+ * design — its own freshly minted Home tab, not loaded from any shared layout — so window 2 in
+ * these tests renders exactly that one tab and nothing more.
  *
  * ## Log capture
  *
@@ -79,7 +80,7 @@ import {
   countOccurrences,
   createSecondWindow,
   createStepLogger,
-  expectWindowDockEmpty,
+  expectWindowDockHasOnlyHomeTab,
   focusWindowAndWaitForRouting,
   getFocusedWindowId,
   getWindowIdOfPage,
@@ -87,6 +88,7 @@ import {
   pollUntil,
   quitAndExpectCleanExit,
   waitForRendererRegistered,
+  widenWindowForToolbarReference,
 } from './multi-window.util';
 
 // #region log markers
@@ -148,6 +150,23 @@ const PAPI_ATTEMPT_TIMEOUT_MS = 15_000;
 
 /** Minimal shape of a window-service focus subject, as seen over JSON-RPC. */
 type FocusSubjectLike = { focusType?: string; id?: string; tabType?: string } | undefined;
+
+/**
+ * Extract the web view id a focus subject names, however it names it: directly (`focusType:
+ * 'webView'`) or via its tab (`focusType: 'tab'`, `tabType: 'webView'`). Both shapes occur in these
+ * tests — clicking into a web view's iframe reports the direct shape, while a tab's own mount-time
+ * auto-focus (`platform-panel.component.tsx`, `web-view.component.tsx`) always reports the tab
+ * shape — so any assertion identifying "the window's Home web view" by focus must accept either.
+ * Mirrors `getWebViewIdFromFocusSubject` in `src/shared/services/window.service-model.ts` from the
+ * outside (that module isn't importable here — these tests only see the app's observable surface).
+ * Returns undefined for a subject that names neither a web view nor a web view's tab.
+ */
+function webViewIdFromFocusSubject(focus: FocusSubjectLike): string | undefined {
+  if (focus?.focusType === 'webView' && typeof focus.id === 'string') return focus.id;
+  if (focus?.focusType === 'tab' && focus.tabType === 'webView' && typeof focus.id === 'string')
+    return focus.id;
+  return undefined;
+}
 
 /** Minimal shape of a serialized verse reference, as seen over JSON-RPC. */
 type VerseRefLike = { book?: string; chapterNum?: number; verseNum?: number } | undefined;
@@ -328,7 +347,8 @@ test.use({
   // DEV_NOISY=false: the noisy-dev layout has no stable single web view to key on and loads
   // test-only extensions; the quiet layout is a single Home tab with a fixed web view id (see
   // HOME_TAB_UUID) in the first window, which is exactly what the scoping and focus assertions
-  // need. Mid-session windows start empty regardless of the dev layout.
+  // need. Mid-session windows dock a freshly minted Home tab of their own regardless of the dev
+  // layout (that tab's id is never HOME_TAB_UUID, which is specific to the first window's layout).
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
 });
 
@@ -353,7 +373,7 @@ test.describe('multi-window lifecycle', () => {
     restoreSettings?.();
   });
 
-  test('second window starts empty, focus routing follows the focused window, and closing the secondary window does not shut the app down', async ({
+  test('second window opens with Home docked, focus routing follows the focused window, and closing the secondary window does not shut the app down', async ({
     electronApp,
     mainPage,
   }) => {
@@ -385,12 +405,12 @@ test.describe('multi-window lifecycle', () => {
     await waitForRendererRegistered(window2Id, 120_000);
     logStep(`window ${window2Id} created and registered`);
 
-    // A window created mid-session starts EMPTY: its dock renders with zero tabs and zero web view
-    // iframes. This is decided product behaviour; the failure modes it locks out are a new window
-    // cloning window 1's layout or loading a default layout, either of which would render tabs
-    // here.
-    await expectWindowDockEmpty(page2);
-    logStep(`window ${window2Id} rendered an empty dock`);
+    // A window created mid-session that would otherwise be born empty docks Home instead: its
+    // dock renders exactly one tab (Home) and one web view iframe, and nothing else. This is
+    // decided product behaviour; the failure modes it locks out are a new window cloning window
+    // 1's layout, loading some OTHER default layout, or failing to dock Home at all.
+    await expectWindowDockHasOnlyHomeTab(page2);
+    logStep(`window ${window2Id} docked its own Home tab`);
 
     // The second renderer must start clean: its per-window services register under scoped names and
     // it registers no globally-unique name at all, so nothing may collide with window 1's
@@ -404,25 +424,37 @@ test.describe('multi-window lifecycle', () => {
     expect(window2StartupLog).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
 
     // Focus routing: with window 2 focused, generic window-service calls must be answered by
-    // window 2. A tab-less window has no tab or web view to focus, so its genuine focus report is
-    // the tab-less subject `{ focusType: 'other' }` (the window's focus rests on the document
-    // body, which belongs to no tab). Reaching that answer proves the service router re-pointed to
-    // window 2: window 1's subject remains the Home web view pinned above (`focusType: 'webView'`
-    // with a `-w1` id), which can never satisfy this poll.
+    // window 2. Window 2's own docked Home tab focuses itself as soon as it mounts — every tab
+    // does, regardless of which window currently has OS focus (see the `setFocus` calls in
+    // `platform-panel.component.tsx` and `web-view.component.tsx`) — so window 2's genuine focus
+    // report names ITS OWN Home tab, via the tab-focus shape those mount-time calls use
+    // (`focusType: 'tab'`, `tabType: 'webView'`; see {@link webViewIdFromFocusSubject}): a freshly
+    // minted id (docked on the fly, not loaded from any shared layout, so unlike window 1's it
+    // carries no `-w{id}` suffix), which can never equal window 1's
+    // `${HOME_TAB_UUID}-w${window1Id}`. Read directly off window 2's own scoped service first
+    // (bypassing the router) so this is the ground truth to poll the generic, routed answer
+    // against, independent of how long window 2's own focus takes to settle.
     await focusWindowAndWaitForRouting(electronApp, window2Id);
+    const window2OwnFocus = await pollUntil(
+      () => getScopedWindowFocus(window2Id),
+      (focus) => webViewIdFromFocusSubject(focus) !== undefined,
+      30_000,
+      `window ${window2Id}'s own scoped getFocus to report its docked Home web view`,
+    );
+    const window2OwnFocusId = webViewIdFromFocusSubject(window2OwnFocus);
     const focusInWindow2 = await pollUntil(
       getGenericWindowFocus,
-      (focus) => focus?.focusType === 'other',
+      (focus) => webViewIdFromFocusSubject(focus) === window2OwnFocusId,
       30_000,
-      `generic getFocus to report window ${window2Id}'s tab-less focus subject`,
+      `generic getFocus to report window ${window2Id}'s own Home web view`,
     );
-    // The exact shape a tab-less window reports: 'other' with no id — in particular NOT window 1's
-    // Home web view id.
-    expect(focusInWindow2).toEqual({ focusType: 'other' });
+    // The exact shape window 2 reports: its own Home web view id — in particular NOT window 1's.
+    expect(focusInWindow2).toEqual(window2OwnFocus);
+    expect(webViewIdFromFocusSubject(focusInWindow2)).not.toBe(`${HOME_TAB_UUID}-w${window1Id}`);
     // Discriminate "routed to window 2" from "still answering window 1": window 1's own scoped
     // service must still hold its Home web view subject (a background window's focused element is
-    // retained while the window is inactive), so the 'other' answer above cannot have come from
-    // window 1 — only from the service router genuinely forwarding to window 2.
+    // retained while the window is inactive), so the answer above cannot have come from window 1 —
+    // only from the service router genuinely forwarding to window 2.
     const window1OwnFocus = await getScopedWindowFocus(window1Id);
     expect(window1OwnFocus?.id).toBe(`${HOME_TAB_UUID}-w${window1Id}`);
     logStep(`generic getFocus answered for window ${window2Id}`);
@@ -482,6 +514,9 @@ test.describe('multi-window lifecycle', () => {
     const logStep = createStepLogger('multi-window');
     const output = captureAppOutput(electronApp);
     await waitForAppReady(mainPage, 180_000);
+    // This test reads references off both windows' toolbars, so every window it asserts on has to
+    // stay above the toolbar shrink ladder's narrowest rung, where the chapter and verse are gone.
+    await widenWindowForToolbarReference(electronApp, mainPage);
     logStep('window 1 ready');
 
     // Baselines: both app-global services answer before anything is changed or closed. Without
@@ -505,10 +540,12 @@ test.describe('multi-window lifecycle', () => {
     const window2Id = getWindowIdOfPage(page2);
     await waitForRendererRegistered(window2Id, 120_000);
     // Window 2 must also have its UI genuinely up (not just its services registered) so it is a
-    // live survivor when window 1 goes away. A mid-session window has no tabs, so "up" means its
-    // dock container rendered and its startup overlay cleared.
+    // live survivor when window 1 goes away. This test doesn't care about window 2's own tab
+    // content (a mid-session window docks its own Home tab, but that isn't what's under test
+    // here), so "up" means its dock container rendered and its startup overlay cleared.
     await expect(page2.locator('div[class*="dock-layout"]')).toBeAttached({ timeout: 120_000 });
     await waitForOverlayGone(page2, 120_000);
+    await widenWindowForToolbarReference(electronApp, page2);
 
     logStep(`window ${window2Id} up`);
 
@@ -536,6 +573,7 @@ test.describe('multi-window lifecycle', () => {
     const window3Url = decodeURIComponent(page3.url());
     expect(window3Url).toContain('JHN');
     expect(window3Url).toContain('paratext-dark');
+    await widenWindowForToolbarReference(electronApp, page3);
     await expectToolbarReferenceToContain(page3, '3:16', 60_000);
     await expectWindowToRenderTheme(page3, 'paratext-dark', 60_000);
     logStep('a newly created window starts on the current reference and theme');

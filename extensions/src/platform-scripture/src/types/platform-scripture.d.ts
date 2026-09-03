@@ -1066,6 +1066,93 @@ declare module 'platform-scripture' {
 
   // #endregion Marker Types
 
+  // #region StyleInfo Types
+
+  /**
+   * A single marker's stylesheet entry (merged usfm.sty + custom.sty). Units:
+   * fontSize/spaceBefore/spaceAfter in points; firstLineIndent/leftMargin/ rightMargin in inches;
+   * color "#RRGGBB" (omitted when black). Matches the scripture-editors platform-editor
+   * `MarkerStyleInfo` shape structurally.
+   */
+  export type MarkerStyleInfo = {
+    marker: string;
+    styleType: 'paragraph' | 'character' | 'note' | 'milestone';
+    endMarker?: string;
+    occursUnder?: string[];
+    rank?: number;
+    textType?: string;
+    textProperties?: string[];
+    notRepeatable?: boolean;
+    description?: string;
+    fontName?: string;
+    fontSize?: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    smallCaps?: boolean;
+    subscript?: boolean;
+    superscript?: boolean;
+    color?: string;
+    /**
+     * Mirrors the editor package's `MarkerStyleInfo` union. Note that `'left'` never arrives from
+     * this provider: the C# side omits the property for the default/left case rather than emitting
+     * it, so a consumer branching on `'left'` writes a dead branch.
+     */
+    justification?: 'left' | 'center' | 'right' | 'both';
+    firstLineIndent?: number;
+    leftMargin?: number;
+    rightMargin?: number;
+    spaceBefore?: number;
+    spaceAfter?: number;
+    lineSpacing?: number;
+  };
+
+  /** A project's merged stylesheet plus its default font settings. */
+  export type StyleInfo = {
+    defaultFont?: string;
+    defaultFontSize?: number;
+    markers: { [marker: string]: MarkerStyleInfo };
+  };
+
+  /** Provides the project's merged stylesheet as StyleInfo */
+  export type StyleInfoProjectInterfaceDataTypes = {
+    /** The merged stylesheet for the given book number */
+    StyleInfo: DataProviderDataType<number, StyleInfo | undefined, never>;
+  };
+
+  /** Provides the project's merged stylesheet (usfm.sty + custom.sty) */
+  export type IStyleInfoProjectDataProvider =
+    IProjectDataProvider<StyleInfoProjectInterfaceDataTypes> & {
+      /** Gets the merged stylesheet (usfm.sty + custom.sty) for the book's stylesheet */
+      getStyleInfo(bookNum: number): Promise<StyleInfo | undefined>;
+      /**
+       * This data cannot be changed this way. The backend does not implement `setStyleInfo` at all
+       * (the C# project data provider registers only `getStyleInfo`), so every call rejects at
+       * runtime.
+       *
+       * Note: the merged stylesheet is derived from the project's `usfm.sty` + `custom.sty`, so
+       * change those files rather than writing through this setter.
+       */
+      setStyleInfo(
+        styleInfo: StyleInfo,
+      ): Promise<DataProviderUpdateInstructions<StyleInfoProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when the style info changes
+       *
+       * @param bookNum Tells the provider what changes to listen for
+       * @param callback Function to run with the updated style info for this selector
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function
+       */
+      subscribeStyleInfo(
+        bookNum: number,
+        callback: (styleInfo: StyleInfo | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
+  // #endregion StyleInfo Types
+
   // #region Versification Types
 
   /**
@@ -2771,6 +2858,7 @@ declare module 'papi-shared-types' {
     IUSJVerseProjectDataProvider,
     IPlainTextVerseProjectDataProvider,
     IMarkerNamesProjectDataProvider,
+    IStyleInfoProjectDataProvider,
     IVersificationProjectDataProvider,
     IPt9InterlinearProjectDataProvider,
     IFindInScriptureProjectDataProvider,
@@ -2802,6 +2890,7 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
+    'platformScripture.StyleInfo': IStyleInfoProjectDataProvider;
     /** @experimental */
     'platformScripture.Versification': IVersificationProjectDataProvider;
     /** @experimental */
@@ -3181,6 +3270,52 @@ declare module 'papi-shared-types' {
      * Corresponds to the `StructureProtected` field in Paratext's `Settings.xml`.
      */
     'platformScripture.structureProtected': boolean;
+
+    /**
+     * The separator string inserted between chapter and verse numbers when formatting a Scripture
+     * reference (e.g. the `:` in `Mt 1:3`). Corresponds to `ChapterVerseSeparator` in Paratext's
+     * `Settings.xml`. Paratext's registered default is `.`.
+     */
+    'platformScripture.chapterVerseSeparator': string;
+
+    /**
+     * The separator string inserted between the start and end verse numbers of a verse range (e.g.
+     * the `-` in `Mt 1:3-5`). Corresponds to `RangeIndicator` in Paratext's `Settings.xml` (the
+     * Paratext 9 C# property is named `VerseRangeSeparator`, but the underlying Settings.xml tag is
+     * `RangeIndicator`).
+     */
+    'platformScripture.verseRangeSeparator': string;
+
+    /**
+     * The default caller character assigned to newly inserted footnotes (`\f`). Corresponds to
+     * `DefaultFootnoteCaller` in Paratext's `Settings.xml`.
+     */
+    'platformScripture.defaultFootnoteCaller': string;
+
+    /**
+     * The default caller character assigned to newly inserted cross-references (`\x`). Corresponds
+     * to `DefaultCrossRefCaller` in Paratext's `Settings.xml`.
+     */
+    'platformScripture.defaultCrossRefCaller': string;
+
+    /**
+     * The auto-generated footnote caller sequence for the project's LANGUAGE: a space-separated
+     * character-set string (e.g. `a b c ... z`), possibly empty. LANGUAGE-backed — Paratext 9
+     * stores it as a writing-system character set (`ScrLanguage.FootnoteCallers`, Paratext repo,
+     * ParatextData/Languages/ScrLanguage.cs:290-300), NOT a `Settings.xml` tag — and read-only
+     * through the settings surface. Empty means "no sequence defined": consumers apply PT9's own
+     * fallback of `a`–`z` (`UsfmXsltExtensions.GetNthCaller`).
+     */
+    'platformScripture.footnoteCallers': string;
+
+    /**
+     * The auto-generated cross-reference caller sequence for the project's LANGUAGE: a
+     * space-separated character-set string, possibly empty. LANGUAGE-backed
+     * (`ScrLanguage.CrossReferenceCallers`), NOT a `Settings.xml` tag, and read-only through the
+     * settings surface. Empty means "no sequence defined": consumers apply PT9's own fallback of
+     * `†` (ViewUsfmXhtmlConverter.cs:73-74).
+     */
+    'platformScripture.crossRefCallers': string;
   }
 
   export interface NetworkEvents {

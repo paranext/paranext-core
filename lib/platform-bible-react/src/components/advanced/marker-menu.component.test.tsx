@@ -108,6 +108,22 @@ describe('MarkerMenu — disallowed items', () => {
     expect(action).toHaveBeenCalledTimes(1);
   });
 
+  it('matches a marker item when the query carries a leading + (USFM nest syntax)', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <MarkerMenu
+        localizedStrings={DISALLOWED_STRINGS}
+        markerMenuItems={[{ marker: 'nd', title: 'Name of God', action: vi.fn() }]}
+      />,
+    );
+
+    // `+nd` is USFM nesting syntax: the leading `+` is a nest instruction, not part of the marker
+    // code, so the filter strips it and resolves the query to the bare `nd` item.
+    await user.type(screen.getByPlaceholderText('Type a style or search.'), '+nd');
+
+    expect(screen.getByRole('option', { name: /Name of God/ })).toBeInTheDocument();
+  });
+
   it('hides a disallowed item when the query is empty', () => {
     render(
       <MarkerMenu

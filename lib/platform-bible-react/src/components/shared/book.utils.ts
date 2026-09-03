@@ -1,5 +1,5 @@
 import { Canon } from '@sillsdev/scripture';
-import { includes, Section } from 'platform-bible-utils';
+import { Section } from 'platform-bible-utils';
 import { ALL_BOOK_IDS } from 'platform-bible-utils/experimental';
 
 /**
@@ -164,18 +164,28 @@ export function doesBookMatchQuery(
   const englishName = Canon.bookIdToEnglishName(bookId);
   const localizedBook = localizedBookNames?.get(bookId);
 
-  // Check English name and ID
+  // Check English name and ID. Native `includes`, not the grapheme-aware helper: every English book
+  // name and canon ID is ASCII, so each grapheme cluster is one code unit and the two index spaces
+  // coincide — a non-ASCII query cannot match either way. This runs per book, per keystroke.
   const matchesEnglishNameOrId =
-    includes(englishName.toLowerCase(), normalizedQuery) ||
-    includes(bookId.toLowerCase(), normalizedQuery);
+    englishName.toLowerCase().includes(normalizedQuery) ||
+    bookId.toLowerCase().includes(normalizedQuery);
 
   if (matchesEnglishNameOrId) return true;
 
-  // Check localized name and ID if available
-
+  // Check localized name and ID if available. Native `includes` here too, for a different reason
+  // than above: this is a search box filtered on every keystroke, so the query is whatever the user
+  // has typed so far. In a script that builds one character from several code points — Khmer, and
+  // any decomposed accent — that prefix usually stops in the middle of a cluster, and a
+  // grapheme-aware match refuses it. The list then empties while the person is still typing. Nine
+  // of the forty-eight Khmer book names in `km.json` lose their very first keystroke that way.
+  //
+  // Matching by code unit trades an exact-boundary guarantee for a usable filter, which is the
+  // right way round here: a false positive shows one extra row, a false negative hides the row the
+  // user is looking for.
   const matchesLocalizedNameOrId = localizedBook
-    ? includes(localizedBook.localizedName.toLowerCase(), normalizedQuery) ||
-      includes(localizedBook.localizedId.toLowerCase(), normalizedQuery)
+    ? localizedBook.localizedName.toLowerCase().includes(normalizedQuery) ||
+      localizedBook.localizedId.toLowerCase().includes(normalizedQuery)
     : false;
 
   if (matchesLocalizedNameOrId) return true;

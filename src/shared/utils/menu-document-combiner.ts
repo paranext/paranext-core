@@ -17,7 +17,6 @@ import {
   NonValidatingDocumentCombiner,
   DeepPartial,
   Localized,
-  startsWith,
   LocalizeKey,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
@@ -45,7 +44,7 @@ function checkNewColumns(
     // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     if (!columnName || typeof newColumns[columnName as ReferencedItem] !== 'object') return;
-    if (!startsWith(columnName, namePrefix))
+    if (!columnName.startsWith(namePrefix))
       throw new Error(`Column name ${columnName} does not start with ${namePrefix}`);
     if (!!currentColumns && currentColumns.isExtensible !== true)
       throw new Error(`Cannot add new column ${columnName} because isExtensible is not set`);
@@ -63,7 +62,7 @@ function checkNewGroups(
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const group = newGroups[groupName as ReferencedItem];
     if (!group) return;
-    if (!startsWith(groupName, namePrefix))
+    if (!groupName.startsWith(namePrefix))
       throw new Error(`Group name '${groupName}' does not start with ${namePrefix}`);
     if ('column' in group && group.column) {
       if (!currentColumns) return;
@@ -74,7 +73,7 @@ function checkNewGroups(
         );
     } else if ('menuItem' in group && group.menuItem) {
       const targetMenuItemName = group.menuItem;
-      if (!startsWith(targetMenuItemName, namePrefix))
+      if (!targetMenuItemName.startsWith(namePrefix))
         throw new Error(`Cannot add new group ${groupName} to a submenu owned by something else`);
     }
   });
@@ -88,10 +87,10 @@ function checkNewMenuItems(
   if (!newMenuItems) return;
   newMenuItems.forEach((menuItem) => {
     if (!menuItem) return;
-    if ('id' in menuItem && menuItem.id && !startsWith(menuItem.id, namePrefix))
+    if ('id' in menuItem && menuItem.id && !menuItem.id.startsWith(namePrefix))
       throw new Error(`Menu item ID ${menuItem.id} does not start with ${namePrefix}`);
     const targetGroupName = menuItem.group;
-    if (targetGroupName && !startsWith(targetGroupName, namePrefix)) {
+    if (targetGroupName && !targetGroupName.startsWith(namePrefix)) {
       if (!currentGroups) return;
       const targetGroup = currentGroups[targetGroupName];
       if (!targetGroup)
@@ -330,7 +329,7 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       const currentWebView = currentMenus?.webViewMenus[webViewName as ReferencedItem];
       /* eslint-enable no-type-assertion/no-type-assertion */
 
-      if (!currentWebView && !startsWith(webViewName, namePrefix))
+      if (!currentWebView && !webViewName.startsWith(namePrefix))
         throw new Error(
           `Cannot add '${webViewName}'. The new web view must start with ${namePrefix}`,
         );

@@ -29,6 +29,20 @@ async function mockGetLocalizedString(item: {
   }
   if (localizeKey === 'Book.GEN') {
     if (language === 'zh-hans') return '创';
+    // Shape of the entries that carry a second name in fullwidth parentheses, plus one with the
+    // hyphenated form, so both separators the Chinese branch strips are covered
+    if (language === 'zh-hant') return '創世記（創世紀）';
+    if (language === 'zh-mo') return '創世記-第一卷';
+  }
+  if (localizeKey === 'Book.MAT') {
+    if (language === 'zh-hans') return '马太-福音';
+  }
+  if (localizeKey === 'Book.REV') {
+    if (language === 'zh-hans') return '启示\uff08默示录\uff09';
+  }
+  if (localizeKey === 'Book.JON') {
+    // Surrounding whitespace, which no shipped entry has but a translator can leave behind
+    if (language === 'zh-hans') return '  约拿-书  ';
   }
   return localizeKey;
 }
@@ -47,6 +61,31 @@ describe('getLocalizedIdFromBookNumber', () => {
   it('with khmer which defines a localization with localized.id', async () => {
     const result = await getLocalizedIdFromBookNumber(1, 'kh', mockGetLocalizedString);
     expect(result).toEqual('លប');
+  });
+
+  it('drops a chinese second name in fullwidth parentheses', async () => {
+    const result = await getLocalizedIdFromBookNumber(1, 'zh-hant', mockGetLocalizedString);
+    expect(result).toEqual('創世記');
+  });
+
+  it('drops a chinese hyphenated suffix', async () => {
+    const result = await getLocalizedIdFromBookNumber(1, 'zh-mo', mockGetLocalizedString);
+    expect(result).toEqual('創世記');
+  });
+
+  it('with chinese keeps only the part before a hyphen', async () => {
+    const result = await getLocalizedIdFromBookNumber(40, 'zh-hans', mockGetLocalizedString);
+    expect(result).toEqual('马太');
+  });
+
+  it('with chinese trims whitespace around the result', async () => {
+    const result = await getLocalizedIdFromBookNumber(32, 'zh-hans', mockGetLocalizedString);
+    expect(result).toEqual('约拿');
+  });
+
+  it('with chinese drops a second name in ideographic parentheses', async () => {
+    const result = await getLocalizedIdFromBookNumber(66, 'zh-hans', mockGetLocalizedString);
+    expect(result).toEqual('启示');
   });
 });
 
@@ -490,6 +529,40 @@ describe('areUsjContentsEqualExceptWhitespace', () => {
     };
     expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(true);
     expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(true);
+  });
+
+  it('should return false when one side has an authored non-breaking space', () => {
+    // Typing `~` beside a space is a real edit: Paratext regularizes spaces while the `~` is still
+    // an ordinary byte, so the resulting NBSP has to survive the comparison or the edit never saves.
+    const before: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['stuff things'] }],
+    };
+    const after: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['stuff \u00a0 things'] }],
+    };
+
+    expect(areUsjContentsEqualExceptWhitespace(before, after)).toBe(false);
+    expect(areUsjContentsEqualExceptWhitespace(after, before)).toBe(false);
+  });
+
+  it('should still collapse ordinary space runs around a non-breaking space', () => {
+    // The NBSP is content; the plain spaces on either side of it are not.
+    const oneSpaceEachSide: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['stuff \u00a0 things'] }],
+    };
+    const manySpacesEachSide: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['stuff   \u00a0\t  things'] }],
+    };
+
+    expect(areUsjContentsEqualExceptWhitespace(oneSpaceEachSide, manySpacesEachSide)).toBe(true);
   });
 
   it('should return true for one not having space at the end of block marker', () => {

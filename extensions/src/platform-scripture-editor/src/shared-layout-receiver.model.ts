@@ -1,13 +1,16 @@
 import type PapiBackend from '@papi/backend';
 import { getErrorMessage, serialize, type PlatformEventEmitter } from 'platform-bible-utils';
-import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './platform-scripture-editor.utils';
+import {
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+} from './platform-scripture-editor.utils';
 
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
 const COMMENTS_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
 // The Scripture Text Grid panel presents the "Text Collection" tab (its title/tooltip is
 // `%webView_scriptureTextGrid_title_multiple%` = "Text Collection").
-const TEXT_COLLECTION_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
+const TEXT_COLLECTION_PANEL_WEBVIEW_TYPE = SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE;
 
 /** Reads the three admin layout settings for a project and serializes them into a signature. */
 async function readLayoutSignature(papi: typeof PapiBackend, projectId: string): Promise<string> {

@@ -40,6 +40,10 @@ namespace TestParanextDataProvider
         /// </summary>
         public Func<bool> RegisterEventResponse { get; set; } = () => true;
 
+        // Event handlers registered through RegisterEventHandler, keyed by event type. Mirrors
+        // _localMethods, which the base client keeps for request handlers.
+        private readonly ConcurrentDictionary<string, Delegate> _localEventHandlers = new();
+
         #region Overrides of PapiClient
 
         public override Task<bool> ConnectAsync()
@@ -174,6 +178,49 @@ namespace TestParanextDataProvider
                     $"No handler registered for request type \"{requestType}\""
                 );
             return handler.DynamicInvoke(args);
+        }
+
+        /// <summary>
+        /// Records the handler instead of adding a JSON-RPC local method (the base client's
+        /// <c>_jsonRpc</c> does not exist here), and — importantly — reproduces StreamJsonRpc's
+        /// duplicate-name rejection.
+        /// <para>
+        /// The throw is not incidental fidelity. <c>JsonRpc.AddLocalRpcMethod</c> refuses a second
+        /// method with the same name and equivalent parameter list, so two components each calling
+        /// <c>RegisterEventHandler</c> for one event name is a startup-killing bug that no test could
+        /// otherwise catch: the fault only appears against a live connection. Reproducing it here
+        /// makes that class of mistake fail in the suite instead of at launch. Consumers that need to
+        /// share an event should subscribe to a fan-out (e.g.
+        /// <c>SettingsService.SettingsChanged</c>) rather than register a second handler.
+        /// </para>
+        /// </summary>
+        public override void RegisterEventHandler(string eventType, Delegate eventHandler)
+        {
+            if (!_localEventHandlers.TryAdd(eventType, eventHandler))
+                throw new InvalidOperationException(
+                    $"A method with the same name and equivalent parameters has already been "
+                        + $"registered: \"{eventType}\""
+                );
+        }
+
+        /// <summary>
+        /// Test-only accessor reporting whether an event handler is registered for the given event
+        /// type. The counterpart of <see cref="IsHandlerRegistered"/> for events.
+        /// </summary>
+        public bool IsEventHandlerRegistered(string eventType) =>
+            _localEventHandlers.ContainsKey(eventType);
+
+        /// <summary>
+        /// Test-only helper that invokes a locally-registered event handler directly, standing in for
+        /// the announcement main would push over the websocket.
+        /// </summary>
+        public void InvokeEventHandler(string eventType, params object?[] args)
+        {
+            if (!_localEventHandlers.TryGetValue(eventType, out var handler))
+                throw new InvalidOperationException(
+                    $"No handler registered for event type \"{eventType}\""
+                );
+            handler.DynamicInvoke(args);
         }
 
         #endregion

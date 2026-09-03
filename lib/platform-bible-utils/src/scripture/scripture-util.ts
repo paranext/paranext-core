@@ -6,7 +6,8 @@ import {
   USJ_TYPE,
 } from '@eten-tech-foundation/scripture-utilities';
 import { BookInfo, ScrollGroupId } from './scripture.model';
-import { at, isWhiteSpace, slice, split, startsWith } from '../string-util';
+import { isWhiteSpace } from '../string-util';
+import { GraphemeString } from '../grapheme-string';
 import { LocalizeKey } from '../extension-contributions/menus.model';
 import { isString } from '../util';
 
@@ -21,6 +22,7 @@ import { isString } from '../util';
 const BLOCK_MARKER_TYPES = ['chapter', 'book', 'para', 'row', 'sidebar', USJ_TYPE];
 
 const ZWSP = '\u200B';
+const NBSP = '\u00A0';
 
 const scrBookData: BookInfo[] = [
   { shortName: 'ERR', fullNames: ['ERROR'], chapters: -1 },
@@ -310,7 +312,7 @@ export async function getLocalizedIdFromBookNumber(
 ) {
   const id = Canon.bookNumberToId(bookNumber);
 
-  if (!startsWith(Intl.getCanonicalLocales(localizationLanguage)[0], 'zh'))
+  if (!Intl.getCanonicalLocales(localizationLanguage)[0].startsWith('zh'))
     return getLocalizedString({
       localizeKey: `LocalizedId.${id}`,
       languagesToSearch: [localizationLanguage],
@@ -321,11 +323,20 @@ export async function getLocalizedIdFromBookNumber(
     localizeKey: `Book.${id}`,
     languagesToSearch: [localizationLanguage],
   });
-  const parts = split(bookName, '-');
-  // some entries had a second name inside ideographic parenthesis
-  const parts2 = split(parts[0], '\xff08');
-  const retVal = parts2[0].trim();
-  return retVal;
+  // Grapheme-aware splitting, deliberately, even though both separators are single characters.
+  // These are localized book names, so a separator can carry a combining mark — and a decorated
+  // separator is part of a larger cluster, which means it is not a separator. Native splits there
+  // anyway and orphans the mark onto the front of the next piece. Keep this off native.
+  //
+  // Split the instance rather than calling the free function twice: the pieces carry the parent's
+  // segmentation, so the second split reuses it. The free function takes a bare string and would
+  // segment again — the same text again, whenever the name has no hyphen.
+  const graphemeName = new GraphemeString(bookName);
+  // Some entries carry a second name inside ideographic parentheses. That is the fullwidth left
+  // parenthesis U+FF08, which needs the four-digit `\u` escape: `\xff08` takes only the first two
+  // hex digits and yields the three characters `ÿ08`, which no book name contains.
+  const beforeParenthesis = graphemeName.split('-')[0].split('\uff08')[0];
+  return beforeParenthesis.toString().trim();
 }
 
 /**
@@ -783,6 +794,27 @@ function isUsjContentEmpty(content: MarkerContent[] | undefined) {
 }
 
 /**
+ * The text of `graphemeString` with trailing whitespace graphemes removed. Scans the existing
+ * segmentation for the cut point and then slices once, so it costs a single pass over the text.
+ *
+ * Not a `/\s+$/` replace, which would be faster: `isWhiteSpace` is not JavaScript's `\s`. It
+ * includes NEXT LINE (U+0085), which `\s` does not, and excludes ZWNBSP (U+FEFF), which `\s`
+ * matches — so a regex would trim a byte-order mark and leave a NEL. Working in clusters is
+ * incidental rather than load-bearing: no cluster can end in a whitespace character without being
+ * entirely whitespace, since whitespace is never an Extend, so this agrees with a character-wise
+ * scan using the same predicate on every input.
+ */
+function trimEndOfGraphemes(graphemeString: GraphemeString): string {
+  const { length } = graphemeString;
+  let end = length;
+  while (end > 0 && isWhiteSpace(graphemeString.charAt(end - 1))) end -= 1;
+  // Slicing would copy the grapheme array to reach the same text. Roughly half the calls here trim
+  // nothing, so answer those without the copy.
+  if (end === length) return graphemeString.toString();
+  return graphemeString.slice(0, end).toString();
+}
+
+/**
  * Determines if the content object is the final child of a parent that is a block-level marker.
  *
  * We do not need to walk up the ancestors to the _closest_ block marker because spaces are
@@ -814,6 +846,25 @@ function isAtEndOfBlockMarker(
 }
 
 /**
+ * {@link normalizeScriptureSpaces}, except a non-breaking space counts as content rather than as
+ * spacing.
+ *
+ * Paratext regularizes spaces while TOKENIZING USFM, where a non-breaking space is still the escape
+ * `~` — an ordinary, non-whitespace byte — so a `~` beside a space always survives into the tokens.
+ * By the time the text is USJ that escape has already become U+00A0, so running the tokenizer's
+ * rule a second time would fold it into the neighbouring space. Comparing USJ that way reports "no
+ * difference" for an edit that added a `~`, which is why this variant exists: normalize each
+ * NBSP-delimited segment on its own and put the NBSPs back, which is exactly what Paratext's own
+ * pass does when it walks over a `~`.
+ *
+ * @param str String to normalize
+ * @returns The normalized string
+ */
+function normalizeScriptureSpacesTreatingNbspAsContent(str: string): string {
+  return str.split(NBSP).map(normalizeScriptureSpaces).join(NBSP);
+}
+
+/**
  * Determines if the USJ documents or markers (and all contents) are equivalent after regularizing
  * spaces according to the way `ParatextData.dll` does.
  *
@@ -838,27 +889,34 @@ function areUsjContentsEqualExceptWhitespaceInternal(
   const aIsString = isString(a);
   const bIsString = isString(b);
   if (aIsString && bIsString) {
-    const aNormalized = normalizeScriptureSpaces(a);
-    const bNormalized = normalizeScriptureSpaces(b);
+    const aNormalized = normalizeScriptureSpacesTreatingNbspAsContent(a);
+    const bNormalized = normalizeScriptureSpacesTreatingNbspAsContent(b);
     // Check to see if their regularized forms are equal. If so, they're equal. If not, they may still
     // be equal if they are at the end of a block-level marker and the only difference is space at the end.
     // If at the end of a block-level marker with space at the end, take off the final space and compare again
     if (aNormalized !== bNormalized) {
+      // Segment `a` once: both the whitespace check and the trim below reuse that work instead of
+      // re-segmenting.
+      const aGraphemes = new GraphemeString(aNormalized);
+      // PERF: `b` is segmented only if something actually reads it. The check below short-circuits
+      // whenever `a` ends in whitespace, and either block-marker guard can return first.
+      let bGraphemesCache: GraphemeString | undefined;
+      const bGraphemes = () => {
+        bGraphemesCache ??= new GraphemeString(bNormalized);
+        return bGraphemesCache;
+      };
+
       // If neither ends in whitespace, they are not equal
-      if (!isWhiteSpace(at(aNormalized, -1) ?? '') && !isWhiteSpace(at(bNormalized, -1) ?? ''))
+      if (!isWhiteSpace(aGraphemes.at(-1) ?? '') && !isWhiteSpace(bGraphemes().at(-1) ?? ''))
         return false;
 
       // If either is not at the end of a block-level marker, they are not equal
       if (!isAtEndOfBlockMarker(a, aParent)) return false;
       if (!isAtEndOfBlockMarker(b, bParent)) return false;
 
-      // Trim the end of each string
-      let aTrimmed = aNormalized;
-      while (isWhiteSpace(at(aTrimmed, -1) ?? '')) aTrimmed = slice(aTrimmed, 0, -1);
-      let bTrimmed = bNormalized;
-      while (isWhiteSpace(at(bTrimmed, -1) ?? '')) bTrimmed = slice(bTrimmed, 0, -1);
-      // If they are not equal after trimming, they are not equal
-      if (aTrimmed !== bTrimmed) return false;
+      // If they are not equal after trimming, they are not equal. Compare the text: `===` on two
+      // instances asks whether they are the same object, which is not the question here.
+      if (trimEndOfGraphemes(aGraphemes) !== trimEndOfGraphemes(bGraphemes())) return false;
     }
   } else if (!aIsString && !bIsString) {
     // We have determined they are not strings, so they must be objects with various simple properties and possibly a `content` array
@@ -967,7 +1025,7 @@ export function collectUsjMarkers(usj: Usj | undefined): string[] {
       // String nodes are text runs, not markers.
       if (isString(node)) return;
       const { marker } = node;
-      if (marker && !startsWith(marker, 'z') && !seen.has(marker)) {
+      if (marker && !marker.startsWith('z') && !seen.has(marker)) {
         seen.add(marker);
         markers.push(marker);
       }

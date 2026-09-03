@@ -84,8 +84,21 @@ one window's business, and the app can have several windows. Those services use 
 
 | Term | File suffix | Lives | Role |
 | ---- | ----------- | ----- | ---- |
-| **Service router** | `*.service-router.ts` | main | Registers the generic global name. Holds no logic; resolves a target window and forwards. Fans out only where the operation is inherently cross-window |
+| **Service router** | `*.service-router.ts` | main | Registers the generic global name. Resolves a target window and forwards. Owns only what no single window can. Fans out only where the operation is inherently cross-window |
 | **Service shard** | `*.service-shard.ts` | each renderer | The real implementation for **one** window. Registered under a window-scoped network object id with an `objectType` of its own |
+
+A router forwarding is the common case, but it is not the whole job: some decisions cannot be made
+anywhere else, because only main can see every window at once. Choosing which window should answer,
+orchestrating an operation that spans two of them, and putting things back when one leg of that
+operation fails all belong to the router. So does any state describing work in flight across
+windows, which no single shard can hold.
+
+The line to hold is the other one: anything that is one window's own business belongs in its shard,
+even when the router is what triggers it. When a router grows a body of policy large enough to read
+as a subsystem, move that policy into its own main-process module beside the router and let the
+router call it — the way window emptiness, shard resolution and owner-routed commands already live
+next to the services that use them. It stays in main, where it has to be; it just stops living in
+the file whose job is routing.
 
 ```
 Renderer (window 1)          Main Process                  Renderer (window 2)

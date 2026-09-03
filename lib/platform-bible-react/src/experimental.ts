@@ -50,6 +50,29 @@ export { Z_INDEX_TOOLTIP } from './components/z-index';
 // `./components/advanced/book-chapter-control/book-chapter-control.navigation`.
 export { ALL_BOOK_IDS } from './components/shared/book.utils';
 export { readDirection, persistDirection, type Direction } from './utils/dir-helper.util';
+// The standard-view marker-palette machinery: the shared keydown forwarding table, the shared
+// open-session orchestration, and the shared filter/ranking — one API family, kept together.
+export {
+  clearPaletteSessionIfCurrent,
+  type ForwardedSessionKind,
+  getMarkerPaletteClaimedKeys,
+  handleMarkerPaletteSessionKeyDown,
+  type MarkerPaletteKeyEvent,
+  type MarkerPaletteKeyOutcome,
+  type MarkerPaletteSessionDriver,
+  type MarkerPaletteSessionKind,
+  type MarkerPaletteSessionState,
+} from './components/advanced/marker-palette-keydown.util';
+export {
+  type MarkerPaletteOpenSession,
+  runMarkerPaletteSession,
+  type RunMarkerPaletteSessionOptions,
+} from './components/advanced/marker-palette-session.util';
+export {
+  filterAndRankPaletteItems,
+  stripMarkerNestingPrefix,
+  type PaletteFilterMode,
+} from './components/advanced/marker-palette-filter.util';
 export {
   default as NavigationHistoryButtons,
   NAVIGATION_HISTORY_BUTTONS_STRING_KEYS,

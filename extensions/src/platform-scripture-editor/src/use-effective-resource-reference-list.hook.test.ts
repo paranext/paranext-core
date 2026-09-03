@@ -102,6 +102,32 @@ describe('useEffectiveResourceReferenceList', () => {
     expect(result.current.status).toBe('loading');
   });
 
+  it('clears the stale user list when the PDP goes away, preventing a wrong cross-project merge', () => {
+    // Scenario: project A’s user list is loaded, then the PDP goes undefined (project change
+    // before the new PDP registers). The hook must clear the user list so the next project’s
+    // admin setting does not merge with project A’s user data.
+    const userListA: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'From Project A', id: 'a-001' }],
+    };
+    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
+    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(userListA, 'subscribeUserModelTexts'));
+
+    const { result, rerender } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-a', 'platformScripture.modelTexts'),
+    );
+    // PDP loaded — user list is present in the merged result.
+    expect(readyList(result.current).items).toHaveLength(1);
+    expect(readyList(result.current).items[0]).toMatchObject({ id: 'a-001' });
+
+    // PDP goes away (new project selected, PDP not yet registered).
+    mockUseProjectDataProvider.mockReturnValue(undefined);
+    rerender();
+
+    // Must report loading — not a stale merge of project B's admin list with project A's user
+    // list.
+    expect(result.current.status).toBe('loading');
+  });
   it('returns project-only list when user list is empty', () => {
     const projectList: ResourceReferenceList = {
       dataVersion: '1.0.0',

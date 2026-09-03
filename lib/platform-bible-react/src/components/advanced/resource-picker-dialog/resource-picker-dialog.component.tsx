@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from '@/components/shadcn-ui/alert';
 import { DialogHeader, DialogTitle } from '@/components/shadcn-ui/dialog';
 import { Label } from '@/components/shadcn-ui/label';
 import { Table, TableBody, TableCell, TableRow } from '@/components/shadcn-ui/table';
@@ -47,12 +48,25 @@ export interface ResourcePickerDialogProps {
   allResources: DblResourceData[];
   /** Whether the `allResources` is still loading */
   isResourcesLoading?: boolean;
-  /** If provided, only resources of this type are shown */
-  resourceType?: ResourceType;
+  /** If provided, only resources of this type (or any of the listed types) are shown */
+  resourceType?: ResourceType | ResourceType[];
   /** IDs of resources already selected in the calling panel */
   selectedResourceIds?: string[];
   /** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
   localizedStrings: ResourcePickerDialogLocalizedStrings;
+  /**
+   * Already-localized sentence shown above the resource list explaining why the list may be
+   * incomplete — for example that the online catalog could not be reached. Omit when the list is
+   * complete.
+   */
+  notice?: string;
+  /**
+   * When false, rows in the "Installed" section are shown but cannot be picked. Use it when the
+   * caller can act on a resource that still needs installing but has nothing to do with one that is
+   * already on disk, so an installed row would accept a click and then silently do nothing.
+   * Defaults to true.
+   */
+  allowSelectingInstalled?: boolean;
   /**
    * When true, clicking an "Already Selected" row calls `onSelect` just like any other row, letting
    * the caller treat it as a deselect. Defaults to false (Already Selected rows stay
@@ -159,6 +173,8 @@ export default function ResourcePickerDialog({
   resourceType,
   selectedResourceIds,
   localizedStrings,
+  notice,
+  allowSelectingInstalled = true,
   allowDeselect,
   onSelect,
 }: ResourcePickerDialogProps) {
@@ -168,7 +184,11 @@ export default function ResourcePickerDialog({
   const filteredResources = useMemo(
     () =>
       allResources
-        .filter((r) => !resourceType || r.type === resourceType)
+        .filter(
+          (r) =>
+            !resourceType ||
+            (Array.isArray(resourceType) ? resourceType.includes(r.type) : r.type === resourceType),
+        )
         .filter((r) => matchesSearch(r, searchText))
         .filter(
           (r) => selectedLanguages.length === 0 || selectedLanguages.includes(r.bestLanguageName),
@@ -262,6 +282,20 @@ export default function ResourcePickerDialog({
           variant="outline"
         />
       </div>
+      {/* The live region stays mounted and only its content changes: assistive tech announces
+          mutations to a region already in the accessibility tree, and a region inserted together
+          with its text usually announces nothing. `Alert` sets its own assertive `role`, which
+          would nest a second live region inside this one, so it is cleared here. */}
+      <div role="status">
+        {notice && (
+          <Alert
+            role={undefined}
+            className="tw:mx-4 tw:mb-2 tw:w-auto tw:bg-muted tw:text-muted-foreground"
+          >
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
+        )}
+      </div>
       {isFiltered && (
         <p className="tw:px-4 tw:pb-1 tw:text-right tw:text-xs tw:text-muted-foreground">
           {formatReplacementString(showingCountTemplate, {
@@ -288,7 +322,11 @@ export default function ResourcePickerDialog({
                 onSelect={allowDeselect ? onSelect : undefined}
                 showCheckmark
               />
-              <ResourceSection label={installedLabel} resources={installed} onSelect={onSelect} />
+              <ResourceSection
+                label={installedLabel}
+                resources={installed}
+                onSelect={allowSelectingInstalled ? onSelect : undefined}
+              />
               <ResourceSection
                 label={toDownloadLabel}
                 resources={visibleToDownload}

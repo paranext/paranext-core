@@ -338,6 +338,56 @@ export async function createSecondWindow(electronApp: ElectronApplication): Prom
 }
 
 /**
+ * Renderer width, in CSS pixels, at or above which a window's toolbar still renders the chapter and
+ * verse of a reference.
+ *
+ * The toolbar walks a shrink ladder as its content row narrows (`APP_TOOLBAR_SHRINK_THRESHOLDS_PX`
+ * in `lib/platform-bible-react/src/components/advanced/toolbar.component.tsx`), and at the ladder's
+ * narrowest rung it drops the chapter and verse entirely, leaving the book alone. This sits above
+ * that rung's threshold rather than on it, because the observed content row is narrower than the
+ * window by its own padding.
+ */
+const TOOLBAR_REFERENCE_MIN_CSS_PX = 800;
+
+/**
+ * Widen a window until its toolbar has room to show a reference in full, and return the renderer
+ * width that achieved it.
+ *
+ * A window narrow enough to reach the shrink ladder's narrowest rung shows the book alone, so a
+ * spec reading a reference off that toolbar cannot see a chapter or verse there however correctly
+ * the navigation reached the window. Every window whose toolbar text is asserted needs this first.
+ *
+ * Sized to the work area rather than to a fixed number, and size only: this compositor honors sizes
+ * exactly but assigns positions itself, and the display is not guaranteed to be any given size.
+ */
+export async function widenWindowForToolbarReference(
+  electronApp: ElectronApplication,
+  page: Page,
+): Promise<number> {
+  const windowId = getWindowIdOfPage(page);
+  await electronApp.evaluate(
+    ({ BrowserWindow, screen }, { id }) => {
+      const win = BrowserWindow.fromId(id);
+      if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+      // An unmapped window reports stale bounds and ignores the resize.
+      if (win.isMinimized()) win.restore();
+      const { workArea } = screen.getPrimaryDisplay();
+      const { height, y } = win.getBounds();
+      win.setBounds({ x: workArea.x, y, width: workArea.width, height });
+    },
+    { id: windowId },
+  );
+  // The shrink step comes from a `ResizeObserver`, so the label re-renders after the resize lands
+  // rather than with it.
+  let rendererWidth = 0;
+  await expect(async () => {
+    rendererWidth = await page.evaluate(() => window.innerWidth);
+    expect(rendererWidth).toBeGreaterThanOrEqual(TOOLBAR_REFERENCE_MIN_CSS_PX);
+  }).toPass({ timeout: 30_000, intervals: [500] });
+  return rendererWidth;
+}
+
+/**
  * The window-scoped shard methods a renderer registers, as patterns taking the window id.
  *
  * One per service the main process's routers forward a command or request to. A renderer starts
@@ -369,42 +419,64 @@ export async function waitForRendererRegistered(
   );
 }
 
-/** Locator for a window's Home tab title, which carries the window-scoped web view id. */
+/**
+ * Locator for a window's Home tab title BY ITS FIXED FALLBACK-LAYOUT ID — only valid for a window
+ * that loaded the single-Home-tab fallback layout ({@link HOME_TAB_UUID}), i.e. the first window of
+ * a fresh profile or one restored from a saved layout that already carried that id. A window whose
+ * Home tab was docked on the fly (see {@link expectWindowDockHasOnlyHomeTab}) gets a freshly
+ * generated web view id each time, so this locator will not find it — identify that one by title
+ * text instead.
+ */
 export function homeTabTitle(page: Page, windowId: number) {
   return page.locator(`.platform-tab-title[data-web-view-id="${HOME_TAB_UUID}-w${windowId}"]`);
 }
 
 /**
- * How long {@link expectWindowDockEmpty} waits after the window's UI is up before asserting
- * emptiness. An empty dock and a dock about to load tabs look identical for a moment — the dock
- * container renders before any layout content arrives — so asserting zero tabs immediately could
- * pass vacuously while a wrongly-loaded layout (a clone of another window's, or a default) is still
- * on its way. The window's startup overlay clearing already signals initialization is done; this
- * settle is headroom on top of that for stragglers.
+ * How long {@link expectWindowDockHasOnlyHomeTab} waits after the Home tab attaches before asserting
+ * it is the ONLY thing docked. A dock that is about to receive more than Home — e.g. a
+ * wrongly-cloned copy of another window's layout landing alongside the docked Home tab — can look
+ * identical to a Home-only dock for a moment, since the extra content can arrive after Home does;
+ * this settle gives a wrongly-added tab time to appear before the count assertions below.
  */
-const EMPTY_DOCK_SETTLE_MS = 5_000;
+const HOME_ONLY_SETTLE_MS = 5_000;
 
 /**
- * Assert that a window's dock UI is genuinely up and renders NO content: zero dock tabs, zero tab
- * titles, zero web view iframes. This is the observable shape of a window that starts (or is
- * restored) with an empty layout.
+ * Assert that a window's dock UI is genuinely up and renders EXACTLY the Home tab: one dock tab,
+ * one tab title, one web view iframe, and that tab/iframe is Home. This is the observable shape of
+ * a window that starts (or is restored) with nothing of its own to show — see
+ * `src/main/services/window-emptiness.util.ts`: a window born empty, or emptied down to nothing,
+ * docks Home instead of staying empty.
  *
- * Fails if the window renders any tab — which is exactly what a regression to loading a default
- * layout, or to cloning another window's layout into this one, would produce.
+ * A freshly docked Home tab is not restored from any saved layout, so it gets a new web view id
+ * each time — identity here is asserted by title text ("Home"), not by a fixed id. That text is
+ * locale-independent in these suites because they pin `platform.interfaceLanguage` to English.
+ * Contrast {@link homeTabTitle}, which locates a Home tab that came from the fixed-id fallback
+ * layout.
+ *
+ * Fails if the window renders zero tabs (Home never got docked) or more than one tab (something
+ * besides Home is also present) — which is exactly what a regression to failing the dock-Home
+ * decision, or to loading a default/cloned layout alongside it, would produce.
  */
-export async function expectWindowDockEmpty(page: Page): Promise<void> {
+export async function expectWindowDockHasOnlyHomeTab(page: Page): Promise<void> {
   // The dock container itself must render — "no tabs because the UI never came up" must fail, not
   // pass. Then the startup overlay must clear, signalling async initialization (settings, theme,
   // layout load) finished.
   await expect(page.locator('div[class*="dock-layout"]')).toBeAttached({ timeout: 120_000 });
   await waitForOverlayGone(page, 120_000);
-  // Give a wrongly-loaded layout time to become observable before asserting absence.
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, EMPTY_DOCK_SETTLE_MS);
+  // Wait for Home itself as the readiness signal, rather than a blind settle before asserting
+  // content: the dock-Home decision and the tab's own load both happen asynchronously after the
+  // dock container first renders.
+  await expect(page.locator('.dock-tab', { hasText: 'Home' })).toHaveCount(1, {
+    timeout: 60_000,
   });
-  await expect(page.locator('.dock-tab')).toHaveCount(0);
-  await expect(page.locator('.platform-tab-title')).toHaveCount(0);
-  await expect(page.locator('iframe[data-web-view-id]')).toHaveCount(0);
+  // Give a wrongly-added extra tab time to become observable before asserting Home is the ONLY one.
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, HOME_ONLY_SETTLE_MS);
+  });
+  await expect(page.locator('.dock-tab')).toHaveCount(1);
+  await expect(page.locator('.platform-tab-title')).toHaveCount(1);
+  await expect(page.locator('iframe[data-web-view-id]')).toHaveCount(1);
+  await expect(page.locator('iframe[title="Home"]')).toHaveCount(1);
 }
 
 // #endregion

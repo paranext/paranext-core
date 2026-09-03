@@ -30,6 +30,9 @@ export type { DialogOptions } from '@shared/models/dialog-options.model';
 export type {
   DirectionFromTab,
   DirectionFromTabAdjacent,
+  FloatLayout,
+  Layout,
+  WindowLayout,
 } from '@shared/models/docking-framework.model';
 export type { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
 export type {
@@ -129,6 +132,8 @@ export type {
   ThemeDataDataTypes,
 } from '@shared/services/theme-data.service-model';
 export type {
+  AppWindowInputEvent,
+  AppWindowInputKind,
   FocusSubject,
   SetFocusSubject,
   SetFocusSpecifier,

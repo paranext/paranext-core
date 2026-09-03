@@ -10,6 +10,7 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  powerMonitor,
   RenderProcessGoneDetails,
   screen,
   session,
@@ -21,6 +22,7 @@ import path from 'path';
 /* import { autoUpdater } from 'electron-updater'; */
 import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
+import { announceAppWindowInput, startAppWindowInputEvent } from '@main/app-window-input.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
 import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
@@ -41,6 +43,7 @@ import { enhancedResourceProtocolService } from '@main/services/enhanced-resourc
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
 import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
+import { registerPowerMonitorListeners } from '@main/services/power-monitor-logging.service';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
 import { performStartupTasks } from '@main/startup-tasks';
@@ -64,38 +67,56 @@ import {
   startWindowServiceRouter,
 } from '@main/services/window.service-router';
 import {
+  canStartupSyncFireNow,
   isAppQuitRequested,
   isAppShuttingDown,
   markQuitRequested,
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
+  shouldWindowCloseAbortReadinessWait,
 } from '@main/services/shutdown-latch.service';
-import { startWebViewServiceRouter } from '@main/services/web-view.service-router';
+import { setAppShutdownSignal } from '@main/services/rpc-server';
+import {
+  getWebViewShard,
+  setWebViewWindowCreator,
+  startWebViewServiceRouter,
+} from '@main/services/web-view.service-router';
 import {
   addWindow,
+  announceRoutingTargetChange,
+  countWindowsThatCouldBeTheLastOne,
   doesNavigationReplaceRendererRegistrations,
+  focusWindow,
   getFocusedWindowId,
   getTargetWindowId,
   getWindows,
-  isWindowClosing,
+  handleWindowBlurred,
+  isWindowClosing as isWindowMarkedClosing,
+  isWindowTracked,
+  isWindowReady,
   markWindowAbandoned,
   markWindowClosing,
   markWindowNotReady,
   markWindowReady,
   removeWindow,
   setFocusedWindowId,
+  setWindowPendingContentPredicate,
 } from '@main/services/window-state.service';
 import {
   assignEntryToWindow,
   handleWindowRemoved,
   initializeWindowLayoutPersistence,
+  isWindowPendingContent,
   loadWindowLayouts,
+  markWindowPendingContent,
   setMainWindowId,
+  setPendingContentChangeListener,
   trackLegacyWindow,
   trackNewWindow,
   updateWindowBounds,
   writeNow,
 } from '@main/services/window-layout-persistence.service';
+import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
 import {
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
@@ -106,9 +127,10 @@ import {
   MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS,
   NO_RENDERER_CRASH_RELOADS_YET,
 } from '@main/renderer-crash-reload-budget.util';
-import type {
-  WindowBoundsState,
-  WindowLayoutEntry,
+import {
+  WINDOW_EMPTIED_REQUEST_TYPE,
+  type WindowBoundsState,
+  type WindowLayoutEntry,
 } from '@shared/data/window-layout-persistence.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import {
@@ -301,10 +323,18 @@ async function main() {
   // This is the run boundary the startup-waterfall parser keys on (main + process-start).
   markStartup(STARTUP_MARK_PROCESS_START);
 
+  // Before the first socket can close: main owns the shutdown latch, and the socket-close handler
+  // that needs it deliberately does not import it. See `setAppShutdownSignal`.
+  setAppShutdownSignal(isAppShuttingDown);
+
   // The network service has to start first, and it uses the shared store after initialization
   await networkService.initialize();
   markStartup('network-service-up');
   await initializeSharedStoreService(networkService);
+
+  // Register the app-window input event so the window's mouse/keyboard hooks below can announce
+  // the gestures that dismiss transient overlays
+  await startAppWindowInputEvent();
 
   // The network object status service relies on seeing everything else start up later
   await startNetworkObjectStatusService();
@@ -358,6 +388,74 @@ async function main() {
   // renderer's layout load can never race the registration
   await initializeWindowLayoutPersistence();
 
+  // The routing target passes over a window that is still waiting for its routed content the same
+  // way it passes over one whose close has begun: the window takes OS focus the moment it is
+  // shown, and anything focus-routed into it before its content arrives is destroyed if the
+  // operation that created it fails and closes it. Injected because the pending-content mark lives
+  // with window-layout persistence, which the window-state tracker does not import.
+  setWindowPendingContentPredicate(isWindowPendingContent);
+  // The other half of that injection: the tracker reads the mark but has nothing to tell it the
+  // mark changed, so a window gaining or losing one moves the routing target with no event —
+  // leaving the routers that hold a resolved shard pointed at the window routing just left.
+  setPendingContentChangeListener(announceRoutingTargetChange);
+
+  // Same reasoning as above: a window can report itself empty as soon as it exists, so the handler
+  // that decides what happens next must already be registered
+  const handleWindowEmptied = createWindowEmptinessHandler({
+    // Which windows may stand in as another window's reason to close is the window-state tracker's
+    // rule, whole — see `countWindowsThatCouldBeTheLastOne` for what it leaves out and why
+    countWindows: countWindowsThatCouldBeTheLastOne,
+    closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+    // A report names its own subject and arrives over the network, so the id is the caller's word.
+    // The tracker is what knows whether that word describes a window this process has.
+    isWindowTracked,
+    markWindowClosing,
+    // The shared registry, not only this handler's own decisions: a window the user is closing can
+    // report empty mid-teardown, and it must get the same "closing" answer instead of a second close
+    isWindowClosing: isWindowMarkedClosing,
+    // The reporting window's own reading, asked only when a close is otherwise about to be decided
+    hasContentArrivedSinceEmptyReport: async (windowId) => {
+      // A window that is not serving requests cannot be asked, and waiting on one that will never
+      // answer would hold up every window's decision behind it. `false` is what the handler reads
+      // as "could not tell", which closes the window — the report was its own word about its own
+      // dock.
+      if (!isWindowReady(windowId)) return false;
+      const shard = await getWebViewShard(windowId);
+      if (!shard) return false;
+      return shard.hasContentArrivedSinceEmptyReport();
+    },
+  });
+  await networkService.registerRequestHandler(
+    WINDOW_EMPTIED_REQUEST_TYPE,
+    async (...args) => handleWindowEmptied(args[0], args[1]),
+    {
+      method: {
+        'x-experimental': true,
+        summary: "Report a window's dock empty and learn whether it closes or docks Home",
+        params: [
+          {
+            name: 'windowId',
+            required: true,
+            summary: 'Electron BrowserWindow ID of the window reporting itself empty',
+            schema: { type: 'number' },
+          },
+          {
+            name: 'reason',
+            required: true,
+            summary: 'Why the window is empty',
+            schema: { type: 'string', enum: ['emptied-by-removal', 'born-empty'] },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary:
+            'Whether the window should dock Home, that it is being closed, or that it should stay as it is because content reached it after it reported',
+          schema: { type: 'object' },
+        },
+      },
+    },
+  );
+
   // A window is tracked and takes OS focus the moment it is shown, but it cannot serve a routed
   // call until its renderer has registered. Its window service shard appearing is that signal, and
   // routing waits for it rather than following focus alone — see `getTargetWindowId`.
@@ -391,11 +489,20 @@ async function main() {
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
 
-  // Signals for the fire-and-forget startup tasks: an abort controller so the Power-mode boot-race
-  // retry loop stops the moment the app begins quitting (wired below), and a window-interactive
-  // clock so a startup sync that only registers late isn't fired onto an editor the user is already
-  // using (see performStartupTasks / STARTUP_SYNC_FRESHNESS_WINDOW_MS).
+  // Signals for the fire-and-forget startup tasks:
+  //
+  // - `startupTasksAbort` stops the startup tasks the moment the app starts going down by either
+  //   route, quit or last-window close. This is the long-standing behavior and is what Power mode's
+  //   boot-race retry loop runs on; nothing about the Simple-mode readiness gate changes it.
+  // - `startupReadinessAbort` stops only Simple mode's readiness wait, and is deliberately NOT
+  //   aborted by a macOS last-window close: there the app stays resident, the startup tasks run once
+  //   per process, and a dock reactivation still wants that session's startup sync. Kept separate so
+  //   that exception cannot leak into Power mode's loop.
+  // - a window-interactive clock, so a Power-mode startup sync that only registers late isn't fired
+  //   onto an editor the user is already using (see performStartupTasks /
+  //   STARTUP_SYNC_FRESHNESS_WINDOW_MS).
   const startupTasksAbort = new AbortController();
+  const startupReadinessAbort = new AbortController();
   let mainWindowInteractiveAt: number | undefined;
 
   /**
@@ -416,6 +523,13 @@ async function main() {
     try {
       await performStartupTasks({
         abortSignal: startupTasksAbort.signal,
+        readinessAbortSignal: startupReadinessAbort.signal,
+        // Answers the state neither abort signal can describe: resident, not quitting, no windows —
+        // where macOS leaves the app after its last window closes. `getWindows` already filters out
+        // destroyed windows, so a window mid-teardown does not keep this true; the latch is what
+        // keeps "no window YET" (the app still coming up) from reading as "went windowless".
+        canFireStartupSync: () =>
+          canStartupSyncFireNow(getWindows().length, hasCreatedWindowThisProcess),
         getWindowInteractiveElapsedMs: () =>
           mainWindowInteractiveAt === undefined
             ? undefined
@@ -448,18 +562,16 @@ async function main() {
     // so no window has OS focus and the fallback below is the ordinary path, not the edge case. It
     // asks where routed calls go, which is the window the user was last working in; the oldest
     // tracked window would be an arbitrary choice that also repoints routing there by focusing it.
-    const targetWindowId = getTargetWindowId();
-    const targetWindow =
-      targetWindowId === undefined
-        ? undefined
-        : (BrowserWindow.fromId(targetWindowId) ?? undefined);
-    const focusWindow = BrowserWindow.getFocusedWindow() ?? targetWindow;
-    // Restoring or focusing a window Electron has already destroyed throws, which would drop the
-    // URI before it is ever dispatched below
-    if (focusWindow && !focusWindow.isDestroyed()) {
-      if (focusWindow.isMinimized()) focusWindow.restore();
-      focusWindow.focus();
-    }
+    const windowIdToRaise = BrowserWindow.getFocusedWindow()?.id ?? getTargetWindowId();
+    // Deliberately NOT gated on `isApplicationFocused()` the way the in-app raises are. That gate
+    // exists to stop us pulling the app in front of whatever the user is working in; this path
+    // runs precisely when the app does not own the foreground, so the gate would suppress every
+    // raise it exists to perform — the user asked for this window by following the link. Raising
+    // through the service rather than the `BrowserWindow` directly is what earns the rest: it is a
+    // no-op instead of a throw on a window that has closed, so a raise can never drop the URI
+    // before it is dispatched below, and an activation the OS refuses leaves the taskbar flashing,
+    // which on this path is the whole signal the user gets that the link landed.
+    if (windowIdToRaise !== undefined) focusWindow(windowIdToRaise);
     logger.debug(`Main is handling uri ${uri}`);
     // need to use `new URL` instead of `URL.parse` because Node<22.1.0 doesn't have it. Can change
     // when we get there
@@ -547,7 +659,10 @@ async function main() {
   }
 
   /** Sets up the electron BrowserWindow renderer process */
-  const createWindow = async (restoreInfo?: WindowRestoreInfo): Promise<BrowserWindow> => {
+  const createWindow = async (
+    restoreInfo?: WindowRestoreInfo,
+    creationOptions?: { pendingContent?: boolean },
+  ): Promise<BrowserWindow> => {
     // The menu and the `platform.createWindow` command stay live through a quit, because every
     // window sits in `preventDefault()` waiting on the shared shutdown run for as long as that run
     // takes. Opening a window in that gap would start a session the app is in no position to serve:
@@ -656,9 +771,16 @@ async function main() {
     else if (restoreInfo?.kind === 'legacy') trackLegacyWindow(windowId);
     else trackNewWindow(windowId);
 
+    if (creationOptions?.pendingContent) markWindowPendingContent(windowId);
+
     // Track which window is focused for multi-window command routing
     newWindow.on('focus', () => {
       setFocusedWindowId(windowId);
+    });
+    // The other half of focus tracking: a blur with no focus following it is the whole application
+    // going to the background, which is what isApplicationFocused answers from
+    newWindow.on('blur', () => {
+      handleWindowBlurred(windowId);
     });
 
     // Set our custom protocol handler to load assets from extensions
@@ -738,7 +860,7 @@ async function main() {
       if (
         details.reason === 'clean-exit' ||
         newWindow.isDestroyed() ||
-        isWindowClosing(windowId) ||
+        isWindowMarkedClosing(windowId) ||
         isAppShuttingDown()
       )
         return;
@@ -813,6 +935,12 @@ async function main() {
       // Key up seems not to change focus in Windows, so we will only change on keyDown
       if (event.type !== 'keyDown') return;
 
+      // Announce Escape so overlays rendered in the parent document dismiss no matter which frame
+      // has focus. Deliberately no preventDefault — the focused frame still gets the key and may
+      // act on it too (e.g. the scripture editor closes its marker palette), and dismissing an
+      // already-dismissed overlay is a no-op.
+      announceAppWindowInput(event);
+
       // Announce a possible focus change
       try {
         await setWindowFocus('detect');
@@ -826,6 +954,10 @@ async function main() {
     newWindow.webContents.on('before-mouse-event', async (_, event) => {
       // Mouse up and other events seem not to change focus in Windows, so we will only change on mouseDown
       if (event.type !== 'mouseDown') return;
+
+      // Announce the click so overlays rendered in the parent document dismiss even when it lands
+      // inside a WebView iframe, whose events never reach the parent document
+      announceAppWindowInput(event);
 
       // Announce a possible focus change
       try {
@@ -988,23 +1120,35 @@ async function main() {
         isAppGoingDown = isAppShuttingDown();
 
         if (isAppGoingDown) {
-          // The app is on its way down: stop the startup boot-race retry loop so it can't fire a
-          // startup sync after this shutdown sync, or reach a network connection that is about to
-          // be torn down.
+          // The app is on its way down: stop the startup tasks so they can't fire a startup sync
+          // after this shutdown sync, or reach a network connection that is about to be torn down.
+          // Unconditional, as it has always been — Power mode's boot-race retry loop in particular
+          // must stop here on every platform.
           startupTasksAbort.abort();
 
-          // Flush the window-layouts structure with every still-tracked window in it, before any
-          // `closed` handler trims the list — a window that is not live at save time is not
-          // written, so this is what preserves the closing windows' entries across a quit (and the
-          // final window's entry on a last-window close). Capture this window's placement first so
-          // the flush holds its freshest bounds; on a multi-window quit each window's close handler
-          // does the same, so the last flush holds everyone's.
+          // Simple mode's readiness wait is the one thing that may outlive this close: on macOS the
+          // app stays resident and the startup tasks run once per PROCESS, so aborting here would
+          // drop the startup sync for good even though a dock reactivation still wants it. The
+          // predicate explains why the platform, and not the quit flag alone, has to decide. A wait
+          // that does survive still cannot fire into a windowless app — `canFireStartupSync` above
+          // is re-checked immediately before the sync goes out.
+          if (shouldWindowCloseAbortReadinessWait(process.platform)) startupReadinessAbort.abort();
+
+          // Flush the window-layouts structure so this window's entry holds what it had open when
+          // the app went down. Capture its placement first so the flush holds its freshest bounds.
+          //
+          // On a multi-window quit every window flushes, and the flushes queue behind one another
+          // while the windows go down around them. A flush writes the structure as it stands when
+          // it reaches the front of the queue — so the LAST flush, the one that survives on disk,
+          // is only complete because a window going down with the app keeps its entry (see
+          // `handleWindowRemoved`'s disposition below).
+          //
           // Only on this path: a window closing while the app stays up is leaving the structure,
           // and its `closed` handler below rewrites the structure without it.
           try {
             cancelPendingBoundsCapture();
             updateWindowBounds(windowId, captureWindowBoundsState());
-            await writeNow(getWindows().map((window) => window.id));
+            await writeNow();
           } catch (e) {
             // Losing the structure costs the user their window arrangement. Skipping the shutdown
             // tasks below would cost them their unsynced edits, which nothing can write back once
@@ -1070,16 +1214,21 @@ async function main() {
       // of this teardown, leaving the window tracked forever and the app never told it closed.
       removeWindow(newWindow, windowId);
 
-      // Stop persisting this window. When the close was deliberate — the app stays up — rewrite the
-      // structure without it so the window does not come back next session. During a quit the
-      // structure was already flushed with this window still in it, and must NOT be rewritten
-      // smaller here.
+      // What this window's disappearance means for its entry. A deliberate close — the app stays up
+      // — takes the entry with it, and the structure is rewritten without it below so the window
+      // does not come back next session. A window going down with the app is NOT leaving the
+      // structure: it has to be there next session, so its entry stays — including in every flush
+      // still queued behind this moment.
       // After the announcement above, which is synchronous and must not wait on a disk write, and
       // before the unsubscribers below, which spend the network service's whole registration retry
       // failing against a renderer that is already gone.
       cancelPendingBoundsCapture();
-      handleWindowRemoved(windowId);
-      if (!isAppGoingDown) await writeNow(getWindows().map((window) => window.id));
+      handleWindowRemoved(windowId, isAppGoingDown ? 'entry-stays' : 'entry-goes-with-it');
+      // A window told to close counts as gone from the moment it is told, and stops counting for
+      // real only here — its close runs the async work above, and it is open and counted for all of
+      // it. Told or not, every window passes through here, and untracked ids are ignored.
+      handleWindowEmptied.handleWindowGone(windowId);
+      if (!isAppGoingDown) await writeNow();
 
       try {
         await windowCloseUnsubscribers.runAllUnsubscribers();
@@ -1318,6 +1467,17 @@ async function main() {
     return newWindow;
   };
 
+  // The router that serves `openWebView` starts before this closure exists, so it is handed the
+  // window facilities once they are real. A caller that reaches the router first (e.g. an extension
+  // opening a window from `activate()`) waits, bounded, for this call rather than failing outright —
+  // so this must stay wired without first waiting for extension-host readiness: a wait here for an
+  // extension-host ready signal would deadlock against that wait.
+  setWebViewWindowCreator({
+    createPendingContentWindow: async () =>
+      (await createWindow(undefined, { pendingContent: true })).id,
+    closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+  });
+
   /**
    * Create the app's windows from the persisted window-layouts structure: one window per saved
    * entry, in entry order — except in simple interface mode, which is single-window, so only the
@@ -1403,6 +1563,10 @@ async function main() {
       // Stop the startup boot-race retry loop before networkService.shutdown() tears down the
       // connection, so a late retry can't resurrect it (a no-op if the window close already aborted).
       startupTasksAbort.abort();
+      // A real quit ends the Simple-mode readiness wait too, including the macOS last-window-close
+      // case the window handler deliberately let through — that exception exists for an app that
+      // stays resident, and this one is not.
+      startupReadinessAbort.abort();
 
       // Prevent closing before graceful shutdown is complete.
       // Also, in the future, this should allow a "are you sure?" dialog to display.
@@ -1455,6 +1619,10 @@ async function main() {
         'electronAPI:env.test',
         (_event, message: string) => `From main.ts: test ${message}`,
       );
+
+      // powerMonitor throws if touched before 'ready', so this is registered here rather than at
+      // module load time.
+      registerPowerMonitorListeners(powerMonitor);
 
       // When packaged, the app loads from file:// which has an opaque (null) origin and sends no
       // Referer header. YouTube embeds require a non-null HTTP/HTTPS Referer and show Error 153

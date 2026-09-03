@@ -1,7 +1,9 @@
 /* Based on scripture-editors' packages/platform/src/usj-nodes.css:
    https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
    (originally synced from commit ba0e846b3f1:
-   https://github.com/eten-tech-foundation/scripture-editors/commit/ba0e846b3f1).
+   https://github.com/eten-tech-foundation/scripture-editors/commit/ba0e846b3f1,
+   with the RTL/bidi gutter-marker fixes and the ::after active-text outline forwarded from the
+   demo copy's d95907eed30 sync — the two vendored copies must not diverge on those rules).
    Local additions: li/lim --para-indent and --verse-text-start entries in
    .psc-gutter-markers.text-spacing, mirroring scripture-editors commit 846ad99
    (https://github.com/eten-tech-foundation/scripture-editors/commit/846ad99,
@@ -76,10 +78,23 @@
   margin-top: 8pt;
 }
 
+/* `\ca` renders identically in BOTH of its states — a first-class `char ca` span at root and the
+   chapter's attribute-run form (AttributeRunNode carries `usfm_ca` for runKind "ca", the same
+   wrapper-class mechanism `usfm_va`/`usfm_vp` use): non-bold green italic, never the chapter's own
+   bold. A later-injected project stylesheet still wins the ordinary properties where it defines
+   them (the layering rule), which is why color/size/style stay at single-class specificity. */
 .formatted-font .usfm_ca {
   color: #007306;
   font-size: 133%;
   font-style: italic;
+}
+/* The anti-bold is load-bearing for the run form, which sits INSIDE the chapter element and would
+   otherwise inherit `.usfm_c`'s bold — and it must survive a project stylesheet that bolds `\ca`
+   (hbkeng.scss declares `.formatted-font .usfm_ca { font-weight: bold }`, an identical-specificity
+   rule injected later, so source order handed it the win). The doubled class — the same
+   specificity bump `commentary-overrides.scss` uses for `\jmp` — pins exactly this one property. */
+.formatted-font .usfm_ca.usfm_ca {
+  font-weight: normal;
 }
 
 .formatted-font .usfm_cp {
@@ -90,6 +105,31 @@
 .text-spacing .usfm_cp {
   margin-bottom: 4pt;
   margin-top: 8pt;
+}
+
+/* The chapter's OWN `\ca`/`\cp` attribute runs, nested inside the chapter element. Font-size
+   percentages resolve against the PARENT's computed size, so the runs' 133%/150% would compound
+   with `.usfm_c`'s 150% (≈200%/225% of body text) and dwarf their standalone twins; dividing by
+   the same 1.5 lands each run at exactly the size its standalone form renders at (133%/150% of
+   body). If `.usfm_c`'s font-size changes, change the divisor with it. Glyph sizing needs no
+   `usfm_va`-style reset here: `.opening`/`.closing` render at 0.7em of the span in BOTH states,
+   so leaving them alone is what keeps the two states identical.
+
+   `display: block` puts the `\ca` run on the line AFTER `\c N` — matching PT9's Standard view,
+   which renders the `\ca` span outside the chapter's block div, and matching the standalone
+   `char ca`, which sits at root between two blocks and so occupies its own line already. Purely
+   presentational: the run's bytes, document positions, and caret order are untouched (display
+   bytes are excluded from positions by node state, not by layout). `\cp` deliberately stays
+   inline on the chapter's line (moving it to its own line is tracked separately); when both runs
+   display, the block `\ca` run pushes the `\cp` run onto the following line as a layout
+   consequence — which is PT9's own three-line layout for that shape. */
+.formatted-font .usfm_c .usfm_ca {
+  display: block;
+  font-size: calc(133% / 1.5);
+}
+
+.formatted-font .usfm_c .usfm_cp {
+  font-size: calc(150% / 1.5);
 }
 
 /* VerseNode, ImmutableVerseNode */
@@ -113,6 +153,26 @@
   color: #003380;
   font-size: 66%;
   vertical-align: text-top;
+}
+
+/* A verse's \va/\vp opening/closing glyphs ride INSIDE the AttributeRunNode wrapper now (they were
+   loose paragraph siblings before the flip), so their own `font-size: 0.7em`
+   (`.formatted-font.marker-editable .opening`/`.closing`/`.selfClosing` below) would otherwise
+   compound with the wrapper's OWN `font-size: 66%` above (0.7 × 0.66 ≈ 46% of the paragraph's
+   size — noticeably smaller than the pre-flip 70%, since `em` is always relative to the immediate
+   parent's computed size, not the paragraph). Reset to 100% of the wrapper's own already-reduced
+   size, matching the value's size exactly, so the glyphs and the value read as one uniformly-sized
+   green/blue-superscript run instead of two visibly different sizes glued together. Selector
+   specificity (four classes) beats the general glyph rule's three, so this wins regardless of
+   declaration order. Ported from the library's packages/platform/src/usj-nodes.css (added during
+   the display-run consolidation's AttributeRunNode wrapper migration). */
+.formatted-font.marker-editable .usfm_va .opening,
+.formatted-font.marker-editable .usfm_va .closing,
+.formatted-font.marker-editable .usfm_va .selfClosing,
+.formatted-font.marker-editable .usfm_vp .opening,
+.formatted-font.marker-editable .usfm_vp .closing,
+.formatted-font.marker-editable .usfm_vp .selfClosing {
+  font-size: 100%;
 }
 
 /* ParaNode */
@@ -2087,6 +2147,43 @@
   font-size: 0.7em;
 }
 
+/* Standard view: editable markers within formatted text get the PT9 marker look.
+   MarkerNode carries its marker-syntax class (opening/closing/selfClosing), not
+   `marker` (dropped in #359); ImmutableTypedTextNode (book id) carries `marker`.
+   Verse/chapter tokens are deliberately excluded: PT9 styles them via their own
+   usfm_v/usfm_c stylesheet classes, not the grey marker look.
+   Scoped to .formatted-font so the Unformatted view keeps full-size plain markers. */
+.formatted-font.marker-editable .opening,
+.formatted-font.marker-editable .closing,
+.formatted-font.marker-editable .selfClosing,
+.formatted-font.marker-editable .marker {
+  color: rgba(140, 140, 140, 1);
+}
+
+.formatted-font.marker-editable .opening,
+.formatted-font.marker-editable .closing,
+.formatted-font.marker-editable .selfClosing,
+.formatted-font.marker-editable .marker:not(.chapter) {
+  font-size: 0.7em;
+}
+
+/* Marker validation states (PT9 ScriptureBase.css .status_unknown/.status_invalid):
+   flag markers the project stylesheet reports as unknown or invalid. Applied to
+   marker GLYPH spans only — body text stays normal (PT9 Standard.xslt stamps status
+   on the marker span, not the element). Same error red as the unmatched-closer
+   `.invalid` rule below. */
+.marker-editable .status_unknown,
+.formatted-font.marker-editable .status_unknown {
+  color: rgba(204, 30, 20, 1);
+  font-weight: bold;
+}
+
+.marker-editable .status_invalid,
+.formatted-font.marker-editable .status_invalid {
+  color: rgba(204, 30, 20, 1);
+  border-bottom: 1px solid rgba(204, 30, 20, 1);
+}
+
 .notetext {
   unicode-bidi: embed;
 }
@@ -2095,8 +2192,29 @@
   color: rgba(170, 170, 170, 1);
 }
 
+/* Hovering an attribute run lifts it out of its dim resting color to the host's ordinary text
+   color. The literal is only the fallback for a host that defines no `--foreground`: a fixed
+   near-black would be all but invisible against a dark theme. */
 .attribute:hover {
-  color: rgba(25, 25, 25, 1);
+  color: var(--foreground, rgba(25, 25, 25, 1));
+}
+
+/* AttributeRunNode: the ONE wrapper span holding a verse's \va/\vp display triplet or a
+   milestone's attribute run (AttributeRunNode.ts) — dim like a char span's `.attribute` run by
+   default, since `color` inherits down to the glyphs and value riding inside it. A verse's
+   wrapper additionally carries `usfm_va`/`usfm_vp` (added only for those two runKinds), whose
+   higher-specificity `.formatted-font .usfm_va`/`.usfm_vp` rules above override this dim color
+   with PT9's green/blue superscript — the same styling a standalone `char va`/`vp` span already
+   gets. A milestone's wrapper carries no such class, so it keeps the dim styling as its own.
+   Ported from the library's packages/platform/src/usj-nodes.css (added during the display-run
+   consolidation's AttributeRunNode wrapper migration). */
+.attribute-run {
+  color: rgba(170, 170, 170, 1);
+}
+
+/* Same hover treatment as `.attribute` above, and for the same reason. */
+.attribute-run:hover {
+  color: var(--foreground, rgba(25, 25, 25, 1));
 }
 
 .invalid {
@@ -2141,6 +2259,21 @@
   border-radius: 10px;
 }
 
+/* \fp (footnote paragraph) displays like a paragraph start — a line break before its span —
+   while the note stays one inline run in the data (no newline ever enters USJ or USFM). A
+   ::before generated line break is used instead of `display: block` because it keeps the span
+   inline (the trailing \f* closer glyph stays on the last content line instead of dropping to
+   its own line, and the expanded-note pill background doesn't fragment around a block box) and
+   the pseudo-element is not in the DOM, so the caret can never land in it and the editor's
+   selection/serialization are untouched. Scoped to .note.expanded so it applies wherever an
+   expanded note's content is visible (inline-expanded notes in any view and the footnote
+   popover, which renders in this same web view document) and never affects collapsed notes,
+   whose content is hidden. */
+.note.expanded .usfm_fp::before {
+  content: '\A';
+  white-space: pre;
+}
+
 /* NoteNode > ImmutableNoteCallerNode */
 
 .immutable-note-caller > button,
@@ -2181,19 +2314,60 @@
     'w' 'x' 'y' 'z';
 }
 
+/* Cross-reference-kind notes' auto-generated callers use their own sequence, so they don't also
+   increment the footnote counter above. */
+@counter-style cross-ref-callers {
+  system: cyclic;
+  /* These symbols are updated in TS by the `NoteNodePlugin`. */
+  symbols: '\2020';
+  suffix: '';
+}
+
 .editor-input {
-  counter-reset: caller;
+  counter-reset: caller crossref;
 }
 
 .editor-input.reset-counters {
   counter-reset: none;
 }
 
-.immutable-note-caller[data-caller='+'] {
+/* Which caller sequence a note uses is decided by the EDITOR, which stamps
+   `data-note-kind="footnote"` or `data-note-kind="crossref"` on every `.note` element following
+   PT9's Standard view classification (Paratext repo,
+   ParatextInternalShared/ScriptureViews/Standard.xslt lines 446-449): a note style whose marker
+   starts with `f` or `ef` is a footnote; EVERY other note style — x, ex, and any custom note
+   marker — uses the cross-reference sequence. Keying the counters on that stamp (instead of
+   enumerating marker classes here) keeps the classification in one place, so a custom.sty note
+   marker gets exactly the sequence PT9 would give it. */
+.note[data-note-kind='footnote'] .immutable-note-caller[data-caller='+'] {
   counter-increment: caller;
 }
 
-.note.collapsed .immutable-note-caller[data-caller='+'] > button::before {
+.note.collapsed[data-note-kind='footnote']
+  .immutable-note-caller[data-caller='+']
+  > button::before {
+  content: counter(caller, note-callers);
+}
+
+.note[data-note-kind='crossref'] .immutable-note-caller[data-caller='+'] {
+  counter-increment: crossref;
+}
+
+.note.collapsed[data-note-kind='crossref']
+  .immutable-note-caller[data-caller='+']
+  > button::before {
+  content: counter(crossref, cross-ref-callers);
+}
+
+/* TRANSITIONAL fallback for editor builds that predate the `data-note-kind` stamping: an
+   unstamped `.note` falls back to the footnote sequence, so callers stay visible (a counter and a
+   non-empty ::before) rather than disappearing. Remove once the pinned editor package always
+   stamps the attribute. */
+.note:not([data-note-kind]) .immutable-note-caller[data-caller='+'] {
+  counter-increment: caller;
+}
+
+.note.collapsed:not([data-note-kind]) .immutable-note-caller[data-caller='+'] > button::before {
   content: counter(caller, note-callers);
 }
 
@@ -2231,25 +2405,91 @@
   color: #7777ff;
 }
 
-/* The generic table-cell box that used to live here (border-collapse on tables +
-   `1px solid #000` on td, with a `.markercell` borderless exception) was moved to
-   marker-styles/commentary-overrides.scss (PT-3086) so it applies only in handbook
-   (HBKENG/TNN/TND) iframes. Real tables in the project view and other resources are
-   intentionally borderless; the paragraph-indent reset for real tables lives in the
-   table-marker section above (.usfm .table-row, .usfm .table-cell). */
+/* The table box, matching Paratext 9's ScriptureBase.css (`table`/`td`/`td.markercell`) and the
+   editor library's own sheet. It is unscoped there and here: PT9 boxes every table it renders, so
+   a project's tables need this as much as a handbook's — without it the cells lose their borders,
+   their padding and their collapsed edges, and a table reads as run-together text.
+   `th` is named alongside `td` because ImmutableTableCellNode emits a real <th> for th* markers,
+   which PT9's td-only rule predates and would otherwise leave unboxed.
+   marker-styles/commentary-overrides.scss carries an identical copy for handbook iframes; it is
+   injected later and simply re-asserts these values there. */
+.usfm table {
+  border-collapse: collapse;
+}
+
+.usfm td,
+.usfm th {
+  /* Theme-aware where PT9's literal black is not: this sheet renders inside the themed app, where
+     a hard #000000 border disappears against a dark background. The literal stays as the fallback
+     for a host that defines no --foreground — and in marker-styles/commentary-overrides.scss's
+     handbook copy, whose iframes are always light and never define the app theme variables. */
+  border: 1px solid var(--foreground, #000000);
+  page-break-inside: avoid;
+  /* FB27281 adding padding based on font size*/
+  padding-right: 0.28em;
+  padding-left: 0.28em;
+}
+
+/* Unreachable today, and kept deliberately: PT9 wraps a row's own `\tr` glyph in a real
+   `<td class="markercell">`, which needs its border removed because `td` above gives it one. Our
+   glyph rides instead in the ANONYMOUS table cell the browser generates around the only non-cell
+   content of a `<tr>` — not a `td` element, so it matches neither rule and has no border to reset.
+   It does miss `td`'s horizontal padding, which the rule below restores directly on the glyph. */
+.usfm td.markercell {
+  border-style: none;
+}
+
+.usfm .table-row > .opening,
+.usfm .table-row > .marker {
+  padding-inline-start: 0.28em;
+}
+
 .usfm rt {
   cursor: pointer;
 }
 
-/* Style statues */
-.status_unknown {
-  color: rgba(204, 30, 20, 1);
-  font-weight: bold;
+/* UnknownNode: lossless carrier for content this editor doesn't model directly — tables,
+   figures, sidebars (\esb), \periph, \ref, \optbreak, etc. Hidden by default in every view
+   (preserves formatted/markers behavior); standard view (.marker-editable) reveals it as a subdued
+   read-only container so the content is visible/inert instead of silently invisible. The node's own
+   USFM bytes (opening marker, attribute run, closing marker) render as ordinary `.marker`/
+   `.attribute` ImmutableTypedTextNode children, already styled by the `.marker`/`.attribute` rules —
+   so NO CSS-generated `::before` label is used here; a generated label would DUPLICATE that real
+   text (a bare `\fig` would show twice; \optbreak's `//` would render as `////`). Ported from the
+   library's packages/platform/src/usj-nodes.css. The source colors it via
+   hsl(var(--muted-foreground, 215 16% 65%) / alpha), but this fork already uses --muted-foreground
+   with a DIFFERENT contract (a full color + hex fallback, lines below), so the subdued grays are
+   written as literal rgba(140, 140, 140, ...) here — matching the fork's own subdued-marker
+   convention (see `.marker-editable .book .marker` above) and avoiding the invalid hsl(var()) that
+   the contract mismatch would produce. Two corpus-proven mid-paragraph constructs get inline
+   treatment instead of a block box: \optbreak (whose `//` token is a real child text node) and \ref
+   (its own inline child text). */
+.unknown-block,
+.unknown-inline {
+  display: none;
 }
 
-.status_invalid {
-  border-bottom: 1px solid rgba(204, 30, 20, 1);
-  color: rgba(204, 30, 20, 1);
+.marker-editable .unknown-block {
+  display: block;
+  margin: 0.25em 0;
+  padding: 0.25em 0.5em;
+  /* An EMPTY opaque block (e.g. a bare \fig) must stay visible/selectable: without content the
+     box collapses to 0 height. One line-height of room keeps the dashed frame renderable. */
+  min-height: 1.5em;
+  border: 1px dashed rgba(140, 140, 140, 0.5);
+  background-color: rgba(140, 140, 140, 0.08);
+  color: rgba(140, 140, 140, 0.85);
+  /* Whole-block selection/deletion: the containment (a selection stays within the box rather
+     than merging with surrounding text) is provided by the opaque/inert UnknownNode, not CSS.
+     `user-select: contain` is not implemented in Blink/Chromium (only auto | text | none | all),
+     so it was a no-op and is intentionally omitted. */
+}
+
+.marker-editable .unknown-inline {
+  display: inline;
+  color: rgba(140, 140, 140, 0.85);
+  /* Same as the block variant: containment comes from the inert UnknownNode, not CSS
+     (`user-select: contain` is a Blink no-op), so no user-select is set here. */
 }
 
 .caption {
@@ -2279,6 +2519,34 @@
   padding: 0px 1px 0px 1px;
   text-indent: 0in;
   white-space: nowrap;
+}
+
+/* Standard view only. Ported from the library's packages/platform/src/usj-nodes.css, where it had
+   been missed in this vendored copy — the app therefore painted the badge in a view the library
+   does not, which is a real app-vs-demo difference at the one element the caret rests in here.
+   In standard view (`marker-editable`) a verse is a VerseNode, i.e. editable text whose content is
+   literally `\v 4 `, so the caret can and does come to rest INSIDE this span; the grey badge from
+   `.formatted-font .verse` above then sits directly behind that caret. PT9's Standard view has no
+   background badge on verse tokens (the formatted, non-editable views keep theirs). */
+.formatted-font.marker-editable .verse {
+  white-space: nowrap;
+  unicode-bidi: embed;
+  background-color: transparent;
+}
+
+/* `.text-spacing .verse` above gives the verse token 2px of margin and 1px of padding on each side.
+   That is the separation the NON-editable views need: there a verse is a decorator rendering a bare
+   number, with no space of its own on either side of it.
+
+   In editable-marker mode the verse is a VerseNode — a TextNode whose text is literally `\v 9 `, so
+   the USFM separator space is real, selectable, caret-addressable content. The box spacing then
+   lands on top of a space the user can already see, and the view reads as TWO spaces after the
+   verse number. Only one of them is a character: the box space has no caret position of its own and
+   no selection highlight, which is exactly how it was reported. The marker's own text does all the
+   separating in this mode, so the box adds none. */
+.text-spacing.marker-editable .verse {
+  margin: 0;
+  padding: 0;
 }
 
 /* Verse marker armed for the two-step intentional delete (first Backspace/Delete selects it).
@@ -2535,13 +2803,20 @@ span.read img {
    Milestone and character markers that appear later in the paragraph are NOT shown in the
    gutter — they are already hidden by the .marker:not(.verse):not(.chapter) rule above.
    :not(.verse) excludes ImmutableVerseNode; :not(.chapter) excludes ImmutableChapterNode. */
-.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child {
+/* direction: ltr + unicode-bidi: isolate keep USFM marker text (e.g. \q1) readable as
+   LTR even in RTL documents. Physical left/right are used for positioning (instead of
+   inset-inline-*) because forcing direction: ltr on the element makes logical property
+   resolution unreliable across browsers. */
+.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child,
+.psc-gutter-markers .book > .marker:first-child {
   display: block;
   position: absolute;
   /* left = -(gutter-width) + 0.5em-gap + para-indent-compensation */
   left: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
   top: 0;
   width: 3em;
+  direction: ltr;
+  unicode-bidi: isolate;
   text-align: right;
   white-space: nowrap;
   color: var(--scripture-accent-marker);
@@ -2680,10 +2955,19 @@ span.read img {
   padding-left: 10px; /* restore base value */
 }
 
-.psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child {
+/* RTL: gutter moves to the right. Physical right is used for the same reason as left above.
+   var(--para-indent) is inherited from the paragraph element (same variable the LTR left
+   calc uses), so indented para types automatically get the correct gutter column without
+   needing per-type overrides.
+   text-align is intentionally NOT overridden here: the base rule's `text-align: right` is
+   what keeps the (forced-ltr) marker text painting inside its 3em box. Setting
+   `text-align: left` here in an RTL containing block triggers a Chrome/Firefox bidi quirk
+   where the text glyphs are painted ~57px outside the box to the left (only manifests when
+   the box width matches the CSS width — auto-widened boxes like \mt1, \ms1 escape it). */
+.psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child,
+.psc-gutter-markers[dir='rtl'] .book > .marker:first-child {
   left: auto;
   right: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
-  text-align: left;
 }
 
 /* ── Active text focus box ────────────────────────────────────────────────────
@@ -2697,25 +2981,34 @@ span.read img {
   --scripture-accent: #c4956a;
 }
 
-/* position: relative on the active paragraph is the containing block for ::before. */
+/* position: relative on the active paragraph is the containing block for the outline pseudo.
+   We use ::after instead of ::before because BookNode paragraphs already use ::before to render
+   the book code via attr(data-code) (see .marker-hidden .book[data-code]::before above), and that
+   rule has higher specificity than the outline's — sharing ::before would let "HAB" bleed into the
+   outline's absolutely-positioned box. */
 .psc-active-focus .psc-active-text {
   position: relative;
 }
 
-.psc-active-focus .psc-active-text::before {
+.psc-active-focus .psc-active-text::after {
   content: '';
   position: absolute;
-  left: var(--verse-text-start, 0px);
-  right: 0;
-  top: var(--active-verse-top, -2px);
-  bottom: var(--active-verse-bottom, -2px);
+  inset-inline-start: var(--verse-text-start, 0px);
+  inset-inline-end: 0;
+  top: -2px;
+  bottom: -2px;
   border: 2.5px solid var(--scripture-accent);
   border-radius: 4px;
   pointer-events: none;
 }
 
-/* RTL: active text box mirrors the hanging indent to the right side */
-.psc-active-focus[dir='rtl'] .psc-active-text::before {
-  left: 0;
-  right: var(--verse-text-start, 0px);
+/* In gutter-marker mode, the paragraph marker (\p, \q1, etc.) is absolutely positioned in the
+   gutter to the inline-start side of the paragraph's content box. Extend the outline's
+   inline-start so the box surrounds the marker too — using min() picks whichever is further
+   into the gutter, the hanging-indent text start (for poetry) or the marker's own column. */
+.psc-active-focus.psc-gutter-markers .psc-active-text::after {
+  inset-inline-start: min(
+    var(--verse-text-start, 0px),
+    calc(-1 * var(--psc-gutter-width) - var(--para-indent))
+  );
 }
