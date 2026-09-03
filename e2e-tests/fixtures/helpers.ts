@@ -873,6 +873,87 @@ export async function waitForProjectMetadata(
   );
 }
 
+/**
+ * JSON-RPC method for the menu data provider's `getMainMenu` (see `menu-data.service-model.ts`'s
+ * `menuDataServiceProviderName`) — same `object:<providerName>-data.<method>` convention as
+ * SETTINGS_GET_METHOD above.
+ */
+const MENU_DATA_GET_MAIN_MENU_METHOD =
+  'object:platform.menuDataServiceDataProvider-data.getMainMenu';
+
+/** Main menu item shape {@link isLocalizedAboutMenuItem} and {@link waitForMainMenuItem} read. */
+export type PolledMainMenuItem = { command?: string; label?: string };
+
+/**
+ * Whether `item` is the main menu's "About Platform.Bible" entry with its label already replaced by
+ * localized text, rather than still showing `menu.data.json`'s raw `%mainMenu_about%` placeholder.
+ */
+export function isLocalizedAboutMenuItem(item: PolledMainMenuItem): boolean {
+  return item.command === 'platform.about' && /About Platform\.Bible/i.test(item.label ?? '');
+}
+
+/**
+ * Wait until the main menu reports an item matching `matches` — used to confirm the extension host
+ * has replaced a placeholder with real text, not merely that the item exists.
+ *
+ * `menu-data.service-host.ts` registers this data provider from the extension host's own startup
+ * `Promise.all`, which runs BEFORE `extensionService.initialize()` — so it answers requests from
+ * the moment it registers, but its very first snapshot is seeded straight from the raw, unlocalized
+ * `menu.data.json`: every label is still its literal `%localize_key%` placeholder. The engine only
+ * replaces that snapshot — and notifies the renderer's subscription — once the extension host's
+ * first contribution resync completes and calls the engine's `rebuildMenus()`. None of
+ * `waitForAppReady`'s own signals (the dock layout, the renderer's window-scoped shards, the
+ * first-run gate, the overlay) observe this, because they are all renderer-only: the menubar's
+ * items arrive from the extension host, not the renderer, so a spec that drives the menubar by name
+ * (clicking a trigger, matching an item's text) needs this extension-host signal too, or it can
+ * open a menu whose data is still mid-replacement underneath it.
+ *
+ * Re-requests the provider's live state on every attempt rather than trusting one snapshot (same
+ * reason {@link waitForProjectMetadata} does), so it cannot report ready before the data has
+ * genuinely turned over — unlike gating on `waitForResyncContributions()` (or anything built on it,
+ * e.g. the settings data provider's `getLocalizedSettingsContributionInfo`): that promise resolves
+ * on the extension-host side BEFORE the resync's own subscribers — including this same menu rebuild
+ * — are awaited, so it settles too early to prove the menu data itself has changed.
+ *
+ * @param matches Predicate identifying the item this caller needs (e.g.
+ *   {@link isLocalizedAboutMenuItem}).
+ * @param description How to name that item if it never arrives, for the timeout error.
+ */
+export async function waitForMainMenuItem(
+  matches: (item: PolledMainMenuItem) => boolean,
+  description: string,
+  port: number = DEFAULT_WEBSOCKET_PORT,
+  timeoutMs = PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const remaining = timeoutMs - (Date.now() - start);
+    try {
+      // Sequential polling: each attempt must finish (or time out) before the next;
+      // parallelizing would defeat the retry/backoff.
+      // eslint-disable-next-line no-await-in-loop
+      const mainMenu = await sendPapiRequestOnce<{ items?: PolledMainMenuItem[] }>(
+        MENU_DATA_GET_MAIN_MENU_METHOD,
+        [],
+        port,
+        singleAttemptBudgetMs(remaining),
+      );
+      if (mainMenu.items?.some(matches)) return;
+    } catch {
+      /* provider not registered yet, or a transient request failure; next poll */
+    }
+    const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
+    if (sleepMs <= 0) break;
+    // Sequential polling: each attempt must finish (or time out) before the next;
+    // parallelizing would defeat the retry/backoff.
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, sleepMs);
+    });
+  }
+  throw new Error(`Main menu never reported ${description} within ${timeoutMs}ms.`);
+}
+
 /** Who wrote a backup, from this process's point of view. */
 type BackupOwner = 'ours' | 'orphaned' | 'live';
 

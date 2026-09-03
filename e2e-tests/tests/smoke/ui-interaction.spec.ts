@@ -2,7 +2,11 @@
 // Per-feature E2E tests belong in tests/isolated/ with isolated.fixture; the ones that must attach
 // to an app you started live in tests/attached/ with cdp.fixture.
 import { test, expect } from '../../fixtures/papi.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import {
+  isLocalizedAboutMenuItem,
+  waitForAppReady,
+  waitForMainMenuItem,
+} from '../../fixtures/helpers';
 
 test.describe('UI Interaction', () => {
   test.beforeAll(async ({ electronApp }) => {
@@ -14,6 +18,16 @@ test.describe('UI Interaction', () => {
     await electronApp.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()[0].maximize();
     });
+
+    // The menubar's items arrive from the extension host, not the renderer, so none of
+    // waitForAppReady's renderer-only signals (dock layout, window-scoped shards, first-run gate,
+    // overlay) observe them being ready — see waitForMainMenuItem's docs. Wait here, once, for the
+    // specific item this suite drives by name, so the Help dropdown a test opens below is never
+    // mid-replacement underneath the click.
+    await waitForMainMenuItem(
+      isLocalizedAboutMenuItem,
+      'the localized "About Platform.Bible" Help menu item',
+    );
   });
 
   test('should open the About dialog from the Help menu', async ({ mainPage }) => {

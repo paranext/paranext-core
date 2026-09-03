@@ -10,6 +10,7 @@ import {
   assertDeclaredWindowSize,
   ASSERT_INTERFACE_MODE_TIMEOUT_MS,
   DEFAULT_WINDOW_SIZE,
+  isLocalizedAboutMenuItem,
   isPopoverTriggerExpanded,
   LAUNCH_PHASE_TIMEOUT_MS,
   resolveRaceLeg,
@@ -76,6 +77,34 @@ describe('isPopoverTriggerExpanded', () => {
     // case needs an actual null, not undefined.
     // eslint-disable-next-line no-null/no-null
     expect(isPopoverTriggerExpanded(null)).toBe(false);
+  });
+});
+
+describe('isLocalizedAboutMenuItem', () => {
+  it('accepts the About item once its label has been localized to English', () => {
+    expect(
+      isLocalizedAboutMenuItem({ command: 'platform.about', label: 'About Platform.Bible' }),
+    ).toBe(true);
+  });
+
+  it('rejects the About item while its label is still the raw menu.data.json placeholder', () => {
+    // This is the actual pre-resync shape MenuDataDataProviderEngine's constructor seeds: the
+    // command is already correct, but the label has not been through a contribution resync yet.
+    expect(isLocalizedAboutMenuItem({ command: 'platform.about', label: '%mainMenu_about%' })).toBe(
+      false,
+    );
+  });
+
+  it('rejects a different item even when its label happens to match', () => {
+    // Reject-side coverage for the `command` half of the predicate: a label match alone must not
+    // be enough, or the wait could resolve against the wrong menu item.
+    expect(
+      isLocalizedAboutMenuItem({ command: 'platform.openSettings', label: 'About Platform.Bible' }),
+    ).toBe(false);
+  });
+
+  it('rejects the About item when it has no label yet', () => {
+    expect(isLocalizedAboutMenuItem({ command: 'platform.about' })).toBe(false);
   });
 });
 
