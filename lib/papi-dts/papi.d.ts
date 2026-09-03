@@ -4696,10 +4696,10 @@ declare module 'shared/services/window.service-model' {
    */
   export type FocusedWindowIdEvent = {
     /**
-     * The window the main process considers focused, or `undefined` if no window of this
-     * application currently does. Survives the whole application losing OS focus (e.g. the user
-     * alt-tabbing to another application) — it names the window the user was last working in, not
-     * whether any window currently holds OS focus. See `getFocusedWindowId`.
+     * The window the main process considers focused, or `undefined` if no window of this application
+     * currently does. Survives the whole application losing OS focus (e.g. the user alt-tabbing to
+     * another application) — it names the window the user was last working in, not whether any window
+     * currently holds OS focus. See `getFocusedWindowId`.
      */
     focusedWindowId: number | undefined;
   };
@@ -4711,7 +4711,8 @@ declare module 'shared/services/window.service-model' {
    * without a new window taking it (e.g. alt-tabbing away) — the payload keeps naming the window the
    * user was last in, matching `getFocusedWindowId`'s survive-blur semantic, so a renderer that shows
    * per-window UI (e.g. an active-tab focus ring) based on this event keeps showing it on the window
-   * the user will land back in rather than clearing it everywhere the moment the app is backgrounded.
+   * the user will land back in rather than clearing it everywhere the moment the app is
+   * backgrounded.
    *
    * @experimental
    */
