@@ -8,6 +8,7 @@ interface WebViewLike {
   webViewType?: string;
   projectId?: string;
   scrollGroupScrRef?: unknown;
+  state?: Record<string, unknown>;
 }
 type WebViewEventHandler = (event: { webView: WebViewLike }) => void;
 
@@ -436,5 +437,160 @@ describe('useOpenProjectTabs', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+  describe('includeNavigableProjectIds', () => {
+    const BIBLE_TEXTS = 'platformScriptureEditor.bibleTexts';
+    const TEXT_COLLECTION = 'platformScriptureEditor.scriptureTextGrid';
+    const openWith = (webView: WebViewLike, includeNavigableProjectIds = true) => {
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeNavigableProjectIds }),
+      );
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() => handler({ webView }));
+      return result;
+    };
+
+    it('ignores declared projects unless the option is passed', () => {
+      const { result } = renderHook(() => useOpenProjectTabs());
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        handler({
+          webView: {
+            id: 'wv-panel',
+            webViewType: BIBLE_TEXTS,
+            // Simple mode's default layout opens this panel with no container project.
+            scrollGroupScrRef: 0,
+            state: { navigableProjectIds: ['RES-1'] },
+          },
+        }),
+      );
+      expect(result.current).toEqual([]);
+    });
+
+    it('surfaces a panel whose only project is the resource it declares', () => {
+      const result = openWith({
+        id: 'wv-panel',
+        webViewType: BIBLE_TEXTS,
+        scrollGroupScrRef: 0,
+        state: { navigableProjectIds: ['RES-1'] },
+      });
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].projectId).toBe('res-1');
+    });
+
+    it('prefers the declared resource over the container project', () => {
+      const result = openWith({
+        id: 'wv-panel',
+        webViewType: BIBLE_TEXTS,
+        // The container is the editable project whose reference list is shown; the resource on
+        // screen is what Find must search.
+        projectId: 'CONTAINER-1',
+        scrollGroupScrRef: 0,
+        state: { navigableProjectIds: ['RES-1'] },
+      });
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].projectId).toBe('res-1');
+    });
+
+    it('yields one tab per declared project for a view hosting several', () => {
+      const result = openWith({
+        id: 'wv-grid',
+        webViewType: TEXT_COLLECTION,
+        scrollGroupScrRef: 0,
+        state: { navigableProjectIds: ['RES-1', 'RES-2'] },
+      });
+      expect(result.current.map((tab) => tab.projectId).sort()).toEqual(['res-1', 'res-2']);
+      expect(result.current.every((tab) => tab.webViewId === 'wv-grid')).toBe(true);
+    });
+
+    it('drops the projects a view stops declaring', () => {
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeNavigableProjectIds: true }),
+      );
+      const openHandler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        openHandler({
+          webView: {
+            id: 'wv-grid',
+            webViewType: TEXT_COLLECTION,
+            scrollGroupScrRef: 0,
+            state: { navigableProjectIds: ['RES-1', 'RES-2'] },
+          },
+        }),
+      );
+      expect(result.current).toHaveLength(2);
+      const updateHandler = mockOnDidUpdateWebView.mock.calls[0][0];
+      act(() =>
+        updateHandler({
+          webView: {
+            id: 'wv-grid',
+            webViewType: TEXT_COLLECTION,
+            scrollGroupScrRef: 0,
+            state: { navigableProjectIds: ['RES-2'] },
+          },
+        }),
+      );
+      expect(result.current.map((tab) => tab.projectId)).toEqual(['res-2']);
+    });
+
+    it('offers nothing for a view declaring an empty list, even with a container project', () => {
+      // An empty declaration means "I display nothing" — falling back to the container project
+      // would offer a project this tab is not showing.
+      const result = openWith({
+        id: 'wv-panel',
+        webViewType: BIBLE_TEXTS,
+        projectId: 'CONTAINER-1',
+        scrollGroupScrRef: 0,
+        state: { navigableProjectIds: [] },
+      });
+      expect(result.current).toEqual([]);
+    });
+
+    it('falls back to the container project when a view declares nothing at all', () => {
+      // An editor never publishes the key; it must still report its own project.
+      const result = openWith({
+        id: 'wv-editor',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'PROJ-1',
+        scrollGroupScrRef: 0,
+      });
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].projectId).toBe('proj-1');
+    });
+
+    it('rejects a malformed declaration rather than treating it as a project id', () => {
+      // Web view state is written by whoever owns the web view, so the value is guarded, not
+      // trusted. A malformed value is no declaration, so the container project answers.
+      const result = openWith({
+        id: 'wv-panel',
+        webViewType: BIBLE_TEXTS,
+        projectId: 'CONTAINER-1',
+        scrollGroupScrRef: 0,
+        state: { navigableProjectIds: 'RES-1' },
+      });
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].projectId).toBe('container-1');
+    });
+
+    it('removes every tab a closed view contributed', () => {
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeNavigableProjectIds: true }),
+      );
+      const openHandler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        openHandler({
+          webView: {
+            id: 'wv-grid',
+            webViewType: TEXT_COLLECTION,
+            scrollGroupScrRef: 0,
+            state: { navigableProjectIds: ['RES-1', 'RES-2'] },
+          },
+        }),
+      );
+      expect(result.current).toHaveLength(2);
+      const closeHandler = mockOnDidCloseWebView.mock.calls[0][0];
+      act(() => closeHandler({ webView: { id: 'wv-grid' } }));
+      expect(result.current).toEqual([]);
+    });
   });
 });
