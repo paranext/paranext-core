@@ -360,10 +360,14 @@ function isStagingCurrent(repo: DevRepo, sourceStamp: string): boolean {
  * include/exclude semantics here.
  */
 function getPublishedFiles(packageDir: string): string[] {
-  // npm exports its own flags to child processes as `npm_config_*`. `npm install -w <workspace>`
-  // in this repo would therefore hand `npm pack` a workspace filter that means nothing in the dev
-  // repo, and npm answers with an error object instead of a file list.
-  const env = { ...process.env };
+  // This runs inside the dev repo, so it needs the same environment every other command there gets
+  // — in particular the `_VOLTA_TOOL_RECURSION` deletion, without which a Volta-shimmed npm cannot
+  // resolve Node at all.
+  //
+  // On top of that: npm exports its own flags to child processes as `npm_config_*`. `npm install -w
+  // <workspace>` in this repo would therefore hand `npm pack` a workspace filter that means nothing
+  // in the dev repo, and npm answers with an error object instead of a file list.
+  const env = devRepoEnv();
   delete env.npm_config_workspace;
   delete env.npm_config_workspaces;
   const output = execSync('npm pack --dry-run --json', {
