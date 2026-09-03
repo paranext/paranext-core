@@ -264,7 +264,7 @@ If you only need the staged copy refreshed — for tests, typecheck, or a produc
 
 Run `npm install` as well if your change **added, removed, or bumped one of `scripture-editors`' own dependencies**, so npm updates this repo's tree and `package-lock.json` to match. Nothing here restates those dependencies; the staged package's own manifest is what npm reads.
 
-A regular `npm install` never moves your `scripture-editors` checkout off a branch of your own. It brings the checkout up to the pinned revision when it is somewhere nothing is being kept — detached, on `main`, or on the pinned branch itself — and otherwise leaves it exactly where it is, warns, and stages that instead. Anything staged that way is marked, so a `package-lock.json` generated from it cannot be committed by accident.
+A regular `npm install` never moves your `scripture-editors` checkout off a branch of your own. It brings the checkout up to the pinned revision when it is somewhere nothing is being kept — detached, on `main`, or on the pinned branch itself — and otherwise leaves it exactly where it is, warns, and stages that instead. Developing both repos at once therefore works the way you would expect: keep your editor branch checked out, and this repo builds against it.
 
 #### Install and build
 
