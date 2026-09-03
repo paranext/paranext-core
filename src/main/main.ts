@@ -1379,7 +1379,7 @@ async function main() {
       // Durable (see `WindowLayoutEntry.windowId`), and settled when the window was tracked above —
       // so the renderer's per-window storage, keyed by this same id, works from the first render in
       // every interface mode rather than waiting on a request to main after the load.
-      [WINDOW_ID]: `${windowId}`,
+      [WINDOW_ID]: windowId,
     };
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
