@@ -611,7 +611,8 @@ describe('resolveSelectedProjectScrollGroup', () => {
     projectId: string,
     scrollGroupId: number,
     webViewId: string,
-  ): OpenScrollGroupTab => ({ projectId, scrollGroupId, webViewId });
+    webViewType = 'platformScriptureEditor.react',
+  ): OpenScrollGroupTab => ({ projectId, scrollGroupId, webViewId, webViewType });
 
   it('keeps the current selection unchanged when its tab is still open', () => {
     const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-B', 1, 'wv-2')];
@@ -634,6 +635,100 @@ describe('resolveSelectedProjectScrollGroup', () => {
     expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, undefined)).toEqual({
       projectId: 'PROJ-A',
       scrollGroupId: 1,
+    });
+  });
+
+  // The picker lists resources open only in a reference panel, so a panel tab can now win any of
+  // the three branches below. Adopting its scroll group while an editor of the same project sits in
+  // a different group leaves `resolveTargetEditorWebViewId` with no match, which silently drops the
+  // editor's select + highlight on every result click.
+  describe('editor preference over reference panels', () => {
+    const panel = (projectId: string, scrollGroupId: number, webViewId: string) =>
+      tab(projectId, scrollGroupId, webViewId, 'platformScriptureEditor.bibleTexts');
+
+    it('prefers an editor over a panel in the same-project fallback, whatever the order', () => {
+      const expected = { projectId: 'PROJ-A', scrollGroupId: 1 };
+      const panelTab = panel('PROJ-A', 0, 'wv-panel');
+      const editorTab = tab('PROJ-A', 1, 'wv-editor', 'platformScriptureEditor.react');
+
+      expect(
+        resolveSelectedProjectScrollGroup(
+          'PROJ-A',
+          2,
+          [panelTab, editorTab],
+          undefined,
+          'platformScriptureEditor.react',
+        ),
+      ).toEqual(expected);
+      expect(
+        resolveSelectedProjectScrollGroup(
+          'PROJ-A',
+          2,
+          [editorTab, panelTab],
+          undefined,
+          'platformScriptureEditor.react',
+        ),
+      ).toEqual(expected);
+    });
+
+    it('prefers an editor even when preferredWebViewId names the panel', () => {
+      // The panel may well be the tab that opened Find (Ctrl+F from a reference panel), but
+      // resolving to it would cost the editor's select + highlight on every later result click.
+      const tabs = [
+        panel('PROJ-A', 0, 'wv-panel'),
+        tab('PROJ-A', 1, 'wv-editor', 'platformScriptureEditor.react'),
+      ];
+      expect(
+        resolveSelectedProjectScrollGroup(
+          'PROJ-A',
+          2,
+          tabs,
+          'wv-panel',
+          'platformScriptureEditor.react',
+        ),
+      ).toEqual({ projectId: 'PROJ-A', scrollGroupId: 1 });
+    });
+
+    it('honours preferredWebViewId when the project has no editor open', () => {
+      const tabs = [panel('PROJ-A', 0, 'wv-panel-1'), panel('PROJ-A', 3, 'wv-panel-2')];
+      expect(
+        resolveSelectedProjectScrollGroup(
+          'PROJ-A',
+          2,
+          tabs,
+          'wv-panel-2',
+          'platformScriptureEditor.react',
+        ),
+      ).toEqual({ projectId: 'PROJ-A', scrollGroupId: 3 });
+    });
+
+    it('prefers an editor in the cross-project fallback despite its higher scroll group', () => {
+      // Panels are pinned to group 0, so ordering by scroll group alone always picks the panel.
+      const tabs = [
+        panel('PROJ-B', 0, 'wv-panel'),
+        tab('PROJ-C', 2, 'wv-editor', 'platformScriptureEditor.react'),
+      ];
+      expect(
+        resolveSelectedProjectScrollGroup(
+          'PROJ-A',
+          0,
+          tabs,
+          undefined,
+          'platformScriptureEditor.react',
+        ),
+      ).toEqual({ projectId: 'PROJ-C', scrollGroupId: 2 });
+    });
+
+    it('still resolves to a panel when the project has no editor tab open', () => {
+      expect(
+        resolveSelectedProjectScrollGroup(
+          'PROJ-A',
+          0,
+          [panel('PROJ-A', 3, 'wv-panel')],
+          undefined,
+          'platformScriptureEditor.react',
+        ),
+      ).toEqual({ projectId: 'PROJ-A', scrollGroupId: 3 });
     });
   });
 
@@ -823,7 +918,8 @@ describe('resolveScrollGroupForPickedProject', () => {
     projectId: string,
     scrollGroupId: number,
     webViewId: string,
-  ): OpenScrollGroupTab => ({ projectId, scrollGroupId, webViewId });
+    webViewType = 'platformScriptureEditor.react',
+  ): OpenScrollGroupTab => ({ projectId, scrollGroupId, webViewId, webViewType });
 
   // The regression this pins: the simple-mode picker reports only a project id, so re-picking the
   // project Find is ALREADY on must not move which of its tabs Find targets. Resolving with an

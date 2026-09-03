@@ -68,7 +68,7 @@ function stubLocalizedStrings(keys: readonly LocalizeKey[]): LanguageStrings {
   return strings;
 }
 
-const NO_OPEN_PROJECTS_KEY = '%webView_find_noOpenProjects_results%';
+const NO_OPEN_PROJECTS_KEY = '%webView_find_noOpenProjectsOrResources_results%';
 const SEARCH_PROMPT_KEY = '%webView_find_searchPrompt%';
 /** The status-bar message for a completed search with 1 result and none hidden. */
 const STATUS_MESSAGE_KEY = '%webView_find_result%';
