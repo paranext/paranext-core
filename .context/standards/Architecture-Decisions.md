@@ -2883,6 +2883,12 @@ step, no automation. Just a record.
   emits explicit `.name` assignments, which is what React reads, and those assignments survive
   webpack's terser into the shipped bundle. Because the package ships as a committed `dist`, the
   option only takes effect once that `dist` is rebuilt; a rebuild is part of this change.
+
+  Regenerating a committed `dist` also lands anything already sitting in `src` unbuilt, which is a
+  behavior change nobody reviewing the ticket is expecting: at one point during this work the
+  `dist` was a commit behind `book.utils.ts`'s switch to native `String.includes`, so a rebuild
+  carried that fix along with it. Whoever rebuilds a committed `dist` should diff it against what
+  `src` alone would produce and say what came along for the ride.
 - **Alternatives considered:** **Ship source maps and symbolicate at log time** — rejected: it
   distributes a deobfuscated app, grows the install by the size of the maps (the renderer map alone
   is ~11.9 MB against a 3.2 MB bundle), and adds a resolution step to the logging path, all to
