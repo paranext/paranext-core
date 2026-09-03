@@ -43,6 +43,8 @@ import {
   updateRelatedFindPanel,
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+  type TextCollectionPanelOptions,
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
@@ -56,7 +58,6 @@ logger.debug('Scripture Editor is importing!');
 const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
-const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 /** Tab title/tooltip for the Text Collection (Scripture Text Grid) tab. */
 const SCRIPTURE_TEXT_GRID_TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 
@@ -388,12 +389,16 @@ async function open(
     };
 
     // If in Simple interface mode, open/update the related panels (model text, Bible texts,
-    // commentaries, comments) and auto-apply the admin's shared layout for the project being
-    // opened (re-arm the buffered panels, focus the desired col-3 tab). Note: A manual/later
-    // sync's held change is applied via the notification's "Apply now" rather than automatically
-    // here.
+    // commentaries, comments, text collection) and auto-apply the admin's shared layout for the
+    // project being opened (re-arm the buffered panels, focus the desired col-3 tab). Note: A
+    // manual/later sync's held change is applied via the notification's "Apply now" rather than
+    // automatically here.
     if (interfaceMode === 'simple' && projectForWebView.projectId) {
-      await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
+      await openOrUpdateRelatedPanels(
+        papi,
+        projectForWebView.projectId,
+        !!projectForWebView.isEditable,
+      );
       await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
     }
 
@@ -441,9 +446,9 @@ async function open(
 
     // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find waits
     // until here because it is the one panel that needs the id of the editor this call just created.
-    // Same guard as `openOrUpdateRelatedPanels`, for the same reason: the Column 3 panels follow the
-    // active translation project, so a read-only resource opened in the editor column must not drag
-    // them along.
+    // Find and the Scripture Text Grid both follow the active translation project, so a read-only
+    // resource opened in the editor column must not drag them along. The other Column 3 panels
+    // follow the editor either way.
     if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable)
       await updateRelatedFindPanel(papi, projectForWebView.projectId, openedWebViewId);
 
@@ -1016,19 +1021,33 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
   },
 };
 
+/**
+ * Pending projectIds to apply during the next Column 3 panel getWebView call, keyed by web view
+ * type. A Map entry present (even with value `undefined`) means a reload is in progress and the
+ * pending value should be used. Absence means no pending value.
+ *
+ * Used to pass a new projectId through reloadWebView, which has no options for extra data.
+ */
+const currentResourceTextPanelProjectIds = new Map<string, string | undefined>();
+
 const scriptureTextGridWebViewProvider: IWebViewProvider = {
   async getWebView(
     savedWebView: SavedWebViewDefinition,
-    openWebViewOptions: ResourceViewerOptions,
+    // The same type `updateRelatedTextCollectionPanel` writes, so the two halves of the re-point are
+    // linked by the type system rather than only by the field name.
+    openWebViewOptions: TextCollectionPanelOptions,
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
       throw new Error(
         `${SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
     // Project-binding seam: the grid is project-bound so it can fire first-open overlay init and,
-    // once content selection lands, select its contents. The PT10 default-layout open passes no
-    // projectId (dormant until content selection lands).
-    const projectId = openWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
+    // once content selection lands, select its contents. The default-layout open passes no
+    // projectId, so the grid starts unbound and falls back to following the scroll group; from then
+    // on `updateRelatedTextCollectionPanel` supplies a projectId here on every Simple-mode project
+    // switch, which is what keeps the panel off the outgoing project. Do not assume the
+    // `openWebViewOptions.projectId` branch is unused.
+    const projectId = openWebViewOptions.projectId ?? savedWebView.projectId;
     // Re-read every call so mode changes are picked up at open/replace/restore time.
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
     // Resolve here (not left to the web view's own effect): PlatformTabTitle auto-resolves a raw
@@ -1069,15 +1088,6 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
     };
   },
 };
-
-/**
- * Pending projectIds to apply during the next resource panel getWebView call, keyed by web view
- * type. A Map entry present (even with value `undefined`) means a reload is in progress and the
- * pending value should be used. Absence means no pending value.
- *
- * Used to pass a new projectId through reloadWebView, which has no options for extra data.
- */
-const currentResourceTextPanelProjectIds = new Map<string, string | undefined>();
 
 /**
  * Creates a resource panel web view provider that injects the given resourceType into web view

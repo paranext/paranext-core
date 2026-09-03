@@ -157,9 +157,9 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   const showResourcePicker = useCallback(
     (selectedResourceIds: string[]) =>
       papi.dialogs.showDialog('platform.resourcePicker', {
-        resourceType: 'ScriptureResource',
         selectedResourceIds,
         isModal: true,
+        resourceType: 'ScriptureResource',
       }),
     [],
   );

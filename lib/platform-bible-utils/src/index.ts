@@ -206,6 +206,7 @@ export type {
 export { menuDocumentSchema } from './extension-contributions/menus.model';
 export type { PaletteItem } from './palette.types';
 export type { DblResourceData, ResourceType } from './resources.model';
+export { doesCatalogRowCoverProject } from './resources.model';
 export type {
   ExtensionControlledProjectSetting,
   ExtensionControlledSetting,

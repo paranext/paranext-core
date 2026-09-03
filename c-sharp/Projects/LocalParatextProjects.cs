@@ -582,12 +582,37 @@ internal class LocalParatextProjects : IDisposable
     /// </summary>
     public IEnumerable<ProjectDetails> GetAvailablePublishedProjectDetails()
     {
-        // IsResourceProject is true for ResourceScrText and JoinedScrText (PT9's read-only
-        // resource-backed project shapes).
-        return GetVisibleScrTexts()
-            .Where(scrText => scrText.IsResourceProject)
-            .Select(TryGetProjectDetails)
-            .OfType<ProjectDetails>();
+        return GetAllResourceScrTexts().Select(TryGetProjectDetails).OfType<ProjectDetails>();
+    }
+
+    /// <summary>
+    /// Returns all resource <see cref="ScrText"/>s visible to the current user. Returns an empty
+    /// sequence when the user has no valid Paratext registration.
+    /// </summary>
+    private static IEnumerable<ScrText> GetAllResourceScrTexts()
+    {
+        if (!RegistrationInfo.DefaultUser.IsValid)
+            return [];
+        // Snapshot under the ScrTextArbitrator lock and materialize before returning — same
+        // pattern as GetScrTexts() to avoid racing the background watcher's RefreshScrTexts.
+        //
+        // AllAccessible (not ScriptureOnly) is required. ScriptureOnly carries the Resources bit, so
+        // it already enumerates .p8z resource bundles whose project type IS scripture; what it omits
+        // is the NonScripture bit, and the UBS Translator's Notes/Handbook resources (TNN, TND, HBK)
+        // are note-typed, not scripture-typed. Enumerating with ScriptureOnly drops them from both
+        // the Get Resources dialog and the text collection — confirmed by manual test on a machine
+        // with TNN installed.
+        //
+        // The NonScripture bit also admits resources this factory cannot serve — XML dictionaries,
+        // MARBLE resources, Global Consultant and Anthropology Notes — which reach the resource
+        // picker typed as Bible texts and render blank. Narrowing this to the note types we do
+        // support needs a project-type test verified on a machine that has them installed; nothing
+        // downstream distinguishes them, so widening this enum widens what the picker offers.
+        using (ScrTextArbitrator.GetLock())
+            return ScrTextCollection
+                .ScrTexts(IncludeProjects.AllAccessible)
+                .Where(scrText => scrText.IsResourceProject)
+                .ToList();
     }
 
     /// <summary>
