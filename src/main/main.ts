@@ -150,6 +150,7 @@ import {
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
   areCapturedBoundsTrustworthy,
+  correctBoundsForDisplayScale,
   trackDisplaySettle,
   type DisplaySettleState,
   ensureBoundsVisibleOnSomeDisplay,
@@ -169,6 +170,7 @@ import {
   WINDOW_EMPTIED_REQUEST_TYPE,
   type WindowBoundsState,
   type WindowLayoutEntry,
+  type WindowRectangle,
 } from '@shared/data/window-layout-persistence.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import {
@@ -891,6 +893,25 @@ async function main() {
      * normal state, so maximizing/minimizing/full-screening cannot overwrite the last normal
      * placement — only flip the flags.
      */
+    // On Windows, getBounds() reports a window's size in the PRIMARY display's units rather than
+    // the units of the display it is actually on whenever the two differ in scale factor (see
+    // correctBoundsForDisplayScale). Every reading of this window's bounds — the settle-clock seed
+    // below and every debounced capture — goes through this first, so the settle tracker, the
+    // trustworthiness check, and the persisted state all agree on one corrected value; seeding the
+    // clock from an uncorrected reading while captures use a corrected one would make the seed
+    // disagree with the display the first real capture lands on, costing the seeded wait it exists
+    // to save.
+    const captureCorrectedBounds = (bounds: WindowRectangle): WindowRectangle => {
+      if (process.platform !== 'win32') return bounds;
+      const containingDisplay = screen.getDisplayNearestPoint({ x: bounds.x, y: bounds.y });
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const corrected = correctBoundsForDisplayScale(bounds, containingDisplay, primaryDisplay);
+      logger.debug(
+        `window bounds captured: raw ${bounds.width}x${bounds.height} on display ${containingDisplay.id} (scale ${containingDisplay.scaleFactor}, primary ${primaryDisplay.scaleFactor}) -> stored ${corrected.width}x${corrected.height}`,
+      );
+      return corrected;
+    };
+
     // The settle clock is seeded from where the window is being placed, rather than left unknown
     // until the first capture, so a drag away from the creation display starts counting from
     // creation rather than from that later drag. `lastAcceptedDisplayId` stays unknown, though: the
@@ -899,7 +920,7 @@ async function main() {
     // capture on the creation display still has to clear `areCapturedBoundsTrustworthy`'s settle
     // wait before it earns the trust that lets later captures on that same display through at once.
     const initialDisplaySettle = trackDisplaySettle(
-      newWindow.getBounds(),
+      captureCorrectedBounds(newWindow.getBounds()),
       screen.getAllDisplays(),
       { displayId: undefined, since: Date.now() },
       Date.now(),
@@ -915,7 +936,7 @@ async function main() {
       const capturedState: WindowBoundsState = { isMaximized, isFullScreen };
       if (!isMaximized && !isFullScreen && !newWindow.isMinimized()) {
         const { x, y, width, height } = newWindow.getBounds();
-        const bounds = { x, y, width, height };
+        const bounds = captureCorrectedBounds({ x, y, width, height });
         const displays = screen.getAllDisplays();
         const now = Date.now();
         displaySettle = trackDisplaySettle(bounds, displays, displaySettle, now);
