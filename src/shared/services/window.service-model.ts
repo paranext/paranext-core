@@ -111,6 +111,36 @@ export type AppWindowInputEvent = {
  */
 export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
 
+/**
+ * Payload of the {@link EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID} network event.
+ *
+ * @experimental
+ */
+export type FocusedWindowIdEvent = {
+  /**
+   * The window the main process considers focused, or `undefined` if no window of this application
+   * currently does. Survives the whole application losing OS focus (e.g. the user alt-tabbing to
+   * another application) — it names the window the user was last working in, not whether any window
+   * currently holds OS focus. See `getFocusedWindowId`.
+   */
+  focusedWindowId: number | undefined;
+};
+
+/**
+ * Name of the network event the main process emits when the window it considers focused changes.
+ *
+ * Fires when a window takes focus (including the first window at startup) and when the focused
+ * window closes, leaving none. Deliberately does NOT fire when the application loses OS focus
+ * without a new window taking it (e.g. alt-tabbing away) — the payload keeps naming the window the
+ * user was last in, matching `getFocusedWindowId`'s survive-blur semantic, so a renderer that shows
+ * per-window UI (e.g. an active-tab focus ring) based on this event keeps showing it on the window
+ * the user will land back in rather than clearing it everywhere the moment the app is
+ * backgrounded.
+ *
+ * @experimental
+ */
+export const EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID = 'platform.onDidChangeFocusedWindowId';
+
 /** Specific item that is intended to be focused in the top-level app window */
 export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
 

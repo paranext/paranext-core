@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
 import {
   addWindow,
@@ -11,6 +11,7 @@ import {
   getTargetWindowId,
   getUnreachableWindowIds,
   getWindows,
+  handleWindowBlurred,
   isWindowAbandoned,
   isWindowClosing,
   isWindowReady,
@@ -22,19 +23,25 @@ import {
   removeWindow,
   resetForTesting,
   setFocusedWindowId,
+  startFocusedWindowIdEvent,
 } from '@main/services/window-state.service';
+import * as networkServiceTypes from '@shared/services/network.service';
 
 // `window-state.service` only imports BrowserWindow as a type, but the module graph resolves
 // `electron`, which is unavailable outside the Electron runtime. `vi.mock` is hoisted above the
 // imports above, so the static import resolves against this stub.
 vi.mock('electron', () => ({ BrowserWindow: class {} }));
 
-const mocks = vi.hoisted(() => ({ loggerError: vi.fn() }));
+const mocks = vi.hoisted(() => ({ loggerError: vi.fn(), focusedWindowIdEmit: vi.fn() }));
 
 // Stood in for so a swallowed subscriber throw can be asserted to have been reported rather than
 // merely swallowed, and so the real logger's file/console transports stay out of the test run
 vi.mock('@shared/services/logger.service', () => ({
   logger: { error: mocks.loggerError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock('@shared/services/network.service', () => ({
+  createNetworkEventEmitterAsync: vi.fn(),
 }));
 
 /** Stand-in for a BrowserWindow — the service only reads `id` and `isDestroyed` */
@@ -447,6 +454,78 @@ describe('window state tracking', () => {
       setFocusedWindowId(4);
 
       expect(heard).toEqual([]);
+    });
+  });
+
+  describe('focused window id event', () => {
+    beforeAll(async () => {
+      vi.mocked(networkServiceTypes.createNetworkEventEmitterAsync).mockResolvedValue(
+        // Only `emit` is exercised here; the rest of the emitter surface is irrelevant
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        { emit: mocks.focusedWindowIdEmit } as unknown as Awaited<
+          ReturnType<typeof networkServiceTypes.createNetworkEventEmitterAsync>
+        >,
+      );
+      await startFocusedWindowIdEvent();
+    });
+
+    beforeEach(() => {
+      mocks.focusedWindowIdEmit.mockClear();
+    });
+
+    test('announces the window that took focus', () => {
+      addWindow(fakeWindow(1));
+
+      setFocusedWindowId(1);
+
+      expect(mocks.focusedWindowIdEmit).toHaveBeenCalledWith({ focusedWindowId: 1 });
+    });
+
+    test('announces again when a different window takes focus', () => {
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      setFocusedWindowId(1);
+      mocks.focusedWindowIdEmit.mockClear();
+
+      setFocusedWindowId(2);
+
+      expect(mocks.focusedWindowIdEmit).toHaveBeenCalledWith({ focusedWindowId: 2 });
+    });
+
+    test('stays quiet when the same window is re-reported as focused', () => {
+      addWindow(fakeWindow(1));
+      setFocusedWindowId(1);
+      mocks.focusedWindowIdEmit.mockClear();
+
+      setFocusedWindowId(1);
+
+      expect(mocks.focusedWindowIdEmit).not.toHaveBeenCalled();
+    });
+
+    test('does not fire on a blur — the last focused window id survives the app losing OS focus', () => {
+      // The whole app being backgrounded (e.g. alt-tab to another application) must not announce a
+      // change: consumers of this event key per-window UI (an active-tab focus ring) on which
+      // window the user was last in, and that answer is meant to survive the app losing OS focus.
+      const only = fakeWindow(1);
+      addWindow(only);
+      setFocusedWindowId(1);
+      mocks.focusedWindowIdEmit.mockClear();
+
+      handleWindowBlurred(1);
+
+      expect(mocks.focusedWindowIdEmit).not.toHaveBeenCalled();
+      expect(getFocusedWindowId()).toBe(1);
+    });
+
+    test('announces undefined when the focused window closes', () => {
+      const only = fakeWindow(1);
+      addWindow(only);
+      setFocusedWindowId(1);
+      mocks.focusedWindowIdEmit.mockClear();
+
+      removeWindow(only, 1);
+
+      expect(mocks.focusedWindowIdEmit).toHaveBeenCalledWith({ focusedWindowId: undefined });
     });
   });
 

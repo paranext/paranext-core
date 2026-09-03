@@ -102,6 +102,7 @@ import {
   removeWindow,
   setFocusedWindowId,
   setWindowPendingContentPredicate,
+  startFocusedWindowIdEvent,
 } from '@main/services/window-state.service';
 import {
   assignEntryToWindow,
@@ -351,6 +352,10 @@ async function main() {
   // Register the app-window input event so the window's mouse/keyboard hooks below can announce
   // the gestures that dismiss transient overlays
   await startAppWindowInputEvent();
+
+  // Register the focused-window-id event so the `focus`/`blur` handlers wired up per window below
+  // can announce every change made through `setFocusedWindowId`/`removeWindow`
+  await startFocusedWindowIdEvent();
 
   // The network object status service relies on seeing everything else start up later
   await startNetworkObjectStatusService();

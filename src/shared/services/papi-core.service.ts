@@ -134,6 +134,7 @@ export type {
 export type {
   AppWindowInputEvent,
   AppWindowInputKind,
+  FocusedWindowIdEvent,
   FocusSubject,
   SetFocusSubject,
   SetFocusSpecifier,
