@@ -2,11 +2,14 @@ import { describe, expect, test } from 'vitest';
 import {
   trackDisplaySettle,
   type DisplaySettleState,
+  type IdentifiedDisplayLike,
   areCapturedBoundsTrustworthy,
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
+  DISPLAY_SETTLE_MS,
   ensureBoundsVisibleOnSomeDisplay,
 } from '@main/window-bounds.util';
+import type { WindowRectangle } from '@shared/data/window-layout-persistence.model';
 
 const PRIMARY = { bounds: { x: 0, y: 0, width: 1920, height: 1080 } };
 const SECONDARY = { bounds: { x: 1920, y: 0, width: 1280, height: 1024 } };
@@ -149,11 +152,22 @@ describe('areCapturedBoundsTrustworthy', () => {
     ).toBe(true);
   });
 
-  test('the first capture of a session is trustworthy once it is on a display', () => {
-    // Nothing has been accepted yet, so there is no transition to settle after
+  test('the first capture of a session is not trustworthy before it has had time to settle', () => {
+    // A window's own creation is a landing too: Win32 and Chromium can disagree about a freshly
+    // created window's DPI on a scaled display the same way they can mid-drag, so the very first
+    // capture of a session needs the same wait as any other landing rather than being waved through
+    // because nothing has been accepted yet.
     const onPrimary = { x: 100, y: 50, width: 800, height: 600 };
 
-    expect(areCapturedBoundsTrustworthy(onPrimary, BOTH_DISPLAYS, undefined, 0)).toBe(true);
+    expect(areCapturedBoundsTrustworthy(onPrimary, BOTH_DISPLAYS, undefined, 0)).toBe(false);
+  });
+
+  test('the first capture of a session is trustworthy once it has settled', () => {
+    const onPrimary = { x: 100, y: 50, width: 800, height: 600 };
+
+    expect(
+      areCapturedBoundsTrustworthy(onPrimary, BOTH_DISPLAYS, undefined, DISPLAY_SETTLE_MS),
+    ).toBe(true);
   });
 });
 
@@ -196,5 +210,107 @@ describe('trackDisplaySettle', () => {
     );
 
     expect(state).toEqual({ displayId: PRIMARY_WITH_ID.id, since: 1_000 });
+  });
+});
+
+describe('a scaled display does not compound a window size across quit/reopen cycles', () => {
+  /**
+   * One session's worth of capture decisions, mirroring the sequence `main.ts` runs: seed the
+   * settle clock from the window's own creation bounds, then feed it every `getBounds()` reading
+   * the platform reports before the app quits, exactly as `captureWindowBoundsState` and its
+   * `resize`/`move` listeners would. Returns whatever ends up persisted — the last trusted reading,
+   * or the bounds the session started from if none was ever trusted.
+   *
+   * `readings` models what Windows/Chromium actually report over time on a scaled display: while
+   * they still disagree about the window's DPI, a reading comes back skewed by the scale mismatch
+   * even though nothing has been dragged anywhere — landing on the display is enough. A rapid
+   * manual quit/reopen cycle can close the window before that disagreement ever resolves, so every
+   * reading in a short session can be a skewed one.
+   */
+  function runSessionCycle(
+    startingBounds: WindowRectangle,
+    readings: readonly { at: number; bounds: WindowRectangle }[],
+    display: IdentifiedDisplayLike,
+  ): WindowRectangle {
+    let displaySettle: DisplaySettleState = trackDisplaySettle(
+      startingBounds,
+      [display],
+      { displayId: undefined, since: 0 },
+      0,
+    );
+    let lastAcceptedDisplayId: number | undefined;
+    let persisted = startingBounds;
+
+    readings.forEach(({ at, bounds }) => {
+      displaySettle = trackDisplaySettle(bounds, [display], displaySettle, at);
+      if (
+        areCapturedBoundsTrustworthy(
+          bounds,
+          [display],
+          lastAcceptedDisplayId,
+          at - displaySettle.since,
+        )
+      ) {
+        persisted = bounds;
+        lastAcceptedDisplayId = displaySettle.displayId;
+      }
+    });
+
+    return persisted;
+  }
+
+  // A single 150%-scaled display — the window never crosses to another one, which is the case the
+  // settle guard used to treat as needing no wait at all.
+  const SCALED_DISPLAY = { id: 1, bounds: { x: 0, y: 0, width: 2560, height: 1440 } };
+  const REQUESTED = { x: 100, y: 100, width: 1024, height: 768 };
+  // What getBounds() reports while Win32 (still on the scale the window is landing FROM) and
+  // Chromium (already reporting for the display it is landing ON) disagree — the same ~1.5x
+  // distortion a 150% display produces for a live crossing, produced here by landing directly on
+  // the display instead.
+  const scaledUp = (bounds: WindowRectangle): WindowRectangle => ({
+    ...bounds,
+    width: Math.round(bounds.width * 1.5),
+    height: Math.round(bounds.height * 1.5),
+  });
+
+  test('a quit taken before the display settles does not grow the persisted bounds', () => {
+    // Every reading in this short session — one right after creation, one at quit — falls inside
+    // the settle window, modeling a fast manual open/close cycle.
+    const persisted = runSessionCycle(
+      REQUESTED,
+      [
+        { at: 50, bounds: scaledUp(REQUESTED) },
+        { at: 100, bounds: scaledUp(REQUESTED) },
+      ],
+      SCALED_DISPLAY,
+    );
+
+    expect(persisted).toEqual(REQUESTED);
+  });
+
+  test('two quit/reopen cycles on a scaled display do not compound the window size', () => {
+    const cycleReadings = (bounds: WindowRectangle) => [
+      { at: 50, bounds: scaledUp(bounds) },
+      { at: 100, bounds: scaledUp(bounds) },
+    ];
+
+    const afterCycle1 = runSessionCycle(REQUESTED, cycleReadings(REQUESTED), SCALED_DISPLAY);
+    const afterCycle2 = runSessionCycle(afterCycle1, cycleReadings(afterCycle1), SCALED_DISPLAY);
+
+    expect(afterCycle1).toEqual(REQUESTED);
+    expect(afterCycle2).toEqual(REQUESTED);
+  });
+
+  test('a reading taken once the display has settled is trusted, unlike an unsettled one', () => {
+    // Positive control: the simulation can accept a reading — DISPLAY_SETTLE_MS is well past what
+    // the two "before it settles" tests above wait for, so this is not merely a guard that refuses
+    // everything.
+    const persisted = runSessionCycle(
+      REQUESTED,
+      [{ at: DISPLAY_SETTLE_MS, bounds: REQUESTED }],
+      SCALED_DISPLAY,
+    );
+
+    expect(persisted).toEqual(REQUESTED);
   });
 });
