@@ -9,8 +9,11 @@ import {
   resetConnectionLost,
 } from '@renderer/services/connection-lost-store';
 import {
+  CONNECTION_LOST_RELOAD_KEY,
+  CONNECTION_LOST_TITLE_KEY,
   ConnectionLostOverlay,
   ConnectionLostOverlayPresentational,
+  ENGLISH_FALLBACKS,
 } from './overlay-connection-lost.component';
 
 /** What the localization service returns once it has answered over a live connection. */
@@ -60,9 +63,9 @@ const PROPS = {
 };
 
 describe('ConnectionLostOverlayPresentational', () => {
-  it('states the problem in an assertive alert', () => {
+  it('states the problem in an assertive alert dialog', () => {
     render(<ConnectionLostOverlayPresentational {...PROPS} />);
-    const alert = screen.getByRole('alert');
+    const alert = screen.getByRole('alertdialog');
     expect(alert).toHaveTextContent('Connection lost.');
     expect(alert).toHaveTextContent("Platform.Bible can't reach its background services.");
   });
@@ -87,23 +90,23 @@ describe('ConnectionLostOverlayPresentational', () => {
   // it really blocks is verified against the running app (see the plan's live-verification task).
   it('lays a full-window scrim under the banner', () => {
     render(<ConnectionLostOverlayPresentational {...PROPS} />);
-    const scrim = screen.getByTestId('connection-lost-scrim');
-    expect(scrim).toHaveClass('tw:absolute', 'tw:inset-0');
-    expect(scrim).toHaveAttribute('aria-hidden', 'true');
-    // Under the banner in the DOM order that decides paint order, so the banner stays clickable.
-    expect(scrim.compareDocumentPosition(screen.getByRole('alert'))).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
+    // The dialog content is itself the scrim — see FULL_SCREEN_SCRIM_CONTENT for why the layer that
+    // covers the window cannot be `DialogContent`'s own backdrop.
+    const scrim = screen.getByTestId('connection-lost-dialog');
+    expect(scrim).toHaveClass('tw:fixed', 'tw:inset-0', 'tw:h-screen', 'tw:w-screen');
+    // The banner is inside the scrim, so the scrim covers every part of the window the banner does
+    // not, and the banner stays clickable.
+    expect(scrim).toContainElement(screen.getByTestId('connection-lost-banner'));
   });
 
   it('starts the banner below the 48px Power-mode toolbar', () => {
     render(<ConnectionLostOverlayPresentational {...PROPS} isPowerMode />);
-    expect(screen.getByRole('alert')).toHaveStyle({ top: '48px' });
+    expect(screen.getByTestId('connection-lost-banner')).toHaveStyle({ top: '48px' });
   });
 
   it('starts the banner below the 56px Simple-mode toolbar', () => {
     render(<ConnectionLostOverlayPresentational {...PROPS} isPowerMode={false} />);
-    expect(screen.getByRole('alert')).toHaveStyle({ top: '56px' });
+    expect(screen.getByTestId('connection-lost-banner')).toHaveStyle({ top: '56px' });
   });
 });
 
@@ -118,7 +121,7 @@ describe('ConnectionLostOverlay', () => {
     // The component renders through a portal to document.body, so it lands as a sibling of RTL's
     // render container rather than inside it — asserting the container is empty would pass
     // regardless of whether the guard below exists. Look where the portal actually lands instead.
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
   it('shows the banner once the connection is lost', () => {
@@ -128,7 +131,7 @@ describe('ConnectionLostOverlay', () => {
       loseConnection();
     });
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Connection lost.');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Connection lost.');
   });
 
   // This only pins that the component maps localizedStrings[KEY] into props instead of passing the
@@ -143,7 +146,7 @@ describe('ConnectionLostOverlay', () => {
       loseConnection();
     });
 
-    const alert = screen.getByRole('alert');
+    const alert = screen.getByRole('alertdialog');
     expect(alert).not.toHaveTextContent('%overlay_');
     expect(alert).toHaveTextContent("Platform.Bible can't reach its background services.");
   });
@@ -160,11 +163,14 @@ describe('ConnectionLostOverlay', () => {
       loseConnection();
     });
 
-    const alert = screen.getByRole('alert');
+    const alert = screen.getByRole('alertdialog');
+    // No `%` anywhere also proves `{%product_name%}` was expanded, not rendered raw.
     expect(alert).not.toHaveTextContent('%');
-    expect(alert).toHaveTextContent('Connection lost.');
-    expect(alert).toHaveTextContent("Platform.Bible can't reach its background services.");
-    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+    expect(alert).toHaveTextContent(ENGLISH_FALLBACKS[CONNECTION_LOST_TITLE_KEY]);
+    expect(alert).toHaveTextContent('Platform.Bible');
+    expect(
+      screen.getByRole('button', { name: ENGLISH_FALLBACKS[CONNECTION_LOST_RELOAD_KEY] }),
+    ).toBeInTheDocument();
   });
 
   // The scrim blocks pointers, not keyboards. Without a focus trap, Tab off Reload walks into the

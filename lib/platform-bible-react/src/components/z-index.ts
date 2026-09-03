@@ -48,7 +48,7 @@ export const Z_INDEX_FIRST_RUN = 700;
  *
  * When the websocket to the rest of the app dies, every layer beneath this one is inert — the
  * first-run wizard cannot submit, modals cannot resolve, the toolbar cannot navigate. Anything
- * rendering over this state would be offering the user a control that silently does nothing.
- * Pinned by `z-index.test.ts`.
+ * rendering over this state would be offering the user a control that silently does nothing. Pinned
+ * by `z-index.test.ts`.
  */
 export const Z_INDEX_CONNECTION_LOST = 800;

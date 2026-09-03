@@ -465,8 +465,9 @@ export function PlatformBibleToolbar() {
         menuData={menuData}
         onSelectMenuItem={handleMenuCommand}
         className={cn(
-          // If the toolbar height changes, the top inset for the workspace updating overlay and
-          // getDockLayoutOuterInset (platform-dock-layout-positioning.util.ts) will need updating too.
+          // If these heights change, update POWER_MODE_TOOLBAR_HEIGHT / SIMPLE_MODE_TOOLBAR_HEIGHT
+          // in toolbar-height.util.ts to match. Every layer positioned below the toolbar reads its
+          // clearance from there, so that is the only other place to change.
           isPowerMode ? 'tw:h-12' : 'tw:h-14',
           'tw:bg-transparent',
           // Only reserve the static guess when there's no live measurement to reserve it above instead.

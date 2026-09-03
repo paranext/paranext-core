@@ -145,7 +145,7 @@ export interface IRpcMethodRegistrar extends IRpcHandler {
    *
    * @experimental
    */
-  onDidLoseConnection: PlatformEvent<undefined>;
+  onDidLoseConnection: PlatformEvent<void>;
 }
 
 export type RegisteredRpcMethodDetails = {

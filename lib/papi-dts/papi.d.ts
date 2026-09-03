@@ -2123,7 +2123,7 @@ declare module 'shared/models/rpc.interface' {
      *
      * @experimental
      */
-    onDidLoseConnection: PlatformEvent<undefined>;
+    onDidLoseConnection: PlatformEvent<void>;
   }
   export type RegisteredRpcMethodDetails = {
     handler: IRpcHandler;
@@ -2251,7 +2251,7 @@ declare module 'client/services/rpc-client' {
      *
      * @experimental
      */
-    readonly onDidLoseConnection: PlatformEvent<undefined>;
+    readonly onDidLoseConnection: PlatformEvent<void>;
     /**
      * Whether {@link onWebSocketClose} has already run for the current socket.
      *
@@ -2571,7 +2571,7 @@ declare module 'main/services/rpc-websocket-listener' {
      *
      * @experimental
      */
-    readonly onDidLoseConnection: PlatformEvent<undefined>;
+    readonly onDidLoseConnection: PlatformEvent<void>;
     private localEventHandler;
     private webSocketServer;
     private nextSocketNumber;
@@ -2704,7 +2704,7 @@ declare module 'shared/services/network.service' {
    *
    * @experimental
    */
-  export const onDidLoseConnection: PlatformEvent<undefined>;
+  export const onDidLoseConnection: PlatformEvent<void>;
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;

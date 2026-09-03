@@ -148,8 +148,14 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'Keep focus on Reload while the connection-lost state is shown, so the keyboard cannot reach controls that can no longer work',
     category: 'Navigation',
     context: 'Renderer (global, only while the connection-lost state is shown)',
+    // Containment comes from the Radix modal `Dialog` the state is built on rather than a keydown
+    // handler of our own; listed here because in this state it is load-bearing, not incidental —
+    // every control it keeps focus away from is one that can no longer do anything.
     keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
-    locations: ['src/renderer/components/overlays/overlay-connection-lost.component.tsx'],
+    locations: [
+      'src/renderer/components/overlays/overlay-connection-lost.component.tsx',
+      'lib/platform-bible-react/src/components/shadcn-ui/dialog.tsx',
+    ],
   },
   {
     id: 'zoom-in',
