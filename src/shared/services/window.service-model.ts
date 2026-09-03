@@ -152,8 +152,8 @@ declare module 'papi-shared-types' {
  * or the focused window has not registered its window service — either because it is still starting
  * or because it has just gone away — the call throws rather than falling back to another window.
  *
- * This is a different resolver from the one the {@link windowServiceProviderName} doc describes: the
- * bare unscoped name goes through the router; `papi.window` does not.
+ * This is a different resolver from the one the `windowServiceProviderName` doc describes: the bare
+ * unscoped name goes through the router; `papi.window` does not.
  */
 export type IWindowService = {
   /**
