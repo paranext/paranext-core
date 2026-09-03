@@ -266,7 +266,7 @@ body:has(> .dragging-layer.dock-style-platform-bible)
   height: var(--dock-tab-height);
 }
 
-.dock-panel.dock-style-platform-bible .dock-nav-operations,
+.dock-panel.dock-style-platform-bible .dock-nav-operations:not(.dock-nav-operations-hidden),
 .dock-panel.dock-style-platform-bible .dock-extra-content {
   gap: vars.$space--sm;
   padding-block: var(--tab-header-to-content-gap);
@@ -279,13 +279,14 @@ body:has(> .dragging-layer.dock-style-platform-bible)
   height: 100%;
 }
 
-// rc-tabs keeps the operations box in the DOM (with `.dock-nav-operations-hidden`) even when no
-// tab overflows into the dropdown. Take it out of the flex layout entirely in that state: because
-// it has `flex-grow: 1` (see `.dock-nav` above), an in-flow hidden box would silently split the
-// bar's leftover space with `.dock-extra-content` and halve the tab-drop zone. Specificity (0,5,0)
-// is needed to beat the `display: flex` set by the
-// `.dock-panel.dock-style-platform-bible .dock-nav-operations` rule above. rc-tabs never measures
-// this box (its overflow math only reads `.dock-nav-wrap`/`.dock-nav-list`), so hiding it is safe.
+// rc-tabs keeps the operations box in the DOM (with `.dock-nav-operations-hidden`) even when no tab
+// overflows into the dropdown. Take it out of the flex layout entirely in that state: because it has
+// `flex-grow: 1` (see `.dock-nav` above), an in-flow hidden box would silently split the bar's
+// leftover space with `.dock-extra-content` and halve the tab-drop zone. The `:not()` above already
+// excludes this state from the `display: flex` rule by selector, but specificity (0,5,0) is kept
+// here too, as a second line of defense that doesn't depend on class order or a scoped `:not()`
+// staying in sync with this selector. rc-tabs never measures this box (its overflow math only reads
+// `.dock-nav-wrap`/`.dock-nav-list`), so hiding it is safe.
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav-operations.dock-nav-operations-hidden {
   display: none;
 }
