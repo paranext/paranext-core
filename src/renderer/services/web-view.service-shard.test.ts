@@ -1012,11 +1012,16 @@ describe('handleSwitchToSimpleMode', () => {
     // narrow only the fields this test reads.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const bakedLayout = bakedLayoutArg as {
-      dockbox: { children: { children: { tabs: { id: string }[] }[] }[] };
+      dockbox: {
+        children: { children: { tabs: { id: string; data?: { webViewType?: string } }[] }[] }[];
+      };
     };
-    expect(bakedLayout.dockbox.children[0].children[0].tabs.map((tab) => tab.id)).toContain(
-      SUPPLEMENT_TAB_ID,
-    );
+    // A merged supplement tab's `id` is freshly minted (see `mint-web-view-ids.util.ts`), so this
+    // reads `webViewType` instead - the one property the merged tab keeps in common with the entry
+    // that describes it.
+    expect(
+      bakedLayout.dockbox.children[0].children[0].tabs.map((tab) => tab.data?.webViewType),
+    ).toContain('test.supplement');
   });
 
   it('fast path: does not merge a disabled default-layout supplement entry', async () => {
