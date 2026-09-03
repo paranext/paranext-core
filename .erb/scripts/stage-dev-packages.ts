@@ -46,6 +46,17 @@ const STAGING_ROOT: string = path.resolve(REPO_ROOT, 'dev-packages', 'staging');
 /** File inside each staged folder recording the source commit the staged copy was built from. */
 const STAGED_FROM_MARKER = '.staged-from';
 
+/**
+ * Bump whenever this script changes what a staged copy contains — which files are copied, or how
+ * `prepareStagedManifest` shapes the manifest.
+ *
+ * The marker records only the source commit, so without this a staged copy stays "current" until
+ * the pinned revision moves, and a fix to the staging logic would never reach anyone already
+ * staged. CI never notices (its tree is always fresh); developer machines keep the old copy for as
+ * long as the pin holds.
+ */
+const STAGING_FORMAT = 2;
+
 /** Build from the current checkout state instead of the pinned revision; always rebuild. */
 const isLocalMode: boolean = process.argv.includes('--local');
 
@@ -100,6 +111,15 @@ function getDevRepoPath(folder: string): string {
   return path.resolve(REPO_ROOT, '..', folder);
 }
 
+/**
+ * Whether this checkout is one this repo cloned and manages, under `dev-packages/`, rather than a
+ * developer's own clone found beside this repo. What this script may do to a checkout depends on
+ * which it is: it moves its own freely, and never moves someone else's off their branch.
+ */
+function isCheckoutOwnedByThisRepo(folder: string): boolean {
+  return getDevRepoPath(folder) === path.resolve(REPO_ROOT, 'dev-packages', folder);
+}
+
 /** Environment for commands run inside a dev repo. */
 function devRepoEnv(): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {
@@ -128,22 +148,33 @@ function run(cmd: string, cwd: string): void {
   execSync(cmd, { stdio: 'inherit', cwd, env: devRepoEnv() });
 }
 
+/** How pnpm can be launched here, worked out once and reused. */
+let pnpmLauncher: string | undefined;
+
 /**
- * Runs a pnpm command. Tries `pnpm` directly first (works in CI with pnpm/action-setup or if pnpm
- * is globally installed). Falls back to `volta run pnpm` for local development with volta-managed
- * pnpm.
+ * Whether pnpm runs on its own (CI with pnpm/action-setup, or a global install) or has to go
+ * through `volta run` (a volta-managed pnpm on a developer machine).
+ *
+ * Asked once, with a command that does nothing, rather than by letting a real command fail and
+ * retrying it: a failing build and an unavailable pnpm are not distinguishable from an exit code
+ * cross-platform, so retrying would run whole builds a second time under a launcher chosen because
+ * of a compile error.
  */
-function runPnpm(args: string, cwd: string): void {
+function getPnpmLauncher(cwd: string): string {
+  if (pnpmLauncher) return pnpmLauncher;
   try {
-    run(`pnpm ${args}`, cwd);
-  } catch (err) {
-    // Log the failure and retry via volta. This fallback is expected on some developer machines
-    // where pnpm is managed by Volta.
-    console.log(
-      `pnpm invocation failed: ${err instanceof Error ? err.message : err}. This is not necessarily a problem. Retrying with 'volta run pnpm'...`,
-    );
-    run(`volta run pnpm ${args}`, cwd);
+    execSync('pnpm --version', { cwd, env: devRepoEnv(), stdio: 'pipe' });
+    pnpmLauncher = 'pnpm';
+  } catch {
+    console.log('`pnpm` did not run on its own; using `volta run pnpm`.');
+    pnpmLauncher = 'volta run pnpm';
   }
+  return pnpmLauncher;
+}
+
+/** Runs a pnpm command, letting any failure of that command surface as itself. */
+function runPnpm(args: string, cwd: string): void {
+  run(`${getPnpmLauncher(cwd)} ${args}`, cwd);
 }
 
 /** Clones the given dev repo into `dev-packages/<folder>` if it is not already present locally. */
@@ -220,12 +251,9 @@ function checkoutRevision(repo: DevRepo): void {
       );
     }
   }
-  console.log(`Checking out ${repo.revision} in ${repo.folder}...`);
-  // When the revision is a branch, check out the REMOTE-TRACKING state, detached. `platform-yalc`
-  // is routinely force-pushed (it is rebased onto main), and a `git pull` on a local branch that
-  // diverged that way fails — or quietly creates a merge commit. Detaching at origin/<branch>
-  // always builds exactly what the remote has, and never touches the checkout's local branches,
-  // which matters when the checkout is a developer's own sibling clone.
+  // Prefer the remote-tracking ref when the revision names a branch. `platform-yalc` is routinely
+  // force-pushed (it is rebased onto main), so the local branch of that name can be on a commit
+  // that no longer exists upstream; `origin/<branch>` is always what the remote actually has.
   let isRemoteBranch: boolean;
   try {
     execSync(`git show-ref --verify --quiet "refs/remotes/origin/${repo.revision}"`, {
@@ -236,27 +264,57 @@ function checkoutRevision(repo: DevRepo): void {
   } catch {
     isRemoteBranch = false;
   }
-  if (isRemoteBranch) {
-    execSync(`git checkout --detach "origin/${repo.revision}"`, {
-      stdio: 'inherit',
+  const target = isRemoteBranch ? `origin/${repo.revision}` : repo.revision;
+
+  const resolve = (rev: string) =>
+    execSync(`git rev-parse --verify --quiet "${rev}^{commit}"`, {
       cwd: repoPath,
-    });
-  } else {
-    // A tag or commit hash; immutable, so nothing to sync after checkout.
-    try {
-      execSync(`git rev-parse --verify --quiet "${repo.revision}^{commit}"`, {
-        stdio: 'pipe',
-        cwd: repoPath,
-      });
-    } catch {
-      throw new Error(
-        `${repoPath} has no revision "${repo.revision}"${
-          isFetchSkipped ? ', and the fetch that would have brought it in was skipped' : ''
-        }.\n`,
-      );
-    }
-    execSync(`git checkout --detach "${repo.revision}"`, { stdio: 'inherit', cwd: repoPath });
+      encoding: 'utf8',
+    }).trim();
+
+  let targetCommit: string;
+  try {
+    targetCommit = resolve(target);
+  } catch {
+    throw new Error(
+      `${repoPath} has no revision "${repo.revision}"${
+        isFetchSkipped ? ', and the fetch that would have brought it in was skipped' : ''
+      }.\n`,
+    );
   }
+
+  if (resolve('HEAD') === targetCommit) {
+    console.log(`${repo.folder} is already at ${repo.revision}; leaving the checkout as it is.`);
+    return;
+  }
+
+  // `git rev-parse --abbrev-ref HEAD` answers `HEAD` when the checkout is already detached.
+  const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
+    cwd: repoPath,
+    encoding: 'utf8',
+  }).trim();
+
+  // Sitting on the branch we are pinned to is the normal developer case: move it forward. `--hard`
+  // is safe and necessary here — the working tree is already known clean, and `platform-yalc` is
+  // force-pushed by design, so a merge or fast-forward would fail exactly when it matters.
+  if (currentBranch === repo.revision) {
+    console.log(`Updating ${repo.folder}'s ${currentBranch} to ${target}...`);
+    execSync(`git reset --hard "${target}"`, { stdio: 'inherit', cwd: repoPath });
+    return;
+  }
+
+  // Somebody else's checkout, on a branch of their own: say what is wrong and stop, rather than
+  // moving them off it. An `npm install` here may well have been run for something unrelated.
+  if (!isCheckoutOwnedByThisRepo(repo.folder)) {
+    throw new Error(
+      `${repoPath} is on "${currentBranch}", but dev-packages.json pins ${repo.folder} to "${repo.revision}".\n\nThat checkout is yours, not this repo's, so nothing here will move it. Pick one:\n\n  - Switch it yourself:            git -C "${repoPath}" checkout ${repo.revision}\n  - Stage what it has right now:  npm run build:editor\n  - Leave it alone and let this repo keep its own clone:\n        git clone "${repo.cloneUrl}" "${path.resolve(REPO_ROOT, 'dev-packages', repo.folder)}"\n`,
+    );
+  }
+
+  // This repo's own clone: detached, so the local branches stay untouched and a force-push
+  // upstream can never leave it wedged on a commit that no longer exists.
+  console.log(`Checking out ${repo.revision} in ${repo.folder}...`);
+  execSync(`git checkout --detach "${target}"`, { stdio: 'inherit', cwd: repoPath });
 }
 
 /**
@@ -270,16 +328,22 @@ function getSourceStamp(repoPath: string): string {
   return status.trim().length > 0 ? `${head}-dirty` : head;
 }
 
+/** What a marker written by this version of the script, for this source state, would say. */
+function getExpectedMarker(sourceStamp: string): string {
+  return `${sourceStamp}${isLocalMode ? '-local' : ''} format=${STAGING_FORMAT}`;
+}
+
 /**
  * Whether every package of this repo is already staged from exactly the currently checked-out
- * commit. Neither a dirty source tree nor a `--local` build ever matches, so both are always
- * superseded by the next regular run.
+ * commit, by a version of this script that produces what this one would. Neither a dirty source
+ * tree nor a `--local` build ever matches, so both are always superseded by the next regular run.
  */
 function isStagingCurrent(repo: DevRepo, sourceStamp: string): boolean {
   if (sourceStamp.endsWith('-dirty')) return false;
+  const expected = getExpectedMarker(sourceStamp);
   return repo.devPackages.every((devPackage) => {
     const markerPath = path.resolve(STAGING_ROOT, devPackage.stagingFolder, STAGED_FROM_MARKER);
-    return fs.existsSync(markerPath) && fs.readFileSync(markerPath, 'utf8').trim() === sourceStamp;
+    return fs.existsSync(markerPath) && fs.readFileSync(markerPath, 'utf8').trim() === expected;
   });
 }
 
@@ -410,7 +474,7 @@ function stagePackage(
   // stamp indistinguishable from a real staging run, leaving that build in place indefinitely.
   fs.writeFileSync(
     path.resolve(stagingDir, STAGED_FROM_MARKER),
-    `${sourceStamp}${isLocalMode ? '-local' : ''}\n`,
+    `${getExpectedMarker(sourceStamp)}\n`,
   );
 }
 
