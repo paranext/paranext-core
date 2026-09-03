@@ -8,6 +8,11 @@ import { createUuid } from '@node/utils/crypto-util';
 import { BrowserWindow } from 'electron';
 import { getErrorMessage, PlatformEventEmitter } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
+import { createNetworkEventEmitterAsync } from '@shared/services/network.service';
+import {
+  EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID,
+  FocusedWindowIdEvent,
+} from '@shared/services/window.service-model';
 
 /** A tracked window, paired with the platform id minted for it */
 type TrackedWindow = {
@@ -416,6 +421,80 @@ export function getFocusedWindowId(): string | undefined {
 }
 
 /**
+ * Emitter for {@link EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID}, `undefined` until
+ * {@link startFocusedWindowIdEvent} registers it (e.g. before startup reaches that call, or if
+ * registration failed).
+ */
+let focusedWindowIdEmitter: PlatformEventEmitter<FocusedWindowIdEvent> | undefined;
+
+/**
+ * Register the focused-window-id network event so {@link getFocusedWindowId} changes are announced
+ * to every process. Call once during main-process startup, before any window is created — a window
+ * takes OS focus as soon as it is shown, and a focus this early would otherwise announce nothing.
+ *
+ * A registration failure is logged and swallowed: renderers that would have reacted to this event
+ * (e.g. a per-window active-tab focus ring) fall back to only ever showing their own window's ring,
+ * which is not worth failing startup over.
+ */
+export async function startFocusedWindowIdEvent(): Promise<void> {
+  try {
+    focusedWindowIdEmitter = await createNetworkEventEmitterAsync(
+      EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID,
+      {
+        notification: {
+          summary: 'Emitted when the window the main process considers focused changes.',
+          params: [
+            {
+              name: 'focusedWindowIdEvent',
+              required: true,
+              summary: 'The newly focused window id, or `undefined` if no window is focused.',
+              schema: {
+                type: 'object',
+                // Not `required`: this key is genuinely absent from the wire payload (rather than
+                // sent as an explicit `null`) when no window is focused — `emit`'s JSON
+                // serialization drops an `undefined`-valued property instead of nulling it, unlike
+                // the `undefined`-to-`null` normalization JSON-RPC command results get (see
+                // `fixupResponse` in `rpc.model.ts`, which is why `platform.getFocusedWindowId`'s own
+                // schema can honestly say `oneOf: [string, null]`). Typed as `string` alone, since
+                // the property is never actually the literal `null` — only present-as-a-string or
+                // absent.
+                properties: { focusedWindowId: { type: 'string' } },
+              },
+            },
+          ],
+          'x-experimental': true,
+        },
+      },
+    );
+  } catch (e) {
+    logger.warn(
+      `Failed to register the ${EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID} event. Per-window UI ` +
+        `that tracks the focused window across windows will not update. ${getErrorMessage(e)}`,
+    );
+  }
+}
+
+/**
+ * Announce the current {@link focusedWindowId} on {@link EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID}.
+ * Called only from the two places {@link focusedWindowId} actually changes value, each already
+ * having checked the change is real — this function does not re-check.
+ *
+ * A failed announcement is warned about and swallowed, the same as every other network-event
+ * announcement in this module's neighborhood (see `announceAppWindowInput`): the caller mutating
+ * `focusedWindowId` must finish regardless of whether the broadcast succeeded.
+ */
+function announceFocusedWindowIdChange(): void {
+  if (!focusedWindowIdEmitter) return;
+  try {
+    focusedWindowIdEmitter.emit({ focusedWindowId });
+  } catch (e) {
+    logger.warn(
+      `Failed to announce focused window id change on ${EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID}. ${getErrorMessage(e)}`,
+    );
+  }
+}
+
+/**
  * Where a routed call should go, and whether that window is serving requests.
  *
  * Prefers the focused window, but only once its renderer is actually serving requests. A window is
@@ -717,6 +796,7 @@ export function removeWindow(window: BrowserWindow, windowId: string): RemovedWi
   if (focusedWindowId === windowId) {
     focusedWindowId = undefined;
     doesFocusedWindowHoldOsFocus = false;
+    announceFocusedWindowIdChange();
   }
   announceRoutingTargetIfChanged();
   return { wasAbandoned };
@@ -724,6 +804,7 @@ export function removeWindow(window: BrowserWindow, windowId: string): RemovedWi
 
 /** Set the focused window ID (called from BrowserWindow focus events) */
 export function setFocusedWindowId(windowId: string | undefined): void {
+  const didFocusedWindowIdChange = windowId !== focusedWindowId;
   focusedWindowId = windowId;
   doesFocusedWindowHoldOsFocus = windowId !== undefined;
   if (windowId !== undefined) {
@@ -731,6 +812,7 @@ export function setFocusedWindowId(windowId: string | undefined): void {
     if (focusOrderIndex >= 0) mostRecentlyFocusedWindowIds.splice(focusOrderIndex, 1);
     mostRecentlyFocusedWindowIds.unshift(windowId);
   }
+  if (didFocusedWindowIdChange) announceFocusedWindowIdChange();
   announceRoutingTargetIfChanged();
 }
 

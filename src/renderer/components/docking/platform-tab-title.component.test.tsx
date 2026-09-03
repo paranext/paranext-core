@@ -2,6 +2,7 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useIsFocusedWindow } from '@renderer/hooks/use-is-focused-window.hook';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
@@ -55,6 +56,12 @@ vi.mock('@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook'
 
 vi.mock('@renderer/hooks/use-last-focused-tab-id.hook', () => ({
   useLastFocusedTabId: vi.fn(() => undefined),
+}));
+
+// Default to focused so the existing window-focus tests (written before this window-focus gating
+// existed) keep exercising the effect; the gating tests below override this to false.
+vi.mock('@renderer/hooks/use-is-focused-window.hook', () => ({
+  useIsFocusedWindow: vi.fn(() => true),
 }));
 
 // Mock heavy transitive deps that run side-effects at module init in jsdom.
@@ -154,6 +161,11 @@ const cssClassTabHeaderLastSelected = 'platform-dock-tab-last-selected';
  * outside all tabs
  */
 const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
+
+/** CSS class applied to the active tab header while it is this window's focused tab */
+const cssClassTabHeaderWindowFocus = 'platform-dock-tab-window-focus';
+/** CSS class applied to the active tab content pane while it is this window's focused tab */
+const cssClassTabContentWindowFocus = 'platform-dock-tabpane-window-focus';
 
 /**
  * The tab title mounted inside a stand-in for rc-dock's DOM structure: a `.dock-panel` ancestor
@@ -358,6 +370,56 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
     expect(container.querySelector('.dock-tabpane-active')).not.toHaveClass(
       cssClassTabContentLastSelected,
+    );
+  });
+});
+
+describe('PlatformTabTitle window-focus highlighting', () => {
+  afterEach(() => {
+    cleanup();
+    vi.mocked(useIsFocusedWindow).mockReturnValue(true);
+    mockFocusSubject = undefined;
+  });
+
+  it('adds the window-focus class to the header and content pane when this tab is the focus subject and this window is the focused one', () => {
+    vi.mocked(useIsFocusedWindow).mockReturnValue(true);
+    mockFocusSubject = { focusType: 'tab', id: 'web-view-1' };
+
+    const { container } = renderTabTitle('web-view-1');
+
+    expect(container.querySelector('.dock-tab-active')).toHaveClass(cssClassTabHeaderWindowFocus);
+    expect(container.querySelector('.dock-tabpane-active')).toHaveClass(
+      cssClassTabContentWindowFocus,
+    );
+  });
+
+  it('does not add the window-focus class when this tab is the focus subject but this window is not the focused one', () => {
+    // This is the "ring in every window" bug: without this gate, every window with the same focus
+    // subject state would show the ring, not just the one the user is actually in.
+    vi.mocked(useIsFocusedWindow).mockReturnValue(false);
+    mockFocusSubject = { focusType: 'tab', id: 'web-view-1' };
+
+    const { container } = renderTabTitle('web-view-1');
+
+    expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
+      cssClassTabHeaderWindowFocus,
+    );
+    expect(container.querySelector('.dock-tabpane-active')).not.toHaveClass(
+      cssClassTabContentWindowFocus,
+    );
+  });
+
+  it('does not add the window-focus class when this window is focused but this tab is not the focus subject', () => {
+    vi.mocked(useIsFocusedWindow).mockReturnValue(true);
+    mockFocusSubject = { focusType: 'tab', id: 'some-other-web-view' };
+
+    const { container } = renderTabTitle('web-view-1');
+
+    expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
+      cssClassTabHeaderWindowFocus,
+    );
+    expect(container.querySelector('.dock-tabpane-active')).not.toHaveClass(
+      cssClassTabContentWindowFocus,
     );
   });
 });
