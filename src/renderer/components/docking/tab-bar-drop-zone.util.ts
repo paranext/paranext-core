@@ -1,27 +1,5 @@
 import { DockContext, DragState, PanelData, TabData } from 'rc-dock';
 
-/**
- * Identifies the tab or floating tab group a drag currently carries (per rc-dock's module-level
- * {@link DragState.getData}) and decides whether rc-dock's own drop rules allow it to be appended to
- * `targetPanel`. Returns the source to pass to `context.dockMove(source, targetPanel, 'middle')`,
- * or `undefined` when the drop should be rejected.
- *
- * Mirrors two existing rc-dock call sites rather than inventing new rules:
- *
- * - `TabCache.onDragOver` (`node_modules/rc-dock/src/DockTabs.tsx`) for a single-tab drag: same
- *   `group` only. On top of that, a tab that already is the last tab of `targetPanel` is rejected:
- *   appending it would change nothing, so offering a drop target there would only mislead.
- * - `DockPanel.render`'s gate on its own tabs-square (`node_modules/rc-dock/src/DockPanel.tsx`) for a
- *   whole-panel drag (including a re-docked float — a single-tab float panel drags as a `panel`,
- *   not a `tab`; see `TabCache.onDragStart`'s single-tab-float branch): reject `panelLock`ed
- *   panels, reject a different group, and reject the panel dropping onto itself (rc-dock issue
- *   ticlo/rc-dock#226 — accepting that duplicates the panel).
- *
- * A locked group's tab (`TabGroup.tabLocked`) is rejected here the same way `DockPanel` gates its
- * own tabs-square for a locked source group, even though the tab remains movable through the
- * ordinary tab-to-tab drop (`TabCache.onDragOver`, which never checks `tabLocked`) — this only
- * narrows the coarse "append to the end" gesture this zone offers, not tab movement in general.
- */
 /** Whether `tab` already sits at the end of `panel`, so appending it there would change nothing. */
 function isLastTabOfPanel(tab: TabData, panel: PanelData): boolean {
   if (tab.parent?.id !== panel.id) return false;
@@ -29,6 +7,34 @@ function isLastTabOfPanel(tab: TabData, panel: PanelData): boolean {
   return lastTab?.id === tab.id;
 }
 
+/**
+ * Identifies the tab or floating tab group a drag currently carries (per rc-dock's module-level
+ * {@link DragState.getData}) and decides whether rc-dock's own drop rules allow it to be appended to
+ * `targetPanel`. Returns the source to pass to `context.dockMove(source, targetPanel, 'middle')`,
+ * or `undefined` when the drop should be rejected.
+ *
+ * Mirrors the parts of two existing rc-dock call sites that apply to this app's own group
+ * configuration — every group here sets `floatable: false` and never sets `disableDock` (see
+ * `getGroups` in `platform-dock-layout-positioning.util.ts`) — rather than inventing new rules.
+ * Both call sites also branch on `floatable: 'singleTab'`, and the second on `disableDock`; neither
+ * branch is replicated here, since no group this app registers can trigger them:
+ *
+ * - `TabCache.onDragOver` (`node_modules/rc-dock/src/DockTabs.tsx`) for a single-tab drag: same
+ *   `group` only. On top of that, a tab that already is the last tab of `targetPanel` is rejected:
+ *   appending it would change nothing, so offering a drop target there would only mislead.
+ * - `DockDropLayer.render`'s gate on its own "middle" (dock-to-tabs) square
+ *   (`node_modules/rc-dock/src/DockDropLayer.tsx`) for a whole-panel drag (including a re-docked
+ *   float — a single-tab float panel drags as a `panel`, not a `tab`; see `TabCache.onDragStart`'s
+ *   single-tab-float branch): reject `panelLock`ed panels, reject a different group, and reject the
+ *   panel dropping onto itself (rc-dock issue ticlo/rc-dock#226 — accepting that duplicates the
+ *   panel).
+ *
+ * A locked group's tab (`TabGroup.tabLocked`) is rejected here the same way `DockPanel.render`
+ * gates whether any drop squares render at all for a locked source group
+ * (`node_modules/rc-dock/src/DockPanel.tsx`), even though the tab remains movable through the
+ * ordinary tab-to-tab drop (`TabCache.onDragOver`, which never checks `tabLocked`) — this only
+ * narrows the coarse "append to the end" gesture this zone offers, not tab movement in general.
+ */
 export function resolveTabBarDropZoneSource(
   context: DockContext,
   targetPanel: PanelData,

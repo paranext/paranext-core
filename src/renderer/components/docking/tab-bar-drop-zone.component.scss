@@ -22,11 +22,13 @@
 
   // Set only while a drag is in progress (`tab-bar-drop-zone.component.tsx`'s
   // `claimLastTabOverlap`/`clearLastTabOverlap`). rc-dock's own per-tab handler
-  // (`TabCache.onDragOver` in `node_modules/rc-dock/src/DockTabs.tsx`) claims the last tab's
-  // trailing half as an `after-tab` drop target via a pointer-vs-midpoint test, and rc-dock's
-  // hit-testing always defers to whichever registered element paints topmost under the pointer —
-  // so pulling this zone's own start edge back to cover that half, for the duration of a drag only,
-  // is the only way to present a single drop target there without patching rc-dock.
+  // (`TabCache.onDragOver` in `node_modules/rc-dock/src/DockTabs.tsx`) is registered on the whole
+  // tab and already picks `after-tab` for that trailing half via a pointer-vs-midpoint test — only
+  // the indicator it draws there is a fixed 30px wide (`DockLayout.setDropRect`) — and rc-dock's
+  // hit-testing always defers to whichever registered element paints topmost under the pointer — so
+  // pulling this zone's own start edge back to cover that half, for the duration of a drag only, is
+  // the only way to present a single drop target there without extending the rc-dock patch
+  // (`patches/rc-dock+3.3.2.patch`).
   &[data-dragging] {
     // Flex items already paint in order-modified (not raw DOM) order, so `.dock-extra-content`
     // (`order: 2` in `dock-layout-wrapper.component.scss`) already paints over `.dock-nav-wrap`
