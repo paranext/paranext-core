@@ -4,6 +4,8 @@ paths:
   - '.erb/scripts/**'
   - 'extensions/lib/**'
   - 'extensions/package.json'
+  - 'extensions/src/*/package.json'
+  - 'extensions/src/*/lib/**'
   - 'lib/*/package.json'
   - 'release/app/package.json'
 ---

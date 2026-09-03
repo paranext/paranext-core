@@ -406,7 +406,11 @@ function prepareStagedManifest(stagingDir: string, stagingFolderByName: Map<stri
   // Volta pins the dev repo's toolchain; it means nothing in a consumer's tree.
   delete manifest.volta;
 
-  ['dependencies', 'peerDependencies'].forEach((section) => {
+  // Every section npm records for a `file:` package. `optionalDependencies` is included even though
+  // nothing declares one today: npm resolves it like `dependencies`, so a `workspace:` specifier
+  // left there would fail the install with `Unsupported URL Type "workspace:"` naming a file inside
+  // a gitignored staging folder that nobody edited.
+  ['dependencies', 'peerDependencies', 'optionalDependencies'].forEach((section) => {
     const deps: Record<string, string> | undefined = manifest[section];
     if (!deps) return;
     Object.entries(deps).forEach(([name, specifier]) => {

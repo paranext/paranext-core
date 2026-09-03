@@ -395,7 +395,7 @@ These steps will walk you through releasing a version on GitHub and bumping the 
 1. Prepare each repository in your [`dev-packages.json`](./dev-packages.json) depending on what kind of release you are publishing:
 
    - Release candidate, alpha, etc.: rebase `release-prep` on `main` if it has not been rebased already for this release cycle.
-   - Full release: publish an actual release of that npm package, and update the version used in this repo accordingly. Remove the entry from `dev-packages.json` entirely so it uses the real published package.
+   - Full release: create a release of that repository, then set its `revision` in [`dev-packages.json`](./dev-packages.json) to that release's tag. These packages are not published to npm — this repo builds them from source and stages them — so removing the entry is not an option: nothing would stage, and the `file:` specifiers that depend on the staged folders would fail to resolve.
 
 2. Make sure the versions in this repo are on the version number you want to release. If they are not, manually dispatch the [Bump Versions workflow](#bumping-version-without-publishing-a-release) or run the `bump-versions` npm script to set the versions to what you want to release on the branch you want to release from.
 
