@@ -20,6 +20,7 @@ import { getWebViewMoveFailureDisposition } from '@shared/models/web-view-move.m
 import {
   forgetWindowWithholding,
   noteWindowWithheldFromActivation,
+  resetWindowActivationForTesting,
 } from '@main/window-activation.util';
 import { getErrorMessage } from 'platform-bible-utils';
 import type { InternalRequestHandler } from '@shared/data/rpc.model';
@@ -198,9 +199,9 @@ describe('moveWebView', () => {
     // is cheap to stop one from starting to.
     clearMovesInFlightForTesting();
     vi.clearAllMocks();
-    // Which windows were created without activation is process state, not a mock, so a test
-    // that marks one has to leave the next test the window it expects.
-    forgetWindowWithholding('7');
+    // Which windows were created without activation, and whose focus has already been handed
+    // back, is process state, not a mock — nothing else clears it between tests.
+    resetWindowActivationForTesting();
     mocks.getTargetWindowId.mockReturnValue('1');
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);

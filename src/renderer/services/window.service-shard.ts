@@ -41,6 +41,7 @@ import {
 } from 'platform-bible-utils';
 import {
   getDockLayout,
+  getDockLayoutSync,
   getSavedWebViewDefinitionSync,
   onDidCloseWebView,
   onDidOpenWebView,
@@ -55,7 +56,6 @@ import { isDirectionFromTab } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewId } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
 import {
-  isWindowAwaitingFirstActivation,
   noteWindowActivated,
   resetActivationLatchForTesting,
   takeTabAwaitingDocumentFocus,
@@ -319,13 +319,16 @@ function endWithholdingAndCatchUp(): void {
   if (!noteWindowActivated()) return;
   const tabId = takeTabAwaitingDocumentFocus();
   if (tabId === undefined) return;
-  // Failure here costs the caret, not the content, so it is logged rather than thrown: the user can
-  // still click into the view.
-  getDockLayout()
-    .then((dockLayout) => dockLayout.focusTab(tabId))
-    .catch((e) => {
-      logger.warn(`Could not focus tab ${tabId} after this window was activated: ${e}`);
-    });
+  // Reached synchronously, within the triggering gesture's own event handling, rather than through
+  // the async `getDockLayout()`: a keystroke's own default action is dispatched as part of that same
+  // gesture, so a focus move that waits for a microtask can land after it, with nothing left to
+  // redirect it to. Failure here costs the caret, not the content, so it is logged rather than
+  // thrown: the user can still click into the view.
+  try {
+    getDockLayoutSync().focusTab(tabId);
+  } catch (e) {
+    logger.warn(`Could not focus tab ${tabId} after this window was activated: ${e}`);
+  }
 }
 
 /**
@@ -510,17 +513,15 @@ class WindowDataProviderEngine
     }
     // Set the focus in the docking layout to the appropriate tab or WebView
     // The main process answers for content it routes here, and its answer WINS: it watches this
-    // window's focus events, while the latch below only sees gestures in the shell document — a
-    // pointer or key event inside a docked web view's iframe never reaches it, so it can stay set
-    // long after the user has been working here. The latch answers only for the focus requests this
-    // window's own panels and web views make as they mount, which never leave the renderer.
+    // window's focus events, while the latch `focusTab` falls back on when this parameter is left
+    // unspecified only sees gestures in the shell document — a pointer or key event inside a docked
+    // web view's iframe never reaches it, so it can stay set long after the user has been working
+    // here. That latch answers only for the focus requests this window's own panels and web views
+    // make as they mount, which never leave the renderer.
     else {
       // Deferred, not dropped: the dock records whatever tab it leaves unfocused, and the
       // catch-up gives that tab its focus when the user actually arrives.
-      (await getDockLayout()).focusTab(
-        newFocusSubject.id,
-        activateWithoutDocumentFocus ?? isWindowAwaitingFirstActivation(),
-      );
+      (await getDockLayout()).focusTab(newFocusSubject.id, activateWithoutDocumentFocus);
     }
 
     return didChangeFocus;

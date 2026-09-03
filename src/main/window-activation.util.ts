@@ -190,24 +190,30 @@ export function forgetWindowBounce(windowId: string): void {
  *
  * @param state Whether the window is still waiting to be seen for the first time — a user gesture
  *   in it ends that — whether its focus has already been handed back once, whether there is another
- *   window to hand it back to, and whether the focus arrived inside the short window after first
- *   paint in which the page takes focus for itself. The third is not always true: a withheld window
- *   can be the first this process tracks, and routing then answers with the window itself. The
- *   fourth is what keeps a user's own click from being undone: on a compositor that does not
- *   self-focus, the FIRST focus event this window ever sees is the user clicking it, and an
- *   unbounded arm would snap them straight back out
+ *   window to hand it back to, whether the focus arrived inside the short window after first paint
+ *   in which the page takes focus for itself, and whether this application held focus before this
+ *   window was revealed. The third is not always true: a withheld window can be the first this
+ *   process tracks, and routing then answers with the window itself. The fourth is what keeps a
+ *   user's own click from being undone: on a compositor that does not self-focus, the FIRST focus
+ *   event this window ever sees is the user clicking it, and an unbounded arm would snap them
+ *   straight back out. The fifth bounds the hand-back to the case it can actually fix: when the
+ *   application held no focus at all, the user was in a foreign application or nothing of ours, and
+ *   handing focus to the window that last had it would raise one of our own windows over whatever
+ *   they were actually in — the hand-back cannot return focus there, only compound the steal.
  */
 export function shouldBounceFocusBack(state: {
   isAwaitingFirstActivation: boolean;
   hasAlreadyBouncedFocusBack: boolean;
   canReturnFocusElsewhere: boolean;
   isWithinSelfFocusWindow: boolean;
+  wasApplicationFocusedBeforeReveal: boolean;
 }): boolean {
   return (
     state.isAwaitingFirstActivation &&
     !state.hasAlreadyBouncedFocusBack &&
     state.canReturnFocusElsewhere &&
-    state.isWithinSelfFocusWindow
+    state.isWithinSelfFocusWindow &&
+    state.wasApplicationFocusedBeforeReveal
   );
 }
 
