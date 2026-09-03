@@ -133,9 +133,8 @@ export function buildSimpleLayoutForProject(projectId: string): {
   // LayoutBase and LayoutInfo are structurally compatible at runtime; LayoutInfo is opaque in the
   // shared model, so cross that boundary here rather than push it onto every caller.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const { layout: mintedLayout, mintedIds } = mintFreshWebViewIds(
-    projectBoundLayout as unknown as LayoutInfo,
-  );
+  const projectBoundLayoutInfo = projectBoundLayout as unknown as LayoutInfo;
+  const { layout: mintedLayout, mintedIds } = mintFreshWebViewIds(projectBoundLayoutInfo);
   // Cast back across the same LayoutBase/LayoutInfo boundary crossed above.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return { layout: mintedLayout as unknown as LayoutBase, mintedIds };
