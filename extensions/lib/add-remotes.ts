@@ -7,10 +7,11 @@ import {
   execCommand,
 } from './git.util';
 
-// This script runs as `extensions`' postinstall, before the repo's dependency tree is guaranteed
-// complete. Do not import `platform-bible-utils` (or anything that loads it) here: its entry point
-// requires `@eten-tech-foundation/scripture-utilities`, whose staged folder may not exist yet on a
-// fresh clone — the import would abort the whole install. Node built-ins and plain code only.
+// This script runs as `extensions`' postinstall, which happens before the root's install scripts.
+// Do not import `platform-bible-utils` (or anything that loads it) here: its entry point requires
+// `@eten-tech-foundation/scripture-utilities`, whose staged folder may not exist yet on a fresh
+// clone — the import would abort the whole install. `extensions`' own dependencies (via
+// `./git.util`) are fine; only the staged dev packages are unavailable at this point.
 
 (async () => {
   let exitCode = 0;

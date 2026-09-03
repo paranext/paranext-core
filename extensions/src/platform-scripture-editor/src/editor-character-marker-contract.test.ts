@@ -18,8 +18,8 @@ import { describe, expect, it } from 'vitest';
  *
  * Reads the resolved package's type declarations rather than importing it: `EditorRef` is a type,
  * so there is no runtime object to reflect over without mounting a Lexical editor in jsdom. Reading
- * whatever is RESOLVED is the point — a fresh clone gets the published tarball and a linked
- * developer gets the yalc build, and either one drifting from these signatures is a real break.
+ * whatever is RESOLVED is the point — everyone gets the copy staged from `scripture-editors` into
+ * `dev-packages/staging/platform-editor`, and it drifting from these signatures is a real break.
  */
 
 const require = createRequire(import.meta.url);
