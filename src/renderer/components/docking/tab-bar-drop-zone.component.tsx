@@ -53,10 +53,13 @@ function clearLastTabOverlap(zone: HTMLElement): void {
  * Widens `zone` backward, over its tab bar's last tab's trailing half, for the duration of a drag.
  *
  * Rc-dock's own per-tab handler (`TabCache.onDragOver` in `node_modules/rc-dock/src/DockTabs.tsx`)
- * claims that half as an `after-tab` drop target via a pointer-vs-midpoint test, and rc-dock's
- * hit-testing (`DragManager`'s `_onMove`) always defers to whichever registered element paints
- * topmost under the pointer, walking up from there. So painting this zone over that half during a
- * drag is the only way to present a single drop target there without patching rc-dock: a negative
+ * is registered on the whole tab, and picks `after-tab` whenever the pointer is past the tab's
+ * midpoint — so that trailing half already accepts a drop; only the indicator rc-dock draws for it
+ * is a fixed 30px wide, centered on the tab's edge (`DockLayout.setDropRect`'s `after-tab` case, in
+ * `node_modules/rc-dock/src/DockLayout.tsx`). And rc-dock's hit-testing (`DragManager`'s `_onMove`)
+ * always defers to whichever registered element paints topmost under the pointer, walking up from
+ * there. So painting this zone over that half during a drag is the only way to present a single
+ * drop target there without extending the rc-dock patch (`patches/rc-dock+3.3.2.patch`): a negative
  * `margin-inline-start` (driven by {@link OVERLAP_PROPERTY}, set in the stylesheet) pulls the zone's
  * own start edge back to the last tab's midpoint, while its end edge still meets the "+" button —
  * see the stylesheet for the paired {@link INDICATOR_INSET_PROPERTY} rule that keeps the visible
@@ -86,9 +89,9 @@ function claimLastTabOverlap(zone: HTMLElement): void {
  * Invisible strip that fills the tab bar's empty remainder — from the last tab's trailing edge to
  * the end of the bar — so a dragged tab or floating tab group can be dropped there to append it to
  * `panelData`, as a single continuous target instead of two separate ones (this zone, plus
- * rc-dock's own ~30px `after-tab` strip at the last tab's edge — `getDropDirection` in
- * `node_modules/rc-dock/src/DockTabs.tsx`). While a drag is in progress, it also claims that
- * `after-tab` strip for itself; see {@link claimLastTabOverlap}.
+ * rc-dock's own `after-tab` drop target, which already covers the last tab's trailing half —
+ * `getDropDirection` in `node_modules/rc-dock/src/DockTabs.tsx`). While a drag is in progress, it
+ * also claims that trailing half for itself; see {@link claimLastTabOverlap}.
  *
  * Rendered as a flex sibling of the "+" button inside `.dock-extra-content` (see `getGroups` in
  * `platform-dock-layout-positioning.util.ts`), not inside `.dock-nav-wrap`/`.dock-nav-list`. Its
