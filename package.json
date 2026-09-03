@@ -79,7 +79,7 @@
     "package": "tsx ./.erb/scripts/clean.js dist && npm run build && npm run build:extensions:production && electron-builder build --publish never && npm run build:dll",
     "package:debug": "cross-env DEBUG_PROD=true npm run package",
     "postinstall": "node .erb/scripts/postinstall.ts",
-    "postinstall:build": "patch-package && tsx .erb/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts && npm run build --workspace=eslint-plugin-paranext",
+    "postinstall:build": "patch-package && tsx .erb/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll && npm run build --workspace=eslint-plugin-paranext",
     "preinstall": "node .erb/scripts/stage-dev-packages.ts",
     "prepare": "husky && npm run csharp:tool:restore",
     "prestart": "ts-node ./.erb/scripts/generate-dev-build-info.ts && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.main.dev.ts",
@@ -286,7 +286,7 @@
     "webpack-merge": "^6.0.1"
   },
   "engines": {
-    "node": ">=18.12.x",
+    "node": ">=22.18.0",
     "npm": ">=7.x"
   },
   "electronmon": {
