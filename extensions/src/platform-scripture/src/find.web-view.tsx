@@ -63,6 +63,8 @@ import {
   prunePresentBookIds,
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
+  resolveTargetEditorWebViewId,
+  resolveTargetReferencePanelWebViewId,
   shouldClearResultsForInvalidQuery,
 } from './find/find.utils';
 import { deriveFindBookLists, UNKNOWN_FIND_BOOK_LISTS } from './find/find-book-lists.utils';
@@ -78,6 +80,10 @@ import {
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import {
+  FIND_SEARCHABLE_WEB_VIEW_TYPES,
+  REFERENCE_PANEL_WEB_VIEW_TYPES,
+} from './resource-panel-web-view-types.const';
 import { useFindSearchTriggers } from './find/use-find-search-triggers.hook';
 import { useAutoSearchDebounce } from './find/use-auto-search-debounce.hook';
 
@@ -106,15 +112,6 @@ const SEARCH_DEBOUNCE_DELAY_MS = 500;
 const HISTORY_DEBOUNCE_DELAY_MS = 5000;
 /** Stable empty-array reference so the History data subscription's default doesn't change identity. */
 const DEFAULT_RECENT_SEARCHES: string[] = [];
-
-/**
- * Web-view types that should count as "open" project tabs for the project picker's "Open Tabs"
- * grouping. Mirrors `checks-side-panel.web-view.tsx` / `manage-books.web-view.tsx`: only the
- * scripture editor binds a project to a scroll group in a user-meaningful way. Without this filter,
- * every project-bound web view (including this Find panel itself) would falsely mark a project as
- * open.
- */
-const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>(['platformScriptureEditor.react']);
 
 /** Short and full names for every scripture project/resource, keyed by canonical project id. */
 type ProjectNamesById = { [id: string]: Pick<FindProject, 'shortName' | 'fullName'> };
@@ -415,11 +412,16 @@ global.webViewComponent = function FindWebView({
   // Filter to scripture editor tabs only — without this filter, every project-bound web view
   // (e.g. this Find panel itself) would falsely mark a project as "open" in the picker's "Open
   // Tabs" grouping.
-  const editorWebViewFilter = useCallback(
-    (webView: { webViewType: string }) => SCRIPTURE_EDITOR_WEB_VIEW_TYPES.has(webView.webViewType),
+  const searchableWebViewFilter = useCallback(
+    (webView: { webViewType: string }) => FIND_SEARCHABLE_WEB_VIEW_TYPES.has(webView.webViewType),
     [],
   );
-  const allOpenProjectTabs = useOpenProjectTabs(editorWebViewFilter);
+  const allOpenProjectTabs = useOpenProjectTabs(
+    searchableWebViewFilter,
+    // The reference panels declare the resource they display; their container project is the
+    // editable project whose reference list they show, which is not what Find searches.
+    { includeNavigableProjectIds: true },
+  );
   const noOpenProjects = allOpenProjectTabs.length === 0;
 
   // Find's project picker only ever lists projects that are open in an editor tab (a project
@@ -497,18 +499,32 @@ global.webViewComponent = function FindWebView({
   const pendingProjectSwitchRerunRef = useRef(false);
 
   // Which open editor tab a Find result click should scroll: the exact tab the project selector
-  // has selected. Deterministic (not a heuristic) because the reassignment effect below guarantees
-  // `(projectId, selectedScrollGroupId)` always names an open tab whenever one exists anywhere.
-  // `undefined` only when `noOpenProjects` — nothing to scroll.
-  const targetEditorWebViewId = useMemo(() => {
-    if (!projectId || selectedScrollGroupId === undefined) return undefined;
-    const normalizedProjectId = normalizeProjectId(projectId);
-    return allOpenProjectTabs.find(
-      (tab) =>
-        normalizeProjectId(tab.projectId) === normalizedProjectId &&
-        tab.scrollGroupId === selectedScrollGroupId,
-    )?.webViewId;
-  }, [projectId, selectedScrollGroupId, allOpenProjectTabs]);
+  // has selected, when that tab is a real Scripture editor. Also `undefined` when the selected
+  // scripture is only open in a read-only reference panel — those register no web view controller.
+  // See `resolveTargetEditorWebViewId`.
+  const targetEditorWebViewId = useMemo(
+    () =>
+      resolveTargetEditorWebViewId(
+        projectId,
+        selectedScrollGroupId,
+        allOpenProjectTabs,
+        SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+      ),
+    [projectId, selectedScrollGroupId, allOpenProjectTabs],
+  );
+
+  // Which reference panel tab a "go to result" activation should bring to the front, when the
+  // selected scripture is showing in one rather than in an editor. See
+  // `resolveTargetReferencePanelWebViewId`.
+  const targetReferencePanelWebViewId = useMemo(
+    () =>
+      resolveTargetReferencePanelWebViewId(
+        projectId,
+        allOpenProjectTabs,
+        REFERENCE_PANEL_WEB_VIEW_TYPES,
+      ),
+    [projectId, allOpenProjectTabs],
+  );
 
   // #endregion
 
@@ -891,6 +907,7 @@ global.webViewComponent = function FindWebView({
       selectedScrollGroupId,
       allOpenProjectTabs,
       editorWebViewId,
+      SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     );
     if (!resolved) return;
     // `resolved.projectId` may carry `useOpenProjectTabs`'s lowercased casing when it names a
@@ -933,10 +950,11 @@ global.webViewComponent = function FindWebView({
         selectedScrollGroupId,
         allOpenProjectTabs,
         editorWebViewId,
+        SCRIPTURE_EDITOR_WEBVIEW_TYPE,
       );
       if (!resolved) {
         logger.warn(
-          `Find: ignoring project selection for ${newProjectId} — it has no open editor tab.`,
+          `Find: ignoring project selection for ${newProjectId} — it has no open editor or reference panel tab.`,
         );
         return;
       }
@@ -1755,11 +1773,28 @@ global.webViewComponent = function FindWebView({
     [editorWebViewController, targetEditorWebViewId, setVerseRefSetting],
   );
 
-  /** Navigate to a result AND shift focus to the editor (double-click / reference-click). */
+  /**
+   * Navigate to a result AND shift focus to the tab showing it (double-click / reference-click):
+   * the Scripture editor when one is open for the project, otherwise the reference panel displaying
+   * it. Single-click preview (`handleFocusedResultChange`) never changes the active tab.
+   */
   const handleOpenAtResult = useCallback(
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
       setVerseRefSetting(searchResult.start.verseRef);
+      if (targetReferencePanelWebViewId && !targetEditorWebViewId) {
+        // The scripture is showing in a read-only reference panel, which registers no web view
+        // controller — so activating its tab IS the navigation. `setVerseRefSetting` above already
+        // moved the panel's scroll group, so it renders the result's reference once shown.
+        //
+        // What the user sees depends on where that panel lives. Bible texts and Commentaries share
+        // Find's Column 3 stack in Simple mode, so activating one necessarily hides Find; that is
+        // the point of this gesture, and single-click preview is the way to keep Find in front.
+        // The Model text panel sits alone in Column 1 and is already visible, so this reveals
+        // nothing and only moves keyboard focus off the result list. Find cannot tell the two cases
+        // apart from inside its own iframe — PAPI exposes no visibility query for another web view.
+        papi.window.setFocus({ focusType: 'webView', id: targetReferencePanelWebViewId });
+      }
       if (targetEditorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: targetEditorWebViewId });
         // Await selectRange before setAnnotation so the websocket is settled (avoids
@@ -1783,7 +1818,12 @@ global.webViewComponent = function FindWebView({
         );
       }
     },
-    [editorWebViewController, targetEditorWebViewId, setVerseRefSetting],
+    [
+      editorWebViewController,
+      targetEditorWebViewId,
+      targetReferencePanelWebViewId,
+      setVerseRefSetting,
+    ],
   );
 
   const handleHideResult = useCallback((index: number) => {

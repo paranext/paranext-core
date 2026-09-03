@@ -3217,3 +3217,45 @@ step, no automation. Just a record.
   `^\d+_web-view-state$` obsolete-key sweep are all untouched: they read numeric-era data no future
   build can add to, and durability changes nothing about them.
 - **Source:** PT-4464.
+## adr-find-searchable-tabs: Find searches what a tab declares it displays, and targets editors and reference panels differently
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** Find's project picker listed only projects open in a Scripture editor tab, so a
+  resource shown in a read-only reference panel (Model text, Bible texts, Commentaries) could not be
+  selected. Worse, Ctrl+F from such a panel passed that resource's project id to Find, whose
+  reassignment effect then found no matching tab, took its cross-project fallback, and silently
+  re-ran the search against an unrelated project (PT-4467). The panels already declare the resource
+  they display under `NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY` (see
+  [adr-navigable-project-ids](#adr-navigable-project-ids)), but nothing on the consuming side read
+  it.
+- **Decision:** `useOpenProjectTabs` gained an opt-in `includeNavigableProjectIds`, under which a
+  web view reports the projects it declares instead of its container project, yielding one tab per
+  declared project. Find opts in and widens its picker filter to
+  `FIND_SEARCHABLE_WEB_VIEW_TYPES`. Because a declaring view can contribute several tabs, tabs are
+  keyed by (web view, project) rather than by web view alone. A declaration of `[]` means "displays
+  nothing" and offers no project; an absent key means the view does not participate, so its
+  container project answers. Result activation then splits by tab kind: an editor is driven through
+  its web view controller (select + highlight), while a reference panel exposes no controller, so
+  activating its tab is the whole navigation. Wherever several tabs of one project qualify, an
+  editor wins.
+- **Alternatives:** **Pin the trigger-supplied project id so the reassignment effect cannot move
+  it** — rejected: it stops the snap-away but leaves the resource absent from the picker, so the
+  user still cannot see or choose what is being searched. **Mirror a Find-specific state key across
+  the two extensions** — implemented first and then removed: `navigableProjectIds` already carries
+  exactly this value from exactly these panels, with a readiness gate, so a second key meant both
+  panels publishing the same value twice under two keys. **Include the Text Collection** — deferred:
+  it declares every resource it hosts and would be nearly free to list, but "go to result" has no
+  defined behavior there, since each cell is its own editor and revealing the grid would not show
+  which cell matched.
+- **Consequences:** Any web view that declares navigable projects becomes searchable by adding its
+  type to `FIND_SEARCHABLE_WEB_VIEW_TYPES`, with no further wiring. The cost is that Find's picker
+  no longer means "projects open in an editor", so callers must not assume a picked row is a valid
+  Replace target — Replace stays gated on editability, which already covers it. Because a panel
+  registers no controller, "go to result" on a panel-only resource can only activate its tab: in
+  Simple mode the Bible texts and Commentaries panels share Find's Column 3 stack, so that
+  necessarily hides the results list, while the Model text panel is already visible in Column 1 and
+  the activation only moves keyboard focus. Find cannot tell those cases apart from inside its own
+  iframe, since PAPI exposes no visibility query for another web view.
+  **Revisit** if per-cell reveal is designed for the Text Collection, which would bring it into the
+  searchable set.
