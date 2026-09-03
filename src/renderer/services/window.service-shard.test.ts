@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, test, vi, beforeEach } from 'vitest';
 import {
+  CSS_CLASS_WINDOW_NOT_FOCUSED,
+  getIsThisWindowFocused,
   getLastFocusedTabId,
   getLastSelectedScriptureNavigableWebViewId,
   getNavigationTargetWebView,
+  onDidChangeIsThisWindowFocused,
   onDidChangeLastFocusedTabId,
   onDidChangeLastSelectedScriptureNavigableWebViewId,
   onDidChangeNavigationTargetWebView,
@@ -10,6 +13,7 @@ import {
 } from '@renderer/services/window.service-shard';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 import {
+  CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS,
   isWindowAwaitingFirstActivation,
   noteTabAwaitingDocumentFocus,
 } from '@renderer/services/window-activation.util';
@@ -686,5 +690,103 @@ describe('a window still waiting for its first activation', () => {
     await engine.setFocus({ focusType: 'tab', id: 'tab-1' });
 
     expect(focusTabMock).toHaveBeenCalledWith('tab-1', false);
+  });
+});
+
+describe('this window becoming the OS-focused window', () => {
+  beforeEach(() => {
+    focusTabMock.mockClear();
+    getTabInfoByIdMock.mockReturnValue({ id: 'tab-1', tabType: 'webView' });
+    globalThis.wasWindowCreatedWithoutActivation = false;
+    testingWindowService.resetActivationLatchForTesting();
+    testingWindowService.setIsThisWindowFocusedForTesting(false);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    globalThis.wasWindowCreatedWithoutActivation = false;
+    testingWindowService.resetActivationLatchForTesting();
+    testingWindowService.setIsThisWindowFocusedForTesting(false);
+  });
+
+  test('reports focused state and toggles the not-focused class on the document element', () => {
+    expect(getIsThisWindowFocused()).toBe(false);
+    expect(document.documentElement.classList.contains(CSS_CLASS_WINDOW_NOT_FOCUSED)).toBe(true);
+
+    testingWindowService.setIsThisWindowFocusedForTesting(true);
+
+    expect(getIsThisWindowFocused()).toBe(true);
+    expect(document.documentElement.classList.contains(CSS_CLASS_WINDOW_NOT_FOCUSED)).toBe(false);
+  });
+
+  test('emits onDidChangeIsThisWindowFocused only when the value actually changes', () => {
+    const received: boolean[] = [];
+    const unsubscribe = onDidChangeIsThisWindowFocused((value) => received.push(value));
+
+    testingWindowService.setIsThisWindowFocusedForTesting(true);
+    testingWindowService.setIsThisWindowFocusedForTesting(true);
+    testingWindowService.setIsThisWindowFocusedForTesting(false);
+
+    unsubscribe();
+    expect(received).toEqual([true, false]);
+  });
+
+  test('gives the tab a cross-window raise left waiting for document focus its focus', () => {
+    noteTabAwaitingDocumentFocus('tab-1');
+
+    testingWindowService.setIsThisWindowFocusedForTesting(true);
+
+    expect(focusTabMock).toHaveBeenCalledWith('tab-1', false);
+  });
+
+  test('consumes the waiting tab once — a second focus transition finds nothing left', () => {
+    noteTabAwaitingDocumentFocus('tab-1');
+
+    testingWindowService.setIsThisWindowFocusedForTesting(true);
+    testingWindowService.setIsThisWindowFocusedForTesting(false);
+    focusTabMock.mockClear();
+    testingWindowService.setIsThisWindowFocusedForTesting(true);
+
+    expect(focusTabMock).not.toHaveBeenCalled();
+  });
+
+  test('has nothing to catch up when no tab was left waiting', () => {
+    // The positive control: the catch-up must fire because a tab was deferred, not on every
+    // OS-focus transition.
+    testingWindowService.setIsThisWindowFocusedForTesting(true);
+
+    expect(focusTabMock).not.toHaveBeenCalled();
+  });
+
+  test('does not steal focus once the note has aged past the bound', () => {
+    vi.useFakeTimers();
+    noteTabAwaitingDocumentFocus('tab-1');
+
+    vi.advanceTimersByTime(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS + 1);
+    testingWindowService.setIsThisWindowFocusedForTesting(true);
+
+    expect(focusTabMock).not.toHaveBeenCalled();
+  });
+
+  test('still catches up right at the bound — only strictly-older notes are dropped', () => {
+    vi.useFakeTimers();
+    noteTabAwaitingDocumentFocus('tab-1');
+
+    vi.advanceTimersByTime(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS);
+    testingWindowService.setIsThisWindowFocusedForTesting(true);
+
+    expect(focusTabMock).toHaveBeenCalledWith('tab-1', false);
+  });
+
+  test('never fires for a window still awaiting its first activation — that window only catches up on a gesture', () => {
+    // A window withheld from activation can take OS focus on its own the moment it first paints
+    // (see `shouldBounceFocusBack`); this transition must not be read as the user having arrived.
+    globalThis.wasWindowCreatedWithoutActivation = true;
+    testingWindowService.resetActivationLatchForTesting();
+    noteTabAwaitingDocumentFocus('tab-1');
+
+    testingWindowService.setIsThisWindowFocusedForTesting(true);
+
+    expect(focusTabMock).not.toHaveBeenCalled();
   });
 });

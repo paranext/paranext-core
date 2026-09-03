@@ -19,8 +19,11 @@ import {
   FocusSubjectWebView,
   FocusSubjectTab,
   getWebViewIdFromFocusSubject,
+  EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID,
 } from '@shared/services/window.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
+import { sendCommand } from '@shared/services/command.service';
+import { getNetworkEvent } from '@shared/services/network.service';
 import { NavigationContext } from '@shared/models/window.service-shard.model';
 import { readDirection } from 'platform-bible-react/experimental';
 import {
@@ -55,9 +58,12 @@ import { isDirectionFromTab } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewId } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
 import {
+  CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS,
+  isWindowAwaitingFirstActivation,
   noteWindowActivated,
   resetActivationLatchForTesting,
   takeTabAwaitingDocumentFocus,
+  takeTabAwaitingDocumentFocusIfFresh,
 } from '@renderer/services/window-activation.util';
 import { settingsService } from '@shared/services/settings.service';
 
@@ -158,6 +164,85 @@ function setLastFocusedTabId(newTabId: string | undefined): void {
   lastFocusedTabId = newTabId;
   onDidChangeLastFocusedTabIdEmitter.emit(newTabId);
 }
+
+/**
+ * Whether the main process currently considers this window the one holding OS focus. Tracked from
+ * {@link EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID}, seeded from `platform.getFocusedWindowId` (see
+ * the subscription below).
+ *
+ * Distinct from DOM focus, which `WindowDataProviderEngine`'s `focusin`/`focusout` listeners track
+ * per window regardless of which window holds OS focus — several windows can each report a tab
+ * focused in their own dock at the same time, so gating an active-tab focus ring on DOM focus alone
+ * shows the ring in every window at once. This is what lets a single window's UI (e.g.
+ * `platform-tab-title.component.tsx`'s focus ring) key off "am I the one window the user is in" —
+ * see {@link getIsThisWindowFocused}.
+ *
+ * Deliberately survives the whole application losing OS focus, matching
+ * {@link EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID}'s survive-blur semantic: alt-tabbing away from
+ * the app must not clear every window's ring, only OS focus actually moving to a different window
+ * of this app does.
+ */
+let isThisWindowFocused = false;
+
+const onDidChangeIsThisWindowFocusedEmitter = new PlatformEventEmitter<boolean>();
+
+/** Event that fires with the new value when {@link getIsThisWindowFocused} changes */
+export const onDidChangeIsThisWindowFocused = onDidChangeIsThisWindowFocusedEmitter.event;
+
+/** Whether the main process currently considers this window the one holding OS focus */
+export function getIsThisWindowFocused(): boolean {
+  return isThisWindowFocused;
+}
+
+/**
+ * Class toggled on `document.documentElement` while this window is NOT the one the main process
+ * considers focused. Power mode's stylesheet uses it to suppress the web view's own `:focus`
+ * outline there, the same way Simple mode already suppresses it unconditionally — see
+ * `dock-layout-wrapper.component.scss`.
+ */
+export const CSS_CLASS_WINDOW_NOT_FOCUSED = 'platform-window-not-focused';
+
+// Applied synchronously here, at module load, to match `isThisWindowFocused`'s own `false` default
+// above — `setIsThisWindowFocused` only toggles the class on a value CHANGE, so if this window's
+// seed also resolves to "not focused" (`false`, same as the default), that call is a no-op and would
+// otherwise leave the ring showing in a window the seed has already confirmed is not the focused
+// one, for as long as it takes some other window to take focus and hand this one a real transition.
+document.documentElement.classList.add(CSS_CLASS_WINDOW_NOT_FOCUSED);
+
+function setIsThisWindowFocused(newValue: boolean): void {
+  if (newValue === isThisWindowFocused) return;
+  isThisWindowFocused = newValue;
+  // Hidden case: a class toggle and an emitted value are the entire effect — nothing here reads
+  // layout or geometry, so this keeps working identically whether this window's tab (in a
+  // multi-window setup each window is its own OS window, not a docked tab) is the visible one or
+  // not.
+  document.documentElement.classList.toggle(CSS_CLASS_WINDOW_NOT_FOCUSED, !newValue);
+  onDidChangeIsThisWindowFocusedEmitter.emit(newValue);
+  if (newValue) runFocusCatchUpForRaisedWindow();
+}
+
+// Seed this window's "am I the focused one" state from the current focused window id, then track
+// live changes. Race-safe the same way `initAutoSyncBlockingService` is: a live event that arrives
+// while the seed request is in flight is more current than the snapshot and must win, so the seed
+// only applies if nothing live has spoken yet.
+(() => {
+  let hasReceivedFocusedWindowIdEvent = false;
+  getNetworkEvent(EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID)((event) => {
+    hasReceivedFocusedWindowIdEvent = true;
+    setIsThisWindowFocused(String(event.focusedWindowId) === globalThis.windowId);
+  });
+  (async () => {
+    try {
+      const focusedWindowId = (await sendCommand('platform.getFocusedWindowId')) ?? undefined;
+      if (!hasReceivedFocusedWindowIdEvent)
+        setIsThisWindowFocused(String(focusedWindowId) === globalThis.windowId);
+    } catch (e) {
+      logger.warn(
+        `window.service-shard failed to seed this window's focused state: ${getErrorMessage(e)}`,
+      );
+    }
+  })();
+})();
 
 /**
  * Whether a web view is a candidate for BCV navigation (see
@@ -327,6 +412,37 @@ function endWithholdingAndCatchUp(): void {
     getDockLayoutSync().focusTab(tabId);
   } catch (e) {
     logger.warn(`Could not focus tab ${tabId} after this window was activated: ${e}`);
+  }
+}
+
+/**
+ * Give the tab a cross-window raise left waiting for document focus its focus, now that this window
+ * has actually become the one the main process considers focused. Called from
+ * {@link setIsThisWindowFocused} on every transition into "focused".
+ *
+ * Distinct from {@link endWithholdingAndCatchUp} above: that one is gesture-gated (a click or
+ * keystroke INSIDE a window still awaiting its first activation) and reads the unbounded
+ * `takeTabAwaitingDocumentFocus`, because a click IS the arrival it is catching up on. This one
+ * fires on an OS focus change, which — unlike a gesture — can arrive long after the raise it was
+ * meant to complete (an unrelated later alt-tab back into this window, once the window has moved on
+ * to something else entirely), so it reads the bounded `takeTabAwaitingDocumentFocusIfFresh`
+ * instead: a stale note is left alone rather than stealing focus into a tab the user never asked to
+ * see.
+ *
+ * Guarded on {@link isWindowAwaitingFirstActivation} being false so a window still awaiting its
+ * first activation — which can take OS focus on its own the moment its page first paints (see
+ * `shouldBounceFocusBack` in `src/main/window-activation.util.ts`) — never has this fire for it;
+ * `endWithholdingAndCatchUp`'s gesture path is the only catch-up such a window gets until the user
+ * has actually done something in it.
+ */
+function runFocusCatchUpForRaisedWindow(): void {
+  if (isWindowAwaitingFirstActivation()) return;
+  const tabId = takeTabAwaitingDocumentFocusIfFresh(CROSS_WINDOW_RAISE_FOCUS_CATCH_UP_BOUND_MS);
+  if (tabId === undefined) return;
+  try {
+    getDockLayoutSync().focusTab(tabId);
+  } catch (e) {
+    logger.warn(`Could not focus tab ${tabId} after this window was raised across windows: ${e}`);
   }
 }
 
@@ -676,6 +792,13 @@ export const testingWindowService = {
    * that activates the window decides the answer for every test after it.
    */
   resetActivationLatchForTesting,
+  /**
+   * Set {@link getIsThisWindowFocused} directly, bypassing the command-seed/network-event plumbing a
+   * test does not have running. Goes through the same {@link setIsThisWindowFocused} a live
+   * broadcast would, so it also drives the CSS class toggle, the emitted event, and the
+   * focus-driven catch-up exactly as the real path does.
+   */
+  setIsThisWindowFocusedForTesting: setIsThisWindowFocused,
 };
 
 // This will be needed later for disposing of the data provider, choosing to ignore instead of

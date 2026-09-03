@@ -33,6 +33,10 @@ vi.mock('@renderer/hooks/use-last-focused-tab-id.hook', () => ({
   useLastFocusedTabId: vi.fn(() => undefined),
 }));
 
+vi.mock('@renderer/hooks/use-is-focused-window.hook', () => ({
+  useIsFocusedWindow: vi.fn(() => true),
+}));
+
 // Mock heavy transitive deps that run side-effects at module init in jsdom.
 vi.mock('@renderer/services/theme.service', () => ({
   __esModule: true,
