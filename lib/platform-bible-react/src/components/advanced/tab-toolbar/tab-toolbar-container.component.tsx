@@ -1,6 +1,10 @@
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import React, { PropsWithChildren, ReactNode, useCallback, useRef, useState } from 'react';
-import { ShrinkStepContext, useShrinkStepOverride } from '@/context/shrink-step.context';
+import {
+  SHRINK_STEP,
+  ShrinkStepContext,
+  useShrinkStepOverride,
+} from '@/context/shrink-step.context';
 import { useShrinkStep } from '@/hooks/use-shrink-step.hook';
 import { SelectMenuItemHandler } from '../menus/platform-menubar.component';
 
@@ -55,11 +59,12 @@ export type TabToolbarContainerProps = PropsWithChildren<{
 
 /**
  * Breakpoints for the tab toolbar, widest first, measured against the container's own outer box.
- * That box includes its `tw:px-4`, so roughly 32px of each number is padding rather than room for
- * controls. Unlike the application titlebar — where the caption-button reserve lands inside or
- * outside the measured box depending on the platform, so `Toolbar` observes its padding-free inner
- * row instead — this padding is the same everywhere, so there is no cross-platform skew to
- * correct.
+ * That box includes the container's horizontal padding, so roughly 32px of each number is padding
+ * rather than room for controls — 16px below the narrowest threshold, where the container tightens
+ * its padding and gaps to give the space to its controls. Unlike the application titlebar — where
+ * the caption-button reserve lands inside or outside the measured box depending on the platform, so
+ * `Toolbar` observes its padding-free inner row instead — this padding is the same everywhere, so
+ * there is no cross-platform skew to correct.
  *
  * Estimated from the widths of the controls the toolbar carries rather than measured, so expect to
  * adjust them the first time this is watched in a running app.
@@ -99,11 +104,22 @@ export const TabToolbarContainer = React.forwardRef<HTMLDivElement, TabToolbarCo
     // layout engine to measure with.
     const shrinkStep = useShrinkStepOverride() ?? measuredShrinkStep;
 
+    // At the narrowest step the padding and inter-zone gaps below cost 48px of a ~300px row, while
+    // the start zone is out of room for controls that have nothing shorter left to fall back to.
+    // Halving both hands ~24px back, and it all lands in the start zone because that is the only
+    // item in this row that grows and shrinks.
+    //
+    // Keying this off the step is safe: `useShrinkStep` measures this element's BORDER box, which
+    // its own padding does not change, so tightening cannot feed back into which step is chosen.
+    // For the same reason the thresholds above stay as written — what changes is how much of each
+    // band's width reaches the controls, not where the bands fall.
+    const isTightened = shrinkStep >= SHRINK_STEP.MINIMUM;
+
     return (
       <ShrinkStepContext.Provider value={shrinkStep}>
         <div
           ref={attachRoot}
-          className={`tw:sticky tw:top-0 tw:box-border tw:flex tw:h-14 tw:flex-row tw:items-center tw:justify-between tw:gap-2 tw:overflow-clip tw:px-4 tw:py-2 tw:text-foreground tw:@container/toolbar ${className}`}
+          className={`tw:sticky tw:top-0 tw:box-border tw:flex tw:h-14 tw:flex-row tw:items-center tw:justify-between tw:overflow-clip tw:py-2 tw:text-foreground tw:@container/toolbar ${isTightened ? 'tw:gap-1 tw:px-2' : 'tw:gap-2 tw:px-4'} ${className}`}
           id={id}
         >
           {children}

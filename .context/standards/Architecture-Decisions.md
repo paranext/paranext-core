@@ -2918,3 +2918,55 @@ step, no automation. Just a record.
   two are documented in terms of each other, and the override is the only one a test should ever
   reach for.
 - **Source:** PT-4466, deferred from PT-4344 (PR #2701).
+
+## adr-narrow-toolbar-yields-padding-then-decoration: A toolbar out of room gives up its own padding, then a control's decoration — never a code
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** Dragging the Simple-mode editor column to its `SIMPLE_COLUMN_MIN_WIDTH_PX` (297) floor
+  inside a full-screen window leaves the tab toolbar's start zone with 117px for controls that want
+  129px. The paragraph-style trigger is the only item there that shrinks, so it absorbed the entire
+  deficit — and, because `adr-toolbar-shrink-measurement`'s ladder has already dropped the style name
+  by that width, what absorbed it was the USFM marker itself. Measured live, a `q2` rendered 5px of
+  the 27px it needs; a one-character `p` loses only a pixel, which is why the window-resize sweep in
+  `paragraph-style-trigger-narrow.spec.ts` never saw it — a splitter drag reaches widths no window
+  resize can, since the window bottoms out at `WINDOW_MIN_WIDTH_PX`.
+- **Decision:** Establish an order of sacrifice for a toolbar that is out of room, and give the
+  ladder two more rungs below "drop the secondary field". First, the **container yields its own
+  chrome**: at `SHRINK_STEP.MINIMUM` `TabToolbarContainer` halves its padding and inter-zone gaps
+  (`px-4`→`px-2`, `gap-2`→`gap-1`), returning ~24px to the start zone, which is the only item in
+  that row that grows and shrinks. Then a **control yields its decoration**: the paragraph-style
+  trigger drops its chevron at the same step. Only after both does anything touch the content —
+  and the trigger now floors at `min-w-min` at that step, so it stops narrowing rather than cut
+  into the marker.
+- **Alternatives:** **Raise the editor column's `panelLock.minWidth`** — rejected: it fixes the whole
+  class rather than one control, but 297 is a UX number bound by
+  `adr-window-min-width-shared-constant`'s arithmetic (`3 × 297 + 2 × 4 = 899` inside a 900px
+  window), and `simple-layout.data.test.ts` asserts every column ≥ 290, so raising the editor to
+  ~330 pushes the side columns to 281 and needs UX plus a window-minimum change. **Tighten the
+  padding at every width** — rejected: it pays for a 297px edge case by retuning the look of every
+  web-view toolbar at every width, and risks misaligning with the titlebar's own padding.
+  **Padding only, keeping the chevron** — rejected: it fits every 1–2 character marker with 11–19px
+  to spare, but a 4-character `toc1` still pushes ~5px past the zone edge, and shipping a known 5px
+  slice is the same defect class this exists to prevent — it would also force the sibling spec's
+  `overrun ≤ 1px` assertion to be weakened, which is how the bug returned the first time. **Hide
+  undo/redo at the narrowest step** — rejected for now: it frees 68px, the only option with real
+  margin to spare, but it costs two discoverable controls, and it is not needed once the two rungs
+  above are in place.
+- **Consequences:** Every marker length now fits at the column floor with ≥16px spare, and the
+  `min-content` floor is deliberately applied *only* at `SHRINK_STEP.MINIMUM`: while the style name
+  is still rendered it contributes its longest word to `min-content`, and a floor there makes the
+  trigger refuse to shrink and be clipped by the zone instead of ellipsising the name — measured at
+  63px of overrun before the floor was made step-dependent. Because the floor has to be
+  step-dependent, it cannot live in the web view (which renders the `TabToolbar` and so always reads
+  the widest step per `adr-shrink-step-override-context`), so the whole control moved into
+  `paragraph-style-trigger.component.tsx` alongside the label — which also makes both rungs
+  unit-testable. The padding change is safe to key off the step because `useShrinkStep` measures the
+  container's **border** box, which its own padding does not change, so it cannot feed back into
+  which step is chosen; the 520/420/340 thresholds stay as written, and what changes is how much of
+  each band reaches the controls. Below the floor — reachable in Power mode, where dock panels carry
+  no `panelLock.minWidth` at all — the trigger still overruns and is clipped; a general answer
+  (toolbar controls overflowing into the floating menu) is left open. The dropped chevron is a
+  UX-visible trade flagged for UX in the PR: the popover semantics, `aria-haspopup` and the
+  `aria-label` are untouched, so nothing changes for keyboard or screen-reader users.
+- **Source:** PT-4466 follow-up, reported against the Simple-mode three-column layout.
