@@ -79,9 +79,9 @@ const EDITOR_WRAPPER_STYLE = `
  * - IN-TEXT MARBLE HIGHLIGHTING is demonstrated by the `OverlayStates` story below. It feeds a small
  *   marble XML chapter through `convertMarbleChapterXml` (the same production path the web view
  *   uses), which produces USJ + annotation paths that match the live editor's annotation resolver.
- *   Hand-authored fixtures like `MATTHEW_2_ANNOTATED_USJ` do NOT resolve under the yalc-pinned
- *   editor (verified) and so do not paint marks - `WithFilterBanner` still uses that fixture only
- *   for its filter STATUS BANNER (component JSX, not an editor mark).
+ *   Hand-authored fixtures like `MATTHEW_2_ANNOTATED_USJ` do NOT resolve under the pinned editor
+ *   (verified) and so do not paint marks - `WithFilterBanner` still uses that fixture only for its
+ *   filter STATUS BANNER (component JSX, not an editor mark).
  */
 
 const localizedStrings = getLocalizedStrings([...ENHANCED_SCRIPTURE_PANE_STRING_KEYS]);
@@ -208,7 +208,7 @@ export const WithFilterBanner: Story = {
  * marble XML run through `convertMarbleChapterXml`. This is the same production data path the web
  * view uses (`loadMarbleChapterXml` → `convertMarbleChapterXml` → editor), so the resulting USJ
  * paths line up with the editor's annotation resolver - unlike the hand-authored
- * `MATTHEW_2_ANNOTATED_USJ` fixture, which doesn't resolve under the yalc-pinned editor (0.8.15).
+ * `MATTHEW_2_ANNOTATED_USJ` fixture, which doesn't resolve under the pinned editor.
  *
  * Exercises three behaviors in one story:
  *

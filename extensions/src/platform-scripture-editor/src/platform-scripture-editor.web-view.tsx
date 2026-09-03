@@ -2694,8 +2694,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // `CLEAR_HISTORY_COMMAND` unconditionally, so anything that re-runs it moments after an edit
     // wipes the undo stack. `@eten-tech-foundation/platform-editor` 0.8.15 is the first published
     // version that holds that effect's inputs stable BY VALUE rather than by reference; 0.8.14 does
-    // not. The pin is `~0.8.15`, so a patch release could regress it without a bump review, and no
-    // test here or upstream covers undo for this path — re-check it by hand when the pin moves.
+    // not. The editor is staged from the revision `dev-packages.json` pins, so it can change with
+    // no version diff here at all, and no test here or upstream covers undo for this path —
+    // re-check it by hand whenever that revision moves.
     editorRef.current?.applyUpdate(buildChapterScaffoldOps(scrRef.chapterNum, lastVerse), 'local');
   }, [scrRef.book, scrRef.chapterNum, lastVerse, isStructureProtected, notifyStructureProtected]);
 
