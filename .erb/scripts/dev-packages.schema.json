@@ -11,7 +11,7 @@
     },
     "repos": {
       "type": "array",
-      "description": "List of development repositories to link into this repo via yalc.",
+      "description": "List of development repositories whose packages are staged into this repo.",
       "items": {
         "$ref": "#/definitions/DevRepo"
       }
@@ -20,7 +20,7 @@
   "definitions": {
     "DevRepo": {
       "type": "object",
-      "description": "A development repository containing one or more packages that can be linked into this repo via yalc.",
+      "description": "A development repository containing one or more packages consumed by this repo.",
       "required": ["folder", "cloneUrl", "revision", "devPackages"],
       "additionalProperties": false,
       "properties": {
