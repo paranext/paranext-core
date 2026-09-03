@@ -264,10 +264,17 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
 
 .dock-nav-operations {
   height: 100%;
+}
 
-  &.dock-nav-operations-hidden {
-    display: none;
-  }
+// rc-tabs keeps the operations box in the DOM (with `.dock-nav-operations-hidden`) even when no
+// tab overflows into the dropdown. Take it out of the flex layout entirely in that state: because
+// it has `flex-grow: 1` (see `.dock-nav` above), an in-flow hidden box would silently split the
+// bar's leftover space with `.dock-extra-content` and halve the tab-drop zone. Specificity (0,5,0)
+// is needed to beat the `display: flex` set by the
+// `.dock-panel.dock-style-platform-bible .dock-nav-operations` rule above. rc-tabs never measures
+// this box (its overflow math only reads `.dock-nav-wrap`/`.dock-nav-list`), so hiding it is safe.
+.dock-layout .dock-panel.dock-style-platform-bible .dock-nav-operations.dock-nav-operations-hidden {
+  display: none;
 }
 
 .dock-nav-more {
