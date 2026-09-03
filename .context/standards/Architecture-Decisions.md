@@ -2856,3 +2856,54 @@ step, no automation. Just a record.
   Node 22.12 / ICU 76.1. Write-up: "Replacing stringz" artifact. Reproduction:
   `~/repos/test/grapheme-segmentation`, `npm run all`. Memory, non-V8 engines and browser runtimes
   were not measured.
+## adr-keep-component-names-in-packaged-bundles: Renderer and WebView bundles keep function and class names through minification
+
+- **Date:** 2026-09-02
+- **Status:** Accepted
+- **Context:** Both error boundaries log React's component stack, which React builds out of the
+  function and class names it finds on the fiber types. Webpack's default `TerserPlugin` mangles
+  those names, so in a packaged build every stack reads as two- and three-letter identifiers
+  (`SNe`, `RNe`, `GEe`) and names no component anyone can look up. The boundaries therefore caught
+  crashes in the field without ever reporting what threw: through the whole PT-4501 investigation no
+  reporter log supplied a component name, and the single most informative artifact produced was
+  React's dev-only hook table — unavailable in a packaged build by construction.
+- **Decision:** Set `terserOptions: { keep_classnames: true, keep_fnames: true }` on the minimizer
+  for the two bundles whose React trees an error boundary reports on: the renderer bundle
+  (`.erb/configs/webpack.config.renderer.prod.ts`) and the extension WebView bundles
+  (`extensions/webpack/webpack.config.web-view.ts`). Scoped to those two: extension `main` code, the
+  extension host and the main process keep webpack's defaults, since no component stack is built
+  from them. The WebView override sits in a file shared with `paranext-extension-template`, so the
+  same option has to be carried there for third-party extensions' stacks to be readable.
+
+  Those two are not sufficient on their own. `platform-bible-react` is consumed through a committed
+  `dist` that its own Vite build minifies, so its component names are destroyed before either
+  webpack config sees them — which is why a verification run still showed the toolbar as `dist_Dh`
+  with everything else named. It therefore also sets `esbuild: { keepNames: true }`
+  (`lib/platform-bible-react/vite.config.ts`). esbuild leaves the identifiers mangled and instead
+  emits explicit `.name` assignments, which is what React reads, and those assignments survive
+  webpack's terser into the shipped bundle. Because the package ships as a committed `dist`, the
+  option only takes effect once that `dist` is rebuilt; a rebuild is part of this change.
+- **Alternatives considered:** **Ship source maps and symbolicate at log time** — rejected: it
+  distributes a deobfuscated app, grows the install by the size of the maps (the renderer map alone
+  is ~11.9 MB against a 3.2 MB bundle), and adds a resolution step to the logging path, all to
+  recover names the bundle can simply keep. **`keep_classnames` alone** — nearly free (+0.2%) but
+  retains only class names, and the components that throw are functions, so it does not answer the
+  question. **`keep_classnames` + `mangle: { keep_fnames: true }`, letting the compressor still drop
+  names** — 9.7% growth instead of 11.3%, and every name probed survived, but only because the
+  compressor happened not to inline those components; a component it does inline comes back mangled.
+  That reintroduces the original failure intermittently and unfalsifiably from a log, which is worse
+  than paying 1.6%. **Capturing `displayName` in the boundaries instead of trusting React's stack** —
+  gives one name rather than a stack, and requires a `displayName` on every component that might
+  throw, which rots the moment someone adds one.
+- **Consequences:** The renderer bundle grows 358 KB raw (3,179,877 -> 3,538,235, +11.3%) and 61 KB
+  gzipped (+7.4%); the extension bundles grow 1.9 MB raw in total (+5.6%); `platform-bible-react`'s
+  `dist` grows 87 KB (+1.6%). Retained names are longer
+  identifiers, so parse cost rises with size; the trade was accepted deliberately, on the grounds
+  that a crash report naming the component is worth more than the bytes. Minified stacks are the
+  reason six candidate root causes for PT-4501 could be neither confirmed nor falsified, so the
+  alternative cost is measured in re-investigations. Anyone tempted to reduce bundle size by
+  restoring the defaults here should know they are trading away every future crash report's
+  usefulness.
+- **Source:** PT-4501. Sizes measured on this branch by building each config with and without the
+  option and comparing `release/app/dist/renderer/renderer.js` and `extensions/dist/**/*.js`;
+  name retention verified in the built bundles and by a deliberate throw in a packaged build.

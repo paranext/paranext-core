@@ -25,6 +25,13 @@ const config = defineConfig({
       insertAt: 'after-all',
     }),
   ],
+  // React builds the component stack that Platform.Bible's error boundaries log out of function and
+  // class names. This package is consumed through its committed `dist`, so a name esbuild mangles
+  // here is gone before the app's own minifier (which keeps names) ever sees it, and every
+  // platform-bible-react component in a crash report reads as an unlookup-able identifier.
+  esbuild: {
+    keepNames: true,
+  },
   build: {
     sourcemap: true,
     lib: {
