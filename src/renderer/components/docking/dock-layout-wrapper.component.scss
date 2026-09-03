@@ -219,9 +219,16 @@ This file styles with SCSS because rc-dock doesn't give us good ways to render w
     flex-grow: 0;
   }
 
-  // Contains New Tab (+) button
+  // Contains the New Tab (+) button and the invisible whole-bar tab-drop zone
+  // (`tab-bar-drop-zone.component.tsx`) that fills whatever space is left after it.
   > .dock-extra-content {
     order: 2;
+    // Claim the bar's leftover space so the drop zone inside has something to grow into; without
+    // this, the space between the "+" button and the tab bar's end belongs to no flex item and a
+    // dropped tab there is silently ignored. Growing this container (rather than growing
+    // `.platform-tab-bar-drop-zone` against `.dock-nav`) keeps every tab-bar flex rule here in one
+    // place instead of split across two stylesheets.
+    flex-grow: 1;
   }
 
   // Contains Overflow Dropdown and other operations
