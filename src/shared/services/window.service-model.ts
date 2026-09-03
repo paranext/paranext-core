@@ -143,14 +143,17 @@ declare module 'papi-shared-types' {
  * JSDOC SOURCE windowService
  *
  * Service for interacting with an application window. Every window hosts its own, so a call from a
- * renderer acts on the window it runs in. The extension host is in no window, so a call made there
- * acts on whichever window the router is targeting at that moment, which can differ between two
- * calls.
+ * renderer acts on the window it runs in.
  *
- * The routing target is usually the focused window, but not always: a window that has taken OS
- * focus does not become the target until it is ready and not closing, so a newly opened window can
- * hold focus while calls still act on the previous one. `platform.getFocusedWindowId` is what
- * tracks focus itself.
+ * The extension host is in no window, so a call made there acts on the window that most recently
+ * had focus — `platform.getFocusedWindowId`, which stays set while the application is in the
+ * background. Two calls can answer for different windows, and a subscription binds to the window
+ * focused when it was made rather than following focus afterwards. If there is no focused window,
+ * or the focused window has not registered its window service — either because it is still starting
+ * or because it has just gone away — the call throws rather than falling back to another window.
+ *
+ * This is a different resolver from the one the {@link windowServiceProviderName} doc describes: the
+ * bare unscoped name goes through the router; `papi.window` does not.
  */
 export type IWindowService = {
   /**
