@@ -168,7 +168,7 @@ beforeEach(() => {
   );
 });
 
-const WINDOW_SCOPED_DEFINITION: WebViewDefinition = {
+const EXISTING_DEFINITION: WebViewDefinition = {
   id: 'abc-w2',
   webViewType: 'test.type',
   contentType: 'html',
@@ -191,7 +191,7 @@ describe('captureAndCloseWebView', () => {
     // that somehow fell behind can never travel to the target in place of the live value.
     const { getFullWebViewStateById } = await import('@renderer/services/web-view-state.service');
     vi.mocked(getFullWebViewStateById).mockReturnValue({ scroll: 5 });
-    const { shard } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
+    const { shard } = await shardOverDockLayout(EXISTING_DEFINITION);
 
     const captured = await shard.captureAndCloseWebView('abc-w2');
 
@@ -202,7 +202,7 @@ describe('captureAndCloseWebView', () => {
     const { deleteFullWebViewStateById } = await import(
       '@renderer/services/web-view-state.service'
     );
-    const { shard } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
+    const { shard } = await shardOverDockLayout(EXISTING_DEFINITION);
 
     await shard.captureAndCloseWebView('abc-w2');
 
@@ -210,19 +210,11 @@ describe('captureAndCloseWebView', () => {
   });
 
   test('capture closes the tab it captured', async () => {
-    const { shard, removedTabIds } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
+    const { shard, removedTabIds } = await shardOverDockLayout(EXISTING_DEFINITION);
 
     await shard.captureAndCloseWebView('abc-w2');
 
     expect(removedTabIds).toEqual(['abc-w2']);
-  });
-
-  test('capture strips the window scope off the captured id', async () => {
-    const { shard } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
-
-    const captured = await shard.captureAndCloseWebView('abc-w2');
-
-    expect(captured?.id).toBe('abc');
   });
 });
 
@@ -231,7 +223,7 @@ describe('argument validation', () => {
   // with anything. These pin that they check rather than trust.
 
   test('capture refuses a web view id that is not a string', async () => {
-    const { shard } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
+    const { shard } = await shardOverDockLayout(EXISTING_DEFINITION);
 
     // The wire has no types; a caller can send whatever it likes
     // eslint-disable-next-line no-type-assertion/no-type-assertion

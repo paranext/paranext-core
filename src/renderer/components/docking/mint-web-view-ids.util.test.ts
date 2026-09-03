@@ -1,13 +1,13 @@
-import { beforeEach, describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import type { LayoutInfo, SavedTabInfo } from '@shared/models/docking-framework.model';
-import withWindowScopedWebViewIds, {
-  withWindowScopedWebViewIdInTab,
-} from '@renderer/components/docking/window-scoped-web-view-ids.util';
+import mintFreshWebViewIds, {
+  mintFreshWebViewIdInTab,
+} from '@renderer/components/docking/mint-web-view-ids.util';
 
 // `LayoutInfo` is deliberately opaque in the shared model, so building a fixture and reading a tab
 // back out of a result both have to cross that boundary. Restructuring to avoid the assertions
-// would mean asserting on something other than the ids this transform exists to rewrite.
+// would mean asserting on something other than the ids this transform exists to mint.
 /* eslint-disable no-type-assertion/no-type-assertion */
 
 /** Tab shaped like a saved web view tab: id repeated inside `data` */
@@ -58,78 +58,49 @@ function readPanel(layout: LayoutInfo) {
   return base.dockbox.children[0];
 }
 
-describe('withWindowScopedWebViewIds', () => {
-  beforeEach(() => {
-    globalThis.windowId = '2';
-  });
+describe('mintFreshWebViewIds', () => {
+  test('replaces a baked layout’s web view id with a freshly minted one', () => {
+    const minted = mintFreshWebViewIds(layoutWithWebView('abc-123'));
 
-  test('scopes a shared layout’s web view id to this window', () => {
-    const scoped = withWindowScopedWebViewIds(layoutWithWebView('abc-123'));
-
-    expect(readWebViewTab(scoped).id).toBe('abc-123-w2');
+    expect(readWebViewTab(minted.layout).id).not.toBe('abc-123');
   });
 
   test('keeps the id repeated inside the tab data in agreement with the tab id', () => {
-    const scoped = withWindowScopedWebViewIds(layoutWithWebView('abc-123'));
+    const minted = mintFreshWebViewIds(layoutWithWebView('abc-123'));
 
-    const tab = readWebViewTab(scoped);
+    const tab = readWebViewTab(minted.layout);
     expect(tab.data.id).toBe(tab.id);
   });
 
-  test('gives two windows different ids for the same shared layout', () => {
+  test('gives two materializations of the same baked layout different ids', () => {
     const shared = layoutWithWebView('abc-123');
 
-    globalThis.windowId = '1';
-    const inWindow1 = readWebViewTab(withWindowScopedWebViewIds(shared)).id;
-    globalThis.windowId = '2';
-    const inWindow2 = readWebViewTab(withWindowScopedWebViewIds(shared)).id;
+    const first = readWebViewTab(mintFreshWebViewIds(shared).layout).id;
+    const second = readWebViewTab(mintFreshWebViewIds(shared).layout).id;
 
-    expect(inWindow1).not.toBe(inWindow2);
+    expect(first).not.toBe(second);
   });
 
   test('does not mutate the layout it is given, which is a constant every window reads', () => {
     const shared = layoutWithWebView('abc-123');
 
-    withWindowScopedWebViewIds(shared);
+    mintFreshWebViewIds(shared);
 
     expect(readWebViewTab(shared).id).toBe('abc-123');
-  });
-
-  test('replaces an existing window suffix rather than stacking another one', () => {
-    // Layouts are re-scoped on every load, including one this window saved with scoped ids already
-    const alreadyScoped = layoutWithWebView('abc-123-w1');
-
-    const scoped = withWindowScopedWebViewIds(alreadyScoped);
-
-    expect(readWebViewTab(scoped).id).toBe('abc-123-w2');
-  });
-
-  test('re-scoping is stable, so repeated loads do not drift the id', () => {
-    const once = withWindowScopedWebViewIds(layoutWithWebView('abc-123'));
-    const twice = withWindowScopedWebViewIds(once);
-
-    expect(readWebViewTab(twice).id).toBe(readWebViewTab(once).id);
-  });
-
-  test('sends the same legacy layout to different ids in different windows', () => {
-    // Two windows can each migrate the same pre-multi-window layout from the undeleted legacy
-    // storage key, so identical input has to come out per-window distinct
-    const legacy = layoutWithWebView('abc-123');
-
-    globalThis.windowId = '1';
-    const inWindow1 = readWebViewTab(withWindowScopedWebViewIds(legacy)).id;
-    globalThis.windowId = '2';
-    const inWindow2 = readWebViewTab(withWindowScopedWebViewIds(legacy)).id;
-
-    expect(inWindow1).not.toBe(inWindow2);
   });
 
   test('does not modify the saved data inside the layout it is given', () => {
     const shared = layoutWithWebView('abc-123');
 
-    withWindowScopedWebViewIds(shared);
+    mintFreshWebViewIds(shared);
 
     expect(readWebViewTab(shared).data.id).toBe('abc-123');
+  });
+
+  test('records the baked id against the minted id in the returned map', () => {
+    const { layout, mintedIds } = mintFreshWebViewIds(layoutWithWebView('abc-123'));
+
+    expect(mintedIds.get('abc-123')).toBe(readWebViewTab(layout).id);
   });
 
   test('keeps a panel’s active tab pointing at the tab that was active', () => {
@@ -137,28 +108,20 @@ describe('withWindowScopedWebViewIds', () => {
     // unrewritten `activeId` silently moves the user off the tab they left open
     const layout = layoutWithPanel([webViewTab('first'), webViewTab('second')], 'second');
 
-    const scoped = withWindowScopedWebViewIds(layout);
+    const minted = mintFreshWebViewIds(layout);
 
-    const panel = readPanel(scoped);
-    expect(panel.activeId).toBe('second-w2');
+    const panel = readPanel(minted.layout);
+    expect(panel.activeId).toBe(minted.mintedIds.get('second'));
     expect(panel.tabs.some((tab) => tab.id === panel.activeId)).toBe(true);
-  });
-
-  test('rewrites the active tab id of a layout saved by another window', () => {
-    const layout = layoutWithPanel([webViewTab('first-w1'), webViewTab('second-w1')], 'second-w1');
-
-    const scoped = withWindowScopedWebViewIds(layout);
-
-    expect(readPanel(scoped).activeId).toBe('second-w2');
   });
 
   test('leaves an active tab id alone when that tab is not a web view', () => {
     const toolTab = { id: 'some-tool', tabType: 'tool' } as unknown as SavedTabInfo;
     const layout = layoutWithPanel([toolTab, webViewTab('a-web-view')], 'some-tool');
 
-    const scoped = withWindowScopedWebViewIds(layout);
+    const minted = mintFreshWebViewIds(layout);
 
-    expect(readPanel(scoped).activeId).toBe('some-tool');
+    expect(readPanel(minted.layout).activeId).toBe('some-tool');
   });
 
   test('leaves tabs that are not web views alone', () => {
@@ -166,9 +129,11 @@ describe('withWindowScopedWebViewIds', () => {
       dockbox: { mode: 'horizontal', children: [{ tabs: [{ id: 'some-tool', tabType: 'tool' }] }] },
     } as unknown as LayoutInfo;
 
-    const scoped = withWindowScopedWebViewIds(layout);
+    const minted = mintFreshWebViewIds(layout);
 
-    const base = scoped as unknown as { dockbox: { children: { tabs: { id: string }[] }[] } };
+    const base = minted.layout as unknown as {
+      dockbox: { children: { tabs: { id: string }[] }[] };
+    };
     expect(base.dockbox.children[0].tabs[0].id).toBe('some-tool');
   });
 
@@ -195,12 +160,12 @@ describe('withWindowScopedWebViewIds', () => {
       },
     } as unknown as LayoutInfo;
 
-    const scoped = withWindowScopedWebViewIds(layout);
+    const minted = mintFreshWebViewIds(layout);
 
-    const base = scoped as unknown as {
+    const base = minted.layout as unknown as {
       dockbox: { children: { children: { tabs: { id: string }[] }[] }[] };
     };
-    expect(base.dockbox.children[0].children[0].tabs[0].id).toBe('deep-1-w2');
+    expect(base.dockbox.children[0].children[0].tabs[0].id).not.toBe('deep-1');
   });
 });
 
@@ -210,40 +175,30 @@ function readIds(tab: SavedTabInfo) {
   return { id: concrete.id, dataId: concrete.data?.id };
 }
 
-describe('withWindowScopedWebViewIdInTab', () => {
-  beforeEach(() => {
-    globalThis.windowId = '2';
-  });
-
-  test('scopes a supplement tab’s id, which is otherwise identical in every window', () => {
-    expect(readIds(withWindowScopedWebViewIdInTab(webViewTab('supplement-tab'))).id).toBe(
-      'supplement-tab-w2',
+describe('mintFreshWebViewIdInTab', () => {
+  test('mints a fresh id for a supplement tab, which is otherwise identical in every window', () => {
+    expect(readIds(mintFreshWebViewIdInTab(webViewTab('supplement-tab'))).id).not.toBe(
+      'supplement-tab',
     );
   });
 
   test('keeps the id repeated inside the tab data in agreement with the tab id', () => {
-    const scoped = readIds(withWindowScopedWebViewIdInTab(webViewTab('supplement-tab')));
+    const minted = readIds(mintFreshWebViewIdInTab(webViewTab('supplement-tab')));
 
-    expect(scoped.dataId).toBe(scoped.id);
+    expect(minted.dataId).toBe(minted.id);
   });
 
-  test('replaces an existing window suffix rather than stacking another one', () => {
-    const scoped = withWindowScopedWebViewIdInTab(webViewTab('supplement-tab-w1'));
+  test('mints a different id each time', () => {
+    const first = readIds(mintFreshWebViewIdInTab(webViewTab('supplement-tab'))).id;
+    const second = readIds(mintFreshWebViewIdInTab(webViewTab('supplement-tab'))).id;
 
-    expect(readIds(scoped).id).toBe('supplement-tab-w2');
-  });
-
-  test('re-scoping is stable, so repeated loads do not drift the id', () => {
-    const once = withWindowScopedWebViewIdInTab(webViewTab('supplement-tab'));
-    const twice = withWindowScopedWebViewIdInTab(once);
-
-    expect(readIds(twice).id).toBe(readIds(once).id);
+    expect(first).not.toBe(second);
   });
 
   test('does not mutate the tab it is given, which comes from a module every load reads', () => {
     const supplementTab = webViewTab('supplement-tab');
 
-    withWindowScopedWebViewIdInTab(supplementTab);
+    mintFreshWebViewIdInTab(supplementTab);
 
     expect(readIds(supplementTab).id).toBe('supplement-tab');
   });
@@ -251,6 +206,6 @@ describe('withWindowScopedWebViewIdInTab', () => {
   test('leaves a tab that is not a web view alone', () => {
     const toolTab = { id: 'some-tool', tabType: 'tool' } as unknown as SavedTabInfo;
 
-    expect(readIds(withWindowScopedWebViewIdInTab(toolTab)).id).toBe('some-tool');
+    expect(readIds(mintFreshWebViewIdInTab(toolTab)).id).toBe('some-tool');
   });
 });

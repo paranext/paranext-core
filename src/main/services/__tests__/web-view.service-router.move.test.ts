@@ -61,18 +61,11 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-/**
- * Wire windows whose WebView service shards are the given objects, telling each stand-in which
- * window serves it — the ids a shard answers with are scoped to its own window (see
- * {@link windowShard}), so a shard that does not know which window it is cannot answer as one.
- */
+/** Wire windows whose WebView service shards are the given objects. */
 function withWindows(
   shardsByWindowId: Record<number, WindowShard>,
   options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
 ) {
-  Object.entries(shardsByWindowId).forEach(([windowId, shard]) =>
-    shard.setWindowId(Number(windowId)),
-  );
   withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId, options);
 }
 
@@ -111,7 +104,8 @@ vi.mock('@shared/services/logger.service', () => ({
   },
 }));
 
-const { moveWebView } = testingWebViewServiceRouter;
+const { moveWebView, seedMoveInFlightForTesting, clearMovesInFlightForTesting } =
+  testingWebViewServiceRouter;
 
 /** Start the router and hand back the object it registered under the generic name */
 async function getRouter() {
@@ -131,29 +125,14 @@ async function getCommandHandler(commandName: string): Promise<InternalRequestHa
 }
 
 /**
- * The id a window holds a web view under. A window scopes the ids of the web views it holds, which
- * is the whole reason a move answers with the target's id rather than the one it was given — a
- * stand-in that echoed the caller's id back would make the two indistinguishable and every
- * assertion about which one a move reports unfalsifiable.
- */
-function scopeWebViewIdToWindow(webViewId: WebViewId, windowId: number): WebViewId {
-  return `${webViewId}-window-${windowId}`;
-}
-
-/**
  * A per-window WebView service shard whose web views are the given ids, extended with the move
  * primitives `moveWebView` drives. `captureAndCloseWebView` answers a definition only for ids this
  * window holds, matching the real shard's "not mine" answer of `undefined`; `adoptWebView` accepts
- * every move and answers with the id the definition is now open under HERE, which is this window's
- * scoping of it (see {@link scopeWebViewIdToWindow}) and not the id it was handed.
+ * every move and answers with the same id it was handed — a web view keeps the id it was minted
+ * with for its whole life, across any number of moves.
  */
 function windowShard(openWebViewIds: string[]) {
-  /** Set by `withWindows` from the id the shard is wired under */
-  let windowId = 0;
   return {
-    setWindowId: (id: number) => {
-      windowId = id;
-    },
     getOpenWebViewDefinition: vi.fn(async (id: string) =>
       openWebViewIds.includes(id) ? { id } : undefined,
     ),
@@ -166,9 +145,7 @@ function windowShard(openWebViewIds: string[]) {
     >(async (id) => (openWebViewIds.includes(id) ? { id, webViewType: 'test.type' } : undefined)),
     adoptWebView: vi.fn<
       (savedWebViewDefinition: SavedWebViewDefinition) => Promise<WebViewId | undefined>
-    >(async (savedWebViewDefinition) =>
-      scopeWebViewIdToWindow(savedWebViewDefinition.id, windowId),
-    ),
+    >(async (savedWebViewDefinition) => savedWebViewDefinition.id),
     // A window with nothing docked in it since its last emptiness report, which is what a window
     // created to receive a moved web view is until the adopt lands. A stand-in without this answers
     // every re-check with a TypeError, and the closes below would all reach the window through the
@@ -210,6 +187,10 @@ function resolvedShardOfWindowAt(windowId: number): number {
 
 describe('moveWebView', () => {
   beforeEach(() => {
+    // Same reason as the sibling block below: the register is module state, and a test that leaves
+    // a record behind is read by the next one. No test here leaks today, which is exactly when it
+    // is cheap to stop one from starting to.
+    clearMovesInFlightForTesting();
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
@@ -219,6 +200,68 @@ describe('moveWebView', () => {
     mocks.isWindowClosing.mockReturnValue(false);
     mocks.getFocusedWindowId.mockReturnValue(1);
     mocks.settingsGet.mockResolvedValue('power');
+  });
+
+  test('refuses a second move of the same web view while the first is still running', async () => {
+    // Two moves of one tab race for a capture only one of them can win. Nothing stopped that: the
+    // in-flight register is filled only after the source window answers the capture, several
+    // awaits in, so both calls are past it before either records anything.
+    //
+    // Double-clicking the menu item is enough to reach it — the item has no disabled state — so
+    // this is refused at the door instead.
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    let releaseAdopt: (webViewId: WebViewId) => void = () => {};
+    target.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseAdopt = resolve;
+        }),
+    );
+    withWindows({ 2: owner, 3: target });
+
+    const firstMove = moveWebView('view-1', 3);
+    await settle();
+
+    const refusal = await failedMove(moveWebView('view-1', 3));
+    expect(getErrorMessage(refusal)).toContain('it is already being moved');
+    // The refused call never touched the tab — the still-running first call owns it — so the
+    // caller has to be able to tell this apart from a failure that actually moved or lost the tab,
+    // rather than reading the generic "could not move" fallback a marker-less rejection gets.
+    expect(getWebViewMoveFailureDisposition(refusal)).toBe('already-moving');
+    // And it was refused before touching anything: one capture, from the first move only. Without
+    // this the second capture is what returns undefined and produces the false "may have closed".
+    expect(owner.captureAndCloseWebView).toHaveBeenCalledTimes(1);
+
+    releaseAdopt('view-1');
+    await firstMove;
+
+    // The refusal lasts exactly as long as the move does. A guard that leaked would make this web
+    // view unmovable for the rest of the session, so with the target answering promptly the next
+    // move of the same view has to go through.
+    target.adoptWebView.mockImplementation(async () => 'view-1');
+    await expect(moveWebView('view-1', 3)).resolves.toBe('view-1');
+  });
+
+  test('a target whose close is decided while its adopt runs does not report a move that worked', async () => {
+    // The check before the adopt catches a close decided up to that moment. The adopt then waits on
+    // a provider with no bound of its own, and a close decided inside that wait is invisible to it —
+    // so the window takes the web view down with it while the move reports the id it just got back.
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    let targetClosing = false;
+    mocks.isWindowClosing.mockImplementation((windowId: number) => windowId === 3 && targetClosing);
+    target.adoptWebView.mockImplementation(async () => {
+      // The close lands while the adopt is in flight, which is the whole point
+      targetClosing = true;
+      return 'view-1';
+    });
+    withWindows({ 2: owner, 3: target });
+
+    await expect(moveWebView('view-1', 3)).rejects.toThrow();
+    // And the web view is not left to go down with the window: recovery put it back where it came
+    // from, which is what the throw is for.
+    expect(owner.adoptWebView).toHaveBeenCalled();
   });
 
   test('moves to an existing window: captures in the owner, adopts in the target, answers the id', async () => {
@@ -237,9 +280,10 @@ describe('moveWebView', () => {
     expect(owner.captureAndCloseWebView.mock.invocationCallOrder[0]).toBeLessThan(
       target.adoptWebView.mock.invocationCallOrder[0],
     );
-    // The target's answer, not the caller's id: window 3 holds it under its own scoping of the id,
-    // and that is what anything after the move has to use
-    expect(movedId).toBe('view-1-window-3');
+    // The target's answer, not an id the move assumes: the move reports whatever the adopt handed
+    // back, and — since a web view keeps the id it was minted with for its whole life — that is the
+    // same id passed in.
+    expect(movedId).toBe('view-1');
   });
 
   test('raises the target window after a successful move while the app holds focus', async () => {
@@ -309,8 +353,7 @@ describe('moveWebView', () => {
 
     const movedId = await moveWebView('view-1', 2);
 
-    // Unchanged, because no window adopted it: an adopt would have answered with the adopting
-    // window's own scoping of the id
+    // Unchanged, because no window adopted it: nothing that would echo a different id ever ran
     expect(movedId).toBe('view-1');
     expect(owner.captureAndCloseWebView).not.toHaveBeenCalled();
     expect(owner.adoptWebView).not.toHaveBeenCalled();
@@ -337,8 +380,8 @@ describe('moveWebView', () => {
       created.adoptWebView.mock.invocationCallOrder[0],
     );
     expect(mocks.clearWindowPendingContent).toHaveBeenCalledWith(7);
-    // The window created for it answers with its own scoping of the id, same as any other target
-    expect(movedId).toBe('view-1-window-7');
+    // Same id as any other target's answer: a web view keeps the id it was minted with
+    expect(movedId).toBe('view-1');
   });
 
   test('a move to a new window waits for that window to be reachable before the source tab closes', async () => {
@@ -363,7 +406,7 @@ describe('moveWebView', () => {
     // The new window's renderer finishes starting and registers its shard
     withWindows({ 2: owner, 7: created });
 
-    await expect(moving).resolves.toBe('view-1-window-7');
+    await expect(moving).resolves.toBe('view-1');
     expect(owner.captureAndCloseWebView).toHaveBeenCalledWith('view-1');
     // Resolve-before-capture, not merely both-happened: the ordering is the whole protection, and
     // an implementation that captured first would still pass every other assertion here
@@ -598,6 +641,33 @@ describe('moveWebView', () => {
     );
   });
 
+  test('a fresh window whose close is decided while its adopt runs does not report a move that worked', async () => {
+    // Same race as the numbered-target case above, but for a window the move itself created:
+    // content reaches it and its close is decided in the interval the request has no way to
+    // observe. Reporting success here would tell the caller the view is somewhere it is about to
+    // be taken down from.
+    const owner = windowShard(['view-1']);
+    const created = windowShard([]);
+    let createdWindowClosing = false;
+    mocks.isWindowClosing.mockImplementation(
+      (windowId: number) => windowId === 7 && createdWindowClosing,
+    );
+    created.adoptWebView.mockImplementation(async () => {
+      // The close lands while the adopt is in flight, which is the whole point
+      createdWindowClosing = true;
+      return 'view-1';
+    });
+    withWindows({ 2: owner, 7: created });
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+
+    await expect(moveWebView('view-1', 'new')).rejects.toThrow();
+
+    // And the web view is not left to go down with the window: recovery put it back where it
+    // came from, which is what the throw is for.
+    expect(owner.adoptWebView).toHaveBeenCalled();
+  });
+
   test('when nothing can reopen the view, the move rejects and the definition is in the log', async () => {
     const owner = windowShard(['view-1']);
     const target = windowShard([]);
@@ -628,7 +698,6 @@ describe('a web view that is between windows on a move', () => {
    */
   function sourceWindowShard(
     webViewId: WebViewId,
-    capturedWebViewId: WebViewId = webViewId,
     extraCapturedFields: Partial<SavedWebViewDefinition> = {},
   ) {
     const shard = windowShard([webViewId]);
@@ -636,7 +705,7 @@ describe('a web view that is between windows on a move', () => {
       if (id !== webViewId) return undefined;
       shard.getOpenWebViewDefinition.mockResolvedValue(undefined);
       shard.getAllOpenWebViewDefinitions.mockResolvedValue([]);
-      return { id: capturedWebViewId, webViewType: 'test.type', ...extraCapturedFields };
+      return { id: webViewId, webViewType: 'test.type', ...extraCapturedFields };
     });
     return shard;
   }
@@ -660,6 +729,10 @@ describe('a web view that is between windows on a move', () => {
   }
 
   beforeEach(() => {
+    // The in-flight set is module state shared by every test in this file, and each mid-move test
+    // releases its adopts AFTER its assertions — so one failing test leaves its records behind and
+    // the next test counts them, turning one failure into a cascade of misleading numbers.
+    clearMovesInFlightForTesting();
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
@@ -694,35 +767,6 @@ describe('a web view that is between windows on a move', () => {
     await moving;
   });
 
-  test('a search for the id the capture stripped the window scope from is refused too', async () => {
-    // A web view restored from a persisted layout is named by a window-scoped id, and the capture
-    // strips that scope rather than carry one window's scope into another — so for the gap the view
-    // has two names, and a search under either has to be told the question could not be answered.
-    // Refusing only for the name the caller used sends a search for the captured id away with
-    // "nobody has it", which is what mints a second copy of a view meant to be unique.
-    const owner = sourceWindowShard('view-1-window-2', 'view-1');
-    const target = windowShard([]);
-    let releaseAdopt: (webViewId: WebViewId) => void = () => {};
-    target.adoptWebView.mockImplementation(
-      async () =>
-        new Promise<WebViewId>((resolve) => {
-          releaseAdopt = resolve;
-        }),
-    );
-    withWindows({ 2: owner, 3: target });
-    const router = await getRouter();
-
-    const moving = moveWebView('view-1-window-2', 3);
-    await settle();
-
-    await expect(router.getOpenWebViewDefinition('view-1')).rejects.toThrow(/unreachable/);
-
-    // Ending the gap here rather than leaving the adopt hanging: the in-flight registry is module
-    // state, so a move left open would keep refusing searches in every test after this one
-    releaseAdopt('view-1-window-3');
-    await moving;
-  });
-
   test('a completed move stops answering that way', async () => {
     const { router, moving, releaseAdopt } = await moveWithHangingAdopt();
 
@@ -753,7 +797,7 @@ describe('a web view that is between windows on a move', () => {
     // target has not adopted yet — so without folding in the move record a writable Scripture
     // editor mid-move would be missing from a shutdown sync's project selection even though both
     // windows are healthy and nothing looks unreachable.
-    const owner = sourceWindowShard('view-1', 'view-1', {
+    const owner = sourceWindowShard('view-1', {
       projectId: 'project-1',
       state: { isReadOnly: false },
     });
@@ -790,12 +834,33 @@ describe('a web view that is between windows on a move', () => {
     await moving;
   });
 
-  test('does not double-count a web view the target already reports while the move record is still open', async () => {
+  test('does not report a web view twice when the window it is now open in already reports it', async () => {
+    // A window can come to report the view a move record still tracks two ways — a target that
+    // adopted it, or a source a failed move's recovery handed it back to — and either way it is
+    // reported under the exact id the move record carries, since a web view keeps the id it was
+    // minted with for its whole life. The fold-in guard matches on that id, so the already-reported
+    // view is not added a second time.
+    const source = windowShard(['view-1']);
+    withWindows({ 2: source });
+    seedMoveInFlightForTesting({
+      webViewType: 'test.type',
+      projectId: 'project-1',
+      capturedDefinition: { id: 'view-1', webViewType: 'test.type', projectId: 'project-1' },
+    });
+
+    const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
+
+    expect(definitions.filter((definition) => definition.id === 'view-1')).toHaveLength(1);
+  });
+
+  test('does not report a web view twice when a late-landing adopt reaches the target before the move record clears', async () => {
     // A late-landing adopt (the router's own request timed out, but the target's state already has
     // it) clears the move record only once its own probe confirms — so for a stretch the target
-    // already reports the definition AND the move record is still in the set. Folding in the move
-    // record unconditionally would count the same web view twice.
-    const owner = sourceWindowShard('view-1', 'view-1', { projectId: 'project-1' });
+    // already reports the definition AND the move record is still in the set. Because a web view
+    // never changes id across a move, the target reports it under the exact id the move record
+    // carries, so the fold-in guard recognizes the two describe the same view and does not add it a
+    // second time.
+    const owner = sourceWindowShard('view-1', { projectId: 'project-1' });
     const target = windowShard([]);
     let releaseAdopt: (webViewId: WebViewId) => void = () => {};
     target.adoptWebView.mockImplementation(
@@ -819,9 +884,6 @@ describe('a web view that is between windows on a move', () => {
     const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
 
     expect(definitions.filter((definition) => definition.id === 'view-1')).toHaveLength(1);
-    // Nothing was folded in, so nothing says it was. The sibling test above shows this same call
-    // does log when a fold-in really happens, so silence here is the dedupe working rather than the
-    // assertion having nothing to catch.
     expect(mocks.loggerDebug).not.toHaveBeenCalledWith(
       expect.stringContaining('are between windows on a move'),
     );
@@ -830,13 +892,59 @@ describe('a web view that is between windows on a move', () => {
     await moving;
   });
 
-  test('does not double-count a web view reported under the id the move started from', async () => {
-    // A move tracks two spellings of its web view's id — the one the caller named and the stripped
-    // one the target was handed — because a window scopes ids to itself when it loads a layout.
-    // Deduping on the captured spelling alone counts the view twice whenever the window holding it
-    // answers with the other spelling, which is what a recovery back into the source window
-    // produces once that window has re-scoped it.
-    const owner = sourceWindowShard('view-1-w2', 'view-1', { projectId: 'project-1' });
+  test('folds in two simultaneous moves, each keeping its own id', async () => {
+    // Two power-mode windows moving their own Home tab at once: nothing about the ids collides, so
+    // both records belong in the fan-out untouched while both are open in no window.
+    const sourceA = sourceWindowShard('home-1', { projectId: 'project-a' });
+    const sourceB = sourceWindowShard('home-2', { projectId: 'project-b' });
+    const targetA = windowShard([]);
+    const targetB = windowShard([]);
+    let releaseAdoptA: (webViewId: WebViewId) => void = () => {};
+    let releaseAdoptB: (webViewId: WebViewId) => void = () => {};
+    targetA.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseAdoptA = resolve;
+        }),
+    );
+    targetB.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseAdoptB = resolve;
+        }),
+    );
+    withWindows({ 2: sourceA, 3: sourceB, 4: targetA, 5: targetB });
+
+    const movingA = moveWebView('home-1', 4);
+    const movingB = moveWebView('home-2', 5);
+    await settle();
+
+    const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
+
+    expect(definitions).toContainEqual(
+      expect.objectContaining({ id: 'home-1', projectId: 'project-a' }),
+    );
+    expect(definitions).toContainEqual(
+      expect.objectContaining({ id: 'home-2', projectId: 'project-b' }),
+    );
+
+    releaseAdoptA('home-1');
+    releaseAdoptB('home-2');
+    await Promise.all([movingA, movingB]);
+  });
+
+  test('folds in a dragged view while its former window still reports another view untouched', async () => {
+    // A window can hold several distinct views at once, each with its own id, so dragging one out
+    // must fold in only that one and leave what the window reports for the rest alone.
+    const holderWebViewIds = ['dragged-view', 'sibling-view'];
+    const holder = windowShard(holderWebViewIds);
+    holder.captureAndCloseWebView.mockImplementation(async (id) => {
+      const index = holderWebViewIds.indexOf(id);
+      if (index < 0) return undefined;
+      // The capture closes the dragged tab; the sibling stays open and keeps being reported
+      holderWebViewIds.splice(index, 1);
+      return { id, webViewType: 'test.type', projectId: 'project-dragged' };
+    });
     const target = windowShard([]);
     let releaseAdopt: (webViewId: WebViewId) => void = () => {};
     target.adoptWebView.mockImplementation(
@@ -845,30 +953,21 @@ describe('a web view that is between windows on a move', () => {
           releaseAdopt = resolve;
         }),
     );
-    withWindows({ 2: owner, 3: target });
+    withWindows({ 2: holder, 4: target });
 
-    const moving = moveWebView('view-1-w2', 3);
+    const move = moveWebView('dragged-view', 4);
     await settle();
-
-    const reportedUnderTheOriginalId: SavedWebViewDefinition = {
-      id: 'view-1-w2',
-      webViewType: 'test.type',
-      projectId: 'project-1',
-    };
-    target.getAllOpenWebViewDefinitions.mockResolvedValue([reportedUnderTheOriginalId]);
 
     const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
 
-    // The window's own answer is there — so the assertions below are about a fold-in that did not
-    // happen, not about an empty read that could not have shown one either way.
-    expect(definitions.filter((definition) => definition.id === 'view-1-w2')).toHaveLength(1);
-    expect(definitions.filter((definition) => definition.id === 'view-1')).toHaveLength(0);
-    expect(mocks.loggerDebug).not.toHaveBeenCalledWith(
-      expect.stringContaining('are between windows on a move'),
+    expect(definitions).toContainEqual(
+      expect.objectContaining({ id: 'dragged-view', projectId: 'project-dragged' }),
     );
+    expect(definitions.some((definition) => definition.id === 'sibling-view')).toBe(true);
+    expect(definitions.filter((definition) => definition.id === 'dragged-view')).toHaveLength(1);
 
-    releaseAdopt('view-1-w2');
-    await moving;
+    releaseAdopt('dragged-view');
+    await move;
   });
 });
 
@@ -901,5 +1000,20 @@ describe('the move commands', () => {
     // — so a router that registers without throwing is one where the move commands' `webViewId`
     // first, owner-routed declarations agree with their docs.
     await expect(getCommandHandler('platform.moveWebViewToNewWindow')).resolves.toBeDefined();
+  });
+});
+
+describe('the move-in-flight testing seams', () => {
+  test('are reachable only through the guarded router bundle, not directly off web-view-ownership.util', async () => {
+    // Production code seeds and clears the move-in-flight register only through a real move
+    // (`addMoveInFlight`/`deleteMoveInFlight`, both legitimately exported there); a bare seed or a
+    // whole-register clear is a testing-only shortcut, so it belongs beside `moveWebView` in the
+    // bundle guarded "not for use in development" rather than sitting importable off the module that
+    // owns the register.
+    const webViewOwnershipUtil = await import('@main/services/web-view-ownership.util');
+    expect('seedMoveInFlightForTesting' in webViewOwnershipUtil).toBe(false);
+    expect('clearMovesInFlightForTesting' in webViewOwnershipUtil).toBe(false);
+    expect(testingWebViewServiceRouter.seedMoveInFlightForTesting).toBeTypeOf('function');
+    expect(testingWebViewServiceRouter.clearMovesInFlightForTesting).toBeTypeOf('function');
   });
 });
