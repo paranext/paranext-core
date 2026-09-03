@@ -1042,12 +1042,11 @@ export async function syncOnProjectSwitch(
 
 /**
  * Replays the project-switch side effects that `open()`'s replace-tab dispatch normally performs
- * (S/R sync, admin's shared layout auto-apply, scroll group 0's source claim, recording
- * recently-opened) — for callers that already know the target project's Scripture Editor tab is
- * showing correctly, where `open()`'s own dispatch resolves to `{ kind: 'focus-existing' }` and
- * returns before any of that runs (see `resolveOpenEditorDispatch`). Used by Platform.Bible core's
- * Power -> Simple mode switch, which bakes `projectId` directly into a cloned layout instead of
- * routing through `open()`.
+ * (S/R sync, admin's shared layout auto-apply, recording recently-opened) — for callers that
+ * already know the target project's Scripture Editor tab is showing correctly, where `open()`'s own
+ * dispatch resolves to `{ kind: 'focus-existing' }` and returns before any of that runs (see
+ * `resolveOpenEditorDispatch`). Used by Platform.Bible core's Power -> Simple mode switch, which
+ * bakes `projectId` directly into a cloned layout instead of routing through `open()`.
  *
  * Called non-blocking, well after the switch's overlay has already released (see the caller in
  * `web-view.service-host.ts`), so by the time this actually runs the user may have already switched
@@ -1055,9 +1054,9 @@ export async function syncOnProjectSwitch(
  * fire-and-forget (`syncOnProjectSwitch` already catches its own errors, and awaiting it here would
  * delay the shared-layout apply and `recordProjectOpened` by however long a deep Send/Receive
  * takes, with `recordProjectOpened` never running at all if the user quits mid-sync); and
- * `applyForProject`/the scroll-group claim re-check `platform.interfaceMode` fresh immediately
- * before running, since applying while no longer in Simple mode would wrongly manipulate the Power
- * layout (or an unrelated scroll group) instead of being a no-op.
+ * `applyForProject` re-checks `platform.interfaceMode` fresh immediately before running, since
+ * applying while no longer in Simple mode would wrongly manipulate the Power layout instead of
+ * being a no-op.
  *
  * @param papi Backend PAPI instance.
  * @param projectId The project now showing in the Scripture Editor.
@@ -1074,8 +1073,6 @@ export async function finalizeProjectSwitch(
   syncOnProjectSwitch(papi, projectId, undefined);
   if ((await papi.settings.get('platform.interfaceMode')) === 'simple') {
     await applyForProject?.(projectId);
-    // Fire-and-forget, like open()'s own call: must not delay recordProjectOpened below.
-    claimScrollGroupSourceProject(papi, projectId);
   }
   try {
     const recentlyOpenedProjects = await papi.dataProviders.get(
@@ -1131,46 +1128,6 @@ export async function openOrUpdateRelatedPanels(
     await papi.commands.sendCommand('legacyCommentManager.openCommentListPanel', projectId);
   } catch (e) {
     papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
-  }
-}
-
-/**
- * Claims scroll group 0's source project as `projectId` after a Simple-mode project switch. The
- * panels {@link openOrUpdateRelatedPanels} re-points are pinned to an explicit project id; a view
- * injected via the default-layout supplement instead of `simple-layout.data.ts` (e.g., Text
- * Collection — see `scriptureTextGridWebViewProvider`) has no such pin and instead follows scroll
- * group 0's _source_ project, which only advances when something writes a new reference. A switch
- * that lands on the same book/chapter/verse in the new project writes nothing, so this is the one
- * explicit call that claims scroll group 0 for the incoming project right away, rather than leaving
- * supplemental views to pick it up only on the user's next reference navigation.
- *
- * Delegates to `papi.scrollGroups.claimScrollGroupSourceProject` — a single atomic host-side
- * operation (see its TSDoc) — rather than combining `getScrRefForProject` and `setScrRef` here:
- * that combination is two round trips with a gap another write can land in, and `setScrRef` records
- * reference history and can be undone by a single Back press, neither of which this "just re-tag
- * the source" operation wants.
- *
- * Fire-and-forget, like {@link syncOnProjectSwitch}: `papi.scrollGroups` is a network object whose
- * first resolution can take up to 30s (a one-time wait before the app's first window creates it —
- * the object lives in main for the app's lifetime, so there is nothing to re-arm for afterward),
- * and this must never delay the switch or its transition overlay. A failure here is logged and
- * swallowed; supplemental views still catch up on the user's next reference navigation. A `false`
- * return (the claim was skipped — see the host method's TSDoc for why) is not logged: every skip
- * reason is an expected, self-explanatory outcome, not a failure.
- *
- * @param papi The instance of papi to claim the scroll group's source project with
- * @param projectId The incoming project to claim scroll group 0's source as
- */
-export async function claimScrollGroupSourceProject(
-  papi: typeof PapiBackend,
-  projectId: string,
-): Promise<void> {
-  try {
-    await papi.scrollGroups.claimScrollGroupSourceProject(0, projectId);
-  } catch (e) {
-    papi.logger.warn(
-      `Error claiming scroll group 0's source project as ${projectId}: ${getErrorMessage(e)}`,
-    );
   }
 }
 

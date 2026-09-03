@@ -965,7 +965,7 @@ step, no automation. Just a record.
   triggering editor held, with no editability check, so Ctrl+F on a resource re-pointed the
   always-visible Find tab at the resource while its three siblings stayed on the translation project.
   **Stale as of `dc972233209`** (2026-08-28): that commit removed `openOrUpdateRelatedPanels`'s
-  `isEditable` gate entirely (unrelated to this ADR — see `adr-scroll-group-claims-source-project`
+  `isEditable` gate entirely (unrelated to this ADR — see `adr-active-editor-project-is-a-window-data-type`
   for why a later attempt to add an equivalent gate elsewhere in the same function was tried and
   reverted). Find's *own* gate below is unaffected and still applies; only this paragraph's
   description of `openOrUpdateRelatedPanels` no longer matches the code. Find is now Column 3's only
@@ -2134,77 +2134,115 @@ step, no automation. Just a record.
 - **Source:** PT-4275 (multi-window epic), multi-window architecture plan §7 and §9.1; branch
   `pt-4275-commands-to-main`.
 
-## adr-scroll-group-claims-source-project: A scroll group's *source project* can be re-claimed without moving its reference or touching history
+## adr-active-editor-project-is-a-window-data-type: The active editor's project is a subscribable window data type, not derived from scroll-group source
 
-- **Date:** 2026-08-28
+- **Date:** 2026-08-31
 - **Status:** Accepted
 - **Context:** PT-4238: in Simple mode, a view with no explicit `projectId` pin (Text Collection,
-  injected via the default-layout supplement rather than `simple-layout.data.ts`) follows scroll
-  group 0's *source project* — whichever project last wrote a reference into the group — rather than
-  "whichever project is currently active." A project switch that lands on the same book/chapter/verse
-  writes nothing, so the source project is left pointing at the outgoing project until the user's next
-  reference navigation. A first fix (`extensions/src/platform-scripture-editor/src/main.ts`'s `open()`)
-  combined the existing `getScrRefForProject`/`setScrRef` methods on `papi.scrollGroups`: read the
-  current reference converted into the incoming project's versification, then write it back tagged
-  with that project as source. Review of the resulting PR (#2736) found this combination structurally
-  wrong for the job, not merely buggy: `setScrRef` is the app-global, history-recording,
-  frame-asserting setter, and a caller combining it with a separate read pays for all of that plus a
-  two-round-trip race window neither half wanted.
-  - **A single Back press undid the claim.** `setScrRef` records reference history; the claim's write
-    became an ordinary history entry, and navigating history one step back restored the *previous*
-    entry's source project — silently reproducing PT-4238 through the app's own Back button.
-  - **A sourceless write from elsewhere turned "unknown" into a confident wrong claim.** A consumer
-    with no explicit `projectId` (Text Collection's resource-cell click, `resource-cell.component.tsx`)
-    writes the scroll group with `sourceProjectId: undefined`, which `writeScrRef` deliberately treats
-    as "the frame is now honestly unknown" — not a bug, a first-class outcome. `getScrRefForProject`
-    against an unknown source returns the raw reference unconverted (nothing to convert *from*); the
-    combined fix could not tell that apart from a genuine identity conversion, so it re-stamped the
-    unconverted reference as if it were correctly expressed in the incoming project's frame.
-  - **A failed conversion was indistinguishable from a successful identity one.** `getScrRefForProject`
-    falls back to the raw reference on any conversion failure, by design, so its callers cannot tell
-    "no conversion was needed" from "conversion failed, here is the untranslated reference anyway." The
-    combined fix stamped either outcome as a successful claim.
-  - **The two round trips left a gap another write could land in**, with no way to detect it: nothing
-    on `IScrollGroupRemoteService` exposed the *current* source project to check against after the
-    read, so a write racing the gap was silently clobbered.
-- **Decision:** Add `claimScrollGroupSourceProject(scrollGroupId, projectId): Promise<boolean>` as a
-  single atomic operation on `IScrollGroupRemoteService`/`papi.scrollGroups`, implemented in
-  `src/main/services/scroll-group.service-host.ts` using the existing non-recording, non-broadcasting-
-  history primitive `writeScrRef` (already used internally by reference-history navigation for the same
-  reason) instead of the public `setScrRef`. It performs the read, the conversion, and the write inside
-  one host-process call with no `await` gap a network round trip could interleave into, and refuses
-  the write (`false`) rather than persisting a guess whenever: the source is already the target project;
-  the source is unknown; the conversion genuinely fails; or a monotonic per-group generation counter
-  shows a *later* call to this same function started while this one's conversion was still in flight —
-  covering both a direct write landing in the gap (checked by comparing the source project directly)
-  and an ABA inversion where the superseding call itself no-ops and so writes nothing to detect (checked
-  by the generation counter alone; see the function's TSDoc and its test file for the exact scenario).
-  This is a distinct case from `adr-single-verse-surfaces-resolve-verse-zero-to-one`'s rejection of
-  "write \[an arbitrary resolved reference\] back to the scroll group … it would move every other
-  view": that ADR rejected persisting a *different* reference than what the user is looking at; this
-  one persists the *same* reference (converted, never renumbered by choice), only re-tagging which
-  project's versification frame it is expressed in — no other view's displayed verse moves.
-- **Alternatives:** **Gate the claim on `projectForWebView.isEditable`**, matching
-  `updateRelatedFindPanel`'s sibling gate — tried (`af0fc2c7333`) and reverted (`5f12cbee72c`): Simple
-  mode's only BCV navigation surface (the top toolbar's `BookChapterControl`; the per-editor one is
-  Power-mode only) resolves its target via `resolveTargetWebView(pinToMainEditor=true)` in
-  `navigation-target.util.ts` with no `isEditable` awareness anywhere in that path, so the gate only
-  delayed a read-only resource's project becoming the source by one navigation, at the cost of leaving
-  Text Collection on stale data until then — not a trade worth making, and not something a per-call gate
-  on this specific write path can fix; it would need `isEditable` awareness inside the navigation-target
-  resolution itself, which is a materially larger change than PT-4238's scope. **Keep the two-call
-  combination and add a compare-and-swap read before the write** — rejected: still two round trips with
-  a now-three-call shape, and does not address the history-recording or unknown-source problems, which
-  come from calling `setScrRef` and `getScrRefForProject` at all rather than from the round-trip count.
-- **Consequences:** `claimScrollGroupSourceProject` on `IScrollGroupRemoteService` is a new,
-  `@experimental`-marked public surface on `papi.scrollGroups`, implemented once in main and delegated
-  to (not locally re-predicted) by the renderer's `scroll-group.service.ts` cache, since nothing in a
-  renderer UI initiates this claim — the caller is always extension-host code reacting to a project
-  switch, so there is no visible control to keep in sync ahead of the host's answer. `open()`'s call
-  site fires it only for a genuine switch (`dispatch.kind === 'replace-tab'`), not the cold-start editor
-  fill, and re-reads `platform.interfaceMode` fresh immediately before firing (matching
-  `finalizeProjectSwitch`'s own pattern) rather than trusting the value read at the top of `open()`,
-  since the sequential awaits in between give the user a window to have switched back to Power mode.
-  `finalizeProjectSwitch` (the Power → Simple cold-start path, which bypasses `open()` entirely) gets
-  the same call for parity, gated the same way it already gates `applyForProject`.
-- **Source:** PT-4238; review of PR #2736 (`pt-4238-text-collection-project-switch`).
+  injected via the default-layout supplement rather than `simple-layout.data.ts`; Find, whenever it
+  opens without a specific triggering editor) needs to know "which project is currently active." Both
+  had been reading scroll group 0's *source project* (the 5th tuple member of
+  `useWebViewScrollGroupScrRef()`) for this, but that field has exactly one legitimate purpose: tagging
+  which project's versification frame the current Scripture reference's numbers are expressed in
+  (versification is resolved per-project via `Settings.Versification` —
+  `c-sharp/Projects/VersificationConversionService.cs` — not derivable from a scheme name alone, so this
+  frame tag is real information, not incidental). Using it as a *project-identity* signal conflates two
+  unrelated questions, and it drifts whenever anything writes a reference for a legitimate but unrelated
+  reason: BCV navigation (coincidentally correct, since it happens to also be the active editor), Back/
+  Forward reference-history navigation, Text Collection's own resource-cell clicks (which write
+  `sourceProjectId: undefined`, since the identity of an unrelated cell isn't a versification frame),
+  a Comments-tab reference click, a Checks-panel reference click. Every one of those is a plausible new
+  drift vector, not a fixed list.
+  - **An interim approach was tried and abandoned on this same branch (PR #2736) before landing here**:
+    proactively "claim" scroll group 0's source project on every Simple-mode switch, via a new
+    `claimScrollGroupSourceProject(scrollGroupId, projectId): Promise<boolean>` on
+    `IScrollGroupRemoteService`. It performed a read-convert-write entirely inside one host-process call
+    (no `await` gap a network round trip could interleave into) using the existing non-recording,
+    non-broadcasting-history primitive `writeScrRef` instead of the public `setScrRef` — avoiding two
+    failure modes a naive `getScrRefForProject` + `setScrRef` combination hit in review: a single Back
+    press undoing the claim (because `setScrRef` records history), and a sourceless write elsewhere
+    (`sourceProjectId: undefined`, deliberately meaning "frame now honestly unknown") getting
+    re-stamped as a confident wrong claim. It also carried a monotonic per-group generation counter to
+    detect an ABA inversion — a superseding claim that itself no-ops (source already matches) and so
+    writes nothing for a slower, superseded claim to detect by comparing source projects alone.
+  - **The interim approach needed increasingly narrow correctness fixes and still didn't converge**: a
+    cold-start reclaim fix (the claim's own early-exit made cold start look like "nothing to claim away
+    from," leaving Text Collection stuck on a stale persisted source), and a Back-button fix (seeding
+    `history.current`'s source in sync with a claim that re-tags without moving the reference, so a
+    lazily-seeded history entry wouldn't resurrect a pre-claim source). Each fix patched a new write site
+    the claim mechanism needed to coexist with — symptomatic of treating the symptom (stale source
+    project) rather than the actual defect (identity read from an interpretation-only field). Both
+    correctness fixes, and the claim mechanism itself, were removed in the change this entry now
+    describes; `writeScrRef`'s `history.current` sync (the Back-button fix) was reverted rather than
+    left in as dead code once its sole motivating caller no longer existed — its two remaining callers
+    (`setScrRefSync`, `navigateReferenceHistory`) never exercise it, since a genuinely new position never
+    matches the scrRef-equality check that gated the sync.
+  - A reliable per-window "which project is my main editor showing" signal already existed and needed no
+    new derivation: `window.service-shard.ts`'s `navigationTargetWebView` resolution (via
+    `resolveTargetWebView` in `navigation-target.util.ts` — the same resolution the top toolbar's BCV
+    controls and `platform.goTo*` commands already navigate against), kept deliberately internal
+    (module state, not PAPI) pending exactly this kind of need, per its own prior code comment.
+- **Decision:** Promote `navigationTargetWebView` to a real, subscribable, read-only PAPI data type:
+  - `WindowDataTypes.ActiveEditorProjectId: DataProviderDataType<undefined, string | undefined, never>`
+    on `src/shared/services/window.service-model.ts`, with hand-documented
+    `getActiveEditorProjectId`/`setActiveEditorProjectId`/`subscribeActiveEditorProjectId` methods on
+    `IWindowService` (mirroring `getFocus`/`setFocus`/`subscribeFocus`), marked `@experimental`. The
+    setter is a no-op always resolving `false` (the pattern already used for `hello-someone`'s read-only
+    `setPeople` — `buildDataProvider` requires a matching setter for every getter).
+  - `src/renderer/services/window.service-shard.ts` publishes it: `getActiveEditorProjectId()` reads
+    `getNavigationTargetWebView()?.definition.projectId` directly (module state, like `getFocus` reads
+    `#focusSubject`), and the constructor subscribes to the already-exported
+    `onDidChangeNavigationTargetWebView` event, calling `notifyUpdate('ActiveEditorProjectId')` only when
+    the resolved project id itself changes — not on every event firing, which also fires for
+    webViewId-only changes (e.g. focus moving between two tabs of the same project).
+  - `src/main/services/window.service-router.ts`'s `FocusedWindowDataProviderEngine` relays it exactly
+    like `Focus`: delegates `getActiveEditorProjectId` to the routing target's shard, notifies both
+    `'Focus'` and `'ActiveEditorProjectId'` on a routing-target change, and `#repointRelay` subscribes to
+    both data types via `Promise.all` with a combined unsubscriber, preserving the existing
+    attach-before-detach ordering guarantee. `setActiveEditorProjectId` does **not** delegate to the
+    target window (unlike `setFocus`) — the answer is always `false` regardless of window availability,
+    so routing it would only add a "no windows available" failure mode to an operation that never does
+    anything in the first place.
+  - `extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx` and
+    `extensions/src/platform-scripture/src/find.web-view.tsx` both read it via the ordinary generic
+    `useData(papi.window.dataProviderName).ActiveEditorProjectId(undefined, undefined)` hook — no bespoke
+    webview hook needed, since (unlike `useWebViewScrollGroupScrRef`, which needs `globalThis` injection
+    purely for `this`-bound versification math) this is a plain reactive read with no per-webview
+    computation. Each keeps its existing fallback shape (`explicitProjectId ?? activeEditorProjectId`),
+    substituting only the source of the fallback value.
+  - The meaning genuinely differs by mode, correctly: `resolveTargetWebView` unconditionally pins to the
+    main-editor fallback in Simple mode (one editor, one answer), but in Power mode tracks whichever
+    Scripture-navigable tab was last focused among possibly several open ones — the same semantics BCV
+    navigation already uses. Text Collection's default-layout supplement applies in **both** modes (see
+    `default-layout-supplement.util.ts`), so following "last-focused editor tab" in Power mode is a real
+    behavior, not a hypothetical.
+- **Alternatives:** **Keep the claim mechanism** (the interim approach above) — rejected once its
+  disproportionate and still-growing fix surface made clear it was patching symptoms of a field being
+  asked a question it was never designed to answer; kept here as prior art against reaching for that
+  combination (proactive re-stamping of an interpretation-only field as an identity signal) again.
+  **Patch each write site individually** (e.g. gate `openOrUpdateRelatedPanels` or `writeScrRef` callers
+  on more conditions) — rejected: the set of writers is open-ended (any future feature that writes a
+  reference for its own legitimate reason becomes a new drift vector), so this never converges to a
+  fixed list. **Give Text Collection its own explicit `projectId` pin**, matching how `simple-layout
+  .data.ts`-declared panels are pinned — deferred, out of scope: Text Collection is dormant until content
+  selection lands (per its own code comment), and a pin needs that selection UI to have somewhere
+  meaningful to write.
+- **Consequences:** The claim mechanism (`claimScrollGroupSourceProject` and its call sites, tests, and
+  the `writeScrRef` history-sync patch built solely to serve it) never shipped past this same unmerged
+  branch, so its removal here needed no superseded-behavior framing — this entry describes the final
+  design directly rather than recording a shipped-then-reverted public surface.
+  `WindowDataTypes.ActiveEditorProjectId` is a new `@experimental`-marked read-only PAPI data type.
+  **Known, accepted, out-of-scope limitation**: the mechanism that lets a caller reach
+  `platform.windowServiceDataProvider` without already knowing a specific window id (the "generic name"
+  router relay) resolves to whichever window currently has OS focus — a single, app-wide guess. This is
+  pre-existing (already true for `Focus`), not a new risk. If Simple mode's separately-tracked (not yet
+  fixed) phantom-second-window bug ever produces a hidden window that holds OS focus, a webview in the
+  real window could get the phantom window's answer instead of its own; not addressed here.
+  **PT-4467** (Ctrl+F from a resource panel searches the wrong project after Find's reassignment effect
+  snaps the selection back) and **PT-4460** (Find's Replace/Replace-All acts on a stale project after a
+  Simple-mode switch) are both adjacent but out of scope: PT-4467 is a collision between PT-4341 and
+  PT-3362 in Find's *reassignment effect* (`resolveSelectedProjectScrollGroup`), and PT-4460 is a stale
+  captured-project closure in the Replace handlers — neither touches the fallback-source derivation this
+  decision changes (`explicitProjectId ?? activeEditorProjectId`, only ever consulted before any explicit
+  selection exists).
+- **Source:** PT-4238; PR #2736 (`pt-4238-text-collection-project-switch`).

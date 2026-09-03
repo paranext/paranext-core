@@ -34,7 +34,6 @@ import resourceTextPanelWebView from './resource-text-panel.web-view?inline';
 import scriptureTextGridWebView from './scripture-text-grid.web-view?inline';
 import scriptureTextGridWebViewStyles from './scripture-text-grid.web-view.scss?inline';
 import {
-  claimScrollGroupSourceProject,
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
   formatEditorTitle,
@@ -302,13 +301,6 @@ async function open(
     // without tearing down the editor or re-running its WebView provider. No project swap
     // occurs, so neither the transition overlay nor a sync is needed.
     if (dispatch.kind === 'focus-existing') {
-      // Fire-and-forget re-claim: reselecting the project that's already focused is the user's
-      // only route to recover scroll group 0's source if it drifted since the original claim
-      // (e.g. a Text Collection cell click clears it - see claimScrollGroupSourceProject's
-      // TSDoc). The replace-tab claim below never runs for this dispatch, so without this,
-      // reselecting the current project would silently leave Text Collection stale.
-      if (interfaceMode === 'simple' && projectForWebView.projectId)
-        claimScrollGroupSourceProject(papi, projectForWebView.projectId);
       return papi.webViews.openWebView(SCRIPTURE_EDITOR_WEBVIEW_TYPE, undefined, {
         existingId: dispatch.existingId,
         createNewIfNotFound: false,
@@ -403,33 +395,6 @@ async function open(
     if (interfaceMode === 'simple' && projectForWebView.projectId) {
       await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
       await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
-    }
-
-    // Deliberately includes the cold-start editor fill, not just a later genuine switch: scroll
-    // group 0's source is restored from state persisted across app restarts, and there is no
-    // guarantee it matches whichever project the cold start happens to (re)open - the two are
-    // reconciled by entirely separate mechanisms. Skipping the claim here (an earlier version of
-    // this code did, to avoid paying it on a path that looked like it had nothing to claim away
-    // from) left Text Collection stuck on whatever the persisted source was until the next real
-    // switch corrected it - on cold start that could be blank or a stale project's texts under
-    // the newly-opened one. The claim's own early-exit (already the requested project, or
-    // genuinely unknown) already avoids the round trip in the one case where cold start really
-    // has nothing to do. Not gated on isEditable; see 5f12cbee72c for why that gate was tried and
-    // reverted. The whole check-and-claim is one fire-and-forget unit, including the
-    // interfaceMode read: `open()`'s sequential awaits above give the user a window to have
-    // switched back to Power mode, so the value captured at the top of this function is too
-    // stale to trust here, and re-reading it inline (rather than fire-and-forget) would add a
-    // round trip to the switch's critical path.
-    if (dispatch.kind === 'replace-tab' && projectForWebView.projectId) {
-      const projectIdToClaim = projectForWebView.projectId;
-      (async () => {
-        if ((await papi.settings.get('platform.interfaceMode')) === 'simple')
-          await claimScrollGroupSourceProject(papi, projectIdToClaim);
-      })().catch((e) => {
-        logger.warn(
-          `Error checking interface mode before claiming scroll group 0's source: ${getErrorMessage(e)}`,
-        );
-      });
     }
 
     // Re-check the replace-tab target after openOrUpdateRelatedPanels: concurrent panel

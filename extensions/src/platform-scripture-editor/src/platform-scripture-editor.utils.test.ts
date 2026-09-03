@@ -7,7 +7,6 @@ import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
-  claimScrollGroupSourceProject,
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
   formatEditorTitle,
@@ -2437,7 +2436,6 @@ function createFinalizeMockPapi() {
     }
     return undefined;
   });
-  const mockClaimScrollGroupSourceProject = vi.fn().mockResolvedValue(true);
   // Defaults to 'simple' - matches the common case (the switch this replays side effects for only
   // ever originates from a Power -> Simple mode change), so most tests don't need to set it.
   const mockSettingsGet = vi.fn().mockResolvedValue('simple');
@@ -2446,7 +2444,6 @@ function createFinalizeMockPapi() {
   const papi = {
     commands: { sendCommand: mockSendCommand },
     dataProviders: { get: mockDataProvidersGet },
-    scrollGroups: { claimScrollGroupSourceProject: mockClaimScrollGroupSourceProject },
     settings: { get: mockSettingsGet },
     logger: { warn: mockWarn },
   } as unknown as typeof PapiBackend;
@@ -2456,7 +2453,6 @@ function createFinalizeMockPapi() {
     mockWarn,
     mockRecordProjectOpened,
     mockDataProvidersGet,
-    mockClaimScrollGroupSourceProject,
     mockSettingsGet,
   };
 }
@@ -2506,23 +2502,6 @@ describe('finalizeProjectSwitch', () => {
     expect(applyForProject).not.toHaveBeenCalled();
   });
 
-  it("claims scroll group 0's source when still in Simple mode", async () => {
-    const { papi, mockClaimScrollGroupSourceProject } = createFinalizeMockPapi();
-
-    await finalizeProjectSwitch(papi, 'proj-1', undefined);
-
-    expect(mockClaimScrollGroupSourceProject).toHaveBeenCalledWith(0, 'proj-1');
-  });
-
-  it('does not claim scroll group 0 when the user has since switched back to Power mode', async () => {
-    const { papi, mockSettingsGet, mockClaimScrollGroupSourceProject } = createFinalizeMockPapi();
-    mockSettingsGet.mockResolvedValue('power');
-
-    await finalizeProjectSwitch(papi, 'proj-1', undefined);
-
-    expect(mockClaimScrollGroupSourceProject).not.toHaveBeenCalled();
-  });
-
   it('does not throw when applyForProject is undefined', async () => {
     const { papi } = createFinalizeMockPapi();
 
@@ -2556,42 +2535,6 @@ describe('finalizeProjectSwitch', () => {
 });
 
 // #endregion finalizeProjectSwitch
-
-// #region claimScrollGroupSourceProject
-
-function createScrollGroupMockPapi() {
-  const mockClaim = vi.fn().mockResolvedValue(true);
-  const mockWarn = vi.fn();
-  // Must cast since the mock only includes the papi properties used by
-  // claimScrollGroupSourceProject.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const papi = {
-    scrollGroups: { claimScrollGroupSourceProject: mockClaim },
-    logger: { warn: mockWarn },
-  } as unknown as typeof PapiBackend;
-  return { papi, mockClaim, mockWarn };
-}
-
-describe('claimScrollGroupSourceProject', () => {
-  it('delegates to papi.scrollGroups.claimScrollGroupSourceProject with scroll group 0 and the incoming project', async () => {
-    const { papi, mockClaim } = createScrollGroupMockPapi();
-
-    await claimScrollGroupSourceProject(papi, 'proj-incoming');
-
-    expect(mockClaim).toHaveBeenCalledWith(0, 'proj-incoming');
-  });
-
-  it('resolves without throwing and logs a warning naming the incoming project when the call rejects', async () => {
-    const { papi, mockClaim, mockWarn } = createScrollGroupMockPapi();
-    mockClaim.mockRejectedValue(new Error('scroll group service unreachable'));
-
-    await expect(claimScrollGroupSourceProject(papi, 'proj-incoming')).resolves.toBeUndefined();
-
-    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-incoming'));
-  });
-});
-
-// #endregion claimScrollGroupSourceProject
 
 // isBlockMarker moved to platform-bible-utils (src/markers/usfm-markers.ts); its tests live in
 // lib/platform-bible-utils/src/markers/usfm-markers.test.ts.

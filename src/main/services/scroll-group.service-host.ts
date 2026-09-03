@@ -397,23 +397,10 @@ export async function getScrRef(scrollGroupId: ScrollGroupId = 0): Promise<Seria
 
 /**
  * Low-level ref write: store `scrRef` (+ its source project) for the scroll group, persist, and
- * broadcast `onDidUpdateScrRef`. NO history recording (no push/replace on the back/forward stacks)
- * — a caller that wants that wraps this (see {@link setScrRefSync}). Reference-history navigation
- * writes through here directly: the stacks already reflect the move, so the destination must always
- * be applied — including a multi-step jump onto a same-numbers entry whose source frame differs.
- *
- * Does, however, keep a pre-existing `history.current` entry's `sourceProjectId` in sync when this
- * write does not move the ref (same book/chapter/verse) — seeing that as "recording" would be wrong
- * (nothing is pushed or replaced on any stack, so this is not a navigation event), but leaving it
- * unsynced is also wrong: `history.current` is documented as mirroring the live position, and
- * {@link getOrCreateReferenceHistory} lazily seeds it from whatever the live source happens to be at
- * first access. A reader (e.g. the Back/Forward button, on mount) can seed it before an async,
- * fire-and-forget caller of this function — {@link claimScrollGroupSourceProject} is the motivating
- * case — has corrected that source; without this, the stale seed sits in `history.current` (or gets
- * pushed onto `back` by the next real navigation) and a later Back resurrects it, even after the
- * live source was fixed. A genuinely new position never matches the scrRef comparison below, so a
- * real navigation's old `history.current` is left alone here for {@link setScrRefSync}'s subsequent
- * `recordNavigation` call to push onto `back` as usual.
+ * broadcast `onDidUpdateScrRef`. NO versification no-op guard and NO history recording — a caller
+ * that wants those wraps this (see {@link setScrRefSync}). Reference-history navigation writes
+ * through here directly: the stacks already reflect the move, so the destination must always be
+ * applied — including a multi-step jump onto a same-numbers entry whose source frame differs.
  *
  * @param scrRef Reference to store. Deep-cloned before storing so it never aliases the caller's
  *   object (nor, for history navigation, the stored history entry).
@@ -433,11 +420,6 @@ function writeScrRef(
   // lost-frame bug — an unknown frame is honestly unknown.
   scrRefSourceProjectIds[scrollGroupId] = sourceProjectId;
   hasOwnScrollGroupState = true;
-
-  const history = referenceHistories.get(scrollGroupId);
-  if (history?.current && compareScrRefs(history.current.scrRef, scrRef) === 0) {
-    history.current = { scrRef: deepClone(scrRef), sourceProjectId };
-  }
   // Scheduled, not written, so a store that is slow or failing can neither delay nor prevent the
   // broadcast below. The broadcast is the correctness-critical half — it is what stops the other
   // windows from silently showing a different verse than this one — while the file only decides
@@ -507,86 +489,6 @@ export async function setScrRef(
   sourceProjectId?: string,
 ): Promise<boolean> {
   return setScrRefSync(scrollGroupId, scrRef, sourceProjectId);
-}
-
-/**
- * Monotonic per-scroll-group counter, bumped at the START of every
- * {@link claimScrollGroupSourceProject} call — including ones that immediately no-op. This is what
- * lets a slow, now-superseded claim detect it lost even when the claim that superseded it never
- * wrote anything: A→B→A in quick succession, where claim(B)'s conversion is slow and claim(A)
- * starts and finds the source is ALREADY `projA` (so it no-ops with no write of its own), still
- * must not let claim(B)'s slow conversion resolve afterward and leave the group on `projB` — the
- * user's last action was switching to A. Checking only "did the stored source change" (as the
- * write-collision guard below also does) misses this shape, because claim(A) changed nothing.
- */
-const claimGenerations: ScrollGroupMap<number> = {};
-
-/**
- * Atomically re-stamp the scroll group's source project as `projectId`, converting the current
- * reference into that project's versification, WITHOUT recording reference history (unlike
- * {@link setScrRef}) and without the read-then-write gap a caller combining
- * {@link getScrRefForProject} and {@link setScrRef} across two round trips would have to race against
- * — prefer this over that combination for exactly that reason.
- *
- * Skips the write (returns `false`) rather than persisting a guess when any of:
- *
- * - The group's source project is already `projectId` — nothing to claim.
- * - The group's source project is unknown (`undefined`) — converting from an unknown frame would
- *   mis-frame the reference with false confidence. The honest "unknown" state that
- *   {@link writeScrRef} already treats as a first-class outcome is left alone, so it can self-heal
- *   on the user's next real navigation instead of being papered over with a guess.
- * - The versification conversion to `projectId` fails — unlike {@link getScrRefForProject}, this does
- *   NOT fall back to the raw reference tagged with `projectId` as if it were a success; that would
- *   persist a confidently wrong claim in place of an honestly unknown one.
- * - A later call to this function started while this one's conversion was still in flight (see
- *   {@link claimGenerations}) — including one that itself no-oped — or the group's source project
- *   changed some other way (a real navigation) while the conversion was in flight. Either way, some
- *   other write — or the intent behind one — won the race, and a claim computed against the
- *   reference from before it must not clobber it.
- *
- * @param scrollGroupId Scroll group to claim. If `undefined`, defaults to 0
- * @param projectId Project to claim the group's source as
- * @returns `true` if the claim was written; `false` if skipped for any of the reasons above
- * @experimental
- */
-export async function claimScrollGroupSourceProject(
-  scrollGroupId: ScrollGroupId | undefined,
-  projectId: string,
-): Promise<boolean> {
-  const scrollGroupIdDefaulted = scrollGroupId ?? 0;
-  const myGeneration = (claimGenerations[scrollGroupIdDefaulted] ?? 0) + 1;
-  claimGenerations[scrollGroupIdDefaulted] = myGeneration;
-
-  const currentSourceProjectId = getScrRefSourceProjectIdSync(scrollGroupIdDefaulted);
-  if (currentSourceProjectId === undefined || currentSourceProjectId === projectId) return false;
-
-  const scrRef = getScrRefSync(scrollGroupIdDefaulted);
-  let convertedScrRef: SerializedVerseRef;
-  try {
-    convertedScrRef = await mapVerseRefBetweenProjects(
-      'platformScripture.mapVerseRefBetweenProjects',
-      scrRef,
-      currentSourceProjectId,
-      projectId,
-    );
-  } catch (e) {
-    logger.warn(
-      `Scroll group could not claim project ${projectId} as its source: conversion failed, leaving the existing source in place. ${getErrorMessage(e)}`,
-    );
-    return false;
-  }
-
-  // The conversion command above was the only await in this function, so it is the only window
-  // where a newer claim (tracked by generation) or another kind of write (tracked by comparing the
-  // source directly) could have landed. Abandon rather than clobbering either.
-  if (
-    claimGenerations[scrollGroupIdDefaulted] !== myGeneration ||
-    getScrRefSourceProjectIdSync(scrollGroupIdDefaulted) !== currentSourceProjectId
-  )
-    return false;
-
-  writeScrRef(scrollGroupIdDefaulted, convertedScrRef, projectId);
-  return true;
 }
 
 /** See {@link IScrollGroupRemoteService.getReferenceHistory} */
@@ -737,7 +639,6 @@ const scrollGroupService: IScrollGroupHostService = {
   getScrRefForProject,
   getReferenceHistory,
   navigateReferenceHistory,
-  claimScrollGroupSourceProject,
   getScrollGroupSnapshot,
   migrateStoredScrollGroupState,
 };
@@ -799,28 +700,6 @@ export async function startScrollGroupServiceHost(): Promise<void> {
             },
           ],
           result: { name: 'didNavigate', schema: { type: 'boolean' } },
-        },
-        {
-          name: 'claimScrollGroupSourceProject',
-          'x-experimental': true,
-          summary:
-            "Atomically re-stamp the scroll group's source project, converting the current " +
-            'reference, without recording reference history',
-          params: [
-            {
-              name: 'scrollGroupId',
-              required: true,
-              summary: 'Scroll group to claim',
-              schema: { type: 'number' },
-            },
-            {
-              name: 'projectId',
-              required: true,
-              summary: "Project to claim the group's source as",
-              schema: { type: 'string' },
-            },
-          ],
-          result: { name: 'didClaim', schema: { type: 'boolean' } },
         },
         {
           name: 'getScrollGroupSnapshot',
