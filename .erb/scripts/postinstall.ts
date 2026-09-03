@@ -17,8 +17,8 @@
  * If the closure is missing but this repo's tree cannot fix it — the staged manifest declares a
  * dependency `package-lock.json` does not record — the re-run would not help: `npm install` would
  * update the lockfile locally, which is the right move for a developer but must be a committed
- * change, not a CI side effect. In CI (or on the guarded second pass) this fails with instructions
- * instead.
+ * change, not a CI side effect. Under `npm ci`, in CI, or on the guarded second pass, this fails
+ * with instructions instead.
  *
  * Plain Node importing only the standard library, like `stage-dev-packages.ts`: on the very install
  * this script exists to repair, devDependencies may be incomplete.
@@ -75,7 +75,10 @@ function postinstall(): void {
     return;
   }
 
-  if (process.env[RERUN_GUARD] || process.env.CI) {
+  // `npm ci` cannot repair this: it installs the closure `package-lock.json` records and never
+  // re-resolves, so a second pass would arrive here with the same missing dependencies. Only an
+  // `npm install` — whose lockfile change has to be committed — can.
+  if (process.env[RERUN_GUARD] || process.env.CI || process.env.npm_command === 'ci') {
     console.error(
       `\nThe staged dev packages declare dependencies that are not installed:\n\n  ${missing.join(
         '\n  ',
@@ -91,8 +94,7 @@ function postinstall(): void {
   console.log(
     '\nThe staged dev packages were created during this install, after npm had already resolved the\ndependency tree without them. Running the install again to pick them up...\n',
   );
-  const command = process.env.npm_command === 'ci' ? 'ci' : 'install';
-  execSync(`npm ${command}`, {
+  execSync('npm install', {
     stdio: 'inherit',
     cwd: REPO_ROOT,
     env: { ...process.env, [RERUN_GUARD]: '1' },
