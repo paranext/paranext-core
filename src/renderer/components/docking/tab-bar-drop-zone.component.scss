@@ -1,3 +1,5 @@
+@use '../../styles/vars';
+
 // This class only sets sizing for the invisible drop zone itself; its position and its "grow to
 // fill leftover space" behavior come from the `.dock-nav > .dock-extra-content` flex rules in
 // `dock-layout-wrapper.component.scss`'s TAB-BAR region — kept there so all tab-bar flex layout
@@ -36,6 +38,20 @@
     // implicit flex-painting rule.
     z-index: 1;
     margin-inline-start: calc(-1 * var(--tab-bar-drop-zone-overlap, 0px));
+
+    // The flex `gap` between this zone and the "+" button (`.dock-extra-content`'s `gap` rule in
+    // `dock-layout-wrapper.component.scss`) belongs to neither flex item, so a drop released over it
+    // hits `.dock-extra-content` itself, which registers no drop handler, and is silently ignored.
+    // Extend the zone's own hit area across that gap with a pseudo-element rather than growing its
+    // real box (padding, a negative margin, or removing the gap) — any of those would narrow
+    // `.dock-nav-wrap` mid-drag and could push a tab into the overflow dropdown while dragging.
+    &::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-end: (-1 * vars.$space--sm);
+      width: vars.$space--sm;
+    }
   }
 }
 

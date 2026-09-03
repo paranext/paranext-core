@@ -77,6 +77,11 @@ function claimLastTabOverlap(zone: HTMLElement): void {
   const zoneRect = zone.getBoundingClientRect();
   const tabMidpoint = tabRect.left + tabRect.width / 2;
   const isRtl = getComputedStyle(zone).direction === 'rtl';
+  // On a bar crowded enough to show the overflow dropdown, `lastTab` (the last tab in DOM order) is
+  // clipped past the bar's visible end, so this clamps to 0 and the widening below is a no-op — that
+  // is correct, not a defect: in that state the zone itself has no width (`.dock-nav-wrap` has
+  // absorbed the bar's whole remainder), so rc-dock's own per-tab target on the last VISIBLE tab is
+  // the only drop target present there.
   const overlap = Math.max(0, isRtl ? tabMidpoint - zoneRect.right : zoneRect.left - tabMidpoint);
   const indicatorInset = Math.max(0, tabRect.width / 2);
 
