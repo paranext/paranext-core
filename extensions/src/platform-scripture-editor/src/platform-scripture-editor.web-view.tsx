@@ -64,11 +64,8 @@ import {
   PopoverTrigger,
   ScrollGroupSelector,
   SelectMenuItemHandler,
-  SHRINK_STEP,
   Spinner,
   TabToolbar,
-  ToolbarCompoundLabel,
-  useShrinkStepValue,
   UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
   isMacOs,
@@ -117,6 +114,7 @@ import {
   StructureProtectionButton,
   STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
 } from './structure-protection-button.component';
+import { ParagraphStyleLabel } from './paragraph-style-label.component';
 import { useMarkerSettleDelay } from './use-marker-settle-delay.hook';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 import { EmptyChapterView, EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.component';
@@ -205,78 +203,6 @@ import {
  */
 function PortalContents({ children }: PropsWithChildren) {
   return children;
-}
-
-/**
- * Characters the paragraph-style trigger reserves for the USFM marker. UX set six, which fits the
- * long markers in ordinary use (`periph`). Must match the `tw:w-[6ch]` literal on the marker slot —
- * Tailwind cannot read this constant, so the two are kept in step by hand.
- */
-const MARKER_SLOT_CHARACTERS = 6;
-
-/**
- * Separator between the marker and its style name. Shared by the rendered label and the tooltip's
- * full text so the two can never disagree about how the label reads.
- */
-const MARKER_STYLE_SEPARATOR = ' - ';
-
-/**
- * Label for the paragraph-style trigger: the marker code, then the style name.
- *
- * A separate component rather than inline JSX because it reads `ShrinkStepContext`, which
- * `TabToolbarContainer` publishes. `PlatformScriptureEditor` _renders_ the `TabToolbar`, so a hook
- * call there would sit above the provider and read the widest step forever. This renders as the
- * toolbar's descendant, so it sees the real value.
- */
-function ParagraphStyleLabel({
-  blockMarker,
-  styleName,
-}: {
-  blockMarker: string;
-  /** Undefined until the localized strings resolve, and for any marker without a description. */
-  styleName: string | undefined;
-}) {
-  const shrinkStep = useShrinkStepValue();
-  // With no style name there is nothing to put beside the marker, so the label is already at its
-  // shortest form — and `fullText` must not advertise a name it cannot show.
-  const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM || !styleName;
-  // A marker longer than the slot is cut without an ellipsis, and a clipped `restor` still reads as
-  // a plausible marker — so declare the label partial and let the tooltip carry the real one.
-  // `ToolbarCompoundLabel`'s own clip detection cannot see this: it watches the style name.
-  const isMarkerClipped = blockMarker.length > MARKER_SLOT_CHARACTERS;
-
-  return (
-    <ToolbarCompoundLabel
-      // A USFM marker is a code, so it reads as one — monospace, inheriting the row's foreground
-      // rather than taking a marker colour.
-      //
-      // The slot is a fixed 6 characters at every step, not sized to the marker: monospace makes
-      // `6ch` exactly six glyphs, which is the width UX asked for, and a content-sized slot would
-      // resize the trigger as the cursor moved between a `p` and a `toc1`, shifting every button
-      // after it. `overflow-hidden` keeps a longer marker inside the slot instead of pushing the
-      // chevron out. Written as a literal because Tailwind extracts class names statically — an
-      // interpolated `tw:w-[${n}ch]` would silently emit no rule at all.
-      primary={
-        // `inline-flex` + `items-center`, not `inline-block`. The slot is taller than its siblings
-        // — a monospace line box against the row's proportional one — and an `inline-block` puts
-        // its text at the top of that taller box, so centring the box on the row still leaves the
-        // marker sitting visibly high next to the style name. A flex container centres its own
-        // content instead, which removes the offset at the source rather than compensating for it.
-        // The marker menu's rows have no fixed slot at all, which is why they never showed this.
-        <span className="tw:inline-flex tw:w-[6ch] tw:items-center tw:overflow-hidden tw:font-mono">
-          {blockMarker}
-        </span>
-      }
-      secondary={styleName}
-      separator={MARKER_STYLE_SEPARATOR}
-      showSecondary={!isAtMinimum}
-      isPartial={isMarkerClipped || (!!styleName && isAtMinimum)}
-      fullText={styleName ? `${blockMarker}${MARKER_STYLE_SEPARATOR}${styleName}` : blockMarker}
-      // A ceiling, not a width: long style names stop the trigger growing without bound, but the
-      // label still shrinks below this.
-      className="tw:max-w-[30ch]"
-    />
-  );
 }
 
 /**
@@ -3876,13 +3802,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
-                          // `tw:min-w-0` lets the button shrink inside the wrapper so its label can
-                          // truncate rather than push the end-zone buttons out of the clipped
-                          // toolbar. It only bites because the wrapper above carries the same
-                          // floor-lift; on its own it would be inert. The width ceiling lives on
-                          // the label itself (30 characters) so it is expressed in the same units
-                          // UX specified it in — see ParagraphStyleLabel.
-                          className="tw:h-8 tw:min-w-0"
+                          // `tw:max-w-full` is what keeps the label ellipsising instead of the
+                          // button being cut off mid-border. The wrapper around this is a block
+                          // box, so the button is not a flex item of it and the `shrink-0` in
+                          // shadcn's button base cannot be shrunk past — the button simply takes
+                          // its content width, up to the label's 30-character ceiling, and
+                          // overruns the toolbar zone, whose `overflow-clip` then slices its
+                          // trailing border. Capping it at the wrapper's width puts the squeeze
+                          // back on the label, which has the `min-w-0` and `truncate` needed to
+                          // absorb it. `tw:min-w-0` lets the button shrink inside the wrapper; it
+                          // only bites because the wrapper above carries the same floor-lift. The
+                          // width ceiling lives on the label itself (30 characters) so it is
+                          // expressed in the same units UX specified it in — see
+                          // ParagraphStyleLabel.
+                          className="tw:h-8 tw:min-w-0 tw:max-w-full"
                           aria-label="Paragraph Selection"
                           // No native `title` here. The label inside now raises its own tooltip
                           // whenever it is abbreviated or clipped, and a native tooltip would open
