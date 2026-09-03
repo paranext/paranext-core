@@ -122,14 +122,16 @@ export function trackDisplaySettle(
 /**
  * Whether a window's current placement is safe to persist.
  *
- * While a window spans the boundary between two displays with different scale factors, Windows and
- * Chromium report different answers for its DPI — Win32 keeps the scale the window is crossing FROM
- * while the window is already resolved onto the display it is crossing TO — so the window is
- * physically about 25% larger than the layout it holds. The state is harmless to look at and clears
- * itself, but a placement captured during it and restored later brings the window back at the wrong
- * size.
+ * Windows and Chromium can briefly disagree about a window's DPI whenever it lands on a display,
+ * not only while it spans the boundary crossing onto one: Win32 keeps the scale the window is
+ * arriving FROM (the display it was on, or an implicit starting context for a window created
+ * straight onto a scaled display) while the window has already resolved onto the display it is
+ * landing ON, so the window is physically about 25% larger than the layout it holds. The state is
+ * harmless to look at and clears itself, but a placement captured during it and restored later
+ * brings the window back at the wrong size — and because nothing corrects it afterward, that wrong
+ * size becomes what the NEXT restore starts from, growing again the same way on every cycle.
  *
- * Two moments are refused, and the second is the one that actually corrupts anything:
+ * Three moments are refused, and the third is the one that actually corrupts anything:
  *
  * - Bounds lying in no single display: the window is straddling. Restoring these would be refused
  *   anyway by {@link ensureBoundsVisibleOnSomeDisplay}, which requires containment in one display —
@@ -137,14 +139,19 @@ export function trackDisplaySettle(
  * - Bounds on a display the window has just reached, before {@link DISPLAY_SETTLE_MS} has passed.
  *   These pass containment and would be restored, and they are the ones that come back wrong: the
  *   geometry has landed while the two DPI answers have not yet met.
+ * - Bounds on the display the window was CREATED on, before {@link DISPLAY_SETTLE_MS} has passed:
+ *   `lastAcceptedDisplayId` starts `undefined` and stays that way until some capture actually
+ *   clears this wait, so a window's own creation earns trust the same way a live crossing does
+ *   rather than being waved through because nothing has been accepted yet to compare it against.
  *
- * A window moved within one display crosses nothing and is trusted at once, which is what keeps
- * this from quietly freezing every saved placement.
+ * A window moved within a display it has ALREADY settled on crosses nothing and is trusted at once,
+ * which is what keeps this from quietly freezing every saved placement once a placement has cleared
+ * the wait a single time.
  *
  * @param bounds Placement captured just now
  * @param displays Displays connected right now
  * @param lastAcceptedDisplayId Display the last accepted capture was on, or `undefined` if none has
- *   been accepted this session
+ *   been accepted this session yet
  * @param msSinceDisplayChange How long the window has been on the display it is on now
  * @returns Whether the placement can be persisted
  */
@@ -156,7 +163,6 @@ export function areCapturedBoundsTrustworthy(
 ): boolean {
   const containingDisplay = displays.find((display) => isContainedIn(bounds, display));
   if (!containingDisplay) return false;
-  if (lastAcceptedDisplayId === undefined) return true;
   if (containingDisplay.id === lastAcceptedDisplayId) return true;
   return msSinceDisplayChange >= DISPLAY_SETTLE_MS;
 }
