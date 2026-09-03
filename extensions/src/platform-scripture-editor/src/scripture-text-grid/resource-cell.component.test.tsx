@@ -594,11 +594,25 @@ describe('ResourceCell book not in this text', () => {
     setUsjResult(missingBookError('MAT'), false);
     const { rerender } = render(<ResourceCell {...props} />);
     expect(screen.getByText('Book not in this text')).toBeInTheDocument();
+    setUsjSpy.mockClear();
+
+    // Move the book first, while the hook still serves the MAT rejection. The stale-failure guard
+    // takes over — the error no longer names the book on screen — so the cell drops to waiting.
+    // Stepping the two halves apart is what keeps this from conflating "the message cleared because
+    // the book changed" with "because the value is no longer an error".
+    rerender(<ResourceCell {...props} scrRef={{ ...scrRef, book: 'GEN' }} />);
+    expect(screen.queryByText('Book not in this text')).not.toBeInTheDocument();
+    expect(screen.getByText('Resource is loading…')).toBeInTheDocument();
 
     setUsjResult(chapter, false);
     rerender(<ResourceCell {...props} scrRef={{ ...scrRef, book: 'GEN' }} />);
 
     expect(screen.queryByText('Book not in this text')).not.toBeInTheDocument();
     expect(screen.getByTestId('editorial')).toBeInTheDocument();
+    // The message branch unmounted the editor, so a remounted editor holds nothing —
+    // "editorial is on screen" is satisfied just as well by a permanently blank editor showing
+    // Lexical's placeholder. Assert the re-feed, matching the twin in
+    // `resource-text-panel.component.test.tsx`.
+    expect(setUsjSpy).toHaveBeenLastCalledWith(chapter);
   });
 });

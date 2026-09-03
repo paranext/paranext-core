@@ -24,12 +24,17 @@ import { canPublishResourcePanelProjectIds } from './resource-panel-readiness.ut
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
-import { filterResourcesByType, resolveSelectedResource } from './resource-reference.utils';
+import { resolveResourcePanelSelection } from './resource-reference.utils';
 import { ResourceTextPanel } from './resource-text-panel.component';
 import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
+
+// Hoisted to module scope because `useLocalizedStrings` keys its subscription on the array's
+// identity — a fresh array per render tears down and re-creates the localization subscription every
+// render. The spread is needed because the source is a `readonly` frozen tuple.
+const ALL_STRING_KEYS = [...RESOURCE_PANEL_STRING_KEYS];
 
 const BIBLE_TEXTS_ICON_URLS: TabIconUrls = {
   lightDefault: 'papi-extension://platformScriptureEditor/assets/book-open.svg',
@@ -57,7 +62,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
-  const [localizedStrings] = useLocalizedStrings([...RESOURCE_PANEL_STRING_KEYS]);
+  const [localizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
 
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
@@ -162,14 +167,22 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
 
   // Resolved here as well as inside the panel because these four PAPI-side concerns all need the
   // DISPLAYED resource, and the panel cannot reach any of them: the chapter subscription and text
-  // direction below, the tab title, Ctrl+F, and publishing navigable project ids. Both sides call
-  // the same pure pair, so there is one implementation rather than two derivations to keep in step.
-  const { resourceProjectId, resourceShortName } = useMemo(() => {
-    const effectiveResources =
-      effectiveResourcesState.status === 'ready' ? effectiveResourcesState.list : undefined;
-    const filtered = filterResourcesByType(effectiveResources?.items, dblResources, resourceType);
-    return resolveSelectedResource(filtered, selectedResourceId, dblResources);
-  }, [effectiveResourcesState, dblResources, resourceType, selectedResourceId]);
+  // direction below, the tab title, Ctrl+F, and publishing navigable project ids.
+  //
+  // A callback reporting the panel's resolution back up cannot replace this: `resourceProjectId`
+  // keys the `ChapterUSJ` subscription that produces the `usjPossiblyError` passed DOWN to the
+  // panel, so the dependency is circular. Deriving it here is what breaks the cycle — and calling
+  // the same single function the panel calls is what stops the two answers diverging.
+  const { resourceProjectId, resourceShortName } = useMemo(
+    () =>
+      resolveResourcePanelSelection({
+        effectiveResourcesState,
+        dblResources,
+        resourceType,
+        selectedResourceId,
+      }),
+    [effectiveResourcesState, dblResources, resourceType, selectedResourceId],
+  );
 
   // Ctrl+F opens Find for the displayed resource.
   useOpenFindShortcut(webViewId, resourceProjectId);

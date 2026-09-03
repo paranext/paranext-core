@@ -5,6 +5,7 @@ import {
   filterResourcesByType,
   getRefId,
   getRefLabel,
+  resolveResourcePanelSelection,
   resolveSelectedResource,
 } from './resource-reference.utils';
 
@@ -268,5 +269,61 @@ describe('resolveSelectedResource', () => {
       resourceProjectId: undefined,
       resourceShortName: undefined,
     });
+  });
+});
+
+describe('resolveResourcePanelSelection', () => {
+  it('returns the same answer as filtering then resolving by hand', () => {
+    // The panel and its web view both call this, and the web view's copy governs the chapter
+    // subscription, the text direction, the tab title, Ctrl+F and the published navigable project
+    // ids. Nothing under `extensions/` tests a `*.web-view.tsx`, so this equivalence is the only
+    // thing that can catch the combined form drifting from the pair it wraps.
+    const state = {
+      status: 'ready' as const,
+      list: { dataVersion: '1.0.0', items: [webRef, handbookRef] },
+    };
+    const filtered = filterResourcesByType(state.list.items, catalog, 'ScriptureResource');
+
+    expect(
+      resolveResourcePanelSelection({
+        effectiveResourcesState: state,
+        dblResources: catalog,
+        resourceType: 'ScriptureResource',
+        selectedResourceId: 'uid-web',
+      }),
+    ).toEqual({
+      filteredResources: filtered,
+      ...resolveSelectedResource(filtered, 'uid-web', catalog),
+    });
+  });
+
+  it('resolves to nothing while the reference list is still loading', () => {
+    // `loading` and `error` carry no list at all, so the panel must get an empty selection rather
+    // than a crash — this is the state every mount passes through.
+    expect(
+      resolveResourcePanelSelection({
+        effectiveResourcesState: { status: 'loading' },
+        dblResources: catalog,
+        resourceType: 'ScriptureResource',
+        selectedResourceId: 'uid-web',
+      }),
+    ).toEqual({
+      filteredResources: [],
+      selectedRef: undefined,
+      dblMatch: undefined,
+      resourceProjectId: undefined,
+      resourceShortName: undefined,
+    });
+  });
+
+  it('resolves to nothing when the reference list could not be read', () => {
+    expect(
+      resolveResourcePanelSelection({
+        effectiveResourcesState: { status: 'error' },
+        dblResources: catalog,
+        resourceType: 'ScriptureResource',
+        selectedResourceId: undefined,
+      }).filteredResources,
+    ).toEqual([]);
   });
 });

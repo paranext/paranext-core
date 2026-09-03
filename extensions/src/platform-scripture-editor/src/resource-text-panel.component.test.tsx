@@ -30,13 +30,6 @@ vi.mock('@eten-tech-foundation/platform-editor', () => ({
     return <div data-testid="editorial" />;
   }),
 }));
-vi.mock('platform-bible-react', async (importOriginal) => {
-  const original = await importOriginal<typeof import('platform-bible-react')>();
-  return {
-    ...original,
-    useExtraValidMarkers: () => [],
-  };
-});
 
 const BIBLE_TEXT_MISSING_BOOK = 'This book does not exist in this Bible text.';
 const COMMENTARY_MISSING_BOOK = 'This book does not exist in this commentary.';
@@ -79,7 +72,7 @@ const INSTALLED_COMMENTARY: DblResourceData = {
   ...INSTALLED_RESOURCE,
   dblEntryUid: 'uid-hbk',
   displayName: 'HBKENG',
-  type: 'EnhancedResource',
+  type: 'CommentaryResource',
 };
 
 /**
@@ -194,7 +187,6 @@ const NOTHING_ON_SCREEN = {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  // Module-scoped, so it outlives `restoreAllMocks` and has to be cleared explicitly.
   setUsjSpy.mockClear();
 });
 
@@ -208,7 +200,7 @@ describe('ResourceTextPanel book not in this resource', () => {
 
   it('uses the commentary wording when the panel is showing a commentary', () => {
     renderPanel({
-      resourceType: 'EnhancedResource',
+      resourceType: 'CommentaryResource',
       effectiveResourcesState: readyState(configuredResource('uid-hbk', 'HBKENG')),
       dblResources: [INSTALLED_COMMENTARY],
       selectedResourceId: 'uid-hbk',
@@ -231,6 +223,9 @@ describe('ResourceTextPanel book not in this resource', () => {
   it('re-feeds the editor when the user navigates to a book the resource does contain', () => {
     const { rerenderWith } = renderPanel({ usjPossiblyError: missingBookError('MAT') });
     expect(screen.getByText(BIBLE_TEXT_MISSING_BOOK)).toBeInTheDocument();
+    // `toHaveBeenLastCalledWith` below matches the whole call history on a spy this file clears only
+    // in `afterEach`, so clear it here to pin the transition rather than any earlier feed.
+    setUsjSpy.mockClear();
 
     rerenderWith({
       scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
@@ -242,7 +237,7 @@ describe('ResourceTextPanel book not in this resource', () => {
     // The message arm unmounted the editor, so the remount holds nothing until this effect refills
     // it. Without the feed the reader gets Lexical's "Enter some Scripture…" placeholder — an edit
     // invitation in a text they cannot edit.
-    expect(setUsjSpy).toHaveBeenCalledWith(SAMPLE_USJ);
+    expect(setUsjSpy).toHaveBeenLastCalledWith(SAMPLE_USJ);
   });
 
   it('keeps waiting when the failure names the book the user just left', () => {

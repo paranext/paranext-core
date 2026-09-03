@@ -64,6 +64,11 @@ export function resolveResourcePanelStringKeys(
  * strings parity test can drive off it rather than a hand-maintained literal list, and so
  * `RESOURCE_PANEL_STRING_KEYS` can fold these in without restating them.
  */
+// Deliberately NOT annotated `: readonly LocalizeKey[]`. That annotation would widen these literals
+// back to `LocalizeKey`, which absorbs any `%...%` string — and because
+// `resource-text-panel.const.ts` spreads this into its own `as const` tuple, the widening would
+// propagate, making `ResourcePanelLocalizedStringKey` accept any key and silently gutting the
+// localized-strings parity test. Leave the type inferred.
 export const RESOURCE_PANEL_TYPED_STRING_KEYS = Object.freeze([
   ...Object.values(BIBLE_TEXTS_KEYS),
   ...Object.values(COMMENTARIES_KEYS),

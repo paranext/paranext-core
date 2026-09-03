@@ -26,12 +26,7 @@ import type {
   EffectiveResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
-import {
-  filterResourcesByType,
-  getRefId,
-  getRefLabel,
-  resolveSelectedResource,
-} from './resource-reference.utils';
+import { getRefId, getRefLabel, resolveResourcePanelSelection } from './resource-reference.utils';
 import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import { LoadingView, RetryableErrorView } from './panel-state-views.component';
@@ -53,12 +48,6 @@ import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
-
-export {
-  RESOURCE_PANEL_STRING_KEYS,
-  type ResourcePanelLocalizedStringKey,
-  type ResourcePanelLocalizedStrings,
-} from './resource-text-panel.const';
 
 /**
  * Falls back to the key itself, matching the idiom in `model-text-panel.component.tsx`. Falling
@@ -131,8 +120,6 @@ function ResourceSelectorDropdown({
   );
 }
 
-const DEFAULT_SCR_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
-
 export type ResourceTextPanelProps = {
   /** Localized strings; import `RESOURCE_PANEL_STRING_KEYS` to resolve them. */
   localizedStrings: ResourcePanelLocalizedStrings;
@@ -163,18 +150,18 @@ export type ResourceTextPanelProps = {
   /** Re-runs the DBL resource catalog fetch. */
   onRetryCatalog: () => void;
   /** The reference the panel is displaying. */
-  scrRef?: SerializedVerseRef;
+  scrRef: SerializedVerseRef;
   /** Called when the editor changes the Scripture reference. */
-  onScrRefChange?: (scrRef: SerializedVerseRef) => void;
+  onScrRefChange: (scrRef: SerializedVerseRef) => void;
   /** Which reference is selected; held by the web view so the choice survives a reopen. */
   selectedResourceId: string | undefined;
   /** Records a new selection. */
   onSelectResource: (id: string | undefined) => void;
   /**
-   * The chapter read for the `resourceProjectId` {@link resolveSelectedResource} returns, exactly as
-   * the data layer returned it — USJ, a `PlatformError`, or `undefined` before anything has
-   * arrived. Which message that implies is derived here rather than by the caller, so the app and
-   * Storybook share one answer.
+   * The chapter read for the `resourceProjectId` {@link resolveResourcePanelSelection} returns,
+   * exactly as the data layer returned it — USJ, a `PlatformError`, or `undefined` before anything
+   * has arrived. Which message that implies is derived here rather than by the caller, so every
+   * consumer gets one answer.
    */
   usjPossiblyError: Usj | PlatformError | undefined;
   /**
@@ -197,7 +184,7 @@ export type ResourceTextPanelProps = {
   /**
    * Open the resource picker for the user to choose a resource. Resolves with the chosen resource,
    * or `undefined` if the picker was cancelled. In the app this opens the `platform.resourcePicker`
-   * dialog; in Storybook it renders the real ResourcePickerDialog inline.
+   * dialog.
    */
   showResourcePicker: (selectedResourceIds: string[]) => Promise<DblResourceData | undefined>;
   /** Logger forwarded to the editor (the web view supplies the PAPI logger; tests may omit it). */
@@ -207,9 +194,9 @@ export type ResourceTextPanelProps = {
 /**
  * Read-only panel that displays one referenced Scripture resource or commentary. It owns the
  * orchestration (filter the configured references by resource type → resolve the selection against
- * the DBL catalog → auto-install if needed → decide what the chapter read means) so the app webview
- * and Storybook share the same logic; only the data (props) and the PAPI-backed operations
- * (callbacks) differ between them.
+ * the DBL catalog → auto-install if needed → decide what the chapter read means). Taking the data
+ * as props and the PAPI-backed operations as callbacks keeps that logic testable without PAPI, and
+ * would let a Storybook story drive the same panel.
  */
 export function ResourceTextPanel({
   localizedStrings,
@@ -220,8 +207,8 @@ export function ResourceTextPanel({
   isCatalogReady,
   hasCatalogError,
   onRetryCatalog,
-  scrRef = DEFAULT_SCR_REF,
-  onScrRefChange = () => {},
+  scrRef,
+  onScrRefChange,
   selectedResourceId,
   onSelectResource,
   usjPossiblyError,
@@ -235,12 +222,16 @@ export function ResourceTextPanel({
 }: ResourceTextPanelProps) {
   // #region Selection
 
-  const effectiveResources =
-    effectiveResourcesState.status === 'ready' ? effectiveResourcesState.list : undefined;
-
-  const filteredResources = useMemo(
-    () => filterResourcesByType(effectiveResources?.items, dblResources, resourceType),
-    [effectiveResources, dblResources, resourceType],
+  // One derivation, shared with the web view — see `resolveResourcePanelSelection`.
+  const { filteredResources, selectedRef, dblMatch, resourceProjectId } = useMemo(
+    () =>
+      resolveResourcePanelSelection({
+        effectiveResourcesState,
+        dblResources,
+        resourceType,
+        selectedResourceId,
+      }),
+    [effectiveResourcesState, dblResources, resourceType, selectedResourceId],
   );
 
   // Readiness is decided from whether the sources have ARRIVED, never from whether the filtered
@@ -275,11 +266,6 @@ export function ResourceTextPanel({
     const currentId = filteredResources.find((r) => getRefId(r) === selectedResourceId);
     if (!currentId) onSelectResource(getRefId(filteredResources[0]));
   }, [filteredResources, selectedResourceId, onSelectResource, pendingResourceId]);
-
-  const { selectedRef, dblMatch, resourceProjectId } = useMemo(
-    () => resolveSelectedResource(filteredResources, selectedResourceId, dblResources),
-    [filteredResources, selectedResourceId, dblResources],
-  );
 
   const [isSelecting, setIsSelecting] = useState(false);
 
@@ -374,8 +360,11 @@ export function ResourceTextPanel({
               await installResource(dblEntryUid);
             } catch (e) {
               // Record the failure so that once the pick finishes and the auto-install effect
-              // re-enables, its failed-uid guard suppresses a duplicate install attempt; this also
-              // surfaces the install-failed state immediately instead of after a second attempt.
+              // re-enables, its failed-uid guard suppresses a duplicate install attempt. Note this
+              // does NOT surface the failure on screen: `selectTextConnection` swallows the rethrow
+              // and returns without persisting, so the selection never changes and
+              // `useDblResourceAutoInstall` leaves `installFailed` false. A failed pick is silent
+              // until the user tries again.
               markInstallFailed(dblEntryUid);
               throw e;
             }
@@ -389,11 +378,32 @@ export function ResourceTextPanel({
     [getUserResourceTexts, setUserResourceTexts, installResource, retryInstall, markInstallFailed],
   );
 
+  // A picker is open. Guarded because the dialog service replaces rather than queues: a second
+  // request rejects the open overlay with ABORTED (`showModalDialogOverlay` in
+  // `overlay.service-host.ts`), which would throw away whatever the user had typed into the picker
+  // they are still using. The overlay id is global to the dialog service, so this only stops THIS
+  // panel from doing it — it cannot stop another web view.
+  const isPickerOpen = useRef(false);
+  // Cleared on unmount so a picker that resolves after the tab closes cannot write the user's
+  // reference list or start a download for a panel that no longer exists.
+  const isMounted = useRef(true);
+  useEffect(
+    () => () => {
+      isMounted.current = false;
+    },
+    [],
+  );
+
   const openResourcePicker = useCallback(() => {
+    if (isPickerOpen.current) return;
+    isPickerOpen.current = true;
     showResourcePicker(currentFilteredDblIds)
       .then((resource) => {
-        if (resource) return handleResourceSelect(resource);
+        if (resource && isMounted.current) return handleResourceSelect(resource);
         return undefined;
+      })
+      .finally(() => {
+        isPickerOpen.current = false;
       })
       .catch((e) => logger?.error(`Resource selection failed: ${getErrorMessage(e)}`));
   }, [showResourcePicker, currentFilteredDblIds, handleResourceSelect, logger]);
@@ -422,11 +432,19 @@ export function ResourceTextPanel({
     [textDirection, extraValidMarkers],
   );
 
-  // `contentState` and `isBlankChapter` are deps because the branches below UNMOUNT `Editorial`
-  // rather than hiding it. A remounted editor holds nothing, and this effect is its only feed — so
-  // without re-running when the panel comes back to the editor, the reader gets Lexical's "Enter
-  // some Scripture…" placeholder (an edit invitation in a text they cannot edit) until the next USJ
-  // happens to arrive.
+  // `contentState` and `isBlankChapter` are deps because the content-area branches below UNMOUNT
+  // `Editorial` rather than hiding it. A remounted editor holds nothing, and this effect is its only
+  // feed — so without re-running when the panel comes back to the editor, the reader gets Lexical's
+  // "Enter some Scripture…" placeholder (an edit invitation in a text they cannot edit) until the
+  // next USJ happens to arrive.
+  //
+  // These deps cover only the content-area branches. Four whole-panel early returns also unmount the
+  // editor — `!hasProject`, `readiness !== 'configured'`, `installFailed`, and
+  // `isSelecting || isInstalling` — and none of them is a dep here, so returning from one of those
+  // with the USJ and content state unchanged remounts an editor this effect never re-feeds. Picking
+  // the resource already on screen is the reachable case: `isSelecting` unmounts, the pick resolves,
+  // and nothing in the deps moved. `ModelTextPanel` avoids the whole class by hiding the editor with
+  // `tw:hidden` instead of unmounting it.
   useEffect(() => {
     if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
   }, [usjFromPdp, contentState, isBlankChapter]);
@@ -450,7 +468,7 @@ export function ResourceTextPanel({
   // Front of the state machine: still resolving, unreadable setting, or genuinely nothing
   // configured. Driven by one readiness value so the empty prompt can only appear once emptiness is
   // actually known — the loading branch deliberately outlasts the catalog fetch when something is
-  // configured, which is the window the old guard let fall through to the empty state.
+  // configured.
   if (readiness !== 'configured') {
     return (
       <PanelReadinessView

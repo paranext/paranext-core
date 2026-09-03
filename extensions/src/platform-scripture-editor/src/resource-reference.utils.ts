@@ -4,6 +4,9 @@ import type {
   EffectiveResourceReference,
 } from 'platform-scripture';
 import type { DblResourceData, ResourceType } from 'platform-bible-utils';
+// Type-only, so this module gains no runtime dependency on the hook (and stays importable from a
+// node-environment test).
+import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 
 /**
@@ -140,4 +143,45 @@ export function resolveSelectedResource(
   }
 
   return { selectedRef, dblMatch, resourceProjectId, resourceShortName };
+}
+
+/** Everything a resource panel and its web view derive from the configured references. */
+export type ResourcePanelSelection = SelectedResource & {
+  /** The references the panel can offer, filtered to its resource type. */
+  filteredResources: EffectiveResourceReference[];
+};
+
+/**
+ * The single derivation of what a resource panel is showing.
+ *
+ * Both the panel and its web view need this answer, and they must not be able to reach different
+ * ones: the panel renders from it, while the web view keys the chapter subscription, the text
+ * direction, the tab title, Ctrl+F and the published navigable project ids off it. The web view
+ * cannot simply take the panel's answer via a callback — `resourceProjectId` keys the `ChapterUSJ`
+ * subscription that produces the USJ passed DOWN to the panel, so the dependency is circular. One
+ * function called from both sides is what keeps the two in step, since nothing under `extensions/`
+ * tests a `*.web-view.tsx` and no test could otherwise pin the agreement.
+ */
+export function resolveResourcePanelSelection({
+  effectiveResourcesState,
+  dblResources,
+  resourceType,
+  selectedResourceId,
+}: {
+  effectiveResourcesState: EffectiveResourceReferenceListState;
+  dblResources: DblResourceData[];
+  resourceType: ResourceType;
+  selectedResourceId: string | undefined;
+}): ResourcePanelSelection {
+  const effectiveResources =
+    effectiveResourcesState.status === 'ready' ? effectiveResourcesState.list : undefined;
+  const filteredResources = filterResourcesByType(
+    effectiveResources?.items,
+    dblResources,
+    resourceType,
+  );
+  return {
+    filteredResources,
+    ...resolveSelectedResource(filteredResources, selectedResourceId, dblResources),
+  };
 }
