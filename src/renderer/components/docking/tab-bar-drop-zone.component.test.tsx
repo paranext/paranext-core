@@ -1,12 +1,16 @@
-import React, { createElement } from 'react';
+import React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DockContext, DragState, PanelData, TabData, TabGroup } from 'rc-dock';
+import { DockContext, DragState, PanelData } from 'rc-dock';
 import { TabBarDropZone } from './tab-bar-drop-zone.component';
-
-const DOCK_ID = 'test-dock';
-const GROUP = 'group-a';
+import {
+  createContext,
+  createDragState,
+  createPanel,
+  createTab,
+  DOCK_ID,
+} from './tab-bar-drop-zone-test.util';
 
 interface MockDragDropDivProps {
   getRef?: React.Ref<HTMLDivElement>;
@@ -60,56 +64,6 @@ vi.mock('rc-dock', async () => {
     },
   };
 });
-
-function createPanel(overrides: Partial<PanelData> = {}): PanelData {
-  return { id: 'panel-1', tabs: [], group: GROUP, ...overrides };
-}
-
-function createTab(overrides: Partial<TabData> = {}): TabData {
-  return { id: 'tab-1', title: 'Tab', content: createElement('div'), group: GROUP, ...overrides };
-}
-
-function createContext(overrides: Partial<DockContext> = {}): DockContext {
-  return {
-    getDockId: () => DOCK_ID,
-    useEdgeDrop: vi.fn(() => false),
-    setDropRect: vi.fn(),
-    getLayoutSize: vi.fn(() => ({ width: 0, height: 0 })),
-    onSilentChange: vi.fn(),
-    dockMove: vi.fn(),
-    getGroup: (): TabGroup => ({}),
-    find: vi.fn(),
-    updateTab: vi.fn(() => true),
-    navigateToPanel: vi.fn(),
-    getTabCache: vi.fn(),
-    removeTabCache: vi.fn(),
-    updateTabCache: vi.fn(),
-    getRootElement: vi.fn(),
-    ...overrides,
-  };
-}
-
-/** A real `DragState`, seeded via the same `setData` mechanism rc-dock's own drag starters use. */
-function createDragState(
-  data: Record<string, unknown> | undefined,
-  scope: unknown = DOCK_ID,
-): DragState {
-  const state = new DragState(
-    new MouseEvent('mousemove', { clientX: 0, clientY: 0 }),
-    {
-      element: document.createElement('div'),
-      ownerDocument: document,
-      dragType: 'left',
-      baseX: 0,
-      baseY: 0,
-      scaleX: 1,
-      scaleY: 1,
-    },
-    true,
-  );
-  state.setData(data, scope);
-  return state;
-}
 
 /** The `onDragOverT`/`onDragLeaveT`/`onDropT` handlers `TabBarDropZone` passed to `DragDropDiv`. */
 function getCapturedHandlers(): MockDragDropDivProps {
