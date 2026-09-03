@@ -1,0 +1,16 @@
+// This class only sets sizing for the invisible drop zone itself; its position and its "grow to
+// fill leftover space" behavior come from the `.dock-nav > .dock-extra-content` flex rules in
+// `dock-layout-wrapper.component.scss`'s TAB-BAR region — kept there so all tab-bar flex layout
+// stays in one place.
+.platform-tab-bar-drop-zone {
+  // `flex-basis: 0` (the `0` in the shorthand) keeps this element out of the flex line's
+  // hypothetical main-size total, so it only ever claims space nothing else needs — it can't force
+  // `.dock-nav-wrap` (the tab list) to shrink and push a tab into the overflow dropdown.
+  flex: 1 0 0;
+  // The default flex-item `min-width: auto` would otherwise floor this at its content size; it has
+  // no content, but pin it to 0 so a change here can't reintroduce that floor.
+  min-width: 0;
+  // Fill the bar's full height (matching the "+" button) rather than just its own flex-centered
+  // content box, so the drop target isn't a thin sliver.
+  align-self: stretch;
+}
