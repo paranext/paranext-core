@@ -2,6 +2,10 @@ import papi from '@papi/frontend';
 import { useEffect, useMemo, useState } from 'react';
 import { wait } from 'platform-bible-utils';
 import type { ScrollGroupId } from 'platform-bible-utils';
+import {
+  isNavigableProjectIds,
+  NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
+} from 'platform-bible-utils/experimental';
 
 export interface OpenProjectTabWithWebView {
   webViewId: string;
@@ -12,11 +16,49 @@ export interface OpenProjectTabWithWebView {
 
 export type WebViewFilter = (webView: { webViewType: string }) => boolean;
 
+export interface UseOpenProjectTabsOptions {
+  /**
+   * Report the projects a web view declares under `NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY`
+   * instead of its container `projectId`, yielding one tab per declared project.
+   *
+   * Off by default: the existing consumers (checklist, checks-side-panel) ask "which project does
+   * this tab belong to", and a reference panel's answer to that is still its container project.
+   */
+  includeNavigableProjectIds?: boolean;
+}
+
 interface WebViewEventLike {
   id: string;
   webViewType?: string;
   projectId?: string;
   scrollGroupScrRef?: unknown;
+  state?: Record<string, unknown>;
+}
+
+/**
+ * Projects a web view declares as displayed, or `undefined` when it declares nothing at all.
+ *
+ * The empty array and a missing key mean different things and must not be collapsed. A view that
+ * declares `[]` is saying "I display nothing" — it should offer no project, not fall back to its
+ * container. A view with no key at all (an editor) never participates, so its container project is
+ * the right answer.
+ *
+ * Guarded rather than trusted: web view state is written by whoever owns the web view, so a
+ * malformed value is treated as no declaration rather than reaching consumers as a project id.
+ */
+function getNavigableProjectIds(state: Record<string, unknown> | undefined): string[] | undefined {
+  if (!state || !(NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY in state)) return undefined;
+  const navigableProjectIds = state[NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY];
+  return isNavigableProjectIds(navigableProjectIds) ? navigableProjectIds : undefined;
+}
+
+/**
+ * Map key for one (web view, project) pair. A web view that declares several navigable projects
+ * yields several tabs, so the web view id alone is no longer unique. NUL-separated because it
+ * cannot occur in either half.
+ */
+function tabKey(webViewId: string, projectId: string): string {
+  return `${webViewId}\u0000${projectId}`;
 }
 
 /**
@@ -43,13 +85,17 @@ interface WebViewEventLike {
  *   because the other consumers (checklist, checks-side-panel) key off this shape; removing it is a
  *   separate cleanup tracked outside this change.
  */
-export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWebView[] {
+export function useOpenProjectTabs(
+  filter?: WebViewFilter,
+  options?: UseOpenProjectTabsOptions,
+): OpenProjectTabWithWebView[] {
   const [tabsMap, setTabsMap] = useState<Map<string, OpenProjectTabWithWebView>>(() => new Map());
+  const includeNavigableProjectIds = options?.includeNavigableProjectIds ?? false;
 
   useEffect(() => {
     let cancelled = false;
     const upsert = (webView: WebViewEventLike) => {
-      const { id, projectId, scrollGroupScrRef, webViewType } = webView;
+      const { id, projectId, scrollGroupScrRef, webViewType, state } = webView;
       const passesFilter = !filter || (webViewType !== undefined && filter({ webViewType }));
       // See JSDoc above: undefined → default group 0; numeric → as-is.
       //
@@ -79,29 +125,42 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
       ) {
         scrollGroup = 0;
       }
-      const passes =
-        typeof projectId === 'string' &&
-        projectId.length > 0 &&
-        scrollGroup !== undefined &&
-        passesFilter;
+      // A view that declares navigable projects reports those instead of its container project —
+      // a reference panel's container is the editable project whose reference list it shows, not
+      // the resource on screen. Falls back to the container project, which is what an editor tab
+      // (and every opted-out caller) reports.
+      const declaredProjectIds = includeNavigableProjectIds
+        ? getNavigableProjectIds(state)
+        : undefined;
+      const tabProjectIds = (
+        declaredProjectIds ?? (typeof projectId === 'string' ? [projectId] : [])
+      ).filter((tabProjectId) => tabProjectId.length > 0);
+      const passes = tabProjectIds.length > 0 && scrollGroup !== undefined && passesFilter;
       setTabsMap((prev) => {
-        if (!passes || scrollGroup === undefined || typeof projectId !== 'string') {
-          if (!prev.has(id)) return prev;
+        const keyPrefix = `${id}\u0000`;
+        const previousKeys = [...prev.keys()].filter((key) => key.startsWith(keyPrefix));
+        if (!passes || scrollGroup === undefined) {
+          if (previousKeys.length === 0) return prev;
           const next = new Map(prev);
-          next.delete(id);
+          previousKeys.forEach((key) => next.delete(key));
           return next;
         }
-        const tab: OpenProjectTabWithWebView = {
-          webViewId: id,
+        const next = new Map(prev);
+        // Drop what this web view contributed before re-adding: its declared set can shrink, and a
+        // stale entry would keep offering a project the view no longer displays.
+        previousKeys.forEach((key) => next.delete(key));
+        tabProjectIds.forEach((tabProjectId) => {
           // Lowercased for backward-compatibility with existing consumers. This casing is NOT
           // authoritative — canonical project ids are UPPERCASE — so consumers must match
           // case-insensitively (see normalizeProjectId / I12).
-          projectId: projectId.toLowerCase(),
-          scrollGroupId: scrollGroup,
-          webViewType: webViewType ?? '',
-        };
-        const next = new Map(prev);
-        next.set(id, tab);
+          const normalizedProjectId = tabProjectId.toLowerCase();
+          next.set(tabKey(id, normalizedProjectId), {
+            webViewId: id,
+            projectId: normalizedProjectId,
+            scrollGroupId: scrollGroup,
+            webViewType: webViewType ?? '',
+          });
+        });
         return next;
       });
     };
@@ -149,9 +208,11 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
     const unsubUpdate = papi.webViews.onDidUpdateWebView(({ webView }) => upsert(webView));
     const unsubClose = papi.webViews.onDidCloseWebView(({ webView }) => {
       setTabsMap((prev) => {
-        if (!prev.has(webView.id)) return prev;
+        const keyPrefix = `${webView.id}\u0000`;
+        const closedKeys = [...prev.keys()].filter((key) => key.startsWith(keyPrefix));
+        if (closedKeys.length === 0) return prev;
         const next = new Map(prev);
-        next.delete(webView.id);
+        closedKeys.forEach((key) => next.delete(key));
         return next;
       });
     });
@@ -161,7 +222,7 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
       unsubUpdate();
       unsubClose();
     };
-  }, [filter]);
+  }, [filter, includeNavigableProjectIds]);
 
   return useMemo(() => [...tabsMap.values()], [tabsMap]);
 }
