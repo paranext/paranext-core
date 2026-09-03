@@ -36,21 +36,23 @@ echo "No secrets found"
 # ============================================
 # Provisional dev-package builds (ALL branches)
 # ============================================
-# `npm run build:editor` stages your uncommitted scripture-editors working tree, and a dirty
-# checkout stages whatever it happens to hold. `npm install` then records THAT package's dependency
-# closure in package-lock.json. Committing the result publishes a lockfile nobody else can
-# reproduce. Staging marks both cases in its `.staged-from` marker, so this is exact: it fires only
-# when a provisional build is staged and the lockfile is going in.
+# A staged dev package is provisional when it did not come from the revision dev-packages.json
+# pins: `npm run build:editor` stages your uncommitted working tree, a dirty checkout stages
+# whatever it holds, and a checkout left on its own branch stages that branch. `npm install` then
+# records THAT package's dependency closure in package-lock.json, and committing the result
+# publishes a lockfile nobody else can reproduce. Staging marks all three in its `.staged-from`
+# marker, so this is exact: it fires only when a provisional build is staged and the lockfile is
+# going in.
 if git diff --cached --name-only --diff-filter=ACMR | grep -qx 'package-lock.json'; then
   PROVISIONAL=$(find dev-packages/staging -maxdepth 2 -name .staged-from \
-    -exec grep -l -e '-local' -e '-dirty' {} + 2>/dev/null || true)
+    -exec grep -l -e '-local' -e '-dirty' -e '-offpin' {} + 2>/dev/null || true)
   if [ -n "$PROVISIONAL" ]; then
     echo ""
     echo "=========================================="
     echo "PROVISIONAL DEV PACKAGE STAGED — commit blocked"
     echo "=========================================="
-    echo "package-lock.json is staged, but these dev packages were staged from a local or dirty"
-    echo "build rather than the revision dev-packages.json pins:"
+    echo "package-lock.json is staged, but these dev packages were not staged from the revision"
+    echo "dev-packages.json pins:"
     echo ""
     echo "$PROVISIONAL" | sed 's|/.staged-from$||;s|^|  |'
     echo ""
