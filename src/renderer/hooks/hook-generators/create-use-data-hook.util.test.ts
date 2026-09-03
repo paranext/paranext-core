@@ -22,6 +22,7 @@ import {
   createUseDataHook,
   RUNAWAY_COOLDOWN_MS,
   RUNAWAY_EVENTS_PER_WINDOW,
+  MAX_SELECTOR_DESCRIPTION_LENGTH,
   RUNAWAY_WINDOW_MS,
 } from '@renderer/hooks/hook-generators/create-use-data-hook.util';
 
@@ -567,6 +568,45 @@ describe('createUseDataHook runaway-loop guard', () => {
 
     expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
       expect.stringContaining('Data of type (unnamed) (selector: platform.interfaceMode)'),
+    );
+  });
+
+  it('truncates a long selector rather than putting all of it in the warning', async () => {
+    const longSelector: TestSelector = { book: 'G'.repeat(200), chapterNum: 1 };
+    const expectedDescription = `${JSON.stringify(longSelector).slice(
+      0,
+      MAX_SELECTOR_DESCRIPTION_LENGTH,
+    )}…`;
+
+    renderUseStuff(longSelector);
+    await act(async () => harness.subscriptions[0].resolveSubscribe());
+
+    deliverTimes(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 1);
+
+    expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining(`Data of type Stuff (selector: ${expectedDescription})`),
+    );
+    // The point of truncating: the whole selector must not reach the log
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('G'.repeat(200)));
+  });
+
+  it('describes an unserializable selector instead of throwing while reporting a trip', async () => {
+    // This runs inside the trip handler, so a `JSON.stringify` throw here would replace the warning
+    // with a fresh exception at the moment the app is already misbehaving - which is the failure
+    // this whole guard exists to report rather than cause.
+    const circularSelector: TestSelector = { book: 'GEN', chapterNum: 1 };
+    // A circular selector cannot be built without stepping outside `TestSelector`'s shape; the
+    // assertion is confined to attaching the cycle.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (circularSelector as unknown as { self: unknown }).self = circularSelector;
+
+    renderUseStuff(circularSelector);
+    await act(async () => harness.subscriptions[0].resolveSubscribe());
+
+    deliverTimes(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 1);
+
+    expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('Data of type Stuff (selector: [unserializable])'),
     );
   });
 });

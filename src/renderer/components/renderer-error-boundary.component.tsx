@@ -1,7 +1,7 @@
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
 import { Component, ErrorInfo, PropsWithChildren, ReactNode } from 'react';
-import { MainWindowCrashedView } from './main-window-crashed-view.component';
+import { WindowCrashedView } from './window-crashed-view.component';
 
 type RendererErrorBoundaryState = {
   hasError: boolean;
@@ -36,7 +36,7 @@ function logRendererCrash(error: unknown, errorInfo: ErrorInfo) {
 
 /**
  * Catches render failures anywhere in the window's React tree so the window shows
- * {@link MainWindowCrashedView} instead of going blank, and reports them to the app log.
+ * {@link WindowCrashedView} instead of going blank, and reports them to the app log.
  *
  * The whole tree mounts through one `root.render` call with nothing above it, so an uncaught render
  * throw tears down the entire root. The renderer process survives that, which is why the window
@@ -52,9 +52,8 @@ function logRendererCrash(error: unknown, errorInfo: ErrorInfo) {
  * close. All localization happens in the fallback, which mounts only after a crash.
  *
  * Covers throws during render and during commit (`useEffect` included). It does NOT cover errors in
- * event handlers, async callbacks or unhandled rejections - React error boundaries never see those
- *
- * - Nor a data provider that returns a `PlatformError` rather than throwing.
+ * event handlers, async callbacks or unhandled rejections, which React error boundaries never see,
+ * nor a data provider that returns a `PlatformError` rather than throwing.
  */
 export class RendererErrorBoundary extends Component<
   PropsWithChildren,
@@ -81,7 +80,7 @@ export class RendererErrorBoundary extends Component<
     const { children } = this.props;
     const { hasError } = this.state;
 
-    if (hasError) return <MainWindowCrashedView onReload={reloadWindow} />;
+    if (hasError) return <WindowCrashedView onReload={reloadWindow} />;
 
     return children;
   }

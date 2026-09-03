@@ -442,7 +442,10 @@ describe('useProjectPickerData', () => {
         }) as never,
     );
 
+    // Empty for both reads that happen before any event: the first render's initializer and the
+    // mount effect that re-reads once the subscriptions are attached.
     vi.mocked(getAllOpenWebViewDefinitionsSync)
+      .mockReturnValueOnce([])
       .mockReturnValueOnce([])
       .mockReturnValue([
         { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-xyz' },
@@ -461,6 +464,30 @@ describe('useProjectPickerData', () => {
 
     await settle(result);
     expect(result.current.currentSimpleProject?.fullName).toBe('Updated Project');
+  });
+
+  it('re-reads the active editor after mount when the first render could not enumerate web views', async () => {
+    // The first read runs during the first render, when this window's dock layout is typically not
+    // registered yet and `getAllOpenWebViewDefinitionsSync` throws. Without the mount effect that
+    // re-reads once the subscriptions are attached, the picker would stay blank until some later
+    // web view event happened to arrive.
+    const { getAllOpenWebViewDefinitionsSync, projectLookupService } = await importMocks();
+    vi.mocked(getAllOpenWebViewDefinitionsSync)
+      .mockImplementationOnce(() => {
+        throw new Error('platformDockLayout is not registered');
+      })
+      .mockReturnValue([
+        { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-xyz' },
+      ] as never);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([{ id: 'proj-xyz', fullName: 'Recovered Project', name: 'Recovered' }]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+
+    // No web view event was ever fired - only the mount effect can have produced this.
+    expect(result.current.currentSimpleProject?.fullName).toBe('Recovered Project');
   });
 
   it('resolves the current project by direct lookup when it is absent from the filtered list snapshot', async () => {

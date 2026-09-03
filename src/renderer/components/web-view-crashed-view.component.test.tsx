@@ -6,7 +6,7 @@ import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   WebViewCrashedView,
-  ENGLISH_DEFAULTS,
+  WEB_VIEW_CRASHED_ENGLISH_DEFAULTS,
   WEB_VIEW_CRASHED_VIEW_STRING_KEYS,
 } from './web-view-crashed-view.component';
 
@@ -189,7 +189,7 @@ describe('WebViewCrashedView', () => {
   });
 });
 
-// `ENGLISH_DEFAULTS` deliberately restates the English text that also lives in `en.json`, because
+// `WEB_VIEW_CRASHED_ENGLISH_DEFAULTS` deliberately restates the English text that also lives in `en.json`, because
 // this view has to render when the localization service is the thing that broke. `en.json` is read
 // from disk by the extension host rather than bundled into the renderer, so importing it here to
 // derive the defaults would add a second 41KB copy to the renderer's load path for four strings -
@@ -201,13 +201,13 @@ describe('English fallbacks stay in step with en.json', () => {
   );
 
   it('has an English default for every key the view resolves', () => {
-    expect(Object.keys(ENGLISH_DEFAULTS).sort()).toEqual(
+    expect(Object.keys(WEB_VIEW_CRASHED_ENGLISH_DEFAULTS).sort()).toEqual(
       [...WEB_VIEW_CRASHED_VIEW_STRING_KEYS].sort(),
     );
   });
 
   // Iterating the entries rather than the key list keeps the keys typed, so this needs no assertion
-  Object.entries(ENGLISH_DEFAULTS).forEach(([key, englishDefault]) => {
+  Object.entries(WEB_VIEW_CRASHED_ENGLISH_DEFAULTS).forEach(([key, englishDefault]) => {
     it(`declares ${key} in en.json`, () => {
       expect(englishStrings[key]).toBeTruthy();
     });

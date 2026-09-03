@@ -1,17 +1,20 @@
+import {
+  buildCrashedViewButtonStateCss,
+  CRASHED_VIEW_BUTTON_STYLE,
+  CRASHED_VIEW_MESSAGE_STYLE,
+  CRASHED_VIEW_TITLE_STYLE,
+  createCrashedViewLocalizer,
+} from '@renderer/components/crashed-view.util';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { LocalizationData } from '@shared/services/localization.service-model';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
-import { Component, CSSProperties, PropsWithChildren, ReactNode } from 'react';
+import { Component, CSSProperties, PropsWithChildren, ReactNode, useEffect, useRef } from 'react';
 
-const TITLE_KEY = '%mainWindow_error_crashed_title%';
-const MESSAGE_KEY = '%mainWindow_error_crashed_message%';
-const RELOAD_BUTTON_KEY = '%mainWindow_error_crashed_reloadButton%';
+const TITLE_KEY = '%window_error_crashed_title%';
+const MESSAGE_KEY = '%window_error_crashed_message%';
+const RELOAD_BUTTON_KEY = '%window_error_crashed_reloadButton%';
 
-type MainWindowCrashedViewStringKey =
-  | typeof TITLE_KEY
-  | typeof MESSAGE_KEY
-  | typeof RELOAD_BUTTON_KEY;
+type WindowCrashedViewStringKey = typeof TITLE_KEY | typeof MESSAGE_KEY | typeof RELOAD_BUTTON_KEY;
 
 /**
  * Keys this view resolves. Declared at module level because `useLocalizedStrings` requires a stable
@@ -25,35 +28,35 @@ const STRING_KEYS: LocalizeKey[] = [TITLE_KEY, MESSAGE_KEY, RELOAD_BUTTON_KEY];
  * so tests can check the English defaults cover exactly these keys; `readonly` so no consumer can
  * mutate the array the hook depends on being stable.
  */
-export const MAIN_WINDOW_CRASHED_VIEW_STRING_KEYS: readonly LocalizeKey[] = STRING_KEYS;
+export const WINDOW_CRASHED_VIEW_STRING_KEYS: readonly LocalizeKey[] = STRING_KEYS;
 
 /**
  * Last-resort English text.
  *
  * Every other view in the app falls back to the localize key itself when a string has not resolved.
  * This one must not: it renders precisely because the window's React tree died, and a user looking
- * at a dead window is better served by English than by `%mainWindow_error_crashed_title%`.
+ * at a dead window is better served by English than by `%window_error_crashed_title%`.
  */
-export const ENGLISH_DEFAULTS: Readonly<Record<MainWindowCrashedViewStringKey, string>> = {
-  [TITLE_KEY]: 'This window stopped working',
-  [MESSAGE_KEY]:
-    'Something went wrong and this window could not be displayed. Reloading should bring it back.',
-  [RELOAD_BUTTON_KEY]: 'Reload',
-};
+export const WINDOW_CRASHED_ENGLISH_DEFAULTS: Readonly<Record<WindowCrashedViewStringKey, string>> =
+  {
+    [TITLE_KEY]: 'This window stopped working',
+    [MESSAGE_KEY]:
+      'Something went wrong and this window could not be displayed. Reloading should bring it back.',
+    [RELOAD_BUTTON_KEY]: 'Reload',
+  };
 
-function localize(localizedStrings: LocalizationData, key: MainWindowCrashedViewStringKey): string {
-  const value = localizedStrings[key];
-  // `useLocalizedStrings` seeds each key with the key itself, so an unresolved string is
-  // indistinguishable from one that resolved to its own name — treat both as unresolved
-  return value && value !== key ? value : ENGLISH_DEFAULTS[key];
-}
+const localize = createCrashedViewLocalizer(WINDOW_CRASHED_ENGLISH_DEFAULTS);
 
-// Styles are inline rather than Tailwind/shadcn on purpose. This view renders after the window's
-// React tree has already failed once, so every dependency it takes is another thing that can stop
-// it appearing - and a crash screen that cannot render leaves the blank window it exists to
-// replace. The theme stylesheet is applied to the document at module evaluation rather than by
-// React, so its custom properties still resolve here; each still carries a literal fallback in case
-// the failure happened before the theme was applied.
+// Styles are inline rather than Tailwind/shadcn on purpose, and the reason is narrower than "fewer
+// dependencies": a `tw:` class is only as good as the class names the Tailwind build emitted, and a
+// shadcn primitive is a component tree that renders through the same React that just failed. This
+// view is the last thing between a throw and a blank window, so what it paints is written where
+// nothing else has to succeed first. The theme stylesheet is applied to the document at module
+// evaluation rather than by React, so its custom properties still resolve here; each still carries a
+// literal fallback in case the failure happened before the theme was applied.
+// `fontFamily: inherit` rather than a hardcoded stack so this screen uses whatever typeface the
+// document establishes (`body` sets it in `app.component.scss`) - a crash screen in a different font
+// from the app reads as a foreign page rather than as this app telling the user something.
 // `position: fixed; inset: 0` rather than `height: 100vh` so the box is measured from the viewport
 // and is unaffected by whatever margin the document's stylesheets do or do not reset.
 const CONTAINER_STYLE: CSSProperties = {
@@ -70,50 +73,14 @@ const CONTAINER_STYLE: CSSProperties = {
   textAlign: 'center',
   background: 'var(--background, #ffffff)',
   color: 'var(--foreground, #1b1b1b)',
-  fontFamily: 'system-ui, sans-serif',
-};
-
-const TITLE_STYLE: CSSProperties = {
-  margin: 0,
-  fontSize: '0.875rem',
-  fontWeight: 500,
-  letterSpacing: '-0.015em',
-};
-
-const MESSAGE_STYLE: CSSProperties = {
-  margin: 0,
-  maxWidth: '24rem',
-  fontSize: '0.875rem',
-  color: 'var(--muted-foreground, #5b5b5b)',
-};
-
-const BUTTON_STYLE: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  height: '2rem',
-  padding: '0 0.625rem',
-  border: '1px solid transparent',
-  borderRadius: 'var(--radius, 0.625rem)',
-  background: 'var(--primary, #1b1b1b)',
-  color: 'var(--primary-foreground, #ffffff)',
   fontFamily: 'inherit',
-  fontSize: '0.875rem',
-  fontWeight: 500,
-  whiteSpace: 'nowrap',
-  cursor: 'pointer',
 };
 
-const BUTTON_CLASS = 'platform-main-window-crashed-reload';
+const BUTTON_CLASS = 'platform-window-crashed-reload';
 
-// Hover and focus-visible cannot be expressed as inline styles, and a button with no visible focus
-// indicator is unusable by keyboard - which matters here because it is the only control on screen.
-const BUTTON_STATE_CSS = `
-.${BUTTON_CLASS}:hover { opacity: 0.9; }
-.${BUTTON_CLASS}:focus-visible { outline: 2px solid var(--ring, #7f7f7f); outline-offset: 2px; }
-`;
+const BUTTON_STATE_CSS = buildCrashedViewButtonStateCss(BUTTON_CLASS);
 
-export type MainWindowCrashedViewProps = {
+export type WindowCrashedViewProps = {
   /**
    * Reloads the window.
    *
@@ -137,21 +104,40 @@ type CrashedViewShellProps = {
 /**
  * The screen itself: fixed markup and fixed styles over text that is already resolved.
  *
- * Calls no hooks and reaches no service, so it renders the same whether the text came from the
- * localization service or from {@link ENGLISH_DEFAULTS} - which is what lets the English path stay
- * identical in layout to the localized one.
+ * Calls React's own hooks only. Nothing here reaches a service, so it renders the same whether the
+ * text came from the localization service or from {@link WINDOW_CRASHED_ENGLISH_DEFAULTS} - which is
+ * what lets the English path stay identical in layout to the localized one.
  *
- * `role="alert"` announces the text to a screen reader, whose previous focus died with the tree.
+ * Takes focus on mount if this window has it. The crash destroyed every focusable thing in the
+ * window, so a keyboard or screen-reader user is otherwise left on `body` with no route to the
+ * reload button - and unlike a single crashed pane there is nothing else here to steal focus from.
+ * A window the user is not looking at is left alone, so a background window crashing cannot pull
+ * focus away from the one they are working in. `role="alert"` announces the text either way.
  */
 function CrashedViewShell({ title, message, reloadLabel, onReload }: CrashedViewShellProps) {
+  // React refs passed to DOM elements must be initialized with null, not undefined.
+  // eslint-disable-next-line no-null/no-null
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // `ownerDocument` rather than a bare `document` for the same reason the web view screen uses it:
+    // it asks the document this element actually lives in.
+    if (containerRef.current?.ownerDocument.hasFocus()) containerRef.current.focus();
+  }, []);
+
   return (
     <>
       {/* Outside the alert region so the region holds only what is announced. */}
       <style>{BUTTON_STATE_CSS}</style>
-      <div style={CONTAINER_STYLE} role="alert">
-        <p style={TITLE_STYLE}>{title}</p>
-        <p style={MESSAGE_STYLE}>{message}</p>
-        <button type="button" className={BUTTON_CLASS} style={BUTTON_STYLE} onClick={onReload}>
+      <div ref={containerRef} style={CONTAINER_STYLE} role="alert" tabIndex={-1}>
+        <p style={CRASHED_VIEW_TITLE_STYLE}>{title}</p>
+        <p style={CRASHED_VIEW_MESSAGE_STYLE}>{message}</p>
+        <button
+          type="button"
+          className={BUTTON_CLASS}
+          style={CRASHED_VIEW_BUTTON_STYLE}
+          onClick={onReload}
+        >
           {reloadLabel}
         </button>
       </div>
@@ -166,7 +152,7 @@ function CrashedViewShell({ title, message, reloadLabel, onReload }: CrashedView
  * failure to localize costs the user English text rather than the blank window this whole view
  * exists to replace.
  */
-function LocalizedCrashedView({ onReload }: MainWindowCrashedViewProps) {
+function LocalizedCrashedView({ onReload }: WindowCrashedViewProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
   return (
@@ -179,13 +165,16 @@ function LocalizedCrashedView({ onReload }: MainWindowCrashedViewProps) {
   );
 }
 
-/** The screen with its text taken straight from {@link ENGLISH_DEFAULTS}, reaching no service. */
-function EnglishCrashedView({ onReload }: MainWindowCrashedViewProps) {
+/**
+ * The screen with its text taken straight from {@link WINDOW_CRASHED_ENGLISH_DEFAULTS}, reaching no
+ * service.
+ */
+function EnglishCrashedView({ onReload }: WindowCrashedViewProps) {
   return (
     <CrashedViewShell
-      title={ENGLISH_DEFAULTS[TITLE_KEY]}
-      message={ENGLISH_DEFAULTS[MESSAGE_KEY]}
-      reloadLabel={ENGLISH_DEFAULTS[RELOAD_BUTTON_KEY]}
+      title={WINDOW_CRASHED_ENGLISH_DEFAULTS[TITLE_KEY]}
+      message={WINDOW_CRASHED_ENGLISH_DEFAULTS[MESSAGE_KEY]}
+      reloadLabel={WINDOW_CRASHED_ENGLISH_DEFAULTS[RELOAD_BUTTON_KEY]}
       onReload={onReload}
     />
   );
@@ -202,8 +191,8 @@ type CrashedViewLocalizationBoundaryProps = PropsWithChildren<{
  * The boundary that renders this view cannot cover it. React hands an error thrown inside a
  * boundary's own fallback to the NEXT boundary up, and above the renderer root there is none - so a
  * throw while localizing would blank the window, which is the exact failure this view exists to
- * replace. The runaway-render guard that produced PT-4501 trips on `LocalizedStrings` more than any
- * other data type, so localization is a likely thing to be unwell at the moment this view mounts.
+ * replace. Localization is the data type the runaway-render guard trips on more than any other, so
+ * it is a likely thing to be unwell at the moment this view mounts.
  *
  * Everything above this boundary - {@link CrashedViewShell} included - must stay service-free for
  * the same reason: a throw there still has nothing to catch it.
@@ -245,7 +234,7 @@ class CrashedViewLocalizationBoundary extends Component<
  * Localized when localization works, English when it does not - including when it throws, which
  * nothing above this component could catch.
  */
-export function MainWindowCrashedView({ onReload }: MainWindowCrashedViewProps) {
+export function WindowCrashedView({ onReload }: WindowCrashedViewProps) {
   return (
     <CrashedViewLocalizationBoundary fallback={<EnglishCrashedView onReload={onReload} />}>
       <LocalizedCrashedView onReload={onReload} />
@@ -253,4 +242,4 @@ export function MainWindowCrashedView({ onReload }: MainWindowCrashedViewProps) 
   );
 }
 
-export default MainWindowCrashedView;
+export default WindowCrashedView;

@@ -127,9 +127,6 @@
   "%mainMenu_view%": "View",
   "%mainMenu_visitSupportBible%": "Visit Support.Bible",
   "%mainMenu_window%": "Window",
-  "%mainWindow_error_crashed_message%": "Something went wrong and this window could not be displayed. Reloading should bring it back.",
-  "%mainWindow_error_crashed_reloadButton%": "Reload",
-  "%mainWindow_error_crashed_title%": "This window stopped working",
   "%markerMenu_deprecated_label%": "Deprecated",
   "%markerMenu_disallowed_label%": "Disallowed",
   "%markerMenu_endTag_label%": "End",
@@ -548,5 +545,8 @@
   "%webView_project%": "Project",
   "%webView_projectAssignmentsAndProgress%": "Assignments and Progress",
   "%webView_title_type_formatString%": "{type} {defaultTitle}",
+  "%window_error_crashed_message%": "Something went wrong and this window could not be displayed. Reloading should bring it back.",
+  "%window_error_crashed_reloadButton%": "Reload",
+  "%window_error_crashed_title%": "This window stopped working",
   "%wordList%": "Word List"
 }

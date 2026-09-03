@@ -1,5 +1,11 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { LocalizationData } from '@shared/services/localization.service-model';
+import {
+  buildCrashedViewButtonStateCss,
+  CRASHED_VIEW_BUTTON_STYLE,
+  CRASHED_VIEW_MESSAGE_STYLE,
+  CRASHED_VIEW_TITLE_STYLE,
+  createCrashedViewLocalizer,
+} from '@renderer/components/crashed-view.util';
 import { logger } from '@shared/services/logger.service';
 import {
   formatReplacementString,
@@ -55,19 +61,16 @@ export const WEB_VIEW_CRASHED_VIEW_STRING_KEYS: readonly LocalizeKey[] = STRING_
  * cause of a blank web view is a crash inside `useLocalizedStrings` itself. A user whose editor
  * just died is better served by English than by `%webView_error_crashed_title%`.
  */
-export const ENGLISH_DEFAULTS: Readonly<Record<WebViewCrashedViewStringKey, string>> = {
+export const WEB_VIEW_CRASHED_ENGLISH_DEFAULTS: Readonly<
+  Record<WebViewCrashedViewStringKey, string>
+> = {
   [TITLE_KEY]: 'This panel stopped working',
   [MESSAGE_KEY]: 'Something went wrong and “{webViewTitle}” could not be displayed.',
   [MESSAGE_NO_TITLE_KEY]: 'Something went wrong and this panel could not be displayed.',
   [RELOAD_BUTTON_KEY]: 'Reload',
 };
 
-function localize(localizedStrings: LocalizationData, key: WebViewCrashedViewStringKey): string {
-  const value = localizedStrings[key];
-  // `useLocalizedStrings` seeds each key with the key itself, so an unresolved string is
-  // indistinguishable from one that resolved to its own name — treat both as unresolved
-  return value && value !== key ? value : ENGLISH_DEFAULTS[key];
-}
+const localize = createCrashedViewLocalizer(WEB_VIEW_CRASHED_ENGLISH_DEFAULTS);
 
 // Styles are inline rather than Tailwind/shadcn on purpose. This component is rendered by the
 // renderer but mounts inside a web view's iframe, whose document carries only the CSP, the font and
@@ -98,52 +101,9 @@ const CONTAINER_STYLE: CSSProperties = {
   fontFamily: 'inherit',
 };
 
-// Mirrors `EmptyTitle`: text-sm, font-medium, tracking-tight
-const TITLE_STYLE: CSSProperties = {
-  margin: 0,
-  fontSize: '0.875rem',
-  fontWeight: 500,
-  letterSpacing: '-0.015em',
-};
-
-// Mirrors `EmptyDescription` inside `EmptyHeader`, whose max-w-sm is 24rem
-const MESSAGE_STYLE: CSSProperties = {
-  margin: 0,
-  maxWidth: '24rem',
-  fontSize: '0.875rem',
-  color: 'var(--muted-foreground, #5b5b5b)',
-};
-
-// Mirrors shadcn `Button` default variant at default size: h-8, px-2.5, rounded-lg (= --radius),
-// text-sm, font-medium, and a TRANSPARENT border rather than a visible one - the border exists only
-// so the focus-visible state can color it without shifting layout.
-const BUTTON_STYLE: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  height: '2rem',
-  padding: '0 0.625rem',
-  border: '1px solid transparent',
-  borderRadius: 'var(--radius, 0.625rem)',
-  background: 'var(--primary, #1b1b1b)',
-  color: 'var(--primary-foreground, #ffffff)',
-  fontFamily: 'inherit',
-  fontSize: '0.875rem',
-  fontWeight: 500,
-  whiteSpace: 'nowrap',
-  cursor: 'pointer',
-};
-
 const BUTTON_CLASS = 'platform-web-view-crashed-reload';
 
-// Hover and focus-visible cannot be expressed as inline styles, and a button with no visible focus
-// indicator is unusable by keyboard - which matters here because the container takes focus first and
-// Tab moves to this button. A scoped <style> is allowed: the web view CSP includes 'unsafe-inline'
-// for styles. Kept to the two states inline styles cannot reach.
-const BUTTON_STATE_CSS = `
-.${BUTTON_CLASS}:hover { opacity: 0.9; }
-.${BUTTON_CLASS}:focus-visible { outline: 2px solid var(--ring, #7f7f7f); outline-offset: 2px; }
-`;
+const BUTTON_STATE_CSS = buildCrashedViewButtonStateCss(BUTTON_CLASS);
 
 export type WebViewCrashedViewProps = {
   /**
@@ -180,8 +140,8 @@ type CrashedViewShellProps = {
  * The panel itself: fixed markup and fixed styles over text that is already resolved.
  *
  * Calls React's own hooks only. Nothing here reaches a service, so it renders the same whether the
- * text came from the localization service or from {@link ENGLISH_DEFAULTS} - which is what lets the
- * English path stay identical in layout to the localized one.
+ * text came from the localization service or from {@link WEB_VIEW_CRASHED_ENGLISH_DEFAULTS} - which
+ * is what lets the English path stay identical in layout to the localized one.
  *
  * Takes focus on mount only if this web view already had it - the crash unmounted everything
  * focusable in the pane, so a keyboard or screen-reader user who was working here would otherwise
@@ -215,9 +175,14 @@ function CrashedViewShell({ title, message, reloadLabel, onReload }: CrashedView
       {/* Outside the alert region so the region holds only what is announced. */}
       <style>{BUTTON_STATE_CSS}</style>
       <div ref={containerRef} style={CONTAINER_STYLE} role="alert" tabIndex={-1}>
-        <p style={TITLE_STYLE}>{title}</p>
-        <p style={MESSAGE_STYLE}>{message}</p>
-        <button type="button" className={BUTTON_CLASS} style={BUTTON_STYLE} onClick={onReload}>
+        <p style={CRASHED_VIEW_TITLE_STYLE}>{title}</p>
+        <p style={CRASHED_VIEW_MESSAGE_STYLE}>{message}</p>
+        <button
+          type="button"
+          className={BUTTON_CLASS}
+          style={CRASHED_VIEW_BUTTON_STYLE}
+          onClick={onReload}
+        >
           {reloadLabel}
         </button>
       </div>
@@ -274,7 +239,8 @@ function LocalizedCrashedView({ onReload, webViewTitle }: WebViewCrashedViewProp
 }
 
 /**
- * The panel with its text taken straight from {@link ENGLISH_DEFAULTS}, reaching no service at all.
+ * The panel with its text taken straight from {@link WEB_VIEW_CRASHED_ENGLISH_DEFAULTS}, reaching no
+ * service at all.
  *
  * A localize-key title cannot be resolved on this path, so it degrades to the untitled message
  * rather than putting a raw `%…%` on screen.
@@ -284,13 +250,15 @@ function EnglishCrashedView({ onReload, webViewTitle }: WebViewCrashedViewProps)
 
   return (
     <CrashedViewShell
-      title={ENGLISH_DEFAULTS[TITLE_KEY]}
+      title={WEB_VIEW_CRASHED_ENGLISH_DEFAULTS[TITLE_KEY]}
       message={
         displayTitle
-          ? formatReplacementString(ENGLISH_DEFAULTS[MESSAGE_KEY], { webViewTitle: displayTitle })
-          : ENGLISH_DEFAULTS[MESSAGE_NO_TITLE_KEY]
+          ? formatReplacementString(WEB_VIEW_CRASHED_ENGLISH_DEFAULTS[MESSAGE_KEY], {
+              webViewTitle: displayTitle,
+            })
+          : WEB_VIEW_CRASHED_ENGLISH_DEFAULTS[MESSAGE_NO_TITLE_KEY]
       }
-      reloadLabel={ENGLISH_DEFAULTS[RELOAD_BUTTON_KEY]}
+      reloadLabel={WEB_VIEW_CRASHED_ENGLISH_DEFAULTS[RELOAD_BUTTON_KEY]}
       onReload={onReload}
     />
   );

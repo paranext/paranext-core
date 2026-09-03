@@ -117,7 +117,10 @@ function useRunawayLoopGuard(
   // record callbacks below every render
   const describeRef = useRef(describeDataTypeForWarning);
   describeRef.current = describeDataTypeForWarning;
-  const describeDataTypeSafely = useCallback(() => describeRef.current?.() ?? dataType, [dataType]);
+  const describeDataTypeOrFallback = useCallback(
+    () => describeRef.current?.() ?? dataType,
+    [dataType],
+  );
 
   // The clause must begin with the data type name — this prepends `Data of type ` to it
   const trip = useCallback((whatHappenedStartingWithDataType: string) => {
@@ -143,10 +146,10 @@ function useRunawayLoopGuard(
     if (!counters.deliveries.hasViolatedThreshold(RUNAWAY_WINDOW_MS)) return true;
 
     trip(
-      `${describeDataTypeSafely()} was updated ${RUNAWAY_EVENTS_PER_WINDOW} times in the last ${RUNAWAY_WINDOW_MS} milliseconds.`,
+      `${describeDataTypeOrFallback()} was updated ${RUNAWAY_EVENTS_PER_WINDOW} times in the last ${RUNAWAY_WINDOW_MS} milliseconds.`,
     );
     return false;
-  }, [describeDataTypeSafely, getCounters, trip]);
+  }, [describeDataTypeOrFallback, getCounters, trip]);
 
   const recordSubscribe = useCallback(() => {
     if (hasTrippedRef.current) return false;
@@ -156,10 +159,10 @@ function useRunawayLoopGuard(
     if (!counters.subscribes.hasViolatedThreshold(RUNAWAY_WINDOW_MS)) return true;
 
     trip(
-      `${describeDataTypeSafely()} was subscribed to ${RUNAWAY_EVENTS_PER_WINDOW} times in the last ${RUNAWAY_WINDOW_MS} milliseconds.`,
+      `${describeDataTypeOrFallback()} was subscribed to ${RUNAWAY_EVENTS_PER_WINDOW} times in the last ${RUNAWAY_WINDOW_MS} milliseconds.`,
     );
     return false;
-  }, [describeDataTypeSafely, getCounters, trip]);
+  }, [describeDataTypeOrFallback, getCounters, trip]);
 
   // `RESOURCE_EXHAUSTED` lets consumers recognize a rate-limited hook without matching on message
   // text
@@ -230,8 +233,8 @@ type UseDataHookGeneric<TUseDataProviderParams extends unknown[]> = {
   ): UseDataProxy<TDataProvider>;
 };
 
-/** Longest selector description included in the runaway-render warning. */
-const MAX_SELECTOR_DESCRIPTION_LENGTH = 80;
+/** Longest selector description included in the runaway-render warning. Exported for tests. */
+export const MAX_SELECTOR_DESCRIPTION_LENGTH = 80;
 
 /**
  * Renders a data type and its selector for the runaway-render warning.
@@ -253,7 +256,7 @@ function describeDataType(dataType: unknown, selector: unknown): string {
     }
   }
   if (selectorDescription.length > MAX_SELECTOR_DESCRIPTION_LENGTH)
-    selectorDescription = `${selectorDescription.slice(0, MAX_SELECTOR_DESCRIPTION_LENGTH)}...`;
+    selectorDescription = `${selectorDescription.slice(0, MAX_SELECTOR_DESCRIPTION_LENGTH)}…`;
   return `${typeName} (selector: ${selectorDescription})`;
 }
 

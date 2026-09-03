@@ -259,6 +259,36 @@ describe('useOpenProjectBookIds', () => {
     expect(getProjectDataProvider).not.toHaveBeenCalled();
   });
 
+  test('follows a change of active project without waiting for a web view event', async () => {
+    // The active project is excluded from the result, so swapping which project is active swaps
+    // which one's books are reported. Nothing above re-reads the open projects when
+    // `activeProjectId` changes - only the hook's mount/dependency effect does - so this is what
+    // holds that effect in place through a later refactor. Without it the hook would keep
+    // reporting the previous project's set.
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      webViewDefinition('editor', { projectId: 'activeProject' }),
+      webViewDefinition('resource', { projectId: 'otherProject' }),
+    ]);
+    getProjectDataProvider.mockImplementation(async (_pdpType: string, projectId: string) =>
+      projectId === 'otherProject'
+        ? pdpWithBooks(booksPresentFlags(66), 'otherProject')
+        : pdpWithBooks(booksPresentFlags(1), 'activeProject'),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ activeProjectId }: { activeProjectId: string }) => useOpenProjectBookIds(activeProjectId),
+      { initialProps: { activeProjectId: 'activeProject' } },
+    );
+
+    // 'activeProject' is excluded, so only 'otherProject' (REV) is reported
+    await waitFor(() => expect(result.current).toEqual(['REV']));
+
+    rerender({ activeProjectId: 'otherProject' });
+
+    // The exclusion moves with the active project: now 'activeProject' (GEN) is the one reported
+    await waitFor(() => expect(result.current).toEqual(['GEN']));
+  });
+
   describe('when disabled', () => {
     test('returns nothing and opens no data providers', async () => {
       vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([

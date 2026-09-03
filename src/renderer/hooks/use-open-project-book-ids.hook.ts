@@ -15,7 +15,7 @@ import {
   NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
 } from 'platform-bible-utils/experimental';
 import { Canon } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /** Canon order for the returned union, so consumers can group by section without re-sorting. */
 const CANON_BOOK_IDS = Canon.allBookIds;
@@ -97,9 +97,14 @@ export function useOpenProjectBookIds(
   );
 
   const [openProjectIdsKey, setOpenProjectIdsKey] = useState(readOpenProjectIdsKey);
+  // Read through a ref so this callback keeps one identity for the life of the hook. Depending on
+  // `readOpenProjectIdsKey` directly would tear down and rebuild all three event subscriptions
+  // every time the active project changes, which is churn the effect below already covers.
+  const readOpenProjectIdsKeyRef = useRef(readOpenProjectIdsKey);
+  readOpenProjectIdsKeyRef.current = readOpenProjectIdsKey;
   const refreshOpenWebViews = useCallback(
-    () => setOpenProjectIdsKey(readOpenProjectIdsKey()),
-    [readOpenProjectIdsKey],
+    () => setOpenProjectIdsKey(readOpenProjectIdsKeyRef.current()),
+    [],
   );
 
   // Undefined while disabled: `useEvent` subscribes to nothing when its event is undefined, so a

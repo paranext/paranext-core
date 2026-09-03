@@ -180,6 +180,14 @@ export function useProjectPickerData(): ProjectPickerData {
   useEvent(onDidUpdateWebView, refreshActiveEditor);
   const onDidCloseWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW), []);
   useEvent(onDidCloseWebView, refreshActiveEditor);
+  // Re-read once the subscriptions above are attached. The initial read runs during the first
+  // render, when this window's dock layout is typically not registered yet, so it comes back empty
+  // and warns; declaring this after the `useEvent` calls means a web view event fired between that
+  // render and the subscriptions cannot be missed. Without it the picker would depend entirely on a
+  // later event arriving to correct a value read too early.
+  useEffect(() => {
+    setActiveEditorProjectId(readActiveEditorProjectId());
+  }, [readActiveEditorProjectId]);
   const onDidReloadExtensions = useMemo(
     () => getNetworkEvent('platform.onDidReloadExtensions'),
     [],

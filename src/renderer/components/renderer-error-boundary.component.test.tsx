@@ -4,7 +4,7 @@ import { logger } from '@shared/services/logger.service';
 import { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RendererErrorBoundary } from './renderer-error-boundary.component';
-import { ENGLISH_DEFAULTS } from './main-window-crashed-view.component';
+import { WINDOW_CRASHED_ENGLISH_DEFAULTS } from './window-crashed-view.component';
 
 vi.mock('@shared/services/logger.service', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
@@ -13,9 +13,9 @@ vi.mock('@shared/services/logger.service', () => ({
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
-      '%mainWindow_error_crashed_title%': 'Localized crash title',
-      '%mainWindow_error_crashed_message%': 'Localized crash message',
-      '%mainWindow_error_crashed_reloadButton%': 'Localized reload',
+      '%window_error_crashed_title%': 'Localized crash title',
+      '%window_error_crashed_message%': 'Localized crash message',
+      '%window_error_crashed_reloadButton%': 'Localized reload',
     },
     false,
   ]),
@@ -103,11 +103,11 @@ describe('RendererErrorBoundary', () => {
     );
 
     expect(
-      screen.getByText(ENGLISH_DEFAULTS['%mainWindow_error_crashed_message%']),
+      screen.getByText(WINDOW_CRASHED_ENGLISH_DEFAULTS['%window_error_crashed_message%']),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', {
-        name: ENGLISH_DEFAULTS['%mainWindow_error_crashed_reloadButton%'],
+        name: WINDOW_CRASHED_ENGLISH_DEFAULTS['%window_error_crashed_reloadButton%'],
       }),
     ).toBeInTheDocument();
   });
