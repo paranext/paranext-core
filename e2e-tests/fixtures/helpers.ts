@@ -1629,6 +1629,33 @@ export function restoreLeakedSettings(): string[] | undefined {
 }
 
 /**
+ * The dev-appdata settings `app.fixture`'s worker-scoped Electron app pins before launch, for
+ * `interfaceMode` seeded at that value.
+ *
+ * `platform.showRegistrationReminderOnStartup: false` is pinned alongside `firstRunComplete`, not
+ * just at startup but for the app's whole lifetime: `first-run-store.ts`'s
+ * `startBackgroundRegistrationRecheck` runs unconditionally after a `firstRunComplete: true` boot,
+ * independent of and later than the pin above, and — unless suppressed — replaces a fully-loaded
+ * app with the first-run wizard's re-registration step as soon as it resolves the machine's
+ * Paratext registration as invalid, which every CI runner's is. The smoke suite has no valid
+ * registration to give it and nothing under test that exercises that reminder, so this keeps the
+ * recheck from ever firing rather than leaving the suite to race its async resolution.
+ *
+ * Exported as a plain function, separate from the fixture that calls it, so its exact contents can
+ * be pinned by a unit test without booting Electron.
+ */
+export function smokeAppSettingsOverrides(
+  interfaceMode: RequiredInterfaceMode,
+): Record<string, unknown> {
+  return {
+    'platform.firstRunComplete': true,
+    'platform.interfaceMode': interfaceMode,
+    'platform.interfaceLanguage': ['en'],
+    'platform.showRegistrationReminderOnStartup': false,
+  };
+}
+
+/**
  * Merge the given key-value pairs into the dev-appdata settings file before launching the app.
  * Preserves any existing settings (e.g. `platform.verseRef`) so the app session starts from the
  * developer's saved state plus the overrides.

@@ -10,6 +10,7 @@ import {
   launchElectronApp,
   teardownElectronApp,
   preConfigureSettings,
+  smokeAppSettingsOverrides,
   ElectronAppContext,
   PROCESS_READY_TIMEOUT,
   RequiredInterfaceMode,
@@ -55,11 +56,8 @@ export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
       // alongside it so mode-dependent UI and text-based selectors are deterministic regardless of
       // the developer's saved settings — pinned before launch rather than switched afterwards, which
       // would take the mid-session locale-reload path and sequentially reload every open WebView.
-      const restoreSettings = preConfigureSettings({
-        'platform.firstRunComplete': true,
-        'platform.interfaceMode': interfaceMode,
-        'platform.interfaceLanguage': ['en'],
-      });
+      // See smokeAppSettingsOverrides for why the registration reminder is pinned off too.
+      const restoreSettings = preConfigureSettings(smokeAppSettingsOverrides(interfaceMode));
       // Nested try/finally: restoreSettings runs in the outer finally so it fires even if launch,
       // `use`, or teardown itself throws; on the success path it also runs only after
       // teardownElectronApp has resolved, so the app's own shutdown writes cannot clobber it there.
