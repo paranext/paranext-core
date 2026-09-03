@@ -374,6 +374,24 @@ describe('window state tracking', () => {
       expect(wasWindowEverReady('entry-durable-id')).toBe(false);
     });
 
+    test('clears the dead window’s abandoned mark when its late close reaches the id after a reclaim', () => {
+      // The corpse had been given up on before it died — abandonment is keyed by the id alone, and
+      // the id now belongs to the window that reclaimed it. Left set, it would go on answering for a
+      // window that is no longer there: the reclaiming window would read as one nothing will ever
+      // run in again, though its renderer has not even had the chance to register yet.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const destroyed = { id: 1, isDestroyed: () => true } as BrowserWindow;
+      addWindow(destroyed, 'entry-durable-id');
+      markWindowAbandoned('entry-durable-id');
+
+      addWindow(fakeWindow(2), 'entry-durable-id');
+      // The corpse's own `closed` handler finally reaches `removeWindow`, after the reclaim above
+      // already gave the id to the new window
+      removeWindow(destroyed, 'entry-durable-id');
+
+      expect(isWindowAbandoned('entry-durable-id')).toBe(false);
+    });
+
     test('says which id it refused and what the window lost when it mints over a duplicate', () => {
       addWindow(fakeWindow(1), 'entry-durable-id');
 
