@@ -173,6 +173,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("getCanUserEditScripture", GetCanUserEditScripture));
 
         retVal.Add(("getMarkerNames", GetMarkerNames));
+        retVal.Add(("getStyleInfo", GetStyleInfo));
 
         retVal.Add(("getFinalVerseNumber", GetFinalVerseNumber));
         retVal.Add(("setFinalVerseNumber", SetFinalVerseNumber));
@@ -181,17 +182,30 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("getFinalVerseNumbersInBook", GetFinalVerseNumbersInBook));
         retVal.Add(("setFinalVerseNumbersInBook", SetFinalVerseNumbersInBook));
 
+        // PT9 interlinear methods are only registered when this PDP advertises
+        // platformScripture.Pt9Interlinear. Published PDPs do not advertise it, so they skip
+        // registration entirely instead of exposing methods their interface list never promised.
+        if (ProjectDetails.Metadata.ProjectInterfaces.Contains(ProjectInterfaces.PT9_INTERLINEAR))
+        {
+            retVal.Add(("getPt9InterlinearManifest", GetPt9InterlinearManifest));
+            retVal.Add(("setPt9InterlinearManifest", SetPt9InterlinearManifest));
+            retVal.Add(("getPt9InterlinearData", GetPt9InterlinearData));
+            retVal.Add(("setPt9InterlinearData", SetPt9InterlinearData));
+        }
+
         return retVal;
     }
 
     /// <summary>
-    /// Documentation marking ONLY the versification projectInterface's methods experimental
+    /// Documentation marking ONLY the experimental projectInterfaces' methods experimental
     /// (<c>x-experimental: true</c>). This PDP exposes many projectInterfaces (USFM, USJ, comments,
-    /// settings, versification, …) on a single network object, so only the versification functions
-    /// are listed in <c>Methods</c> and the object-level <c>Experimental</c> flag is left unset — the
-    /// stable interfaces and the <c>object:{name}</c> existence method stay unmarked. Mirrors the
-    /// <c>@experimental</c> tag on <c>platformScripture.Versification</c> /
-    /// <c>IVersificationProjectDataProvider</c> in <c>platform-scripture.d.ts</c>.
+    /// settings, versification, PT9 interlinear, ...) on a single network object, so only the methods
+    /// of the experimental interfaces (versification and PT9 interlinear) are listed in
+    /// <c>Methods</c> and the object-level <c>Experimental</c> flag is left unset - the stable
+    /// interfaces and the <c>object:{name}</c> existence method stay unmarked. Mirrors the
+    /// <c>@experimental</c> tags on <c>platformScripture.Versification</c> /
+    /// <c>IVersificationProjectDataProvider</c> and <c>platformScripture.Pt9Interlinear</c> /
+    /// <c>IPt9InterlinearProjectDataProvider</c> in <c>platform-scripture.d.ts</c>.
     /// </summary>
     protected override NetworkObjectDocumentation GetNetworkObjectDocumentation() =>
         new()
@@ -284,6 +298,46 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                         ),
                         ExperimentalMethodDocumentation.Param("value", "Ignored.", "array"),
                     ],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "boolean",
+                        "Never returns; always throws"
+                    )
+                ),
+                // The PT9 entries are unconditional even though their registration is gated:
+                // documentation is consulted only for functions actually registered, so a
+                // published PDP publishes no PT9 docs.
+                ["getPt9InterlinearManifest"] = ExperimentalMethodDocumentation.Create(
+                    "Get a map of project-relative PT9 interlinear file path to the SHA-256 hex of "
+                        + "the file's current bytes. Empty when the project has no interlinear data.",
+                    [],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "object",
+                        "Map of file path to SHA-256 hex"
+                    )
+                ),
+                ["setPt9InterlinearManifest"] = ExperimentalMethodDocumentation.Create(
+                    "Read-only - throws. PT9 interlinear data is owned by the Paratext project's "
+                        + "files on disk.",
+                    [ExperimentalMethodDocumentation.Param("value", "Ignored.", "object")],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "boolean",
+                        "Never returns; always throws"
+                    )
+                ),
+                ["getPt9InterlinearData"] = ExperimentalMethodDocumentation.Create(
+                    "Get the project's PT9 interlinear data parsed from its interlinear files: "
+                        + "setups, per-book cluster data, the lexicon, and stored word analyses. "
+                        + "Empty lists when the project has no interlinear data.",
+                    [],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "object",
+                        "The parsed interlinear data"
+                    )
+                ),
+                ["setPt9InterlinearData"] = ExperimentalMethodDocumentation.Create(
+                    "Read-only - throws. PT9 interlinear data is owned by the Paratext project's "
+                        + "files on disk.",
+                    [ExperimentalMethodDocumentation.Param("value", "Ignored.", "object")],
                     ExperimentalMethodDocumentation.ResultOf(
                         "boolean",
                         "Never returns; always throws"
@@ -1628,6 +1682,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (paratextSettingName == ProjectSettingsNames.PT_TEXT_DIRECTION)
             return scrText.RightToLeft ? "rtl" : "ltr";
 
+        // Caller sequences come from the project's LANGUAGE (writing-system character sets in the
+        // ldml file), not from Settings.xml — PT9's Standard view reads
+        // scrText.Language.FootnoteCallers / .CrossReferenceCallers
+        // (ParatextInternalShared/ScriptureEditor/ViewUsfmXhtmlConverter.cs:73-74). Returned
+        // verbatim, possibly "": consumers apply PT9's own fallbacks (a-z for footnotes per
+        // UsfmXsltExtensions.GetNthCaller, "†" for cross-references).
+        if (settingName == ProjectSettingsNames.PB_FOOTNOTE_CALLERS)
+            return scrText.Language.FootnoteCallers;
+        if (settingName == ProjectSettingsNames.PB_CROSS_REF_CALLERS)
+            return scrText.Language.CrossReferenceCallers;
+
         // BooksPresent in Settings.xml isn't always 123 characters, but this way of getting it is always
         if (paratextSettingName == ProjectSettingsNames.PT_BOOKS_PRESENT)
             return scrText.BooksPresentSet.Books;
@@ -1778,6 +1843,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (paratextSettingName == ProjectSettingsNames.PT_LANGUAGE_TAG)
             throw new Exception(
                 "Cannot set the language tag this way. Must edit the language definition ldml file"
+            );
+
+        // Caller sequences come from the project's language definition (writing-system character
+        // sets), not from Settings.xml — read-only here, like text direction above.
+        if (
+            settingName == ProjectSettingsNames.PB_FOOTNOTE_CALLERS
+            || settingName == ProjectSettingsNames.PB_CROSS_REF_CALLERS
+        )
+            throw new Exception(
+                "Cannot set caller sequences this way. Must edit the language definition ldml file"
             );
 
         // BooksPresentSet is changed by adding and removing books, not setting the setting value
@@ -2386,8 +2461,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     #region Scripture-related methods
 
     /// <summary>
-    /// Send an event on the PAPI announcing that all the Scripture data has changed. This is used
-    /// for reloading all the Scripture, settings, etc. after a project has been S/Red.
+    /// Send an event on the PAPI announcing that all the Scripture data has changed, so clients
+    /// reload the Scripture, settings, etc. Currently emitted only by book management operations;
+    /// Send/Receive does not yet emit it.
     /// </summary>
     public void SendFullProjectUpdateEvent()
     {
@@ -2500,6 +2576,39 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return scrStylesheet.Tags.Where(tag => tag != null).Select(tag => tag.Name).ToArray();
     }
 
+    /// <summary>
+    /// Gets the full style info (merged usfm.sty + custom.sty) for the book's stylesheet.
+    /// Resolves the custom-stylesheet @todo on getMarkerNames: ScrStylesheet already merges
+    /// custom.sty per-property (ParatextData ScrStylesheet.CreateTag).
+    /// </summary>
+    public PlatformStyleInfo GetStyleInfo(int bookNum)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        ScrStylesheet scrStylesheet =
+            scrText.ScrStylesheet(bookNum)
+            ?? throw new InvalidDataException($"ScrStylesheet for book number '{bookNum}' is null");
+        Dictionary<string, PlatformMarkerStyleInfo> markers = [];
+        foreach (var tag in scrStylesheet.Tags)
+        {
+            if (tag == null)
+                continue;
+            // Derived end tags and unknown placeholders are not real stylesheet entries:
+            // endMarker on the base entry carries closer knowledge (spec: closers are
+            // recognized by syntax, not lookup).
+            if (
+                tag.StyleType == ScrStyleType.scEndStyle
+                || tag.StyleType == ScrStyleType.scMilestoneEnd
+                || tag.StyleType == ScrStyleType.scUnknownStyle
+            )
+                continue;
+            markers[tag.Marker] = new PlatformMarkerStyleInfo(tag);
+        }
+        // Default font/size: same ScrText accessors PT9's CSSCreator.CreateUsfmCss(ScrText, ...)
+        // reads — ScrText has no DefaultFont/DefaultFontSize properties; the language's font is the
+        // project's default font.
+        return new PlatformStyleInfo(scrText.Language.FontName, scrText.Language.FontSize, markers);
+    }
+
     #endregion
 
     #region Versification (platformScripture.Versification)
@@ -2573,6 +2682,99 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// </summary>
     public bool SetFinalVerseNumbersInBook(int bookNum, int[] value) =>
         throw new NotSupportedException(VersificationReadOnlyMessage);
+
+    #endregion
+
+    #region PT9 Interlinear (platformScripture.Pt9Interlinear)
+
+    // Read-only access to a Paratext project's PT9 interlinear data, parsed from the project's
+    // interlinear files, for importing legacy interlinear data. Files on disk are authoritative;
+    // no writer, no file-change events. Reads are not coordinated with Send/Receive; a caller
+    // detects a sync that landed mid-read by re-polling the manifest afterward.
+
+    private const string Pt9InterlinearReadOnlyMessage =
+        "PT9 interlinear data is read-only. It reflects the Paratext project's interlinear files on "
+        + "disk, which are the authoritative source; there is no write path through this "
+        + "projectInterface.";
+
+    /// <summary>
+    /// Request timeout for the PT9 interlinear getters. A cold read of a
+    /// <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/>-sized project from a slow disk or network share
+    /// can exceed the client's default request timeout, while a genuinely hung filesystem should
+    /// still fail rather than wait forever.
+    /// </summary>
+    private const int Pt9InterlinearNetworkTimeoutMs = 120_000;
+
+    /// <summary>
+    /// Resolves the live project for the PT9 interlinear getters, so a relocated or reloaded
+    /// project is always read at its current location through its own file manager.
+    /// </summary>
+    private ScrText GetPt9InterlinearScrText()
+    {
+        try
+        {
+            return LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        }
+        catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
+        {
+            throw new InvalidDataException(
+                $"Project with ID '{ProjectDetails.Metadata.Id}' was not found"
+            );
+        }
+    }
+
+    /// <summary>
+    /// Gets a map of project-relative path to the SHA-256 hex of that file's current bytes: an
+    /// opaque change-detection token per file, never content, covering the interlinear book
+    /// files, the lexicon, and the stored word analyses. Only interlinear file content is
+    /// change-detected: the setups (from the setups file or rebuilt from project settings) and
+    /// <c>HasAssociatedLexicalProject</c> derive partly from project settings and can change the
+    /// payload without any hash changing. Empty when the project has no interlinear data. Throws if the project directory or
+    /// a file found by the scan cannot be read, so an unreadable project never poses as one with
+    /// no data and a caller never receives a partial manifest. Shares
+    /// <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/> with the data read: files
+    /// over the cap throw the same too-large error instead of being hashed, so a probe never
+    /// reads more than a servable corpus.
+    /// </summary>
+    [NetworkTimeout(Pt9InterlinearNetworkTimeoutMs)]
+    public Dictionary<string, string> GetPt9InterlinearManifest(object? param = null)
+    {
+        return Pt9InterlinearReader.GetManifest(GetPt9InterlinearScrText());
+    }
+
+    /// <summary>
+    /// Read-only - always throws. PT9 interlinear data is owned by the Paratext project's files on
+    /// disk.
+    /// </summary>
+    public bool SetPt9InterlinearManifest(object? value) =>
+        throw new NotSupportedException(Pt9InterlinearReadOnlyMessage);
+
+    /// <summary>
+    /// Gets the project's PT9 interlinear data parsed from its interlinear files: setups, per-book
+    /// cluster data, the lexicon, and stored word analyses. Setups come from the setups file when
+    /// present, merged with setups PT9 reconstructs from legacy project settings. Empty lists when
+    /// the project has no interlinear data. Throws if the project directory or a file found by
+    /// the scan cannot be read, or a file cannot be parsed, so an unreadable project never poses
+    /// as one with no data and a caller never receives a partial payload; and throws an error
+    /// whose message starts with <see cref="Pt9InterlinearReader.Pt9InterlinearDataTooLargeMessagePrefix"/> when the
+    /// files exceed <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/> (the error also
+    /// carries <see cref="PlatformErrorCodes.ResourceExhausted"/> as its platform error code). The cap bounds
+    /// source bytes - the serialized size cannot be confirmed at this layer - and realistic data
+    /// serializes smaller than its indented on-disk XML, keeping real responses clear of the
+    /// transport's message size limit; content crafted of near-empty elements can still inflate
+    /// past it, an accepted residual risk.
+    /// </summary>
+    [NetworkTimeout(Pt9InterlinearNetworkTimeoutMs)]
+    public Pt9InterlinearProjectData GetPt9InterlinearData(object? param = null)
+    {
+        return Pt9InterlinearReader.GetData(GetPt9InterlinearScrText());
+    }
+
+    /// <summary>
+    /// Read-only - always throws. See <see cref="SetPt9InterlinearManifest"/>.
+    /// </summary>
+    public bool SetPt9InterlinearData(object? value) =>
+        throw new NotSupportedException(Pt9InterlinearReadOnlyMessage);
 
     #endregion
 

@@ -51,16 +51,18 @@ import { openScriptureEditorForProject } from '../../../fixtures/scripture-edito
 import {
   DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
+  RENDERER_STARTING_LOG,
   WEBSOCKET_PORT,
   captureAppOutput,
   createSecondWindow,
   createStepLogger,
-  expectWindowDockEmpty,
+  expectWindowDockHasOnlyHomeTab,
   focusWindowAndWaitForRouting,
   getWindowIdOfPage,
   homeTabTitle,
   pollUntil,
   waitForRendererRegistered,
+  widenWindowForToolbarReference,
 } from './multi-window.util';
 
 /** Fixed GUID of the bundled sample WEB project (c-sharp/assets/WEB/Settings.xml <Guid>). */
@@ -166,7 +168,7 @@ async function dismissPopoverFromWebView(frame: Frame, overlayId: string): Promi
 
 /**
  * Show a modal alert dialog through the GENERIC `dialog:showDialog` request — the name the main
- * process serves with a routing proxy that forwards to the focused window. The returned promise
+ * process serves with a service router that forwards to the focused window. The returned promise
  * stays pending until the user answers or dismisses the dialog (the request is registered with its
  * timeout disabled), so callers must NOT await it until after driving the dialog; it resolves
  * `null` when the dialog is dismissed without an answer.
@@ -216,7 +218,7 @@ function showModalAlertViaWebSocket(prompt: string): Promise<unknown> {
 
 /**
  * Send a notification through the GENERIC notification service — the name the main process serves
- * with a routing proxy that forwards `send` to the focused window. `duration: 0` means the toast
+ * with a service router that forwards `send` to the focused window. `duration: 0` means the toast
  * never auto-closes, so assertions cannot race an auto-dismiss; tests dismiss explicitly.
  */
 async function sendNotification(message: string): Promise<string | number> {
@@ -284,6 +286,9 @@ test.describe('per-window UI isolation', () => {
     await waitForAppReady(mainPage, 180_000);
     const window1Id = getWindowIdOfPage(mainPage);
     await expect(homeTabTitle(mainPage, window1Id)).toBeAttached({ timeout: 60_000 });
+    // The scroll-group section below reads references off both windows' toolbars, which show the
+    // book alone at the toolbar shrink ladder's narrowest rung.
+    await widenWindowForToolbarReference(electronApp, mainPage);
     logStep(`window ${window1Id} ready`);
 
     // ── Navigation target, baseline ────────────────────────────────────────────────────────────
@@ -294,10 +299,11 @@ test.describe('per-window UI isolation', () => {
     const page2 = await createSecondWindow(electronApp);
     const window2Id = getWindowIdOfPage(page2);
     await waitForRendererRegistered(window2Id, 120_000);
-    // The empty dock is scenario groundwork here (window 2 must have no navigable tab of its own);
-    // the empty-start behaviour itself is locked by multi-window.spec.ts.
-    await expectWindowDockEmpty(page2);
+    // The Home-only dock is scenario groundwork here (window 2 must have no navigable tab of its
+    // own — Home isn't one); the dock-Home behaviour itself is locked by multi-window.spec.ts.
+    await expectWindowDockHasOnlyHomeTab(page2);
     await expect(page2.locator(BCV_TRIGGER).first()).toBeDisabled();
+    await widenWindowForToolbarReference(electronApp, page2);
     logStep(`window ${window2Id} up; both BCV controls disabled with no navigable tabs anywhere`);
 
     // ── Navigation target follows only the OWN window's tabs ───────────────────────────────────
@@ -311,8 +317,9 @@ test.describe('per-window UI isolation', () => {
     await expect(page2.locator(`iframe[data-web-view-id="${editorId1}"]`)).toHaveCount(0);
     // Window 1 now resolves its own editor as the navigation target…
     await expect(mainPage.locator(BCV_TRIGGER).first()).toBeEnabled({ timeout: 30_000 });
-    // …and window 2 must NOT: its fallback searches only its own (empty) dock. The settle gives a
-    // wrongly cross-window-reaching resolution time to flip the control before the assertion.
+    // …and window 2 must NOT: its fallback searches only its own dock, which holds only the
+    // non-navigable Home tab. The settle gives a wrongly cross-window-reaching resolution time to
+    // flip the control before the assertion.
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 2_000);
     });
@@ -322,9 +329,9 @@ test.describe('per-window UI isolation', () => {
     // ── Web-view placement routes to the focused window ────────────────────────────────────────
     await focusWindowAndWaitForRouting(electronApp, window2Id);
     const editorId2 = await openScriptureEditorForProject(page2, SAMPLE_WEB_PROJECT_ID, {
-      // Window 2 is an empty secondary window: it has no initial iframe for the helper's
-      // loadLayout-race guard to wait on, and the empty-dock probe above already proved its
-      // initial layout finished loading.
+      // The Home-only dock probe above already proved window 2's initial loadLayout finished (its
+      // own docked Home tab only ever attaches after that), so the helper's own loadLayout-race
+      // guard would be redundant here.
       skipInitialLayoutGuard: true,
     });
     // Placement proof, mirror-image of window 1's: the iframe attached in window 2 (enforced by
@@ -351,8 +358,12 @@ test.describe('per-window UI isolation', () => {
     // ── Modal dialog through the generic request lands in the FOCUSED window ───────────────────
     // Window 2 still holds focus. The pending request resolves only when the dialog is answered
     // or dismissed, so it is held un-awaited while the DOM assertions run.
+    // Waiting on window 2's dialog shard, not on a routing wire name: main claims the generic
+    // `dialog:showDialog` before any window exists, so its presence says nothing about whether the
+    // window that should show the dialog can serve it yet. What follows asserts the observable
+    // outcome — which window renders it, and that Escape resolves the request with null.
     await waitForPapiMethodRegistered(
-      new RegExp(`^dialog:showDialog-${window2Id}$`),
+      new RegExp(`^object:DialogService-${window2Id}\\.showDialog$`),
       WEBSOCKET_PORT,
       60_000,
     );
@@ -473,6 +484,10 @@ test.describe('per-window UI isolation', () => {
 
     // ── No faults or cross-window registration collisions anywhere in the exercised flows ──────
     const wholeLog = output.text();
+    // Positive control before BOTH negative sweeps — see RENDERER_STARTING_LOG. Without it they
+    // pass just as happily against output that never arrived as against output with no faults in
+    // it, and the fault sweep is one of the assertions it backs, not an exception to it.
+    expect(wholeLog).toContain(RENDERER_STARTING_LOG);
     FAULT_MARKERS.forEach((marker) => expect(wholeLog).not.toContain(marker));
     expect(wholeLog).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
   });

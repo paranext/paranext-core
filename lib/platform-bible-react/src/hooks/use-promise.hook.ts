@@ -65,11 +65,24 @@ export const usePromise = <T>(
     (async () => {
       // If there is a callback to run, run it
       if (promiseFactoryCallback) {
-        const result = await promiseFactoryCallback();
-        // If the promise was not already replaced, update the value
-        if (promiseIsCurrent) {
-          setValue(() => result);
-          setIsLoading(false);
+        try {
+          const result = await promiseFactoryCallback();
+          // If the promise was not already replaced, update the value
+          if (promiseIsCurrent) {
+            setValue(() => result);
+            setIsLoading(false);
+          }
+        } catch (error) {
+          // A rejection is not a reason to keep reporting that the value is on its way: nothing else
+          // will resolve this one, so `isLoading` would stay `true` for the life of the component and
+          // any spinner with it. The value is left alone — the caller's `preserveValue` choice is
+          // about what to show while a promise runs, and this one is over. The error carries the
+          // stack of the factory that rejected, which is the only context this hook has to give.
+          if (promiseIsCurrent) setIsLoading(false);
+          console.error(
+            'usePromise: the promise factory rejected, so there is no new value',
+            error,
+          );
         }
       }
     })();

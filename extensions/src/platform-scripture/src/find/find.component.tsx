@@ -87,6 +87,10 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_allowRegex%',
   '%webView_find_cancelSearch%',
   '%webView_find_capitalization%',
+  '%webView_find_flexibility%',
+  '%webView_find_ignoreDiacritics%',
+  '%webView_find_ignoreWhitespaceDifferences%',
+  '%webView_find_ignoreWhitespaceDifferences_tooltip%',
   '%webView_find_clearSearch%',
   '%webView_find_errorOccurred%',
   '%webView_find_extraMaterialNotSearched%',
@@ -271,6 +275,8 @@ export type FindProps = {
   localizedBookData: Map<string, LocalizedBookData>;
   /** Whether to match case in the search. */
   shouldMatchCase: boolean;
+  ignoreWhitespaceDifferences: boolean;
+  ignoreDiacritics: boolean;
   /** Which text to match (all text / verse text only). */
   searchTextType: SearchTextType;
   /** The word-boundary restriction for matches. */
@@ -347,6 +353,8 @@ export type FindProps = {
   setWordRestriction: (value: WordRestriction) => void;
   /** Called when the match-case filter changes. */
   setShouldMatchCase: (value: boolean) => void;
+  setIgnoreWhitespaceDifferences: (value: boolean) => void;
+  setIgnoreDiacritics: (value: boolean) => void;
   /** Called when the allow-regex filter changes. */
   setIsRegexAllowed: (value: boolean) => void;
   /** Called when the user toggles find/replace mode. */
@@ -435,6 +443,8 @@ export function Find({
   selectedBookIds,
   localizedBookData,
   shouldMatchCase,
+  ignoreWhitespaceDifferences,
+  ignoreDiacritics,
   searchTextType,
   wordRestriction,
   isRegexAllowed,
@@ -463,6 +473,8 @@ export function Find({
   setSearchTextType,
   setWordRestriction,
   setShouldMatchCase,
+  setIgnoreWhitespaceDifferences,
+  setIgnoreDiacritics,
   setIsRegexAllowed,
   onToggleMode,
   onReplaceTermChange,
@@ -487,7 +499,12 @@ export function Find({
   const resultsContainerRef = useRef<HTMLDivElement>(null);
 
   const areFiltersActive =
-    shouldMatchCase || wordRestriction !== 'none' || searchTextType !== 'all' || isRegexAllowed;
+    shouldMatchCase ||
+    wordRestriction !== 'none' ||
+    searchTextType !== 'all' ||
+    isRegexAllowed ||
+    ignoreWhitespaceDifferences ||
+    ignoreDiacritics;
 
   const visibleResults = useMemo(
     () =>
@@ -947,6 +964,10 @@ export function Find({
             setWordRestriction={setWordRestriction}
             shouldMatchCase={shouldMatchCase}
             setShouldMatchCase={setShouldMatchCase}
+            ignoreWhitespaceDifferences={ignoreWhitespaceDifferences}
+            setIgnoreWhitespaceDifferences={setIgnoreWhitespaceDifferences}
+            ignoreDiacritics={ignoreDiacritics}
+            setIgnoreDiacritics={setIgnoreDiacritics}
             isRegexAllowed={isRegexAllowed}
             setIsRegexAllowed={setIsRegexAllowed}
             localizedStrings={{
@@ -962,6 +983,12 @@ export function Find({
               restrictionEndOfWord: localizedStrings['%webView_find_restrictions_endOfWord%'],
               capitalization: localizedStrings['%webView_find_capitalization%'],
               matchCase: localizedStrings['%webView_find_matchCase%'],
+              flexibility: localizedStrings['%webView_find_flexibility%'],
+              ignoreWhitespaceDifferences:
+                localizedStrings['%webView_find_ignoreWhitespaceDifferences%'],
+              ignoreWhitespaceDifferencesTooltip:
+                localizedStrings['%webView_find_ignoreWhitespaceDifferences_tooltip%'],
+              ignoreDiacritics: localizedStrings['%webView_find_ignoreDiacritics%'],
               pattern: localizedStrings['%webView_find_pattern%'],
               allowRegex: localizedStrings['%webView_find_allowRegex%'],
             }}

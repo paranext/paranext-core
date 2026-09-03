@@ -17,6 +17,13 @@ namespace TestParanextDataProvider
         )
             : base(name, papiClient, projectDetails, paratextProjects) { }
 
+        /// <summary>
+        /// The names this PDP would register as wire methods, so tests can assert the wire surface
+        /// a given project's interface list produces.
+        /// </summary>
+        public List<string> GetRegisteredFunctionNames() =>
+            GetFunctions().Select(function => function.functionName).ToList();
+
         protected override IProjectStreamManager CreateStreamManager(ProjectDetails projectDetails)
         {
             return new InMemoryStreamManager(this);

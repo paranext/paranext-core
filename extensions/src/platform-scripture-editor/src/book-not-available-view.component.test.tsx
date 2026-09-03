@@ -178,6 +178,93 @@ describe('BookNotAvailableView', () => {
     expect(onOpenManageBooks).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ['Simple', false],
+    ['Power', true],
+  ])(
+    're-announces in %s mode when announcementKey names a different missing book',
+    (_mode, isPowerMode) => {
+      // No arm's strings name the book, so GEN -> EXO in a project lacking both would otherwise
+      // leave a mounted region with byte-identical text: `aria-live` sees no change and the second
+      // book is silent. The key is what remounts the region and repairs focus for it.
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+
+      const { rerender } = render(
+        <BookNotAvailableView
+          localizedStrings={STRINGS}
+          isPowerMode={isPowerMode}
+          onOpenManageBooks={vi.fn()}
+          announcementKey="projA:GEN"
+        />,
+      );
+      const firstRegion = screen.getByRole('status');
+      expect(firstRegion).toHaveFocus();
+
+      rerender(
+        <BookNotAvailableView
+          localizedStrings={STRINGS}
+          isPowerMode={isPowerMode}
+          onOpenManageBooks={vi.fn()}
+          announcementKey="projA:EXO"
+        />,
+      );
+
+      // A NEW region in the DOM is what gives the live region something to announce, and focus has
+      // been repaired into it rather than left on the body.
+      const secondRegion = screen.getByRole('status');
+      expect(secondRegion).not.toBe(firstRegion);
+      expect(secondRegion).toHaveFocus();
+    },
+  );
+
+  it.each([
+    ['simple', false],
+    ['power', true],
+  ])(
+    'in %s mode, re-keys the region without taking focus off the control the user is still in',
+    (_mode, isPowerMode) => {
+      // The real path to a second missing book is the toolbar's `BookChapterControl`, which this web
+      // view renders in its OWN document and which KEEPS focus across the navigation. The focus
+      // repair declines by design in that case, so the remounted region is the whole announcement —
+      // and `EmptyState` mounts its `role="status"` with the text already present, which several
+      // screen readers do not report.
+      //
+      // This pins the boundary rather than the wish: a new region node IS inserted, and the user's
+      // place is not stolen. Making that insertion reliably audible belongs to the shared primitive.
+      // TODO(PT-4416): Give `EmptyState` an announcement that does not depend on a focus move.
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+
+      const bookControl = document.createElement('button');
+      document.body.appendChild(bookControl);
+
+      const { rerender } = render(
+        <BookNotAvailableView
+          localizedStrings={STRINGS}
+          isPowerMode={isPowerMode}
+          onOpenManageBooks={vi.fn()}
+          announcementKey="projA:GEN"
+        />,
+      );
+      const firstRegion = screen.getByRole('status');
+      bookControl.focus();
+
+      rerender(
+        <BookNotAvailableView
+          localizedStrings={STRINGS}
+          isPowerMode={isPowerMode}
+          onOpenManageBooks={vi.fn()}
+          announcementKey="projA:EXO"
+        />,
+      );
+
+      const secondRegion = screen.getByRole('status');
+      expect(secondRegion).not.toBe(firstRegion);
+      expect(bookControl).toHaveFocus();
+
+      bookControl.remove();
+    },
+  );
+
   it('falls back to the raw key when a string is missing', () => {
     render(<BookNotAvailableView isPowerMode={false} onOpenManageBooks={vi.fn()} />);
 

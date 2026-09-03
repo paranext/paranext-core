@@ -11,6 +11,13 @@ const rootPackageInfoFull: typeof rootPackageInfo & {
   peerDependencies?: Record<string, unknown>;
 } = rootPackageInfo;
 
+const externalPackages = [
+  ...Object.keys(packageInfoFull.peerDependencies ?? {}),
+  ...Object.keys(packageInfoFull.dependencies ?? {}),
+  ...Object.keys(rootPackageInfoFull.peerDependencies ?? {}),
+  ...Object.keys(rootPackageInfoFull.dependencies ?? {}),
+];
+
 const config = defineConfig({
   base: './',
   build: {
@@ -24,12 +31,14 @@ const config = defineConfig({
       fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'js' : format}`,
     },
     rollupOptions: {
-      external: [
-        ...Object.keys(packageInfoFull.peerDependencies ?? {}),
-        ...Object.keys(packageInfoFull.dependencies ?? {}),
-        ...Object.keys(rootPackageInfoFull.peerDependencies ?? {}),
-        ...Object.keys(rootPackageInfoFull.dependencies ?? {}),
-      ],
+      // Keep dependencies external, including when imported through a subpath. Rollup compares an
+      // `external` string to the whole import specifier, so a bare package name never matches
+      // `package/subpath` and the dependency gets bundled instead — silently, since the build
+      // still succeeds. `unicode-segmenter/grapheme` was vendored into `dist` that way, which also
+      // hid it from `npm audit`. Matching on a prefix keeps every subpath external.
+      external: externalPackages.map(
+        (name) => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:/|$)`),
+      ),
       output: {
         globals: {
           react: 'React',
@@ -43,7 +52,10 @@ const config = defineConfig({
     // Warm the lazy one-time ICU init behind Intl.* so it never lands inside a test's timeout window
     // on a slow CI worker. This workspace's intl/* tests construct Intl.NumberFormat/DateTimeFormat/
     // Collator directly. Shares the repo-root setup file. See vitest.setup.ts for rationale.
-    setupFiles: [path.resolve(__dirname, '../../vitest.setup.ts')],
+    setupFiles: [
+      path.resolve(__dirname, '../../vitest.setup.ts'),
+      path.resolve(__dirname, '../../vitest.setup.node.ts'),
+    ],
   },
 });
 export default config;

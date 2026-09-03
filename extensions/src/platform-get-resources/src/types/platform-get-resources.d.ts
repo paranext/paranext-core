@@ -82,6 +82,21 @@ declare module 'papi-shared-types' {
      */
     'platformGetResources.getCachedResources': () => Promise<DblResourceData[] | undefined>;
 
+    /**
+     * Returns locally-installed, read-only resources that are NOT in the DBL catalog (e.g. VULGP83,
+     * TNN, TND, HBK) as synthetic `DblResourceData` entries.
+     *
+     * Convention: each returned entry has `dblEntryUid === projectId`, marking it as non-DBL.
+     * Callers (e.g. `selectTextConnection`) detect this and create a `ProjectReference` instead of
+     * a `DblResourceReference` so the resource is loadable without a catalog entry.
+     *
+     * @returns Synthetic resource entries for locally-installed non-DBL resources. Also returns
+     *   `[]` when the C# data provider has not registered its projects yet or the lookup threw —
+     *   callers cannot distinguish those from a genuine "no local non-DBL resources" result, so a
+     *   caller that needs a retry or loading affordance must get that signal from elsewhere.
+     */
+    'platformGetResources.getLocalNonDblResources': () => Promise<DblResourceData[]>;
+
     // `paratextBibleSendReceive.*` commands are deliberately NOT declared here. This file is
     // auto-included (via `typeRoots`) into the TypeScript programs of extension repos developed
     // against core — including the closed-source Send/Receive extension itself, where duplicate or

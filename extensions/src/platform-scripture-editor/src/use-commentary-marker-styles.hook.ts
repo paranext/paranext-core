@@ -15,8 +15,11 @@ import tndptgStyles from './marker-styles/tndptg.scss?inline';
 import commentaryOverrides from './marker-styles/commentary-overrides.scss?inline';
 
 // Keyed on DBL entry UID (lowercase). A locally-installed DBL resource's projectId is the
-// dblEntryUid plus a suffix, so we match by `startsWith`. The same UIDs back the C#
-// `CommentariesWhiteList` in DblResourcesDataProvider.cs — keep these two lists in sync.
+// dblEntryUid plus a suffix, so we match by `startsWith`. This map overlaps with the C#
+// `CommentariesWhiteList` in DblDownloadableDataProvider.cs but may include additional legacy UIDs
+// for resources installed under a UID that was later reassigned in the DBL catalog — those legacy
+// UIDs ensure locally-installed resources still receive their marker styles even after the UID
+// change. The C# whitelist contains only the current catalog UIDs.
 const COMMENTARY_STYLES_BY_DBL_ENTRY_UID: Record<string, string> = {
   // UBS Translator's Handbook
   '97196133a859179b': hbkengStyles, // HBKENG — English
@@ -26,7 +29,8 @@ const COMMENTARY_STYLES_BY_DBL_ENTRY_UID: Record<string, string> = {
   '24daa5f24f0020b3': hbkptStyles, // HBKPT — Portuguese
   '1ff24938918bd69e': hbkespStyles, // HBKESP — Spanish
   // SIL Translator's Notes
-  '090f7cbf7924b245': tnnStyles, // TNN — English
+  '72dd0b9b0f2b4024': tnnStyles, // TNN — English (current UID; old UID reassigned in DBL)
+  '090f7cbf7924b245': tnnStyles, // TNN — English (old UID; kept for installs predating the UID change)
   '0617c397f003127c': tnnespStyles, // TNNESP — Spanish
   '233345361843ce8b': tnnptgStyles, // TNNPTG — Portuguese
   d95fde28b4346e61: tnnfrStyles, // TNNFR — French

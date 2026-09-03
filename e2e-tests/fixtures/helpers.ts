@@ -13,16 +13,25 @@ import WebSocket from 'ws';
 const DEFAULT_WEBSOCKET_PORT = 8876;
 
 /**
- * A renderer's window-scoped `platform.about` command (`command:platform.about-{windowId}`, see
- * `dialog.service-host.ts`).
+ * The window-scoped shard methods a renderer registers, one per service the main process's routers
+ * forward a command or request to (see the `*.service-shard.ts` modules).
  *
- * The gate matches the SCOPED name rather than the generic `command:platform.about`: the main
- * process registers routing proxies under the generic names before it creates any window, so the
- * generic name appears in `rpc.discover` while no renderer exists to serve it. A scoped name can
- * only come from a live renderer that finished registering its commands. The window id is an
- * Electron BrowserWindow id, so it is matched as a pattern rather than a fixed string.
+ * Each gate matches a SCOPED name rather than the generic `dialog:showDialog` or
+ * `command:platform.openBookChapterControl`: the main process registers those before it creates any
+ * window, so they appear in `rpc.discover` while no renderer exists to serve them. A scoped shard
+ * method can only come from a live renderer that finished registering its services. The window id
+ * is an Electron BrowserWindow id, so it is matched as a pattern rather than a fixed string.
+ *
+ * All of them, not just one: a renderer starts its shards together, so any one of them proves only
+ * that the batch is under way. A spec that drives a command right after the gate — Ctrl+B, a
+ * feedback form, a settings tab — needs the shard behind THAT command to have registered.
  */
-const SCOPED_PLATFORM_ABOUT_COMMAND = /^command:platform\.about-\d+$/;
+const SCOPED_SHARD_METHODS = [
+  /^object:DialogService-\d+\.showDialog$/,
+  /^object:UsersnapService-\d+\.submitIdea$/,
+  /^object:BookChapterControlService-\d+\.open$/,
+  /^object:WebViewService-\d+\.openSettingsTab$/,
+];
 
 const RPC_DISCOVER_POLL_INTERVAL_MS = 250;
 export const PROCESS_READY_TIMEOUT = 120_000;
@@ -578,6 +587,53 @@ export function preConfigureSettings(overrides: Record<string, unknown>): () => 
 }
 
 /**
+ * Path to the platform-scripture extension's persisted recently-opened-projects list.
+ * `papi.storage`'s user-data files are named for the base64 of the storage key with padding
+ * stripped, so this is `recentlyOpenedProjects` encoded — see
+ * `RECENTLY_OPENED_PROJECTS_STORAGE_KEY` in
+ * `extensions/src/platform-scripture/src/recently-opened-projects.service.ts`.
+ */
+const DEV_APPDATA_RECENT_PROJECTS_PATH = path.resolve(
+  __dirname,
+  '../../dev-appdata/extensions/platformScripture/user-data/cmVjZW50bHlPcGVuZWRQcm9qZWN0cw',
+);
+
+/**
+ * Replaces the persisted recently-opened-projects list before the app launches.
+ *
+ * SIMPLE-MODE TESTS NEED THIS. Simple mode auto-fills its empty Scripture editor slot with the
+ * first project from this list that will open (`openDefaultActiveProjectIfApplicable` in
+ * `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`). That open is
+ * asynchronous and slow — it can land AFTER a test has opened its own project, replacing the editor
+ * tab and re-pointing every Column 3 panel at the auto-opened project. Left alone the list holds
+ * whatever the developer last opened, so which project wins is a coin flip. Naming the project the
+ * test wants makes the auto-open agree with the test's own open, so it no longer matters which
+ * lands first.
+ *
+ * Must be called BEFORE `launchElectronApp`.
+ *
+ * @param projectIds Project ids, most recent first. An empty list leaves the picker nothing to open
+ *   from recents, so it falls through to Send/Receive's shared projects.
+ * @returns A restore function that writes the file back to its exact pre-call contents (or deletes
+ *   it if it did not exist). Call it AFTER the app has closed — the app rewrites this file whenever
+ *   a project is opened.
+ */
+export function preConfigureRecentlyOpenedProjects(projectIds: string[]): () => void {
+  let originalContents: string | undefined;
+  if (fs.existsSync(DEV_APPDATA_RECENT_PROJECTS_PATH))
+    originalContents = fs.readFileSync(DEV_APPDATA_RECENT_PROJECTS_PATH, 'utf-8');
+
+  fs.mkdirSync(path.dirname(DEV_APPDATA_RECENT_PROJECTS_PATH), { recursive: true });
+  fs.writeFileSync(DEV_APPDATA_RECENT_PROJECTS_PATH, JSON.stringify(projectIds));
+
+  return () => {
+    if (originalContents !== undefined)
+      fs.writeFileSync(DEV_APPDATA_RECENT_PROJECTS_PATH, originalContents);
+    else fs.rmSync(DEV_APPDATA_RECENT_PROJECTS_PATH, { force: true });
+  };
+}
+
+/**
  * Adds the given usernames as team members of the specified Paratext project so they appear in the
  * "Assign to" dropdown.
  *
@@ -625,10 +681,11 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
 
 /**
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
- * platform-dock layout to appear, then for a renderer to finish registering its window-scoped menu
- * commands (the dock can render before that async work completes), and finally for the full-screen
- * initialization overlay to clear. The overlay lingers while async services (settings, theme)
- * finish initializing — it must be gone before tests interact with the UI.
+ * platform-dock layout to appear, then for a renderer to finish registering every window-scoped
+ * shard the main process routes a command to (the dock can render before that async work
+ * completes), and finally for the full-screen initialization overlay to clear. The overlay lingers
+ * while async services (settings, theme) finish initializing — it must be gone before tests
+ * interact with the UI.
  */
 export async function waitForAppReady(page: Page, timeout = 90_000): Promise<void> {
   const start = Date.now();
@@ -636,16 +693,18 @@ export async function waitForAppReady(page: Page, timeout = 90_000): Promise<voi
     state: 'attached',
     timeout,
   });
-  const remaining1 = Math.max(1000, timeout - (Date.now() - start));
-  await waitForPapiMethodRegistered(
-    SCOPED_PLATFORM_ABOUT_COMMAND,
-    DEFAULT_WEBSOCKET_PORT,
-    remaining1,
+  // Waited on together: the renderer starts them together too, so they arrive within a poll of one
+  // another and waiting one after another would spend the timeout budget several times over
+  const remainingForShards = Math.max(1000, timeout - (Date.now() - start));
+  await Promise.all(
+    SCOPED_SHARD_METHODS.map((scopedShardMethod) =>
+      waitForPapiMethodRegistered(scopedShardMethod, DEFAULT_WEBSOCKET_PORT, remainingForShards),
+    ),
   );
-  const remaining2 = Math.max(1000, timeout - (Date.now() - start));
-  // Services like settings and theme finish async work after dock-layout mounts and platform.about
-  // registers, so the overlay can outlast both earlier signals.
-  await waitForOverlayGone(page, remaining2);
+  const remainingForOverlay = Math.max(1000, timeout - (Date.now() - start));
+  // Services like settings and theme finish async work after the dock layout mounts and the shards
+  // register, so the overlay can outlast both earlier signals.
+  await waitForOverlayGone(page, remainingForOverlay);
 }
 
 /** Options accepted by {@link openFromEditorHamburger}. */

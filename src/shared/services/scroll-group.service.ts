@@ -16,21 +16,14 @@ const onDidChangeReferenceHistory = getNetworkEvent(EVENT_NAME_ON_DID_CHANGE_REF
 let networkObject: IScrollGroupService | undefined;
 
 /**
- * Cached resolution of the scroll group network object, re-armed when that object goes away.
+ * Cached resolution of the scroll group network object.
  *
- * Exactly one renderer publishes the object (see `scroll-group.service-host.ts`), and when that
- * window closes another window takes the name over. Without re-arming, every consumer here — the
- * extension host's `papi.scrollGroups`, the main process, and every surviving renderer — would keep
- * the proxy from the closed window, which by then has been revoked, and every call would throw for
- * the rest of the session.
- *
- * A closing window drops its RPC connection without disposing anything, so the disposal this relies
- * on is the one `networkObjectService.forgetUnreachableRemoteObjects` raises for objects the
- * network can no longer reach. Every process runs that cleanup when the main process announces a
- * window closing, which is what keeps this re-arm alive in the main and extension host processes as
- * well as the renderers.
+ * Main hosts the object (`main/services/scroll-group.service-host.ts`) and registers it before any
+ * window is created, so it is there for as long as the app is, and there is nothing to re-arm for:
+ * no window closing can take it away. `createCachedInitializer` still retries a FAILED resolution,
+ * which is the case that remains — a consumer that asks before the object has been announced.
  */
-let initialize = createCachedInitializer(initializeScrollGroupService);
+const initialize = createCachedInitializer(initializeScrollGroupService);
 
 async function initializeScrollGroupService(): Promise<void> {
   await networkObjectStatusService.waitForNetworkObject(
@@ -47,10 +40,6 @@ async function initializeScrollGroupService(): Promise<void> {
       `${NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE} is not available as a network object`,
     );
   networkObject = scrollGroupNetworkObject;
-  scrollGroupNetworkObject.onDidDispose(() => {
-    networkObject = undefined;
-    initialize = createCachedInitializer(initializeScrollGroupService);
-  });
 }
 
 /**

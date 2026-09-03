@@ -48,6 +48,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Find, FIND_LOCALIZED_STRING_KEYS, FindProject } from './find/find.component';
 import { FIND_FOCUS_SEARCH_EVENT } from './find.model';
 import { useFocusSearchOnInvoke } from './find/use-focus-search-on-invoke.hook';
+import { buildFindOptions } from './find/find-options.utils';
 import {
   applyPreserveCase,
   armBoundedWait,
@@ -268,6 +269,16 @@ global.webViewComponent = function FindWebView({
     'none',
   );
   const [isRegexAllowed, setIsRegexAllowed] = useWebViewState<boolean>('findIsRegexAllowed', false);
+  // Both default to off so a search is exact — including for a specific invisible character —
+  // unless the user opts out of exactness. Mirrors PT9's FindReplaceOptions defaults.
+  const [ignoreWhitespaceDifferences, setIgnoreWhitespaceDifferences] = useWebViewState<boolean>(
+    'findIgnoreWhitespaceDifferences',
+    false,
+  );
+  const [ignoreDiacritics, setIgnoreDiacritics] = useWebViewState<boolean>(
+    'findIgnoreDiacritics',
+    false,
+  );
 
   const [activeMode, setActiveMode] = useWebViewState<'find' | 'replace'>('findActiveMode', 'find');
   // Replace is a power-mode-only capability. In simple interface mode we hide the find/replace
@@ -1077,7 +1088,15 @@ global.webViewComponent = function FindWebView({
       return;
     }
     if (searchTermRef.current) addToHistoryRef.current(searchTermRef.current);
-  }, [shouldMatchCase, wordRestriction, isRegexAllowed, searchTextType, relevantScopeKey]);
+  }, [
+    shouldMatchCase,
+    wordRestriction,
+    isRegexAllowed,
+    searchTextType,
+    ignoreWhitespaceDifferences,
+    ignoreDiacritics,
+    relevantScopeKey,
+  ]);
 
   // Stores a cancel function for a pending replace/replace-all operation (the 1-second window
   // before the re-search fires). Calling it stops the timer and triggers a revert.
@@ -1173,14 +1192,18 @@ global.webViewComponent = function FindWebView({
         await abandonFindJob();
         if (!isMountedRef.current) return;
 
-        await beginFindJob({
-          scope: findScope,
-          searchString: searchTerm,
-          caseInsensitive: !shouldMatchCase,
-          useRegex: isRegexAllowed,
-          verseTextOnly: searchTextType === 'verseOnly',
-          wordRestriction,
-        });
+        await beginFindJob(
+          buildFindOptions({
+            searchTerm,
+            findScope,
+            shouldMatchCase,
+            isRegexAllowed,
+            searchTextType,
+            wordRestriction,
+            ignoreWhitespaceDifferences,
+            ignoreDiacritics,
+          }),
+        );
         if (!isMountedRef.current) return;
 
         setSearchStatus('running');
@@ -1218,6 +1241,8 @@ global.webViewComponent = function FindWebView({
       findPdp,
       findPdpAvailability,
       findScope,
+      ignoreDiacritics,
+      ignoreWhitespaceDifferences,
       isRegexAllowed,
       isSearchQueryValid,
       scope,
@@ -2176,6 +2201,8 @@ global.webViewComponent = function FindWebView({
       selectedBookIds={selectedBookIds}
       localizedBookData={localizedBookData}
       shouldMatchCase={shouldMatchCase}
+      ignoreWhitespaceDifferences={ignoreWhitespaceDifferences}
+      ignoreDiacritics={ignoreDiacritics}
       searchTextType={searchTextType}
       wordRestriction={wordRestriction}
       isRegexAllowed={isRegexAllowed}
@@ -2207,6 +2234,8 @@ global.webViewComponent = function FindWebView({
       setSearchTextType={setSearchTextType}
       setWordRestriction={setWordRestriction}
       setShouldMatchCase={setShouldMatchCase}
+      setIgnoreWhitespaceDifferences={setIgnoreWhitespaceDifferences}
+      setIgnoreDiacritics={setIgnoreDiacritics}
       setIsRegexAllowed={setIsRegexAllowed}
       onToggleMode={setActiveMode}
       onReplaceTermChange={setReplaceTerm}

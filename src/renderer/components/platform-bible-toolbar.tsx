@@ -1,6 +1,7 @@
 import logo from '@assets/icon.png';
 import { ReferenceHistoryButtons } from '@renderer/components/reference-history-buttons.component';
 import { SyncStatusButton } from '@renderer/components/sync-status-button.component';
+import { useBackendSyncActivity } from '@renderer/hooks/use-backend-sync-activity.hook';
 import { UserProfilePopover } from '@renderer/components/user-profile-popover/user-profile-popover.component';
 import {
   useData,
@@ -11,14 +12,15 @@ import {
   useProjectSetting,
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useOpenProjectBookIds } from '@renderer/hooks/use-open-project-book-ids.hook';
 import { useSendReceiveAvailability } from '@renderer/hooks/use-send-receive-availability.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
-import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
-import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
+import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
+import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
 import {
   registerBookChapterControlHandle,
   TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID,
@@ -35,6 +37,7 @@ import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { HomeIcon } from 'lucide-react';
 import {
   Badge,
+  BOOK_CHAPTER_CONTROL_STRING_KEYS,
   BookChapterControl,
   BookChapterControlHandle,
   Button,
@@ -69,6 +72,10 @@ const TOOLTIP_DELAY = 300;
 
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
+// Stable identity for the "nothing extra to offer" case, so the memo below does not hand
+// BookChapterControl a fresh empty array on every render.
+const EMPTY_BOOK_IDS: string[] = [];
+
 // Visual breathing room between content and the native buttons on top of the live-measured overlay
 // width. Tuned by eye — smaller than the static reserved-space guess's 1rem (see
 // getToolbarOSReservedSpaceClassName) because the live measurement is exact, unlike that guess.
@@ -90,6 +97,8 @@ const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 // with CSS container queries — their failure mode here is silent.
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
+
+const bookChapterControlLocalizedStringKeys: LocalizeKey[] = [...BOOK_CHAPTER_CONTROL_STRING_KEYS];
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%mainMenu_openHome%',
@@ -197,7 +206,7 @@ function ProjectSelectorTrigger({
 }
 
 export function PlatformBibleToolbar() {
-  const { currentProject, recentProjects, allProjects, currentProjectError } =
+  const { currentSimpleProject, recentProjects, allProjects, currentSimpleProjectError } =
     useProjectPickerData();
 
   const isPowerMode = useIsPowerMode();
@@ -238,6 +247,12 @@ export function PlatformBibleToolbar() {
     resolvedWebView?.definition.projectId,
   );
 
+  // The baseline is the navigation target's own project — its definition `projectId`. For a view
+  // that displays something other than its own project (a resource panel, whose `projectId` is the
+  // container whose reference list is shown; the Scripture Text Grid, which hosts many), that means
+  // the books of the resource on screen are offered as additional and labelled as outside the
+  // project. That is deliberate: the baseline tracks the project the user is working in, not
+  // whatever a panel happens to be rendering, so the unqualified list stays stable as panels change.
   const [booksPresentPossiblyError] = useProjectSetting(
     resolvedWebView?.definition.projectId,
     'platformScripture.booksPresent',
@@ -252,14 +267,37 @@ export function PlatformBibleToolbar() {
     }
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
+  const projectBookIds = useMemo(() => getBookIdsFromBooksPresent(booksPresent), [booksPresent]);
   // Stable identity per booksPresent value — BookChapterControl memoizes its book list (and the
   // filtering/matching derived from it) on this function's identity, so a fresh closure every
   // render would recompute all of that on every toolbar render
-  const fetchActiveBookIds = useCallback(
-    () => getBookIdsFromBooksPresent(booksPresent),
-    [booksPresent],
-  );
+  const fetchActiveBookIds = useCallback(() => projectBookIds, [projectBookIds]);
   const getActiveBookIds = booksPresent ? fetchActiveBookIds : undefined;
+
+  // Simple mode is the only mode this ships in: it has a single, global book/chapter/verse control,
+  // so widening its book list is unambiguous. Power mode's own controls are left as they are for
+  // that team to decide on; the component API stays open to them either way. Disabled outright in
+  // Power mode so it opens no data providers and no booksPresent subscriptions for a result nothing
+  // there reads.
+  const openProjectBookIds = useOpenProjectBookIds(
+    resolvedWebView?.definition.projectId,
+    !isPowerMode,
+  );
+  const additionalBookIds = useMemo(() => {
+    if (isPowerMode) return EMPTY_BOOK_IDS;
+    // BookChapterControl renders exactly the book list it is given, so the current book has to come
+    // from here or a reference on a book the active project lacks would be missing from its own
+    // picker.
+    if (projectBookIds.includes(scrRef.book) || openProjectBookIds.includes(scrRef.book))
+      return openProjectBookIds;
+    return [...openProjectBookIds, scrRef.book];
+  }, [isPowerMode, projectBookIds, openProjectBookIds, scrRef.book]);
+  // Stable identity per value, for the same reason fetchActiveBookIds is memoized above:
+  // BookChapterControl memoizes its book list on this function's identity.
+  const fetchAdditionalBookIds = useCallback(() => additionalBookIds, [additionalBookIds]);
+  // Undefined rather than a function returning an empty list: the control offers no "show more
+  // books" toggle when there is nothing extra to offer.
+  const getAdditionalBookIds = additionalBookIds.length > 0 ? fetchAdditionalBookIds : undefined;
 
   // Register the top BookChapterControl's imperative handle only while it is enabled — a React 19
   // cleanup callback ref so registration tracks both mount/unmount and the enabled state. When
@@ -304,6 +342,10 @@ export function PlatformBibleToolbar() {
   const hasProjectPickerItems = projectPickerItems.length > 0;
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
+
+  const [bookChapterControlLocalizedStrings] = useLocalizedStrings(
+    bookChapterControlLocalizedStringKeys,
+  );
 
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
@@ -395,6 +437,19 @@ export function PlatformBibleToolbar() {
   // `undefined` while unknown — the render gate below treats that as available (fail open). Only
   // checked in simple mode, since that gate is the only thing the answer feeds.
   const isSendReceiveAvailable = useSendReceiveAvailability({ enabled: !isPowerMode });
+  // Fail open a second way: even a settled `false` must not hide the indicator once the backend has
+  // reported a sync. `useSendReceiveAvailability` asks whether the send/receive EXTENSION is
+  // present, but syncs also start from paths that never touch it — `startup-tasks.ts` calls the
+  // dotnet `syncProjects` command directly — so an extension that is missing or failed to activate
+  // would otherwise leave a multi-minute sync with no surface at all in Simple mode, where the
+  // persistent toast is suppressed in favour of this indicator.
+  //
+  // Sticky, not live: a gate on "is syncing right now" unmounts the control in the same commit the
+  // sync finishes, so the outcome the user was waiting for is never painted and never announced, and
+  // the status hook's seed loop is torn down mid-flight. Once a sync has been seen this stays true
+  // for the session. Reads a store the renderer seeds once at startup, so it costs no subscription
+  // and no request here. See `useBackendSyncActivity`.
+  const hasBackendSynced = useBackendSyncActivity();
 
   const openHome = useCallback(async () => {
     try {
@@ -428,11 +483,25 @@ export function PlatformBibleToolbar() {
         appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
         configAreaChildren={
           <>
-            {!isPowerMode && isSendReceiveAvailable !== false && (
+            {!isPowerMode && (isSendReceiveAvailable !== false || hasBackendSynced) && (
               // Simple mode only — power users send/receive per project from the Home
               // view. Fail open on availability: `undefined` means not known yet (the extension
               // host is busy, or send/receive is still activating), and the button must not hinge
-              // on that resolving. Only a settled `false` hides it.
+              // on that resolving. A settled `false` hides it — unless the backend has reported a
+              // sync, which is a surface the user needs regardless of what the extension probe says
+              // (see `hasBackendSynced` above).
+              //
+              // The cost of failing open is one seed-retry loop for the extension's CLAIM in builds
+              // with no send/receive at all, restarted on each Simple/Power toggle since that unmounts
+              // and remounts this. An unregistered command is not cheap to fail: `sendCommand` routes
+              // through `requestWithRetry`, so one read rejects only after `MAX_REQUEST_ATTEMPTS`
+              // attempts at `REQUEST_ATTEMPT_WAIT_TIME_MS` apart (~10s, `rpc.model.ts`). Availability
+              // settles to `false` within `SEND_RECEIVE_UNKNOWN_GRACE_MS` (5s) there, so this unmounts
+              // while that loop's FIRST read is still retrying. The backend activity signal costs
+              // nothing here either way: it is seeded once at startup by `initSyncActivityService`
+              // and read from a store, not re-seeded per mount.
+              // TODO(PT-4233): A one-shot capability probe would fit a permanently-absent claim
+              // command better than a retry loop does.
               <SyncStatusButton />
             )}
             {marketingVersion !== '' && (
@@ -480,7 +549,7 @@ export function PlatformBibleToolbar() {
         )}
         {!isPowerMode && (
           <Select
-            value={currentProject?.id ?? ''}
+            value={currentSimpleProject?.id ?? ''}
             onValueChange={async (projectId: string) => {
               try {
                 await openProject(projectId);
@@ -499,11 +568,11 @@ export function PlatformBibleToolbar() {
                   : localizedStrings['%projectPicker_toolbar_no_projects%']
               }
             >
-              {currentProject && (
+              {currentSimpleProject && (
                 <ProjectSelectorLabel
-                  fullName={currentProject.fullName}
-                  shortName={currentProject.shortName}
-                  errorMessage={currentProjectError}
+                  fullName={currentSimpleProject.fullName}
+                  shortName={currentSimpleProject.shortName}
+                  errorMessage={currentSimpleProjectError}
                 />
               )}
             </ProjectSelectorTrigger>
@@ -539,6 +608,8 @@ export function PlatformBibleToolbar() {
           showTriggerChevron={!isPowerMode}
           disabled={isBookChapterControlDisabled}
           getActiveBookIds={getActiveBookIds}
+          getAdditionalBookIds={getAdditionalBookIds}
+          localizedStrings={bookChapterControlLocalizedStrings}
           recentSearches={recentScriptureRefs}
           onAddRecentSearch={addRecentScriptureRef}
         />

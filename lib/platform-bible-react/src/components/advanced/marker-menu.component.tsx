@@ -1,5 +1,6 @@
 import { FC, LegacyRef, useMemo, useState } from 'react';
 import { Ban, Check } from 'lucide-react';
+import { stripMarkerNestingPrefix } from '@/components/advanced/marker-palette-filter.util';
 import {
   Command,
   CommandEmpty,
@@ -220,7 +221,10 @@ export function MarkerMenu({
   const [commandSearch, setCommandSearch] = useState<string>('');
 
   const [codeMatchItems, titleMatchItems] = useMemo(() => {
-    const query = commandSearch.trim().toLowerCase();
+    // A leading `+` is USFM nesting syntax (`\+nd` nests inside an open char span), not part of the
+    // marker code — strip it so `+nd` resolves to the bare `nd` item. The shared helper is the one
+    // strip rule for every marker-matching site, so this menu and the palettes cannot drift.
+    const query = stripMarkerNestingPrefix(commandSearch.trim().toLowerCase());
     if (!query) {
       // Hide disallowed markers until specifically searched, so the menu isn't cluttered with
       // entries the user cannot insert.
@@ -256,6 +260,10 @@ export function MarkerMenu({
         value={commandSearch}
         onValueChange={(value) => setCommandSearch(value)}
         placeholder={searchPlaceholder ?? localizedStrings['%markerMenu_searchPlaceholder%']}
+        // Picker semantics: the list is the whole point here, and nothing else in this menu claims
+        // Space. Only a LEADING space is intercepted, so titles containing spaces ("Cross
+        // Reference") are still searchable.
+        spaceSelectsHighlightedItem
       />
       <CommandList>
         <CommandEmpty>{localizedStrings['%markerMenu_noResults%']}</CommandEmpty>

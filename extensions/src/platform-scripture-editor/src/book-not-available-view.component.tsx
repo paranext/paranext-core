@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import { formatReplacementString } from 'platform-bible-utils';
 import {
   Button,
@@ -16,6 +15,7 @@ import {
   type BookNotAvailableViewStringKey,
   type ManageBooksDisabledReason,
 } from './book-not-available-view.const';
+import { useFocusReplacedContent } from './use-focus-replaced-content.hook';
 
 const { SIMPLE_MESSAGE_KEY, TITLE_KEY, DESCRIPTION_KEY, MANAGE_BOOKS_BUTTON_KEY } =
   BOOK_NOT_AVAILABLE_VIEW_KEYS;
@@ -50,6 +50,13 @@ export type BookNotAvailableViewProps = {
   manageBooksDisabledReason?: ManageBooksDisabledReason;
   /** Invoked when the user clicks "Manage books". */
   onOpenManageBooks: () => void;
+  /**
+   * Identifies WHICH missing book and project this message is about, e.g. `${projectId}:${book}`.
+   * No arm's strings name the book, so moving between two books the project lacks leaves a mounted
+   * region with byte-identical text — which `aria-live` cannot see as a change. Changing this key
+   * remounts the region and repairs focus again, so the second missing book is not silent.
+   */
+  announcementKey?: string;
 };
 
 /**
@@ -62,9 +69,10 @@ export type BookNotAvailableViewProps = {
  * Accessibility: this view REPLACES the editor subtree, so its arrival is a content swap a
  * screen-reader user gets no other notice of, and the focused element inside the editor is
  * destroyed along with it. Both modes therefore mark the message region `role="status"`, and the
- * region takes focus on mount — but only when this document already had focus, so navigating here
- * from the toolbar's book/chapter control does not yank focus out of the control the user is still
- * using.
+ * region takes focus on mount via {@link useFocusReplacedContent}, which repairs focus only when it
+ * actually fell to the body — so navigating here from the toolbar's book/chapter control does not
+ * yank focus out of the control the user is still using. Pass `announcementKey` so that moving from
+ * one missing book to another is not silent; see that prop.
  *
  * This deliberately diverges from the sibling `EmptyChapterView`, which keeps the editor
  * mounted-but-hidden and refocuses it: that view has a chapter to return to, whereas a book missing
@@ -75,28 +83,31 @@ export function BookNotAvailableView({
   isPowerMode,
   manageBooksDisabledReason,
   onOpenManageBooks,
+  announcementKey,
 }: BookNotAvailableViewProps) {
-  // Using null for React ref compatibility
-  // eslint-disable-next-line no-null/no-null
-  const regionRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // `document.hasFocus()` distinguishes "the editor inside this iframe had focus and we just
-    // unmounted it, so focus has fallen to `body`" from "focus is in the toolbar outside this
-    // iframe". Only the first case is ours to repair.
-    if (!document.hasFocus()) return;
-    regionRef.current?.focus();
-  }, []);
+  const regionRef = useFocusReplacedContent<HTMLDivElement>(announcementKey);
 
   if (!isPowerMode) {
     return (
+      // Keyed so a new subject remounts the live region. `aria-live` reports content that CHANGES;
+      // the same sentence about a different book is not a change it can see.
       <div
+        key={announcementKey}
         ref={regionRef}
         role="status"
         tabIndex={-1}
         className="tw:flex tw:h-full tw:items-center tw:justify-center tw:px-4 tw:outline-none"
       >
-        <span>{localize(localizedStrings, SIMPLE_MESSAGE_KEY)}</span>
+        {/* Same small muted treatment as `EmptyDescription` in the Power branch below and as
+            `EmptyState` in the resource surfaces, so a missing book reads identically wherever the
+            user meets it. A plain `span` rather than `EmptyState` because this branch puts
+            `role="status"` on the focus target itself; `EmptyState` supplies its own region, and
+            nesting two live regions is worse than one.
+            TODO(PT-4416): Converge this arm with `ResourceBookNotAvailable`, which now carries the
+            same layout, focus repair, and re-announcement in `ResourceMessageView`. */}
+        <span className="tw:text-center tw:text-sm tw:text-muted-foreground">
+          {localize(localizedStrings, SIMPLE_MESSAGE_KEY)}
+        </span>
       </div>
     );
   }
@@ -105,7 +116,15 @@ export function BookNotAvailableView({
   const manageBooksButtonLabel = localize(localizedStrings, MANAGE_BOOKS_BUTTON_KEY);
 
   return (
-    <Empty ref={regionRef} role="status" tabIndex={-1} className="tw:h-full tw:outline-none">
+    // Keyed for the same reason as the Simple branch above: neither the title nor the description
+    // names the book, so without a remount the region's text is identical for the next missing book.
+    <Empty
+      key={announcementKey}
+      ref={regionRef}
+      role="status"
+      tabIndex={-1}
+      className="tw:h-full tw:outline-none"
+    >
       <EmptyHeader>
         {/* `EmptyTitle` renders a `div`, not a heading. This zero-state is the entire content of the
           editor panel, so it needs a real heading for structure-based navigation — nesting one inside

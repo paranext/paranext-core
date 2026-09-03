@@ -10,6 +10,21 @@ import {
 } from '@shared/models/openrpc.model';
 import { SerializedRequestType } from '@shared/utils/util';
 import { JSONRPCResponse } from 'json-rpc-2.0';
+import { PlatformEvent } from 'platform-bible-utils';
+
+/**
+ * What a process took with it when its connection to the network went away
+ *
+ * @experimental
+ */
+export type RpcClientDisconnectEvent = {
+  /**
+   * Names of the methods that were registered by the departed process and have now been removed
+   * from the central registry, in registration order. Nothing has interpreted these names; a
+   * subscriber that knows how a given kind of name is formed is the one that can say what died.
+   */
+  removedMethodNames: string[];
+};
 
 /**
  * Defines how to support sending requests on the network and emitting events on the network
@@ -101,6 +116,21 @@ export interface IRpcMethodRegistrar extends IRpcHandler {
   ) => Promise<boolean>;
   /** Unregister a network event emitter so it is no longer tracked centrally */
   unregisterEvent: (eventName: string) => Promise<boolean>;
+  /**
+   * Event that fires when a process disconnects from the network, carrying the method names its
+   * departure removed from the central registry.
+   *
+   * This is platform-internal core plumbing between the process that owns the websocket server and
+   * the services that know how their own registered names are formed, not part of the `@papi/*`
+   * surface.
+   *
+   * This is a local, in-process event: only the process that owns the connections can observe one
+   * being lost, so it fires exclusively in the process holding the websocket server. Everywhere
+   * else it is a real event that simply never fires.
+   *
+   * @experimental
+   */
+  onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
 }
 
 export type RegisteredRpcMethodDetails = {

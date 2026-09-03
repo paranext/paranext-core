@@ -29,6 +29,10 @@ export type FindFiltersStrings = {
   restrictionEndOfWord: string;
   capitalization: string;
   matchCase: string;
+  flexibility: string;
+  ignoreWhitespaceDifferences: string;
+  ignoreWhitespaceDifferencesTooltip: string;
+  ignoreDiacritics: string;
   pattern: string;
   allowRegex: string;
 };
@@ -41,6 +45,10 @@ type FindFiltersProps = {
   setWordRestriction: (value: WordRestriction) => void;
   shouldMatchCase: boolean;
   setShouldMatchCase: (value: boolean) => void;
+  ignoreWhitespaceDifferences: boolean;
+  setIgnoreWhitespaceDifferences: (value: boolean) => void;
+  ignoreDiacritics: boolean;
+  setIgnoreDiacritics: (value: boolean) => void;
   isRegexAllowed: boolean;
   setIsRegexAllowed: (value: boolean) => void;
   localizedStrings: FindFiltersStrings;
@@ -56,6 +64,10 @@ export function FindFilters({
   setWordRestriction,
   shouldMatchCase,
   setShouldMatchCase,
+  ignoreWhitespaceDifferences,
+  setIgnoreWhitespaceDifferences,
+  ignoreDiacritics,
+  setIgnoreDiacritics,
   isRegexAllowed,
   setIsRegexAllowed,
   localizedStrings,
@@ -177,7 +189,54 @@ export function FindFilters({
           </div>
         </fieldset>
 
-        {/* 4. Pattern */}
+        {/* 4. Match flexibility. Both options relax how the query is matched against the text;
+            neither alters the query itself, so an exact search stays reachable by leaving them
+            off. buildSearchRegex ignores both in regex mode. */}
+        <fieldset className="tw:mb-3">
+          <legend className="tw:px-2 tw:py-1.5 tw:text-sm tw:font-semibold">
+            {localizedStrings.flexibility}
+          </legend>
+          <div className="tw:flex tw:min-h-9 tw:items-center tw:gap-2">
+            <Checkbox
+              id="ignoreWhitespaceDifferences"
+              checked={ignoreWhitespaceDifferences}
+              onCheckedChange={(checked) => setIgnoreWhitespaceDifferences(checked === true)}
+            />
+            <Label
+              htmlFor="ignoreWhitespaceDifferences"
+              className="tw:cursor-pointer tw:text-sm tw:font-normal"
+            >
+              {localizedStrings.ignoreWhitespaceDifferences}
+            </Label>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="tw:h-3.5 tw:w-3.5 tw:text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="tw:max-w-xs">
+                    {localizedStrings.ignoreWhitespaceDifferencesTooltip}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <div className="tw:flex tw:min-h-9 tw:items-center tw:gap-2">
+            <Checkbox
+              id="ignoreDiacritics"
+              checked={ignoreDiacritics}
+              onCheckedChange={(checked) => setIgnoreDiacritics(checked === true)}
+            />
+            <Label
+              htmlFor="ignoreDiacritics"
+              className="tw:cursor-pointer tw:text-sm tw:font-normal"
+            >
+              {localizedStrings.ignoreDiacritics}
+            </Label>
+          </div>
+        </fieldset>
+
+        {/* 5. Pattern */}
         <fieldset>
           <legend className="tw:px-2 tw:py-1.5 tw:text-sm tw:font-semibold">
             {localizedStrings.pattern}

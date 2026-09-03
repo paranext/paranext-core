@@ -13,7 +13,7 @@ import {
   useTruncationTooltip,
 } from 'platform-bible-react';
 import { EllipsisVertical, GripVertical } from 'lucide-react';
-import { formatReplacementString, LocalizedStringValue } from 'platform-bible-utils';
+import { formatReplacementString } from 'platform-bible-utils';
 import {
   CSSProperties,
   ReactNode,
@@ -23,38 +23,34 @@ import {
   type MouseEvent,
 } from 'react';
 import { ResourceCellState } from './resource-cell.utils';
+import {
+  BOOK_NOT_AVAILABLE_KEY,
+  COPY_KEY,
+  EMPTY_KEY,
+  FAILED_KEY,
+  LOADING_KEY,
+  NOT_INSTALLED_KEY,
+  UNAVAILABLE_KEY,
+  type ResourceCellLocalizedStrings,
+} from './resource-cell.const';
 
-/**
- * Localization keys for the ResourceCell's status and action labels. Import to resolve them via
- * `useLocalizedStrings` (in the app) or `getLocalizedStrings` (in Storybook).
- */
-export const UNAVAILABLE_KEY = '%webView_scriptureTextGrid_cell_unavailable%';
-export const NOT_INSTALLED_KEY = '%webView_scriptureTextGrid_cell_not_installed%';
-export const LOADING_KEY = '%webView_scriptureTextGrid_cell_status_loading%';
-export const FAILED_KEY = '%webView_scriptureTextGrid_cell_status_failed%';
-export const EMPTY_KEY = '%webView_scriptureTextGrid_cell_verse_empty%';
-export const ZOOM_IN_KEY = '%webView_scriptureTextGrid_cell_zoomIn%';
-export const ZOOM_OUT_KEY = '%webView_scriptureTextGrid_cell_zoomOut%';
-export const RESET_ZOOM_KEY = '%webView_scriptureTextGrid_cell_resetZoom%';
-export const ZOOM_OPTIONS_KEY = '%webView_scriptureTextGrid_cell_zoomOptions%';
-export const COPY_KEY = '%webView_scriptureTextGrid_cell_copy%';
-export const RESOURCE_CELL_STRING_KEYS = Object.freeze([
+// Re-exported from `resource-cell.const.ts` so importers keep reading these from the component while
+// a node-environment test can import the key list without a DOM.
+export {
   UNAVAILABLE_KEY,
   NOT_INSTALLED_KEY,
   LOADING_KEY,
   FAILED_KEY,
+  BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
   ZOOM_IN_KEY,
   ZOOM_OUT_KEY,
   RESET_ZOOM_KEY,
   ZOOM_OPTIONS_KEY,
   COPY_KEY,
-] as const);
-
-type ResourceCellLocalizedStringKey = (typeof RESOURCE_CELL_STRING_KEYS)[number];
-export type ResourceCellLocalizedStrings = {
-  [key in ResourceCellLocalizedStringKey]?: LocalizedStringValue;
-};
+  RESOURCE_CELL_STRING_KEYS,
+  type ResourceCellLocalizedStrings,
+} from './resource-cell.const';
 
 /** How the cell shows its resource name: a hanging inline label, or a header band. */
 export type ResourceNameDisplay = 'inline' | 'header';
@@ -150,6 +146,18 @@ function ZoomItemsShared({
  * the enclosing gridcell already exposes the name via `aria-label`, so the visible copy is not
  * announced twice.
  */
+/**
+ * Compile-time exhaustiveness check for the cell-state chain below: every state that does NOT
+ * render a placeholder must be `'ready'`. Adding a `ResourceCellState` member without giving it a
+ * branch fails to compile here instead of silently rendering "Download failed".
+ *
+ * @param state The only state left unhandled by the chain.
+ * @returns The same state, so the check is an ordinary expression rather than an unused binding.
+ */
+function assertStateIsReady(state: 'ready'): 'ready' {
+  return state;
+}
+
 function ResourceNameLabel({ label, className }: { label: string; className?: string }) {
   // Show the tooltip only when the label text is actually clipped (same manual-`open` pattern
   // shared with `ProjectRowView` in `project-selector.component.tsx`).
@@ -229,13 +237,27 @@ export function ResourceCellView({
     unavailableContent = (
       <span className="tw:font-medium">{localizedStrings[NOT_INSTALLED_KEY]}</span>
     );
-  } else {
+  } else if (state === 'bookNotAvailable') {
+    // No "Resource unavailable" heading and no retry wording: the resource is present and working,
+    // it simply has no such book.
+    unavailableContent = (
+      <span className="tw:text-sm tw:text-muted-foreground">
+        {localizedStrings[BOOK_NOT_AVAILABLE_KEY]}
+      </span>
+    );
+  } else if (state === 'failed') {
     unavailableContent = (
       <>
         <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>
         <span className="tw:text-sm tw:text-muted-foreground">{localizedStrings[FAILED_KEY]}</span>
       </>
     );
+  } else {
+    // Only `'ready'` is left, and it renders `readyContent` below rather than this. Testing
+    // `'failed'` explicitly instead of letting it be the fallthrough is what makes a future
+    // `ResourceCellState` member a type error here rather than a cell silently telling the user to
+    // retry a download that may have succeeded.
+    assertStateIsReady(state);
   }
 
   const stateContent =

@@ -116,7 +116,7 @@ Dismissal is a keyboard and screen-reader concern, not just a pointer one:
 ## The iframe (WebView) gap
 
 Platform.Bible renders most WebViews as **`iframe`s**, and many are **cross-origin and sandboxed**
-(see `src/renderer/services/web-view.service-host.ts`). Two consequences for dismissal:
+(see `src/renderer/services/web-view.service-shard.ts`). Two consequences for dismissal:
 
 **1. Pointer dismissal silently fails across a WebView.** When a user clicks **into a
 cross-origin/sandboxed iframe, the parent document never receives a `pointerdown`/`mousedown`.** So

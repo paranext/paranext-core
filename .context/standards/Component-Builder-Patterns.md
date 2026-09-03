@@ -146,7 +146,7 @@ export class FeatureWebViewProvider implements IWebViewProvider {
 
 `useWebViewState<T>(key, default)` is scoped **per `webViewId`**, not per project or per user. Each `openWebView` call without a reuse strategy mints a **new** web view id, so closing and reopening a tool creates a fresh instance with empty state — slots persisted via `useWebViewState` do **not** survive close/reopen.
 
-There is no id-reuse idiom that survives a close: `existingId: '?'` resolves through the **live** dock layout (`findFirstWebViewDefinitionByType` in `src/renderer/services/web-view.service-host.ts`), so it only finds a currently-open instance — it is a **dedupe** mechanism (don't open a second instance while one is already open; see `openFind` in `extensions/src/platform-scripture/src/main.ts`), not a persistence mechanism. Once a tab is closed it is removed from the layout, and the next `openWebView` mints a fresh id with empty state. For state that must survive close/reopen (or across sessions), use user-scoped `papi.settings` instead of `useWebViewState`.
+There is no id-reuse idiom that survives a close: `existingId: '?'` resolves through the **live** dock layout (`findFirstWebViewDefinitionByType` in `src/renderer/services/web-view.service-shard.ts`), so it only finds a currently-open instance — it is a **dedupe** mechanism (don't open a second instance while one is already open; see `openFind` in `extensions/src/platform-scripture/src/main.ts`), not a persistence mechanism. Once a tab is closed it is removed from the layout, and the next `openWebView` mints a fresh id with empty state. For state that must survive close/reopen (or across sessions), use user-scoped `papi.settings` instead of `useWebViewState`.
 
 ### Custom Web View Options
 

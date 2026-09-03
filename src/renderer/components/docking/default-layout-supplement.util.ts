@@ -114,7 +114,7 @@ function withPinningForMode(tab: SavedTabInfo, isSimpleMode: boolean): SavedTabI
  * Pure and idempotent: returns a deep clone, never mutates `baseLayout`, and skips entries whose id
  * already exists or whose anchor is absent. `entries` should already be filtered by any
  * `flagSetting` (see {@link filterEnabledSupplementEntries} and the caller in
- * `web-view.service-host.ts`).
+ * `web-view.service-shard.ts`).
  *
  * `interfaceMode` is required rather than inferred because this merge runs against both modes'
  * layouts — Simple mode's build-baked one and Power mode's persisted one — while a supplement entry

@@ -30,10 +30,14 @@ export class FirstRunPage {
   async waitForWizard(timeout = 90_000): Promise<void> {
     await this.dialog.waitFor({ state: 'visible', timeout });
     // "Next" becoming visible confirms the wizard is in the interactive "wizard"
-    // state (past the loading spinner) and that localisation strings have resolved.
+    // state (past the loading spinner) and that localisation strings have resolved. The dialog
+    // itself shows while the registration probes are still running, and those probes legitimately
+    // take tens of seconds on a cold start (up to 3 attempts x ~10-15 s plus backoffs — see
+    // resolveRegistrationValidity), so this second wait needs to cover the full probe budget, not
+    // just a UI render.
     await this.dialog
       .getByRole('button', { name: 'Next' })
-      .waitFor({ state: 'visible', timeout: 15_000 });
+      .waitFor({ state: 'visible', timeout: 75_000 });
   }
 
   /** Wait for the wizard to close after completion or skip. */
@@ -51,7 +55,10 @@ export class FirstRunPage {
    * — use {@link clickSaveAndRestart} and {@link clickSync} respectively.
    */
   async clickNext(): Promise<void> {
-    await this.dialog.getByRole('button', { name: /^(Next|Finish)$/i }).click();
+    // Long click timeout: steps like Internet Settings keep Next DISABLED until their async
+    // settings reads land, and on a loaded machine that can exceed Playwright's 30 s default.
+    // click() auto-waits for enabled, so the timeout IS the wait for the step to become ready.
+    await this.dialog.getByRole('button', { name: /^(Next|Finish)$/i }).click({ timeout: 60_000 });
   }
 
   /** Click the Back button (not present on the first step or on the SyncProgress interstitial). */
@@ -64,7 +71,7 @@ export class FirstRunPage {
    * advances to Sync progress; in production it triggers a real S/R sync first.
    */
   async clickSync(): Promise<void> {
-    await this.dialog.getByRole('button', { name: /^sync$/i }).click();
+    await this.dialog.getByRole('button', { name: /^sync$/i }).click({ timeout: 60_000 });
   }
 
   /** Click "Skip automatic sync" (present only on the Sync consent step shell footer). */
@@ -75,8 +82,13 @@ export class FirstRunPage {
   /**
    * Click the "Save and restart" button on the Identify step. In demo mode this calls onNext()
    * directly without restarting; in production it saves registration data and restarts the app.
+   *
+   * Even in demo mode the button is DISABLED until the Registration name field is non-empty
+   * (`isSaveDisabled` in identify-step.component.tsx requires a trimmed name; only the code
+   * validation is bypassed), so this fills a placeholder name first.
    */
   async clickSaveAndRestart(): Promise<void> {
+    await this.dialog.getByLabel('Registration name').fill('E2E Demo User');
     await this.dialog.getByRole('button', { name: /save and restart/i }).click();
   }
 }

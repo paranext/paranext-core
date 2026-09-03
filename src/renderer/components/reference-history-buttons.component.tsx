@@ -4,7 +4,7 @@ import {
   getReferenceHistorySync,
   navigateReferenceHistorySync,
   onDidChangeReferenceHistory,
-} from '@renderer/services/scroll-group.service-host';
+} from '@renderer/services/scroll-group.service';
 import { ReferenceHistory } from '@shared/services/scroll-group.service-model';
 import { formatScrRef, ScrollGroupId } from 'platform-bible-utils';
 import {

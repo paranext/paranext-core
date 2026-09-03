@@ -1,7 +1,7 @@
 import { SavedTabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import { FIND_WEBVIEW_TYPE, SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import { LayoutBase } from 'rc-dock';
-import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
+import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './dock-tab-group.util';
 
 /**
  * Width rc-dock adds per divider when it computes a box's minimum width (`box.minWidth +=

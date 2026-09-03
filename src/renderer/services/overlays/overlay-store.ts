@@ -6,7 +6,11 @@
 import type { PlatformError } from 'platform-bible-utils';
 import { OverlayEntry, OverlayResolveType, PopoverContent } from './overlay.service-model';
 
-/** Map of overlay id to overlay entry */
+/**
+ * Map of overlay id to overlay entry. Iteration order IS creation order: `addOverlay` appends a new
+ * key, and the in-place updates below re-`set` a key that already exists, which keeps that key in
+ * its original position. {@link getTopmostOverlay} depends on this.
+ */
 const overlays = new Map<string, OverlayEntry>();
 
 /** Set of listeners notified on any store change */
@@ -103,6 +107,24 @@ export function getOverlayById(id: string): OverlayEntry | undefined {
 }
 
 /**
+ * Get the most recently created overlay matching `predicate` — the topmost of the overlays it
+ * accepts, since a newer overlay always renders over an older one.
+ *
+ * @param predicate Which overlays to consider
+ * @returns The newest matching overlay, or undefined if none match
+ */
+export function getTopmostOverlay(
+  predicate: (overlay: OverlayEntry) => boolean,
+): OverlayEntry | undefined {
+  const entriesInCreationOrder = Array.from(overlays.values());
+  for (let index = entriesInCreationOrder.length - 1; index >= 0; index -= 1) {
+    const entry = entriesInCreationOrder[index];
+    if (predicate(entry)) return entry;
+  }
+  return undefined;
+}
+
+/**
  * Removes all overlays from the store and notifies listeners.
  *
  * WARNING: Test-only. Does not resolve or reject pending overlay promises. Using this in production
@@ -125,6 +147,49 @@ export function updateOverlayContent(id: string, content: PopoverContent): boole
   const entry = overlays.get(id);
   if (!entry || entry.type !== 'popover') return false;
   overlays.set(id, { ...entry, content });
+  notifyListeners();
+  return true;
+}
+
+/**
+ * Updates the mutable `filterText`/`selectedIndex` state of a command palette overlay and notifies
+ * subscribers. `selectedIndex` is always clamped to `[0, itemCount - 1]` (or `0` when `itemCount`
+ * is `0`) — both when moved by `selectedIndexDelta` and when left alone, since a `filterText`
+ * change can shrink the filtered list out from under the previous index.
+ *
+ * @param id The overlay id to update
+ * @param patch `filterText` replaces the stored filter text (omit to leave it unchanged; the empty
+ *   string is normalized to undefined so the entry never stores `''`); `selectedIndex` sets the
+ *   highlighted index ABSOLUTELY (the active palette mirrors cmdk's arrow-key highlight this way —
+ *   it knows the resulting index, not a delta); `selectedIndexDelta` moves the current index by
+ *   this many items; both clamp; `itemCount` is the length of the filtered item list used to clamp
+ *   `selectedIndex`
+ * @returns True if the overlay was found and updated, false otherwise
+ */
+export function updateCommandPaletteState(
+  id: string,
+  patch: {
+    filterText?: string;
+    selectedIndex?: number;
+    selectedIndexDelta?: number;
+    itemCount: number;
+  },
+): boolean {
+  const entry = overlays.get(id);
+  if (!entry || entry.type !== 'commandPalette') return false;
+
+  const maxIndex = Math.max(0, patch.itemCount - 1);
+  // Callers never pass selectedIndex and selectedIndexDelta together — an update either sets the
+  // highlight absolutely or moves it — so no precedence rule between them is needed here.
+  const rawIndex = patch.selectedIndex ?? entry.selectedIndex + (patch.selectedIndexDelta ?? 0);
+  const selectedIndex = Math.min(Math.max(rawIndex, 0), maxIndex);
+
+  overlays.set(id, {
+    ...entry,
+    // Normalize '' to undefined so the entry's filterText is never the empty string
+    filterText: patch.filterText !== undefined ? patch.filterText || undefined : entry.filterText,
+    selectedIndex,
+  });
   notifyListeners();
   return true;
 }

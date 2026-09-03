@@ -120,6 +120,8 @@ function buildProps(overrides: Partial<FindProps> = {}): FindProps {
     selectedBookIds: [],
     localizedBookData: LOCALIZED_BOOK_DATA,
     shouldMatchCase: false,
+    ignoreWhitespaceDifferences: false,
+    ignoreDiacritics: false,
     searchTextType: 'all',
     wordRestriction: 'none',
     isRegexAllowed: false,
@@ -147,6 +149,8 @@ function buildProps(overrides: Partial<FindProps> = {}): FindProps {
     setSearchTextType: vi.fn(),
     setWordRestriction: vi.fn(),
     setShouldMatchCase: vi.fn(),
+    setIgnoreWhitespaceDifferences: vi.fn(),
+    setIgnoreDiacritics: vi.fn(),
     setIsRegexAllowed: vi.fn(),
     onToggleMode: vi.fn(),
     onReplaceTermChange: vi.fn(),
@@ -382,6 +386,11 @@ const STRINGS = {
   '%webView_find_capitalization%': 'Capitalization',
   '%webView_find_pattern%': 'Pattern',
   '%webView_find_matchCase%': 'Match case',
+  '%webView_find_flexibility%': 'Match flexibility',
+  '%webView_find_ignoreDiacritics%': 'Ignore diacritics',
+  '%webView_find_ignoreWhitespaceDifferences%': 'Ignore whitespace differences',
+  '%webView_find_ignoreWhitespaceDifferences_tooltip%':
+    'Match any run of spaces in the text where the search has spaces.',
   '%webView_find_allowRegex%': 'Allow regex',
   '%webView_find_showing%': 'Showing',
   '%webView_find_findTab%': 'Find',
@@ -822,9 +831,54 @@ describe('Find — an unrunnable query with results still on screen', () => {
   // job, but the display must not wait on that effect landing — otherwise there is a window showing
   // the last query's results under an empty search box, which is the bug this all exists to fix.
   it('shows the idle prompt instead of stale results when the box is emptied', () => {
-    render(<Find {...buildEmptiedSelectionProps({ scope: 'currentBook', searchTerm: '' })} />);
+    render(<Find {...buildEmptiedSelectionProps({ scope: 'book', searchTerm: '' })} />);
 
     expect(screen.getByText('Enter search text to find results')).toBeInTheDocument();
     expect(screen.queryByText(RESULT_MATCH_TEXT)).not.toBeInTheDocument();
   });
+});
+
+// The reason these exist: the whole point of this pair of options is that they are reachable and
+// default to off. A regression that dropped the wiring — or shipped either one enabled — would
+// silently change every search, and nothing else in this suite would notice.
+describe('Find — whitespace and diacritic tolerance toggles', () => {
+  /** Opens the filters dropdown, which is where both toggles live */
+  async function openFilters(user: ReturnType<typeof setupUser>) {
+    await user.click(screen.getByRole('button', { name: 'Toggle filters' }));
+  }
+
+  it.each([
+    ['Ignore whitespace differences', 'setIgnoreWhitespaceDifferences'] as const,
+    ['Ignore diacritics', 'setIgnoreDiacritics'] as const,
+  ])('reports %s being turned on', async (label, setterName) => {
+    const user = setupUser();
+    const setter = vi.fn();
+    render(<Find {...buildLifecycleProps({ [setterName]: setter })} />);
+
+    await openFilters(user);
+    await user.click(screen.getByRole('checkbox', { name: label }));
+
+    expect(setter).toHaveBeenCalledWith(true);
+  });
+
+  it.each([['Ignore whitespace differences'], ['Ignore diacritics']])(
+    'renders %s unchecked, so a search is exact unless the user opts out',
+    async (label) => {
+      const user = setupUser();
+      render(<Find {...buildLifecycleProps({})} />);
+
+      await openFilters(user);
+
+      expect(screen.getByRole('checkbox', { name: label })).not.toBeChecked();
+    },
+  );
+
+  it.each([['ignoreWhitespaceDifferences'] as const, ['ignoreDiacritics'] as const])(
+    'marks the filters button active while %s is on',
+    async (propName) => {
+      render(<Find {...buildLifecycleProps({ [propName]: true })} />);
+
+      expect(screen.getByRole('button', { name: 'Toggle filters' })).toHaveClass('tw:bg-muted');
+    },
+  );
 });

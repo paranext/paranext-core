@@ -2,7 +2,7 @@ import { useData } from '@renderer/hooks/papi-hooks';
 import { useEvent, usePromise } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getNetworkEvent } from '@shared/services/network.service';
-import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-host';
+import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-shard';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { type ProjectMetadata } from '@shared/models/project-metadata.model';
@@ -43,6 +43,10 @@ const PDPF_REGISTRATION_DEBOUNCE_MS = 200;
  * before the layering PDPF that provides this interface registers). Published resources also carry
  * this interface via the Scripture Extender layering PDPF, so the current project and recent
  * projects (both always scripture or resource projects) resolve from the same filtered fetch.
+ *
+ * `src/main/startup-readiness.util.ts` deliberately keeps its own copy of this literal for its
+ * startup readiness gate (see that file's rationale for why it isn't shared). If you change this
+ * one, consider whether that one should change too.
  */
 const PICKER_PROJECT_INTERFACE = 'platformScripture.USJ_Chapter';
 const PICKER_METADATA_FILTER: ProjectMetadataFilterOptions = {
@@ -94,12 +98,20 @@ function metadataToProjectItem(m: ProjectMetadata): ProjectItem {
 }
 
 export type ProjectPickerData = {
-  currentProject: ProjectItem | undefined;
+  /**
+   * The active Scripture editor's project. Named for Simple mode - where there is exactly one
+   * project tab, so this unambiguously is "the current project" - because every consumer only reads
+   * it in a Simple-mode context (the Power-mode toolbar hides the control that would show it). In
+   * Power mode this still resolves (to whichever editor tab happens to be first), but that value is
+   * not meaningful UI state there and MUST NOT be treated as a deliberate selection - see the
+   * cache-writing effect below.
+   */
+  currentSimpleProject: ProjectItem | undefined;
   recentProjects: ProjectItem[];
   /** All projects, with recentProjects already excluded. */
   allProjects: ProjectItem[];
   /** Set when fetching details for the current project fails. */
-  currentProjectError: string | undefined;
+  currentSimpleProjectError: string | undefined;
   isLoading: boolean;
 };
 
@@ -115,7 +127,9 @@ export function useProjectPickerData(): ProjectPickerData {
   //   window's dock layout, so another window's event just re-derives the same value.
   const [metadataRefreshCounter, setMetadataRefreshCounter] = useState(0);
   const [webViewRefreshCounter, setWebViewRefreshCounter] = useState(0);
-  const [currentProjectError, setCurrentProjectError] = useState<string | undefined>(undefined);
+  const [currentSimpleProjectError, setCurrentSimpleProjectError] = useState<string | undefined>(
+    undefined,
+  );
   const refreshMetadata = useCallback(() => setMetadataRefreshCounter((n) => n + 1), []);
   const refreshActiveEditor = useCallback(() => setWebViewRefreshCounter((n) => n + 1), []);
   // When getMetadataForAllProjects rejects (e.g. a PDPF's getAvailableProjects RPC times out
@@ -245,7 +259,7 @@ export function useProjectPickerData(): ProjectPickerData {
     return entry.promise;
   }, [metadataRefreshCounter]);
 
-  const [currentProject, isCurrentProjectLoading] = usePromise<ProjectItem | undefined>(
+  const [currentSimpleProject, isCurrentSimpleProjectLoading] = usePromise<ProjectItem | undefined>(
     useCallback(async () => {
       // Referenced so this callback re-runs on web view events (open/update/close) to pick up the
       // active editor, without invalidating the metadata cache.
@@ -280,7 +294,7 @@ export function useProjectPickerData(): ProjectPickerData {
       const editorDef = findFirstEditorWebViewDefinition(allDefs);
       const currentProjectId = editorDef?.projectId;
       if (!currentProjectId) {
-        setCurrentProjectError(undefined);
+        setCurrentSimpleProjectError(undefined);
         return undefined;
       }
       try {
@@ -290,7 +304,7 @@ export function useProjectPickerData(): ProjectPickerData {
         const key = normalizeProjectId(currentProjectId);
         const m = metadata.find((md) => normalizeProjectId(md.id) === key);
         if (m) {
-          setCurrentProjectError(undefined);
+          setCurrentSimpleProjectError(undefined);
           return metadataToProjectItem(m);
         }
         // Miss: the active editor references a project not in the USJ-filtered snapshot yet - e.g.
@@ -300,13 +314,13 @@ export function useProjectPickerData(): ProjectPickerData {
         // wedging on an error card. Display fields are identical either way - the interface filter
         // only decides list inclusion, not which fields a project carries.
         const single = await projectLookupService.getMetadataForProject(currentProjectId);
-        setCurrentProjectError(undefined);
+        setCurrentSimpleProjectError(undefined);
         return metadataToProjectItem(single);
       } catch (e) {
         logger.error(
           `ProjectPicker: could not fetch details for current project ${currentProjectId}: ${getErrorMessage(e)}`,
         );
-        setCurrentProjectError('Unable to load current project details');
+        setCurrentSimpleProjectError('Unable to load current project details');
         return {
           id: currentProjectId,
           fullName: 'Unable to load current project details',
@@ -378,12 +392,12 @@ export function useProjectPickerData(): ProjectPickerData {
   );
 
   return {
-    currentProject,
+    currentSimpleProject,
     recentProjects,
     allProjects,
-    currentProjectError,
+    currentSimpleProjectError,
     isLoading:
-      isCurrentProjectLoading ||
+      isCurrentSimpleProjectLoading ||
       isRecentIdsLoading ||
       isRecentProjectsLoading ||
       isAllProjectsLoading,

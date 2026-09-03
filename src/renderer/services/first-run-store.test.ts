@@ -46,7 +46,9 @@ function stubSettings({
   firstRunComplete = false,
   showReminder,
 }: { mode?: string; firstRunComplete?: boolean; showReminder?: boolean } = {}) {
-  // @ts-expect-error ts(2345) - mock returns a narrower type than the full SettingTypes union
+  // @ts-expect-error ts(2345) - the mock's implicit-undefined fallthrough is not assignable to
+  // the SettingTypes union; that mismatch is the load-bearing compile-time guard that every
+  // setting this store reads has a case above (no member of SettingTypes admits undefined).
   mockGet.mockImplementation(async (key: string) => {
     if (key === 'platform.interfaceMode') return mode;
     if (key === 'platform.firstRunComplete') return firstRunComplete;
@@ -235,7 +237,9 @@ describe('resolveFirstRunState', () => {
 
   it('does not re-persist platform.syncOnStartup when the setting is already persisted', async () => {
     localStorage.setItem('platform-bible.syncOnStartupDisabled', 'true');
-    // @ts-expect-error ts(2345) - mock returns a narrower type than the full SettingTypes union
+    // @ts-expect-error ts(2345) - the mock's implicit-undefined fallthrough is not assignable
+    // to the SettingTypes union; that mismatch is the load-bearing compile-time guard that every
+    // setting this store reads has a case above (no member of SettingTypes admits undefined).
     mockGet.mockImplementation(async (key: string) => {
       if (key === 'platform.interfaceMode') return 'simple';
       if (key === 'platform.firstRunComplete') return true;
@@ -511,7 +515,9 @@ describe('background registration re-check (completed simple-mode user)', () => 
   });
 
   it('fails open and raises the wizard when the reminder setting read throws', async () => {
-    // @ts-expect-error ts(2345) - mock returns a narrower type than the full SettingTypes union
+    // @ts-expect-error ts(2345) - the mock's implicit-undefined fallthrough is not assignable
+    // to the SettingTypes union; that mismatch is the load-bearing compile-time guard that every
+    // setting this store reads has a case above (no member of SettingTypes admits undefined).
     mockGet.mockImplementation(async (key: string) => {
       if (key === 'platform.interfaceMode') return 'simple';
       if (key === 'platform.firstRunComplete') return true;
@@ -692,7 +698,9 @@ describe('OS-language default on fresh first-run', () => {
       en: { autonym: 'English' },
     });
     // Override the stubSettings mock to return ['en'] for platform.interfaceLanguage.
-    // @ts-expect-error ts(2345) - mock returns a narrower type than the full SettingTypes union
+    // @ts-expect-error ts(2345) - the mock's implicit-undefined fallthrough is not assignable
+    // to the SettingTypes union; that mismatch is the load-bearing compile-time guard that every
+    // setting this store reads has a case above (no member of SettingTypes admits undefined).
     mockGet.mockImplementation(async (key: string) => {
       if (key === 'platform.interfaceMode') return 'simple';
       if (key === 'platform.firstRunComplete') return false;

@@ -194,6 +194,22 @@ const config: StorybookConfig = {
         /^@shared\/services\/rpc-handler\.factory$/,
         join(__dirname, 'papi-stubs/rpc-handler.factory.ts'),
       ),
+      // The toolbar's sync status is derived entirely from Send/Receive commands and network events,
+      // none of which Storybook can answer — so without this the button can only ever render `idle`
+      // (then `unknown` a minute later). The mock lets a story name the status directly, and defaults
+      // to the same inert `idle` otherwise. Same reasoning as above re: NormalModuleReplacementPlugin
+      // vs `resolve.alias` (`@renderer/*` is a TsconfigPathsPlugin path).
+      new NormalModuleReplacementPlugin(
+        /^@renderer\/hooks\/use-sync-status\.hook$/,
+        join(__dirname, 'mocks/use-sync-status.hook.ts'),
+      ),
+      // Delegates every command to the real service (which answers "no backend" through the inert
+      // rpc handler) except the two Send/Receive commands whose rejection would otherwise make the
+      // sync button's accepted-cancel state unreachable in Storybook. See the stub for details.
+      new NormalModuleReplacementPlugin(
+        /^@shared\/services\/command\.service$/,
+        join(__dirname, 'papi-stubs/command.service.ts'),
+      ),
     );
 
     // Remove the Storybook Webpack rules that we already have our own rules for

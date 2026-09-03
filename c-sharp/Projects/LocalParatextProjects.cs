@@ -97,9 +97,10 @@ internal class LocalParatextProjects : IDisposable
     // Published projects are read-only in PT9 — ResourceProjectFileManager.SetXml() throws
     // AttemptedResourceWritingException — and cannot accept comment writes. They therefore do not
     // advertise legacyCommentManager.comments; everything else still applies because published
-    // projects can still be read for scripture and resource-references. The unpublished list is
-    // defined as the published list plus the comment interface so the two stay in sync by
-    // construction.
+    // projects can still be read for scripture and resource-references. They also do not advertise
+    // PT9 interlinear: published projects are distributed archives that do not carry interlinear
+    // authoring data. The unpublished list is the published list plus the remaining interfaces,
+    // kept in sync with that base by construction.
     private static readonly List<string> s_paratextPublishedProjectInterfaces =
     [
         ProjectInterfaces.BASE,
@@ -111,6 +112,7 @@ internal class LocalParatextProjects : IDisposable
         ProjectInterfaces.USX_VERSE,
         ProjectInterfaces.PLAIN_TEXT_VERSE,
         ProjectInterfaces.MARKER_NAMES,
+        ProjectInterfaces.STYLE_INFO,
         ProjectInterfaces.TEXT_CONNECTION_SETTINGS,
         ProjectInterfaces.USER_EDITOR_SETTINGS,
         ProjectInterfaces.SCRIPTURE_EDIT_PERMISSIONS,
@@ -121,6 +123,7 @@ internal class LocalParatextProjects : IDisposable
     [
         .. s_paratextPublishedProjectInterfaces,
         ProjectInterfaces.LEGACY_COMMENT,
+        ProjectInterfaces.PT9_INTERLINEAR,
     ];
 
     public LocalParatextProjects(PapiClient? papiClient = null)
@@ -579,12 +582,37 @@ internal class LocalParatextProjects : IDisposable
     /// </summary>
     public IEnumerable<ProjectDetails> GetAvailablePublishedProjectDetails()
     {
-        // IsResourceProject is true for ResourceScrText and JoinedScrText (PT9's read-only
-        // resource-backed project shapes).
-        return GetVisibleScrTexts()
-            .Where(scrText => scrText.IsResourceProject)
-            .Select(TryGetProjectDetails)
-            .OfType<ProjectDetails>();
+        return GetAllResourceScrTexts().Select(TryGetProjectDetails).OfType<ProjectDetails>();
+    }
+
+    /// <summary>
+    /// Returns all resource <see cref="ScrText"/>s visible to the current user. Returns an empty
+    /// sequence when the user has no valid Paratext registration.
+    /// </summary>
+    private static IEnumerable<ScrText> GetAllResourceScrTexts()
+    {
+        if (!RegistrationInfo.DefaultUser.IsValid)
+            return [];
+        // Snapshot under the ScrTextArbitrator lock and materialize before returning — same
+        // pattern as GetScrTexts() to avoid racing the background watcher's RefreshScrTexts.
+        //
+        // AllAccessible (not ScriptureOnly) is required. ScriptureOnly carries the Resources bit, so
+        // it already enumerates .p8z resource bundles whose project type IS scripture; what it omits
+        // is the NonScripture bit, and the UBS Translator's Notes/Handbook resources (TNN, TND, HBK)
+        // are note-typed, not scripture-typed. Enumerating with ScriptureOnly drops them from both
+        // the Get Resources dialog and the text collection — confirmed by manual test on a machine
+        // with TNN installed.
+        //
+        // The NonScripture bit also admits resources this factory cannot serve — XML dictionaries,
+        // MARBLE resources, Global Consultant and Anthropology Notes — which reach the resource
+        // picker typed as Bible texts and render blank. Narrowing this to the note types we do
+        // support needs a project-type test verified on a machine that has them installed; nothing
+        // downstream distinguishes them, so widening this enum widens what the picker offers.
+        using (ScrTextArbitrator.GetLock())
+            return ScrTextCollection
+                .ScrTexts(IncludeProjects.AllAccessible)
+                .Where(scrText => scrText.IsResourceProject)
+                .ToList();
     }
 
     /// <summary>
