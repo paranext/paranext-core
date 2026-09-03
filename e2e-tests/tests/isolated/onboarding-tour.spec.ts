@@ -235,7 +235,7 @@ test.describe('Onboarding tour', () => {
     await expect(dialog).toBeVisible({ timeout: 15_000 });
   });
 
-  test('Help > Show the tour again reopens the completed tour at its first stop', async ({
+  test('Help > Show the tour reopens the completed tour at its first stop', async ({
     mainPage,
   }) => {
     await waitForAppReadyWithTour(mainPage);
@@ -248,7 +248,7 @@ test.describe('Onboarding tour', () => {
     await expect(dialog).not.toBeVisible({ timeout: 5_000 });
 
     await mainPage.getByRole('menuitem', { name: /^Help$/i }).click();
-    await mainPage.getByRole('menuitem', { name: /Show the tour again/i }).click();
+    await mainPage.getByRole('menuitem', { name: /Show the tour/i }).click();
 
     await expect(dialog).toBeVisible({ timeout: 15_000 });
     expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);

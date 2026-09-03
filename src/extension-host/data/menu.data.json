@@ -73,8 +73,8 @@
         "iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"
       },
       {
-        "label": "%mainMenu_helpInfo_showTourAgain%",
-        "localizeNotes": "Application main menu > Help > Show the tour again",
+        "label": "%mainMenu_helpInfo_showTour%",
+        "localizeNotes": "Application main menu > Help > Show the tour",
         "group": "platform.helpInfo",
         "order": 4,
         "command": "platform.showOnboardingTour"
