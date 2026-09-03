@@ -244,6 +244,10 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 beforeEach(() => {
   vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
   vi.mocked(useOpenProjectBookIds).mockReturnValue(['REV']);
+  // The real `useInterfaceMode` runs in these tests and caches the resolved mode, so without this
+  // a test that renders while the setting is still loading would inherit the previous test's mode
+  // and treat it as known.
+  localStorage.clear();
 });
 
 const mockSendCommandWithSyncStates = (
@@ -441,7 +445,9 @@ describe('PlatformBibleToolbar — Sync button', () => {
   });
 
   it('is not rendered in power mode even when send/receive is available', async () => {
-    // Sync belongs to simple mode; power users send/receive per project from the Home view
+    // Power mode deliberately has no toolbar Sync: send/receive already surfaces itself there (a
+    // notification while syncing, progress in the send/receive dialog, and progress in an open
+    // editor window), and power users start one per project from the Home view.
     vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
     mockSendCommand(true);
     render(<PlatformBibleToolbar />);
@@ -452,6 +458,43 @@ describe('PlatformBibleToolbar — Sync button', () => {
     expect(
       document.querySelector('button[data-testid="toolbar-sync-button"]'),
     ).not.toBeInTheDocument();
+  });
+
+  it('is not rendered at startup while the interface mode is not yet known', async () => {
+    // A power user's first start has no cached mode, so the setting reports its 'simple' default
+    // until it resolves. Sync has to wait for the real mode rather than render on that placeholder,
+    // or it appears in the power toolbar and then vanishes.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), true]);
+    mockSendCommand(true);
+    render(<PlatformBibleToolbar />);
+
+    // The marketing version arrives from an async command, so finding it proves the toolbar has
+    // rendered past its async work and the absence below is a real absence, not an early read.
+    await screen.findByText('1.0.0');
+    expect(
+      document.querySelector('button[data-testid="toolbar-sync-button"]'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('appears once the interface mode resolves to simple', async () => {
+    // The positive control for the test above: same setup, same assertions, only the mode settling
+    // differs — so the absence there is caused by the unknown mode and nothing else.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), true]);
+    mockSendCommand(true);
+    const { rerender } = render(<PlatformBibleToolbar />);
+    await screen.findByText('1.0.0');
+    expect(
+      document.querySelector('button[data-testid="toolbar-sync-button"]'),
+    ).not.toBeInTheDocument();
+
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    rerender(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(
+        document.querySelector('button[data-testid="toolbar-sync-button"]'),
+      ).toBeInTheDocument();
+    });
   });
 
   it('is rendered with the idle label when send/receive is available', async () => {
@@ -616,6 +659,23 @@ describe('PlatformBibleToolbar — project picker Select visibility by interface
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
       expect(screen.queryByTestId('project-picker-select')).not.toBeInTheDocument();
+    });
+  });
+
+  it('hides project picker Select while the interface mode is not yet known', async () => {
+    // Same startup window the Sync button waits out: with no cached mode the setting reports its
+    // 'simple' default, and a picker that power mode replaces with the Home button must not render
+    // on that placeholder.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), true]);
+    const { rerender } = render(<PlatformBibleToolbar />);
+    await screen.findByText('1.0.0');
+    expect(screen.queryByTestId('project-picker-select')).not.toBeInTheDocument();
+
+    // Positive control: the same render shows the picker as soon as the mode settles.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    rerender(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('project-picker-select')).toBeInTheDocument();
     });
   });
 });
@@ -903,6 +963,26 @@ describe('PlatformBibleToolbar — books beyond the active project', () => {
     render(<PlatformBibleToolbar />);
     const control = await screen.findByTestId('book-chapter-control');
     expect(control).not.toHaveAttribute('data-additional-books');
+  });
+
+  it('offers nothing beyond the active project while the interface mode is not yet known', async () => {
+    // Same startup window Sync and the project picker wait out. The widened list is simple mode's
+    // content, so a power user must not be shown it — nor the "show more books" affordance that
+    // comes with it — on the 'simple' placeholder that stands in for an unresolved read.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), true]);
+    const { rerender } = render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).not.toHaveAttribute('data-additional-books');
+
+    // Positive control: the same render offers the open resource's books once the mode settles.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    rerender(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('book-chapter-control')).toHaveAttribute(
+        'data-additional-books',
+        'REV',
+      );
+    });
   });
 
   it('offers the current book when the active project does not have it', async () => {

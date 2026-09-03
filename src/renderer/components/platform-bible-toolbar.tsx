@@ -11,7 +11,7 @@ import {
   useRecentScriptureRefs,
   useProjectSetting,
 } from '@renderer/hooks/papi-hooks';
-import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { useOpenProjectBookIds } from '@renderer/hooks/use-open-project-book-ids.hook';
 import { useSendReceiveAvailability } from '@renderer/hooks/use-send-receive-availability.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
@@ -209,7 +209,14 @@ export function PlatformBibleToolbar() {
   const { currentSimpleProject, recentProjects, allProjects, currentSimpleProjectError } =
     useProjectPickerData();
 
-  const isPowerMode = useIsPowerMode();
+  // One subscription for both answers, since the toolbar gates controls on each. `isSimpleMode` is
+  // deliberately not `!isPowerMode`: the simple-only controls below must never appear in power
+  // mode, so they wait for the mode to be known rather than rendering on the 'simple' placeholder
+  // that stands in for an unresolved read. Power-only controls can use `isPowerMode` as-is — that
+  // test already fails closed while the mode is unknown.
+  const [interfaceMode, , isInterfaceModeKnown] = useInterfaceMode();
+  const isPowerMode = interfaceMode === 'power';
+  const isSimpleMode = isInterfaceModeKnown && interfaceMode === 'simple';
 
   // The resolved navigation target: the tracked (last-selected) web view's saved definition or,
   // failing that, the main project editor's — same rule `useProjectPickerData` uses to find the
@@ -276,22 +283,28 @@ export function PlatformBibleToolbar() {
 
   // Simple mode is the only mode this ships in: it has a single, global book/chapter/verse control,
   // so widening its book list is unambiguous. Power mode's own controls are left as they are for
-  // that team to decide on; the component API stays open to them either way. Disabled outright in
-  // Power mode so it opens no data providers and no booksPresent subscriptions for a result nothing
-  // there reads.
+  // that team to decide on; the component API stays open to them either way. Gated on
+  // `!isPowerMode` rather than the stricter `isSimpleMode` for the same reason as the availability
+  // probe below: this is a prefetch, so starting it while the mode is still unknown means the
+  // widened list is ready the moment we learn the mode is simple. The cost is that a power user
+  // whose mode has not resolved yet briefly opens the project's data provider and one booksPresent
+  // subscription for a result nothing there reads.
   const openProjectBookIds = useOpenProjectBookIds(
     resolvedWebView?.definition.projectId,
     !isPowerMode,
   );
   const additionalBookIds = useMemo(() => {
-    if (isPowerMode) return EMPTY_BOOK_IDS;
+    // `isSimpleMode`, not `!isPowerMode`: unlike the prefetch above, this feeds rendered content —
+    // the widened book list and the "show more books" affordance that comes with it — so an
+    // unresolved read must not put simple mode's list in front of a power user.
+    if (!isSimpleMode) return EMPTY_BOOK_IDS;
     // BookChapterControl renders exactly the book list it is given, so the current book has to come
     // from here or a reference on a book the active project lacks would be missing from its own
     // picker.
     if (projectBookIds.includes(scrRef.book) || openProjectBookIds.includes(scrRef.book))
       return openProjectBookIds;
     return [...openProjectBookIds, scrRef.book];
-  }, [isPowerMode, projectBookIds, openProjectBookIds, scrRef.book]);
+  }, [isSimpleMode, projectBookIds, openProjectBookIds, scrRef.book]);
   // Stable identity per value, for the same reason fetchActiveBookIds is memoized above:
   // BookChapterControl memoizes its book list on this function's identity.
   const fetchAdditionalBookIds = useCallback(() => additionalBookIds, [additionalBookIds]);
@@ -434,8 +447,12 @@ export function PlatformBibleToolbar() {
     'Marketing Version',
   );
 
-  // `undefined` while unknown — the render gate below treats that as available (fail open). Only
-  // checked in simple mode, since that gate is the only thing the answer feeds.
+  // `undefined` while unknown — the render gate below treats that as available (fail open). Skipped
+  // in power mode, where nothing consumes the answer. Gated on `!isPowerMode` rather than the
+  // stricter `isSimpleMode` on purpose: this probe is a prefetch, so starting it while the mode is
+  // still unknown means the answer is ready the moment we learn the mode is simple, instead of
+  // making simple-mode users wait for two round trips in sequence. The cost is one wasted probe for
+  // a power user whose mode has not resolved yet.
   const isSendReceiveAvailable = useSendReceiveAvailability({ enabled: !isPowerMode });
   // Fail open a second way: even a settled `false` must not hide the indicator once the backend has
   // reported a sync. `useSendReceiveAvailability` asks whether the send/receive EXTENSION is
@@ -483,13 +500,17 @@ export function PlatformBibleToolbar() {
         appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
         configAreaChildren={
           <>
-            {!isPowerMode && (isSendReceiveAvailable !== false || hasBackendSynced) && (
-              // Simple mode only — power users send/receive per project from the Home
-              // view. Fail open on availability: `undefined` means not known yet (the extension
-              // host is busy, or send/receive is still activating), and the button must not hinge
-              // on that resolving. A settled `false` hides it — unless the backend has reported a
-              // sync, which is a surface the user needs regardless of what the extension probe says
-              // (see `hasBackendSynced` above).
+            {isSimpleMode && (isSendReceiveAvailable !== false || hasBackendSynced) && (
+              // Simple mode only, by UX decision: power mode deliberately has no toolbar Sync
+              // because syncing already surfaces itself there — a notification while it runs,
+              // progress inside the Sync dialog, and progress in an open editor window — and power
+              // users start a sync per project from the Home view.
+              //
+              // Fail open on availability: `undefined` means not known yet (the extension host is
+              // busy, or the send/receive extension is still activating), and the button must not
+              // hinge on that resolving. A settled `false` hides it — unless the backend has
+              // reported a sync, which is a surface the user needs regardless of what the extension
+              // probe says (see `hasBackendSynced` above).
               //
               // The cost of failing open is one seed-retry loop for the extension's CLAIM in builds
               // with no send/receive at all, restarted on each Simple/Power toggle since that unmounts
@@ -547,7 +568,7 @@ export function PlatformBibleToolbar() {
             </Tooltip>
           </TooltipProvider>
         )}
-        {!isPowerMode && (
+        {isSimpleMode && (
           <Select
             value={currentSimpleProject?.id ?? ''}
             onValueChange={async (projectId: string) => {
