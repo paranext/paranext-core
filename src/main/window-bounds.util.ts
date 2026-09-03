@@ -16,6 +16,44 @@ export const DEFAULT_WINDOW_HEIGHT = 728;
 /** The one property of an Electron `Display` this module needs, so tests can pass plain objects */
 export type DisplayLike = { bounds: WindowRectangle };
 
+/** A display the DPI-unit correction below needs to know the scale factor of */
+export type ScaledDisplayLike = DisplayLike & { scaleFactor: number };
+
+/**
+ * Corrects a captured rectangle's width/height for the DPI-unit mismatch Electron exhibits on
+ * Windows for a window created (or landing) directly on a display whose scale factor differs from
+ * the primary display's: `getBounds()` reports the size in the PRIMARY display's units rather than
+ * the units of the display the window is actually on, so a window that is truly 1024x728 in its own
+ * display's units reads back around 25% larger when that display is scaled 125% against a 100%
+ * primary. The persisted state has to be in the containing display's own units — what the window
+ * was actually asked for, and what restoring it asks for again next launch — or the misread size
+ * becomes next launch's request and compounds by the same ratio every quit/reopen cycle.
+ *
+ * The correction is the ratio `primaryDisplay.scaleFactor / containingDisplay.scaleFactor`, not
+ * simply the containing display's own factor: the reading is expressed in the primary's units
+ * whatever those are, so a non-100% primary needs the ratio between the two, not just one side of
+ * it. Only width/height are affected — `x`/`y` are returned unchanged — and `bounds` itself is
+ * returned unchanged when the two displays share a scale factor.
+ *
+ * @param bounds Rectangle as `getBounds()` reported it
+ * @param containingDisplay Display the window is actually on
+ * @param primaryDisplay The primary display, whose units a mismatched reading is expressed in
+ * @returns `bounds`, or a copy with width/height corrected to the containing display's own units
+ */
+export function correctBoundsForDisplayScale(
+  bounds: WindowRectangle,
+  containingDisplay: ScaledDisplayLike,
+  primaryDisplay: ScaledDisplayLike,
+): WindowRectangle {
+  const ratio = primaryDisplay.scaleFactor / containingDisplay.scaleFactor;
+  if (ratio === 1) return bounds;
+  return {
+    ...bounds,
+    width: Math.round(bounds.width * ratio),
+    height: Math.round(bounds.height * ratio),
+  };
+}
+
 /** Whether `bounds` lies fully within `display` — the containment rule for "visible" */
 function isContainedIn(bounds: WindowRectangle, display: DisplayLike): boolean {
   return (
