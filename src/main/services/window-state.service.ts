@@ -413,8 +413,15 @@ export async function startFocusedWindowIdEvent(): Promise<void> {
               summary: 'The newly focused window id, or `undefined` if no window is focused.',
               schema: {
                 type: 'object',
-                properties: { focusedWindowId: { type: ['number', 'null'] } },
-                required: ['focusedWindowId'],
+                // Not `required`: this key is genuinely absent from the wire payload (rather than
+                // sent as an explicit `null`) when no window is focused — `emit`'s JSON
+                // serialization drops an `undefined`-valued property instead of nulling it, unlike
+                // the `undefined`-to-`null` normalization JSON-RPC command results get (see
+                // `fixupResponse` in `rpc.model.ts`, which is why `platform.getFocusedWindowId`'s own
+                // schema can honestly say `oneOf: [number, null]`). Typed as `number` alone, since
+                // the property is never actually the literal `null` — only present-as-a-number or
+                // absent.
+                properties: { focusedWindowId: { type: 'number' } },
               },
             },
           ],
