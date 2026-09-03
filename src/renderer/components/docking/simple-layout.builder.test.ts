@@ -260,13 +260,33 @@ describe('simple-layout.builder', () => {
       expect(collectTabs(result)[0].data).toBeUndefined();
     });
 
-    it('is what buildSimpleLayoutForProject bakes into the static layout', () => {
-      // Both paths must produce the same baked layout: the static one goes through
+    /**
+     * A tab's `data` payload with its `id` field removed, for comparing baked content across a
+     * minted id.
+     */
+    function dataWithoutId(data: unknown): unknown {
+      if (!data || typeof data !== 'object') return data;
+      // Tab data is dynamic — narrow only to strip the one field this comparison excludes.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const rest = { ...(data as { id?: string }) };
+      delete rest.id;
+      return rest;
+    }
+
+    it('bakes the same tab data as buildSimpleLayoutForProject, aside from the ids it freshly mints', () => {
+      // Both paths must bake the same data into the static layout: the static one goes through
       // `buildSimpleLayoutForProject`, and supplement tabs merged in afterward are baked by calling
-      // this directly.
-      expect(applyProjectIdToTabs(simpleLayout, 'proj-1')).toEqual(
-        buildSimpleLayoutForProject('proj-1'),
-      );
+      // this directly. `buildSimpleLayoutForProject` additionally mints a fresh id for every tab
+      // (see `mint-web-view-ids.util.ts`; covered by the `mints a fresh id...` tests above), so this
+      // compares each tab's `data` with `id` excluded rather than the tabs (or ids) themselves.
+      const directlyBaked = collectTabs(applyProjectIdToTabs(simpleLayout, 'proj-1'));
+      const { layout: builtLayout } = buildSimpleLayoutForProject('proj-1');
+      const built = collectTabs(builtLayout);
+
+      expect(built).toHaveLength(directlyBaked.length);
+      built.forEach((builtTab, index) => {
+        expect(dataWithoutId(builtTab.data)).toEqual(dataWithoutId(directlyBaked[index].data));
+      });
     });
   });
 });
