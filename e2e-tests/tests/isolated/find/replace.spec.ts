@@ -67,6 +67,19 @@ function firstResultCard(frame: FrameLocator): Locator {
   return frame.locator('[role="button"][aria-pressed]').first();
 }
 
+/**
+ * The status-bar paragraph under the results list — carries the result count (as "N results" or
+ * "Showing N of M results"), the "No results found" message, and the regex error message.
+ *
+ * `role="status"` is excluded deliberately: the idle/no-open-projects/invalid-query placeholders
+ * render through `EmptyState`, which adds `role="status"` and the same `tw:text-center
+ * tw:font-light` classes, so without this exclusion the idle placeholder would satisfy this locator
+ * too. Mirrors `resultsMessage` in `find.spec.ts`.
+ */
+function resultsMessage(frame: FrameLocator): Locator {
+  return frame.locator('p:not([role="status"]).tw\\:font-light.tw\\:text-center');
+}
+
 /** The Find dock tab, which in Power mode is a normal closable tab rather than a fixed one. */
 function findTab(mainPage: Page): Locator {
   return mainPage.locator('.dock-tab', { hasText: /^Find/i });
@@ -394,15 +407,25 @@ test.describe('Replace operations', () => {
   // the plural is what makes a Replace All that acted on the focused result alone fail here.
   test('replaces every visible result from Replace All', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
-    const counter = frame.locator('.tw\\:tabular-nums');
 
     // Baseline occurrences of the replacement word already in the project: the three single-replace
     // tests above each wrote one, using the same default replacement term as this test, so counting
-    // "replaced" after this test's own Replace All would double-count theirs.
+    // "replaced" after this test's own Replace All would double-count theirs (running this test
+    // alone, with those three skipped, the baseline is legitimately 0). Read the total from the
+    // status-bar message, not the "N of M" counter above the results list: that counter tracks only
+    // the loaded batch (capped at RESULTS_BATCH_SIZE, 100 — see find.web-view.tsx) and freezes at
+    // "1 of 100" once REPLACE_SEARCH_TERM's several hundred real matches push the true total past
+    // it, while the status-bar total comes straight from the find job's own count.
     await frame.locator('#search-term').fill('replaced');
     await frame.locator('#search-term').press('Enter');
-    await expect(counter).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
-    const baselineCount = Number((await counter.textContent())?.match(/of (\d+)/)?.[1]);
+    const baselineMessage = resultsMessage(frame);
+    await expect(baselineMessage).toHaveText(/^(no results found|\d+ results)$/i, {
+      timeout: SEARCH_TIMEOUT_MS,
+    });
+    const baselineText = (await baselineMessage.textContent()) ?? '';
+    const baselineCount = /no results found/i.test(baselineText)
+      ? 0
+      : Number(baselineText.match(/(\d+) results$/)?.[1]);
     expect(Number.isNaN(baselineCount)).toBe(false);
 
     await frame.locator('#search-term').fill(REPLACE_SEARCH_TERM);
@@ -431,9 +454,10 @@ test.describe('Replace operations', () => {
 
     await frame.locator('#search-term').fill('replaced');
     await frame.locator('#search-term').press('Enter');
-    await expect(counter).toHaveText(new RegExp(`of ${baselineCount + toastCount}$`), {
-      timeout: SEARCH_TIMEOUT_MS,
-    });
+    await expect(resultsMessage(frame)).toHaveText(
+      new RegExp(`^${baselineCount + toastCount} results$`),
+      { timeout: SEARCH_TIMEOUT_MS },
+    );
 
     await closeFindPanel(mainPage);
   });
