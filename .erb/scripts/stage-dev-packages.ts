@@ -27,8 +27,13 @@
  * - Default: fetch and check out the revision pinned in `dev-packages.json` (refusing to touch a
  *   checkout with uncommitted changes), then build and stage if the marker is stale.
  * - `--local`: build and stage whatever is currently checked out, working changes and all, skipping
- *   the origin/revision handling and the freshness marker. This is the inner loop for editor
- *   development (`npm run build:editor`).
+ *   the origin/revision handling. Its output is marked so the next regular run always replaces it.
+ *   This is the inner loop for editor development (`npm run build:editor`).
+ * - `--skip-fetch` (or `PT_SKIP_DEV_PACKAGE_FETCH=1`): resolve the revision against the refs the
+ *   checkout already has instead of fetching. `npm install` cannot pass a flag through to a
+ *   lifecycle script, so the environment variable is the form that works there. Use it offline;
+ *   what gets staged is whatever the checkout resolves the revision to, which may trail the
+ *   remote.
  */
 
 const { execSync } = require('child_process');
@@ -43,6 +48,10 @@ const STAGED_FROM_MARKER = '.staged-from';
 
 /** Build from the current checkout state instead of the pinned revision; always rebuild. */
 const isLocalMode: boolean = process.argv.includes('--local');
+
+/** Resolve the pinned revision against the checkout's existing refs rather than fetching. */
+const isFetchSkipped: boolean =
+  process.argv.includes('--skip-fetch') || !!process.env.PT_SKIP_DEV_PACKAGE_FETCH;
 
 // #region Types — keep in sync with dev-packages.schema.json (both must be updated together)
 
@@ -92,8 +101,8 @@ function getDevRepoPath(folder: string): string {
 }
 
 /** Environment for commands run inside a dev repo. */
-function devRepoEnv() {
-  const env = {
+function devRepoEnv(): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = {
     ...process.env,
     // Allow volta to run pnpm commands
     VOLTA_FEATURE_PNPM: '1',
@@ -157,8 +166,21 @@ function cloneRepoIfNeeded(repo: DevRepo): void {
  */
 function verifyOrigin(repo: DevRepo, repoPath: string): void {
   const origin = execSync('git remote get-url origin', { cwd: repoPath, encoding: 'utf8' }).trim();
-  // Compare without the optional `.git` suffix or a trailing slash, which are not meaningful here.
-  const normalize = (url: string) => url.replace(/\/+$/, '').replace(/\.git$/, '');
+  // Reduce every URL form git accepts for one repo to `<host>/<path>` before comparing. Only the
+  // repo identity matters here, not the transport: anyone who pushes to the dev repo has an SSH
+  // remote (`git@github.com:org/repo.git`), which is the same repo as the HTTPS `cloneUrl` and must
+  // not be reported as a move.
+  const normalize = (url: string) =>
+    url
+      .trim()
+      .replace(/\/+$/, '')
+      .replace(/\.git$/, '')
+      // Drop the scheme (`https://`, `ssh://`, `git+https://`) and any `user@` prefix, then turn
+      // scp-style `host:org/repo` into `host/org/repo`.
+      .replace(/^[a-z+]+:\/\//i, '')
+      .replace(/^[^@/]+@/, '')
+      .replace(/^([^/:]+):/, '$1/')
+      .toLowerCase();
   if (normalize(origin) === normalize(repo.cloneUrl)) return;
 
   // Keep the previous URL under a remote named for its organization rather than overwriting it, so
@@ -186,8 +208,18 @@ function checkoutRevision(repo: DevRepo): void {
     );
   }
 
-  console.log(`Fetching latest in ${repo.folder}...`);
-  execSync('git fetch origin --tags', { stdio: 'inherit', cwd: repoPath });
+  if (isFetchSkipped) {
+    console.log(`Skipping the fetch in ${repo.folder}; using the refs it already has.`);
+  } else {
+    console.log(`Fetching latest in ${repo.folder}...`);
+    try {
+      execSync('git fetch origin --tags', { stdio: 'inherit', cwd: repoPath });
+    } catch (error) {
+      throw new Error(
+        `Could not fetch ${repo.cloneUrl} in ${repoPath}.\n\nIf you are offline and that checkout already has ${repo.revision}, stage what it has instead of fetching:\n\n  PT_SKIP_DEV_PACKAGE_FETCH=1 npm install\n\nWhatever the checkout resolves ${repo.revision} to is then what gets staged, which may be older than the remote.\n\nFetch failed with: ${error instanceof Error ? error.message : error}\n`,
+      );
+    }
+  }
   console.log(`Checking out ${repo.revision} in ${repo.folder}...`);
   // When the revision is a branch, check out the REMOTE-TRACKING state, detached. `platform-yalc`
   // is routinely force-pushed (it is rebased onto main), and a `git pull` on a local branch that
@@ -211,6 +243,18 @@ function checkoutRevision(repo: DevRepo): void {
     });
   } else {
     // A tag or commit hash; immutable, so nothing to sync after checkout.
+    try {
+      execSync(`git rev-parse --verify --quiet "${repo.revision}^{commit}"`, {
+        stdio: 'pipe',
+        cwd: repoPath,
+      });
+    } catch {
+      throw new Error(
+        `${repoPath} has no revision "${repo.revision}"${
+          isFetchSkipped ? ', and the fetch that would have brought it in was skipped' : ''
+        }.\n`,
+      );
+    }
     execSync(`git checkout --detach "${repo.revision}"`, { stdio: 'inherit', cwd: repoPath });
   }
 }
@@ -228,8 +272,8 @@ function getSourceStamp(repoPath: string): string {
 
 /**
  * Whether every package of this repo is already staged from exactly the currently checked-out
- * commit. A dirty source tree never matches, so `--local` builds are always superseded by the next
- * regular run.
+ * commit. Neither a dirty source tree nor a `--local` build ever matches, so both are always
+ * superseded by the next regular run.
  */
 function isStagingCurrent(repo: DevRepo, sourceStamp: string): boolean {
   if (sourceStamp.endsWith('-dirty')) return false;
@@ -245,9 +289,16 @@ function isStagingCurrent(repo: DevRepo, sourceStamp: string): boolean {
  * include/exclude semantics here.
  */
 function getPublishedFiles(packageDir: string): string[] {
+  // npm exports its own flags to child processes as `npm_config_*`. `npm install -w <workspace>`
+  // in this repo would therefore hand `npm pack` a workspace filter that means nothing in the dev
+  // repo, and npm answers with an error object instead of a file list.
+  const env = { ...process.env };
+  delete env.npm_config_workspace;
+  delete env.npm_config_workspaces;
   const output = execSync('npm pack --dry-run --json', {
     cwd: packageDir,
     encoding: 'utf8',
+    env,
     // npm writes its human-readable tarball summary to stderr, so capture that separately to keep
     // stdout pure JSON. Captured rather than ignored so a failure still reports why.
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -354,7 +405,13 @@ function stagePackage(
     fs.copyFileSync(path.resolve(packageDir, file), destination);
   });
   prepareStagedManifest(stagingDir, stagingFolderByName);
-  fs.writeFileSync(path.resolve(stagingDir, STAGED_FROM_MARKER), `${sourceStamp}\n`);
+  // `--local` marks its output so it can never satisfy `isStagingCurrent`: a local build is a
+  // developer's private state, and a clean checkout at the pinned commit would otherwise write a
+  // stamp indistinguishable from a real staging run, leaving that build in place indefinitely.
+  fs.writeFileSync(
+    path.resolve(stagingDir, STAGED_FROM_MARKER),
+    `${sourceStamp}${isLocalMode ? '-local' : ''}\n`,
+  );
 }
 
 function stageDevPackages(): void {
