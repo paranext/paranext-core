@@ -707,6 +707,51 @@ export async function waitForAppReady(page: Page, timeout = 90_000): Promise<voi
   await waitForOverlayGone(page, remainingForOverlay);
 }
 
+/**
+ * Poll until a web view of `webViewType` is open, and return its id.
+ *
+ * Every materialization of a baked layout mints a fresh id for its web views (see
+ * `mintFreshWebViewIds` in `src/renderer/components/docking/mint-web-view-ids.util.ts`), so a fixed
+ * layout slot's id can never be known ahead of time from a baked constant — it can only be read
+ * live from the app. Queries the renderer's `papi.webViews.getAllOpenWebViewDefinitions()` (the
+ * same mechanism `enhanced-resources` specs use to locate icon-only tabs) rather than the DOM,
+ * because the slot's id is not otherwise exposed by type — only by the `data-web-view-id` it
+ * renders once known.
+ */
+export async function waitForOpenWebViewIdByType(
+  page: Page,
+  webViewType: string,
+  timeoutMs = 120_000,
+): Promise<string> {
+  const start = Date.now();
+  // Sequential polling: each attempt must finish (or time out) before the next; parallelizing would
+  // defeat the retry/backoff.
+  /* eslint-disable no-await-in-loop */
+  while (Date.now() - start < timeoutMs) {
+    const id = await page.evaluate(async (type) => {
+      // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
+      const { papi } = window as unknown as {
+        papi: {
+          webViews: {
+            getAllOpenWebViewDefinitions: () => Promise<{ id: string; webViewType: string }[]>;
+          };
+        };
+      };
+      const definitions = await papi.webViews.getAllOpenWebViewDefinitions();
+      return definitions.find((d) => d.webViewType === type)?.id;
+    }, webViewType);
+    if (id) return id;
+    const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
+    if (sleepMs <= 0) break;
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, sleepMs);
+    });
+  }
+  /* eslint-enable no-await-in-loop */
+  throw new Error(`No open web view of type "${webViewType}" within ${timeoutMs}ms`);
+}
+
 /** Options accepted by {@link openFromEditorHamburger}. */
 export interface OpenFromEditorHamburgerOptions {
   /**
