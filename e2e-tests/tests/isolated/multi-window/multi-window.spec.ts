@@ -91,6 +91,7 @@ import {
   getFocusedWindowId,
   getWindowIdOfPage,
   homeTabTitle,
+  OS_FOCUS_COOPERATION_BUDGET_MS,
   pollUntil,
   quitAndExpectCleanExit,
   waitForRendererRegistered,
@@ -389,10 +390,9 @@ async function waitForWindowToBeRaised(
   timeoutMs: number,
 ): Promise<void> {
   const startTime = Date.now();
-  const cooperationBudgetMs = 10_000;
   await pollUntil(
     async () => {
-      if (Date.now() - startTime >= cooperationBudgetMs) {
+      if (Date.now() - startTime >= OS_FOCUS_COOPERATION_BUDGET_MS) {
         await electronApp.evaluate(({ BrowserWindow }, id) => {
           BrowserWindow.fromId(id)?.emit('focus');
         }, windowId);

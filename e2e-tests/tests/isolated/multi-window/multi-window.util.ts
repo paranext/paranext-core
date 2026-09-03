@@ -214,7 +214,7 @@ export async function getFocusedWindowId(): Promise<number | undefined> {
  * Activation requests that a compositor honors at all are honored within a second or two, so ten
  * seconds of retries means it will not cooperate.
  */
-const OS_FOCUS_COOPERATION_BUDGET_MS = 10_000;
+export const OS_FOCUS_COOPERATION_BUDGET_MS = 10_000;
 
 /**
  * Give a window focus and wait until the main process routes to it.
