@@ -13,6 +13,12 @@
   // Fill the bar's full height (matching the "+" button) rather than just its own flex-centered
   // content box, so the drop target isn't a thin sliver.
   align-self: stretch;
+  // Positioned in every state, not only while dragging: this is the containing block that
+  // `.platform-tab-bar-drop-zone-indicator` below sizes its `position: absolute` box against. Left
+  // static, that box would size against the nearest positioned ancestor instead — the whole tab
+  // bar — and sit on top of every tab, out ahead of even the `pointer-events: none` on the
+  // indicator below.
+  position: relative;
 
   // Set only while a drag is in progress (`tab-bar-drop-zone.component.tsx`'s
   // `claimLastTabOverlap`/`clearLastTabOverlap`). rc-dock's own per-tab handler
@@ -26,7 +32,6 @@
     // (`order: 2` in `dock-layout-wrapper.component.scss`) already paints over `.dock-nav-wrap`
     // (`order: 1`) without this — z-index makes that outcome explicit rather than relying on an
     // implicit flex-painting rule.
-    position: relative;
     z-index: 1;
     margin-inline-start: calc(-1 * var(--tab-bar-drop-zone-overlap, 0px));
   }
@@ -41,4 +46,8 @@
   inset-block: 0;
   inset-inline-end: 0;
   inset-inline-start: var(--tab-bar-drop-zone-indicator-inset, 0);
+  // This element exists only as a geometry reference for `setDropRect`, never as an interactive
+  // surface; it must never intercept pointer events itself, so hit-testing always reaches the zone
+  // (`.platform-tab-bar-drop-zone`, its containing block) and the tabs painted beneath it.
+  pointer-events: none;
 }
