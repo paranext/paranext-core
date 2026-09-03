@@ -724,11 +724,12 @@ export async function waitForOpenWebViewIdByType(
   timeoutMs = 120_000,
 ): Promise<string> {
   const start = Date.now();
+  let lastSeenTypes: string[] = [];
   // Sequential polling: each attempt must finish (or time out) before the next; parallelizing would
   // defeat the retry/backoff.
   /* eslint-disable no-await-in-loop */
   while (Date.now() - start < timeoutMs) {
-    const id = await page.evaluate(async (type) => {
+    const { id, types } = await page.evaluate(async (type) => {
       // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
       // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
       const { papi } = window as unknown as {
@@ -739,9 +740,13 @@ export async function waitForOpenWebViewIdByType(
         };
       };
       const definitions = await papi.webViews.getAllOpenWebViewDefinitions();
-      return definitions.find((d) => d.webViewType === type)?.id;
+      return {
+        id: definitions.find((d) => d.webViewType === type)?.id,
+        types: definitions.map((d) => d.webViewType),
+      };
     }, webViewType);
     if (id) return id;
+    lastSeenTypes = types;
     const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
     if (sleepMs <= 0) break;
     await new Promise<void>((resolve) => {
@@ -749,7 +754,14 @@ export async function waitForOpenWebViewIdByType(
     });
   }
   /* eslint-enable no-await-in-loop */
-  throw new Error(`No open web view of type "${webViewType}" within ${timeoutMs}ms`);
+  // Lists what WAS open at the final poll: an empty list points at the layout never materializing,
+  // while a non-empty list missing only this type points at the slot being lost after materialization
+  // (e.g. a dock "Replacing tab failed" race during a concurrent auto-open) rather than a lookup bug.
+  throw new Error(
+    `No open web view of type "${webViewType}" within ${timeoutMs}ms (last seen open types: ${
+      lastSeenTypes.length > 0 ? lastSeenTypes.join(', ') : '<none>'
+    })`,
+  );
 }
 
 /** Options accepted by {@link openFromEditorHamburger}. */
