@@ -1,7 +1,7 @@
 {
   "licenseeVersion": "10.1.0",
   "corpusVersion": "6.12.0",
-  "documentSha256": "f7c8a39877898787ae68ab334ca49eb6de5fd91b3734bb49297be460dd7d8762",
+  "documentSha256": "5a1fffe752ceaffca1ce9c691469d6feba8cc1e2907d678188cbbe975c8219c7",
   "packages": [
     {
       "ecosystem": "npm",
@@ -782,6 +782,15 @@
     },
     {
       "ecosystem": "npm",
+      "name": "@testing-library/react",
+      "version": "16.2.0",
+      "spdxId": "MIT",
+      "confidence": 100,
+      "matchedFile": "LICENSE",
+      "textSha256": "9680978280d509520d2a7b51e93ffbf7d9ec2b9de4411a6989daba5b659048e0"
+    },
+    {
+      "ecosystem": "npm",
       "name": "@usersnap/browser",
       "version": "1.0.2",
       "spdxId": "MIT",
@@ -792,7 +801,16 @@
     {
       "ecosystem": "npm",
       "name": "@xmldom/xmldom",
-      "version": "0.8.13",
+      "version": "0.8.15",
+      "spdxId": "MIT",
+      "confidence": 100,
+      "matchedFile": "LICENSE",
+      "textSha256": "4da724fc305d81606b245b324d4d2586916b9d248b23d82183df753ace0fdf71"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@xmldom/xmldom",
+      "version": "0.9.12",
       "spdxId": "MIT",
       "confidence": 100,
       "matchedFile": "LICENSE",
@@ -886,15 +904,6 @@
       "confidence": 100,
       "matchedFile": "license",
       "textSha256": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "char-regex",
-      "version": "1.0.2",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE",
-      "textSha256": "7003e5641a276772ec0a4559ea92de7583b8a444d209916fb6a131da91caf69f"
     },
     {
       "ecosystem": "npm",
@@ -1138,11 +1147,11 @@
     {
       "ecosystem": "npm",
       "name": "glob-parent",
-      "version": "6.0.2",
+      "version": "5.1.2",
       "spdxId": "ISC",
       "confidence": 100,
       "matchedFile": "LICENSE",
-      "textSha256": "fc68eb8f1c8e1d6b8be50f3c177927e24791cae7dc251e6253a012f37926a30c"
+      "textSha256": "2c46f1325bd3822a33c1e2c1e49c18d13127ac00f9c8b3b79196c7a126f73cd9"
     },
     {
       "ecosystem": "npm",
@@ -1478,6 +1487,15 @@
     {
       "ecosystem": "npm",
       "name": "rc-menu",
+      "version": "9.6.4",
+      "spdxId": "MIT",
+      "confidence": 100,
+      "matchedFile": "LICENSE.md",
+      "textSha256": "5d0427088e37071c4b942de990f6365d5c2d195f3e957ce925322d184784e2eb"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "rc-menu",
       "version": "9.8.4",
       "spdxId": "MIT",
       "confidence": 100,
@@ -1715,12 +1733,21 @@
     },
     {
       "ecosystem": "npm",
+      "name": "shallowequal",
+      "version": "1.1.0",
+      "spdxId": "MIT",
+      "confidence": 100,
+      "matchedFile": "LICENSE",
+      "textSha256": "709e45bb17277819ce27e9abe5dc8e56fe93081e54adb6e6385517f28aa11ac4"
+    },
+    {
+      "ecosystem": "npm",
       "name": "signal-exit",
-      "version": "3.0.7",
+      "version": "4.1.0",
       "spdxId": "ISC",
       "confidence": 100,
       "matchedFile": "LICENSE.txt",
-      "textSha256": "e05b1eaf5b5f99b7ad75cd1f38858ff9a311780b97715ead67936d60bf96aa7e"
+      "textSha256": "b173e19b9a78df305577ace0e52ef45a4bcc915ea28b47b256dc3b68dcb1f7e7"
     },
     {
       "ecosystem": "npm",
@@ -1734,7 +1761,7 @@
     {
       "ecosystem": "npm",
       "name": "source-map",
-      "version": "0.7.6",
+      "version": "0.6.1",
       "spdxId": "BSD-3-Clause",
       "confidence": 0,
       "textSha256": "6cb0631f71c7749763fd3dd1d5bee52dd1070ec17f2edc1710079ad070bd2fbd"
@@ -1755,15 +1782,6 @@
       "spdxId": "MIT",
       "confidence": 0,
       "textSha256": "11f2aafb37d06b3ee5bdaf06e9811141d0da05263c316f3d627f45c20d43261b"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "stringz",
-      "version": "2.1.0",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE",
-      "textSha256": "9d49d00b32187d81be6f057c90e773a520ae0ed8019012a17622216c7f518de7"
     },
     {
       "ecosystem": "npm",
@@ -1827,6 +1845,15 @@
       "confidence": 100,
       "matchedFile": "LICENSE",
       "textSha256": "039184dfa0a822397b3f45a435b5b1e538721587fbade96b9fa80f86cb354109"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "unicode-segmenter",
+      "version": "0.17.3",
+      "spdxId": "MIT",
+      "confidence": 100,
+      "matchedFile": "LICENSE",
+      "textSha256": "c6870e61278ca4af52f28b3ed644780d460bcd4ed927ebeb2a9555cb353b7aaa"
     },
     {
       "ecosystem": "npm",
