@@ -199,24 +199,38 @@ vi.mock('@renderer/services/workspace-updating-store', async (importOriginal) =>
 });
 
 // Capturing `buildSimpleLayoutForProject`'s `projectId` argument is the primary assertion point
-// below. `SIMPLE_LAYOUT_TAB_IDS` is mocked to `[]` so the (real, separately-tested) tabs-resolved
-// tracker resolves immediately instead of waiting on webview open/update events that never fire in
-// this test. The dockbox includes a `platformScriptureEditor.bibleTexts` tab, matching
-// `ANCHOR_WEB_VIEW_TYPE` above, so the real (unmocked) default-layout-supplement merge logic has a
-// matching anchor to attach the mocked supplement's `SUPPLEMENT_TAB_ID` tab to (see the merge tests
-// below) - the merge/filter logic itself is real production code, only the supplement's own
-// content is mocked.
-const { buildSimpleLayoutForProjectMock, simpleLayoutTabIdsMock, visibleSimpleLayoutTabIdsMock } =
-  vi.hoisted(() => {
-    // Mutable (not frozen empty) so individual tests can populate it to exercise logic keyed off
-    // real Simple-mode tab ids, while defaulting to empty for every other test (matching real
-    // SIMPLE_LAYOUT_TAB_IDS's/VISIBLE_SIMPLE_LAYOUT_TAB_IDS's shape without needing to know their
-    // actual values). Declared as their own explicitly-typed variables (rather than an inline
-    // `[] as string[]`) so the array's element type doesn't need a type assertion.
-    const simpleLayoutTabIds: string[] = [];
-    const visibleSimpleLayoutTabIds: string[] = [];
-    return {
-      buildSimpleLayoutForProjectMock: vi.fn((projectId: string) => ({
+// below. `VISIBLE_SIMPLE_LAYOUT_TAB_IDS` is mocked to `[]` so the (real, separately-tested)
+// tabs-resolved tracker resolves immediately instead of waiting on webview open/update events that
+// never fire in this test. The dockbox includes a `platformScriptureEditor.bibleTexts` tab,
+// matching `ANCHOR_WEB_VIEW_TYPE` above, so the real (unmocked) default-layout-supplement merge
+// logic has a matching anchor to attach the mocked supplement's `SUPPLEMENT_TAB_ID` tab to (see the
+// merge tests below) - the merge/filter logic itself is real production code, only the
+// supplement's own content is mocked.
+const {
+  buildSimpleLayoutForProjectMock,
+  simpleLayoutEditorTabIdMock,
+  visibleSimpleLayoutTabIdsMock,
+  simpleLayoutTabIdsMock,
+} = vi.hoisted(() => {
+  // Mutable (not a frozen empty array) so individual tests can populate
+  // `visibleSimpleLayoutTabIdsMock` to exercise logic keyed off real Simple-mode tab ids, while
+  // defaulting to empty for every other test (matching real `VISIBLE_SIMPLE_LAYOUT_TAB_IDS`'s
+  // shape without needing to know its actual values). Declared as its own explicitly-typed
+  // variable (rather than an inline `[] as string[]`) so the array's element type doesn't need a
+  // type assertion.
+  const visibleSimpleLayoutTabIds: string[] = [];
+  // Same pattern as `visibleSimpleLayoutTabIds` above, but standing in for the broader
+  // `SIMPLE_LAYOUT_TAB_IDS` (every Simple-mode tab id, not just the per-panel visible ones) —
+  // `saveLayout`'s content-based contamination guard is keyed off this set.
+  const simpleLayoutTabIds: string[] = [];
+  return {
+    // Real `buildSimpleLayoutForProject` returns `{ layout, mintedIds }`; the mock's `mintedIds`
+    // maps `SIMPLE_LAYOUT_EDITOR_TAB_ID_MOCK` (the fixture's stand-in for the baked slot id) to the
+    // one live tab id this fixture's layout actually carries, so `trackFreshSimpleEditorTabId` and
+    // the `VISIBLE_SIMPLE_LAYOUT_TAB_IDS` translation in production code have something real to
+    // resolve against.
+    buildSimpleLayoutForProjectMock: vi.fn((projectId: string) => ({
+      layout: {
         dockbox: {
           mode: 'horizontal' as const,
           children: [
@@ -236,21 +250,19 @@ const { buildSimpleLayoutForProjectMock, simpleLayoutTabIdsMock, visibleSimpleLa
           ],
         },
         builtForProjectId: projectId,
-      })),
-      simpleLayoutTabIdsMock: simpleLayoutTabIds,
-      visibleSimpleLayoutTabIdsMock: visibleSimpleLayoutTabIds,
-    };
-  });
+      },
+      mintedIds: new Map([['simple-layout-editor-tab-id-mock', 'bible-texts-tab']]),
+    })),
+    simpleLayoutEditorTabIdMock: 'simple-layout-editor-tab-id-mock',
+    visibleSimpleLayoutTabIdsMock: visibleSimpleLayoutTabIds,
+    simpleLayoutTabIdsMock: simpleLayoutTabIds,
+  };
+});
 vi.mock('@renderer/components/docking/simple-layout.builder', () => ({
   buildSimpleLayoutForProject: buildSimpleLayoutForProjectMock,
-  SIMPLE_LAYOUT_TAB_IDS: simpleLayoutTabIdsMock,
+  SIMPLE_LAYOUT_EDITOR_TAB_ID: simpleLayoutEditorTabIdMock,
   VISIBLE_SIMPLE_LAYOUT_TAB_IDS: visibleSimpleLayoutTabIdsMock,
-  // Every test that pushes into `simpleLayoutTabIdsMock` to model "the fixed Simple editor tab id"
-  // pushes exactly that one id first, matching real `simpleLayout`'s single Scripture Editor tab —
-  // a getter (not a snapshot) so it stays correct across `vi.resetModules()` re-imports.
-  get SIMPLE_LAYOUT_EDITOR_TAB_ID() {
-    return simpleLayoutTabIdsMock[0];
-  },
+  SIMPLE_LAYOUT_TAB_IDS: simpleLayoutTabIdsMock,
 }));
 
 // `LayoutInfo` is deliberately opaque in the shared model, so building a layout fixture and reading
@@ -379,39 +391,52 @@ function makeDockLayoutThatTracksAdds(simpleLayout: LayoutInfo) {
 }
 
 /**
- * A dock layout stand-in that tracks whether one specific (window-scoped) web view id is present,
- * derived from whatever layout it was most recently handed — the same shape a real dock takes,
- * where `loadLayout` replaces the dock's whole contents and later lookups reflect that. Modeled on
+ * A dock layout stand-in that tracks whether the one web view `initialLayout` carries is present,
+ * following it under whatever id it is most recently loaded with — including a freshly minted one,
+ * if `initialLayout` is loaded as a baked default (see `mint-web-view-ids.util.ts`), since the id a
+ * caller sees before that load cannot be known in advance. The same shape a real dock takes, where
+ * `loadLayout` replaces the dock's whole contents and later lookups reflect that. Modeled on
  * `makeDockLayoutThatTracksAdds` rather than extending `makeDockLayout`, so no existing test's
  * behavior shifts.
  */
-function makeDockLayoutTrackingOneWebView(initialLayout: LayoutInfo, webViewId: string) {
+function makeDockLayoutTrackingOneWebView(initialLayout: LayoutInfo) {
   const loadedLayouts: LayoutInfo[] = [];
   const removeTabFromDockCalls: string[] = [];
-  let webViewIsPresent = tabIdsIn(initialLayout).includes(webViewId);
-  const webViewDefinition = {
-    id: webViewId,
-    webViewType: 'test.type',
-    contentType: 'html',
-    content: '<p>captured</p>',
-    state: {},
-  } as unknown as WebViewTabProps;
+  let currentWebViewId: string | undefined = tabIdsIn(initialLayout)[0];
+  const webViewDefinitionFor = (id: string) =>
+    ({
+      id,
+      webViewType: 'test.type',
+      contentType: 'html',
+      content: '<p>captured</p>',
+      state: {},
+      // This stand-in only carries the fields the code under test reads.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+    }) as unknown as WebViewTabProps;
   const dockLayout = {
     onLayoutChangeRef: { current: undefined },
     loadLayout: (layout: LayoutInfo) => {
       loadedLayouts.push(layout);
-      webViewIsPresent = tabIdsIn(layout).includes(webViewId);
+      [currentWebViewId] = tabIdsIn(layout);
     },
-    getAllWebViewDefinitions: () => (webViewIsPresent ? [webViewDefinition] : []),
+    getAllWebViewDefinitions: () =>
+      currentWebViewId ? [webViewDefinitionFor(currentWebViewId)] : [],
     getWebViewDefinition: (id: string) =>
-      webViewIsPresent && id === webViewId ? webViewDefinition : undefined,
+      currentWebViewId === id ? webViewDefinitionFor(id) : undefined,
     removeTabFromDock: (id: string) => {
       removeTabFromDockCalls.push(id);
     },
     simpleLayout: initialLayout,
     testLayout: initialLayout,
+    // This stand-in only carries the fields the code under test reads.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
   } as unknown as PapiDockLayout;
-  return { dockLayout, loadedLayouts, removeTabFromDockCalls };
+  return {
+    dockLayout,
+    loadedLayouts,
+    removeTabFromDockCalls,
+    getCurrentWebViewId: () => currentWebViewId,
+  };
 }
 
 /** Wire up a web view provider and theme so `openWebView`'s dock-add path can run to completion */
@@ -535,29 +560,28 @@ beforeEach(() => {
   respondToGetLayout({ kind: 'empty' });
 });
 
-describe('loadLayout scopes web view ids to this window', () => {
+describe('loadLayout mints fresh web view ids for a baked-default layout', () => {
   beforeEach(() => {
     settingsGetMock.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? 'simple' : true,
     );
   });
 
-  test('scopes the ids that come from the shared layout', async () => {
+  test('mints a fresh id for a tab in the shared baked layout', async () => {
     const loaded = await loadLayoutInWindow(layoutWithAnchor());
 
-    expect(tabIdsIn(loaded)).toContain('anchor-tab-w2');
+    expect(tabIdsIn(loaded)).not.toContain('anchor-tab');
   });
 
-  test('scopes supplement tab ids, which are merged in after the layout is scoped', async () => {
+  test('mints the supplement tab a fresh id too, merged in after the base layout is minted', async () => {
     const loaded = await loadLayoutInWindow(layoutWithAnchor());
 
-    // Unscoped, this id is identical in every window, so both windows' web views would register
-    // their message handlers under the same name
-    expect(tabIdsIn(loaded)).toContain(`${SUPPLEMENT_TAB_ID}-w2`);
+    // Reusing the baked id verbatim would let two windows' copies of this supplement tab collide
+    // on the same id
     expect(tabIdsIn(loaded)).not.toContain(SUPPLEMENT_TAB_ID);
   });
 
-  test('gives two windows different supplement tab ids', async () => {
+  test('gives two windows different minted ids for the very same shared layout object', async () => {
     const sharedLayout = layoutWithAnchor();
 
     globalThis.windowId = '1';
@@ -566,8 +590,7 @@ describe('loadLayout scopes web view ids to this window', () => {
     globalThis.windowId = '2';
     const inWindow2 = tabIdsIn(await loadLayoutInWindow(sharedLayout));
 
-    expect(inWindow1).not.toContain(`${SUPPLEMENT_TAB_ID}-w2`);
-    expect(inWindow2).toContain(`${SUPPLEMENT_TAB_ID}-w2`);
+    inWindow1.forEach((id) => expect(inWindow2).not.toContain(id));
   });
 
   test('keeps a supplement tab’s id and its data id in agreement', async () => {
@@ -575,34 +598,34 @@ describe('loadLayout scopes web view ids to this window', () => {
 
     const { dockbox } = loaded as unknown as { dockbox: { children: { tabs: SavedTabInfo[] }[] } };
     const supplementTab = dockbox.children[0].tabs.find(
-      (tab) => tab.id === `${SUPPLEMENT_TAB_ID}-w2`,
+      (tab) =>
+        (tab.data as { webViewType?: string } | undefined)?.webViewType === 'test.supplement',
     );
-    expect((supplementTab?.data as { id: string }).id).toBe(`${SUPPLEMENT_TAB_ID}-w2`);
+    expect(supplementTab?.id).toBeDefined();
+    expect((supplementTab?.data as { id: string }).id).toBe(supplementTab?.id);
   });
 
-  test('re-scopes a restored supplement tab instead of adding a second copy', async () => {
-    // Power mode restores the merged layout, so the next load restores a supplement tab that is
-    // already scoped — to the id of the window that saved it, which is durable but still not this
-    // (freshly minted, in a real launch) window's id
-    const savedByAnotherWindowId = '11111111-1111-4111-8111-111111111111';
-    const savedSupplementTab: SavedTabInfo = {
-      id: `${SUPPLEMENT_TAB_ID}-w${savedByAnotherWindowId}`,
+  test('does not re-mint or duplicate a supplement tab a persisted layout already carries', async () => {
+    // Power mode restores a genuinely persisted layout as-is (see `getPersistedLayout`'s
+    // `isBakedDefault: false`) — its ids, including a previously-minted supplement tab's, pass
+    // through untouched, and the merge recognizes the tab by webViewType so it is never duplicated.
+    const previouslyMintedSupplementTab: SavedTabInfo = {
+      id: 'previously-minted-supplement-id',
       tabType: TAB_TYPE_WEBVIEW,
-      data: {
-        id: `${SUPPLEMENT_TAB_ID}-w${savedByAnotherWindowId}`,
-        webViewType: 'test.supplement',
-        state: {},
-      },
+      data: { id: 'previously-minted-supplement-id', webViewType: 'test.supplement', state: {} },
     } as unknown as SavedTabInfo;
     settingsGetMock.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? 'power' : true,
     );
-    respondToGetLayout({ kind: 'entry', layout: layoutWithAnchor([savedSupplementTab]) });
+    respondToGetLayout({
+      kind: 'entry',
+      layout: layoutWithAnchor([previouslyMintedSupplementTab]),
+    });
 
     const loaded = await loadLayoutInWindow(layoutWithAnchor());
 
-    expect(tabIdsIn(loaded).filter((id) => id.startsWith(SUPPLEMENT_TAB_ID))).toEqual([
-      `${SUPPLEMENT_TAB_ID}-w2`,
+    expect(tabIdsIn(loaded).filter((id) => id === 'previously-minted-supplement-id')).toEqual([
+      'previously-minted-supplement-id',
     ]);
   });
 });
@@ -612,7 +635,7 @@ describe('loadLayout scopes web view ids to this window', () => {
  * interface just for a test double would be significantly worse than one justified cast (mirrors
  * the LayoutInfo/LayoutBase casts already used at this same boundary in the host file).
  */
-function createFakeDockLayout(): PapiDockLayout {
+function createFakeDockLayout(simpleLayoutOverride?: LayoutInfo): PapiDockLayout {
   const fake = {
     onLayoutChangeRef: { current: undefined },
     loadLayout: vi.fn(),
@@ -630,7 +653,9 @@ function createFakeDockLayout(): PapiDockLayout {
     getTabInfoById: vi.fn(),
     focusTab: vi.fn(),
     testLayout: { dockbox: { mode: 'horizontal' as const, children: [] } },
-    simpleLayout: { dockbox: { mode: 'horizontal' as const, children: [] } },
+    simpleLayout: simpleLayoutOverride ?? {
+      dockbox: { mode: 'horizontal' as const, children: [] },
+    },
   };
   // See the function-level comment above: casting a partial fake to the full interface is the
   // deliberate choice here, not an oversight.
@@ -677,8 +702,8 @@ describe('handleSwitchToSimpleMode', () => {
     );
     globalThis.windowId = '1';
     buildSimpleLayoutForProjectMock.mockClear();
-    simpleLayoutTabIdsMock.length = 0;
     visibleSimpleLayoutTabIdsMock.length = 0;
+    simpleLayoutTabIdsMock.length = 0;
   });
 
   afterEach(() => {
@@ -822,23 +847,21 @@ describe('handleSwitchToSimpleMode', () => {
     expect(getMetadataForProjectMock).not.toHaveBeenCalled();
   });
 
-  it('fast path: the tabs-resolved tracker only waits on VISIBLE_SIMPLE_LAYOUT_TAB_IDS, not the full SIMPLE_LAYOUT_TAB_IDS list', async () => {
+  it('fast path: resolves quickly when the visible-tabs list is empty', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
     setLastOpenedProject({ id: 'proj-visible-tabs' });
-    // Populate the full (5-tab) list with an id that never fires an open/update event (nothing in
-    // this test emits one). Leave the visible-only list empty. If the switch is still tracking the
-    // full list, it will block on the tracker's real timeout; if it correctly narrowed to the
-    // (empty) visible list, it resolves on the next tick.
-    simpleLayoutTabIdsMock.push('hidden-tab-not-in-visible-list');
+    // Leave the visible-tabs list empty (the file-wide `beforeEach` default) - the tabs-resolved
+    // tracker has nothing to wait on and should resolve on the next tick rather than blocking on
+    // its real timeout.
 
     const start = Date.now();
     await host.handleSwitchToSimpleMode();
     const elapsedMs = Date.now() - start;
 
-    // Well under the tracker's 3s timeout - proves the switch didn't wait on the full list.
+    // Well under the tracker's 3s timeout - proves the switch didn't block waiting on the tracker.
     expect(elapsedMs).toBeLessThan(1000);
     const { logger } = await import('@shared/services/logger.service');
     expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('timed out'));
@@ -1077,10 +1100,15 @@ describe('handleSwitchToSimpleMode', () => {
     // The loaded layout's shape is dynamic — narrow only the fields this test reads.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const loadedLayout = loadedLayoutArg as {
-      dockbox: { children: { children: { tabs: { id: string }[] }[] }[] };
+      dockbox: {
+        children: { children: { tabs: { id: string; data?: { webViewType?: string } }[] }[] }[];
+      };
     };
     const bibleTextsPanelTabs = loadedLayout.dockbox.children[0].children[0].tabs;
-    expect(bibleTextsPanelTabs.map((tab) => tab.id)).toContain(SUPPLEMENT_TAB_ID);
+    // A merged supplement tab's `id` is freshly minted (see `mint-web-view-ids.util.ts`), so this
+    // reads `webViewType` instead - the one property the merged tab keeps in common with the entry
+    // that describes it.
+    expect(bibleTextsPanelTabs.map((tab) => tab.data?.webViewType)).toContain('test.supplement');
   });
 
   it('fast path: does not merge a disabled default-layout supplement entry', async () => {
@@ -1099,10 +1127,14 @@ describe('handleSwitchToSimpleMode', () => {
     // The loaded layout's shape is dynamic — narrow only the fields this test reads.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const loadedLayout = loadedLayoutArg as {
-      dockbox: { children: { children: { tabs: { id: string }[] }[] }[] };
+      dockbox: {
+        children: { children: { tabs: { id: string; data?: { webViewType?: string } }[] }[] }[];
+      };
     };
     const bibleTextsPanelTabs = loadedLayout.dockbox.children[0].children[0].tabs;
-    expect(bibleTextsPanelTabs.map((tab) => tab.id)).not.toContain(SUPPLEMENT_TAB_ID);
+    expect(bibleTextsPanelTabs.map((tab) => tab.data?.webViewType)).not.toContain(
+      'test.supplement',
+    );
   });
 
   it('a superseded switch never reaches loadLayout, even if its own async work finishes after a newer switch started', async () => {
@@ -1216,55 +1248,6 @@ describe('handleSwitchToSimpleMode', () => {
 
     // The contamination guard's early return means saveLayout never reaches its network-request
     // call — proving the contaminated layout was never pushed to the main process.
-    const saveCalls = mocks.networkRequest.mock.calls.filter(
-      ([requestType]) => requestType === SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
-    );
-    expect(saveCalls).toEqual([]);
-    const { logger } = await import('@shared/services/logger.service');
-    expect(logger.warn).toHaveBeenCalled();
-  });
-
-  it('refuses to persist a layout containing a window-scoped Simple-mode tab id', async () => {
-    // Regression test: `SIMPLE_LAYOUT_TAB_IDS` is always unscoped, but a contaminating tab's live
-    // id may carry this window's scope suffix (e.g. it arrived via `loadLayout`'s no-arg branch,
-    // which scopes every id it loads) - the guard must strip that suffix before comparing, or a
-    // scoped contaminant slips past it.
-    const host = await importHost();
-    const fakeDockLayout = createFakeDockLayout();
-    simpleLayoutTabIdsMock.push('simple-fixed-tab-1');
-    settingsGetMock.mockImplementation(async (key: string) =>
-      key === 'platform.interfaceMode' ? 'power' : false,
-    );
-    host.registerDockLayout(fakeDockLayout);
-    await vi.waitFor(() => expect(fakeDockLayout.loadLayout).toHaveBeenCalled());
-    mocks.networkRequest.mockClear();
-
-    // `globalThis.windowId` is set to a window id of the shape the platform mints, matching the
-    // suffix `withWindowScopedWebViewIds` would have appended to this id had it come through a
-    // real scoped load. Another window's suffix would pass a guard that only ever strips its own.
-    globalThis.windowId = '22222222-2222-4222-8222-222222222222';
-    const contaminatedLayout = {
-      dockbox: {
-        mode: 'horizontal',
-        children: [
-          {
-            tabs: [
-              {
-                id: 'simple-fixed-tab-1-w22222222-2222-4222-8222-222222222222',
-                tabType: 'webView',
-                data: {},
-              },
-            ],
-          },
-        ],
-      },
-    };
-    // onLayoutChangeRef.current's real type (OnLayoutChange) is rc-dock's own LayoutInfo-shaped
-    // signature; this test only needs enough of that shape to exercise saveLayout's tab-id check,
-    // so asserting through it here is simpler than building a full LayoutInfo fixture.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    await fakeDockLayout.onLayoutChangeRef.current?.(contaminatedLayout as never, '', undefined);
-
     const saveCalls = mocks.networkRequest.mock.calls.filter(
       ([requestType]) => requestType === SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
     );
@@ -1415,7 +1398,50 @@ describe('handleSwitchToSimpleMode', () => {
 });
 
 describe('Scripture Editor tab events keep last-opened-project-cache current', () => {
-  const FIXED_SIMPLE_EDITOR_TAB_ID = 'simple-editor-tab';
+  // Matches the mocked `simple-layout.builder` module's `SIMPLE_LAYOUT_EDITOR_TAB_ID` (see the
+  // hoisted mock above) - the baked slot id `loadLayout`'s no-arg branch mints a fresh id from.
+  const BAKED_EDITOR_TAB_ID = simpleLayoutEditorTabIdMock;
+
+  /** A layout whose one tab is the Simple editor slot `loadLayout`'s no-arg branch mints from */
+  function editorSlotLayout(): LayoutInfo {
+    return {
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          {
+            tabs: [
+              {
+                id: BAKED_EDITOR_TAB_ID,
+                tabType: TAB_TYPE_WEBVIEW,
+                data: {
+                  id: BAKED_EDITOR_TAB_ID,
+                  webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+                  state: {},
+                },
+              },
+            ],
+          },
+        ],
+      },
+      // This fixture only carries the fields the code under test reads.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+    } as unknown as LayoutInfo;
+  }
+
+  /**
+   * Registers a dock layout carrying the Simple editor slot and waits for the fire-and-forget
+   * no-arg `loadLayout` to mint it a fresh id, via the real `mintFreshWebViewIds` - not a seeded
+   * fixture. `simpleEditorTabIds` (the set `cacheLastOpenedSimpleProject`/
+   * `trackSimpleEditorReplaceTab` filter against) only ever grows from a real materialization's
+   * minted ids, so that is the only way a test can produce an id these tests need to be tracked.
+   */
+  async function mintEditorTabId(fakeDockLayout: PapiDockLayout): Promise<string> {
+    await vi.waitFor(() => expect(fakeDockLayout.loadLayout).toHaveBeenCalled());
+    const [loadedLayout] = vi.mocked(fakeDockLayout.loadLayout).mock.calls[0];
+    const mintedId = tabIdsIn(loadedLayout).find((id) => id !== BAKED_EDITOR_TAB_ID);
+    if (!mintedId) throw new Error('expected the Simple editor tab to receive a freshly minted id');
+    return mintedId;
+  }
 
   beforeEach(() => {
     vi.resetModules();
@@ -1431,22 +1457,22 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
     // Absent isPublished means "not published" (see project-metadata.model.ts), so the default
     // fixture is a normal, cacheable project unless a test overrides it.
     getMetadataForProjectMock.mockResolvedValue({});
-    simpleLayoutTabIdsMock.length = 0;
-    simpleLayoutTabIdsMock.push(FIXED_SIMPLE_EDITOR_TAB_ID);
   });
 
   afterEach(() => {
     localStorage.clear();
   });
 
-  it('caches the project when the fixed Simple editor tab opens', async () => {
+  it('caches the project when the Simple editor tab opens', async () => {
     const host = await importHost();
-    host.registerDockLayout(createFakeDockLayout());
+    const fakeDockLayout = createFakeDockLayout(editorSlotLayout());
+    host.registerDockLayout(fakeDockLayout);
+    const editorTabId = await mintEditorTabId(fakeDockLayout);
     const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
 
     emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
       webView: {
-        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        id: editorTabId,
         webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
         projectId: 'proj-simple-opened',
       },
@@ -1455,14 +1481,16 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
     await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-simple-opened' }));
   });
 
-  it('caches the project when the fixed Simple editor tab updates to a different project', async () => {
+  it('caches the project when the Simple editor tab updates to a different project', async () => {
     const host = await importHost();
-    host.registerDockLayout(createFakeDockLayout());
+    const fakeDockLayout = createFakeDockLayout(editorSlotLayout());
+    host.registerDockLayout(fakeDockLayout);
+    const editorTabId = await mintEditorTabId(fakeDockLayout);
     const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
 
     emitNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW, {
       webView: {
-        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        id: editorTabId,
         webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
         projectId: 'proj-simple-updated',
       },
@@ -1471,9 +1499,11 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
     await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-simple-updated' }));
   });
 
-  it('does not cache a Power-mode editor tab, whose id is never one of the fixed Simple-layout ids', async () => {
+  it('does not cache a Power-mode editor tab, whose id was never minted for the Simple editor slot', async () => {
     const host = await importHost();
-    host.registerDockLayout(createFakeDockLayout());
+    const fakeDockLayout = createFakeDockLayout(editorSlotLayout());
+    host.registerDockLayout(fakeDockLayout);
+    await mintEditorTabId(fakeDockLayout);
     const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
 
     emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
@@ -1488,14 +1518,16 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
     expect(getLastOpenedProject()).toBeUndefined();
   });
 
-  it('does not cache a non-editor tab, even if it happens to carry a fixed Simple-layout tab id', async () => {
+  it('does not cache a non-editor tab, even if it happens to carry the Simple editor slot’s minted id', async () => {
     const host = await importHost();
-    host.registerDockLayout(createFakeDockLayout());
+    const fakeDockLayout = createFakeDockLayout(editorSlotLayout());
+    host.registerDockLayout(fakeDockLayout);
+    const editorTabId = await mintEditorTabId(fakeDockLayout);
     const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
 
     emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
       webView: {
-        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        id: editorTabId,
         webViewType: 'platformScriptureEditor.bibleTexts',
         projectId: 'proj-not-editor',
       },
@@ -1507,13 +1539,15 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
 
   it('never caches a published resource as the last-opened Simple-mode project', async () => {
     const host = await importHost();
-    host.registerDockLayout(createFakeDockLayout());
+    const fakeDockLayout = createFakeDockLayout(editorSlotLayout());
+    host.registerDockLayout(fakeDockLayout);
+    const editorTabId = await mintEditorTabId(fakeDockLayout);
     getMetadataForProjectMock.mockResolvedValue({ isPublished: true });
     const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
 
     emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
       webView: {
-        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        id: editorTabId,
         webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
         projectId: 'proj-resource',
       },
@@ -1525,14 +1559,16 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
 
   it('logs a warning and does not cache when the metadata lookup rejects', async () => {
     const host = await importHost();
-    host.registerDockLayout(createFakeDockLayout());
+    const fakeDockLayout = createFakeDockLayout(editorSlotLayout());
+    host.registerDockLayout(fakeDockLayout);
+    const editorTabId = await mintEditorTabId(fakeDockLayout);
     getMetadataForProjectMock.mockRejectedValue(new Error('PDP unavailable'));
     const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
     const { logger } = await import('@shared/services/logger.service');
 
     emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
       webView: {
-        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        id: editorTabId,
         webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
         projectId: 'proj-lookup-fails',
       },
@@ -1544,13 +1580,15 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
 
   it('stops caching after the dock layout is unregistered', async () => {
     const host = await importHost();
-    const unregister = host.registerDockLayout(createFakeDockLayout());
+    const fakeDockLayout = createFakeDockLayout(editorSlotLayout());
+    const unregister = host.registerDockLayout(fakeDockLayout);
+    const editorTabId = await mintEditorTabId(fakeDockLayout);
     unregister();
     const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
 
     emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
       webView: {
-        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        id: editorTabId,
         webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
         projectId: 'proj-after-unregister',
       },
@@ -1560,12 +1598,12 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
     expect(getLastOpenedProject()).toBeUndefined();
   });
 
-  it('keeps caching after an in-Simple project switch replaces the fixed editor tab id (replace-tab)', async () => {
+  it('keeps caching after an in-Simple project switch replaces the editor tab’s minted id (replace-tab)', async () => {
     // Regression test: an in-Simple project switch (e.g. Paratext -> Open while already in Simple
-    // mode) does NOT reuse the fixed Simple editor tab id - `resolveOpenEditorDispatch` dispatches
-    // it as `{ kind: 'replace-tab', targetTabId: <current editor id> }`, and `addWebViewToDock`'s
+    // mode) does NOT reuse the Simple editor tab's id - `resolveOpenEditorDispatch` dispatches it
+    // as `{ kind: 'replace-tab', targetTabId: <current editor id> }`, and `addWebViewToDock`'s
     // `replace-tab` case swaps the WHOLE tab (including its id) for the new webview's freshly
-    // generated one. A filter keyed on the original fixed id alone would silently stop matching
+    // generated one. A filter keyed on the original minted id alone would silently stop matching
     // after this single switch, for the rest of the session.
     //
     // Drives the real `openOrReloadWebView` for the tracking half (where the regression actually
@@ -1576,20 +1614,22 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
     // id is still used to prove the cache reacts, exactly like every other test in this describe
     // block, but only after `openOrReloadWebView` has run for real and updated the tracked id set.
     const host = await importHost();
-    host.registerDockLayout(createFakeDockLayout());
+    const fakeDockLayout = createFakeDockLayout(editorSlotLayout());
+    host.registerDockLayout(fakeDockLayout);
+    const editorTabId = await mintEditorTabId(fakeDockLayout);
     const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
 
-    // Initial Power -> Simple switch: the fast path always mounts the fixed editor tab id.
+    // Initial Power -> Simple switch: the no-arg load always mints the editor tab an id.
     emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
       webView: {
-        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        id: editorTabId,
         webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
         projectId: 'proj-initial',
       },
     });
     await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-initial' }));
 
-    // In-Simple project switch: a freshly-generated id replaces the fixed one via `replace-tab`.
+    // In-Simple project switch: a freshly-generated id replaces the minted one via `replace-tab`.
     const NEW_EDITOR_TAB_ID = 'freshly-generated-guid';
     getWebViewProviderMock.mockResolvedValue({
       getWebView: vi.fn(async () => ({
@@ -1601,12 +1641,12 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
 
     await host.openOrReloadWebView(
       { id: NEW_EDITOR_TAB_ID, webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE },
-      { type: 'replace-tab', targetTabId: FIXED_SIMPLE_EDITOR_TAB_ID },
+      { type: 'replace-tab', targetTabId: editorTabId },
       {},
     );
     expect(getWebViewProviderMock).toHaveBeenCalledWith(SCRIPTURE_EDITOR_WEBVIEW_TYPE);
 
-    // The fresh id must now be recognized - not just the original fixed one.
+    // The fresh id must now be recognized - not just the original minted one.
     emitNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW, {
       webView: {
         id: NEW_EDITOR_TAB_ID,
@@ -1616,72 +1656,6 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
     });
 
     await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-switched' }));
-  });
-
-  it('caches the project when the fixed Simple editor tab opens with a window-scoped id', async () => {
-    // Regression test: the fixed tab id opens window-scoped whenever the current layout was loaded
-    // via `loadLayout`'s no-arg branch (which scopes every id it loads) rather than the fast path -
-    // e.g. a session that starts directly in Simple mode, or the bare-layout fallback. The tracked
-    // id set must recognize the scoped id, not just the raw one it was seeded with.
-    const host = await importHost();
-    host.registerDockLayout(createFakeDockLayout());
-    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-
-    emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
-      webView: {
-        id: `${FIXED_SIMPLE_EDITOR_TAB_ID}-w22222222-2222-4222-8222-222222222222`,
-        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-        projectId: 'proj-scoped-opened',
-      },
-    });
-
-    await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-scoped-opened' }));
-  });
-
-  it('keeps caching after an in-Simple project switch replaces a window-scoped editor tab id (replace-tab)', async () => {
-    // Regression test: `resolveOpenEditorDispatch` dispatches `targetTabId` as whichever id is
-    // CURRENTLY the Simple editor's - if the current layout loaded via the no-arg branch, that id
-    // is window-scoped. The tracked id set must recognize the scoped `targetTabId` in order to add
-    // the replacement's id, or tracking silently stops for the rest of the session (same failure
-    // mode as the unscoped case above, triggered by a different starting condition).
-    const host = await importHost();
-    host.registerDockLayout(createFakeDockLayout());
-    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    const SCOPED_EDITOR_TAB_ID = `${FIXED_SIMPLE_EDITOR_TAB_ID}-w22222222-2222-4222-8222-222222222222`;
-
-    emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
-      webView: {
-        id: SCOPED_EDITOR_TAB_ID,
-        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-        projectId: 'proj-scoped-initial',
-      },
-    });
-    await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-scoped-initial' }));
-
-    const NEW_EDITOR_TAB_ID = 'freshly-generated-guid-2';
-    getWebViewProviderMock.mockResolvedValue({
-      getWebView: vi.fn(async () => ({
-        id: NEW_EDITOR_TAB_ID,
-        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-        content: '',
-      })),
-    });
-
-    await host.openOrReloadWebView(
-      { id: NEW_EDITOR_TAB_ID, webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE },
-      { type: 'replace-tab', targetTabId: SCOPED_EDITOR_TAB_ID },
-      {},
-    );
-
-    emitNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW, {
-      webView: {
-        id: NEW_EDITOR_TAB_ID,
-        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-        projectId: 'proj-scoped-switched',
-      },
-    });
-
-    await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-scoped-switched' }));
   });
 });
 
@@ -1693,27 +1667,24 @@ describe('loadLayout restores this window’s layout from the main process', () 
     );
   });
 
-  test('a window assigned an entry loads it, ids scoped to this window', async () => {
-    // Saved under a durable id from a previous session, still not this (freshly minted, in a real
-    // launch) window's id
-    respondToGetLayout({
-      kind: 'entry',
-      layout: layoutWithTab('saved-tab-w11111111-1111-4111-8111-111111111111'),
-    });
+  test('a window assigned an entry loads it, keeping the persisted tab’s id unchanged', async () => {
+    respondToGetLayout({ kind: 'entry', layout: layoutWithTab('saved-tab-id') });
 
     const loaded = await loadLayoutInWindow(layoutWithAnchor());
 
     expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:get', '2');
-    expect(tabIdsIn(loaded)).toEqual(['saved-tab-w2']);
+    // A genuinely-persisted layout is never re-minted or rescoped - a web view keeps the one id it
+    // was minted with for its whole life (see `mint-web-view-ids.util.ts`).
+    expect(tabIdsIn(loaded)).toEqual(['saved-tab-id']);
   });
 
-  test('a legacy window loads the unprefixed legacy layout from localStorage', async () => {
+  test('a legacy window loads the unprefixed legacy layout from localStorage, id unchanged', async () => {
     localStorage.setItem('dock-saved-layout', serialize(layoutWithTab('legacy-tab')));
     respondToGetLayout({ kind: 'legacy' });
 
     const loaded = await loadLayoutInWindow(layoutWithAnchor());
 
-    expect(tabIdsIn(loaded)).toEqual(['legacy-tab-w2']);
+    expect(tabIdsIn(loaded)).toEqual(['legacy-tab']);
   });
 
   test('a legacy window prefers a window-prefixed legacy key over the stale unprefixed one', async () => {
@@ -1726,7 +1697,7 @@ describe('loadLayout restores this window’s layout from the main process', () 
 
     const loaded = await loadLayoutInWindow(layoutWithAnchor());
 
-    expect(tabIdsIn(loaded)).toEqual(['prefixed-tab-w2']);
+    expect(tabIdsIn(loaded)).toEqual(['prefixed-tab']);
   });
 
   test('with several window-prefixed legacy keys, the lowest window id wins', async () => {
@@ -1738,7 +1709,7 @@ describe('loadLayout restores this window’s layout from the main process', () 
 
     const loaded = await loadLayoutInWindow(layoutWithAnchor());
 
-    expect(tabIdsIn(loaded)).toEqual(['lowest-tab-w2']);
+    expect(tabIdsIn(loaded)).toEqual(['lowest-tab']);
   });
 
   test('a second window never receives the legacy layout — the clone fallback is gone', async () => {
@@ -1762,14 +1733,17 @@ describe('loadLayout restores this window’s layout from the main process', () 
     expect(tabIdsIn(loaded)).toEqual([]);
   });
 
-  test('falls back to testLayout only when legacy storage is empty too', async () => {
+  test('falls back to testLayout only when legacy storage is empty too, minting the fallback a fresh id', async () => {
     respondToGetLayout({ kind: 'legacy' });
 
     const loaded = await loadLayoutInWindow(layoutWithAnchor());
 
     // The dev-fresh-profile behavior: no saved entry and no legacy layout loads testLayout (which
-    // here holds the anchor tab; the supplement then merges onto that anchor as usual)
-    expect(tabIdsIn(loaded)).toContain('anchor-tab-w2');
+    // here holds the anchor tab; the supplement then merges onto that anchor as usual). testLayout
+    // is a baked-default fallback, not a genuinely persisted layout, so its tab receives a freshly
+    // minted id rather than keeping the baked `anchor-tab` literal.
+    expect(tabIdsIn(loaded)).not.toContain('anchor-tab');
+    expect(tabIdsIn(loaded).length).toBeGreaterThan(0);
   });
 
   test('a window created for pending content starts truly empty', async () => {
@@ -2187,7 +2161,7 @@ describe('loadLayout when the saved-layout request fails', () => {
 
     const { dockLayout, loadedLayouts } = await registerWindowThroughRetries(layoutWithAnchor());
 
-    expect(tabIdsIn(loadedLayouts[loadedLayouts.length - 1])).toEqual(['saved-tab-w2']);
+    expect(tabIdsIn(loadedLayouts[loadedLayouts.length - 1])).toEqual(['saved-tab']);
     expect(getItemSpy).not.toHaveBeenCalledWith('dock-saved-layout');
     // Pushes work normally — the load succeeded, just not on the first attempt
     await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('changed'), undefined, undefined);
@@ -2532,7 +2506,11 @@ describe('loadLayout discards a load a newer one has superseded', () => {
     interfaceMode = 'simple';
     if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
     await interfaceModeCallback('simple');
-    expect(tabIdsIn(loadedLayouts[loadedLayouts.length - 1])).toContain('anchor-tab-w2');
+    // No project is cached and none resolves, so the switch falls back to the bare `loadLayout()`
+    // no-arg branch, which mints the baked anchor tab a fresh id rather than keeping its literal.
+    const idsAfterModeSwitch = tabIdsIn(loadedLayouts[loadedLayouts.length - 1]);
+    expect(idsAfterModeSwitch).not.toContain('anchor-tab');
+    expect(idsAfterModeSwitch.length).toBeGreaterThan(0);
     const loadsBeforeTheLateAnswer = loadedLayouts.length;
 
     // Main finally answers the first request — with the power layout the user has already left
@@ -2543,7 +2521,7 @@ describe('loadLayout discards a load a newer one has superseded', () => {
     // The stale answer must not reach the dock: loading it would replace the whole layout, wiping
     // whatever the user has done since the switch
     expect(loadedLayouts).toHaveLength(loadsBeforeTheLateAnswer);
-    expect(tabIdsIn(loadedLayouts[loadedLayouts.length - 1])).not.toContain('stale-power-tab-w2');
+    expect(tabIdsIn(loadedLayouts[loadedLayouts.length - 1])).not.toContain('stale-power-tab');
 
     // Keep the dangling dock-layout registration from leaking into the next test
     dockLayout.onLayoutChangeRef.current = undefined;
@@ -2764,7 +2742,7 @@ describe('saveLayout pushes this window’s layout to the main process', () => {
     // Once the saved power layout lands, it is what the dock gets — and pushes resume from there
     heldGet.answerWith({ kind: 'entry', layout: layoutWithTab('saved-power-tab') });
     await switchToPower;
-    expect(tabIdsIn(loadedLayouts[loadedLayouts.length - 1])).toEqual(['saved-power-tab-w2']);
+    expect(tabIdsIn(loadedLayouts[loadedLayouts.length - 1])).toEqual(['saved-power-tab']);
 
     await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('after'), undefined, undefined);
     expect(layoutPushes()).toHaveLength(1);
@@ -3058,9 +3036,6 @@ describe('a failed dock add rolls back what the open already did', () => {
 describe('captureAndCloseWebView', () => {
   test('a load in flight is read only after it settles, so a web view it drops is never captured', async () => {
     const TARGET_WEB_VIEW_ID = 'target-web-view';
-    // The window-scoped id `loadLayout` gives the tab once it lands (see
-    // `withWindowScopedWebViewIds`) — `globalThis.windowId` is `'2'` for every test in this file.
-    const SCOPED_TARGET_WEB_VIEW_ID = `${TARGET_WEB_VIEW_ID}-w2`;
     let interfaceMode = 'simple';
     settingsGetMock.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? interfaceMode : false,
@@ -3079,13 +3054,17 @@ describe('captureAndCloseWebView', () => {
     const heldGet = holdGetLayout();
 
     const module = await primeWebViewOpenPath();
-    const { dockLayout, removeTabFromDockCalls } = makeDockLayoutTrackingOneWebView(
-      layoutWithTab(TARGET_WEB_VIEW_ID),
-      SCOPED_TARGET_WEB_VIEW_ID,
-    );
+    const { dockLayout, loadedLayouts, removeTabFromDockCalls, getCurrentWebViewId } =
+      makeDockLayoutTrackingOneWebView(layoutWithTab(TARGET_WEB_VIEW_ID));
     module.registerDockLayout(dockLayout);
+    // Simple mode's initial load is a baked default, so the target tab lands under a freshly
+    // minted id rather than the `TARGET_WEB_VIEW_ID` literal - wait for that mint to land, then
+    // read back the live id the rest of this test operates on.
+    await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
+    const mintedTargetWebViewId = getCurrentWebViewId();
+    if (!mintedTargetWebViewId) throw new Error('expected the target tab to receive a minted id');
     await vi.waitFor(() =>
-      expect(dockLayout.getWebViewDefinition(SCOPED_TARGET_WEB_VIEW_ID)).toBeDefined(),
+      expect(dockLayout.getWebViewDefinition(mintedTargetWebViewId)).toBeDefined(),
     );
     if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
 
@@ -3101,7 +3080,7 @@ describe('captureAndCloseWebView', () => {
     await vi.waitFor(() => expect(heldGet.hasRequest()).toBe(true));
 
     const shard = await registeredShard();
-    const capturePromise = shard.captureAndCloseWebView(SCOPED_TARGET_WEB_VIEW_ID);
+    const capturePromise = shard.captureAndCloseWebView(mintedTargetWebViewId);
 
     // The load lands with a layout that no longer holds the target web view
     heldGet.answerWith({ kind: 'entry', layout: layoutWithTab('other-tab') });

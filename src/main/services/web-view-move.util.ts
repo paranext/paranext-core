@@ -83,7 +83,7 @@ const LATE_ADOPT_PROBE_RETRY_DELAY_MS = 3_000;
  * wait.
  *
  * @param webViewId The id the target would hold the web view under — the captured definition's id,
- *   which the capture already stripped of its source window's scope
+ *   which is the same id the web view was minted with and keeps for its whole life
  * @returns The id the web view is open under in the target, or undefined when the probe confirmed
  *   absence or could not ask
  */
@@ -141,10 +141,9 @@ function raiseMoveTarget(target: MoveWebViewTarget): void {
  * capture, so the wait for a window to finish starting — the one step here that can take a cold
  * renderer start — is spent with the web view still in the window the user left it in.
  *
- * @returns Authoritative id of the web view in its new window. Can differ from the id passed in: a
- *   web view restored from a persisted layout carries a window-scoped id, and the capture strips
- *   that scope rather than carry one window's scope into another — callers use the returned id for
- *   anything after the move
+ * @returns Authoritative id of the web view in its new window — the same id as `webViewId`, since a
+ *   web view keeps the id it was minted with for its whole life, across any number of moves (see
+ *   `mint-web-view-ids.util.ts`)
  * @throws If no window holds the web view; if the destination could not be made ready — a named
  *   target window that does not exist or is closing, or a window created for the move that never
  *   became reachable, all of which leave the web view where it was; if taking the web view out of
@@ -169,7 +168,12 @@ export async function moveWebView(
   // The in-flight register cannot do this job: it is filled only after the source window has
   // answered the capture, which is several awaits later.
   if (movesInProgress.has(webViewId))
-    throw new Error(`Cannot move webview ${webViewId}: it is already being moved.`);
+    throw new Error(
+      describeWebViewMoveFailure(
+        'already-moving',
+        `Cannot move webview ${webViewId}: it is already being moved.`,
+      ),
+    );
   movesInProgress.add(webViewId);
   try {
     return await moveCapturedWebView(webViewId, target, isUserRequested);
@@ -322,7 +326,6 @@ async function moveCapturedWebView(
   // puts it back — see the in-flight register, which is what keeps a search landing in that gap
   // from being told the view does not exist.
   const moveInFlight: WebViewMoveInFlight = {
-    namedWebViewId: webViewId,
     webViewType: captured.webViewType,
     projectId: captured.projectId,
     capturedDefinition: captured,
@@ -414,13 +417,7 @@ async function moveCapturedWebView(
       );
     }
 
-    return await recoverAfterFailedMove(
-      webViewId,
-      owner,
-      captured,
-      targetDescription,
-      moveInFlight,
-    );
+    return await recoverAfterFailedMove(webViewId, owner, captured, targetDescription);
   } finally {
     deleteMoveInFlight(moveInFlight);
   }
@@ -475,7 +472,6 @@ async function recoverAfterFailedMove(
   owner: WebViewOwner,
   captured: SavedWebViewDefinition,
   targetDescription: string,
-  moveInFlight: WebViewMoveInFlight,
 ): Promise<never> {
   logger.debug(
     `Reopening webview ${webViewId} after its failed move to ${targetDescription}. Captured definition: ${JSON.stringify(captured)}`,
@@ -493,10 +489,8 @@ async function recoverAfterFailedMove(
         logger.warn(
           `Webview ${webViewId} was reopened in window ${owner.windowId}, but that window's close was decided in the meantime; reopening it somewhere else as well.`,
         );
-      else {
+      else
         reopenedIn = { description: sourceDescription, disposition: 'reopened-in-source-window' };
-        moveInFlight.recoveredIntoWindow = true;
-      }
     }
   }
   if (reopenedIn === undefined) {
@@ -507,7 +501,6 @@ async function recoverAfterFailedMove(
           description: 'the focused window',
           disposition: 'reopened-in-focused-window',
         };
-        moveInFlight.recoveredIntoWindow = true;
       }
     } catch (e) {
       logger.warn(

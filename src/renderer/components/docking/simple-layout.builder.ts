@@ -1,7 +1,9 @@
 import { deepClone } from 'platform-bible-utils';
 import { BoxBase, LayoutBase, PanelBase } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
+import type { LayoutInfo } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
+import mintFreshWebViewIds, { type MintedWebViewIdMap } from './mint-web-view-ids.util';
 import { simpleLayout } from './simple-layout.data';
 
 /**
@@ -45,10 +47,14 @@ export function visitTabs(layout: LayoutBase, visit: (tab: SavedTabInfo) => void
 }
 
 /**
- * The stable UUIDs used for the simple-mode tabs. Derived from {@link simpleLayout} so this list
- * cannot drift from the static layout. Exposed so callers driving the power → simple transition can
- * wait until each tab's webview has resolved (replacing the unknown-title placeholder) before
- * hiding the workspace-updating overlay.
+ * The stable ids `simpleLayout` bakes for the simple-mode tabs. Derived from {@link simpleLayout} so
+ * this list cannot drift from the static layout. These are `simpleLayout`'s baked slot ids, not
+ * runtime web view ids: a materialized Simple layout mints a fresh id for every tab (see
+ * {@link mintFreshWebViewIds}), so a caller that needs to recognize a _live_ tab must translate
+ * through the `mintedIds` map a materialization returns rather than comparing against these
+ * directly. Used by `web-view.service-shard.ts`'s `saveLayout` content-based guard to catch a
+ * baked-slot id straggling into a persisted layout (see `adr-layout-persistence-guard-retirement`
+ * in `.context/standards/Architecture-Decisions.md`).
  */
 export const SIMPLE_LAYOUT_TAB_IDS: readonly string[] = (() => {
   const ids: string[] = [];
@@ -115,21 +121,39 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * Builds a clone of the static {@link simpleLayout} with `projectId` baked into each tab's saved
- * web-view definition. When the dock layout restores from this, each web-view provider's
- * `getWebView` receives the `projectId` via `savedWebView.projectId` and renders the real project
- * content immediately — no empty-placeholder mount followed by a `reloadWebView` round-trip. This
- * is the simple-mode equivalent of how power mode restores its persisted layout: state baked in, no
+ * web-view definition and a fresh id minted for every tab (see {@link mintFreshWebViewIds}) — this
+ * is a materialization of the baked layout, the same as the no-arg Simple-mode load, and mints for
+ * the same reason: `simpleLayout`'s ids are a slot identity in the data file, not ids any live web
+ * view may carry. When the dock layout restores from this, each web-view provider's `getWebView`
+ * receives the `projectId` via `savedWebView.projectId` and renders the real project content
+ * immediately — no empty-placeholder mount followed by a `reloadWebView` round-trip. This is the
+ * simple-mode equivalent of how power mode restores its persisted layout: state baked in, no
  * follow-up commands required.
  *
  * If the caller can't resolve a project (cold start, no recents), load the bare `simpleLayout`
  * instead — the default-project picker in `platform-scripture-editor` will still fill the empty
  * Scripture Editor placeholder after the layout swap (the slower path, but a valid fallback).
+ *
+ * @returns The project-bound layout, and the map from each tab's baked slot id
+ *   ({@link VISIBLE_SIMPLE_LAYOUT_TAB_IDS}, {@link SIMPLE_LAYOUT_EDITOR_TAB_ID}) to the fresh id
+ *   minted for it in this materialization — callers that need to recognize one of this layout's
+ *   live tabs (e.g. to wait for its webview to resolve, or to track it as the Simple-mode editor
+ *   tab) translate through this map rather than comparing against the baked ids directly.
  */
-export function buildSimpleLayoutForProject(projectId: string): LayoutBase {
+export function buildSimpleLayoutForProject(projectId: string): {
+  layout: LayoutBase;
+  mintedIds: MintedWebViewIdMap;
+} {
   const cloned = deepClone(simpleLayout);
   visitTabs(cloned, (tab) => {
     if (!isObjectRecord(tab.data)) return;
     tab.data.projectId = projectId;
   });
-  return cloned;
+  // LayoutBase and LayoutInfo are structurally compatible at runtime; LayoutInfo is opaque in the
+  // shared model, so cross that boundary here rather than push it onto every caller.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const { layout: mintedLayout, mintedIds } = mintFreshWebViewIds(cloned as unknown as LayoutInfo);
+  // Cast back across the same LayoutBase/LayoutInfo boundary crossed above.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return { layout: mintedLayout as unknown as LayoutBase, mintedIds };
 }

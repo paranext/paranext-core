@@ -50,12 +50,6 @@ const STORED_STATE_KEY_PATTERN = new RegExp(`^(.+)_${WEB_VIEW_STATE_KEY}$`);
  * swept up as if it named a dead window, and requiring the shape is what tells the two apart. See
  * {@link WINDOW_ID_SHAPE_PATTERN_SOURCE} for why this matches by shape rather than requiring an
  * RFC-4122-strict UUID.
- *
- * Deliberately narrower than the scope-suffix matcher in `window-scoped-web-view-ids.util.ts`,
- * which also accepts the numeric ids older layouts carry. What that one reads is always an id this
- * app wrote, after an anchored `-w`; what this one reads is any key in shared storage, and a bare
- * run of digits is a plausible prefix for a key belonging to someone else. Widening it to match
- * would put those keys in reach of deletion.
  */
 const WINDOW_ID_PATTERN = new RegExp(`^${WINDOW_ID_SHAPE_PATTERN_SOURCE}$`, 'i');
 

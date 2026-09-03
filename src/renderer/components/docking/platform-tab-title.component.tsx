@@ -205,6 +205,7 @@ const MOVE_FAILURE_MESSAGE_KEYS: Record<WebViewMoveFailureDisposition, LocalizeK
   // the only thing that can be "standing unconfirmed"; move-to-an-existing-window never sets it.
   'reached-new-window-unconfirmed': '%tab_contextMenu_moveTabToNewWindow_failedUnconfirmed%',
   'possibly-closed': '%tab_contextMenu_moveTab_failedMayHaveClosed%',
+  'already-moving': '%tab_contextMenu_moveTab_failedAlreadyMoving%',
 };
 
 /**

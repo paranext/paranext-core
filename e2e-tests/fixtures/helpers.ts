@@ -714,6 +714,63 @@ export async function waitForAppReady(page: Page, timeout = 90_000): Promise<voi
   await waitForOverlayGone(page, remainingForOverlay);
 }
 
+/**
+ * Poll until a web view of `webViewType` is open, and return its id.
+ *
+ * Every materialization of a baked layout mints a fresh id for its web views (see
+ * `mintFreshWebViewIds` in `src/renderer/components/docking/mint-web-view-ids.util.ts`), so a fixed
+ * layout slot's id can never be known ahead of time from a baked constant — it can only be read
+ * live from the app. Queries the renderer's `papi.webViews.getAllOpenWebViewDefinitions()` (the
+ * same mechanism `enhanced-resources` specs use to locate icon-only tabs) rather than the DOM,
+ * because the slot's id is not otherwise exposed by type — only by the `data-web-view-id` it
+ * renders once known.
+ */
+export async function waitForOpenWebViewIdByType(
+  page: Page,
+  webViewType: string,
+  timeoutMs = 120_000,
+): Promise<string> {
+  const start = Date.now();
+  let lastSeenTypes: string[] = [];
+  // Sequential polling: each attempt must finish (or time out) before the next; parallelizing would
+  // defeat the retry/backoff.
+  /* eslint-disable no-await-in-loop */
+  while (Date.now() - start < timeoutMs) {
+    const { id, types } = await page.evaluate(async (type) => {
+      // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
+      const { papi } = window as unknown as {
+        papi: {
+          webViews: {
+            getAllOpenWebViewDefinitions: () => Promise<{ id: string; webViewType: string }[]>;
+          };
+        };
+      };
+      const definitions = await papi.webViews.getAllOpenWebViewDefinitions();
+      return {
+        id: definitions.find((d) => d.webViewType === type)?.id,
+        types: definitions.map((d) => d.webViewType),
+      };
+    }, webViewType);
+    if (id) return id;
+    lastSeenTypes = types;
+    const sleepMs = Math.min(RPC_DISCOVER_POLL_INTERVAL_MS, timeoutMs - (Date.now() - start));
+    if (sleepMs <= 0) break;
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, sleepMs);
+    });
+  }
+  /* eslint-enable no-await-in-loop */
+  // Lists what WAS open at the final poll: an empty list points at the layout never materializing,
+  // while a non-empty list missing only this type points at the slot being lost after materialization
+  // (e.g. a dock "Replacing tab failed" race during a concurrent auto-open) rather than a lookup bug.
+  throw new Error(
+    `No open web view of type "${webViewType}" within ${timeoutMs}ms (last seen open types: ${
+      lastSeenTypes.length > 0 ? lastSeenTypes.join(', ') : '<none>'
+    })`,
+  );
+}
+
 /** Options accepted by {@link openFromEditorHamburger}. */
 export interface OpenFromEditorHamburgerOptions {
   /**

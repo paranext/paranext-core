@@ -625,6 +625,31 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     );
   });
 
+  it('a move refused before it started says so rather than that something went wrong mid-move', async () => {
+    // A second click while the first move is still running never touched the tab; the tab is
+    // wherever the still-running move leaves it, which is not what any of the other messages say
+    vi.mocked(sendCommand).mockRejectedValue(
+      new Error(
+        describeWebViewMoveFailure(
+          'already-moving',
+          'Cannot move webview web-view-1: it is already being moved.',
+        ),
+      ),
+    );
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+
+    fireEvent.click(screen.getByText('Move tab to new window'));
+
+    await waitFor(() =>
+      expect(notificationService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%tab_contextMenu_moveTab_failedAlreadyMoving%',
+          severity: 'error',
+        }),
+      ),
+    );
+  });
+
   it('a disposition that survived the network round trip is still read', async () => {
     // What the renderer actually receives: the request plumbing wraps a handler's rejection in its
     // own message, so a disposition only reaches here if it is read out of the whole text rather

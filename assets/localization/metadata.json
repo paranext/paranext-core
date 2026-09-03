@@ -162,6 +162,13 @@
       "message": "Renamed because moving a tab to an existing window can fail the same way as moving it to a new one, and this message now covers both. Use %tab_contextMenu_moveTab_failed% instead."
     }
   },
+  "%tab_contextMenu_moveTabToNewWindow_failedAlreadyMoving%": {
+    "fallbackKey": "%tab_contextMenu_moveTab_failedAlreadyMoving%",
+    "deprecationInfo": {
+      "date": "2026-09-03",
+      "message": "Renamed because a second move can be refused for a tab headed to an existing window just as it can for one headed to a new window, and this message now covers both. Use %tab_contextMenu_moveTab_failedAlreadyMoving% instead."
+    }
+  },
   "%tab_contextMenu_moveTabToNewWindow_failedMayHaveClosed%": {
     "fallbackKey": "%tab_contextMenu_moveTab_failedMayHaveClosed%",
     "deprecationInfo": {

@@ -41,11 +41,6 @@ export function describeMatcher(matcher: OwnerMatcher): string {
 
 /** A web view a move has taken out of one window and not yet put into another */
 export type WebViewMoveInFlight = {
-  /**
-   * The id the move was asked for. Still carries its window's scope, so — unlike the captured id,
-   * which has had that scope stripped — it names one view in the whole application.
-   */
-  namedWebViewId: WebViewId;
   /** Type of the captured view */
   webViewType: WebViewType;
   /** Project the captured view was showing, if any */
@@ -54,20 +49,12 @@ export type WebViewMoveInFlight = {
    * The definition the capture returned, kept whole rather than split into the fields above:
    * `getAllOpenWebViewDefinitionsWithReachability` in `web-view.service-router.ts` folds this into
    * its merged read so a web view mid-move is not invisible to a caller that selects by
-   * `state?.isReadOnly` alongside `projectId` — a selection
-   * `namedWebViewId`/`webViewType`/`projectId` alone cannot answer.
+   * `state?.isReadOnly` alongside `projectId` — a selection `webViewType`/`projectId` alone cannot
+   * answer. Its `id` is also what a search and the fold-in match on: the id a web view is minted
+   * with never changes across a move (see `mint-web-view-ids.util.ts`), so this is the same id the
+   * caller asked the move for and the same id the destination window reports once the adopt lands.
    */
   capturedDefinition: SavedWebViewDefinition;
-  /**
-   * Whether a failed move has already put the web view back into a window under the captured id.
-   *
-   * A window reporting the captured spelling is ambiguous from the outside — it may be the target
-   * that adopted the view, or the source a recovery handed it back to — and the two want opposite
-   * treatment: the first is a view reported once and named once, the second is a view already in
-   * the read. Nothing about the ids can tell them apart, so the move records which happened while
-   * it still knows.
-   */
-  recoveredIntoWindow?: boolean;
 };
 
 /**
@@ -103,27 +90,11 @@ export function forEachMoveInFlight(visit: (move: WebViewMoveInFlight) => void):
   webViewMovesInFlight.forEach(visit);
 }
 
-/**
- * Put a record in without running a move, so a test can state the situation a read is supposed to
- * handle. Reachable only through `testingWebViewServiceRouter`: a move that recovers sets its flag
- * and throws with no await in between, so no test can drive a real move and observe the record it
- * leaves.
- */
-export function seedMoveInFlightForTesting(move: WebViewMoveInFlight): void {
-  webViewMovesInFlight.add(move);
-}
-
-/** Drop every record, so one test's unfinished move cannot be read by the next */
-export function clearMovesInFlightForTesting(): void {
-  webViewMovesInFlight.clear();
-}
-
 /** Whether a move in flight is holding the web view a search is looking for */
 export function isMatchedByMoveInFlight(matcher: OwnerMatcher): boolean {
   return [...webViewMovesInFlight].some((move) =>
     matcher.kind === 'id'
-      ? move.namedWebViewId === matcher.webViewId ||
-        move.capturedDefinition.id === matcher.webViewId
+      ? move.capturedDefinition.id === matcher.webViewId
       : move.webViewType === matcher.webViewType &&
         (matcher.projectId === undefined || move.projectId === matcher.projectId),
   );

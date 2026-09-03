@@ -3,6 +3,7 @@ import { LayoutBase } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import {
   buildSimpleLayoutForProject,
+  SIMPLE_LAYOUT_EDITOR_TAB_ID,
   SIMPLE_LAYOUT_TAB_IDS,
   VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
   visitPanels,
@@ -91,12 +92,12 @@ describe('simple-layout.builder', () => {
 
   describe('buildSimpleLayoutForProject', () => {
     it('returns a LayoutBase with the same column structure as simpleLayout', () => {
-      const result = buildSimpleLayoutForProject('proj-1');
+      const { layout: result } = buildSimpleLayoutForProject('proj-1');
       expect(countColumns(result)).toBe(countColumns(simpleLayout));
     });
 
     it('returns a LayoutBase with the same per-panel tab counts as simpleLayout', () => {
-      const result = buildSimpleLayoutForProject('proj-1');
+      const { layout: result } = buildSimpleLayoutForProject('proj-1');
       // Hardcoded (Column 1: Model Text, Column 2: Scripture Editor, Column 3: Resources & Tools)
       // rather than compared against `panelTabCounts(simpleLayout)` — that would re-derive the
       // expectation with `visitPanels`, the function under test.
@@ -104,7 +105,7 @@ describe('simple-layout.builder', () => {
     });
 
     it('every tab in the result has data.projectId === provided projectId', () => {
-      const result = buildSimpleLayoutForProject('proj-1');
+      const { layout: result } = buildSimpleLayoutForProject('proj-1');
       const tabs = collectTabs(result);
       expect(tabs.length).toBeGreaterThan(0);
       tabs.forEach((tab) => {
@@ -116,7 +117,7 @@ describe('simple-layout.builder', () => {
     });
 
     it('preserves the empty {} state shape on every tab', () => {
-      const result = buildSimpleLayoutForProject('proj-1');
+      const { layout: result } = buildSimpleLayoutForProject('proj-1');
       const tabs = collectTabs(result);
       expect(tabs.length).toBeGreaterThan(0);
       tabs.forEach((tab) => {
@@ -128,7 +129,7 @@ describe('simple-layout.builder', () => {
     });
 
     it('returns a deep clone — mutating a tab in the result does not mutate simpleLayout', () => {
-      const result = buildSimpleLayoutForProject('proj-1');
+      const { layout: result } = buildSimpleLayoutForProject('proj-1');
       const resultTabs = collectTabs(result);
       const staticTabs = collectTabs(simpleLayout);
       const firstResultTab = resultTabs[0];
@@ -146,8 +147,8 @@ describe('simple-layout.builder', () => {
     });
 
     it('produces independent objects across calls with different projectIds', () => {
-      const a = buildSimpleLayoutForProject('proj-a');
-      const b = buildSimpleLayoutForProject('proj-b');
+      const { layout: a } = buildSimpleLayoutForProject('proj-a');
+      const { layout: b } = buildSimpleLayoutForProject('proj-b');
       expect(a).not.toBe(b);
       expect(a.dockbox).not.toBe(b.dockbox);
       const aTabs = collectTabs(a);
@@ -168,6 +169,33 @@ describe('simple-layout.builder', () => {
       // Narrow only the field we read.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       expect((bTabs[0].data as { projectId?: string }).projectId).toBe('proj-b');
+    });
+
+    it('mints a fresh id for every tab rather than reusing simpleLayout’s baked ids', () => {
+      const { layout: result } = buildSimpleLayoutForProject('proj-1');
+      const resultIds = collectTabs(result).map((tab) => tab.id);
+      const bakedIds = collectTabs(simpleLayout).map((tab) => tab.id);
+      expect(resultIds).not.toEqual(bakedIds);
+      resultIds.forEach((id) => expect(bakedIds).not.toContain(id));
+    });
+
+    it('gives two materializations for the same project different tab ids', () => {
+      const { layout: first } = buildSimpleLayoutForProject('proj-1');
+      const { layout: second } = buildSimpleLayoutForProject('proj-1');
+      expect(collectTabs(first).map((tab) => tab.id)).not.toEqual(
+        collectTabs(second).map((tab) => tab.id),
+      );
+    });
+
+    it('maps the Scripture Editor slot’s baked id to its freshly minted id', () => {
+      expect(SIMPLE_LAYOUT_EDITOR_TAB_ID).toBe(SCRIPTURE_EDITOR_TAB_ID);
+      const { layout: result, mintedIds } = buildSimpleLayoutForProject('proj-1');
+      const editorTabIndex = collectTabs(simpleLayout).findIndex(
+        (tab) => tab.id === SIMPLE_LAYOUT_EDITOR_TAB_ID,
+      );
+      expect(mintedIds.get(SIMPLE_LAYOUT_EDITOR_TAB_ID)).toBe(
+        collectTabs(result)[editorTabIndex].id,
+      );
     });
   });
 
