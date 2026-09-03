@@ -19,6 +19,16 @@ const LIVE_DIR = path.join(ROOT, 'main');
 const BACKUP_DIR = `${LIVE_DIR}.e2e-backup`;
 process.env.PT_E2E_MAIN_LOCAL_STORAGE_DIR = LIVE_DIR;
 
+/**
+ * Reads a manifest this same test suite wrote and narrows it to the one field these tests inspect,
+ * without asserting the parsed JSON's shape: a manifest missing or misshaping `complete` fails the
+ * assertion that reads this function's result, rather than the read itself.
+ */
+function readManifestComplete(manifestPath: string): boolean {
+  const parsed: unknown = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+  return typeof parsed === 'object' && !!parsed && 'complete' in parsed && parsed.complete === true;
+}
+
 const SCR_REFS_KEY = 'scroll-group.service-host.scrRefs';
 const THEME_KEY = 'theme.service-host.currentTheme';
 const DEVELOPER_REF = '{"0":{"book":"PSA","chapterNum":23,"verseNum":1}}';
@@ -134,7 +144,7 @@ describe('app-global manifest write ordering', () => {
         if (manifestExistedBeforeFirstCopy === undefined) {
           manifestExistedBeforeFirstCopy = fs.existsSync(manifestPath);
           manifestWasCompleteBeforeFirstCopy = manifestExistedBeforeFirstCopy
-            ? (JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as { complete: boolean }).complete
+            ? readManifestComplete(manifestPath)
             : undefined;
         }
         return realCopyFileSync(src, dest);
@@ -151,10 +161,7 @@ describe('app-global manifest write ordering', () => {
       // And it must read as unfinished at that point, or a kill right here would leave a manifest
       // the next pin trusts as restorable from a directory that has not actually copied anything.
       expect(manifestWasCompleteBeforeFirstCopy).toBe(false);
-      const finalManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as {
-        complete: boolean;
-      };
-      expect(finalManifest.complete).toBe(true);
+      expect(readManifestComplete(manifestPath)).toBe(true);
     } finally {
       copySpy.mockRestore();
     }
@@ -176,8 +183,7 @@ describe('app-global manifest write ordering', () => {
 
     try {
       expect(() => pinAppGlobalState()).toThrow('simulated disk failure mid-copy');
-      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as { complete: boolean };
-      expect(manifest.complete).toBe(false);
+      expect(readManifestComplete(manifestPath)).toBe(false);
     } finally {
       copySpy.mockRestore();
     }
