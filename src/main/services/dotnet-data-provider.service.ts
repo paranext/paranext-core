@@ -100,15 +100,22 @@ function startDotnetDataProvider() {
   let options: SpawnOptionsWithoutStdio | undefined;
 
   // `dotnet watch` restores and builds before the provider's `Main()` runs at all, which is the
-  // single largest block of dev startup. Opting out runs the already-built assembly instead, so
-  // that cost moves out of startup — at the price of hot reload on C# edits: you must run
-  // `npm run build:data` yourself after changing C#, or the app silently keeps running the old
-  // build.
+  // single largest block of dev startup. Opting out (`npm run start:no-dotnet-watch`) runs the
+  // already-built assembly instead, so that cost moves out of startup — at the price of hot reload
+  // on C# edits: you must run `npm run build:data` yourself after changing C#, or the app keeps
+  // running the previous build. Logged below, because a stale build is otherwise invisible: the app
+  // starts and behaves normally, just against older C#.
   // `run --no-build` rather than the built assembly directly: the build output path is
   // runtime-identifier specific (e.g. `bin/Debug/net8.0/linux-x64/`), so letting MSBuild resolve it
   // keeps this working on every platform without hardcoding that layout.
   if (!globalThis.isPackaged && process.env.PT_DOTNET_NO_WATCH === 'true') {
     args = ['run', '--project', 'c-sharp/ParanextDataProvider.csproj', '--no-build'];
+    logger.info(
+      formatLog(
+        'PT_DOTNET_NO_WATCH is set: running the prebuilt assembly with no watcher. C# changes will NOT be picked up until you run `npm run build:data`.',
+        DOTNET_DATA_PROVIDER_NAME,
+      ),
+    );
   }
 
   if (globalThis.isPackaged) {

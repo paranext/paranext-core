@@ -265,6 +265,18 @@ npm start
 
 After you run `npm start` (or, in VSCode, launch `Debug Platform`), you can edit the code, and the relevant processes will hot reload.
 
+### Starting without the .NET watcher
+
+`npm start` runs the .NET data provider under `dotnet watch`, which restores and builds the project before the provider's `Main()` runs — 15-24 seconds of dev startup, depending on how warm the MSBuild and Roslyn servers are. If you are not editing C#, you can skip it:
+
+```bash
+npm run start:no-dotnet-watch
+```
+
+This runs the already-built assembly instead, which takes roughly 3 seconds off the time to a fully loaded app and about 15 seconds off how long the data provider takes to become ready.
+
+**The trade-off is that C# changes are no longer picked up.** You have to run `npm run build:data` yourself after editing C#, or the app will keep running the previous build — it starts and behaves normally, just against older C# code, so the startup log says explicitly when this mode is active. You also need to have built the provider at least once (`npm run build:data`) before the script will work at all.
+
 ### Developing Extensions
 
 Platform.Bible core extensions are found in the `extensions` folder. Please follow the instructions in
