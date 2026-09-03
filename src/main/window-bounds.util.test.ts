@@ -3,7 +3,9 @@ import {
   trackDisplaySettle,
   type DisplaySettleState,
   type IdentifiedDisplayLike,
+  type ScaledDisplayLike,
   areCapturedBoundsTrustworthy,
+  correctBoundsForDisplayScale,
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
   DISPLAY_SETTLE_MS,
@@ -103,6 +105,41 @@ describe('ensureBoundsVisibleOnSomeDisplay', () => {
     ensureBoundsVisibleOnSomeDisplay(savedState, [PRIMARY], PRIMARY);
 
     expect(savedState).toEqual(original);
+  });
+});
+
+describe('correctBoundsForDisplayScale', () => {
+  test('divides a reading inflated by a scaled display against a 100% primary back to true size', () => {
+    // Measured on a secondary display scaled 125% with a 100% primary: getBounds() reported
+    // 1283x914 for a window whose own-display size was 1024x728 (1283/1024 ~= 1.253, matching the
+    // 1.25 scale ratio within rounding).
+    const containingDisplay: ScaledDisplayLike = { bounds: SECONDARY.bounds, scaleFactor: 1.25 };
+    const primaryDisplay: ScaledDisplayLike = { bounds: PRIMARY.bounds, scaleFactor: 1.0 };
+    const reading = { x: -1442, y: 253, width: 1283, height: 914 };
+
+    const corrected = correctBoundsForDisplayScale(reading, containingDisplay, primaryDisplay);
+
+    expect(corrected).toEqual({ x: -1442, y: 253, width: 1026, height: 731 });
+  });
+
+  test('a primary and containing display at the same scale factor is the identity', () => {
+    const display: ScaledDisplayLike = { bounds: PRIMARY.bounds, scaleFactor: 1.0 };
+    const reading = { x: 100, y: 50, width: 1024, height: 728 };
+
+    expect(correctBoundsForDisplayScale(reading, display, display)).toEqual(reading);
+  });
+
+  test('corrects by the ratio between the two scale factors, not the containing display alone', () => {
+    // A 150% primary against a 125% secondary: the ratio is 1.5/1.25 = 1.2, not 1/1.25 — a non-100%
+    // primary is why the correction has to be the RATIO between the two rather than simply the
+    // inverse of the target display's own factor.
+    const containingDisplay: ScaledDisplayLike = { bounds: SECONDARY.bounds, scaleFactor: 1.25 };
+    const primaryDisplay: ScaledDisplayLike = { bounds: PRIMARY.bounds, scaleFactor: 1.5 };
+    const reading = { x: 2000, y: 100, width: 1000, height: 800 };
+
+    const corrected = correctBoundsForDisplayScale(reading, containingDisplay, primaryDisplay);
+
+    expect(corrected).toEqual({ x: 2000, y: 100, width: 1200, height: 960 });
   });
 });
 
@@ -312,5 +349,69 @@ describe('a scaled display does not compound a window size across quit/reopen cy
     );
 
     expect(persisted).toEqual(REQUESTED);
+  });
+});
+
+describe('correcting captured bounds keeps a window on a scaled display from growing across quit/reopen cycles', () => {
+  // Distinct from the settle-race modeled above: this is a STABLE unit mismatch — Electron reports
+  // getBounds() in the primary's units for as long as the window lives on a differently-scaled
+  // secondary display, not only during a brief landing window — so no amount of waiting for
+  // DISPLAY_SETTLE_MS corrects it. Only dividing the reading by the scale ratio at capture does.
+  const PRIMARY_SCALE: ScaledDisplayLike = { bounds: PRIMARY.bounds, scaleFactor: 1.0 };
+  const SECONDARY_SCALE: ScaledDisplayLike = { bounds: SECONDARY.bounds, scaleFactor: 1.25 };
+
+  /**
+   * One quit/reopen cycle: the window is created at `storedSize` (its own display's units),
+   * `getBounds()` reports that size distorted into the primary's units — mirroring what Electron
+   * measurably does on Windows for a window living on a secondary display scaled against the
+   * primary — and capture runs it through `correct` before persisting. `correct` is the seam under
+   * test: an identity function reproduces capture with no correction (the pre-fix behavior);
+   * {@link correctBoundsForDisplayScale} is the fix.
+   */
+  function runCreateCaptureCycle(
+    storedSize: { width: number; height: number },
+    correct: (
+      reading: WindowRectangle,
+      containing: ScaledDisplayLike,
+      primary: ScaledDisplayLike,
+    ) => WindowRectangle,
+  ): { width: number; height: number } {
+    const distortionRatio = SECONDARY_SCALE.scaleFactor / PRIMARY_SCALE.scaleFactor;
+    const reported: WindowRectangle = {
+      x: 0,
+      y: 0,
+      width: Math.round(storedSize.width * distortionRatio),
+      height: Math.round(storedSize.height * distortionRatio),
+    };
+    const corrected = correct(reported, SECONDARY_SCALE, PRIMARY_SCALE);
+    return { width: corrected.width, height: corrected.height };
+  }
+
+  test('without a correction, three cycles compound the size by the scale ratio each time', () => {
+    // Positive control: with no correction applied, the same model that converges below instead
+    // grows every cycle — proving the growth in the next test comes from the correction, not from
+    // the model happening to be static.
+    const noCorrection = (reading: WindowRectangle) => reading;
+    const start = { width: DEFAULT_WINDOW_WIDTH, height: DEFAULT_WINDOW_HEIGHT };
+
+    const afterCycle1 = runCreateCaptureCycle(start, noCorrection);
+    const afterCycle2 = runCreateCaptureCycle(afterCycle1, noCorrection);
+    const afterCycle3 = runCreateCaptureCycle(afterCycle2, noCorrection);
+
+    expect(afterCycle1.width).toBeGreaterThan(start.width);
+    expect(afterCycle2.width).toBeGreaterThan(afterCycle1.width);
+    expect(afterCycle3.width).toBeGreaterThan(afterCycle2.width);
+  });
+
+  test('correctBoundsForDisplayScale converges three cycles on the starting size instead of growing', () => {
+    const start = { width: DEFAULT_WINDOW_WIDTH, height: DEFAULT_WINDOW_HEIGHT };
+
+    const afterCycle1 = runCreateCaptureCycle(start, correctBoundsForDisplayScale);
+    const afterCycle2 = runCreateCaptureCycle(afterCycle1, correctBoundsForDisplayScale);
+    const afterCycle3 = runCreateCaptureCycle(afterCycle2, correctBoundsForDisplayScale);
+
+    expect(afterCycle1).toEqual(start);
+    expect(afterCycle2).toEqual(start);
+    expect(afterCycle3).toEqual(start);
   });
 });
