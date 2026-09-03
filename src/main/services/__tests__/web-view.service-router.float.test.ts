@@ -177,11 +177,14 @@ describe('float layouts are untouched by multi-window routing', () => {
 
     await router.openWebView('someType', FLOAT_LAYOUT, { existingId: 'existing-view' });
 
+    // The owner (window 2) is not the target window (window 1) and the app holds focus, so this
+    // open is about to raise the owner across windows — `true` here, not the layout, is what the
+    // raise gate in `web-view.service-router.test.ts` pins.
     expect(owner.openWebView).toHaveBeenCalledWith(
       'someType',
       FLOAT_LAYOUT,
       { existingId: 'existing-view' },
-      false,
+      true,
     );
     expect(focused.openWebView).not.toHaveBeenCalled();
   });

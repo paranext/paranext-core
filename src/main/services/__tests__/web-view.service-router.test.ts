@@ -1509,6 +1509,63 @@ describe('web view service router', () => {
 
       expect(mocks.focusWindow).toHaveBeenCalledWith(2);
     });
+
+    test('withholds document focus from the shard when about to raise across windows, so the raise below has a tab left waiting to catch up on', async () => {
+      // `focusWindow` below runs an OS-level raise of a window that is, at the moment the shard's
+      // own `openWebView` call runs above it, still backgrounded — a `focus()` call inside a window
+      // that does not hold OS focus is silently dropped rather than deferred. Without withholding
+      // here, the raise lands with nothing focused inside it.
+      const owner = windowShard(['existing-view']);
+      owner.openWebView.mockResolvedValue('existing-view');
+      withWindows({ 1: windowShard([]), 2: owner });
+      const router = await getRouter();
+
+      await router.openWebView('someType', undefined, { existingId: 'existing-view' });
+
+      expect(owner.openWebView).toHaveBeenCalledWith(
+        'someType',
+        undefined,
+        { existingId: 'existing-view' },
+        true,
+      );
+    });
+
+    test('does not withhold document focus when the routed window is already the one the user is in (no raise happening)', async () => {
+      const focused = windowShard(['existing-view']);
+      withWindows({ 1: focused, 2: windowShard([]) });
+      const router = await getRouter();
+
+      await router.openWebView('someType', undefined, { existingId: 'existing-view' });
+
+      expect(focused.openWebView).toHaveBeenCalledWith(
+        'someType',
+        undefined,
+        { existingId: 'existing-view' },
+        false,
+      );
+    });
+
+    test('does not withhold document focus for a passive probe that opted out of bringToFront', async () => {
+      // The pre-open snapshot mirrors the same `bringToFront` opt-out the post-open raise already
+      // respects — a probe that declined the raise must not have its content withheld either.
+      const owner = windowShard([{ id: 'wv-2', webViewType: 'comments' }]);
+      owner.openWebView.mockResolvedValue('wv-2');
+      withWindows({ 1: windowShard([]), 2: owner });
+      const router = await getRouter();
+
+      await router.openWebView('comments', undefined, {
+        existingId: '?',
+        createNewIfNotFound: false,
+        bringToFront: false,
+      });
+
+      expect(owner.openWebView).toHaveBeenCalledWith(
+        'comments',
+        undefined,
+        { existingId: '?', createNewIfNotFound: false, bringToFront: false },
+        false,
+      );
+    });
   });
 
   test('opens a brand new web view in the focused window', async () => {

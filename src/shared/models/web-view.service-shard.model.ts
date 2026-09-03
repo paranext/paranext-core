@@ -41,8 +41,11 @@ export interface WebViewServiceShard extends WebViewServiceType {
    * @param activateWithoutDocumentFocus Dock the web view and make its tab active, but leave
    *   document focus alone. Focusing the new tab focuses its iframe, and a `focus()` inside a
    *   window that does not hold OS focus asks the browser to activate that window — which would
-   *   undo a window that was deliberately opened in the background. Passed by the main process when
-   *   it created this window without activating it and the user has not activated it since
+   *   undo a window that was deliberately opened in the background, or would be silently dropped if
+   *   the window has not yet become the OS foreground. Passed by the main process both when it
+   *   created this window without activating it and the user has not activated it since, and when
+   *   it is about to raise this window across windows (its own OS-level `focusWindow` call happens
+   *   after this returns, so document focus would otherwise be requested too early)
    * @experimental
    */
   openWebView: (

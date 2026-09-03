@@ -483,11 +483,22 @@ async function openWebViewInOwningWindow(
     throw new Error(
       `Cannot open ${webViewType} in window ${owner.windowId}: that window is closing.`,
     );
+  const isOwnerAwaitingFirstActivation = shouldContentAvoidDocumentFocus(owner.windowId);
+  // Read the same condition the raise below decides on, before the open runs: a raise about to
+  // happen needs the shard to activate the tab without moving document focus. Without this, the
+  // shard's own `focus()` call runs while the owning window is still backgrounded — a `focus()`
+  // inside a window that does not hold OS focus is silently dropped rather than deferred — and
+  // `focusWindow` below then raises the window with no document focus left to land the tab.
+  const willLikelyRaiseAcrossWindows =
+    owner.windowId !== getTargetWindowId() &&
+    isApplicationFocused() &&
+    options?.bringToFront !== false &&
+    !isOwnerAwaitingFirstActivation;
   const openedWebViewId = await owner.shard.openWebView(
     webViewType,
     layout,
     options,
-    shouldContentAvoidDocumentFocus(owner.windowId),
+    isOwnerAwaitingFirstActivation || willLikelyRaiseAcrossWindows,
   );
   const isCrossWindow = owner.windowId !== getTargetWindowId();
   // A caller who opted out of bringToFront is opting out at the window level too: the shard already
