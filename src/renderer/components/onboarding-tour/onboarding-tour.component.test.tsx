@@ -266,7 +266,7 @@ describe('OnboardingTour', () => {
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
 
-  it('reopens a completed tour when a replay is requested (Help > Show the tour again)', () => {
+  it('reopens a completed tour when a replay is requested (Help > Show the tour)', () => {
     writeTourDone();
     render(<OnboardingTour />);
     expect(screen.queryByTestId('mock-tour')).toBeNull();
@@ -300,7 +300,7 @@ describe('OnboardingTour', () => {
   it('shows a replay in Power mode, where the shared Profile stop still applies', () => {
     // Power has no Simple columns and no Sync button, so Tour's open-time filter drops those stops.
     // The Profile stop survives — the toolbar renders `UserProfilePopover` in both modes — and it
-    // is the one thing Help > Show the tour again can still teach a Power user.
+    // is the one thing Help > Show the tour can still teach a Power user.
     mockIsPowerMode = true;
     writeTourDone();
     render(<OnboardingTour />);
