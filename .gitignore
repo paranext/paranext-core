@@ -99,3 +99,10 @@ service-account.json
 # build on any untracked file the build produced.
 /.bundle/
 /vendor/bundle/
+
+# Per-PR review working documents (triage briefs, revision plans). These are scratch for one review
+# round - the durable record is the PR thread and the commit messages - and the repository root is
+# where they are most visible to anyone browsing the project. Ignored rather than merely deleted
+# because the instruction to commit every supporting file is what put them here in the first place.
+/triage-brief-*.md
+/implementation-plan-*.md
