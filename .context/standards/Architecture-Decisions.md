@@ -2975,8 +2975,14 @@ step, no automation. Just a record.
   needs them at the moment it opens and never again.
 - **Consequences:** Duplicate window names are possible and accepted, as they are in Paratext
   9: the cost of choosing wrong is one tab in the wrong window. Nothing in the main process may
-  call `setTitle`, or the native title stops following the page title and the submenu's names
-  go stale. Contributed tab items carry a `command` that may name an action the menu performs
+  call `setTitle`: a title set from main never sticks — at construction it lasts only until the
+  renderer publishes its first page title, and at runtime it lasts only until the renderer's next
+  page-title change — so the main process cannot hold a name against the renderer's own naming,
+  and the submenu would show a stale one until that next change. (An earlier version of this
+  bullet said the call permanently breaks the native title's link to the page title; a runtime
+  probe showed otherwise — a runtime call held indefinitely until superseded by the renderer's own
+  next title change, so the call only leaves the submenu briefly stale rather than permanently
+  wrong.) Contributed tab items carry a `command` that may name an action the menu performs
   itself rather than a registered PAPI command, which the channel's TSDoc states. Float panels
   are excluded from naming so a modal dialog cannot rename the window; a maximized panel is
   read first, since it is what the user is looking at.

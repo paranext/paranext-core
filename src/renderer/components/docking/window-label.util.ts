@@ -100,7 +100,10 @@ let latestRequestedLabel: string | LocalizeKey | undefined;
  *
  * The page title is the whole mechanism: Electron's `page-title-updated` carries it to the native
  * window title, which is what the OS switcher shows and what other windows read when they offer
- * this one as a target. Nothing in the main process may set the title itself, or that link breaks.
+ * this one as a target. A title set from the main process does not stick — at construction it lasts
+ * only until the renderer publishes its first page title, and at runtime it lasts only until the
+ * renderer's next page-title change — so the main process cannot hold a name against the renderer's
+ * own naming.
  *
  * @param layout The window's dock layout
  * @param findTab Looks a tab up by id, as the live dock layout does
