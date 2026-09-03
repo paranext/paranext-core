@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => {
     getAbandonedWindowIds: vi.fn(),
     wasWindowEverReady: vi.fn(),
     isWindowClosing: vi.fn(),
+    isWindowTracked: vi.fn<(windowId: string) => boolean>(() => true),
+    getWindowCreationRank: vi.fn<(windowId: string) => number | undefined>(() => undefined),
     isApplicationFocused: vi.fn(),
     focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
@@ -67,6 +69,8 @@ vi.mock('@main/services/window-state.service', () => ({
   getAbandonedWindowIds: mocks.getAbandonedWindowIds,
   wasWindowEverReady: mocks.wasWindowEverReady,
   isWindowClosing: mocks.isWindowClosing,
+  isWindowTracked: mocks.isWindowTracked,
+  getWindowCreationRank: mocks.getWindowCreationRank,
   isApplicationFocused: mocks.isApplicationFocused,
   focusWindow: mocks.focusWindow,
 }));

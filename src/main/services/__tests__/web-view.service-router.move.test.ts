@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => {
     isWindowReady: vi.fn(),
     isWindowClosing: vi.fn(),
     isWindowTracked: vi.fn<(windowId: string) => boolean>(() => true),
+    getWindowCreationRank: vi.fn<(windowId: string) => number | undefined>(() => undefined),
     getFocusedWindowId,
     // The real answer is false only while no window holds OS focus, which in this suite is exactly
     // when getFocusedWindowId answers undefined — derived so the focus-driven tests keep meaning
@@ -83,6 +84,7 @@ vi.mock('@main/services/window-state.service', () => ({
   isWindowReady: mocks.isWindowReady,
   isWindowClosing: mocks.isWindowClosing,
   isWindowTracked: mocks.isWindowTracked,
+  getWindowCreationRank: mocks.getWindowCreationRank,
   getFocusedWindowId: mocks.getFocusedWindowId,
   isApplicationFocused: mocks.isApplicationFocused,
   focusWindow: mocks.focusWindow,

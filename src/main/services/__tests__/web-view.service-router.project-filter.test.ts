@@ -67,6 +67,9 @@ vi.mock('@main/services/window-state.service', () => ({
   // No test here is about a window closing, and an open into the window a search resolved re-reads
   // this immediately before it runs
   isWindowClosing: () => false,
+  // No test here is about a window the tracker no longer knows; every window this suite creates
+  // stays tracked
+  isWindowTracked: () => true,
   getFocusedWindowId: mocks.getFocusedWindowId,
   // No test here is about the cross-window raise; the app holding focus is what allows one
   isApplicationFocused: () => true,

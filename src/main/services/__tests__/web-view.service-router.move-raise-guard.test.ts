@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => {
     getAbandonedWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
     isWindowClosing: vi.fn(),
+    isWindowTracked: vi.fn<(windowId: string) => boolean>(() => true),
+    getWindowCreationRank: vi.fn<(windowId: string) => number | undefined>(() => undefined),
     // Independent of getFocusedWindowId here, unlike the derived mock the other move suites use:
     // these tests pin the one situation where the two diverge — a window was focused once (the id
     // stays set) while no window holds OS focus now
@@ -62,6 +64,8 @@ vi.mock('@main/services/window-state.service', () => ({
   getAbandonedWindowIds: mocks.getAbandonedWindowIds,
   isWindowReady: mocks.isWindowReady,
   isWindowClosing: mocks.isWindowClosing,
+  isWindowTracked: mocks.isWindowTracked,
+  getWindowCreationRank: mocks.getWindowCreationRank,
   getFocusedWindowId: mocks.getFocusedWindowId,
   isApplicationFocused: mocks.isApplicationFocused,
   focusWindow: mocks.focusWindow,
