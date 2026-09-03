@@ -283,22 +283,28 @@ export function PlatformBibleToolbar() {
 
   // Simple mode is the only mode this ships in: it has a single, global book/chapter/verse control,
   // so widening its book list is unambiguous. Power mode's own controls are left as they are for
-  // that team to decide on; the component API stays open to them either way. Disabled outright in
-  // Power mode so it opens no data providers and no booksPresent subscriptions for a result nothing
-  // there reads.
+  // that team to decide on; the component API stays open to them either way. Gated on
+  // `!isPowerMode` rather than the stricter `isSimpleMode` for the same reason as the availability
+  // probe below: this is a prefetch, so starting it while the mode is still unknown means the
+  // widened list is ready the moment we learn the mode is simple. The cost is that a power user
+  // whose mode has not resolved yet briefly opens the project's data provider and one booksPresent
+  // subscription for a result nothing there reads.
   const openProjectBookIds = useOpenProjectBookIds(
     resolvedWebView?.definition.projectId,
     !isPowerMode,
   );
   const additionalBookIds = useMemo(() => {
-    if (isPowerMode) return EMPTY_BOOK_IDS;
+    // `isSimpleMode`, not `!isPowerMode`: unlike the prefetch above, this feeds rendered content —
+    // the widened book list and the "show more books" affordance that comes with it — so an
+    // unresolved read must not put simple mode's list in front of a power user.
+    if (!isSimpleMode) return EMPTY_BOOK_IDS;
     // BookChapterControl renders exactly the book list it is given, so the current book has to come
     // from here or a reference on a book the active project lacks would be missing from its own
     // picker.
     if (projectBookIds.includes(scrRef.book) || openProjectBookIds.includes(scrRef.book))
       return openProjectBookIds;
     return [...openProjectBookIds, scrRef.book];
-  }, [isPowerMode, projectBookIds, openProjectBookIds, scrRef.book]);
+  }, [isSimpleMode, projectBookIds, openProjectBookIds, scrRef.book]);
   // Stable identity per value, for the same reason fetchActiveBookIds is memoized above:
   // BookChapterControl memoizes its book list on this function's identity.
   const fetchAdditionalBookIds = useCallback(() => additionalBookIds, [additionalBookIds]);

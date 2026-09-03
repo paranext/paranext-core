@@ -965,6 +965,26 @@ describe('PlatformBibleToolbar — books beyond the active project', () => {
     expect(control).not.toHaveAttribute('data-additional-books');
   });
 
+  it('offers nothing beyond the active project while the interface mode is not yet known', async () => {
+    // Same startup window Sync and the project picker wait out. The widened list is simple mode's
+    // content, so a power user must not be shown it — nor the "show more books" affordance that
+    // comes with it — on the 'simple' placeholder that stands in for an unresolved read.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), true]);
+    const { rerender } = render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).not.toHaveAttribute('data-additional-books');
+
+    // Positive control: the same render offers the open resource's books once the mode settles.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    rerender(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('book-chapter-control')).toHaveAttribute(
+        'data-additional-books',
+        'REV',
+      );
+    });
+  });
+
   it('offers the current book when the active project does not have it', async () => {
     // BookChapterControl renders exactly the book list it is given, so a reference on a book the
     // active project lacks is only in its own picker because the toolbar adds it.

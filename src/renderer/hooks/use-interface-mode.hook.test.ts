@@ -99,6 +99,33 @@ describe('useInterfaceMode', () => {
     renderHook(() => useInterfaceMode());
     expect(localStorage.getItem(INTERFACE_MODE_CACHE_KEY)).toBeNull();
   });
+
+  it('falls back to the mode this session resolved, not the one cached at mount', () => {
+    // The user can switch modes without remounting this hook, so the mount-time cache goes stale
+    // the moment they do. Falling back to it after that answers with the mode they left — which is
+    // how simple-only UI ends up in the power toolbar.
+    settingState.value = 'power';
+    const { result, rerender } = renderHook(() => useInterfaceMode());
+    expect(result.current[0]).toBe('power');
+
+    settingState.value = PLATFORM_ERROR;
+    rerender();
+    expect(result.current[0]).toBe('power');
+  });
+
+  it('stays known once the mode has resolved, even if the read goes back to loading', () => {
+    settingState.value = 'power';
+    const { result, rerender } = renderHook(() => useInterfaceMode());
+    expect(result.current[2]).toBe(true);
+
+    // `useData`'s runaway guard reports an error alongside `isLoading: true` for its whole cooldown.
+    // Dropping back to unknown there would unmount and remount every mode-gated control.
+    settingState.value = PLATFORM_ERROR;
+    settingState.isLoading = true;
+    rerender();
+    expect(result.current[2]).toBe(true);
+    expect(result.current[0]).toBe('power');
+  });
 });
 
 // The rule simple-only UI must follow — `isModeKnown && mode === 'simple'`, never `mode !== 'power'`
