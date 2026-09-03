@@ -1495,9 +1495,11 @@ export function restoreLeakedSettings(): string[] | undefined {
             'which run took them, and it could not be moved aside. Nothing was restored and nothing ' +
             'was deleted, but settings pins will refuse to run until it is gone — inspect it by hand.'
         : // Listing only the path(s) that actually moved, rather than naming both files outright:
-          // one of the two quarantine attempts can fail on its own (e.g. a permission error moving
-          // the backup while the live settings file moves fine), and a message naming both would
-          // misdescribe that case.
+          // `movedSettings` is `undefined` whenever the live settings file does not exist at all
+          // (nothing to quarantine there), and `movedBackup` can be `undefined` if the backup itself
+          // vanishes in the race between the `existsSync` check above and this quarantine attempt —
+          // neither is a failure, but a message naming both files unconditionally would claim a path
+          // moved when it did not.
           `Moved ${[movedBackup, movedSettings]
             .filter((moved) => moved !== undefined)
             .join(' and ')} aside: the backup is unreadable, or predates backups recording which ` +
