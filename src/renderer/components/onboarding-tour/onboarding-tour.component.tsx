@@ -106,10 +106,10 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
         spotlightPadding: 1,
       },
       {
-        // TODO(PT-4007): the sync button does not render in the toolbar until this is fixed, and
-        // `toolbar-sync-area` is then an empty zero-size wrapper — so Tour skips this stop and the
-        // tour runs with four. Nothing here needs to change once the button is back; this note
-        // exists so a four-stop tour is recognized as that bug rather than a regression here.
+        // Conditional stop: the sync button it anchors to renders only where Send/Receive is
+        // installed, which is Paratext 10 Studio. In plain Platform.Bible `toolbar-sync-area`
+        // stays an empty zero-size wrapper, so Tour skips this stop and the tour runs with four —
+        // expected there, not a defect. Nothing here changes between the two builds.
         target: '[data-testid="toolbar-sync-area"]',
         title: strings['%toolbar_sync%'] ?? '',
         description: strings['%onboardingTour_step_sendReceive_description%'] ?? '',

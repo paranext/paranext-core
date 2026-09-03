@@ -496,8 +496,12 @@ export function PlatformBibleToolbar() {
                 empty:hidden keeps the wrapper out of the flex flow when the button is absent, so
                 it contributes no gap-2 spacing while staying in the DOM at zero size — which is
                 how Tour skips the step.
-                TODO(PT-4007): while the sync button is missing from the toolbar this wrapper is
-                always empty, so the tour runs with four stops rather than five. */}
+                In plain Platform.Bible the wrapper is always empty and the tour runs with four
+                stops rather than five: Send/Receive ships only in Paratext 10 Studio, so
+                `platformGetResources.isSendReceiveAvailable` settles to `false`, and no dotnet
+                sync can raise `hasBackendSynced` either (`GetSyncActivity` is hardcoded idle in
+                `ParatextProjectSendReceiveService`). A four-stop tour in this build is correct,
+                not a regression. */}
             <div data-testid="toolbar-sync-area" className="tw:min-w-0 tw:shrink tw:empty:hidden">
               {!isPowerMode && (isSendReceiveAvailable !== false || hasBackendSynced) && (
                 // Simple mode only — power users send/receive per project from the Home
