@@ -210,8 +210,10 @@ deciding where a feature lives — record it in
 [`Architecture-Decisions.md`](.context/standards/Architecture-Decisions.md). This applies to **all**
 work, not just `/investigate-prd`.
 
-- **Capture the decision** as an append-only entry (date · status · context · decision · alternatives
-  · consequences). Mark superseded decisions rather than deleting them — with the one carve-out the
+- **Capture the decision** as an entry (date · status · context · decision · alternatives
+  · consequences) inserted in **alphabetical order by slug**, not at the end of the file — sorted
+  insertion spreads new entries across the file so concurrent branches conflict less often. Mark
+  superseded decisions rather than deleting them — with the one carve-out the
   log itself states: delete a superseded entry when leaving it would keep a dead approach readable as
   available prior art, retire its number instead of reusing it, and leave a stub explaining the gap.
 - **Promote settled conventions:** when a decision hardens into a rule everyone should follow, also
