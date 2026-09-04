@@ -75,7 +75,6 @@
 import type { ElectronApplication, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
-  preConfigureSettings,
   sendPapiRequestOnce,
   waitForAppReady,
   WINDOW_ID_SHAPE_SOURCE,
