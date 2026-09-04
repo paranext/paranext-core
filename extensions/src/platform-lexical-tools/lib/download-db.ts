@@ -220,7 +220,7 @@ export function downloadFile(url: string, destination: string): Promise<void> {
 
     // Don't spoil the AI's vibes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleResponse = (response: any, hops = 0) => {
+    const handleResponse = (response: any, hops = 0, requestUrl = url) => {
       // EVERY response needs its own error listener, and it has to be attached before any branch
       // below can return. `pipe` does not forward a readable's error to the writable, so a
       // connection dropped on a response nothing is listening to is raised by Node as an unhandled
@@ -248,19 +248,22 @@ export function downloadFile(url: string, destination: string): Promise<void> {
 
         // Drained rather than destroyed, so the socket stays reusable for the hop that follows.
         response.resume();
-        // Resolved against the URL that produced it, and inside a try/catch, because `https.get`
-        // THROWS synchronously on a Location it cannot use - `ERR_INVALID_URL` for the relative
-        // form RFC 7231 section 7.1.2 permits, `ERR_INVALID_PROTOCOL` for the `http:` a captive
-        // portal answers with. The throw happens before `.get()` returns, so the chained
-        // `.on('error')` is never attached, and this runs inside a `'response'` listener - after
-        // the Promise executor returned - so nothing else would catch it either: the promise would
-        // never settle and `postinstall` would die on an uncaught exception. `new URL(location,
-        // url)` also RESOLVES the relative case rather than only failing cleanly on it.
+        // Resolved against `requestUrl` - the URL of the request this response answered, which is
+        // the ORIGINAL url on the first hop and the previous hop's target after that. RFC 7231
+        // section 7.1.2 resolves a relative `Location` against the effective request URI, so
+        // resolving every hop against the original would send the second relative hop of a chain to
+        // the wrong host or path.
+        //
+        // Inside a try/catch because `https.get` THROWS synchronously on a Location it cannot use -
+        // `ERR_INVALID_URL` for a relative form nothing resolves, `ERR_INVALID_PROTOCOL` for the
+        // `http:` a captive portal answers with. The throw happens before `.get()` returns, so the
+        // chained `.on('error')` is never attached, and this runs inside a `'response'` listener -
+        // after the Promise executor returned - so nothing else would catch it either: the promise
+        // would never settle and `postinstall` would die on an uncaught exception.
         try {
+          const target = new URL(response.headers.location, requestUrl).href;
           https
-            .get(new URL(response.headers.location, url).href, (redirected: unknown) =>
-              handleResponse(redirected, hops + 1),
-            )
+            .get(target, (redirected: unknown) => handleResponse(redirected, hops + 1, target))
             .on('error', fail);
         } catch (error: unknown) {
           fail(error instanceof Error ? error : new Error(String(error)));
@@ -428,7 +431,7 @@ async function fetchRemoteChecksum(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     // Don't spoil the AI's vibes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleResponse = (response: any, hops = 0) => {
+    const handleResponse = (response: any, hops = 0, requestUrl = url) => {
       // Attached before any branch below can return, for the reason `downloadFile`'s copy of this
       // handler documents: an abandoned response with no error listener is an unhandled error that
       // takes the whole `postinstall` down rather than failing this one fetch.
@@ -447,14 +450,12 @@ async function fetchRemoteChecksum(url: string): Promise<string> {
 
         // Drained rather than destroyed, so the socket stays reusable for the hop that follows.
         response.resume();
-        // Resolved and guarded for the reason `downloadFile`'s copy of this branch documents: a
-        // relative or `http:` Location makes `https.get` throw synchronously, before the chained
-        // error listener exists and outside anything that could catch it.
+        // Resolved against the request this response answered, and guarded, for the reasons
+        // `downloadFile`'s copy of this branch documents.
         try {
+          const target = new URL(response.headers.location, requestUrl).href;
           https
-            .get(new URL(response.headers.location, url).href, (redirected: unknown) =>
-              handleResponse(redirected, hops + 1),
-            )
+            .get(target, (redirected: unknown) => handleResponse(redirected, hops + 1, target))
             .on('error', (err: Error) => {
               reject(err);
             });

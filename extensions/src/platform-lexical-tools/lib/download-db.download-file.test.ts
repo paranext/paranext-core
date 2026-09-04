@@ -303,6 +303,31 @@ describe('downloadFile', () => {
     expect(fs.readFileSync(destination, 'utf8')).toBe(GOOD_TEXT);
   });
 
+  it('resolves each relative hop against the hop that produced it, not against the original', async () => {
+    const dir = makeTempDir();
+    const destination = path.join(dir, 'LICENSE.md');
+
+    // The case a single relative hop cannot distinguish. GitHub hands a download to a different
+    // host mid-chain, and RFC 7231 section 7.1.2 resolves a relative `Location` against the
+    // EFFECTIVE REQUEST URI - so the second hop below belongs to the media host, not to the host
+    // the download started on. Resolving every hop against the original URL sends it to
+    // `https://example.invalid/notices/payload`, which is a different file on a different server.
+    const stub = stubHttpsGetSequence([
+      redirectTo('https://media.invalid/lfs/object'),
+      redirectTo('./payload'),
+      (response) => response.end(GOOD_TEXT),
+    ]);
+
+    await downloadFile('https://example.invalid/notices/LICENSE.md', destination);
+
+    expect(stub.urls()).toEqual([
+      'https://example.invalid/notices/LICENSE.md',
+      'https://media.invalid/lfs/object',
+      'https://media.invalid/lfs/payload',
+    ]);
+    expect(fs.readFileSync(destination, 'utf8')).toBe(GOOD_TEXT);
+  });
+
   it('rejects rather than crashing on a redirect to a URL it cannot follow', async () => {
     const dir = makeTempDir();
     const destination = path.join(dir, 'LICENSE.md');
