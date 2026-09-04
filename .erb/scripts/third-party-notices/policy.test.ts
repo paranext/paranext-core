@@ -1379,6 +1379,15 @@ describe('notices-policy.json', () => {
     expect(stale).toEqual([]);
   });
 
+  // These two loops generate their cases FROM the shipped policy, so an empty collection produces
+  // no cases and a green run - the shape where a test file is least likely to be looked at. The
+  // counts are asserted rather than only checked non-empty: both are small, hand-curated lists of
+  // legal determinations, so a change in either is worth noticing here and updating deliberately.
+  it('generates a case for every election and every exception the shipped policy carries', () => {
+    expect(Object.keys(policy.elections)).toHaveLength(3);
+    expect(policy.exceptions).toHaveLength(16);
+  });
+
   Object.entries(policy.elections).forEach(([key, election]) => {
     it(`election "${key}" names an elected id present in its "of" expression and on the allow list`, () => {
       const parsed = parseDeclared(election.of);
@@ -1436,9 +1445,9 @@ describe('notices-policy.json', () => {
 });
 
 describe('curated overrides', () => {
-  // The three SIL packages come from an internal feed whose nuspecs declare nothing, so
-  // nuget-license reports LicenseInformationOrigin "Unknown" AND a validation error. Both routes
-  // must reach the override, or the whole .NET section blocks on packages a human already ruled on.
+  // The three SIL packages declare nothing in their nuspecs, so nuget-license reports
+  // LicenseInformationOrigin "Unknown" AND a validation error. Both routes must reach the override,
+  // or the whole .NET section blocks on packages a human already ruled on.
   const OVERRIDE_POLICY = {
     ...POLICY,
     // The shipped policy lists `Unicode-DFS-2016` under `allowed`, and so must this fixture: an
@@ -1869,6 +1878,38 @@ describe("a bundled file does not displace a package's own grant", () => {
   });
 });
 
+describe('the pinned hash and the file it came from move together', () => {
+  // `textSha256` is taken from `objectingFile || best || anyText`. On the last of those nothing
+  // identified the text, so there is no `best` - and a `matchedFile` computed from `best` alone
+  // leaves the row with a hash and no filename. That is the reviewed-exception population, and
+  // `diffLock` tells whoever reads its "the license text changed under the same version" message to
+  // "Inspect <matchedFile> before accepting" - the one fact a hand review starts from.
+  it('names the file the hash was taken from when nothing identified the text', () => {
+    const v = classify({
+      ...base,
+      declaredField: 'SEE LICENSE IN LICENSE',
+      detection: {
+        dir: '/x',
+        files: [
+          {
+            filename: 'LICENSE',
+            spdxId: 'NOASSERTION',
+            matcher: 'none',
+            confidence: 0,
+            sha256: 'sha-LICENSE',
+            text: 'text',
+          },
+        ],
+      },
+    });
+    expect(v.textSha256).toBe('sha-LICENSE');
+    expect(v.matchedFile).toBe('LICENSE');
+    // Nothing identified it, so there is no identifier to record - and inventing one would tell
+    // `exceptionRemedy` an exception could clear a block it cannot.
+    expect(v.detected).toBeUndefined();
+  });
+});
+
 describe('loadPolicy', () => {
   // Collected and removed together, as every other suite in this pipeline does: one temp directory
   // per case, left behind, is a tree that grows with every run of the test suite.
@@ -1908,5 +1949,36 @@ describe('loadPolicy', () => {
       exceptions: [entry('MIT'), { ...entry('MIT'), package: 'npm:q', version: '2.0.0' }],
     });
     expect(loadPolicy(file).exceptions).toHaveLength(2);
+  });
+
+  it('refuses a vendored license text under an ecosystem nothing reads', () => {
+    // `vendoredLicenseText` is reached only from `nugetVerdict`, which always builds the key as
+    // `nuget:<name>`. An `npm:` entry is a hash-pinned legal text reproduced nowhere, and
+    // `stalePolicyEntries` cannot report it because the package it names is still in the closure.
+    const file = write({
+      licenseTexts: {
+        'npm:some-package': {
+          file: 'x.txt',
+          version: '1.0.0',
+          source: 'https://e.test',
+          sha256: 'a',
+        },
+      },
+    });
+    expect(() => loadPolicy(file)).toThrow(/vendored license texts for npm:some-package/);
+  });
+
+  it('accepts vendored license texts keyed to NuGet packages', () => {
+    const file = write({
+      licenseTexts: {
+        'nuget:Some.Package': {
+          file: 'x.txt',
+          version: '1.0.0',
+          source: 'https://e.test',
+          sha256: 'a',
+        },
+      },
+    });
+    expect(Object.keys(loadPolicy(file).licenseTexts ?? {})).toEqual(['nuget:Some.Package']);
   });
 });

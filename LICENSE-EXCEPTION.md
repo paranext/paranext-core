@@ -16,15 +16,16 @@ under the GNU Affero General Public License, version 3 or later.
 1. the modules **of Platform.Bible's own authorship** that Platform.Bible supplies to an extension
    at run time, in place of a copy the extension would otherwise carry itself. In this version of
    this exception those modules are `@papi/backend`, `@papi/core`, `@papi/frontend`,
-   `@papi/frontend/react`, `platform-bible-react`, `platform-bible-utils` and `@sillsdev/scripture`;
+   `@papi/frontend/react`, `platform-bible-react` and `platform-bible-utils`;
 2. the type declarations in `lib/papi-dts`;
 3. the JSON-RPC Platform API; and
 4. the WebView interfaces.
 
 Platform.Bible also supplies an extension with modules that are **not** its own — Node.js built-ins
-such as `crypto`, and React. Those are governed by their own licenses, they are not Platform.Bible's
-to license, and nothing in this exception is needed for them or extends to them. Using them neither
-brings a work within this exception nor puts it outside one.
+such as `crypto`, React, and `@sillsdev/scripture`, which is separately published under the MIT
+License. Those are governed by their own licenses, they are not Platform.Bible's to license, and
+nothing in this exception is needed for them or extends to them. Using them neither brings a work
+within this exception nor puts it outside one.
 
 **"an Independent Extension"** means a work that
 

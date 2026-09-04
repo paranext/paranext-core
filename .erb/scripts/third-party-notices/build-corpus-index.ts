@@ -28,7 +28,6 @@ import { readJsonFile } from './read-json';
 import type { Policy } from './types';
 
 const DIR = path.join(__dirname, 'spdx-corpus');
-const INDEX = path.join(DIR, 'index.json');
 const POLICY = path.join(__dirname, 'notices-policy.json');
 const SOURCE = 'spdx-license-list/full';
 
@@ -60,7 +59,15 @@ export function reachableIds(policy: Policy): string[] {
   return [...ids].sort();
 }
 
-export function main(): void {
+/**
+ * @param outputDir Where to write `index.json`. Defaults to the committed corpus directory, which
+ *   is what the npm script regenerates. A caller passes a temp directory to exercise the WRITE
+ *   without mutating a tracked file that other suites - `render`, `identify`, `lock`,
+ *   `verify-shipping-set`, and `degradation`'s spawned child processes - read while vitest runs
+ *   their files in parallel.
+ */
+export function main(outputDir: string = DIR): void {
+  const index = path.join(outputDir, 'index.json');
   const policy = loadPolicy(POLICY);
   const ids = reachableIds(policy);
 
@@ -88,13 +95,13 @@ export function main(): void {
     checksums[id] = sha256(spdxLicenseList[id].licenseText);
   });
 
-  fs.mkdirSync(DIR, { recursive: true });
+  fs.mkdirSync(outputDir, { recursive: true });
   fs.writeFileSync(
-    INDEX,
+    index,
     `${JSON.stringify({ source: SOURCE, version, checksums }, undefined, 2)}\n`,
   );
   console.log(
-    `Wrote ${path.relative(path.join(__dirname, '..', '..', '..'), INDEX)}: ${ids.length} licenses from ${SOURCE} ${version}.`,
+    `Wrote ${path.relative(path.join(__dirname, '..', '..', '..'), index)}: ${ids.length} licenses from ${SOURCE} ${version}.`,
   );
 }
 

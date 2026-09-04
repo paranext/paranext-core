@@ -438,16 +438,36 @@ async function readDeclaredLicense(
 ): Promise<DeclaredLicense> {
   try {
     const parsed = JSON.parse(await fs.readFile(path.join(root, repoRootRelativePath), 'utf8'));
-    return { file: repoRootRelativePath, present: true, license: parsed.license };
+    return {
+      file: repoRootRelativePath,
+      present: true,
+      license: parsed.license,
+      licenseIsDeliberate: parsed.licenseIsDeliberate,
+    };
   } catch (error: unknown) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
-      return { file: repoRootRelativePath, present: false, license: undefined };
+      return {
+        file: repoRootRelativePath,
+        present: false,
+        license: undefined,
+        licenseIsDeliberate: undefined,
+      };
     throw error;
   }
 }
 
-/** One extension JSON file's `license` declaration, as `readDeclaredLicense` reports it. */
-export type DeclaredLicense = { file: string; present: boolean; license: unknown };
+/**
+ * One extension JSON file's `license` declaration, as `readDeclaredLicense` reports it.
+ *
+ * `licenseIsDeliberate` is the extension's own statement that its `license` was chosen rather than
+ * inherited - see `decideLicenseStamp`.
+ */
+export type DeclaredLicense = {
+  file: string;
+  present: boolean;
+  license: unknown;
+  licenseIsDeliberate?: unknown;
+};
 
 /**
  * Whether this repository may stamp its license onto an extension folder, from what its files say.
@@ -459,6 +479,14 @@ export type DeclaredLicense = { file: string; present: boolean; license: unknown
  *
  * An ABSENT file says nothing - a manifest-only extension is stamped from its manifest alone - but
  * a folder with neither file is not an extension this can say anything about.
+ *
+ * `MIT` and an absent field are both read as "nobody has decided this yet", because that is what
+ * the extension template leaves behind. An extension whose MIT is a DECISION - a bundled extension
+ * publishing a runtime-linked surface, which LICENSING.md's MIT section says must stay MIT so
+ * third-party authors do not inherit AGPL obligations - is indistinguishable from the template
+ * default by value alone, and would be relicensed by a routine `update-from-templates` run. So it
+ * says so instead: `"licenseIsDeliberate": true` beside the `license` field, in either file, and
+ * nothing here overwrites the declaration or the text that accompanies it.
  */
 export function decideLicenseStamp(declarations: DeclaredLicense[]): {
   stamp: boolean;
@@ -466,6 +494,16 @@ export function decideLicenseStamp(declarations: DeclaredLicense[]): {
 } {
   const present = declarations.filter((declaration) => declaration.present);
   if (!present.length) return { stamp: false };
+  // Stated rather than inferred: the value alone cannot tell "this was decided" from "nobody has
+  // looked at it".
+  const deliberate = present.find(({ licenseIsDeliberate }) => licenseIsDeliberate === true);
+  if (deliberate)
+    return {
+      stamp: false,
+      reason:
+        `${deliberate.file} sets "licenseIsDeliberate": true, so its ` +
+        `"${String(deliberate.license)}" is a decision rather than the template's default.`,
+    };
   // Neither the template's value nor this repository's: somebody chose these terms on purpose, and
   // nothing here may overwrite the field or the text that goes with them.
   const chosen = present.find(

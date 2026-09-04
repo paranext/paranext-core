@@ -341,8 +341,14 @@ const TERMS_OF_SERVICE_FILE_NAME = 'TERMS-OF-SERVICE.md';
  * Open the Terms of Service document that ships beside the application.
  *
  * `shell.openPath` hands the file to whatever the operating system opens Markdown with, which is
- * not guaranteed to be anything. When nothing does - or the document is absent, as it is in a tree
- * that has never been packaged - reveal it in the file manager so the user can still reach it.
+ * not guaranteed to be anything: a stock Windows machine registers no handler for `.md`. When
+ * nothing does, reveal the document in the file manager so the user can still reach it.
+ *
+ * THROWS when the open failed, even though the reveal was attempted. `shell.openPath` RESOLVES with
+ * an error string rather than rejecting and `shell.showItemInFolder` returns `void`, so a function
+ * that only logged could not report either failure - and both can fail together inside the snap,
+ * whose confinement does not reach `org.freedesktop.FileManager1`. The caller is a dialog the user
+ * clicked a license link in; it needs to be able to say the document did not open.
  */
 async function openTermsOfService() {
   const termsOfServicePath = path.join(globalThis.resourcesPath, TERMS_OF_SERVICE_FILE_NAME);
@@ -352,6 +358,7 @@ async function openTermsOfService() {
     `Could not open ${termsOfServicePath}: ${openError}. Revealing it in the file manager instead.`,
   );
   shell.showItemInFolder(termsOfServicePath);
+  throw new Error(`Could not open the Terms of Service at ${termsOfServicePath}: ${openError}`);
 }
 
 async function main() {

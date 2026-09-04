@@ -62,9 +62,19 @@ function stubHttpsGet(drive: (response: PassThrough) => void) {
 function stubHttpsGetSequence(hops: ((response: PassThrough, hop: number) => void)[]) {
   let hop = 0;
   const requests: EventEmitter[] = [];
+  const urls: string[] = [];
   vi.spyOn(https, 'get').mockImplementation(
     // @ts-expect-error ts(2345) - a test stub for one call shape, not the full `https.get` surface
-    (_url: string, callback: (response: unknown) => void) => {
+    (url: string, callback: (response: unknown) => void) => {
+      // The real `https.get` REJECTS a URL it cannot use by throwing SYNCHRONOUSLY, before it
+      // returns the request an error listener would be attached to. A stub that accepted anything
+      // would make the redirect-target tests pass on a value the real client never accepts.
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'https:')
+        throw Object.assign(new Error(`Protocol "${parsed.protocol}" not supported.`), {
+          code: 'ERR_INVALID_PROTOCOL',
+        });
+      urls.push(url);
       const request = new EventEmitter();
       requests.push(request);
       const response = new PassThrough();
@@ -87,7 +97,7 @@ function stubHttpsGetSequence(hops: ((response: PassThrough, hop: number) => voi
       return request;
     },
   );
-  return { requestCount: () => hop, requests };
+  return { requestCount: () => hop, requests, urls: () => urls };
 }
 
 /** Turns a scripted response into a 302 pointing at the next hop. */
@@ -230,6 +240,84 @@ describe('downloadFile', () => {
       'cross-device link not permitted',
     );
 
+    expect(fs.existsSync(`${destination}.part`)).toBe(false);
+  });
+
+  it('rejects when the close fails after a complete body, rather than renaming a truncated file', async () => {
+    const dir = makeTempDir();
+    const destination = path.join(dir, 'LICENSE.md');
+    fs.writeFileSync(destination, GOOD_TEXT);
+
+    // The window between `'finish'` and the rename. A flush or close failure - a full disk found
+    // only when the last buffered write lands - is emitted as `'error'` on the stream, and the
+    // close callback carries no error to report it with: `close(cb)` registers `cb` as a `'close'`
+    // listener and `'close'` is emitted with no arguments. With the download's own teardown handler
+    // still attached, that error is swallowed and the rename goes ahead, replacing a complete
+    // license text with a truncated one and reporting success.
+    const createWriteStream = fs.createWriteStream.bind(fs);
+    vi.spyOn(fs, 'createWriteStream').mockImplementation(
+      // @ts-expect-error ts(2345) - a test stub for the one call shape `downloadFile` uses
+      (file: string) => {
+        const stream = createWriteStream(file);
+        const close = stream.close.bind(stream);
+        Object.defineProperty(stream, 'close', {
+          value: (callback?: () => void) => {
+            stream.emit('error', new Error('EIO: i/o error on flush'));
+            close(callback);
+          },
+        });
+        return stream;
+      },
+    );
+
+    stubHttpsGet((response) => {
+      response.end('Attribution-ShareAlike 4.0 Inter');
+    });
+
+    await expect(downloadFile('https://example.invalid/LICENSE.md', destination)).rejects.toThrow(
+      'i/o error on flush',
+    );
+
+    expect(fs.readFileSync(destination, 'utf8')).toBe(GOOD_TEXT);
+    expect(fs.existsSync(`${destination}.part`)).toBe(false);
+  });
+
+  it('resolves a relative redirect target against the URL that produced it', async () => {
+    const dir = makeTempDir();
+    const destination = path.join(dir, 'LICENSE.md');
+
+    // RFC 7231 section 7.1.2 permits a relative `Location`, and `https.get` throws
+    // `ERR_INVALID_URL` on one - synchronously, before the request its error listener would attach
+    // to exists, and from inside a `'response'` listener where nothing else catches it either.
+    const stub = stubHttpsGetSequence([
+      redirectTo('/lfs/redirected'),
+      (response) => response.end(GOOD_TEXT),
+    ]);
+
+    await downloadFile('https://example.invalid/notices/LICENSE.md', destination);
+
+    expect(stub.urls()).toEqual([
+      'https://example.invalid/notices/LICENSE.md',
+      'https://example.invalid/lfs/redirected',
+    ]);
+    expect(fs.readFileSync(destination, 'utf8')).toBe(GOOD_TEXT);
+  });
+
+  it('rejects rather than crashing on a redirect to a URL it cannot follow', async () => {
+    const dir = makeTempDir();
+    const destination = path.join(dir, 'LICENSE.md');
+    fs.writeFileSync(destination, GOOD_TEXT);
+
+    // A captive portal answering an `http:` Location. `https.get` throws `ERR_INVALID_PROTOCOL`
+    // synchronously, so the failure has to be caught at the call site and routed into the promise -
+    // otherwise the promise never settles and `postinstall` dies on an uncaught exception.
+    stubHttpsGetSequence([redirectTo('http://portal.invalid/login')]);
+
+    await expect(downloadFile('https://example.invalid/LICENSE.md', destination)).rejects.toThrow(
+      /not supported/,
+    );
+
+    expect(fs.readFileSync(destination, 'utf8')).toBe(GOOD_TEXT);
     expect(fs.existsSync(`${destination}.part`)).toBe(false);
   });
 });

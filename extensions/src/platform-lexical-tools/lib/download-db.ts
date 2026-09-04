@@ -248,12 +248,23 @@ export function downloadFile(url: string, destination: string): Promise<void> {
 
         // Drained rather than destroyed, so the socket stays reusable for the hop that follows.
         response.resume();
-        // Follow the redirect
-        https
-          .get(response.headers.location, (redirected: unknown) =>
-            handleResponse(redirected, hops + 1),
-          )
-          .on('error', fail);
+        // Resolved against the URL that produced it, and inside a try/catch, because `https.get`
+        // THROWS synchronously on a Location it cannot use - `ERR_INVALID_URL` for the relative
+        // form RFC 7231 section 7.1.2 permits, `ERR_INVALID_PROTOCOL` for the `http:` a captive
+        // portal answers with. The throw happens before `.get()` returns, so the chained
+        // `.on('error')` is never attached, and this runs inside a `'response'` listener - after
+        // the Promise executor returned - so nothing else would catch it either: the promise would
+        // never settle and `postinstall` would die on an uncaught exception. `new URL(location,
+        // url)` also RESOLVES the relative case rather than only failing cleanly on it.
+        try {
+          https
+            .get(new URL(response.headers.location, url).href, (redirected: unknown) =>
+              handleResponse(redirected, hops + 1),
+            )
+            .on('error', fail);
+        } catch (error: unknown) {
+          fail(error instanceof Error ? error : new Error(String(error)));
+        }
         return;
       }
 
@@ -270,7 +281,8 @@ export function downloadFile(url: string, destination: string): Promise<void> {
         return;
       }
 
-      file = fs.createWriteStream(staged);
+      const stream = fs.createWriteStream(staged);
+      file = stream;
 
       // Add download progress reporting
       const totalSize = parseInt(response.headers['content-length'] || '0', 10);
@@ -295,9 +307,9 @@ export function downloadFile(url: string, destination: string): Promise<void> {
         }
       });
 
-      response.pipe(file);
+      response.pipe(stream);
 
-      file.on('finish', () => {
+      stream.on('finish', () => {
         // `fail` closes the stream to release the handle before removing the staging file, and
         // `close()` ends the stream, which emits `finish`. Without this guard that teardown path
         // runs the success path: the truncated staging file is renamed over a destination that
@@ -305,21 +317,42 @@ export function downloadFile(url: string, destination: string): Promise<void> {
         if (settled) return;
         // Claimed here rather than after the rename, so that `fail` - which assumes an INCOMPLETE
         // download - can no longer run once a complete body is on disk. Everything below therefore
-        // settles the promise itself: routing a close or rename failure through `fail` at this
-        // point would find `settled` already true, return without rejecting, and leave the promise
-        // pending forever, hanging the install rather than failing it.
+        // settles the promise itself.
         settled = true;
+
+        /**
+         * Settles the promise for a failure raised AFTER the body reached the staging file.
+         *
+         * `fail` cannot serve this window: it returns without rejecting once `settled` is true, so
+         * routing a close, flush or rename failure through it would leave the promise pending
+         * forever and hang the install rather than fail it.
+         */
+        let reported = false;
+        const failAfterBody = (error: Error) => {
+          if (reported) return;
+          reported = true;
+          discardStaged(() => reject(error));
+        };
+        // The stream's error listener moves with `settled`. A flush or close failure - EIO, ENOSPC,
+        // a full disk discovered only when the last buffered write lands - is emitted as `'error'`
+        // on the stream, and with `fail` still attached it would be swallowed by that function's
+        // `settled` guard while the rename below went ahead: a truncated body renamed over a
+        // complete destination, and `resolve()` reporting the download succeeded.
+        stream.off('error', fail);
+        stream.on('error', failAfterBody);
+
         // Closed before the rename, and the rename before `resolve`, so a caller that sees this
         // promise settle sees a complete file under the real name - never a staging file, and
         // never a handle still open on Windows.
-        file?.close((closeError) => {
-          if (closeError) {
-            discardStaged(() => reject(closeError));
-            return;
-          }
+        //
+        // The callback takes no error: `close(cb)` registers `cb` as a `'close'` listener and
+        // `'close'` is emitted with no arguments, so a close-time failure arrives on `'error'`
+        // first and `failAfterBody` has already run by the time this fires.
+        stream.close(() => {
+          if (reported) return;
           fs.rename(staged, destination, (renameError) => {
             if (renameError) {
-              discardStaged(() => reject(renameError));
+              failAfterBody(renameError);
               return;
             }
             console.log('Download complete.');
@@ -328,7 +361,7 @@ export function downloadFile(url: string, destination: string): Promise<void> {
         });
       });
 
-      file.on('error', fail);
+      stream.on('error', fail);
     };
 
     https.get(url, handleResponse).on('error', fail);
@@ -414,14 +447,20 @@ async function fetchRemoteChecksum(url: string): Promise<string> {
 
         // Drained rather than destroyed, so the socket stays reusable for the hop that follows.
         response.resume();
-        // Follow the redirect
-        https
-          .get(response.headers.location, (redirected: unknown) =>
-            handleResponse(redirected, hops + 1),
-          )
-          .on('error', (err: Error) => {
-            reject(err);
-          });
+        // Resolved and guarded for the reason `downloadFile`'s copy of this branch documents: a
+        // relative or `http:` Location makes `https.get` throw synchronously, before the chained
+        // error listener exists and outside anything that could catch it.
+        try {
+          https
+            .get(new URL(response.headers.location, url).href, (redirected: unknown) =>
+              handleResponse(redirected, hops + 1),
+            )
+            .on('error', (err: Error) => {
+              reject(err);
+            });
+        } catch (error: unknown) {
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
         return;
       }
 

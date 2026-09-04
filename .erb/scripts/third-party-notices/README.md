@@ -152,8 +152,9 @@ and why every escape instrument is pinned.
   review** question, not a build one. The gate treats a new entry exactly like any other.
 - `reviewer` is the email of whoever read the package's license file; `date` is the day they read
   it, not the day the template was pasted.
-- An exception is pinned to one version and one text hash, so the block returns the moment the
-  package changes its license text — and the entry has to be reviewed again.
+- An exception is pinned to one text hash, so the block returns the moment the package changes its
+  license text — and the entry has to be reviewed again. `version` records what the determination
+  was read against; it does not gate.
 - Only one `exceptions` entry per package. Re-review edits the entry in place; appending a second
   leaves the stale one in force, and `loadPolicy` refuses the file.
 

@@ -463,12 +463,34 @@ describe('alwaysListedPackages', () => {
   });
 
   it('still records that no version was found when the project declares none', () => {
-    // The permissiveness control: the fallback has to keep firing where it should.
-    const [listed] = alwaysListedPackages(policy, [], [{ id: 'something.else', version: '1.0.0' }]);
+    // The permissiveness control: the fallback has to keep firing where it should. Central Package
+    // Management is the live shape - the reference is there, the version is declared elsewhere.
+    const [listed] = alwaysListedPackages(
+      policy,
+      [],
+      [{ id: 'Microsoft.ICU.ICU4C.Runtime', version: undefined }],
+    );
     expect(listed.version).toBe('—');
   });
 
   it('lists nothing for a package the closure already contains', () => {
-    expect(alwaysListedPackages(policy, [{ name: 'MICROSOFT.ICU.ICU4C.RUNTIME' }], [])).toEqual([]);
+    expect(
+      alwaysListedPackages(
+        policy,
+        [{ name: 'MICROSOFT.ICU.ICU4C.RUNTIME' }],
+        [{ id: 'Microsoft.ICU.ICU4C.Runtime', version: '72.1.0.3' }],
+      ),
+    ).toEqual([]);
+  });
+
+  it('refuses an alwaysList override the project file no longer references', () => {
+    // The row is synthesised from the POLICY KEY, so it outlives the reference that justified it:
+    // no restore produces the package (that is why the override exists), `stalePolicyEntries`
+    // exempts `alwaysList` entries, and `missingDirectReferences` only looks at references that are
+    // present - leaving the document asserting that the Windows installer redistributes something
+    // the project stopped referencing, with every gate green.
+    expect(() =>
+      alwaysListedPackages(policy, [], [{ id: 'something.else', version: '1.0.0' }]),
+    ).toThrow(/no PackageReference for it/);
   });
 });

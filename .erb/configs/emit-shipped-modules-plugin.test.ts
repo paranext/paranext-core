@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isWarmFilesystemCache } from './emit-shipped-modules-plugin';
 
 let dir: string;
@@ -67,16 +67,26 @@ describe('isWarmFilesystemCache when the directory cannot be read', () => {
     expect(isWarmFilesystemCache({ type: 'filesystem', cacheDirectory: missing })).toBe(false);
   });
 
-  it('refuses to answer when the read fails for any other reason', () => {
+  it('answers warm when the read fails for any other reason', () => {
     // A directory that may well be full and simply could not be read - EACCES after a container
     // build, EMFILE under the five webpacks `npm run build` runs at once. Answering "cold" there
     // stamps the manifest trustworthy on the strength of information nobody has, and a module list
-    // a cache hit has shortened then goes into a legal artifact. Reproduced here as ENOTDIR, which
-    // is the same class: a path that exists and is not a readable directory.
+    // a cache hit has shortened then goes into a legal artifact. "Warm" refuses to certify the
+    // manifest instead - `shipping-set.ts` rejects a warm-stamped set - without failing a build
+    // that generates no notices. Reproduced here as ENOTDIR, which is the same class: a path that
+    // exists and is not a readable directory.
     const notADirectory = path.join(dir, 'cache-is-a-file');
-    fs.writeFileSync(notADirectory, 'not a directory');
-    expect(() =>
-      isWarmFilesystemCache({ type: 'filesystem', cacheDirectory: notADirectory }),
-    ).toThrow(/could not read the webpack cache directory/);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      fs.writeFileSync(notADirectory, 'not a directory');
+      expect(isWarmFilesystemCache({ type: 'filesystem', cacheDirectory: notADirectory })).toBe(
+        true,
+      );
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringMatching(/could not read the webpack cache directory/),
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

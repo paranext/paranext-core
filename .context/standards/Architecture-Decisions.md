@@ -362,6 +362,32 @@ step, no automation. Just a record.
   `SectionButton`'s `isDisabled`.
 - **Source:** PT-4092, review of #2699.
 
+## adr-build-stays-mixed-mode: `npm run build` keeps building extensions in development mode
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `build:main`, `build:extension-host` and `build:renderer` each set
+  `NODE_ENV=production`; `build:extensions` does not, so `npm run build` produces a mixed-mode tree.
+  A large part of the notices pipeline exists to cope with that: the `mode` field on every emitted
+  manifest and `assertOneBuildGraph`'s mixed-mode refusal, the per-bundle AND per-mode
+  `extensionCacheDirectory` split, an extra `build:extensions:production` step in three workflow
+  jobs and in the `package` script, and the source-text tests that pin those steps. Pointing `build`
+  at `build:extensions:production` would collapse the mode dimension out of all of it.
+- **Decision:** Leave `npm run build`'s semantics alone. Changing what the documented build command
+  produces is a change to every consumer of a development extension build, including
+  `paratext-10-studio`, whose `package-core` step runs `npm run build` inside a patched clone — so
+  it is a cross-repository behaviour change rather than a notices one, and it does not belong in a
+  relicensing change.
+- **Alternatives:** Set `NODE_ENV=production` in `build:extensions` and add a separate dev script —
+  the simplification is real and remains the likely eventual answer; rejected here on scope. Leave
+  it undocumented — rejected: the compensating apparatus reads as an oversight rather than as
+  support for a decision, which is what prompted the question.
+- **Consequences:** the mode dimension stays in the manifests, the cache split, the workflows and
+  the tests that pin them, and a plain `npm run build` still leaves a tree where
+  `npm run verify:third-party-notices` hard-fails until the production extension build runs.
+  **Revisit** as its own change, with `paratext-10-studio` in scope.
+- **Source:** the multi-agent review of #2654, finding 25.
+
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
 
 - **Formerly:** ADR-0011
@@ -399,6 +425,48 @@ step, no automation. Just a record.
   and only partly covered is skipped without notification — be reported to the user.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
+
+## adr-core-does-not-distribute-a-binary: `paranext-core` builds installers but publishes none
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `THIRD-PARTY-NOTICES.md` states that UBS permits distribution of the lexical database
+  "in Paratext" and that the permission "does not extend to Platform.Bible", while the Publish
+  workflow uploaded a `.snap` to the public snap store unconditionally and attached Windows, macOS
+  and Linux installers to a GitHub release — every one of them built as `productName:
+  'Platform.Bible'` and every one carrying the database, which `download-db.ts` puts in strict mode
+  so a missing copy hard-fails the install. Both statements are about the same artifact. Separately,
+  `release/app/package.json` declares `SEE LICENSE IN TERMS-OF-SERVICE.md` for a product built under
+  the Platform.Bible name, while the Terms of Service name only Paratext.
+
+  There is no practical path to releasing a separate Platform.Bible build, and only Paratext 10 is
+  released from this source — from `paranext/paratext-10-studio`, which clones this repository,
+  patches it, adds private extensions, and packages the result.
+- **Decision:** This repository does not distribute a built application. The snap-store upload is
+  removed and the GitHub release carries no binaries; it creates the version tag, the draft and the
+  generated notes, which are the fixed points a downstream build constructs its own release from.
+  Installers are still built on every leg — that is how the packaging path is exercised — and the
+  optional S3 upload of the Windows and macOS artifacts stays, for internal sharing. Nothing is
+  identified as Platform.Bible to a public audience, so the Platform.Bible/Paratext 10
+  identification the notices and the Terms would otherwise need is not needed at all.
+- **Alternatives:** Identify Platform.Bible builds as Paratext 10 builds in both documents —
+  rejected: the two are not the same release, and writing that they are would make a legal
+  document assert something the project does not do. Keep distributing and ask UBS to extend the
+  permission — rejected as unnecessary once nothing is distributed. Exclude the database from
+  public artifacts — rejected: it is not optional in this build, and the identification problem
+  would remain for the Terms of Service.
+- **Consequences:** `publish.yml` no longer needs `SNAPCRAFT_STORE_CREDENTIALS` (the repository
+  secret wants revoking separately), and the Linux `release/staged` staging is gone since the S3
+  step excludes Linux. `README.md`'s Users section points at Paratext 10 rather than at GitHub
+  releases and the snap store. Nothing consumes the release assets programmatically: every
+  `autoUpdater` use in `main.ts` is commented out, so there is no update feed to break. What is
+  already published — the `latest/stable` snap and fourteen GitHub releases going back to 2023 —
+  stays published until someone unpublishes it; this decision is about the future.
+  `paratext-10-studio` becomes the sole distributor, which makes the notices document it packs
+  (this repository's, describing this repository's shipping set rather than the patched clone's)
+  the only copy a user receives. **Revisit** if this repository ever needs to publish a build to a
+  public audience.
+- **Source:** the multi-agent review of #2654, finding 1.
 
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
 
@@ -1442,6 +1510,39 @@ step, no automation. Just a record.
   for a typed surface rather than a state key.
 - **Source:** PT-4346, global BCV control showing books from open resources.
 
+## adr-no-agpl-notice-in-the-application-ui: the application UI names the Terms of Service and no license
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `LICENSE` (the full AGPL text), `LICENSING.md`, `LICENSE-EXCEPTION.md` and
+  `THIRD-PARTY-NOTICES.md` all ship in the installed `resources/` directory, but only
+  `TERMS-OF-SERVICE.md` has a code path that opens it. The About dialog reads "License: Paratext
+  Terms of Service" and names no license, disclaims no warranty, and offers no way to view the
+  AGPL. AGPL section 5(d) expects an interactive program that normally displays "appropriate legal
+  notices" to keep displaying a copyright notice, a warranty disclaimer, and a statement of how to
+  view the License.
+- **Decision:** The application UI deliberately displays no AGPL notice. Section 5(d) attaches to
+  conveyance "under the terms of section 4"; SIL Global and the United Bible Societies hold the
+  copyright in this code and convey the binary under the Terms of Service instead (section 3.B.1),
+  which they may do with their own work. Contributors are covered by the Paratext Contributor
+  License Agreement, and the third-party code in the binary is permissive apart from the
+  snap-staged LGPL/MPL libraries, which are unmodified, dynamically linked, and whose notices
+  already ship. No section 5(d) obligation attaches to this conveyance, and it is imperative that
+  nothing in the product declares the released package to be AGPL.
+- **Alternatives:** Add a second line to the About dialog naming `AGPL-3.0-or-later` with a link
+  that opens `resources/LICENSE` — rejected: the released binary is not conveyed under the AGPL, and
+  a UI line saying otherwise is exactly the confusion to avoid. Stop shipping `resources/LICENSE` —
+  rejected: the AGPL text has to travel with the source it governs, and `LICENSE-EXCEPTION.md`
+  refers to it.
+- **Consequences:** the residual risk runs the other way — `resources/LICENSE` ships beside the
+  binary with no code path to open it and nothing in the UI explaining it, so a user who finds it
+  is likelier to conclude the binary is AGPL than a user who finds nothing. `LICENSING.md` ships
+  alongside and reconciles the two, which is why `electron-builder.json5` packs it. A **third
+  party** who builds and conveys a binary from this source IS conveying under the AGPL, and 5(d)
+  does attach to them — they, not this project, would need a notice surface; `LICENSING.md` says
+  so. **Revisit** if the conveyance terms change.
+- **Source:** the multi-agent review of #2654, finding 30a.
+
 ## adr-no-production-create-project: PT10 has no production create-project primitive
 
 - **Formerly:** ADR-0005
@@ -1690,6 +1791,33 @@ step, no automation. Just a record.
   on persisted slots.
 - **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
   transient-state scrubs.
+
+## adr-package-verifies-the-document-not-the-shipping-set: `npm run package` runs the check a patched clone can answer
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `npm run package` runs `npm run verify:third-party-notices:document` rather than the
+  stronger `--verify-shipping-set`. The reason recorded in `packaging.test.ts` was that the
+  shipping-set half cannot run over warm webpack caches — which stopped being true once `clean.ts`
+  became the first step of `package` and its glob started removing every
+  `node_modules/.cache/webpack-*` directory, including each extension bundle's per-mode one. Since
+  `package` is the route that produces the installers, the stronger check looked available.
+- **Decision:** Keep `--verify-document`, for a different reason: `package` is not run only from
+  this repository. `paratext-10-studio` clones this repo, patches it, copies private extensions in,
+  yalc-links a local `scripture-editors`, and runs `npm run package` inside the patched clone.
+  `verifyNpmShippingSet` ends in `diffShippingSet`, which refuses any drift in either direction, so
+  it would fail there on every build. `--verify-document` compares the committed document against
+  the sha256 in the committed lock — two committed files, no build inputs — so it answers the same
+  way in a patched clone as it does here.
+- **Alternatives:** Switch `package` to `--verify-shipping-set` — rejected: it breaks the downstream
+  packaging build. Make the shipping-set check tolerate a superset — rejected: "any drift in either
+  direction" is the property that makes it worth running at all.
+- **Consequences:** the artifact users receive is verified as a DOCUMENT (the committed notices match
+  the committed lock) rather than as a derivation from that build's own graph; the derivation is
+  checked on the Linux leg of `test.yml` and at release time in `publish.yml` and
+  `package-main.yml`. **Revisit** if notices generation ever moves into `paratext-10-studio`, which
+  would give the patched build a shipping set of its own to verify against.
+- **Source:** the multi-agent review of #2654, finding 22.
 
 ## adr-packaged-extensions-are-discovered: `InstalledExtensions.packaged` reports discovered extensions, not activated ones
 

@@ -91,8 +91,8 @@
     // Third-party attribution obligations - MIT, BSD, ISC and Apache-2.0 alike - apply to the
     // distributed binary regardless of the terms the application itself ships under, so the notices
     // travel with the installer. This is NOT the end-user license: nsis.license / dmg license is a
-    // separate artifact and stays unset: the Terms of Service are accepted at account creation, not
-    // through a click-through during install (LICENSING.md).
+    // separate artifact and stays unset, because the agreement box the Terms of Service name
+    // belongs to the Paratext account flow rather than to an installer license page (LICENSING.md).
     './THIRD-PARTY-NOTICES.md',
     './LICENSE',
     // The installer otherwise carries two statements about the user's rights and nothing that
@@ -103,9 +103,12 @@
     './LICENSING.md',
     // The terms the application itself is licensed to the user under (Terms of Service section
     // 3.B.1). Referenced by `release/app/package.json`'s `SEE LICENSE IN TERMS-OF-SERVICE.md`, so
-    // it has to travel with the binary for that declaration to resolve. NOT an installer EULA:
-    // acceptance happens when a user creates their Paratext account, not through a click-through
-    // during install, which is why `nsis.license` and `dmg` stay unset.
+    // it has to travel with the binary for a reader of that declaration to be able to find it.
+    // `extraResources` puts it in the installed `resources/` directory - one level ABOVE
+    // `app.asar`, so it is not inside the package that declares it and the specifier does not
+    // resolve from within (`files` there is `dist`, `node_modules`, `package.json`). NOT an
+    // installer EULA either: the agreement box the Terms name is the Paratext account flow's, which
+    // is why `nsis.license` and `dmg` stay unset.
     './TERMS-OF-SERVICE.md',
     // An additional permission under section 7 of the AGPL. Section 7 expects such a permission to
     // travel with the license text it modifies, so it ships beside `LICENSE` rather than only
@@ -135,7 +138,9 @@
       // Snap confinement prevents writing to `/var/lock` which GlobalMutex normally requires
       SIL_CORE_MAKE_GLOBAL_MUTEX_LOCAL_ONLY: 'true',
     },
-    // Change from "devel" to "stable" when it's ready to be published on the snap store
+    // Stays "devel". This repository does not publish to the snap store - `publish.yml` builds the
+    // snap so the Linux leg is exercised and so it can be shared internally, and Paratext 10 is
+    // released from `paranext/paratext-10-studio` (see LICENSING.md, "The distributed application").
     grade: 'devel',
     stagePackages: [
       'libappindicator3-1',

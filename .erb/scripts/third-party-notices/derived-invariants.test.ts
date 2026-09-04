@@ -3,6 +3,8 @@ import * as path from 'path';
 import { describe, expect, it, vi } from 'vitest';
 import { REQUIRED_BUNDLES } from './shipping-set';
 import { assertSnapStagePackagesClassified } from './main';
+import { RIDS, readDirectPackageReferences } from './nuget-set';
+import { STATIC_TREES, WHOLESALE_COPIED_EXTENSIONS } from './static-assets';
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
 
@@ -246,5 +248,92 @@ describe('the snap section is written from the policy, not from prose', () => {
       [staged[0]]: { ...policy.snapStagePackages[staged[0]], classification: 'probably fine' },
     };
     expect(() => assertSnapStagePackagesClassified(staged, bent)).toThrow(/does not classify/);
+  });
+});
+
+describe('the RID list matches the runtimes the build publishes for', () => {
+  // `RIDS` decides how many `dotnet restore` passes the NuGet closure is unioned from. A publish
+  // target added to the build scripts and not here produces a document narrower than what ships,
+  // with no new restore, no warning and no count that reveals the loss.
+  const published = (() => {
+    const { scripts }: { scripts: Record<string, string> } = JSON.parse(
+      fs.readFileSync(path.join(REPO, 'package.json'), 'utf8'),
+    );
+    return [
+      ...new Set(
+        Object.entries(scripts)
+          .filter(([name]) => name.startsWith('build:data-release:'))
+          .flatMap(([, command]) => [...command.matchAll(/-r\s+(\S+)/g)].map((match) => match[1])),
+      ),
+    ].sort();
+  })();
+
+  it('reads a non-empty published set from the build scripts', () => {
+    // Otherwise the comparison below is two empty sets.
+    expect(published.length).toBeGreaterThan(0);
+  });
+
+  it('publishes for exactly the runtimes the NuGet closure is collected for', () => {
+    expect(published).toEqual(RIDS.slice().sort());
+  });
+});
+
+describe('the packed static trees match what webpack copies', () => {
+  // `STATIC_TREES` and `WHOLESALE_COPIED_EXTENSIONS` restate `webpack.util.ts`'s copy rules. A
+  // fourth copied directory added there and not here ships a third-party attribution file that no
+  // gate reads - the failure `static-assets.ts` exists to prevent, arrived at from the other side.
+  const util = fs.readFileSync(path.join(REPO, 'extensions', 'webpack', 'webpack.util.ts'), 'utf8');
+
+  /** The `from` of every `staticFiles` entry copied as a DIRECTORY rather than as a named file. */
+  const copiedTrees = (() => {
+    const block = /const staticFiles:[\s\S]*?\}\[\] = \[([\s\S]*?)\n\];/.exec(util);
+    if (!block) throw new Error('could not find the staticFiles list in webpack.util.ts');
+    return [...block[1].matchAll(/\{[^{}]*\}/g)]
+      .map((match) => match[0])
+      .filter((entry) => !entry.includes("toType: 'file'"))
+      .flatMap((entry) => {
+        const from = /from: '([^']+)'/.exec(entry);
+        // A `from` carrying an extension or a `<placeholder>` names one file, not a tree.
+        return from && !from[1].includes('.') && !from[1].includes('<') ? [from[1]] : [];
+      })
+      .sort();
+  })();
+
+  const notBundled = (() => {
+    const declaration = /const extensionsNotBundled: string\[\] = \[([^\]]*)\]/.exec(util);
+    if (!declaration) throw new Error('could not find extensionsNotBundled in webpack.util.ts');
+    return [...declaration[1].matchAll(/'([^']+)'/g)].map((match) => match[1]).sort();
+  })();
+
+  it('reads a non-empty copy list from webpack.util.ts', () => {
+    // Both regexes above are the kind that stops matching after an unrelated reformat, and two
+    // empty sets compare equal.
+    expect(copiedTrees.length).toBeGreaterThan(0);
+    expect(notBundled.length).toBeGreaterThan(0);
+  });
+
+  it('scans exactly the trees copy-webpack-plugin copies wholesale', () => {
+    expect(copiedTrees).toEqual(STATIC_TREES.slice().sort());
+  });
+
+  it('scans the whole source directory of exactly the extensions webpack does not bundle', () => {
+    expect(notBundled).toEqual(WHOLESALE_COPIED_EXTENSIONS.slice().sort());
+  });
+});
+
+describe('the two Microsoft compatibility shims are referenced for no assets', () => {
+  // LICENSING.md records the determination: neither package's assembly reaches the publish output,
+  // so neither may contribute one - a reference that DID would put a package carrying the pre-MIT
+  // "Excluded License" clause into the derived closure and therefore into THIRD-PARTY-NOTICES.md,
+  // raising a question nobody has answered. The `System.Net.Http` reference exists precisely to say
+  // "no assets": `SIL.Core` pulls it in transitively, and without the exclusion the restore assets
+  // file resolves its netstandard1.6 assembly even though publish discards it.
+  const SHIMS = ['System.Net.Http', 'System.Net.WebSockets'];
+
+  it.each(SHIMS)('references %s for no runtime assets, if at all', (id) => {
+    const matching = readDirectPackageReferences().filter(
+      (reference) => reference.id.toLowerCase() === id.toLowerCase(),
+    );
+    matching.forEach((reference) => expect(reference.shipsRuntimeAssets).toBe(false));
   });
 });

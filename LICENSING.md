@@ -43,6 +43,12 @@ redistributed on its own. `stampExtensionLicense` in `extensions/lib/git.util.ts
 copies in step, and `extension-licenses.test.ts` fails if a packaged extension declares a license
 but ships no text for it.
 
+It reads `MIT` and an absent field alike as the extension template's untouched default, and stamps
+over both. An extension whose MIT is a decision — one publishing a runtime-linked surface, for the
+reason the "MIT" section below sets out — says so with `"licenseIsDeliberate": true` beside its
+`license` field in `package.json` or `manifest.json`, and is then left alone. Without that field an
+intentionally-MIT bundled extension would be relicensed by a routine `update-from-templates` run.
+
 Three of the five packages under `lib/` are AGPL. They are the ones that exist only while an
 extension is being built and contribute nothing to what it ships; the "MIT" section below states the
 rule that draws that line and applies it package by package. None of the three imposes an obligation
@@ -186,23 +192,53 @@ That is a licensing decision too.
 
 ## The distributed application
 
+**This repository does not distribute a built application.** Its workflows build installers so that
+developers and contributors can run and test what the source produces, but nothing is published to
+an app store or attached to a public release. The application released to users is **Paratext 10**,
+built from this source in the `paranext/paratext-10-studio` repository, and it is that release the
+Terms of Service govern. Everything below describes the terms the released application carries; a
+locally built `Platform.Bible` binary is the same code under the same terms, not a separate product
+with its own.
+
 The built application is **not** distributed under the AGPL. It is licensed to the user under the
 [Paratext Terms of Service](./TERMS-OF-SERVICE.md), whose section 3.B.1 says so directly: "The final
 and built Paratext 10 application is licensed to you solely under these Terms of Service, not under
 the GNU Affero General Public License ('AGPL') or any other license." `release/app/package.json`
 declares `"license": "SEE LICENSE IN TERMS-OF-SERVICE.md"` — npm's registered form for terms that are
-not an SPDX license — and `electron-builder.json5` packs that file into every installer, so the
-declaration resolves against something the user actually has.
+not an SPDX license.
 
-The Terms are **not** an installer EULA. Acceptance happens when a user creates their Paratext
-account or installs the client by ticking the agreement box (Terms section 1), not through a
-click-through during install, which is why `nsis.license` and the `dmg` license stay unset and a test
-pins them that way.
+`SEE LICENSE IN <file>` is read relative to the package that declares it, and this one does not
+resolve there: `release/app`'s `files` list is `dist`, `node_modules` and `package.json`, so
+`TERMS-OF-SERVICE.md` is never inside `app.asar`. It travels through
+`electron-builder.json5`'s `extraResources` instead, which places it in the installed `resources/`
+directory — one level above the package, beside `LICENSE`, `LICENSING.md`, `LICENSE-EXCEPTION.md`
+and `THIRD-PARTY-NOTICES.md`. The declaration names the document a user actually receives; it just
+names it from outside the archive that carries the declaration.
+
+The Terms are **not** an installer EULA. Section 1 says they are accepted "by ticking the agreement
+box when creating your Paratext account or installing the Paratext client" — and the agreement box
+is the Paratext account flow's, not an installer license page. This repository's installers present
+no such page: `nsis.license` and the `dmg` license are unset, and a test pins them that way.
 
 This document is what section 3.B.1 means by "the AGPL Components identified by Paratext": the tables
 above are the identification. Section 3.B.2 adds that, except for those components, the rest of the
 application is proprietary, and that using or interacting with it over a network does not itself
 trigger AGPL obligations.
+
+**The application UI names the Terms of Service and no license, deliberately.** The About dialog
+shows "License: Paratext Terms of Service" and nothing else — no AGPL identifier, no warranty
+disclaimer, no way to open `LICENSE`. AGPL section 5(d) expects an interactive program to keep
+displaying appropriate legal notices, but it attaches to conveyance "under the terms of section 4",
+and this binary is not conveyed under the AGPL: the copyright holders convey it under the Terms
+instead, as section 3.B.1 says. Naming the AGPL in the product would state the opposite of what
+3.B.1 establishes. `LICENSE` still ships in `resources/` because the AGPL text has to travel with
+the source it governs, and this document ships beside it to say which layer is which.
+
+**A third party who builds and conveys a binary from this source is in a different position.** They
+convey under the AGPL, because that is the license they received the source under — so section
+5(d)'s notice expectations attach to their build, and satisfying them is theirs to do. Nothing in
+this section carries across to them; it describes only how the copyright holders convey their own
+work.
 
 This split is lawful only because SIL Global and United Bible Societies control the copyright in the
 source (see "Inbound contributions" below); it is the same dual-licensing arrangement used by any
@@ -234,8 +270,9 @@ reached only at runtime (a `require` resolved at run time, a native module, anyt
 passes through webpack) is outside it; `.erb/scripts/third-party-notices/shipping-set.ts` sets out
 why that source was chosen over a `package.json` closure, and what each of its four inputs covers.
 It is also not a claim that nothing copyleft is in the Linux artifact. The snap stages Ubuntu shared libraries inside
-itself (`electron-builder.json5` → `snap.stagePackages`), and several are copyleft — ALSA and
-AppIndicator under the LGPL, NSS and NSPR under MPL-2.0. They obstruct nothing: they are unmodified
+itself (`electron-builder.json5` → `snap.stagePackages`), and several are copyleft. The "Linux snap"
+table in THIRD-PARTY-NOTICES.md is generated from the stage list and is authoritative for which ones
+and under what terms; no enumeration is repeated here. They obstruct nothing: they are unmodified
 archive builds, linked dynamically, and both licenses are compatible with AGPL source. But they are
 redistributed inside the `.snap`. `assertSnapStagePackagesClassified` reads `snap.stagePackages`
 and fails the build on a staged library the policy has not classified, and each library's own Ubuntu
@@ -260,9 +297,9 @@ Three .NET components carry no SPDX identifier in the notices table, and all thr
 rather than unresolved: `ParatextCorePluginInterfaces` ships alongside `ParatextData` and
 `ParatextChecks`, and although its nuspec declares no license and its copyright notice reserves all
 rights, it is code of the same SIL Global / United Bible Societies team that owns Platform.Bible,
-published from a different product release on the same internal feed. No third-party disclosure
-obligation attaches to any of the three; the notices file records them as proprietary first-party
-components and lists them so a reader can map every assembly under `dotnet/` to a row.
+published from a different product release. No third-party disclosure obligation attaches to any of
+the three; the notices file records them as proprietary first-party components and lists them so a
+reader can map every assembly under `dotnet/` to a row.
 
 Two third-party packages carry a pre-SPDX `<licenseUrl>` rather than an expression, and both are
 settled. `Icu4c.Win.Min` resolves ICU 59 and `Microsoft.ICU.ICU4C.Runtime` resolves ICU 72; ICU moved
@@ -285,22 +322,25 @@ section answers for `CsvHelper` above. **Neither package's assembly reaches the 
 the question does not arise.**
 
 Both are netstandard compatibility shims that .NET 8 does not need; the runtime supplies both types
-from its shared framework. They differ only in how they are kept out:
+from its shared framework, on every published runtime identifier. Measured on all four
+(`linux-x64`, `win-x64`, `osx-x64`, `osx-arm64`), the `System.Net.Http.dll` in the publish output is
+the ~1.7 MB framework assembly, never the package's ~280 KB netstandard shim — this project
+publishes `SelfContained`, so conflict resolution picks by assembly version and 8.0.0.0 beats 4.x
+unconditionally.
 
-- `System.Net.WebSockets` is simply never referenced. The SDK supersedes the 4.3.0 package, so its
-  assembly would be discarded even if it were — but referencing it would still put the package in the
-  restore closure and therefore in this document, adding a redistribution question without adding any
-  code to the build.
-- `System.Net.Http` cannot be avoided that way: `SIL.Core` targets netstandard2.0 and declares
-  version **4.3.4**, which is past the 4.3.0 the shared framework supersedes, so the package's own
-  netstandard1.6 assembly would win and ship. `ParanextDataProvider.csproj` therefore carries an
-  explicit `ExcludeAssets="all"` reference, which reduces the package's contribution to `_._`
-  placeholders and leaves the framework's implementation in place. Verified by hash: the
-  `System.Net.Http.dll` in the publish output is byte-identical to the .NET 8 shared-framework build,
-  not to the package's.
+They differ in what it takes to keep them out of the derived NuGet closure this document is
+generated from, which reads `project.assets.json` rather than the publish output:
 
-Neither may be referenced for its assets. If a future dependency forces one back into the publish
-output, the "Excluded License" question has to be answered before it ships.
+- `System.Net.WebSockets` is simply never referenced, so it is in neither.
+- `System.Net.Http` is a transitive dependency of `SIL.Core`, which targets netstandard2.0 and
+  declares version **4.3.4** — past the 4.3.0 the framework's `PackageOverrides.txt` supersedes. A
+  plain restore therefore resolves its `runtimes/unix/lib/netstandard1.6` asset in the assets file
+  even though publish discards it, and the generator would list the package as something this
+  project redistributes. `ParanextDataProvider.csproj` carries an `ExcludeAssets="all"` reference to
+  say otherwise: the assets file then records `_._` placeholders and the closure does not see it.
+
+Neither may be referenced for its assets. If a future dependency forces one of these assemblies into
+the publish output, the "Excluded License" question has to be answered before it ships.
 
 Two things follow the binary:
 
@@ -393,8 +433,8 @@ Two things follow the binary:
   under "MIT" above.
 
 - **An end-user license** embedded in the installers (electron-builder `nsis.license` / `dmg`
-  license). No such configuration exists, and none should be added: the Terms of Service are accepted
-  at account creation rather than through a click-through during install - see "The distributed
+  license). No such configuration exists, and none should be added: the agreement box the Terms of
+  Service name is the Paratext account flow's, not an installer license page - see "The distributed
   application" above.
 
 ## Inbound contributions

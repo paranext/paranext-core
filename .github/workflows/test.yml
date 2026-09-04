@@ -116,10 +116,10 @@ jobs:
         with:
           dotnet-version: ${{ matrix.dotnet_version }}
 
-      # The notices generator restores the .NET closure once per runtime identifier - four passes,
-      # against an internal SIL feed - on top of the build's own restore. `~/.npm` is cached by
-      # setup-node and the bundler gems by setup-ruby; without this, the NuGet store is the one
-      # dependency store fetched cold on every run.
+      # The notices generator restores the .NET closure once per runtime identifier - four passes -
+      # on top of the build's own restore. `~/.npm` is cached by setup-node and the bundler gems by
+      # setup-ruby; without this, the NuGet store is the one dependency store fetched cold on every
+      # run.
       #
       # The key names the files that actually decide what gets restored. `packages.lock.json` is not
       # one of them - this repository uses no NuGet lock files, so that pattern hashed nothing and
@@ -211,8 +211,8 @@ jobs:
       # artifact is a claim carried by Windows and macOS binaries too. The full check (`--verify`,
       # available via `npm run verify:third-party-notices`) cannot run on these legs: license
       # identification needs Ruby, installed on the Linux leg only, and the NuGet closure needs four
-      # `dotnet restore` passes against an internal SIL feed. Neither of those varies by platform, so
-      # re-running them here would only repeat the Linux leg's answer at a cost this leg cannot pay.
+      # `dotnet restore` passes. Neither of those varies by platform, so re-running them here would
+      # only repeat the Linux leg's answer at a cost this leg cannot pay.
       # License identification is platform-invariant (same files, same pinned licensee version) and
       # the NuGet closure is already made platform-complete FROM Linux by the four-RID union.
       # The one thing that genuinely varies is the npm closure - npm installs an optional dependency

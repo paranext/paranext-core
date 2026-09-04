@@ -17,6 +17,7 @@ import {
   normalizeValidationErrors,
   readDirectPackageReferences,
 } from './nuget-set';
+import { inCi } from './main';
 
 /**
  * Registers tsx in the child, so it can `require` this pipeline's `.ts` modules.
@@ -277,18 +278,30 @@ describe('collectNugetPackages checks each RID before merging them', () => {
     expect(runCollect(50)).toBe('RESOLVED:50');
   });
 
-  it('leaves the tree\u2019s own project.assets.json exactly as it found it', () => {
-    // The fakes above stand in for a file this repository really has, under a path `.gitignore`
-    // covers - so a run that wrote its synthetic closure there would leave 50 nonexistent packages
-    // on disk with nothing in `git status` to show it, and `dotnet test` would then read them.
-    // `collectNugetPackages` restores the bytes it captured, which is a guarantee only as good as
-    // the fakes standing between it and the real path.
-    const assets = path.join(REPO_ROOT, 'c-sharp', 'obj', 'project.assets.json');
-    if (!fs.existsSync(assets)) return;
-    const before = fs.readFileSync(assets);
-    runCollect(50);
-    expect(fs.readFileSync(assets).equals(before)).toBe(true);
-  });
+  // `project.assets.json` is gitignored build output, so a checkout that has never built the .NET
+  // side genuinely has nothing to compare - a reported SKIP rather than a silent pass, which is the
+  // difference between "this did not run" and "this ran and found nothing wrong". CI restores .NET
+  // on the legs that run this suite, so a skip there would mean the guard stopped covering the file
+  // it protects; the assertion below is what says so instead.
+  const REAL_ASSETS = path.join(REPO_ROOT, 'c-sharp', 'obj', 'project.assets.json');
+  it.skipIf(!fs.existsSync(REAL_ASSETS) && !inCi())(
+    'leaves the tree\u2019s own project.assets.json exactly as it found it',
+    () => {
+      // The fakes above stand in for a file this repository really has, under a path `.gitignore`
+      // covers - so a run that wrote its synthetic closure there would leave 50 nonexistent
+      // packages on disk with nothing in `git status` to show it, and `dotnet test` would then read
+      // them. `collectNugetPackages` restores the bytes it captured, which is a guarantee only as
+      // good as the fakes standing between it and the real path.
+      if (!fs.existsSync(REAL_ASSETS))
+        throw new Error(
+          `${REAL_ASSETS} is missing in CI, so this guard did not run where it counts. Restore the ` +
+            '.NET project before this suite, or stop running it on this leg.',
+        );
+      const before = fs.readFileSync(REAL_ASSETS);
+      runCollect(50);
+      expect(fs.readFileSync(REAL_ASSETS).equals(before)).toBe(true);
+    },
+  );
 });
 
 // Minimal project.assets.json `targets` fixtures. `nuget-license -t` answers "what is in the

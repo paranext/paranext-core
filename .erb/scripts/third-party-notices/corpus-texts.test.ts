@@ -1,5 +1,6 @@
 import { spawnSync } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
 import { main as buildCorpusIndex, reachableIds } from './build-corpus-index';
@@ -121,26 +122,31 @@ describe('the committed corpus index is what its generator writes', () => {
   const INDEX = path.join(__dirname, 'spdx-corpus', 'index.json');
 
   /**
-   * `build-corpus-index.ts` writes to one fixed path - the committed index - so the only way to
-   * exercise its WRITE is to run it and put the file back. Everything else about the corpus is
-   * checked as content (`covers every license the shipped policy can reach`, `every indexed text
-   * matches its recorded checksum`); what has no other cover is that the committed bytes are the
-   * bytes the generator produces, from this policy and this `spdx-license-list` version.
+   * Everything else about the corpus is checked as content (`covers every license the shipped
+   * policy can reach`, `every indexed text matches its recorded checksum`); what has no other cover
+   * is that the committed bytes are the bytes the generator produces, from this policy and this
+   * `spdx-license-list` version.
    *
    * That is the drift this catches: an identifier added to the policy, or the matcher dependency
    * bumped, without the index regenerated. `corpus.ts` re-verifies every text against the committed
    * checksum at READ time, so a stale index cannot put wrong text into the document - but it can
    * leave a reachable identifier with no entry at all, and this is what says so.
+   *
+   * Generated into a TEMP directory and compared, rather than over the committed file and restored.
+   * `spdx-corpus/index.json` is tracked and `corpus.ts` reads it lazily for `render`, `identify`,
+   * `lock` and `verify-shipping-set` - plus `degradation`'s spawned child processes, which vitest's
+   * scheduling does not reach at all - so a write-then-restore window in a parallel run is a race
+   * whose failure reads as corpus corruption in whichever suite lost it.
    */
   it('rewrites it byte-for-byte', () => {
-    const before = fs.readFileSync(INDEX, 'utf8');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-corpus-'));
     try {
-      buildCorpusIndex();
-      expect(fs.readFileSync(INDEX, 'utf8')).toBe(before);
+      buildCorpusIndex(dir);
+      expect(fs.readFileSync(path.join(dir, 'index.json'), 'utf8')).toBe(
+        fs.readFileSync(INDEX, 'utf8'),
+      );
     } finally {
-      // Restored unconditionally: a failing assertion must not leave the committed artifact
-      // rewritten in the working tree.
-      fs.writeFileSync(INDEX, before);
+      fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 
