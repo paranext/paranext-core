@@ -29,4 +29,10 @@ internal class ProjectDataScope
     /// Specifies what specific data is in scope given the value of DataType
     /// </summary>
     public string? DataQualifier { get; set; }
+
+    /// <summary>
+    /// Narrows a listing to the DataQualifiers that start with this string. Only meaningful for
+    /// calls that enumerate qualifiers rather than name one; null or empty means no narrowing.
+    /// </summary>
+    public string? DataQualifierPrefix { get; set; }
 }
