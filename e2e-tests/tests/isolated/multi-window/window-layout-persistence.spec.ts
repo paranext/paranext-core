@@ -117,6 +117,7 @@ import {
   waitForAppPages,
   waitForRendererRegistered,
   webViewTabTitle,
+  windowScopedWebViewId,
 } from './multi-window.util';
 
 /**
@@ -683,6 +684,11 @@ test.describe('window layout persistence', () => {
           height: Math.min(560, workArea.height - 220),
         },
       ];
+      // On a work area narrow enough that the clamp above collapses two or more widths onto
+      // WINDOW_MIN_WIDTH, the comment's premise fails silently and only the heights would still
+      // tell the entries apart. Fail loud instead.
+      const widths = sizes.map((size) => size.width);
+      expect(new Set(widths).size).toBe(widths.length);
 
       await placeWindowAndSettle(ctx.electronApp, mainId1, {
         x: workArea.x + 40,
@@ -896,7 +902,9 @@ test.describe('window layout persistence', () => {
       // that lost the legacy layout would show one Home tab (fallback, or its own docked Home), and
       // fail here.
       await expect(homeTabTitle(pageB, windowBId)).toBeAttached({ timeout: 60_000 });
-      await expect(webViewTabTitle(pageB, `${LEGACY_SECOND_TAB_UUID}-w${windowBId}`)).toBeAttached({
+      await expect(
+        webViewTabTitle(pageB, windowScopedWebViewId(LEGACY_SECOND_TAB_UUID, windowBId)),
+      ).toBeAttached({
         timeout: 60_000,
       });
       await expect(pageB.locator('.platform-tab-title')).toHaveCount(2);

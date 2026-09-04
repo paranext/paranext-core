@@ -27,6 +27,7 @@ import {
   getFullWebViewStateById,
   setFullWebViewStateById,
 } from '@renderer/services/web-view-state.service';
+import { WindowClosingError } from '@renderer/services/window-closing-error.model';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { LogError } from '@shared/log-error.model';
@@ -2555,7 +2556,7 @@ let isWindowToldToClose = false;
  */
 export function throwIfWindowIsClosing(operation: string): void {
   if (!isWindowToldToClose) return;
-  throw new Error(
+  throw new WindowClosingError(
     `web-view.service-shard: window ${globalThis.windowId} cannot ${operation}: the main process has told this window that it is closing.`,
   );
 }
