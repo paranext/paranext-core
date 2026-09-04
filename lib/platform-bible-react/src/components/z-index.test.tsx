@@ -15,6 +15,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import {
+  Menubar,
+  MenubarContent,
+  MenubarItem,
+  MenubarMenu,
+  MenubarTrigger,
+} from '@/components/shadcn-ui/menubar';
+import {
   Z_INDEX_ABOVE_DOCK,
   Z_INDEX_ABOVE_POPOVER,
   Z_INDEX_FIRST_RUN,
@@ -130,7 +137,32 @@ describe('rendered stacking', () => {
 
     const popover = document.querySelector<HTMLElement>('[data-slot="popover-content"]');
     const tooltip = document.querySelector<HTMLElement>('[data-slot="tooltip-content"]');
+    // Assert both values are actually declared before comparing them. `Number('')` is 0, so a bare
+    // `greaterThan` would keep passing as `675 > 0` if either component ever went back to setting
+    // its stacking with a class instead of an inline style — the comparison would still be true and
+    // would no longer be testing anything.
+    expect(popover?.style.zIndex).toBe(String(Z_INDEX_ABOVE_DOCK));
+    expect(tooltip?.style.zIndex).toBe(String(Z_INDEX_TOOLTIP));
     expect(Number(tooltip?.style.zIndex)).toBeGreaterThan(Number(popover?.style.zIndex));
+  });
+
+  test('the menubar declares a z-index on the overlay tier', () => {
+    // The tooltip tier is documented as clearing "the menubar". At a stock z-class the menubar's
+    // dropdown was two orders of magnitude below the tier it was described as belonging to, so it
+    // rendered under any popover — and nothing here noticed.
+    render(
+      <Menubar defaultValue="file">
+        <MenubarMenu value="file">
+          <MenubarTrigger>File</MenubarTrigger>
+          <MenubarContent>
+            <MenubarItem>one</MenubarItem>
+          </MenubarContent>
+        </MenubarMenu>
+      </Menubar>,
+    );
+
+    const menu = document.querySelector<HTMLElement>('[data-slot="menubar-content"]');
+    expect(menu?.style.zIndex).toBe(String(Z_INDEX_ABOVE_DOCK));
   });
 
   test('a dropdown menu declares a z-index on the overlay tier', () => {
