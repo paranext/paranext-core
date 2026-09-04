@@ -16,9 +16,10 @@ import { RetryableErrorView, LoadingView } from './panel-state-views.component';
  * display — from a single `readiness` value.
  *
  * Used by BOTH the Resource (Bible Texts / Commentaries) and Model Text panels, so neither can
- * drift from the other on the question that caused this bug. Keeping the states here also gives the
- * Resource panel its only testable seam for them: it lives entirely in a web view with no extracted
- * component.
+ * drift from the other on the question that caused this bug. Both panels have an extracted
+ * component (`resource-text-panel.component.tsx`, `model-text-panel.component.tsx`), so these
+ * states are reachable from a component test through either of them as well as from this view's own
+ * stories.
  *
  * Deciding these states inline is what went wrong in both panels: an empty prompt was rendered from
  * a value that was only meaningful once the data had arrived. Taking one `readiness` value makes

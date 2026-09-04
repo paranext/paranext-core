@@ -8,7 +8,7 @@ import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-
 import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
 import { RESOURCE_CELL_STRING_KEYS } from './scripture-text-grid/resource-cell.const';
 import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
-import { RESOURCE_PANEL_TYPED_STRING_KEYS } from './resource-panel-strings.utils';
+import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
 import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-options-notice.utils';
 
 type LocalizedStringsFile = {
@@ -207,10 +207,22 @@ describe('retired book-not-found-in-project string', () => {
   });
 });
 
-// The resource panels' strings come in matched `bibleTexts_` / `commentaries_` pairs and the model
-// text panel's in a single set. Driven off the exported key lists so that an en-only addition, or a
-// dropped `es` value, fails here without anyone remembering to edit this file.
-describe.each([...RESOURCE_PANEL_TYPED_STRING_KEYS])('resource panel label %s', (key) => {
+// The resource panels' strings come in matched `bibleTexts_` / `commentaries_` pairs plus a set
+// shared by both tabs, and the model text panel's in a single set. Driven off the exported key
+// lists — `RESOURCE_PANEL_STRING_KEYS` folds the typed pairs in, so every key either panel renders
+// is covered — so that an en-only addition, or a dropped `es` value, fails here without anyone
+// remembering to edit this file.
+//
+// A couple of keys legitimately appear in both frozen lists, because both panels render them. Each
+// list is right to declare what its own surface uses, so the de-duplication belongs here: without
+// it a failure on a shared key reports twice, under two different owners, and the file's
+// one-block-per-surface structure stops meaning anything. The model text block below owns them.
+const MODEL_TEXT_PANEL_KEY_SET = new Set<string>(MODEL_TEXT_PANEL_STRING_KEYS);
+const RESOURCE_PANEL_ONLY_STRING_KEYS = RESOURCE_PANEL_STRING_KEYS.filter(
+  (key) => !MODEL_TEXT_PANEL_KEY_SET.has(key),
+);
+
+describe.each([...RESOURCE_PANEL_ONLY_STRING_KEYS])('resource panel label %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();
   });
