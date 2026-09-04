@@ -4,7 +4,8 @@ import { MultiSelectComboBoxEntry } from '@/components/advanced/multi-select-com
 
 /**
  * Whether a resource belongs to the section of the catalogue currently on display. An undefined
- * `resourceType` means "no type filter", so everything matches; an array matches any of its types.
+ * `resourceType` means "no type filter", so everything matches, as does an empty array — that is
+ * what a multi-select with nothing chosen hands over.
  *
  * Shared by the resource rows and the language filter so the two can never disagree about which
  * resources are in play — a language offered by the filter always has rows behind it.
@@ -14,9 +15,8 @@ export function matchesResourceType(
   resourceType?: ResourceType | ResourceType[],
 ): boolean {
   if (!resourceType) return true;
-  return Array.isArray(resourceType)
-    ? resourceType.includes(resource.type)
-    : resource.type === resourceType;
+  if (!Array.isArray(resourceType)) return resource.type === resourceType;
+  return resourceType.length === 0 || resourceType.includes(resource.type);
 }
 
 /**
@@ -60,7 +60,7 @@ export function buildLanguageFilterOptions(
       label: language,
       value: language,
       starred: installedLanguages.has(language),
-      secondaryLabel: count.toLocaleString(),
+      secondaryLabel: count.toString(),
     }));
 }
 
