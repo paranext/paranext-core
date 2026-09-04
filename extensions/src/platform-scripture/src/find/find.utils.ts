@@ -495,8 +495,10 @@ export function resolveTargetEditorWebViewId(
  * Used only when {@link resolveTargetEditorWebViewId} finds no editor: a project open in a real
  * editor is driven through the editor's web view controller, which also selects and highlights the
  * match. A reference panel exposes no controller, so activating its tab is the whole interaction —
- * the panel is already following the reference through its scroll group, so it renders the right
- * place on its own once shown.
+ * a panel following Find's scroll group has already been moved by the write that precedes the
+ * activation, so it renders the right place on its own once shown. A panel detached from every
+ * scroll group is the exception: it ignores that write, and `useOpenProjectTabs` reports it as
+ * group 0 regardless, so it can still be picked here and revealed at an unrelated reference.
  *
  * Deliberately does NOT match on scroll group, unlike the editor resolver. That resolver's group
  * match picks _which_ of several editor tabs a result click drives; here the only action is
