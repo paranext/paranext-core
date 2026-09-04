@@ -233,6 +233,12 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // Committing a pick, holding still while one is in flight, migrating a legacy bare id and
   // falling back when the selection leaves the list are one decision, not four effects that can
   // disagree across renders. `resolveResourceSelection` makes it, and is tested directly.
+  //
+  // Resolved HERE and handed to the panel as `selectedRef`, rather than resolved by the panel and
+  // reported back up: `resourceProjectId` below keys the `ChapterUSJ` subscription that produces
+  // the `usjPossiblyError` this passes DOWN to the panel, so a callback would close a cycle. That
+  // constraint is what fixes the direction of the whole boundary, and it is why there is exactly
+  // one answer to "which resource is on screen" rather than two derivations to keep in step.
   const selection = resolveResourceSelection(
     filteredResources,
     selectedResourceId,
@@ -454,7 +460,7 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   return (
     <ResourceTextPanel
       localizedStrings={localizedStrings}
-      hasProject={projectId !== undefined}
+      hasProject={!!projectId}
       resourceType={resourceType}
       filteredResources={filteredResources}
       selectedRef={selectedRef}
