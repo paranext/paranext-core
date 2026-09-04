@@ -177,12 +177,20 @@ function expectEditorShowing() {
 }
 
 /**
- * Everything the content area can put on screen. Asserted as one object so that "the panel is
- * waiting" is a claim about ALL of them at once — checking only the message the test has in mind
- * would pass just as happily on a panel showing a different one.
+ * Everything the content area can put on screen, plus the selector as a positive control. Asserted
+ * as one object so that "the panel is waiting" is a claim about ALL of them at once — checking only
+ * the message the test has in mind would pass just as happily on a panel showing a different one.
+ *
+ * `selector` is what makes the waiting assertions falsifiable. Every one of them is otherwise
+ * purely negative, and a negative assertion passes just as well against a panel that rendered
+ * nothing at all: replacing this component's whole render with `<div />` leaves them green. The
+ * selector stays mounted in every content state by design — losing it would strip the reader's only
+ * route to a text that has the book — so requiring it proves the panel is alive and that the
+ * content area specifically is empty.
  */
 function contentOnScreen() {
   return {
+    selector: !!screen.queryByRole('button', { name: /WEB|HBKENG/ }),
     editor: !!screen.queryByTestId('editorial'),
     missingBook: !!screen.queryByText(BIBLE_TEXT_MISSING_BOOK),
     blankChapter: !!screen.queryByText(BLANK_CHAPTER),
@@ -190,8 +198,9 @@ function contentOnScreen() {
   };
 }
 
-/** No message and no editor — the panel is waiting. */
-const NOTHING_ON_SCREEN = {
+/** The selector and nothing else: the panel is alive and the content area is waiting. */
+const NOTHING_BUT_THE_SELECTOR = {
+  selector: true,
   editor: false,
   missingBook: false,
   blankChapter: false,
@@ -256,13 +265,13 @@ describe('ResourceTextPanel book not in this resource', () => {
   it('keeps waiting when the failure names the book the user just left', () => {
     renderPanel({ scrRef: MAT_1_1, usjPossiblyError: missingBookError('GEN') });
 
-    expect(contentOnScreen()).toEqual(NOTHING_ON_SCREEN);
+    expect(contentOnScreen()).toEqual(NOTHING_BUT_THE_SELECTOR);
   });
 
   it('keeps waiting when the failure names a resource the panel has switched away from', () => {
     renderPanel({ usjPossiblyError: missingBookError('MAT', 'some-other-project') });
 
-    expect(contentOnScreen()).toEqual(NOTHING_ON_SCREEN);
+    expect(contentOnScreen()).toEqual(NOTHING_BUT_THE_SELECTOR);
   });
 });
 
@@ -280,7 +289,16 @@ describe('ResourceTextPanel blank chapter', () => {
     // the read has settled. This is the state every navigation passes through.
     renderPanel({ usjPossiblyError: BLANK_USJ, isUsjLoading: true });
 
-    expect(screen.queryByText(BLANK_CHAPTER)).not.toBeInTheDocument();
+    // Asserted as the whole content area rather than just the absent message: what should be on
+    // screen is the EDITOR, and a bare `not.toBeInTheDocument()` would pass against a panel that
+    // rendered nothing at all.
+    expect(contentOnScreen()).toEqual({
+      selector: true,
+      editor: true,
+      missingBook: false,
+      blankChapter: false,
+      unavailable: false,
+    });
   });
 
   it('re-feeds the editor when the message gives way to it with the same chapter in hand', () => {
@@ -324,7 +342,7 @@ describe('ResourceTextPanel content that cannot be shown', () => {
     // edit in a text the reader cannot edit.
     renderPanel({ usjPossiblyError: undefined });
 
-    expect(contentOnScreen()).toEqual(NOTHING_ON_SCREEN);
+    expect(contentOnScreen()).toEqual(NOTHING_BUT_THE_SELECTOR);
   });
 });
 
