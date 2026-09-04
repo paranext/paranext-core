@@ -428,6 +428,31 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
+    /// <remarks>
+    /// Takes no sync write scope and no project write lock: this is a read, like
+    /// <see cref="GetExtensionData"/>.
+    /// </remarks>
+    public override string[] ListExtensionDataQualifiers(ProjectDataScope scope)
+    {
+        if (string.IsNullOrEmpty(scope.ExtensionName))
+            throw new InvalidDataException("Must provide an extension name");
+
+        scope.ProjectID = ProjectDetails.Metadata.Id;
+
+        ProjectDetails projectDetails = _paratextProjects.GetProjectDetails(scope.ProjectID!);
+        IProjectStreamManager extensionStreamManager = CreateStreamManager(projectDetails);
+        // Scoped to this extension's own data so a project's thousands of other files are never
+        // walked, and so no other extension's layout is exposed
+        var qualifiers = extensionStreamManager.GetExistingDataStreamNames(
+            $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{scope.ExtensionName}"
+        );
+
+        var prefix = scope.DataQualifierPrefix;
+        return string.IsNullOrEmpty(prefix)
+            ? qualifiers
+            : [.. qualifiers.Where(q => q.StartsWith(prefix, StringComparison.Ordinal))];
+    }
+
     private Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
     {
         ProjectDetails projectDetails = _paratextProjects.GetProjectDetails(scope.ProjectID!);
