@@ -2,7 +2,11 @@ import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
-import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-shard';
+import {
+  closeTab,
+  floatTab,
+  updateTabPartialSync,
+} from '@renderer/services/web-view.service-shard';
 import {
   getWebViewMoveFailureDisposition,
   WebViewMoveFailureDisposition,
@@ -23,7 +27,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { getErrorMessage, isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
 
@@ -60,6 +64,13 @@ type PlatformTabTitleProps = {
    * locale-independent selector.
    */
   webViewId?: string;
+  /**
+   * Whether this tab can be closed by the user. Gates middle-click-to-close (mouse button 1) on the
+   * tab header, the same way it gates rc-dock's own close button.
+   *
+   * @default true
+   */
+  isClosable?: boolean;
 };
 
 // CSS classes for highlighting the active tab header and content
@@ -90,6 +101,14 @@ const handleFloatTab = async (tabId: string) => {
     await floatTab(tabId);
   } catch (error) {
     logger.error(`Failed to float tab ${tabId}: ${getErrorMessage(error)}`);
+  }
+};
+
+const handleCloseTab = async (tabId: string) => {
+  try {
+    await closeTab(tabId);
+  } catch (error) {
+    logger.error(`Failed to close tab ${tabId}: ${getErrorMessage(error)}`);
   }
 };
 
@@ -154,6 +173,7 @@ const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
  *   value, it will trigger a new flash animation.
  * @param id ID of the tab
  * @param webViewId ID of the WebView this tab hosts, if it is a WebView tab; `undefined` otherwise
+ * @param isClosable Whether this tab can be closed by the user. Defaults to `true`.
  */
 export function PlatformTabTitle({
   iconUrl,
@@ -162,6 +182,7 @@ export function PlatformTabTitle({
   flashTriggerTime,
   id,
   webViewId,
+  isClosable = true,
 }: PlatformTabTitleProps) {
   const isPowerMode = useIsPowerMode();
 
@@ -481,6 +502,21 @@ export function PlatformTabTitle({
 
   const iconOnlyClass = isIconOnly ? ' icon-only' : '';
 
+  // Middle-click (mouse button 1) closes the tab, matching the convention browsers and other
+  // editors use for their own tab bars. The close itself runs on `auxclick` — the click event for
+  // a non-primary button — rather than on `mousedown`, mirroring how a left-button click only acts
+  // once the button is released over the target. `mousedown` still needs its own handler: on this
+  // button, Electron's native behavior (autoscroll on Windows, primary-selection paste on Linux)
+  // fires from the mousedown itself, before any click event reaches this component.
+  const handleTabHeaderMouseDown = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.button === 1) event.preventDefault();
+  };
+
+  const handleTabHeaderAuxClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 1 || !isClosable) return;
+    handleCloseTab(id);
+  };
+
   const icon = (
     <div
       className={`tab-menu-icon${dragIgnoreClass}`}
@@ -498,6 +534,11 @@ export function PlatformTabTitle({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
+          {/* Middle-click has no keyboard equivalent to give this div — it targets a physical mouse
+              button a keyboard cannot press. Closing the tab stays keyboard- and screen-reader-
+              accessible through rc-dock's own tab button (the ancestor `.dock-tab-btn` this div
+              renders inside) and its close control. */}
+          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
           <div
             ref={containerRef}
             className={`platform-tab-title${dragIgnoreClass}${iconOnlyClass}`}
@@ -506,6 +547,8 @@ export function PlatformTabTitle({
             // a screen reader announces every icon-only tab in this column identically.
             aria-label={isIconOnly ? title : tabLabel}
             data-web-view-id={webViewId}
+            onMouseDown={handleTabHeaderMouseDown}
+            onAuxClick={handleTabHeaderAuxClick}
           >
             <span className={dragIgnoreClass.trim()}>{icon}</span>
             <span className={`platform-tab-title-text ${dragIgnoreClass.trim()}`.trim()}>

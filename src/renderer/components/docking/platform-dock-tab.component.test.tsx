@@ -77,3 +77,23 @@ describe('createRCDockTabFromTabInfo closable gating', () => {
     expect(result.closable).toBe(true);
   });
 });
+
+describe('createRCDockTabFromTabInfo isClosable pass-through to PlatformTabTitle', () => {
+  it('passes the resolved closable value through as the isClosable prop when false', () => {
+    const result = createRCDockTabFromTabInfo(createTabInfo(false));
+    // `title` is typed as rc-dock's broad `TabData['title']` union; narrow to read the prop this
+    // test asserts on.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const title = result.title as React.ReactElement<{ isClosable?: boolean }>;
+    expect(title.props.isClosable).toBe(false);
+  });
+
+  it('passes the resolved closable value through as the isClosable prop when defaulted to true', () => {
+    const result = createRCDockTabFromTabInfo(createTabInfo(undefined));
+    // `title` is typed as rc-dock's broad `TabData['title']` union; narrow to read the prop this
+    // test asserts on.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const title = result.title as React.ReactElement<{ isClosable?: boolean }>;
+    expect(title.props.isClosable).toBe(true);
+  });
+});
