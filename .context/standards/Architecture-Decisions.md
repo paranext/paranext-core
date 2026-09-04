@@ -265,8 +265,8 @@ step, no automation. Just a record.
   the Enter/Space handler would silently stop finding a highlighted cell, with no compiler or type
   error to catch it. Separately, the cmdk `CommandItem` `value` string that both drives the
   highlight and gets parsed back into a chapter/verse number was hand-built inline at six call
-  sites (`git diff main...HEAD -- book-chapter-control.component.tsx` shows the six
-  `` `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ...` `` templates this branch replaced) and
+  sites, each spelling its own
+  `` `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ...` `` template, and
   parsed back with two ad hoc regexes (`commandValue.match(/:(\d+)$/)` and
   `commandValue.match(/(\d+)$/)`), each of which had to agree with every builder site by
   convention alone.
@@ -296,9 +296,12 @@ step, no automation. Just a record.
   arithmetic (wrap-around horizontal, clamp vertical, RTL mirroring) is now one pure function,
   `computeTargetGridItem` in `book-chapter-control.utils.ts`, shared by both grids instead of two
   near-duplicate `switch` statements that had already drifted from each other before this branch.
-- **Source:** This branch's BookChapterControl keyboard-navigation rework (PT-4345); the removed
-  DOM-query activation and the six inline value-builders are visible in `git diff main...HEAD --
-  lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx`.
+- **Source:** PT-4345 (BookChapterControl keyboard-navigation rework), PR #2750. The removed
+  DOM-query activation and the six inline value-builders are in that PR's diff of
+  `lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx`.
+  A round-trip check in `parseChapterFromItemValue` is part of the contract, not an optimization:
+  two canon books have English names that end in digits (`PS2` → "Psalm 151", `PS3` → "Psalms
+  152-155"), so a trailing-number match alone reads a book ROW as a chapter cell of itself.
 
 ## adr-blank-chapter-simple-mode-only: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
 
@@ -1936,6 +1939,45 @@ step, no automation. Just a record.
 - **Source:** PR #2707 review of the PT9 interlinear projectInterface - finding that the PR's
   architecture decisions had no recorded precedent for the next PT9-legacy import to follow.
 
+## adr-recent-searches-menu-semantics: RecentSearches is a menu, not a listbox
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** `RecentSearches`
+  (`lib/platform-bible-react/src/components/advanced/recent-searches.component.tsx`) was built on
+  `Popover` + cmdk's `Command`/`CommandItem`. Inside the BCV control that nesting misbehaved twice
+  over: cmdk items are never DOM-focused (the list container owns focus and items only carry
+  `data-selected`), so the inner list competed with the outer picker's own cmdk instance for arrow
+  keys and highlight state; and a popover-in-a-popover left the recent-searches list on the same
+  stacking tier as its host. The component is exported from
+  `lib/platform-bible-react/src/index.ts`, so the roles it renders are public API.
+- **Decision:** Rebuild it on Radix `DropdownMenu` + `DropdownMenuItem`, with `modal={false}`. A
+  list of past references that you pick one item from is a menu, and menu semantics
+  (`role="menu"` / `role="menuitem"`, roving DOM focus, type-ahead, Escape-to-close) are what
+  Radix already implements correctly. `modal={false}` is required rather than cosmetic: Radix menus
+  default to modal, which traps focus and sets `pointer-events: none` on `<body>` for as long as
+  the menu is open — this list opens beside a search input the user is still typing in, usually
+  inside another popover, so the surrounding controls must stay clickable. The component carries
+  its own `TooltipProvider` because it is exported standalone and cannot assume a host tree has
+  one.
+- **Alternatives:** (a) **keep `Popover` + `Command` and coordinate the two cmdk instances** —
+  rejected: two cmdk roots sharing a keyboard surface means arbitrating `data-selected` between
+  them on every keystroke, which is the bug, not a fix for it. (b) **keep listbox semantics and
+  hand-roll roving focus on the items** — rejected: reimplements what Radix ships, and listbox is
+  the wrong role for a pick-one-action-and-close list. (c) **ship the role change undocumented** —
+  rejected: it silently breaks any consumer querying `role="option"`, which is exactly the class of
+  drift this log exists to catch.
+- **Consequences:** This is a **breaking accessibility-contract change** for consumers outside this
+  repo: `getByRole('option')` / `listbox` queries against `RecentSearches` no longer match, and
+  screen readers announce a menu rather than a listbox. In-repo the only consumers are
+  `BookChapterControl` and its story, so nothing here needed updating — which is precisely why the
+  change needed pinning. `recent-searches.component.test.tsx` now asserts both halves (menu
+  semantics present, listbox semantics absent), so a swap back fails a test rather than a
+  consumer. The `ariaLabel` prop additionally became the button's visible tooltip text, so it is
+  now user-visible microcopy and its TSDoc says so.
+- **Source:** PT-4345 (BCV styling/keyboard-nav epic), where the nested-cmdk keyboard conflict
+  surfaced while rebuilding the picker's arrow-key navigation.
+
 ## adr-registration-validity-once-per-session: Registration validity resolves once per session, in a store the first-run gate and the UI share
 
 - **Date:** 2026-08-22
@@ -3411,52 +3453,23 @@ step, no automation. Just a record.
   to assert it still agrees with the TypeScript constants — a twin that drifts is worse than a
   duplicated one, because neither copy can then be trusted to say what a layer's value is.
   `Z_INDEX_OVERLAY`
-  (400) itself was left untouched as out of scope for this work: it has ten `zIndex:` call sites
-  across seven consumer files (`overlay-popover.component.tsx`, `overlay-context-menu.component.tsx`
-  (×2), `overlay-command-palette.component.tsx` (×2), `settings-sidebar.component.tsx`,
-  `project-selector.component.tsx` (×2), `manage-books-dialog.component.tsx`,
-  `character-marker-bar-overlay.component.tsx`), sits below `Z_INDEX_MODAL_BACKDROP` in the scale,
-  and is not covered by any ordering test above — it may warrant its own review.
+  (400) itself was left largely untouched as out of scope for this work: it sits below
+  `Z_INDEX_MODAL_BACKDROP` in the scale and is not covered by any ordering test above, so it may
+  warrant its own review. Its consumers were audited for the one shape this decision does forbid —
+  a consumer pinning an overlay BELOW the host it renders inside — and the two instances found in
+  `project-selector.component.tsx` (a filter menu and a row tooltip inside that component's own
+  `PopoverContent`) were removed rather than left as counterexamples. One consumer override
+  survives, in `settings-sidebar.component.tsx`, carrying a TODO: it pins a host popover rather
+  than nesting an overlay under one, and needs verifying against the surfaces that sidebar renders
+  in before it can be dropped.
+- **Follow-through:** "Every shadcn overlay sets the constant for its own tier itself" was not true
+  of `menubar.tsx` when this was written — its content and submenu were still on Tailwind's
+  `tw:z-50`, two orders of magnitude below the tier `tooltip.tsx`'s own comment named it as a member
+  of. It now sets `Z_INDEX_ABOVE_DOCK`, with a rendered-stacking test in `z-index.test.tsx`.
+  `DropdownMenuSubContent` sets `Z_INDEX_ABOVE_POPOVER` rather than copying its parent's tier, so a
+  caller that lifts a menu to that tier (the footnote type and caller dropdowns do) cannot leave its
+  own submenu painting underneath it.
 - **Source:** PT-4345 (BCV styling/keyboard-nav epic, the z-index repair task), which reconciles the
   drift left by PR #2365 (silently raised `Z_INDEX_ABOVE_DOCK` 250 → 600, burying every tooltip) and
   PR #2229 (placed a menu at `Z_INDEX_OVERLAY` underneath its own `Z_INDEX_ABOVE_DOCK` host) by
   adding the ordering tests in `z-index.test.tsx` and this decision record.
-
-## adr-recent-searches-menu-semantics: RecentSearches is a menu, not a listbox
-
-- **Date:** 2026-08-31
-- **Status:** Accepted
-- **Context:** `RecentSearches`
-  (`lib/platform-bible-react/src/components/advanced/recent-searches.component.tsx`) was built on
-  `Popover` + cmdk's `Command`/`CommandItem`. Inside the BCV control that nesting misbehaved twice
-  over: cmdk items are never DOM-focused (the list container owns focus and items only carry
-  `data-selected`), so the inner list competed with the outer picker's own cmdk instance for arrow
-  keys and highlight state; and a popover-in-a-popover left the recent-searches list on the same
-  stacking tier as its host. The component is exported from
-  `lib/platform-bible-react/src/index.ts`, so the roles it renders are public API.
-- **Decision:** Rebuild it on Radix `DropdownMenu` + `DropdownMenuItem`, with `modal={false}`. A
-  list of past references that you pick one item from is a menu, and menu semantics
-  (`role="menu"` / `role="menuitem"`, roving DOM focus, type-ahead, Escape-to-close) are what
-  Radix already implements correctly. `modal={false}` is required rather than cosmetic: Radix menus
-  default to modal, which traps focus and sets `pointer-events: none` on `<body>` for as long as
-  the menu is open — this list opens beside a search input the user is still typing in, usually
-  inside another popover, so the surrounding controls must stay clickable. The component carries
-  its own `TooltipProvider` because it is exported standalone and cannot assume a host tree has
-  one.
-- **Alternatives:** (a) **keep `Popover` + `Command` and coordinate the two cmdk instances** —
-  rejected: two cmdk roots sharing a keyboard surface means arbitrating `data-selected` between
-  them on every keystroke, which is the bug, not a fix for it. (b) **keep listbox semantics and
-  hand-roll roving focus on the items** — rejected: reimplements what Radix ships, and listbox is
-  the wrong role for a pick-one-action-and-close list. (c) **ship the role change undocumented** —
-  rejected: it silently breaks any consumer querying `role="option"`, which is exactly the class of
-  drift this log exists to catch.
-- **Consequences:** This is a **breaking accessibility-contract change** for consumers outside this
-  repo: `getByRole('option')` / `listbox` queries against `RecentSearches` no longer match, and
-  screen readers announce a menu rather than a listbox. In-repo the only consumers are
-  `BookChapterControl` and its story, so nothing here needed updating — which is precisely why the
-  change needed pinning. `recent-searches.component.test.tsx` now asserts both halves (menu
-  semantics present, listbox semantics absent), so a swap back fails a test rather than a
-  consumer. The `ariaLabel` prop additionally became the button's visible tooltip text, so it is
-  now user-visible microcopy and its TSDoc says so.
-- **Source:** PT-4345 (BCV styling/keyboard-nav epic), where the nested-cmdk keyboard conflict
-  surfaced while rebuilding the picker's arrow-key navigation.

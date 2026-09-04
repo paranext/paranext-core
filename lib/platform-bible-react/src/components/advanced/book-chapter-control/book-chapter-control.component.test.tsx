@@ -1126,9 +1126,8 @@ describe('BookChapterControl top-match preview', () => {
   });
 
   test('activating the top-match row submits the highlighted chapter, not the parsed one', async () => {
-    // The row must submit what it displays. Drive the ROW, not a bare Enter: with no `submitKeys`
-    // prop, Enter over a highlighted grid cell goes through cmdk's own onSelect to
-    // handleChapterSelect and never reaches handleTopMatchSelect.
+    // The row must submit what it displays, whichever way it is activated. This case drives the ROW
+    // itself; the Enter path onto the same reference is covered separately below.
     const handleSubmit = vi.fn();
     const user = userEvent.setup();
     render(
@@ -1333,5 +1332,125 @@ describe('BookChapterControl back button', () => {
     await user.keyboard('{Backspace}');
 
     expect(await screen.findByRole('button', { name: 'Back to books' })).toBeInTheDocument();
+  });
+}, 15_000);
+
+// The picker's key handler runs as `onKeyDownCapture` on the popover, so it sees every keystroke in
+// the popover's React subtree — including a portalled menu's — before the widget the user is
+// actually interacting with does. These pin the keys it must NOT claim.
+describe('BookChapterControl yields keys it does not own', () => {
+  const RECENT = [
+    { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    { book: 'EXO', chapterNum: 2, verseNum: 3 },
+  ];
+
+  async function openPickerWithRecentSearches() {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        getEndVerse={() => 30}
+        recentSearches={RECENT}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    return { handleSubmit, user };
+  }
+
+  /**
+   * The picker's own search input. Both the trigger and the input carry `role="combobox"` once the
+   * popover is open, so the role alone is ambiguous there.
+   */
+  function getSearchInput(): HTMLInputElement {
+    const input = screen
+      .getAllByRole('combobox')
+      .find((element) => element instanceof HTMLInputElement);
+    if (!(input instanceof HTMLInputElement)) throw new Error('expected the search input');
+    return input;
+  }
+
+  test('the recent-searches list stays keyboard-navigable while a preview grid is on screen', async () => {
+    const { user } = await openPickerWithRecentSearches();
+    // A preview grid on screen is the state in which the picker claims the arrow keys.
+    await user.keyboard('mat 12');
+    await waitFor(() => expect(screen.getByRole('option', { name: '12' })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /recent/i }));
+    const items = await screen.findAllByRole('menuitem');
+    await user.keyboard('{ArrowDown}');
+
+    // Radix moves focus onto the list's first row. The picker swallowing the arrow leaves the list
+    // unnavigable, with the hidden grid's highlight moving instead.
+    await waitFor(() => expect(items[0]).toHaveFocus());
+  });
+
+  test('Enter on the recent-searches list does not submit the typed reference', async () => {
+    const { handleSubmit, user } = await openPickerWithRecentSearches();
+    await user.keyboard('mat 12');
+    await waitFor(() => expect(screen.getByRole('option', { name: '12' })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /recent/i }));
+    await screen.findAllByRole('menuitem');
+    // Radix focuses the menu CONTENT on open, not a row, so this is the state the picker sees for
+    // every Enter pressed before the user has arrowed anywhere. Enter there addresses the list, not
+    // the picker behind it: it must neither submit the typed reference nor close the picker.
+    await user.keyboard('{Enter}');
+
+    expect(handleSubmit).not.toHaveBeenCalled();
+    expect(getSearchInput()).toBeInTheDocument();
+  });
+
+  test('ArrowLeft moves the caret in the query instead of the preview highlight', async () => {
+    const { user } = await openPickerWithRecentSearches();
+    await user.keyboard('mat 12:15');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '15' })).toHaveAttribute('data-selected', 'true'),
+    );
+
+    const input = getSearchInput();
+    expect(input.selectionStart).toBe('mat 12:15'.length);
+
+    await user.keyboard('{ArrowLeft}');
+
+    // The caret has to be able to get back into the number the user typed. Claiming the key for the
+    // grid both freezes the caret and steps the highlight to 14 — which the top-match row then
+    // displays, and Enter then submits.
+    expect(input.selectionStart).toBe('mat 12:15'.length - 1);
+    expect(screen.getByRole('option', { name: '15' })).toHaveAttribute('data-selected', 'true');
+  });
+
+  test('an arrow at the end of the query still drives the preview grid', async () => {
+    const { user } = await openPickerWithRecentSearches();
+    await user.keyboard('mat 12:15');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '15' })).toHaveAttribute('data-selected', 'true'),
+    );
+
+    // The caret is already at the end, so ArrowRight has nowhere to go in the input and the grid
+    // takes it — the rule a combobox uses.
+    await user.keyboard('{ArrowRight}');
+
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '16' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('arrow keys are released once quick navigation has hidden the list', async () => {
+    const { user } = await openPickerWithRecentSearches();
+    await user.keyboard('mat 12');
+    await waitFor(() => expect(screen.getByRole('option', { name: '12' })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Next chapter' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('option', { name: '12' })).not.toBeInTheDocument(),
+    );
+
+    // With the list unmounted there is no grid to move and no refs to scroll, so claiming the key
+    // would swallow it — denying it both to cmdk and to the quick-nav buttons' own focus restore.
+    await user.keyboard('{ArrowDown}');
+
+    expect(getSearchInput()).toHaveFocus();
   });
 }, 15_000);
