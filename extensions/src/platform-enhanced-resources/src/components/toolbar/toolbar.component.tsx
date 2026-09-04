@@ -1,4 +1,5 @@
 import {
+  BOOK_CHAPTER_CONTROL_STRING_KEYS,
   BookChapterControl,
   Button,
   DropdownMenu,
@@ -68,6 +69,11 @@ export const TOOLBAR_STRING_KEYS = Object.freeze([
   '%enhancedResources_toolbar_menu_zoomIn%',
   '%enhancedResources_toolbar_menu_zoomOut%',
   '%enhancedResources_toolbar_menu_zoomReset%',
+  // The toolbar mounts a `BookChapterControl`, which localizes its own strings from the bag it is
+  // handed. Batching its keys in here is what keeps this toolbar's picker in the user's language;
+  // without them every quick-nav tooltip and back-button label falls back to English while the rest
+  // of the toolbar is translated.
+  ...BOOK_CHAPTER_CONTROL_STRING_KEYS,
 ] as const);
 
 type ToolbarLocalizedStringKey = (typeof TOOLBAR_STRING_KEYS)[number];
@@ -351,6 +357,7 @@ export function EnhancedResourceTopToolbar({
           handleSubmit={onScrRefChange}
           recentSearches={recentSearches}
           onAddRecentSearch={onAddRecentSearch}
+          localizedStrings={localizedStringsWithLoadingState[0]}
         />
       ) : (
         <Button

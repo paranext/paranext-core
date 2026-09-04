@@ -329,9 +329,16 @@ export interface RecentSearchesProps<T> {
 	 * Passing an empty string suppresses the tooltip AND leaves the icon-only button without an
 	 * accessible name, so prefer omitting the prop — which falls back to a sensible default — over
 	 * passing `''`.
+	 *
+	 * A value that is still a raw `%localization_key%` is treated as not-yet-localized and falls back
+	 * to the default, so a key can never reach the screen as tooltip text.
 	 */
 	ariaLabel?: string;
-	/** Heading text for the recent searches group */
+	/**
+	 * Heading for the recent searches list. Rendered as the list's visible heading and used as its
+	 * accessible name, so a screen reader announces what the list is rather than a bare "menu". Falls
+	 * back to the default when omitted or still a raw `%localization_key%`.
+	 */
 	groupHeading?: string;
 	/** Optional ID for the dropdown menu content for accessibility */
 	id?: string;

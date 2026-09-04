@@ -53,6 +53,15 @@ export function getFocusableElements(
  * Consumers rendering the item on a filled background (e.g. `bg-primary` for a current chapter)
  * should override the ring color with one that contrasts against that fill — `cn` merges the later
  * `ring-*` color and drops this one, so argument order decides rather than CSS output order.
+ *
+ * Tailwind implements `ring-*` as a `box-shadow`, and CSS Color Adjust forces `box-shadow: none`
+ * under `forced-colors: active` (Windows High Contrast). Consumers of this constant suppress the
+ * `data-selected` background they would otherwise fall back on, so without the `outline` below the
+ * highlight would vanish entirely there and arrowing through a list would move nothing visible.
+ * `Highlight` is a system color, so it tracks whichever high-contrast theme the user has chosen.
  */
 export const LIST_ITEM_KEYBOARD_FOCUS_RING =
-  'tw:data-selected:ring-2 tw:data-selected:ring-ring/50 tw:data-selected:ring-inset';
+  'tw:data-selected:ring-2 tw:data-selected:ring-ring/50 tw:data-selected:ring-inset ' +
+  'tw:forced-colors:data-selected:outline-2 ' +
+  'tw:forced-colors:data-selected:outline-[color:Highlight] ' +
+  'tw:forced-colors:data-selected:-outline-offset-2';

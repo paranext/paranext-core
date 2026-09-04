@@ -239,12 +239,12 @@ export function BookChapterControl({
     const highlight = commandValue.startsWith(`${topMatch.book} `) ? commandValue : '';
     const highlightedVerse = parseVerseFromItemValue(highlight);
     const highlightedChapter = parseChapterFromItemValue(highlight);
+    // A value cannot name both a chapter cell and a verse cell, so no case-split on which kind of
+    // highlight is present is needed: whichever one the value is, the other parse yields
+    // `undefined` and falls through.
     return {
       book: topMatch.book,
-      chapterNum:
-        highlightedVerse !== undefined
-          ? (topMatch.chapterNum ?? 1)
-          : (highlightedChapter ?? topMatch.chapterNum ?? 1),
+      chapterNum: highlightedChapter ?? topMatch.chapterNum ?? 1,
       verseNum: highlightedVerse ?? topMatch.verseNum ?? 1,
     };
   }, [topMatch, commandValue]);
@@ -653,6 +653,17 @@ export function BookChapterControl({
     (event: KeyboardEvent<HTMLDivElement | HTMLButtonElement>) => {
       if (event.ctrlKey) return;
 
+      const eventTarget = event.target instanceof HTMLElement ? event.target : undefined;
+
+      // The recent-searches list portals out to `body`, but it stays a React child of this popover,
+      // so its keydowns still arrive at this capture-phase handler — ahead of the list's own
+      // bubble-phase navigation. Not one of them is ours to claim: while that list is open it owns
+      // every key the user presses, and taking arrows or Enter here would leave it unnavigable and
+      // submit a reference out from under it. Both roles matter, because the list is focused in two
+      // stages: Radix focuses the CONTENT (`role="menu"`) when it opens and only moves focus onto a
+      // row (`role="menuitem"`) once the user arrows.
+      if (eventTarget?.closest('[role="menu"], [role="menuitem"]')) return;
+
       const { isLetter, isDigit } = getKeyCharacterType(event.key);
 
       // Enter / Space pick the highlighted chapter / verse. cmdk binds Enter natively on
@@ -667,8 +678,7 @@ export function BookChapterControl({
         (viewMode === 'chapters' || viewMode === 'verses') &&
         (event.key === ' ' || event.key === 'Enter')
       ) {
-        const target = event.target instanceof HTMLElement ? event.target : undefined;
-        const isTargetInteractive = !!target?.closest(
+        const isTargetInteractive = !!eventTarget?.closest(
           'button, a, input, select, textarea, [role="button"]',
         );
         if (isTargetInteractive) {
@@ -716,22 +726,18 @@ export function BookChapterControl({
       // only a chapter and would drop the verse the user typed. Space is deliberately not included:
       // the books view is a text field, where a space is a character.
       if (viewMode === 'books' && topMatch && event.key === 'Enter') {
-        const target = event.target instanceof HTMLElement ? event.target : undefined;
-        // The header's own controls (quick navigation, recent searches) keep their activation, and
-        // so does any input that isn't this picker's search box. `menuitem` covers the recent
-        // searches list: it portals out of this popover but stays a React child, so its keystrokes
-        // still reach this capture-phase handler, and its items are focusable `div`s rather than
-        // buttons.
+        // The header's own controls (quick navigation, the recent-searches trigger) keep their
+        // activation, and so does any input that isn't this picker's search box. The
+        // recent-searches list itself never gets this far — the portalled-menu bail at the top of
+        // this handler returns before any of these branches run.
         //
         // Excluding the search box is load-bearing, not a special case: it is itself an `input`, so
         // without this it would match the selector below and Enter — the normal way to commit a
         // typed reference — would never submit anything. The chapters/verses branch above needs no
         // such exclusion because the search box is not rendered in those views.
         const isTargetInteractive =
-          target !== commandInputRef.current &&
-          !!target?.closest(
-            'button, a, input, select, textarea, [role="button"], [role="menuitem"]',
-          );
+          eventTarget !== commandInputRef.current &&
+          !!eventTarget?.closest('button, a, input, select, textarea, [role="button"]');
         if (!isTargetInteractive) {
           event.preventDefault();
           event.stopPropagation();
@@ -764,6 +770,46 @@ export function BookChapterControl({
       // Narrows `event.key` to `ArrowKey` for `computeTargetGridItem` below, and leaves every
       // non-arrow key to cmdk.
       if (!isArrowKey(event.key)) return;
+
+      // Quick navigation hides the whole list, and with it the top-match row and the preview grid
+      // this handler would be steering. There is nothing on screen for an arrow to move, so
+      // claiming one would swallow the keystroke — denying it both to cmdk and to the quick-nav
+      // buttons' own focus-restore. The `fetchEndChapter(...) > 1` conjunct in the grid resolver
+      // below exists for the same reason; this is the other half of "is a grid actually rendered".
+      if (isCommandListHidden) return;
+
+      // In the books view the search input keeps focus, so a horizontal arrow is first of all a
+      // caret key: it belongs to the grid only once the caret has nowhere left to go in that
+      // direction — the same rule a combobox uses, and the same reasoning that forwards Home and End
+      // to the input. Claiming it unconditionally freezes the caret mid-query AND quietly retargets
+      // what Enter submits, because the top-match row prefers the highlighted cell over the parsed
+      // query: pressing ArrowLeft to edit the verse in "mat 12:15" would step the highlight to 14
+      // and submit a verse that was never typed. The dedicated chapter and verse views render no
+      // input and take all four arrows.
+      if (viewMode === 'books' && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        const input = commandInputRef.current;
+        const caretStart = input?.selectionStart ?? 0;
+        const caretEnd = input?.selectionEnd ?? 0;
+        // Which arrow walks toward the start of the text is a property of the layout, not of the
+        // key: in a right-to-left field the leftmost character is the LAST one.
+        const isTowardTextStart =
+          direction === 'rtl' ? event.key === 'ArrowRight' : event.key === 'ArrowLeft';
+        const canCaretMove =
+          !!input &&
+          (caretStart !== caretEnd ||
+            (isTowardTextStart ? caretStart > 0 : caretEnd < input.value.length));
+        if (canCaretMove) return;
+      }
+
+      // Arrows aimed at a focused header control belong to that control — the quick-nav buttons use
+      // ArrowUp / ArrowDown to hand focus back to the search input. The books view's preview grid is
+      // steered from the input and never holds focus itself, so it has no claim on those.
+      if (
+        viewMode === 'books' &&
+        eventTarget !== commandInputRef.current &&
+        eventTarget?.closest('button, a, [role="button"]')
+      )
+        return;
 
       // Chapters and verses differ only in where the item count comes from and how an item's
       // cmdk value is spelled. Everything else — reading the current highlight, computing the
@@ -857,6 +903,7 @@ export function BookChapterControl({
       viewMode,
       topMatch,
       shouldShowVerseGridForTopMatch,
+      isCommandListHidden,
       direction,
       handleBackToBooks,
       handleBackToChapters,
@@ -1038,47 +1085,56 @@ export function BookChapterControl({
   // The cmdk value of the preview cell the highlight last named.
   const highlightedPreviewCellRef = useRef('');
 
+  // The preview grid the books view renders under the top-match row, or `undefined` when there is
+  // none on screen. Both the seeding effect below and the controlled-value handler read this, so
+  // they cannot disagree about whether a grid exists to hold the highlight.
+  const previewGrid = useMemo(() => {
+    if (viewMode !== 'books' || !topMatch || isCommandListHidden) return undefined;
+
+    const { book, chapterNum, verseNum } = topMatch;
+    if (shouldShowVerseGridForTopMatch && chapterNum && getEndVerse) {
+      return {
+        max: getEndVerse(book, chapterNum),
+        initial:
+          verseNum ??
+          (book === scrRef.book && chapterNum === scrRef.chapterNum ? scrRef.verseNum : 1),
+        parse: parseVerseFromItemValue,
+        buildValue: (item: number) => verseItemValue(book, chapterNum, item),
+      };
+    }
+    // A single-chapter book renders no chapter preview, so there is no cell for a seed to land on;
+    // writing one would blank the highlight instead of placing it.
+    const endChapter = fetchEndChapter(book);
+    if (endChapter <= 1) return undefined;
+    return {
+      max: endChapter,
+      initial: chapterNum ?? (book === scrRef.book ? scrRef.chapterNum : 1),
+      parse: parseChapterFromItemValue,
+      buildValue: (item: number) => chapterItemValue(book, item),
+    };
+  }, [
+    viewMode,
+    topMatch,
+    isCommandListHidden,
+    shouldShowVerseGridForTopMatch,
+    getEndVerse,
+    scrRef.book,
+    scrRef.chapterNum,
+    scrRef.verseNum,
+  ]);
+
   // The books view shows a chapter (or verse) preview grid under the top-match row. Seed its
   // highlight the same way the chapters and verses views seed theirs, so every grid surface obeys
   // the same rule: exactly one cell is highlighted for as long as the grid is on screen, and arrow
   // keys only ever move it.
   //
-  // The seed also has to be defended, not just written once. cmdk moves its own highlight to the
-  // first item in the list — the top-match row, whose value names no cell — whenever the filter
-  // text changes and whenever the pointer crosses that row, so the highlight is put back on the
-  // cell it last named (remembered here) rather than left off the grid. A new parsed reference
-  // seeds afresh; a highlight the user moved survives.
+  // Seeding is still an effect rather than part of the value handler above, because a fresh
+  // reference arrives as a render (the query changed), not as a value request from cmdk. Running it
+  // in a LAYOUT effect keeps the seed in the same commit, so no frame is ever painted with the
+  // highlight off the grid. A new parsed reference seeds afresh; a highlight the user moved
+  // survives.
   useLayoutEffect(() => {
-    if (viewMode !== 'books' || !topMatch) {
-      seededPreviewKeyRef.current = '';
-      return;
-    }
-
-    const { book, chapterNum, verseNum } = topMatch;
-    const previewGrid = (() => {
-      if (shouldShowVerseGridForTopMatch && chapterNum && getEndVerse) {
-        return {
-          max: getEndVerse(book, chapterNum),
-          initial:
-            verseNum ??
-            (book === scrRef.book && chapterNum === scrRef.chapterNum ? scrRef.verseNum : 1),
-          parse: parseVerseFromItemValue,
-          buildValue: (item: number) => verseItemValue(book, chapterNum, item),
-        };
-      }
-      // A single-chapter book renders no chapter preview, so there is no cell for a seed to land
-      // on; writing one would blank the highlight instead of placing it.
-      const endChapter = fetchEndChapter(book);
-      if (endChapter <= 1) return undefined;
-      return {
-        max: endChapter,
-        initial: chapterNum ?? (book === scrRef.book ? scrRef.chapterNum : 1),
-        parse: parseChapterFromItemValue,
-        buildValue: (item: number) => chapterItemValue(book, item),
-      };
-    })();
-
-    if (!previewGrid || previewGrid.max <= 0) {
+    if (viewMode !== 'books' || !topMatch || !previewGrid || previewGrid.max <= 0) {
       seededPreviewKeyRef.current = '';
       return;
     }
@@ -1111,17 +1167,7 @@ export function BookChapterControl({
         ? highlightedPreviewCellRef.current
         : buildValue(Math.min(Math.max(initial, 1), max)),
     );
-  }, [
-    viewMode,
-    topMatch,
-    previewSeedKey,
-    shouldShowVerseGridForTopMatch,
-    getEndVerse,
-    commandValue,
-    scrRef.book,
-    scrRef.chapterNum,
-    scrRef.verseNum,
-  ]);
+  }, [viewMode, topMatch, previewGrid, previewSeedKey, commandValue]);
 
   // #endregion
 
@@ -1235,6 +1281,14 @@ export function BookChapterControl({
             loop
             value={commandValue}
             onValueChange={setCommandValue}
+            // The keyboard highlight is this control's own state — seeded when a grid appears and
+            // moved only by the arrow keys — while hover is styled separately on every item and
+            // grid cell. Letting cmdk also move the highlight under the pointer contradicts that:
+            // it hands the highlight to whatever the pointer is over, including the top-match row,
+            // which names no grid cell. The seeding effect below then has to put it back, so every
+            // pointer event over that row costs two renders of the whole preview grid — and a
+            // pointer on its way to the grid must cross that row.
+            disablePointerSelection
             shouldFilter={false}
           >
             {/* Header: Input (with quick nav buttons) for book view, fixed header for chapter view */}
@@ -1302,6 +1356,14 @@ export function BookChapterControl({
                               disabled={isQuickNavDisabled}
                               className="tw:h-8.5 tw:w-6 tw:p-0"
                               aria-label={title}
+                              // A disabled control dispatches no pointer or focus events, so the
+                              // Tooltip below can never open on one — and these arrows come back
+                              // disabled at the edges of the canon, which is where a user is most
+                              // likely to ask what the button was for. The native tooltip is the
+                              // only hover text a disabled button can show. Set only while
+                              // disabled: alongside an open Radix tooltip it would render a second,
+                              // duplicate bubble.
+                              title={isQuickNavDisabled ? title : undefined}
                               onKeyDown={handleQuickNavButtonKeyDown}
                             >
                               <Icon />

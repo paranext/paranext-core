@@ -883,7 +883,12 @@ describe('Find — whitespace and diacritic tolerance toggles', () => {
   );
 });
 
-const RECENT_SEARCHES_LABEL_KEY = '%webView_find_showRecentSearches%';
+// `buildProps` stubs every localized string as its own key, which is exactly what
+// `useLocalizedStrings` hands a consumer before the strings arrive. `RecentSearches` treats a raw
+// key as not-yet-localized and falls back to its English default, so this — not the key — is the
+// button's accessible name here. That fallback is what keeps a `%key%` off the screen when it is
+// rendered as visible tooltip text.
+const RECENT_SEARCHES_LABEL = 'Show recent searches';
 
 // `recentSearches: []` in `buildProps` means every other suite in this file renders
 // `RecentSearches` with an empty list, which makes it return `undefined` and never mount — so
@@ -895,7 +900,7 @@ describe('Find — recent searches menu', () => {
     const user = setupUser();
     render(<Find {...buildProps({ recentSearches: RECENT_SEARCH_TERMS })} />);
 
-    await user.click(screen.getByRole('button', { name: RECENT_SEARCHES_LABEL_KEY }));
+    await user.click(screen.getByRole('button', { name: RECENT_SEARCHES_LABEL }));
 
     const menu = await screen.findByRole('menu');
     expect(within(menu).getByText('first search')).toBeInTheDocument();
@@ -907,10 +912,30 @@ describe('Find — recent searches menu', () => {
     const onSearchTermChange = vi.fn();
     render(<Find {...buildProps({ recentSearches: RECENT_SEARCH_TERMS, onSearchTermChange })} />);
 
-    await user.click(screen.getByRole('button', { name: RECENT_SEARCHES_LABEL_KEY }));
+    await user.click(screen.getByRole('button', { name: RECENT_SEARCHES_LABEL }));
     await user.click(await screen.findByText('first search'));
 
     expect(onSearchTermChange).toHaveBeenCalledWith('first search');
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('uses the localized label once the strings arrive', async () => {
+    const user = setupUser();
+    render(
+      <Find
+        {...buildProps({
+          recentSearches: RECENT_SEARCH_TERMS,
+          localizedStrings: {
+            ...STRINGS,
+            '%webView_find_showRecentSearches%': 'Mostrar búsquedas recientes',
+            '%webView_find_recent%': 'Recientes',
+          },
+        })}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Mostrar búsquedas recientes' }));
+
+    expect(await screen.findByRole('menu', { name: 'Recientes' })).toBeInTheDocument();
   });
 });

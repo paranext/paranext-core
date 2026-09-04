@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ComponentProps } from 'react';
 import { beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import RecentSearches from './recent-searches.component';
@@ -36,11 +37,18 @@ beforeAll(() => {
 const RECENT = ['Genesis 1:1', 'Exodus 2:3'];
 const TRIGGER_NAME = 'Show recent searches';
 
-function renderRecentSearches(recentSearches: string[] = RECENT) {
+function renderRecentSearches(
+  recentSearches: string[] = RECENT,
+  props: Partial<ComponentProps<typeof RecentSearches<string>>> = {},
+) {
   const onSearchItemSelect = vi.fn();
   const user = userEvent.setup();
   render(
-    <RecentSearches recentSearches={recentSearches} onSearchItemSelect={onSearchItemSelect} />,
+    <RecentSearches
+      recentSearches={recentSearches}
+      onSearchItemSelect={onSearchItemSelect}
+      {...props}
+    />,
   );
   return { onSearchItemSelect, user };
 }
@@ -74,5 +82,65 @@ describe('RecentSearches', () => {
 
     expect(onSearchItemSelect).toHaveBeenCalledWith('Exodus 2:3');
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+  });
+
+  test('a selection reports the close exactly once', async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <RecentSearches
+        recentSearches={RECENT}
+        onSearchItemSelect={vi.fn()}
+        onOpenChange={onOpenChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: TRIGGER_NAME }));
+    await user.click(await screen.findByRole('menuitem', { name: /Exodus 2:3/ }));
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+
+    // Radix auto-closes on select, so closing again in the select handler would report it twice —
+    // and a consumer that restores focus or reopens on close would do so twice per pick.
+    expect(onOpenChange.mock.calls.filter(([isOpen]) => isOpen === false)).toHaveLength(1);
+  });
+
+  test('the list carries its heading as its accessible name', async () => {
+    const { user } = renderRecentSearches(RECENT, { groupHeading: 'Recent' });
+
+    await user.click(screen.getByRole('button', { name: TRIGGER_NAME }));
+
+    // Without this the list announces as a bare "menu" with N items and nothing says these are
+    // recent searches — the group name a heading used to carry programmatically.
+    expect(await screen.findByRole('menu', { name: 'Recent' })).toBeInTheDocument();
+  });
+
+  test('a raw localization key never reaches the screen', async () => {
+    // `useLocalizedStrings` yields `{ [key]: key }` while loading and permanently on a provider
+    // error, so consumers really do hand these through. A key is harmless in an `aria-label` and
+    // user-visible the moment it is rendered as tooltip or heading text.
+    const { user } = renderRecentSearches(RECENT, {
+      ariaLabel: '%history_recentSearches_ariaLabel%',
+      groupHeading: '%history_recent%',
+    });
+
+    const trigger = screen.getByRole('button', { name: TRIGGER_NAME });
+    await user.click(trigger);
+
+    expect(await screen.findByRole('menu', { name: 'Recent' })).toBeInTheDocument();
+    expect(screen.queryByText('%history_recent%')).not.toBeInTheDocument();
+    expect(screen.queryByText('%history_recentSearches_ariaLabel%')).not.toBeInTheDocument();
+  });
+
+  test('dismissing the list does not leave a tooltip open over the surrounding UI', async () => {
+    const { user } = renderRecentSearches(RECENT, { ariaLabel: TRIGGER_NAME });
+
+    await user.click(screen.getByRole('button', { name: TRIGGER_NAME }));
+    await user.click(await screen.findByRole('menuitem', { name: /Exodus 2:3/ }));
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+
+    // Radix returns focus to the trigger when the list closes, which Tooltip reads as a reason to
+    // open. The pointer is on the row that was clicked, never on the button, so no `pointerleave`
+    // will arrive to close it again — it would sit over the search input until the button blurs.
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
   });
 });
