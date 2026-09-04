@@ -30,8 +30,13 @@ export type HelloRock3ProjectData = {
   extensionData: { [key: string]: string | undefined };
 };
 
+/** What every one of an extension's extension-data keys starts with */
+function getExtensionKeyPrefix(extensionName: string): string {
+  return `${extensionName}/`;
+}
+
 function getExtensionDataKey(scope: ExtensionDataScope): string {
-  return `${scope.extensionName}/${scope.dataQualifier}`;
+  return `${getExtensionKeyPrefix(scope.extensionName)}${scope.dataQualifier}`;
 }
 
 export class HelloRock3ProjectDataProviderEngine
@@ -116,13 +121,19 @@ export class HelloRock3ProjectDataProviderEngine
     // native prefix match can match half of a user-perceived character. The grapheme index
     // `stringLength` returns is only interchangeable with the grapheme-aware `slice`, so both
     // halves of the split have to come from the same family.
-    const extensionKeyPrefix = `${scope.extensionName}/`;
-    const extensionKeyPrefixLength = stringLength(extensionKeyPrefix);
-    return Object.keys(this.projectData.extensionData)
-      .filter((key) => startsWith(key, extensionKeyPrefix))
-      .map((key) => slice(key, extensionKeyPrefixLength))
-      .filter((dataQualifier) => startsWith(dataQualifier, scope.dataQualifierPrefix ?? ''))
-      .sort();
+    const keyPrefix = getExtensionKeyPrefix(scope.extensionName);
+    const keyPrefixLength = stringLength(keyPrefix);
+    const qualifiers = Object.keys(this.projectData.extensionData)
+      .filter((key) => startsWith(key, keyPrefix))
+      .map((key) => slice(key, keyPrefixLength));
+    // Skipped entirely when no prefix was given, rather than matched against `''`: each of these
+    // helpers segments its input into graphemes, so a no-op filter is a full pass over every key
+    const { dataQualifierPrefix } = scope;
+    return (
+      dataQualifierPrefix
+        ? qualifiers.filter((qualifier) => startsWith(qualifier, dataQualifierPrefix))
+        : qualifiers
+    ).sort();
   }
 
   async setRandomNumber(max: number, newNum: number) {

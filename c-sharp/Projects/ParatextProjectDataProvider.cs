@@ -386,8 +386,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (string.IsNullOrEmpty(scope.DataQualifier))
             throw new InvalidDataException("Must provide a data qualifier");
 
-        scope.ProjectID = ProjectDetails.Metadata.Id;
-
         Stream? dataStream =
             GetExtensionStream(scope, true)
             ?? throw new InvalidDataException("Extension data not found");
@@ -404,8 +402,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
             throw new InvalidDataException("Must provide a data qualifier");
-
-        scope.ProjectID = ProjectDetails.Metadata.Id;
 
         Stream? dataStream =
             GetExtensionStream(scope, true)
@@ -437,15 +433,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (string.IsNullOrEmpty(scope.ExtensionName))
             throw new InvalidDataException("Must provide an extension name");
 
-        scope.ProjectID = ProjectDetails.Metadata.Id;
-
-        ProjectDetails projectDetails = _paratextProjects.GetProjectDetails(scope.ProjectID!);
-        IProjectStreamManager extensionStreamManager = CreateStreamManager(projectDetails);
         // Scoped to this extension's own data so a project's thousands of other files are never
         // walked, and so no other extension's layout is exposed
-        var qualifiers = extensionStreamManager.GetExistingDataStreamNames(
-            $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{scope.ExtensionName}"
-        );
+        var qualifiers = CreateExtensionStreamManager()
+            .GetExistingDataStreamNames(GetExtensionDataRoot(scope));
 
         var prefix = scope.DataQualifierPrefix;
         return string.IsNullOrEmpty(prefix)
@@ -455,14 +446,24 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
     {
-        ProjectDetails projectDetails = _paratextProjects.GetProjectDetails(scope.ProjectID!);
-
-        IProjectStreamManager extensionStreamManager = CreateStreamManager(projectDetails);
-        return extensionStreamManager.GetDataStream(
-            $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{scope.ExtensionName}/{scope.DataQualifier}",
-            createIfNotExists
-        );
+        return CreateExtensionStreamManager()
+            .GetDataStream(
+                $"{GetExtensionDataRoot(scope)}/{scope.DataQualifier}",
+                createIfNotExists
+            );
     }
+
+    /// <summary>
+    /// Where an extension's data lives, relative to the project. Listing and reading both compose
+    /// their stream names from this, which is what makes every name
+    /// <see cref="ListExtensionDataQualifiers"/> returns readable by
+    /// <see cref="GetExtensionData"/> — change the layout here and both sides move together.
+    /// </summary>
+    private static string GetExtensionDataRoot(ProjectDataScope scope) =>
+        $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{scope.ExtensionName}";
+
+    private IProjectStreamManager CreateExtensionStreamManager() =>
+        CreateStreamManager(_paratextProjects.GetProjectDetails(ProjectDetails.Metadata.Id));
 
     protected virtual IProjectStreamManager CreateStreamManager(ProjectDetails projectDetails)
     {
