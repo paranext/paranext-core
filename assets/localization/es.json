@@ -493,6 +493,8 @@
   "%resourcePicker_downloads_unavailable%": "Las descargas de recursos no están disponibles en esta instalación.",
   "%resourcePicker_language_filter_any%": "Cualquier idioma",
   "%resourcePicker_language_filter_multipleSelected%": "{selectCount} idiomas",
+  "%resourcePicker_language_filter_no_results%": "No se encontraron idiomas",
+  "%resourcePicker_language_filter_search_placeholder%": "Buscar idiomas…",
   "%resourcePicker_load_error%": "No se pudo cargar la lista de recursos disponibles.",
   "%resourcePicker_no_results%": "No se encontraron resultados",
   "%resourcePicker_no_results_filtered%": "Ningún recurso coincide con los filtros actuales.",
