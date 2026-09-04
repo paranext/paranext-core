@@ -51,13 +51,14 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
             }
         );
 
-        var streamNames = files
-            .Select(file =>
-                Path.GetRelativePath(rootDir, file).Replace(Path.DirectorySeparatorChar, '/')
-            )
-            .ToList();
-        streamNames.Sort(StringComparer.Ordinal);
-        return [.. streamNames];
+        return
+        [
+            .. files
+                .Select(file =>
+                    Path.GetRelativePath(rootDir, file).Replace(Path.DirectorySeparatorChar, '/')
+                )
+                .Order(StringComparer.Ordinal),
+        ];
     }
 
     public Stream? GetDataStream(string streamName, bool createIfNotExists = false)

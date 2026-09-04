@@ -111,11 +111,12 @@ export type MandatoryProjectDataTypes = {
 };
 
 /**
- * The `ExtensionData` methods required for a Project Data Provider Engine to fulfill the
- * requirements of {@link MandatoryProjectDataTypes}'s `ExtensionData` data type.
+ * The extension-data methods a Project Data Provider Engine provides.
  *
- * Note: These methods are already covered by {@link MandatoryProjectDataTypes}, but this type adds
- * JSDocs for them.
+ * Note: `getExtensionData` and `setExtensionData` are already covered by
+ * {@link MandatoryProjectDataTypes}'s `ExtensionData` data type, and this type just adds JSDocs for
+ * them. `listExtensionDataQualifiers` is not a data-type method — it has no paired setter and
+ * nothing to subscribe to — so this type is its only declaration for engines.
  */
 export type WithProjectDataProviderEngineExtensionDataMethods<
   TProjectDataTypes extends DataProviderDataTypes,
