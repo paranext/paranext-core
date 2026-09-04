@@ -10,7 +10,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Check, ChevronsUpDown, Star } from 'lucide-react';
-import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type VariantProps } from 'class-variance-authority';
 import { useHasContentBelow } from '@/hooks/use-has-content-below.hook';
 
@@ -23,14 +23,19 @@ import { useHasContentBelow } from '@/hooks/use-has-content-below.hook';
  * portal, so an effect living up there measures a list that has not been attached yet and concludes
  * there is nothing to scroll.
  */
-function OptionListScrollCue({ children, isEnabled }: { children: ReactNode; isEnabled: boolean }) {
-  // ref.current expects null not undefined for div ref
-  // eslint-disable-next-line no-null/no-null
-  const containerRef = useRef<HTMLDivElement>(null);
-  const hasContentBelow = useHasContentBelow(containerRef, '[data-slot="command-list"]', isEnabled);
+function OptionListScrollCue({
+  children,
+  isEnabled,
+  scrollerRef,
+}: {
+  children: ReactNode;
+  isEnabled: boolean;
+  scrollerRef: RefObject<HTMLElement | null>;
+}) {
+  const hasContentBelow = useHasContentBelow(scrollerRef, isEnabled);
 
   return (
-    <div className="tw:relative" ref={containerRef}>
+    <div className="tw:relative">
       {children}
       {hasContentBelow && (
         <div
@@ -134,6 +139,9 @@ export function MultiSelectComboBox({
   id,
 }: MultiSelectComboBoxProps) {
   const [isOpenLocal, setIsOpenLocal] = useState(false);
+  // ref.current expects null not undefined for a div ref
+  // eslint-disable-next-line no-null/no-null
+  const listRef = useRef<HTMLDivElement>(null);
 
   const handleSelect = useCallback(
     (label: string) => {
@@ -239,8 +247,8 @@ export function MultiSelectComboBox({
                 </Button>
               </div>
             )}
-            <OptionListScrollCue isEnabled={showScrollCue}>
-              <CommandList>
+            <OptionListScrollCue isEnabled={showScrollCue} scrollerRef={listRef}>
+              <CommandList ref={listRef}>
                 <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
                 <CommandGroup>
                   {sortedOptions.map((option) => {
