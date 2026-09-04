@@ -10,10 +10,12 @@ stylesheet-only packages Tailwind inlines before webpack runs, and anything `rel
 unbundled beside the bundle), the NuGet closure of the bundled .NET data provider, and Electron.
 Build and test tooling is excluded because it is not distributed.
 
-Two things this repository distributes are neither npm nor NuGet packages, so no scan of either
-graph can reach them and neither appears as a row below: the UBS lexical database, and the
-system libraries the Linux snap stages from Ubuntu. Both are described in their own sections,
-because a component that ships without a row is indistinguishable from one nobody considered.
+Some of what this repository distributes is neither an npm nor a NuGet package - bundled data,
+the system libraries the Linux snap stages from Ubuntu, files copied verbatim out of a source
+tree, and native libraries taken from the machine that built the installer. No scan of either
+graph can reach any of them and none appears as a row below, so each is described in a section
+of its own, present only when that build actually carries it: a component that ships without a
+row is indistinguishable from one nobody considered.
 
 **This is a reference, not the notices for any shipped product.** A distributed application
 built on paranext-core carries its own dependencies on top of these, and must generate its own
@@ -134,7 +136,9 @@ build machine on Linux and macOS; the `Microsoft.ICU.ICU4C.Runtime` package on W
 distributed under the Unicode license, which requires its copyright and permission notice to
 travel with copies. That package is referenced under an MSBuild condition on the *host* OS, so
 no restore performed on Linux resolves it whatever runtime identifier is requested; it is listed
-here from a recorded determination in `notices-policy.json` rather than from the closure.
+here from a recorded determination in `notices-policy.json` rather than from the closure. The
+Linux and macOS copies belong to no package graph at all and are covered under "Native libraries
+copied from the build machine" above.
 
 | Package | Version | License | Notes |
 | --- | --- | --- | --- |

@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { describe, expect, it, vi } from 'vitest';
 import { REQUIRED_BUNDLES } from './shipping-set';
-import { assertSnapStagePackagesClassified } from './main';
+import { assertCopiedPlatformLibraryIdsAllowed, assertSnapStagePackagesClassified } from './main';
 import { RIDS, readDirectPackageReferences } from './nuget-set';
 import { STATIC_TREES, WHOLESALE_COPIED_EXTENSIONS } from './static-assets';
 
@@ -318,6 +318,39 @@ describe('the packed static trees match what webpack copies', () => {
 
   it('scans the whole source directory of exactly the extensions webpack does not bundle', () => {
     expect(notBundled).toEqual(WHOLESALE_COPIED_EXTENSIONS.slice().sort());
+  });
+});
+
+describe('every copied platform library names terms the corpus can reproduce', () => {
+  // The document reproduces the CANONICAL text of each identifier on the library's behalf, and the
+  // corpus index holds exactly the identifiers a verdict can reach - which `allowed` drives and this
+  // table does not. An identifier here and nowhere else would leave the section stating an
+  // obligation and reproducing nothing.
+  const policy = JSON.parse(fs.readFileSync(path.join(__dirname, 'notices-policy.json'), 'utf8'));
+
+  it('reads a non-empty table from the shipped policy', () => {
+    // Otherwise the case below asserts nothing.
+    expect(Object.keys(policy.copiedPlatformLibraries)).not.toHaveLength(0);
+  });
+
+  it('accepts the shipped policy', () => {
+    expect(() => assertCopiedPlatformLibraryIdsAllowed(policy)).not.toThrow();
+  });
+
+  it('refuses an identifier that is not on the allow list', () => {
+    expect(() =>
+      assertCopiedPlatformLibraryIdsAllowed({
+        ...policy,
+        copiedPlatformLibraries: {
+          'libsomething (Linux)': {
+            platforms: 'Linux',
+            copiedBy: 'a csproj Content rule',
+            spdx: ['NotAnAllowedIdentifier'],
+            reason: 'x',
+          },
+        },
+      }),
+    ).toThrow(/NotAnAllowedIdentifier/);
   });
 });
 

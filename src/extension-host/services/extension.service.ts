@@ -27,6 +27,10 @@ import {
   getCommandLineSwitch,
   stripWrappingQuotes,
 } from '@node/utils/command-line.util';
+import {
+  EXTENSION_INTERFACE_MODULE_SPECIFIERS,
+  type ExtensionInterfaceModuleSpecifier,
+} from '@extension-host/data/extension-interface-modules.data';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
 import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import * as papiCore from '@shared/services/papi-core.service';
@@ -1304,6 +1308,38 @@ async function callActivateOnExtension(
 }
 
 /**
+ * The modules the extension host supplies to an extension at run time, by the specifier that
+ * reaches them.
+ *
+ * A DATA table rather than a chain of comparisons inside the shim, so the set an extension may link
+ * against is something a guard can compare by VALUE. `Record` over
+ * `ExtensionInterfaceModuleSpecifier` and not `string`: the type has no index signature, so a
+ * module supplied here without a specifier in
+ * `@extension-host/data/extension-interface-modules.data` - or a specifier there with nothing
+ * supplied for it - is a compile error. That file carries the licensing consequences of changing
+ * the list.
+ */
+const EXTENSION_INTERFACE_MODULES: Readonly<Record<ExtensionInterfaceModuleSpecifier, unknown>> = {
+  '@papi/backend': papi,
+  '@papi/core': papiCore,
+  '@sillsdev/scripture': SillsdevScripture,
+  crypto,
+  'platform-bible-utils': platformBibleUtils,
+};
+
+/**
+ * Whether this specifier is one the extension host supplies.
+ *
+ * A type predicate rather than `Object.hasOwn`, which does not narrow a `string` to the record's
+ * key union - and narrowing is what lets the lookup below stay free of a type assertion.
+ */
+function isExtensionInterfaceModule(
+  moduleName: string,
+): moduleName is ExtensionInterfaceModuleSpecifier {
+  return EXTENSION_INTERFACE_MODULE_SPECIFIERS.some((specifier) => specifier === moduleName);
+}
+
+/**
  * Whether the startup marks in {@link activateExtensions} have already been emitted this session.
  * Activation re-runs whenever extensions are installed/updated/removed mid-session (the watcher
  * calls `reloadExtensions`), and re-emitting the marks then would inject duplicate rows and a
@@ -1334,22 +1370,13 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   // WARNING: This code should not be edited without serious review. For more information,
   // see https://github.com/paranext/paranext/wiki/Module-import-restrictions
   //
-  // This shim is also where the Extension Interface is defined in practice: the module names
-  // allowed below are what an extension may link against at runtime, and LICENSE-EXCEPTION.md
-  // grants an additional permission under AGPL section 7 to works that use only those. Widening
-  // this list widens that grant; narrowing it can put an existing extension outside the exception.
-  // Treat a change here as a licensing change as well as a security one.
   // Assert the specific type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   Module.prototype.require = ((moduleName: string) => {
-    // Allow the extension to import papi and some other things
-    if (moduleName === '@papi/backend') return papi;
-    if (moduleName === '@papi/core') return papiCore;
-    if (moduleName === '@sillsdev/scripture') return SillsdevScripture;
-    if (moduleName === 'platform-bible-utils') return platformBibleUtils;
-
-    // Node's built-in modules
-    if (moduleName === 'crypto') return crypto;
+    // Allow the extension to import papi and some other things. The list is EXTENSION_INTERFACE_MODULES
+    // (above), looked up rather than compared against name by name, so the set an extension may
+    // link against is a value a test can read instead of a source pattern it has to recognize.
+    if (isExtensionInterfaceModule(moduleName)) return EXTENSION_INTERFACE_MODULES[moduleName];
 
     // Figure out if we are doing the import for the extension file in activateExtension
     const extensionFile = extensionsWithCheck.find(

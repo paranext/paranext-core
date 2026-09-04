@@ -121,6 +121,11 @@ const report = {
     libdrm2: { classification: 'permissive' },
     'libgtk-3-0': { classification: 'not-established' },
   },
+  // The two prose sections are gated on the build rather than written unconditionally, so the
+  // fixture has to supply the facts that turn them on - see `pushElectronSection` and
+  // `pushLexicalDatabaseSection`.
+  packedExtensions: ['platform-lexical-tools', 'quick-verse'],
+  shipsElectron: true,
 };
 
 describe('render', () => {
@@ -332,6 +337,50 @@ describe('render', () => {
     // say so rather than leaving CC BY-SA to imply the whole file is open.
     expect(out).toContain('**not** available under an open');
     expect(out).toContain('https://github.com/ubsicap/ubs-open-license');
+  });
+
+  it('says nothing about the lexical database when the extension that ships it is gone', () => {
+    // The section makes UBS copyright claims and CC BY-SA 4.0 attributions for a 35 MB database
+    // fetched into one extension's assets. Written unconditionally it would go on making them for
+    // an artifact that contains no database at all - the failure `static-assets.ts` names as the
+    // reason it exists, in the document's own prose.
+    const out = render({ ...report, packedExtensions: ['quick-verse'] });
+    expect(out).not.toContain('UBS lexical database');
+    expect(out).not.toContain('UBS Dictionary of Biblical Hebrew');
+  });
+
+  it('says nothing about Electron when nothing records it as shipping', () => {
+    const out = render({ ...report, shipsElectron: false });
+    expect(out).not.toContain('## Electron, Chromium, and Node.js');
+  });
+
+  it('discloses a native library copied from the build machine, and reproduces its terms', () => {
+    // Neither package graph can see one - no manifest declares it, no restore resolves it - so
+    // without this the document names the obligation in the .NET prose and discharges it for the
+    // Windows package alone.
+    const out = render({
+      ...report,
+      copiedPlatformLibraries: {
+        'libicu (Linux and macOS)': {
+          platforms: 'Linux and macOS',
+          copiedBy: 'ParanextDataProvider.csproj',
+          spdx: ['Unicode-3.0'],
+          reason: 'ICU is published under the Unicode license.',
+        },
+      },
+    });
+    expect(out).toContain('## Native libraries copied from the build machine');
+    expect(out).toContain('### libicu (Linux and macOS)');
+    expect(out).toContain('**Terms:** Unicode-3.0');
+    // The point of the entry: the canonical text is reproduced, so the obligation the .NET prose
+    // states is actually discharged for these copies.
+    expect(out).toContain('### Unicode-3.0 — canonical text');
+    // The version comes from the build machine, so the document must not invent one.
+    expect(out).toContain('version not established');
+  });
+
+  it('omits the section when no platform library is copied', () => {
+    expect(render(report)).not.toContain('## Native libraries copied from the build machine');
   });
 
   it('lists the snap-staged system libraries it is given', () => {

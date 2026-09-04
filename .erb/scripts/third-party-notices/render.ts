@@ -12,7 +12,21 @@ import { compareByNameThenVersion, compareStrings } from './compare';
 import { canonicalText } from './corpus';
 import { parseDeclared } from './declared';
 import { normalizeText } from './package-files';
-import type { NamedText, Report, ReportRow, SnapStagePackage } from './types';
+import type {
+  CopiedPlatformLibrary,
+  NamedText,
+  Report,
+  ReportRow,
+  SnapStagePackage,
+} from './types';
+
+/**
+ * The extension that ships the UBS lexical database, whose terms the document describes in prose.
+ *
+ * Named once so `pushLexicalDatabaseSection`'s gate reads against the packed extension set rather
+ * than against a string repeated at the point of use.
+ */
+const LEXICAL_DATABASE_EXTENSION = 'platform-lexical-tools';
 
 /** A license or NOTICE text, keyed by its own hash, with every package it covers. */
 type CollectedTexts = Map<string, { text: string; packages: string[] }>;
@@ -489,10 +503,12 @@ function pushPreamble(out: string[], corpusVersion: string, licenseeVersion: str
     'unbundled beside the bundle), the NuGet closure of the bundled .NET data provider, and Electron.',
     'Build and test tooling is excluded because it is not distributed.',
     '',
-    'Two things this repository distributes are neither npm nor NuGet packages, so no scan of either',
-    'graph can reach them and neither appears as a row below: the UBS lexical database, and the',
-    'system libraries the Linux snap stages from Ubuntu. Both are described in their own sections,',
-    'because a component that ships without a row is indistinguishable from one nobody considered.',
+    'Some of what this repository distributes is neither an npm nor a NuGet package - bundled data,',
+    'the system libraries the Linux snap stages from Ubuntu, files copied verbatim out of a source',
+    'tree, and native libraries taken from the machine that built the installer. No scan of either',
+    'graph can reach any of them and none appears as a row below, so each is described in a section',
+    'of its own, present only when that build actually carries it: a component that ships without a',
+    'row is indistinguishable from one nobody considered.',
     '',
     '**This is a reference, not the notices for any shipped product.** A distributed application',
     'built on paranext-core carries its own dependencies on top of these, and must generate its own',
@@ -541,8 +557,17 @@ function pushOpenQuestions(out: string[], openPolicyQuestions: string[]): void {
   }
 }
 
-/** Electron and what it bundles, which carry their own notices inside the packaged app. */
-function pushElectronSection(out: string[]): void {
+/**
+ * Electron and what it bundles, which carry their own notices inside the packaged app.
+ *
+ * Gated on the fact that puts Electron in the artifact, rather than written unconditionally: it is
+ * packed as a prebuilt runtime and compiled into no bundle, so the notices policy's
+ * `unbundledDependencies` entry - "SHIPS, but is disclosed in prose rather than as a row" - is the
+ * record that it ships at all. Drop that record and this section goes with it, instead of the
+ * document going on asserting that a repackaged application embeds Chromium.
+ */
+function pushElectronSection(out: string[], shipsElectron: boolean): void {
+  if (!shipsElectron) return;
   out.push('## Electron, Chromium, and Node.js', '');
   out.push(
     'The packaged application embeds Electron (MIT), which in turn bundles Chromium, V8, and',
@@ -553,8 +578,16 @@ function pushElectronSection(out: string[]): void {
   );
 }
 
-/** The UBS lexical database, which is redistributed data and belongs to neither package graph. */
-function pushLexicalDatabaseSection(out: string[]): void {
+/**
+ * The UBS lexical database, which is redistributed data and belongs to neither package graph.
+ *
+ * Gated on `platform-lexical-tools` being among the extensions the installer packs. The database is
+ * fetched into that extension's assets at install time, so with the extension gone the artifact
+ * contains no database - and an ungated section would go on making UBS copyright claims and CC
+ * BY-SA 4.0 attributions for content no installer carries.
+ */
+function pushLexicalDatabaseSection(out: string[], packedExtensions: string[]): void {
+  if (!packedExtensions.includes(LEXICAL_DATABASE_EXTENSION)) return;
   out.push('## Bundled data \u2014 UBS lexical database', '');
   out.push(
     'The `platform-lexical-tools` extension ships a prebuilt SQLite lexical database. It is fetched',
@@ -587,16 +620,18 @@ function pushLexicalDatabaseSection(out: string[]): void {
   );
 }
 
-/** The notices stated by third-party files copied verbatim out of an extension's asset trees. */
+/** The notices stated by third-party files an installer copies verbatim out of a source tree. */
 function pushStaticAssetSection(out: string[], staticAssetNotices: NamedText[]): void {
   if (staticAssetNotices.length) {
-    out.push('## Files copied into extensions', '');
+    out.push('## Files copied verbatim into the installer', '');
     out.push(
-      "Each extension's `assets/` and `public/` directories are copied into `extensions/dist`",
-      'verbatim and packed into every installer, so a third-party file placed there is',
-      'redistributed without being compiled into anything. Nothing in the module graph can see one,',
-      'which is why the notices policy carries an inventory of them and the build refuses a file it',
-      'does not record. The notices those files state are reproduced here.',
+      "Each extension's `assets/` and `public/` directories are copied into `extensions/dist`, the",
+      "repository root's `assets/` is packed directly, and the .NET data provider's `assets` and",
+      '`base-directory-assets` trees are copied into its publish output — which is packed whole as',
+      '`./dotnet/`. A third-party file placed in any of them is redistributed in every installer',
+      'without being compiled into anything, so neither the module graph nor the NuGet closure can',
+      'see one. That is why the notices policy carries an inventory of them and the build refuses a',
+      'file it does not record. The notices those files state are reproduced here.',
       '',
     );
     staticAssetNotices.forEach(({ name, text }) => {
@@ -604,6 +639,49 @@ function pushStaticAssetSection(out: string[], staticAssetNotices: NamedText[]):
       out.push(`### \`${name}\``, '', fence, normalizeText(text) || '', fence, '');
     });
   }
+}
+
+/**
+ * Native libraries the build copies out of the machine that built it, and the terms they are under.
+ *
+ * Neither package graph can see one: no manifest declares it and no restore resolves it, yet
+ * `ParanextDataProvider.csproj` copies it beside the executable and electron-builder packs the
+ * whole publish directory. The same "outside both graphs" shape as the snap-staged Ubuntu
+ * libraries, with one difference that decides how it is written: the VERSION is whatever the build
+ * machine had, so nothing can pin one. What is fixed is the license, and its canonical text is what
+ * the document reproduces - under "Canonical license texts for declared identifiers", where the
+ * corpus-sourced texts already live.
+ */
+function pushCopiedPlatformLibrarySection(
+  out: string[],
+  copiedPlatformLibraries: Record<string, CopiedPlatformLibrary>,
+): void {
+  const entries = Object.entries(copiedPlatformLibraries).sort(([first], [second]) =>
+    compareStrings(first, second),
+  );
+  if (!entries.length) return;
+  out.push('## Native libraries copied from the build machine', '');
+  out.push(
+    'The .NET build copies these out of the machine that produced the installer, so they are',
+    'redistributed inside it while appearing in neither the npm nor the NuGet closure above. Their',
+    'versions are whatever that machine had installed and are deliberately not stated here — a',
+    'version this document cannot establish would be an invented fact. The terms are what is fixed,',
+    'and the canonical text of each identifier below is reproduced under "Canonical license texts',
+    'for declared identifiers".',
+    '',
+  );
+  entries.forEach(([name, entry]) => {
+    out.push(
+      `### ${name}`,
+      '',
+      `- **Platforms:** ${entry.platforms}`,
+      `- **Copied by:** ${entry.copiedBy}`,
+      `- **Terms:** ${entry.spdx.join(', ')}`,
+      '',
+      entry.reason,
+      '',
+    );
+  });
 }
 
 /** The Ubuntu libraries snapcraft stages inside the Linux `.snap`, and their copyright files. */
@@ -708,7 +786,9 @@ function pushDotnetSection(out: string[], dotnetDescribed: DescribedRow[]): void
     'distributed under the Unicode license, which requires its copyright and permission notice to',
     'travel with copies. That package is referenced under an MSBuild condition on the *host* OS, so',
     'no restore performed on Linux resolves it whatever runtime identifier is requested; it is listed',
-    'here from a recorded determination in `notices-policy.json` rather than from the closure.',
+    'here from a recorded determination in `notices-policy.json` rather than from the closure. The',
+    'Linux and macOS copies belong to no package graph at all and are covered under "Native libraries',
+    'copied from the build machine" above.',
     '',
   );
   out.push('| Package | Version | License | Notes |', '| --- | --- | --- | --- |');
@@ -971,6 +1051,33 @@ function pushLicenseTextsSection(
   pushFencedSections(out, texts);
 }
 
+/**
+ * Adds each copied platform library's identifiers to the canonical-text collection.
+ *
+ * The libraries have no row - nothing declares or resolves them - so `useCanonicalText` never sees
+ * them, and without this the section above would state an obligation and reproduce nothing, which
+ * is the state the notices policy's own note calls the worst of the three. `main.ts` refuses an
+ * identifier that is not on `allowed`, so the corpus holds a text for every one that reaches here.
+ */
+function addCopiedPlatformLibraryTexts(
+  canonical: CollectedTexts,
+  copiedPlatformLibraries: Record<string, CopiedPlatformLibrary>,
+): void {
+  Object.entries(copiedPlatformLibraries).forEach(([name, entry]) => {
+    entry.spdx.forEach((id) => {
+      const text = canonicalText(id);
+      if (!text) return;
+      if (!canonical.has(id)) canonical.set(id, { text, packages: [] });
+      canonical
+        .get(id)
+        ?.packages.push(
+          `\`${name}\` (native library copied from the build machine; version not established) — ` +
+            'no copyright notice recorded: nothing of the library is read here',
+        );
+    });
+  });
+}
+
 /** SPDX's own texts, reproduced for the packages that declare an identifier and ship no copy. */
 function pushCanonicalTextsSection(out: string[], canonical: CollectedTexts): void {
   if (canonical.size) {
@@ -1072,6 +1179,9 @@ export function render({
   snapStagePackageLicenses = {},
   snapCopyrightTexts = [],
   staticAssetNotices = [],
+  packedExtensions = [],
+  shipsElectron = false,
+  copiedPlatformLibraries = {},
 }: Report): string {
   assertKnownEcosystems(verdicts);
 
@@ -1084,6 +1194,7 @@ export function render({
     ...rows,
     ...dotnetRows,
   ]);
+  addCopiedPlatformLibraryTexts(canonical, copiedPlatformLibraries);
   const npmDescribed = described.filter((row) => row.ecosystem === 'npm');
   const dotnetDescribed = described.filter((row) => row.ecosystem === 'nuget');
   const npmAccount = accountNpmRows(npmDescribed);
@@ -1091,10 +1202,11 @@ export function render({
   const out: string[] = [];
   pushPreamble(out, corpusVersion, licenseeVersion);
   pushOpenQuestions(out, openPolicyQuestions);
-  pushElectronSection(out);
-  pushLexicalDatabaseSection(out);
+  pushElectronSection(out, shipsElectron);
+  pushLexicalDatabaseSection(out, packedExtensions);
   pushStaticAssetSection(out, staticAssetNotices);
   pushSnapSection(out, snapStagePackages, snapStagePackageLicenses, snapCopyrightTexts);
+  pushCopiedPlatformLibrarySection(out, copiedPlatformLibraries);
   pushDotnetSection(out, dotnetDescribed);
   pushNpmSection(out, npmDescribed, npmAccount);
   assertNpmRowsAccountedFor(npmDescribed, npmAccount, canonical);
