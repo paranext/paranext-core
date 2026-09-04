@@ -139,6 +139,14 @@ export class LexicalReferenceProjectDataProviderEngine
     throw new Error(ERROR_MESSAGE_NO_EXTENSION_DATA);
   }
 
+  // This project data provider holds no extension data, so there is nothing to enumerate. The
+  // method is optional on the engine, but implementing it keeps this class consistent with its
+  // getExtensionData/setExtensionData siblings above.
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  listExtensionDataQualifiers(): Promise<string[]> {
+    throw new Error(ERROR_MESSAGE_NO_EXTENSION_DATA);
+  }
+
   // Because this is a base project data provider, we have to provide this method even though it always throws
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   setSetting(): Promise<DataProviderUpdateInstructions<MandatoryProjectDataTypes>> {
