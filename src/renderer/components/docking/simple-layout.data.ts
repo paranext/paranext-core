@@ -20,7 +20,8 @@ export const RC_DOCK_DIVIDER_MIN_WIDTH_RESERVE_PX = 4;
  * × 1e6) (size)px`, so the `size` weights already scale them with the window in pure CSS. It only
  * stops a splitter drag from collapsing a column to nothing.
  *
- * `simple-layout.data.test.ts` pins the arithmetic against the window minimum in `main.ts`.
+ * `simple-layout.data.test.ts` pins the arithmetic against `WINDOW_MIN_WIDTH_PX`, the same constant
+ * `main.ts` applies as the window `minWidth`.
  */
 export const SIMPLE_COLUMN_MIN_WIDTH_PX = 297;
 

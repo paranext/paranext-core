@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { TabToolbar } from '@/components/advanced/tab-toolbar/tab-toolbar.component';
 import { SHRINK_STEP, useShrinkStepValue } from '@/context/shrink-step.context';
+import { ShrinkStepOverride } from '@/context/shrink-step-override.component';
 
 describe('TabToolbar', () => {
   it('does not force tw:h-full on the start/center/end area wrappers (breaks vertical centering)', () => {
@@ -101,21 +102,62 @@ describe('TabToolbar', () => {
     expect(endWrapper?.className).not.toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
   });
 
+  it('tightens its own padding and gaps at the narrowest step, so the space goes to the controls instead of the margins', () => {
+    // At the narrowest step the toolbar spends 48px of a ~300px row on padding and inter-zone gaps
+    // while the start zone runs out of room for controls that have no shorter form left. Halving
+    // both hands that space back. Safe to key off the step because `useShrinkStep` measures the
+    // container's BORDER box, which padding does not change — so tightening cannot feed back into
+    // which step is chosen.
+    render(
+      <ShrinkStepOverride value={SHRINK_STEP.MINIMUM}>
+        <TabToolbar
+          onSelectProjectMenuItem={() => {}}
+          onSelectViewInfoMenuItem={() => {}}
+          startAreaChildren={<span data-testid="start-child">Start</span>}
+        />
+      </ShrinkStepOverride>,
+    );
+
+    const container = screen.getByTestId('start-child').parentElement?.parentElement;
+
+    expect(container).not.toBeNull();
+    expect(container?.className).toMatch(/(?:^|\s)tw:px-2(?:\s|$)/);
+    expect(container?.className).toMatch(/(?:^|\s)tw:gap-1(?:\s|$)/);
+    expect(container?.className).not.toMatch(/(?:^|\s)tw:px-4(?:\s|$)/);
+    expect(container?.className).not.toMatch(/(?:^|\s)tw:gap-2(?:\s|$)/);
+  });
+
+  it('keeps its full padding and gaps at every wider step', () => {
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        startAreaChildren={<span data-testid="start-child">Start</span>}
+      />,
+    );
+
+    const container = screen.getByTestId('start-child').parentElement?.parentElement;
+
+    expect(container?.className).toMatch(/(?:^|\s)tw:px-4(?:\s|$)/);
+    expect(container?.className).toMatch(/(?:^|\s)tw:gap-2(?:\s|$)/);
+  });
+
   it('publishes its shrink step down to the items inside it, so a laddered label sees the real value', () => {
-    // Guards the wiring end to end: `TabToolbar` forwards the prop, `TabToolbarContainer` puts it
-    // on the context, and a descendant reads it. Each piece is exercised elsewhere; only this
-    // catches them being connected wrongly.
+    // Guards the wiring end to end: `TabToolbarContainer` prefers the override over its own
+    // measurement, republishes it on `ShrinkStepContext`, and a descendant reads it. Each piece is
+    // exercised elsewhere; only this catches them being connected wrongly.
     function StepProbe() {
       return <span data-testid="step">{useShrinkStepValue()}</span>;
     }
 
     render(
-      <TabToolbar
-        onSelectProjectMenuItem={() => {}}
-        onSelectViewInfoMenuItem={() => {}}
-        shrinkStep={SHRINK_STEP.MINIMUM}
-        startAreaChildren={<StepProbe />}
-      />,
+      <ShrinkStepOverride value={SHRINK_STEP.MINIMUM}>
+        <TabToolbar
+          onSelectProjectMenuItem={() => {}}
+          onSelectViewInfoMenuItem={() => {}}
+          startAreaChildren={<StepProbe />}
+        />
+      </ShrinkStepOverride>,
     );
 
     expect(screen.getByTestId('step')).toHaveTextContent(String(SHRINK_STEP.MINIMUM));

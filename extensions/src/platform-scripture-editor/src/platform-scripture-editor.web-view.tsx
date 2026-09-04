@@ -50,7 +50,6 @@ import {
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
-  DisabledActionTooltip,
   EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
@@ -61,14 +60,10 @@ import {
   Popover,
   PopoverAnchor,
   PopoverContent,
-  PopoverTrigger,
   ScrollGroupSelector,
   SelectMenuItemHandler,
-  SHRINK_STEP,
   Spinner,
   TabToolbar,
-  ToolbarCompoundLabel,
-  useShrinkStepValue,
   UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
   isMacOs,
@@ -110,13 +105,16 @@ import {
 } from 'platform-scripture-editor';
 import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
-import { ChevronDown } from 'lucide-react';
 import { useAnnotationStyleSheet } from './annotations/use-annotation-stylesheet.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import {
   StructureProtectionButton,
   STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
 } from './structure-protection-button.component';
+import {
+  ParagraphStyleTrigger,
+  PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
+} from './paragraph-style-trigger.component';
 import { useMarkerSettleDelay } from './use-marker-settle-delay.hook';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 import { EmptyChapterView, EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.component';
@@ -208,78 +206,6 @@ function PortalContents({ children }: PropsWithChildren) {
 }
 
 /**
- * Characters the paragraph-style trigger reserves for the USFM marker. UX set six, which fits the
- * long markers in ordinary use (`periph`). Must match the `tw:w-[6ch]` literal on the marker slot —
- * Tailwind cannot read this constant, so the two are kept in step by hand.
- */
-const MARKER_SLOT_CHARACTERS = 6;
-
-/**
- * Separator between the marker and its style name. Shared by the rendered label and the tooltip's
- * full text so the two can never disagree about how the label reads.
- */
-const MARKER_STYLE_SEPARATOR = ' - ';
-
-/**
- * Label for the paragraph-style trigger: the marker code, then the style name.
- *
- * A separate component rather than inline JSX because it reads `ShrinkStepContext`, which
- * `TabToolbarContainer` publishes. `PlatformScriptureEditor` _renders_ the `TabToolbar`, so a hook
- * call there would sit above the provider and read the widest step forever. This renders as the
- * toolbar's descendant, so it sees the real value.
- */
-function ParagraphStyleLabel({
-  blockMarker,
-  styleName,
-}: {
-  blockMarker: string;
-  /** Undefined until the localized strings resolve, and for any marker without a description. */
-  styleName: string | undefined;
-}) {
-  const shrinkStep = useShrinkStepValue();
-  // With no style name there is nothing to put beside the marker, so the label is already at its
-  // shortest form — and `fullText` must not advertise a name it cannot show.
-  const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM || !styleName;
-  // A marker longer than the slot is cut without an ellipsis, and a clipped `restor` still reads as
-  // a plausible marker — so declare the label partial and let the tooltip carry the real one.
-  // `ToolbarCompoundLabel`'s own clip detection cannot see this: it watches the style name.
-  const isMarkerClipped = blockMarker.length > MARKER_SLOT_CHARACTERS;
-
-  return (
-    <ToolbarCompoundLabel
-      // A USFM marker is a code, so it reads as one — monospace, inheriting the row's foreground
-      // rather than taking a marker colour.
-      //
-      // The slot is a fixed 6 characters at every step, not sized to the marker: monospace makes
-      // `6ch` exactly six glyphs, which is the width UX asked for, and a content-sized slot would
-      // resize the trigger as the cursor moved between a `p` and a `toc1`, shifting every button
-      // after it. `overflow-hidden` keeps a longer marker inside the slot instead of pushing the
-      // chevron out. Written as a literal because Tailwind extracts class names statically — an
-      // interpolated `tw:w-[${n}ch]` would silently emit no rule at all.
-      primary={
-        // `inline-flex` + `items-center`, not `inline-block`. The slot is taller than its siblings
-        // — a monospace line box against the row's proportional one — and an `inline-block` puts
-        // its text at the top of that taller box, so centring the box on the row still leaves the
-        // marker sitting visibly high next to the style name. A flex container centres its own
-        // content instead, which removes the offset at the source rather than compensating for it.
-        // The marker menu's rows have no fixed slot at all, which is why they never showed this.
-        <span className="tw:inline-flex tw:w-[6ch] tw:items-center tw:overflow-hidden tw:font-mono">
-          {blockMarker}
-        </span>
-      }
-      secondary={styleName}
-      separator={MARKER_STYLE_SEPARATOR}
-      showSecondary={!isAtMinimum}
-      isPartial={isMarkerClipped || (!!styleName && isAtMinimum)}
-      fullText={styleName ? `${blockMarker}${MARKER_STYLE_SEPARATOR}${styleName}` : blockMarker}
-      // A ceiling, not a width: long style names stop the trigger growing without bound, but the
-      // label still shrinks below this.
-      className="tw:max-w-[30ch]"
-    />
-  );
-}
-
-/**
  * Time in ms to delay taking action to wait for the editor to load. Hope to be obsoleted by a way
  * to listen for the editor to finish loading
  *
@@ -340,7 +266,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   SYNC_EDIT_BLOCKED_KEY,
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
-  '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%',
+  ...PARAGRAPH_STYLE_TRIGGER_STRING_KEYS,
   '%webView_platformScriptureEditor_insertCommentAtSelection%',
   '%webView_platformScriptureEditor_insertFootnoteAtSelection%',
   '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%',
@@ -3855,69 +3781,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   localizedStrings={localizedStrings}
                 />
 
-                {/* Truthy, not just defined: an empty marker has nothing to put in the fixed
-                    marker slot, so the trigger would render a blank six-character box followed by
-                    a dangling " - " and the generic fallback description. No marker and no block
-                    are the same state to a user, so they read the same way. */}
-                {!!blockMarker && (
-                  <DisabledActionTooltip
-                    disabled={isStructureProtected}
-                    tooltipText={
-                      localizedStrings[
-                        '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%'
-                      ]
-                    }
-                    // This wrapper div — not the Button inside it — is the toolbar zone's flex
-                    // item, so this is where the shrink floor has to be lifted. Without it the div
-                    // stays pinned at min-content and the Button's own `tw:min-w-0` can never come
-                    // into play, because the box around it never narrows.
-                    className="tw:min-w-0"
-                  >
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          // `tw:min-w-0` lets the button shrink inside the wrapper so its label can
-                          // truncate rather than push the end-zone buttons out of the clipped
-                          // toolbar. It only bites because the wrapper above carries the same
-                          // floor-lift; on its own it would be inert. The width ceiling lives on
-                          // the label itself (30 characters) so it is expressed in the same units
-                          // UX specified it in — see ParagraphStyleLabel.
-                          className="tw:h-8 tw:min-w-0"
-                          aria-label="Paragraph Selection"
-                          // No native `title` here. The label inside now raises its own tooltip
-                          // whenever it is abbreviated or clipped, and a native tooltip would open
-                          // on top of it a beat later — two overlapping bubbles for one control.
-                          // `aria-label` still names the button for assistive technology.
-                          disabled={isStructureProtected}
-                          variant="outline"
-                        >
-                          <ParagraphStyleLabel
-                            blockMarker={blockMarker}
-                            styleName={blockMarkerName}
-                          />
-                          {/* An icon has no shorter form, so it must never be the thing squeezed. */}
-                          <ChevronDown className="tw:shrink-0" />
-                        </Button>
-                      </PopoverTrigger>
-                      {/* 384px is the width this menu wants, not a width it can insist on. Simple
-                          mode gives the editor ~302px at the 900px window minimum, and a fixed
-                          384px popover lays out at full width and is then clipped by the web view
-                          edge — taking roughly 80px of every row with it, including the ellipsis
-                          each row had correctly truncated to. The rows were degrading properly into
-                          space nobody could see. Radix measures the room actually available and
-                          publishes it, so cap against that and let the menu narrow instead. */}
-                      <PopoverContent className="tw:w-96 tw:max-w-(--radix-popover-content-available-width) tw:p-0">
-                        <MarkerMenu
-                          localizedStrings={localizedStrings}
-                          markerMenuItems={paragraphSwitcherMenuItems}
-                          searchPlaceholder={
-                            localizedStrings['%markerMenu_searchPlaceholder_paragraph%']
-                          }
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </DisabledActionTooltip>
-                )}
+                <ParagraphStyleTrigger
+                  blockMarker={blockMarker}
+                  styleName={blockMarkerName}
+                  isStructureProtected={isStructureProtected}
+                  markerMenuItems={paragraphSwitcherMenuItems}
+                  localizedStrings={localizedStrings}
+                />
               </>
             )}
           </>
