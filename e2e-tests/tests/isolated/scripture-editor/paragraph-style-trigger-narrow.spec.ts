@@ -1,14 +1,14 @@
 /**
- * PT-4466 — the paragraph-style trigger must ellipsise its label rather than have its trailing
- * border sliced off when the editor column narrows.
+ * The paragraph-style trigger must ellipsise its label rather than have its trailing border sliced
+ * off when the editor column narrows.
  *
- * The reported failure was silent to every DOM-visibility check: the trigger stayed
- * `toBeVisible()`, its own `scrollWidth` equalled its `clientWidth`, and its text content was
- * complete — while a chunk of the button, border and chevron included, was simply not painted. The
- * button sits in a BLOCK wrapper, so it is not a flex item and the `shrink-0` in shadcn's button
- * base leaves it at its content width; the toolbar zone's `overflow-clip` then cuts whatever runs
- * past the zone edge. A child clipped by an ancestor's overflow reports no overflow of its own, so
- * the assertions here are geometric — the trigger's box against its zone's box — exactly as
+ * This class of failure is silent to every DOM-visibility check: the trigger stays `toBeVisible()`,
+ * its own `scrollWidth` equals its `clientWidth`, and its text content is complete — while a chunk
+ * of the button, border and chevron included, is simply not painted. The button sits in a BLOCK
+ * wrapper, so it is not a flex item and the `shrink-0` in shadcn's button base leaves it at its
+ * content width; the toolbar zone's `overflow-clip` then cuts whatever runs past the zone edge. A
+ * child clipped by an ancestor's overflow reports no overflow of its own, so the assertions here
+ * are geometric — the trigger's box against its zone's box — exactly as
  * `title-bar-narrow-width.spec.ts` does for the same class of bug.
  *
  * ONE test() per spec file (isolated-fixture / second-Electron-instance constraint — see
@@ -46,7 +46,7 @@ test.describe('paragraph-style trigger at narrow editor widths', () => {
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
     await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
 
-    const trigger = editorFrame.locator('[aria-label="Paragraph Selection"]');
+    const trigger = editorFrame.locator('[aria-label="Paragraph style"]');
     await expect(trigger).toBeVisible({ timeout: 60_000 });
 
     // The root cause, asserted directly. The geometric checks below can only bite while the style

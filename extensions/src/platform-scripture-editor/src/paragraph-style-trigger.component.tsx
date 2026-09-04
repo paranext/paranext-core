@@ -13,6 +13,7 @@ import {
 } from 'platform-bible-react';
 import { ParagraphStyleLabel } from './paragraph-style-label.component';
 
+const ARIA_LABEL_KEY = '%webView_platformScriptureEditor_paragraphSelection_ariaLabel%';
 const PROTECTED_TOOLTIP_KEY =
   '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%';
 const SEARCH_PLACEHOLDER_KEY = '%markerMenu_searchPlaceholder_paragraph%';
@@ -25,9 +26,22 @@ const SEARCH_PLACEHOLDER_KEY = '%markerMenu_searchPlaceholder_paragraph%';
  * {@link SEARCH_PLACEHOLDER_KEY} is deliberately absent: it is already one of
  * `MARKER_MENU_STRING_KEYS`, which the web view spreads for the menu this trigger opens.
  */
-export const PARAGRAPH_STYLE_TRIGGER_STRING_KEYS = Object.freeze([PROTECTED_TOOLTIP_KEY] as const);
+export const PARAGRAPH_STYLE_TRIGGER_STRING_KEYS = Object.freeze([
+  ARIA_LABEL_KEY,
+  PROTECTED_TOOLTIP_KEY,
+] as const);
 
 export type ParagraphStyleTriggerStringKey = (typeof PARAGRAPH_STYLE_TRIGGER_STRING_KEYS)[number];
+
+/**
+ * Falls back to the key itself when a string has not resolved, matching the rest of this
+ * extension's toolbar controls. A visible key is a louder signal that a contribution is missing
+ * than a silently unnamed control.
+ */
+const localize = (
+  strings: { [key in ParagraphStyleTriggerStringKey]?: string },
+  key: ParagraphStyleTriggerStringKey,
+) => strings[key] ?? key;
 
 /** Props for {@link ParagraphStyleTrigger}. */
 export type ParagraphStyleTriggerProps = {
@@ -81,7 +95,7 @@ export function ParagraphStyleTrigger({
   return (
     <DisabledActionTooltip
       disabled={isStructureProtected}
-      tooltipText={localizedStrings[PROTECTED_TOOLTIP_KEY] ?? PROTECTED_TOOLTIP_KEY}
+      tooltipText={localize(localizedStrings, PROTECTED_TOOLTIP_KEY)}
       // This wrapper div — not the Button inside it — is the toolbar zone's flex item, so the floor
       // has to be set here as well as on the button. Without it the div stays pinned at min-content
       // and the button's own floor can never come into play, because the box around it never
@@ -102,7 +116,7 @@ export function ParagraphStyleTrigger({
             // label itself (30 characters) so it is expressed in the same units UX specified it in
             // — see ParagraphStyleLabel.
             className={`tw:h-8 tw:max-w-full ${widthFloor}`}
-            aria-label="Paragraph Selection"
+            aria-label={localize(localizedStrings, ARIA_LABEL_KEY)}
             // No native `title` here. The label inside raises its own tooltip whenever it is
             // abbreviated or clipped, and a native tooltip would open on top of it a beat later —
             // two overlapping bubbles for one control. `aria-label` still names the button for

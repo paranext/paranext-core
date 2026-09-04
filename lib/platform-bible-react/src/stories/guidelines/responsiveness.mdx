@@ -111,7 +111,6 @@ Below the narrowest step a toolbar can still be given less room than its items n
 2. **A control's decoration.** An affordance with no information in it — a dropdown chevron on a trigger that is already a bordered code — is dropped at that step. The control keeps its popover semantics and its accessible name, so nothing changes for keyboard or screen-reader users.
 3. **Nothing else.** A field that is a code — a USFM marker, a canon id — has no shorter form, so a control whose label is down to one must stop shrinking rather than cut into it. Floor it at `min-w-min`, and only at the narrowest step: while a second field is still rendered it contributes its longest word to `min-content`, and a floor there stops the control shrinking at all, so it is clipped instead of ellipsising.
 
-
 Lightweight filter toolbars, may wrap into two, maximum three rows instead of hiding elements.
 
 ### Tabs

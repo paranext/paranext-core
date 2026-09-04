@@ -69,7 +69,7 @@ test.describe('paragraph-style trigger at the editor column floor', () => {
     await poetryBlock.waitFor({ timeout: 60_000 });
     await poetryBlock.click();
 
-    const trigger = editorFrame.locator('[aria-label="Paragraph Selection"]');
+    const trigger = editorFrame.locator('[aria-label="Paragraph style"]');
     await expect(trigger).toBeVisible({ timeout: 60_000 });
     // Positive control: everything below is vacuous if the caret never landed in a multi-character
     // marker, because a one-character marker cannot overflow by more than the rounding tolerance.

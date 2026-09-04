@@ -6,6 +6,7 @@ import {
   useShrinkStepOverride,
 } from '@/context/shrink-step.context';
 import { useShrinkStep } from '@/hooks/use-shrink-step.hook';
+import { cn } from '@/utils/shadcn-ui/utils';
 import { SelectMenuItemHandler } from '../menus/platform-menubar.component';
 
 export type TabToolbarCommonProps = {
@@ -119,7 +120,11 @@ export const TabToolbarContainer = React.forwardRef<HTMLDivElement, TabToolbarCo
       <ShrinkStepContext.Provider value={shrinkStep}>
         <div
           ref={attachRoot}
-          className={`tw:sticky tw:top-0 tw:box-border tw:flex tw:h-14 tw:flex-row tw:items-center tw:justify-between tw:overflow-clip tw:py-2 tw:text-foreground tw:@container/toolbar ${isTightened ? 'tw:gap-1 tw:px-2' : 'tw:gap-2 tw:px-4'} ${className}`}
+          className={cn(
+            'tw:sticky tw:top-0 tw:box-border tw:flex tw:h-14 tw:flex-row tw:items-center tw:justify-between tw:overflow-clip tw:py-2 tw:text-foreground tw:@container/toolbar',
+            isTightened ? 'tw:gap-1 tw:px-2' : 'tw:gap-2 tw:px-4',
+            className,
+          )}
           id={id}
         >
           {children}

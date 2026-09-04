@@ -4,7 +4,7 @@ import { SHRINK_STEP, ToolbarCompoundLabel, useShrinkStepValue } from 'platform-
  * Separator between the marker and its style name. Shared by the rendered label and the tooltip's
  * full text so the two can never disagree about how the label reads.
  */
-export const MARKER_STYLE_SEPARATOR = ' - ';
+const MARKER_STYLE_SEPARATOR = ' - ';
 
 /** Props for {@link ParagraphStyleLabel}. */
 export type ParagraphStyleLabelProps = {

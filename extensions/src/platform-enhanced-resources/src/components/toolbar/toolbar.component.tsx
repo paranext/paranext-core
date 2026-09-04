@@ -506,7 +506,8 @@ export function EnhancedResourceTabBar({
   );
   // This bar is not inside a `TabToolbar`, so there is no toolbar above it publishing a step — it
   // measures its own width, unless a `ShrinkStepOverride` pins one for a story or test.
-  const areTabLabelsHidden = (useShrinkStepOverride() ?? measuredShrinkStep) > 0;
+  const shrinkStepOverride = useShrinkStepOverride();
+  const areTabLabelsHidden = (shrinkStepOverride ?? measuredShrinkStep) > 0;
 
   const getLocalizedString = (key: ToolbarLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;

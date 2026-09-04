@@ -40,10 +40,10 @@ describe('ParagraphStyleLabel', () => {
   });
 
   it('sizes the marker to its own content rather than reserving a fixed slot', () => {
-    // The gap this guards against was a fixed six-character slot: a one-character marker rendered
-    // followed by five blank characters before the separator. Jsdom reports every layout metric as
-    // 0, so the rendered width cannot be measured here — the narrowest honest proxy is that the
-    // marker carries no fixed width at all, which is the whole of the fix.
+    // A fixed-width slot pads a short marker out to the slot's width, leaving blank characters
+    // between it and the separator. Jsdom reports every layout metric as 0, so the rendered width
+    // cannot be measured here — the narrowest honest proxy is that the marker carries no fixed
+    // width class at all.
     render(<ParagraphStyleLabel blockMarker="p" styleName="Paragraph" />);
 
     expect(screen.getByText('p').className).not.toMatch(/w-\[\d+ch\]/);

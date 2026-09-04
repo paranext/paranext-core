@@ -56,7 +56,9 @@ describe('ParagraphStyleTrigger', () => {
   it('floors itself at the marker once the style name has been dropped', () => {
     renderTrigger(SHRINK_STEP.MINIMUM);
 
-    const button = screen.getByRole('button', { name: 'Paragraph Selection' });
+    const button = screen.getByRole('button', {
+      name: '%webView_platformScriptureEditor_paragraphSelection_ariaLabel%',
+    });
 
     // The marker is all that is left at this step and has no shorter form, so the trigger has to
     // stop narrowing here rather than let the toolbar zone squeeze into the marker itself.
@@ -67,7 +69,9 @@ describe('ParagraphStyleTrigger', () => {
   it('keeps shrinking freely while the style name is still rendered', () => {
     renderTrigger(SHRINK_STEP.TIGHTER);
 
-    const button = screen.getByRole('button', { name: 'Paragraph Selection' });
+    const button = screen.getByRole('button', {
+      name: '%webView_platformScriptureEditor_paragraphSelection_ariaLabel%',
+    });
 
     // A `min-content` floor is only right once the style name is gone. While the name is rendered
     // it contributes its longest word to `min-content`, which is far wider than the zone can spare
