@@ -84,3 +84,9 @@ the root `npm run build` does not rebuild them. A source change in either packag
 accompanied by `npm run build:pbu` / `npm run build:pbr` and a committed `dist/` **does not ship**,
 and CI cannot see the skew. `platform-bible-react`'s bundle embeds `platform-bible-utils`' `dist`,
 so rebuilding the latter requires rebuilding the former too.
+
+The skew runs the other way too, which is easier to miss: because a committed `dist/` can be behind
+its own `src`, rebuilding it ships whatever earlier work skipped its rebuild — a behavior change
+outside the scope of whatever ticket happens to trigger the rebuild. Whoever rebuilds a committed
+`dist/` should diff it against what `src` alone would produce and say in the PR what came along for
+the ride.

@@ -26,12 +26,9 @@ const configWebView: webpack.Configuration = merge(configBase, {
   optimization: {
     minimizer: [
       new TerserPlugin({
-        // React builds the component stack that Platform.Bible's WebView error boundary logs out of
-        // function and class names, so mangling them turns every field crash report into
-        // meaningless two-letter identifiers. Keeping the names costs a little bundle size and is
-        // the only thing that makes a packaged-build crash report name the component that threw.
-        // Scoped to WebViews because they are the only React trees an error boundary reports on;
-        // extension `main` code is minified with webpack's defaults.
+        // React builds the component stack an error boundary logs out of function and class names,
+        // so mangling them costs every WebView crash report the name of the component that threw.
+        // Scoped to WebViews because they are the React trees an error boundary reports on.
         terserOptions: { keep_classnames: true, keep_fnames: true },
       }),
     ],
