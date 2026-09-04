@@ -233,8 +233,13 @@ export type WindowSummary = {
    */
   label: string;
   /**
-   * Whether this window currently holds the primary role. The role is reassignable, so this follows
-   * the role rather than which window happened to be created first.
+   * Whether this window is the one answering for the application's lifetime right now — the window
+   * whose close asks about closing everything, and which docks Home rather than closing when it is
+   * emptied.
+   *
+   * This is the live answer, not the persisted flag of the same name. Usually they agree, but when
+   * no open window holds the marked entry the role falls to one of the windows that are open while
+   * the flag stays where it is, and this reports the window that actually answers.
    */
   isMain: boolean;
 };

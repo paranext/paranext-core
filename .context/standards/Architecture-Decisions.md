@@ -3103,3 +3103,60 @@ step, no automation. Just a record.
   UX-visible trade flagged for UX in the PR: the popover semantics, `aria-haspopup` and the
   `aria-label` are untouched, so nothing changes for keyboard or screen-reader users.
 - **Source:** PT-4466 follow-up, reported against the Simple-mode three-column layout.
+
+## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** Windows were ruled equal siblings: no hierarchy, no "main window" in API or UX
+  language, and a `primary` role flag allowed only as a reassignable marker for which persisted
+  entry restores first. But the quit decision was still `window-all-closed`, a pure
+  window count that keyed on nothing. Closing the primary window while a secondary was open left
+  the app running on the secondary and spliced the primary's entry out of the persisted
+  structure, so the user's main layout did not return next launch — the NN-6 hole PT-4286's
+  window-close rule closes. Paratext 9 has the same shape: closing the main form closes
+  everything, floating windows close alone.
+- **Decision:** The primary role becomes load-bearing for the application's lifetime, and stays a
+  role. Its ✕, while other windows are open, asks once (in main, `dialog.showMessageBox`, never a
+  renderer modal — a renderer modal open during window close previously left its requester
+  hanging) and on confirm closes every window with each layout kept for next session; alone, it
+  quits as before; a secondary's ✕ closes only that window and its layout is dropped; Cmd+Q, File →
+  Quit and `platform.quit` keep their no-prompt behaviour. The primary is identified by the
+  persisted `isMain` entry: it releases its runtime id in the `closed` handler, one event after the
+  `close` handler where the close path asks, so the answer is present on every pass that asks.
+  On confirm the quit latch is set BEFORE the other windows are told to close, so each reads a quit
+  on its first pass and records `'entry-stays'` by intent rather than by the last-window count
+  happening to flip. A quit already requested is NOT the user's ✕ and never asks: the latch is set
+  before any window's close, and a quit arriving while the question is open takes the question down
+  with it (Electron closes a signalled message box and reports it as cancelled), so the latch — not
+  the reported answer — is what the decision reads. When no live window holds the marked entry at
+  all — the startup restore always leaves one that does, so this means every window it created has
+  gone and something else opened one, as an extension's `platform.createWindow` can while macOS
+  keeps the app resident with none open — the oldest live window answers instead. The marked entry
+  keeps its flag: it names the entry simple mode restores and the only one allowed the legacy
+  layout fallback, so moving it to a window created into that gap would cost the user that layout
+  next launch. An emptied primary never reaches this path at all: moving its last tab out reopens
+  Home, exactly as closing that tab does, so the primary cannot disappear except through its own ✕
+  or Quit.
+- **Alternatives:** A second main-owned live reference alongside the persisted
+  `isMain` entry — rejected as two truths for one role. A renderer-hosted confirm dialog — rejected;
+  see the hanging-requester incident above. Re-electing a new primary when the primary closes —
+  rejected as unreachable: with this rule the primary cannot disappear while secondaries live, so
+  there is nothing to elect. Relying on `areAllWindowsClosing()` flipping to make the secondaries
+  record `'entry-stays'` — rejected; it works by accident of ordering and says nothing about
+  intent. A "don't ask again" — rejected; Cmd+Q is the prompt-free path and stays so.
+- **Consequences:** Amends the equal-siblings ruling without reversing it: the primary window
+  decides the app's lifetime, and nothing else about it is special — no API or UX may call it
+  "the main window", and nothing else may route, gate, or prioritise on the role. Primary
+  re-election is deliberately not implemented and a future need for it would mean this rule has
+  been broken. The dialog's restore promise is user-visible and load-bearing, so the relaunch e2e
+  that asserts every window comes back is what keeps that sentence honest. The mode-switch half
+  of PT-4286 (a live switch to Simple must close the secondaries) is out of this decision's scope; PT-4286
+  carries it. Linux behaviour of the native dialog is best-effort and unverified on real
+  hardware at the time of writing.
+  PR #2702 has the renderer learn whether it is the primary window from a URL parameter fixed at
+  window creation (`isMainWindow`), read for one purpose: whether to draw the top-level menu. No
+  lifecycle, routing or persistence decision consults it, and it cannot describe a window that
+  becomes primary later — PT-4278's window-manager service is the durable answer for that.
+- **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
+  folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.

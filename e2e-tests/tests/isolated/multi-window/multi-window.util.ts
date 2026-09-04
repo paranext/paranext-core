@@ -350,6 +350,34 @@ export async function createSecondWindow(electronApp: ElectronApplication): Prom
 const TOOLBAR_REFERENCE_MIN_CSS_PX = 800;
 
 /**
+ * Close a window the way the user's ✕ does, and wait for it to go.
+ *
+ * Deliberately not `window.close()` from the renderer. That destroys the web contents and fires
+ * only the past-tense `closed`, so the cancellable `close` never reaches main — and with it none of
+ * main's close handler runs: not the shutdown work, not the layout flush, not the close-all
+ * question. A test closing that way looks like a user close and exercises none of one.
+ *
+ * @param electronApp The running app
+ * @param page The window to close
+ */
+export async function closeWindowLikeAUser(
+  electronApp: ElectronApplication,
+  page: Page,
+): Promise<void> {
+  const windowId = getWindowIdOfPage(page);
+  const pageClosed = page.waitForEvent('close', { timeout: 30_000 });
+  await electronApp.evaluate(
+    ({ BrowserWindow }, { id }) => {
+      const win = BrowserWindow.fromId(id);
+      if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+      win.close();
+    },
+    { id: windowId },
+  );
+  await pageClosed;
+}
+
+/**
  * Widen a window until its toolbar has room to show a reference in full, and return the renderer
  * width that achieved it.
  *
@@ -371,8 +399,8 @@ export async function widenWindowForToolbarReference(
       if (!win) throw new Error(`No BrowserWindow with id ${id}`);
       // An unmapped window reports stale bounds and ignores the resize.
       if (win.isMinimized()) win.restore();
-      const { workArea } = screen.getPrimaryDisplay();
       const { height, y } = win.getBounds();
+      const { workArea } = screen.getDisplayMatching(win.getBounds());
       win.setBounds({ x: workArea.x, y, width: workArea.width, height });
     },
     { id: windowId },
@@ -420,15 +448,35 @@ export async function waitForRendererRegistered(
 }
 
 /**
- * Locator for a window's Home tab title BY ITS FIXED FALLBACK-LAYOUT ID — only valid for a window
- * that loaded the single-Home-tab fallback layout ({@link HOME_TAB_UUID}), i.e. the first window of
- * a fresh profile or one restored from a saved layout that already carried that id. A window whose
+ * Apply the window-scope suffix a saved-layout web view id carries once it is loaded into a
+ * specific window — the same suffix `window-scoped-web-view-ids.util.ts`
+ * (`withWindowScopedWebViewIdInTab`) stamps on in the app itself. Centralized here so a change to
+ * that scheme surfaces as one place to update instead of every call site's locator silently
+ * building against the old id and timing out with nothing to name.
+ */
+export function windowScopedWebViewId(webViewId: string, windowId: number): string {
+  return `${webViewId}-w${windowId}`;
+}
+
+/**
+ * A window's Home tab web view id BY ITS FIXED FALLBACK-LAYOUT ID — only valid for a window that
+ * loaded the single-Home-tab fallback layout ({@link HOME_TAB_UUID}), i.e. the first window of a
+ * fresh profile or one restored from a saved layout that already carried that id. A window whose
  * Home tab was docked on the fly (see {@link expectWindowDockHasOnlyHomeTab}) gets a freshly
- * generated web view id each time, so this locator will not find it — look that one up with
+ * generated web view id each time, so this is not that id.
+ */
+export function homeTabWebViewId(windowId: number): string {
+  return windowScopedWebViewId(HOME_TAB_UUID, windowId);
+}
+
+/**
+ * Locator for a window's Home tab title BY ITS FIXED FALLBACK-LAYOUT ID — see
+ * {@link homeTabWebViewId}. A window whose Home tab was docked on the fly gets a freshly generated
+ * web view id each time, so this locator will not find it — look that one up with
  * {@link webViewTabTitle}, passing the id it minted.
  */
 export function homeTabTitle(page: Page, windowId: number) {
-  return webViewTabTitle(page, `${HOME_TAB_UUID}-w${windowId}`);
+  return webViewTabTitle(page, homeTabWebViewId(windowId));
 }
 
 /**
@@ -443,6 +491,33 @@ export function homeTabTitle(page: Page, windowId: number) {
 export function webViewTabTitle(page: Page, webViewId: string) {
   return page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
 }
+
+/**
+ * The web view ids a window is holding, read off its dock's tab titles
+ * (`platform-tab-title.component.tsx` stamps each web view tab with `data-web-view-id`;
+ * non-web-view tabs carry no such attribute and are therefore not matched).
+ *
+ * Tab titles rather than iframes: every tab in the tab bar renders its title whether or not it has
+ * ever been the active tab, while rc-dock mounts a tab's pane — and with it the web view's iframe —
+ * lazily. A window holding a tab the user has not looked at yet must still count as holding it.
+ */
+export async function getHeldWebViewIds(page: Page): Promise<string[]> {
+  return page
+    .locator('.platform-tab-title[data-web-view-id]')
+    .evaluateAll((titles) => titles.map((title) => title.getAttribute('data-web-view-id') ?? ''));
+}
+
+/**
+ * Per-request timeout for a move (`platform.moveWebViewToWindow` /
+ * `platform.moveWebViewToNewWindow` — see `src/declarations/papi-shared-types.ts`). A move to a new
+ * window pays a whole cold renderer start before it touches the web view — deliberately, so a
+ * window that never comes up costs a wait and an error rather than a web view open in no window —
+ * and a cold start on a loaded machine can take a minute. A budget shorter than that would report a
+ * transport timeout for a move that was still legitimately under way, even for a move whose target
+ * is already open and so pays no cold start of its own: it inherits the same CI machines as the
+ * moves that do.
+ */
+export const MOVE_COMMAND_TIMEOUT_MS = 180_000;
 
 /**
  * How long {@link expectWindowDockHasOnlyHomeTab} waits after the Home tab attaches before asserting
@@ -503,9 +578,10 @@ export interface AppExitResult {
 }
 
 /**
- * Trigger a REAL app quit — exactly what File > Exit or Cmd+Q does — and wait for the Electron OS
- * process to exit, then reap the leftover process group. Returns the exit code/signal for the
- * caller to assert on (a clean quit exits with code 0 and no signal).
+ * Bring the app down — a real quit, exactly what File > Exit or Cmd+Q does, or a caller-supplied
+ * trigger (see `triggerExit`) — and wait for the Electron OS process to exit, then reap the
+ * leftover process group. Returns the exit code/signal for the caller to assert on (a clean quit
+ * exits with code 0 and no signal).
  *
  * Watches the OS process itself, not Playwright's ElectronApplication `close` event. That event
  * additionally waits for the process's stdio streams to close, and a graceful dev-mode quit leaves
@@ -515,6 +591,12 @@ export interface AppExitResult {
  *
  * `app.quit()` is scheduled rather than called inline so the evaluate round-trip completes before
  * teardown begins.
+ *
+ * Pass `triggerExit` to bring the app down some other way — closing a window through its ✕, say. It
+ * runs after the exit listener is armed, raced against that listener rather than plain-awaited: a
+ * trigger that brings the process down itself can have its own round trip rejected once that
+ * process is already gone, and that rejection must not skip the wait below or the reap that follows
+ * it.
  *
  * Budget: the quit path is a bounded shutdown-sync attempt (which rejects immediately in this
  * suite's configuration, since no S/R extension is registered) plus bounded child-process waits of
@@ -533,6 +615,7 @@ export interface AppExitResult {
 export async function quitAppAndWaitForExit(
   electronApp: ElectronApplication,
   output?: AppOutputCapture,
+  triggerExit?: () => Promise<void>,
 ): Promise<AppExitResult> {
   const electronProcess = electronApp.process();
   const processExit = new Promise<AppExitResult>((resolve) => {
@@ -541,18 +624,45 @@ export async function quitAppAndWaitForExit(
     );
   });
 
-  await electronApp.evaluate(({ app }) => {
-    setTimeout(() => app.quit(), 0);
-  });
+  // Armed before the trigger, never after: a trigger whose own round trip outlives the exit would
+  // otherwise land the exit before anything is listening, and the wait below would burn its whole
+  // budget on an event that already fired.
+  //
+  // Raced against the exit rather than bare-awaited: a trigger that brings the process down itself
+  // (closing the primary through its ✕, say) can have its own round trip rejected with "Target
+  // page, context or browser has been closed" once that process is gone — before it ever resolves.
+  // The rejection is caught rather than left to settle the race: `Promise.race` resolves OR rejects
+  // on whichever promise settles first, so an uncaught rejection here would still be able to win
+  // against `processExit` and throw out of this function on a run where the CDP round trip is cut
+  // before libuv reaps the child — skipping both the wait below and the process-group reap that
+  // follows it. Catching it means this race can only ever resolve — whichever of the two settles
+  // first — so the wait and the reap below always run, and the error is kept to report if the
+  // trigger failed for a reason unrelated to the exit it caused.
+  let triggerError: unknown;
+  if (triggerExit)
+    await Promise.race([
+      triggerExit().catch((e: unknown) => {
+        triggerError = e;
+      }),
+      processExit,
+    ]);
+  else
+    await electronApp.evaluate(({ app }) => {
+      setTimeout(() => app.quit(), 0);
+    });
 
+  const exitTriggerDescription = triggerExit ? 'the trigger' : 'app.quit()';
   const exitResult = await Promise.race([
     processExit,
     new Promise<never>((_resolve, reject) => {
       setTimeout(() => {
         const outputTail = output?.text().split('\n').slice(-60).join('\n');
+        const triggerErrorNote = triggerError
+          ? `; trigger failed with: ${triggerError instanceof Error ? triggerError.message : String(triggerError)}`
+          : '';
         reject(
           new Error(
-            `Electron process did not exit within 120 s of app.quit()${
+            `Electron process did not exit within 120 s of ${exitTriggerDescription}${triggerErrorNote}${
               outputTail ? `; last app output:\n${outputTail}` : ''
             }`,
           ),
@@ -570,6 +680,23 @@ export async function quitAppAndWaitForExit(
   }
 
   return exitResult;
+}
+
+/**
+ * Sweep a still-running app's output for faults and duplicate registrations.
+ *
+ * The counterpart to {@link quitAndExpectCleanExit} for a test that never quits.
+ * {@link RENDERER_STARTING_LOG} is the positive control: every caller creates a window during the
+ * test, so that line lands after the capture attached — without it an empty capture would satisfy
+ * both negative assertions and the sweep would examine nothing.
+ *
+ * @param output The capture taken at the start of the test
+ */
+export function expectNoFaultsWhileRunning(output: AppOutputCapture): void {
+  const log = output.text();
+  expect(log).toContain(RENDERER_STARTING_LOG);
+  FAULT_MARKERS.forEach((marker) => expect(log).not.toContain(marker));
+  expect(log).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
 }
 
 /**
