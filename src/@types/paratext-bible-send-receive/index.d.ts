@@ -466,15 +466,15 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.commitDaily': (projectId: string) => Promise<void>;
 
     /**
-     * Syncs projects: sends/receives each project, then reads each project's connected resources
-     * and projects (one level deep — connections of connections are not included) and
+     * Syncs projects: sends/receives each project, then reads each synced project's connected
+     * resources and projects (one level deep — connections of connections are not included) and
      * sends/receives connected translation projects or DBL-updates connected resources as needed.
      * Unknown project IDs are skipped. Deduplication is handled internally.
      *
      * This signature matches this repository's C# stub (`String[]? projectIds`, no return value),
-     * which core itself calls (e.g. the startup sync passes `undefined` to mean "sync all"). The
-     * Send/Receive extension's own declaration also returns the S/R results; core does not consume
-     * them.
+     * which core itself calls (e.g. the startup sync passes `undefined` for its zero-state
+     * bootstrap case — see the cases below for what that actually syncs). The Send/Receive
+     * extension's own declaration also returns the S/R results; core does not consume them.
      *
      * @param projectIds IDs of the projects to sync.
      *
