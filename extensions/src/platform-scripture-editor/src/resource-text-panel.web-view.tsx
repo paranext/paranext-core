@@ -408,8 +408,12 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
               await installResource(dblEntryUid);
             } catch (e) {
               // Record the failure so that once the pick finishes and the auto-install effect
-              // re-enables, its failed-uid guard suppresses a duplicate install attempt; this also
-              // surfaces the install-failed state immediately instead of after a second attempt.
+              // re-enables, its failed-uid guard suppresses a duplicate install attempt.
+              //
+              // TODO(PT-4508): This does NOT surface the failure on screen. `selectTextConnection`
+              // swallows the rethrow below and returns without persisting, so the selection never
+              // changes, `dblEntryUidToInstall` stays `undefined`, and `installFailed` never becomes
+              // true — a failed pick is silent until the user tries again.
               markInstallFailed(dblEntryUid);
               throw e;
             }
