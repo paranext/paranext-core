@@ -143,6 +143,37 @@ describe('dataProviderService.registerEngine — documentation forwarding', () =
     );
   });
 
+  it('exposes a list___ method with neither a matching setter nor an ignore decorator', async () => {
+    // This is why the PDP method that enumerates extension data is called
+    // `listExtensionDataQualifiers` and not `getExtensionDataQualifiers`: `get`/`set`/`subscribe`
+    // are magic prefixes here, so a getter-shaped name would demand a setter with nothing to set
+    // (see the test below, which is what a rename would run into) and imply a subscriber with
+    // nothing to notify.
+    const engine = {
+      getData: async () => 1,
+      setData: async () => true,
+      listExtensionDataQualifiers: async () => ['byMachine/ledger/abc.json', 'top.json'],
+    };
+
+    await dataProviderService.registerEngine(
+      // The name/engine are generic in this test context; cast to satisfy the typed signature.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      'test.listMethod' as never,
+      // The name/engine are generic in this test context; cast to satisfy the typed signature.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      engine as never,
+    );
+
+    const registeredObject = vi.mocked(networkObjectService.set).mock.calls[0][1];
+    // Called through `Reflect.apply` rather than behind an `instanceof` guard, so a method that is
+    // not on the registered object at all fails here instead of skipping the assertion
+    const exposedMethod: unknown = Reflect.get(registeredObject, 'listExtensionDataQualifiers');
+
+    await expect(
+      Reflect.apply(Function.prototype.call, exposedMethod, [undefined]),
+    ).resolves.toEqual(['byMachine/ledger/abc.json', 'top.json']);
+  });
+
   it('refuses to register an unignored get___ method with no matching setter', async () => {
     // The other half: registration failing this way is what the decorator is holding back, so a
     // decorator quietly dropped from a shard is a window that cannot start

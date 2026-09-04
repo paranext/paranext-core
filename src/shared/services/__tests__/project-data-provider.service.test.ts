@@ -147,6 +147,45 @@ describe('registerProjectDataProviderEngineFactory — platform-canonical attrib
   });
 });
 
+describe('registerProjectDataProviderEngineFactory — listExtensionDataQualifiers is optional', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // The mocks return minimal disposables standing in for the full network object / data provider.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    vi.mocked(networkObjectService.set).mockResolvedValue({ dispose: vi.fn() } as never);
+    // The mocks return minimal disposables standing in for the full network object / data provider.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    vi.mocked(registerEngineByType).mockResolvedValue({
+      dispose: vi.fn(async () => true),
+    } as never);
+  });
+
+  it('registers a platform.base engine that does not enumerate its extension data', async () => {
+    // Not every base PDP can enumerate — one over a remote store may not be able to, and
+    // platform-lexical-tools holds no extension data at all — so the method is optional on the
+    // engine and the `platform.base` guard must keep checking only getExtensionData and getSetting.
+    // Requiring it there would stop every engine that predates it from registering.
+    const engineWithoutEnumeration = makeBaseEngine();
+    expect('listExtensionDataQualifiers' in engineWithoutEnumeration).toBe(false);
+    const engineFactory: IProjectDataProviderEngineFactory<['platform.base']> = {
+      getAvailableProjects: async () => [],
+      // The test engine isn't a full typed engine; cast to satisfy the generic engine return type.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      createProjectDataProviderEngine: async () => engineWithoutEnumeration as never,
+    };
+
+    await registerProjectDataProviderEngineFactory('pdpf-id', ['platform.base'], engineFactory);
+
+    // set() types its object argument as a generic NetworkableObject, so cast to reach the method.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const factory = vi.mocked(networkObjectService.set).mock.calls[0][1] as unknown as {
+      getProjectDataProviderId(projectId: string): Promise<string>;
+    };
+
+    await expect(factory.getProjectDataProviderId('real-project-id')).resolves.toBeTruthy();
+  });
+});
+
 describe('ProjectDataProviderFactory — disposal while a PDP is being created', () => {
   beforeEach(() => {
     vi.clearAllMocks();
