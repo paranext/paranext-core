@@ -6,6 +6,13 @@
  * webpack renderer dev server fails to render new dock tabs (`openResourceViewer` returns an ID but
  * the editor iframe never appears in the DOM).
  *
+ * Worker-scoped means worker, not file: with `workers: 1` one worker runs every spec, so without
+ * {@link CommentWorkerFixtures.commentAppOwner} a second spec would inherit the first spec's app —
+ * and with it whatever that spec did to the simple layout. `openScriptureEditor` in Simple mode
+ * replaces the Column 2 scripture-editor slot with a fresh id and nothing re-applies the layout
+ * in-session, so an inherited app hands the next spec a layout its `waitForSimpleLayout` will wait
+ * out in full. Every spec using this fixture must declare its own owner.
+ *
  * `mainPage` remains test-scoped: each test gets a fresh reference to the first window, with its
  * own error/console listeners and failure-screenshot capture.
  *
@@ -20,16 +27,29 @@ import {
   ConsoleMessage,
 } from '@playwright/test';
 import {
+  assertInterfaceMode,
+  applyDeclaredWindowSize,
   launchElectronApp,
   ElectronAppContext,
   teardownElectronApp,
   preConfigureSettings,
+  DEFAULT_WINDOW_SIZE,
+  WindowSize,
 } from './helpers';
 
 export { expect } from '@playwright/test';
 
 /** Worker-scoped fixtures — one Electron app shared across all tests in the worker. */
 interface CommentWorkerFixtures {
+  /**
+   * Which spec owns this worker's Electron app; set with `test.use({ commentAppOwner: '<spec>' })`.
+   *
+   * Playwright starts a fresh worker — and so a fresh app — whenever a test needs a different
+   * worker-option value, so giving each spec its own name is what keeps one spec's layout changes
+   * out of the next spec. The value itself is only an identity; any string unique to the spec
+   * does.
+   */
+  commentAppOwner: string;
   commentElectronApp: ElectronApplication;
   /** Stored so teardown can clean up the user-data dir. */
   commentAppContext: ElectronAppContext;
@@ -37,31 +57,64 @@ interface CommentWorkerFixtures {
 
 /** Test-scoped fixtures — each test gets its own page reference and listeners. */
 interface CommentTestFixtures {
+  /**
+   * Window size this suite's layout is written against; set with `test.use({ windowSize: { width,
+   * height } })`. Defaults to {@link DEFAULT_WINDOW_SIZE}.
+   */
+  windowSize: WindowSize;
   mainPage: Page;
 }
 
 export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
-  // Worker-scoped: one Electron process for the entire worker (all tests in a file).
-  commentAppContext: [
-    // Playwright worker-scoped fixtures use empty destructuring when they have no fixture dependencies
-    // eslint-disable-next-line no-empty-pattern
-    async ({}, use) => {
-      // Pre-configure English locale and simple mode in the settings file before launching so
-      // the app starts in the expected state. This avoids the mid-session locale-reload path
-      // (which sequentially reloads every open WebView and can take 5+ minutes).
-      const restoreSettings = preConfigureSettings({
-        'platform.interfaceLanguage': ['en'],
-        'platform.interfaceMode': 'simple',
-      });
-      const ctx = await launchElectronApp({ envOverrides: { DEV_NOISY: 'false' } });
-      await use(ctx);
+  commentAppOwner: ['', { scope: 'worker', option: true }],
 
-      console.log('[teardown] Comment worker-scoped app teardown starting...');
-      await teardownElectronApp(ctx);
-      // Restore the developer's settings file only after the app has fully closed so the app's
-      // own shutdown writes cannot clobber the restored contents.
-      restoreSettings();
-      console.log('[teardown] Comment worker-scoped app teardown complete');
+  // Worker-scoped: one Electron process per owning spec (see commentAppOwner).
+  commentAppContext: [
+    async ({ commentAppOwner }, use) => {
+      // Enforced, not merely documented: two specs sharing the default would share one worker and
+      // one app, so the second would inherit the first's layout changes — the leak this option
+      // exists to prevent, and one that shows up as an unrelated assertion failure much later.
+      if (!commentAppOwner)
+        throw new Error(
+          'e2e precondition: a spec using comment.fixture must declare its own app owner, e.g. ' +
+            "test.use({ commentAppOwner: 'my-spec' }). Any string unique to the spec will do.",
+        );
+      console.log(`[setup] Launching comment app for "${commentAppOwner}"`);
+      // Pin what these suites depend on before launching, rather than inheriting it. Anything left
+      // unpinned comes from the shared, gitignored dev-appdata settings file — see "State that leaks
+      // between runs" in e2e-tests/CLAUDE.md — so an unpinned key is whatever the last run on this
+      // checkout happened to leave.
+      const restoreSettings = preConfigureSettings({
+        // Every text-based selector in these suites is English. Pinned before launch rather than
+        // switched afterwards, which would take the mid-session locale-reload path and sequentially
+        // reload every open WebView (5+ minutes).
+        'platform.interfaceLanguage': ['en'],
+        // These suites are written against Simple mode's Column 3 layout.
+        'platform.interfaceMode': 'simple',
+        // Required BECAUSE simple mode is pinned above: simple is the one mode that shows the
+        // first-run wizard, and power bypasses it. The wizard is a modal that cannot be dismissed
+        // (its Radix handlers all preventDefault) and aria-hides the rest of the app.
+        'platform.firstRunComplete': true,
+        // See smokeAppSettingsOverrides in helpers.ts for why this is pinned alongside
+        // firstRunComplete rather than left to the app's default.
+        'platform.showRegistrationReminderOnStartup': false,
+      });
+      // Nested try/finally: restoreSettings must run only after teardown has fully finished (so the
+      // app's own shutdown writes cannot clobber it), and must run even if launch, `use`, or
+      // teardown itself throws. A launch that throws gets no teardown from Playwright at all, so
+      // without the outer finally the pins above would stay in the developer's real settings file.
+      try {
+        const ctx = await launchElectronApp({ envOverrides: { DEV_NOISY: 'false' } });
+        try {
+          await use(ctx);
+        } finally {
+          console.log('[teardown] Comment worker-scoped app teardown starting...');
+          await teardownElectronApp(ctx);
+          console.log('[teardown] Comment worker-scoped app teardown complete');
+        }
+      } finally {
+        restoreSettings();
+      }
     },
     { scope: 'worker' },
   ],
@@ -74,17 +127,31 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
   ],
 
   // Test-scoped: each test gets the first window with its own listeners.
-  mainPage: async ({ commentElectronApp }, use, testInfo: TestInfo) => {
+  windowSize: [DEFAULT_WINDOW_SIZE, { option: true }],
+  mainPage: async ({ commentElectronApp, windowSize }, use, testInfo: TestInfo) => {
     const page = await commentElectronApp.firstWindow({ timeout: 90_000 });
 
-    // Ensure the window is large enough for WebView content to be visible.
-    await commentElectronApp.evaluate(({ BrowserWindow }) => {
-      const win = BrowserWindow.getAllWindows()[0];
-      if (win) {
-        if (win.isMaximized()) win.unmaximize();
-        win.setSize(1280, 800);
-      }
-    });
+    // Ensure the window is large enough for WebView content to be visible. Retried: `setSize`
+    // returns before the renderer's `outerWidth`/`outerHeight` reflect the new size, so a single
+    // read can race the resize.
+    await applyDeclaredWindowSize(
+      commentElectronApp,
+      page,
+      windowSize,
+      'This fixture sets this size at launch; check that the window manager is not overriding it.',
+    );
+
+    // Verify the mode this fixture pinned before launch actually took effect. Pinning without
+    // checking is how a suite ends up driving the other mode's layout and failing much later on an
+    // element that mode never renders, which reads as a timeout rather than a setup problem. The
+    // mode is not an option here: these suites are written against Simple mode's Column 3 layout,
+    // so there is nothing for a caller to choose.
+    await assertInterfaceMode(
+      'simple',
+      'This fixture pins simple mode before launch and the app did not come up in it. The pin ' +
+        'merges into the shared dev-appdata settings file, so another run holding that file can ' +
+        'stop it taking effect.',
+    );
 
     console.log(`Window URL: ${page.url()}`);
     const onPageError = (err: Error) => console.error(`Page error: ${err.message}`);

@@ -146,7 +146,8 @@ cd c-sharp
 dotnet tool restore
 dotnet csharpier .
 
-# Type checking
+# Type checking (runs typecheck:core, typecheck:erb, typecheck:e2e, typecheck:workspaces
+# concurrently so one failing check doesn't hide the others)
 npm run typecheck
 ```
 
