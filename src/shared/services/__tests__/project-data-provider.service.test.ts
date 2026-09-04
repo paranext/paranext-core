@@ -37,6 +37,25 @@ function makeBaseEngine() {
   };
 }
 
+/** Make the registration boundaries succeed, returning minimal stand-in disposables. */
+function mockSuccessfulRegistration() {
+  // The mocks return minimal disposables standing in for the full network object / data provider.
+  /* eslint-disable no-type-assertion/no-type-assertion */
+  vi.mocked(networkObjectService.set).mockResolvedValue({ dispose: vi.fn() } as never);
+  vi.mocked(registerEngineByType).mockResolvedValue({ dispose: vi.fn(async () => true) } as never);
+  /* eslint-enable no-type-assertion/no-type-assertion */
+}
+
+/** The internal factory the service registered, reached through the `networkObjectService.set` mock */
+function captureRegisteredFactory() {
+  // set() types its object argument as a generic NetworkableObject, so cast to reach the methods.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return vi.mocked(networkObjectService.set).mock.calls[0][1] as unknown as {
+    getProjectDataProviderId(projectId: string): Promise<string>;
+    dispose(): Promise<boolean>;
+  };
+}
+
 describe('registerProjectDataProviderEngineFactory — attributes + documentation parameters', () => {
   it('exposes attributes and documentation as optional trailing parameters (compile-time)', () => {
     type Sig = Parameters<typeof registerProjectDataProviderEngineFactory>;
@@ -71,14 +90,7 @@ describe('registerProjectDataProviderEngineFactory — attributes + documentatio
 describe('registerProjectDataProviderEngineFactory — platform-canonical attributes win (anti-spoofing)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // The mocks return minimal disposables standing in for the full network object / data provider.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    vi.mocked(networkObjectService.set).mockResolvedValue({ dispose: vi.fn() } as never);
-    // The mocks return minimal disposables standing in for the full network object / data provider.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    vi.mocked(registerEngineByType).mockResolvedValue({
-      dispose: vi.fn(async () => true),
-    } as never);
+    mockSuccessfulRegistration();
   });
 
   it('overwrites caller-supplied projectInterfaces with the canonical value at the factory level', async () => {
@@ -128,13 +140,8 @@ describe('registerProjectDataProviderEngineFactory — platform-canonical attrib
 
     await registerProjectDataProviderEngineFactory('pdpf-id', ['platform.base'], engineFactory);
 
-    // Capture the internal factory the service registered, then drive a PDP creation through it.
-    // set() types its object argument as a generic NetworkableObject, so cast to reach the method.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const factory = vi.mocked(networkObjectService.set).mock.calls[0][1] as unknown as {
-      getProjectDataProviderId(projectId: string): Promise<string>;
-    };
-    await factory.getProjectDataProviderId('real-project-id');
+    // Drive a PDP creation through the factory the service registered.
+    await captureRegisteredFactory().getProjectDataProviderId('real-project-id');
 
     expect(registerEngineByType).toHaveBeenCalledTimes(1);
     const mergedAttributes = vi.mocked(registerEngineByType).mock.calls[0][3];
@@ -150,14 +157,7 @@ describe('registerProjectDataProviderEngineFactory — platform-canonical attrib
 describe('registerProjectDataProviderEngineFactory — listExtensionDataQualifiers is optional', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // The mocks return minimal disposables standing in for the full network object / data provider.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    vi.mocked(networkObjectService.set).mockResolvedValue({ dispose: vi.fn() } as never);
-    // The mocks return minimal disposables standing in for the full network object / data provider.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    vi.mocked(registerEngineByType).mockResolvedValue({
-      dispose: vi.fn(async () => true),
-    } as never);
+    mockSuccessfulRegistration();
   });
 
   it('registers a platform.base engine that does not enumerate its extension data', async () => {
@@ -176,13 +176,9 @@ describe('registerProjectDataProviderEngineFactory — listExtensionDataQualifie
 
     await registerProjectDataProviderEngineFactory('pdpf-id', ['platform.base'], engineFactory);
 
-    // set() types its object argument as a generic NetworkableObject, so cast to reach the method.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const factory = vi.mocked(networkObjectService.set).mock.calls[0][1] as unknown as {
-      getProjectDataProviderId(projectId: string): Promise<string>;
-    };
-
-    await expect(factory.getProjectDataProviderId('real-project-id')).resolves.toBeTruthy();
+    await expect(
+      captureRegisteredFactory().getProjectDataProviderId('real-project-id'),
+    ).resolves.toBeTruthy();
   });
 });
 
