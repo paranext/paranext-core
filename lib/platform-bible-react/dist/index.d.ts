@@ -4018,8 +4018,8 @@ export type ShrinkStepOverrideProps = React$1.PropsWithChildren<{
  * needed in between.
  *
  * The override applies to the whole subtree and no toolbar resets it, so every nested toolbar
- * beneath it is pinned to `value` — not just the nearest one. Wrap the narrowest subtree that
- * needs it.
+ * beneath it is pinned to `value` — not just the nearest one. Wrap the narrowest subtree that needs
+ * it.
  *
  * @example
  *
