@@ -279,8 +279,12 @@
   "staticAssetNoticesNote": "Each extension's `assets/` and `public/` directories are copied into `extensions/dist` verbatim by copy-webpack-plugin, the repository root's `assets/` is packed directly, and ParanextDataProvider.csproj copies `c-sharp/assets` and `c-sharp/base-directory-assets` into the .NET publish output that electron-builder packs as `./dotnet/` - so a third-party file placed in any of them is redistributed in every installer without being compiled into anything, and neither webpack's module graph nor the NuGet closure has anything to say about it. This is the inventory that closes that gap: every notice-shaped file under those trees must be recorded here or `assertStaticAssetNoticesRecorded` refuses the build. A `sha256` entry pins a tracked file whose text the document reproduces verbatim; `notTracked` records a file fetched at install time, which has nothing stable to pin and is described in the document's prose instead.",
   "staticAssetNotices": {
     "c-sharp/assets/Attribution.md": {
-      "reason": "States the upstreams of the .NET data provider's copied assets: usfm.sty (and usfm_sb.sty beside it) from ubsicap/usfm, and the World English Bible text under WEB/ from ebible.org. ParanextDataProvider.csproj copies the whole assets tree into the publish output, which electron-builder packs as ./dotnet/, so these files reach every installer.",
-      "sha256": "5ab9cb186ee38c8a86d4ba93f39d826b4ffb7a8a5369b8909d005978c9e5d189"
+      "reason": "States the upstreams of the .NET data provider's copied assets: usfm.sty and usfm_sb.sty from ubsicap/usfm, and the World English Bible text under WEB/ from ebible.org. ParanextDataProvider.csproj copies the whole assets tree into the publish output, which electron-builder packs as ./dotnet/, so these files reach every installer.",
+      "sha256": "9002e23dfaeb99c45cef4610a1e09ba5d518a758b6cde21720fe70368fc47bf9"
+    },
+    "c-sharp/base-directory-assets/ATTRIBUTION.md": {
+      "reason": "States the source and terms of IP-Country.zip, the IP-address-range to country-code data the .NET data provider reads for internet safety features. The data is DB-IP's IP to Country Lite database under CC BY 4.0, converted to a compact binary form; ParanextDataProvider.csproj copies base-directory-assets beside the executable and electron-builder packs the publish output as ./dotnet/, so it reaches every installer. CC BY 4.0 requires the attribution to travel with the data, and the archive itself can carry none.",
+      "sha256": "f2b6ead2ab8e0dbab2b269e60bc01a91b18b19f04d3340e7fd17f004db9c202e"
     },
     "extensions/src/quick-verse/assets/ATTRIBUTION.md": {
       "reason": "States the author and terms of letter-q.png, the quick-verse extension's icon, which is third-party artwork obtained from veryicon.com.",
