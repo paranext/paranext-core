@@ -60,6 +60,9 @@ const STRINGS = {
   '%webView_modelTextPanel_settingsUnavailable%':
     "Couldn't load your model text. It will appear once it's available.",
   '%webView_resourcePanel_textUnavailable%': 'This text could not be loaded.',
+  '%webView_modelTextPanel_emptyState_moreInfo%': 'More info',
+  '%webView_modelTextPanel_emptyState_lessInfo%': 'Less info',
+  '%webView_modelTextPanel_emptyState_moreInfo_body%': 'Detail text here.',
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -674,5 +677,15 @@ describe('ModelTextPanel', () => {
 
     expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pick model text…' })).not.toBeInTheDocument();
+  });
+
+  // The disclosure's expand/collapse behaviour is covered directly in
+  // panel-state-views.component.test.tsx. What this panel owns is that it supplies one at all,
+  // with its own model-text copy.
+  it('renders the More info disclosure with the model text body copy', () => {
+    render(<ModelTextPanel {...makeProps()} />);
+
+    expect(screen.getByRole('button', { name: 'More info' })).toBeInTheDocument();
+    expect(screen.getByText('Detail text here.')).toBeInTheDocument();
   });
 });

@@ -498,31 +498,52 @@ export function PlatformBibleToolbar() {
         appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
         configAreaChildren={
           <>
-            {isSimpleMode && (isSendReceiveAvailable !== false || hasBackendSynced) && (
-              // Simple mode only, by UX decision: power mode deliberately has no toolbar Sync
-              // because syncing already surfaces itself there — a notification while it runs,
-              // progress inside the Sync dialog, and progress in an open editor window — and power
-              // users start a sync per project from the Home view.
-              //
-              // Fail open on availability: `undefined` means not known yet (the extension host is
-              // busy, or the send/receive extension is still activating), and the button must not
-              // hinge on that resolving. A settled `false` hides it — unless the backend has
-              // reported a sync, which is a surface the user needs regardless of what the extension
-              // probe says (see `hasBackendSynced` above).
-              //
-              // The cost of failing open is one seed-retry loop for the extension's CLAIM in builds
-              // with no send/receive at all, restarted on each Simple/Power toggle since that unmounts
-              // and remounts this. An unregistered command is not cheap to fail: `sendCommand` routes
-              // through `requestWithRetry`, so one read rejects only after `MAX_REQUEST_ATTEMPTS`
-              // attempts at `REQUEST_ATTEMPT_WAIT_TIME_MS` apart (~10s, `rpc.model.ts`). Availability
-              // settles to `false` within `SEND_RECEIVE_UNKNOWN_GRACE_MS` (5s) there, so this unmounts
-              // while that loop's FIRST read is still retrying. The backend activity signal costs
-              // nothing here either way: it is seeded once at startup by `initSyncActivityService`
-              // and read from a store, not re-seeded per mount.
-              // TODO(PT-4233): A one-shot capability probe would fit a permanently-absent claim
-              // command better than a retry loop does.
-              <SyncStatusButton />
-            )}
+            {/* toolbar-sync-area: always in the DOM so onboarding-tour step 4
+                (onboarding-tour.component.tsx) can target [data-testid="toolbar-sync-area"]
+                regardless of whether the sync button itself renders — that button stays
+                conditional so the toolbar remains compact when sync is unavailable.
+                This wrapper displaces SyncStatusButton as the flex item in the config area's
+                shrinking row, so it has to be transparent to that shrinking: `shrink` and
+                `min-w-0` pass the row's pressure through to the button, which truncates its own
+                label (see its className). `shrink-0` here would pin the wrapper's width and
+                silently undo that. `display: contents` would be tidier still, but it gives the
+                wrapper no box, and Tour measures this element to place the spotlight.
+                empty:hidden keeps the wrapper out of the flex flow when the button is absent, so
+                it contributes no gap-2 spacing while staying in the DOM at zero size — which is
+                how Tour skips the step.
+                In plain Platform.Bible the wrapper is always empty and the tour runs with four
+                stops rather than five: Send/Receive ships only in Paratext 10 Studio, so
+                `platformGetResources.isSendReceiveAvailable` settles to `false`, and no dotnet
+                sync can raise `hasBackendSynced` either (`GetSyncActivity` is hardcoded idle in
+                `ParatextProjectSendReceiveService`). A four-stop tour in this build is correct,
+                not a regression. */}
+            <div data-testid="toolbar-sync-area" className="tw:min-w-0 tw:shrink tw:empty:hidden">
+              {isSimpleMode && (isSendReceiveAvailable !== false || hasBackendSynced) && (
+                // Simple mode only, by UX decision: power mode deliberately has no toolbar Sync
+                // because syncing already surfaces itself there — a notification while it runs,
+                // progress inside the Sync dialog, and progress in an open editor window — and power
+                // users start a sync per project from the Home view.
+                //
+                // Fail open on availability: `undefined` means not known yet (the extension host is
+                // busy, or the send/receive extension is still activating), and the button must not
+                // hinge on that resolving. A settled `false` hides it — unless the backend has
+                // reported a sync, which is a surface the user needs regardless of what the extension
+                // probe says (see `hasBackendSynced` above).
+                //
+                // The cost of failing open is one seed-retry loop for the extension's CLAIM in builds
+                // with no send/receive at all, restarted on each Simple/Power toggle since that unmounts
+                // and remounts this. An unregistered command is not cheap to fail: `sendCommand` routes
+                // through `requestWithRetry`, so one read rejects only after `MAX_REQUEST_ATTEMPTS`
+                // attempts at `REQUEST_ATTEMPT_WAIT_TIME_MS` apart (~10s, `rpc.model.ts`). Availability
+                // settles to `false` within `SEND_RECEIVE_UNKNOWN_GRACE_MS` (5s) there, so this unmounts
+                // while that loop's FIRST read is still retrying. The backend activity signal costs
+                // nothing here either way: it is seeded once at startup by `initSyncActivityService`
+                // and read from a store, not re-seeded per mount.
+                // TODO(PT-4233): A one-shot capability probe would fit a permanently-absent claim
+                // command better than a retry loop does.
+                <SyncStatusButton />
+              )}
+            </div>
             {marketingVersion !== '' && (
               <TooltipProvider delayDuration={TOOLTIP_DELAY}>
                 <Tooltip>

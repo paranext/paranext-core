@@ -135,3 +135,28 @@ console.error = (...args: unknown[]) => {
   originalConsoleError(...args);
 };
 /* eslint-enable no-console */
+
+// ─── window.matchMedia stub ──────────────────────────────────────────────────
+//
+// jsdom does not implement window.matchMedia, and several modules call it at module-init time
+// (theme.service-host.ts does, reached via papi-frontend.service.ts and the dock-layout import
+// chain). Any test file that transitively imports one of those throws on import without a stub.
+//
+// Setup files run before the test file's own imports are evaluated, so defining it here covers
+// every jsdom test in the repo — which is what this file is for. It stays writable so a test that
+// needs real media-query behaviour can still redefine it.
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: undefined,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}

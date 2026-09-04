@@ -1009,6 +1009,38 @@ step, no automation. Just a record.
   deliberately not checked in — the numbers above are the durable part, and the parity suite in
   `grapheme-string.test.ts` is what guards the behavior.
 
+## adr-hand-written-tour-spotlight: Hand-write the guided-tour spotlight rather than adopt a tour dependency
+
+- **Date:** 2026-08-26
+- **Status:** Accepted
+- **Context:** PT-4262 names "the Tour component evaluated in PT-4257 (allshadcn)" as the thing to
+  build the Simple-mode orientation tour on, and repeats it in the Definition of Done. Following that
+  up: allshadcn is a community gallery documenting a spotlight *pattern*, not an entry in the official
+  shadcn registry and not an installable package — there is nothing to `add` or depend on. The other
+  candidates in the space (`onborda`, `driver.js`, `react-joyride`, `shepherd.js`) are real packages,
+  but each ships its own overlay, positioning engine and theming, none of which compose with this
+  repo's `pr-twp` scoped preflight, `Z_INDEX_*` scale, `readDirection()` RTL convention, or the
+  rc-dock geometry the stops actually anchor to.
+- **Decision:** Write the spotlight component by hand (`src/renderer/components/onboarding-tour/
+  tour.component.tsx`), following the allshadcn spotlight pattern — full-viewport SVG mask with a
+  cutout over the measured target, plus a positioned step card. Take no new runtime dependency.
+- **Alternatives:** **Vendor a shadcn-registry Tour** — rejected: no such registry component exists,
+  so there is no upstream to diff against and `// CUSTOM:` markers would be meaningless.
+  **Depend on `onborda`/`driver.js`/`react-joyride`/`shepherd.js`** — rejected: each brings a second
+  overlay and theming system into an app that already has both, and the integration surface (mask
+  geometry, z-index, RTL, focus handling) is most of the component anyway. **Defer the tour until a
+  dependency is chosen** — rejected: the tour is the deliverable, and the pattern is well understood.
+- **Consequences:** The repo owns the spotlight code, including the parts a library would have
+  supplied: rect re-measurement (resize, scroll, and `ResizeObserver` for in-place target reflow),
+  side flipping and viewport clamping, the focus trap, and the skip-a-missing-target degradation.
+  That is the cost, and it is why the component carries a full unit-test file rather than a smoke
+  test. The upside is that it speaks the repo's own conventions natively and has no upgrade
+  treadmill. If a second consumer appears, promote it to `lib/platform-bible-react/` under that
+  library's localization contract; until then it stays beside its only consumer per
+  `.claude/rules/architecture/react-patterns.md`.
+- **Source:** PT-4262 implementation (PR #2632), where the review asked why the mandated dependency
+  was not used.
+
 ## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
 - **Formerly:** ADR-0018
@@ -3165,6 +3197,55 @@ step, no automation. Just a record.
      action. This decision establishes the contradiction rather than causing it. Owner: core.
 - **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
+
+## adr-tour-offered-in-both-modes: Offer the orientation tour in both interface modes, letting the anchor filter decide what each mode sees
+
+- **Date:** 2026-09-02
+- **Status:** Accepted
+- **Context:** The tour was built for Simple mode and shipped Simple-only — hidden from the Help
+  menu in Power (`hiddenInterfaceModes`) and refused in the component (`!isPowerMode`). Review
+  established that this was a different answer than the one the stakeholder asked for ("we should
+  offer this tour under Help… for Power and Simple"), and that Power was not cleanly declined but
+  half-wired: `requestTourReplay()` increments a count nothing consumes, so a replay requested in
+  Power was accepted, rendered nothing, and then opened the tour unprompted if that window later
+  switched to Simple. Three of the five stops anchor to `[data-dockid="simple-panel-*"]` and a
+  fourth to the Sync button, which the toolbar renders only in Simple; the copy for two of them
+  asserts Simple invariants ("There is only ever one project here", "these can't be closed or
+  moved") that are false in Power. The fifth stop, the toolbar's Profile button, is rendered in
+  both modes and is where internet settings and registration live in both.
+- **Decision:** Offer the tour in both modes and let `Tour`'s existing open-time filter decide what
+  each mode gets — Simple sees its columns and toolbar stops, Power sees the one shared Profile
+  stop. Keep the *unrequested* showing Simple-only: `mightShow` allows Power only for an explicit
+  replay, so no Power user is interrupted by a one-stop tour they did not ask for. Make the
+  readiness gate mode-aware, waiting on the anchor that mode actually has. Refuse a replay at the
+  shard boundary while the first-run wizard gates the app, since that is the one non-transient
+  "cannot show" state and the request would otherwise be banked rather than dropped.
+- **Alternatives:**
+  - *Keep it Simple-only, declared deliberately* — rejected once the shared stop was identified.
+    Declining would have been defensible on the grounds that the tour teaches the three-column
+    model, but it discards a stop that is correct in Power and that answers the same question a
+    Power user has. It also leaves the stakeholder's request answered with "no" where a partial yes
+    costs a mode-aware selector.
+  - *Author a Power-specific tour* — rejected as premature: Power's orientation needs are not
+    established, and inventing stops for it inside a review pass is the kind of UX-by-developer the
+    review already pushed back on. If Power ever warrants its own tour, this decision does not
+    block it.
+  - *Let the tour auto-show in Power too* — rejected: a single stop pointing at the Profile button,
+    appearing unprompted on next launch for every existing Power user, is interruption without
+    orientation. The Help menu is the right door for it.
+  - *Fix only the banked-replay bug and leave Power refused* — rejected: it fixes the symptom the
+    review found while leaving the mode question unanswered, and the boundary refusal is needed
+    either way for the wizard case.
+- **Consequences:** The tour's step list is now a superset that each mode filters, so what a user
+  sees depends on what their layout renders — a stop added later without a Power-safe anchor simply
+  will not appear there, silently. That is the same degradation the component already relies on for
+  the Sync button (absent wherever Send/Receive is not installed, which is every build but
+  Paratext 10 Studio), so the behavior is not new, but it does mean stop count is not a fixed
+  number and tests assert on the filtered list rather than a constant. Copy for any future stop
+  must be true in every mode the stop can appear in, since the filter selects on anchor presence
+  and cannot know whether prose applies.
+- **Source:** PT-4262 review (PR #2632), where the Help entry was found to ship Simple-only against
+  an explicit request for both modes.
 
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 
