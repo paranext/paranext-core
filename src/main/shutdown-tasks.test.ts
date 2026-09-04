@@ -44,8 +44,8 @@ const mockLoggerError = vi.mocked(logger.error);
  */
 function openWebViews(
   definitions: object[],
-  unreachableWindowIds: number[] = [],
-  abandonedWindowIds: number[] = [],
+  unreachableWindowIds: string[] = [],
+  abandonedWindowIds: string[] = [],
 ) {
   // The fan-out's real definitions are `SavedWebViewDefinition`s; these fixtures carry only the
   // three fields the shutdown selection reads
@@ -276,7 +276,7 @@ describe('performShutdownTasks', () => {
             projectId: 'answered-project',
           },
         ],
-        [2],
+        ['2'],
       ),
     );
     await performShutdownTasks();
@@ -293,7 +293,7 @@ describe('performShutdownTasks', () => {
     // established, and a debug-only skip is the quietest line in the log on precisely the run most
     // likely to have dropped a user's unsynced work
     mockSettingsGet.mockResolvedValue('simple');
-    mockGetOpenWebViews.mockResolvedValue(openWebViews([], [1]));
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([], ['1']));
     await performShutdownTasks();
     expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
       expect.stringContaining('sendReceiveProjects'),
@@ -311,7 +311,7 @@ describe('performShutdownTasks', () => {
     // them later. Reporting that run as a clean skip would put the quietest line in the log on the
     // session most likely to have lost the user's work.
     mockSettingsGet.mockResolvedValue('simple');
-    mockGetOpenWebViews.mockResolvedValue(openWebViews([], [], [4]));
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([], [], ['4']));
 
     await performShutdownTasks();
 
@@ -339,7 +339,7 @@ describe('performShutdownTasks', () => {
           },
         ],
         [],
-        [4],
+        ['4'],
       ),
     );
 
@@ -457,9 +457,9 @@ describe('performWindowCloseTasks', () => {
       windowWebViews([writableEditor('p1'), writableEditor('p2')]),
     );
 
-    await performWindowCloseTasks(2);
+    await performWindowCloseTasks('2');
 
-    expect(mockGetOpenWebViewsForWindow).toHaveBeenCalledWith(2);
+    expect(mockGetOpenWebViewsForWindow).toHaveBeenCalledWith('2');
     expect(mockGetOpenWebViews).not.toHaveBeenCalled();
     expect(mockRequestNoRetry).toHaveBeenCalledWith(
       expect.stringContaining('sendReceiveProjects'),
@@ -473,7 +473,7 @@ describe('performWindowCloseTasks', () => {
     mockSettingsGet.mockResolvedValue('simple');
     mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([writableEditor('p1')]));
 
-    await performWindowCloseTasks(2);
+    await performWindowCloseTasks('2');
 
     expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).not.toContainEqual(
       expect.stringContaining('cancelSync'),
@@ -495,7 +495,7 @@ describe('performWindowCloseTasks', () => {
       ]),
     );
 
-    await performWindowCloseTasks(2);
+    await performWindowCloseTasks('2');
 
     expect(mockRequestNoRetry).toHaveBeenCalledWith(
       expect.stringContaining('sendReceiveProjects'),
@@ -507,7 +507,7 @@ describe('performWindowCloseTasks', () => {
     mockSettingsGet.mockResolvedValue('simple');
     mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([]));
 
-    await performWindowCloseTasks(2);
+    await performWindowCloseTasks('2');
 
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
   });
@@ -517,7 +517,7 @@ describe('performWindowCloseTasks', () => {
     // has nothing to do with the window going away
     mockSettingsGet.mockResolvedValue('power');
 
-    await performWindowCloseTasks(2);
+    await performWindowCloseTasks('2');
 
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
     expect(mockGetOpenWebViewsForWindow).not.toHaveBeenCalled();
@@ -526,7 +526,7 @@ describe('performWindowCloseTasks', () => {
   it('skips the sync and warns when the interface mode cannot be read', async () => {
     mockSettingsGet.mockRejectedValue(new Error('extension host is going away'));
 
-    await performWindowCloseTasks(2);
+    await performWindowCloseTasks('2');
 
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
     expect(mockLoggerWarn).toHaveBeenCalledWith(
@@ -540,7 +540,7 @@ describe('performWindowCloseTasks', () => {
     mockSettingsGet.mockResolvedValue('simple');
     mockGetOpenWebViewsForWindow.mockRejectedValue(new Error('window is unreachable'));
 
-    await performWindowCloseTasks(2);
+    await performWindowCloseTasks('2');
 
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
     expect(mockLoggerWarn).toHaveBeenCalledWith(
@@ -553,7 +553,7 @@ describe('performWindowCloseTasks', () => {
     mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([writableEditor('p1')]));
     mockRequestNoRetry.mockRejectedValue(new Error('command not registered'));
 
-    await expect(performWindowCloseTasks(2)).resolves.toBeUndefined();
+    await expect(performWindowCloseTasks('2')).resolves.toBeUndefined();
     expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('failed or skipped'));
   });
 
@@ -564,7 +564,7 @@ describe('performWindowCloseTasks', () => {
       throw new Error('unexpected logging failure');
     });
 
-    await expect(performWindowCloseTasks(2)).resolves.toBeUndefined();
+    await expect(performWindowCloseTasks('2')).resolves.toBeUndefined();
     expect(mockLoggerError).toHaveBeenCalled();
   });
 
@@ -586,7 +586,7 @@ describe('performWindowCloseTasks', () => {
       return undefined;
     });
 
-    const windowCloseTasks = performWindowCloseTasks(2);
+    const windowCloseTasks = performWindowCloseTasks('2');
     await vi.waitFor(() =>
       expect(mockRequestNoRetry).toHaveBeenCalledWith(
         expect.stringContaining('sendReceiveProjects'),

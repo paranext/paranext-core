@@ -74,6 +74,7 @@ import {
   quitAppAndWaitForExit,
   waitForAppPages,
   waitForRendererRegistered,
+  withPlatformWindow,
 } from './multi-window.util';
 
 const BASE_LAUNCH_OPTIONS: LaunchElectronAppOptions = {
@@ -170,21 +171,18 @@ async function readMessageBoxCalls(
 }
 
 /** Ask a window to close the way its ✕ does — through Electron's `close`, not `app.quit()` */
-async function clickCloseOn(electronApp: ElectronApplication, windowId: number): Promise<void> {
-  await electronApp.evaluate(({ BrowserWindow }, id) => {
-    const win = BrowserWindow.fromId(id);
-    if (!win) throw new Error(`No BrowserWindow with id ${id}`);
-    win.close();
-  }, windowId);
+async function clickCloseOn(electronApp: ElectronApplication, windowId: string): Promise<void> {
+  await withPlatformWindow(electronApp, windowId, (win) => win.close());
 }
 
-/** IDs of the windows still alive in the main process */
-async function liveWindowIds(electronApp: ElectronApplication): Promise<number[]> {
+/** Platform ids of the windows still alive in the main process, sorted for stable comparison */
+async function liveWindowIds(electronApp: ElectronApplication): Promise<string[]> {
   return electronApp.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()
       .filter((win) => !win.isDestroyed())
-      .map((win) => win.id)
-      .sort((a, b) => a - b),
+      .map((win) => new URL(win.webContents.getURL()).searchParams.get('windowId') ?? undefined)
+      .filter((id): id is string => id !== undefined)
+      .sort(),
   );
 }
 
@@ -300,7 +298,7 @@ test.describe('window close rule', () => {
     logStep('asked once; cancelled');
 
     // …and cancelling changed nothing: both windows are still alive and the app is up
-    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort((a, b) => a - b));
+    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort());
     await expect(mainPage.locator('body')).toBeVisible();
 
     // The primary is still a window that ASKS, not one whose close guard is stuck: a second ✕ must
@@ -312,7 +310,7 @@ test.describe('window close rule', () => {
       30_000,
       'the close-all question to be asked a second time',
     );
-    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort((a, b) => a - b));
+    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort());
     logStep('asked again on the second close; still both windows');
 
     expectNoFaultsWhileRunning(output);
@@ -375,7 +373,17 @@ test.describe('window close rule', () => {
       });
       const restored = await waitForAppPages(ctx.electronApp, 2, 240_000);
       expect(restored).toHaveLength(2);
-      const [restoredMain, restoredSecond] = restored;
+      // The primary is picked out by matching the id it held before the quit, not by taking the
+      // first page: window ids are durable, so the window that restores the primary comes back
+      // under that same id, while the order the two windows appear in is a race and means nothing.
+      const restoredMain = restored.find((page) => getWindowIdOfPage(page) === primaryId);
+      const restoredSecond = restored.find((page) => getWindowIdOfPage(page) !== primaryId);
+      if (!restoredMain || !restoredSecond)
+        throw new Error(
+          `the primary did not come back under its own id ${primaryId} — restored ids were ${restored
+            .map(getWindowIdOfPage)
+            .join(', ')}`,
+        );
       await waitForAppReady(restoredMain, 180_000);
       await waitForRendererRegistered(getWindowIdOfPage(restoredSecond), 120_000);
       logStep('phase 2: both windows restored');
@@ -543,7 +551,7 @@ test.describe('window close rule', () => {
     await clickCloseOn(electronApp, primaryId);
     await mainPage.waitForTimeout(2_000);
     expect(await readMessageBoxCalls(electronApp)).toHaveLength(1);
-    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort((a, b) => a - b));
+    expect(await liveWindowIds(electronApp)).toEqual([primaryId, secondId].sort());
     logStep('still asked only once; both windows still open');
 
     expectNoFaultsWhileRunning(output);

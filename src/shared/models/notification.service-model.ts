@@ -185,9 +185,10 @@ export const NotificationServiceNetworkObjectName = 'NotificationService';
  * OpenRPC documentation for the notification service network object.
  *
  * Attached in two places: each window's renderer registers its window-scoped name (e.g.
- * `NotificationService-1`) with these docs, and the main process attaches the same docs when it
- * registers its service router under the generic {@link NotificationServiceNetworkObjectName} — the
- * name consumers actually call — so the public name does not show undocumented in `rpc.discover`.
+ * `NotificationService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`) with these docs, and the main process
+ * attaches the same docs when it registers its service router under the generic
+ * {@link NotificationServiceNetworkObjectName} — the name consumers actually call — so the public
+ * name does not show undocumented in `rpc.discover`.
  *
  * @experimental
  */
