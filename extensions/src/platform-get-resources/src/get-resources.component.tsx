@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronsUpDown,
   ChevronUp,
+  CloudOff,
   Ellipsis,
   Globe,
   Shapes,
@@ -27,6 +28,7 @@ import {
   Filter,
   Label,
   MultiSelectComboBoxEntry,
+  RetryableErrorView,
   SearchBar,
   Spinner,
   Table,
@@ -36,8 +38,14 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
-import type { DblResourceData, LocalizedStringValue } from 'platform-bible-utils';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getResourcePickerBodyState } from 'platform-bible-react/experimental';
+import type { DblResourceData, LocalizedStringValue, PlatformError } from 'platform-bible-utils';
+import {
+  FAILED_PRECONDITION,
+  getErrorMessage,
+  isPlatformError,
+  newPlatformError,
+} from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
 
 /**
@@ -53,6 +61,7 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_any_type%',
   '%resources_dialog_subtitle%',
   '%resources_dialog_title%',
+  '%resources_downloadsUnavailable%',
   '%resources_filterBy%',
   '%resources_filterInput%',
   '%resources_fullName%',
@@ -63,8 +72,10 @@ export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%resources_noResults%',
   '%resources_noResultsError%',
   '%resources_open%',
+  '%resources_providerNotReady%',
   '%resources_remove%',
   '%resources_results%',
+  '%resources_retry%',
   '%resources_showing%',
   '%resources_size%',
   '%resources_type%',
@@ -171,6 +182,73 @@ const getActionContent = (
   return <Label className="tw:my-2 tw:flex tw:h-6 tw:items-center">{installedText}</Label>;
 };
 
+/**
+ * Rejection reason a caller of `onInstallOrRemoveResource` uses to say "the backing data provider
+ * has not resolved yet".
+ *
+ * A sentinel rather than a message: this component owns the localized strings, so a caller that
+ * supplied its own text would put untranslated English in front of the user.
+ *
+ * Raise it with {@link newResourceActionProviderNotReadyError} and recognise it with
+ * {@link isResourceActionProviderNotReadyError} rather than comparing this string yourself.
+ */
+export const RESOURCE_ACTION_PROVIDER_NOT_READY = 'platformGetResources.providerNotReady';
+
+/**
+ * Builds the rejection a caller of `onInstallOrRemoveResource` raises when the backing data
+ * provider has not resolved yet.
+ *
+ * A `PlatformError` carrying `FAILED_PRECONDITION` rather than a bare `Error`: the code is the
+ * machine-readable class of the failure — the system is not in a state where this action can run —
+ * and it is what anything other than this component (a log surface, a generic handler, a caller
+ * deciding whether to retry) should key off.
+ *
+ * @returns The rejection reason to reject with.
+ */
+export function newResourceActionProviderNotReadyError(): PlatformError {
+  return newPlatformError(RESOURCE_ACTION_PROVIDER_NOT_READY, FAILED_PRECONDITION);
+}
+
+/**
+ * Whether a rejection from `onInstallOrRemoveResource` is "the backing data provider has not
+ * resolved yet".
+ *
+ * Keyed on the sentinel in the message, and deliberately NOT on `FAILED_PRECONDITION` alone, for
+ * two independent reasons:
+ *
+ * - The code does not survive a TypeScript rejection crossing a process boundary. `doRequest` in
+ *   `network.service.ts` rebuilds such a rejection as a message-only `PlatformError`; its richer
+ *   `platformErrorCode` field is populated only for C# `PlatformErrorCodes.WithCode` throws. The
+ *   note on `isJsonRpcMethodNotFoundError` in `src/shared/data/rpc.model.ts` records the same
+ *   constraint, and reads its own code back out of the message for the same reason.
+ * - The code says only what CLASS of failure this is. A genuine install failure that is also a failed
+ *   precondition would then be relabelled "resources are not ready yet" — a different lie from the
+ *   one this sentinel exists to prevent, but a lie.
+ *
+ * Matched as a substring so it survives the prefix PAPI prepends at a process boundary. A caller
+ * raising this from the extension host or a data provider, rather than from inside the web view's
+ * own React tree, would otherwise fall through to the raw message and show the user a machine
+ * token.
+ *
+ * @param error The rejection reason.
+ * @returns Whether it is the provider-not-ready sentinel.
+ */
+export function isResourceActionProviderNotReadyError(error: unknown): boolean {
+  const message = isPlatformError(error) ? error.message : getErrorMessage(error);
+  return message.includes(RESOURCE_ACTION_PROVIDER_NOT_READY);
+}
+
+// PAPI prepends `JSON-RPC Request error (<code>): ` to any rejection that crosses a process
+// boundary, and every real install/uninstall failure crosses one. That prefix is diagnostic noise
+// to whoever reads the alert, so strip it before showing the message. Spelled out rather than
+// imported because `getJsonRpcRequestErrorMessagePrefix` lives in `src/shared`, which an extension
+// cannot import from; written with character classes so it stays readable without escapes.
+const JSON_RPC_ERROR_PREFIX_PATTERN = /^JSON-RPC Request error [(][^)]*[)]: */;
+
+function stripCrossProcessPrefix(message: string): string {
+  return message.replace(JSON_RPC_ERROR_PREFIX_PATTERN, '');
+}
+
 export type GetResourcesProps = {
   /**
    * Array of [Object with localized strings for the component, isLoading]. Import
@@ -184,6 +262,17 @@ export type GetResourcesProps = {
   isLoadingResources?: boolean;
   /** Whether loading the resource list failed (shows the error message instead of the table). */
   isResourcesError?: boolean;
+  /**
+   * Re-runs the caller's resource fetch. Omit when the caller has no way to re-drive it; the error
+   * state then renders its message without a retry rather than an inert button.
+   */
+  onRetryResources?: () => void;
+  /**
+   * Whether this installation cannot download resources at all. Distinct from `isResourcesError`:
+   * that state offers a retry because trying again might work; this one says why the list is empty
+   * and offers none, because no retry can change it.
+   */
+  areDownloadsUnavailable?: boolean;
   /** DBL entry UIDs that are currently installing/removing (shown with a spinner). */
   idsBeingHandled?: string[];
   /** Currently selected resource type filter values. */
@@ -222,6 +311,8 @@ export function GetResources({
   resources = emptyResources,
   isLoadingResources = false,
   isResourcesError = false,
+  onRetryResources,
+  areDownloadsUnavailable = false,
   idsBeingHandled = [],
   selectedTypes = [],
   selectedLanguages = [],
@@ -248,6 +339,9 @@ export function GetResources({
   const languagesText: string = getLocalizedString('%resources_languages%');
   const noResultsText: string = getLocalizedString('%resources_noResults%');
   const noResultsErrorText: string = getLocalizedString('%resources_noResultsError%');
+  const retryText: string = getLocalizedString('%resources_retry%');
+  const providerNotReadyText: string = getLocalizedString('%resources_providerNotReady%');
+  const downloadsUnavailableText: string = getLocalizedString('%resources_downloadsUnavailable%');
   const openText: string = getLocalizedString('%resources_open%');
   const removeText: string = getLocalizedString('%resources_remove%');
   const resultsText: string = getLocalizedString('%resources_results%');
@@ -272,8 +366,25 @@ export function GetResources({
     try {
       await onInstallOrRemoveResource(dblEntryUid, action);
     } catch (e) {
-      setActionError(getErrorMessage(e));
+      // Callers signal "the backing provider has not resolved yet" with a sentinel rather than a
+      // message, because the text the user reads has to be localized and this component is the half
+      // that holds the localized strings. Any other rejection carries a message worth showing —
+      // minus the cross-process prefix, which tells the user nothing.
+      setActionError(
+        isResourceActionProviderNotReadyError(e)
+          ? providerNotReadyText
+          : stripCrossProcessPrefix(getErrorMessage(e)),
+      );
     }
+  };
+
+  // Clearing the stale action error is this button's job because the error state REPLACES the
+  // table, and a row action is the only other thing that clears it. Without this, a failed install
+  // followed by a failed catalog refresh pins its alert above a list that recovers fine, with no
+  // interaction left that can dismiss it.
+  const handleRetryResources = () => {
+    setActionError(undefined);
+    onRetryResources?.();
   };
 
   const [textFilter, setTextFilter] = useState<string>('');
@@ -361,6 +472,18 @@ export function GetResources({
     });
   }, [sortConfig.direction, sortConfig.key, textAndTypeAndLanguageFilteredResources]);
 
+  // The same discriminant the resource picker derives its body from, so the two surfaces showing the
+  // very same catalog cannot answer "why is this list empty?" differently. This list has no "Clear
+  // filters" affordance of its own — its filters sit in the header and are always reachable — so it
+  // never asks for that state.
+  const bodyState = getResourcePickerBodyState({
+    isResourcesLoading: isLoadingResources,
+    hasResourcesError: isResourcesError,
+    hasNoResults: sortedResources.length === 0,
+    canClearFiltersHelp: false,
+    areDownloadsUnavailable,
+  });
+
   const handleSort = (key: SortConfig['key']) => {
     const newSortConfig: SortConfig = { key, direction: 'ascending' };
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -437,99 +560,104 @@ export function GetResources({
           </div>
         )}
         <CardContent className="tw:grow tw:overflow-auto">
-          {isLoadingResources ? (
+          {bodyState === 'loading' && (
             <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
               <Spinner />
             </div>
-          ) : (
-            // Can't use if-else here because of how the return statement is structured
-            /* eslint-disable no-nested-ternary */
-            <div>
-              {isResourcesError ? (
-                <div className="tw:m-4 tw:flex tw:justify-center">
-                  <Label>{noResultsErrorText}</Label>
-                </div>
-              ) : sortedResources.length === 0 ? (
-                <div className="tw:m-4 tw:flex tw:justify-center">
-                  <Label>{noResultsText}</Label>
-                </div>
-              ) : (
-                <Table stickyHeader>
-                  <TableHeader className="tw:bg-none" stickyHeader>
-                    <TableRow>
-                      <TableHead />
-                      <TableHead />
-                      {buildTableHead('fullName', fullNameText)}
-                      {buildTableHead('bestLanguageName', languageText)}
-                      {buildTableHead('type', typeText)}
-                      {buildTableHead('size', sizeText)}
-                      {buildTableHead('action', actionText)}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedResources.map((resource) => (
-                      <TableRow
-                        onDoubleClick={() => {
-                          if (resource.installed) onOpenResource(resource.projectId);
-                        }}
-                        key={resource.displayName + resource.fullName}
-                      >
-                        <TableCell>
-                          <BookOpen className="tw:pr-0" size={18} />
-                        </TableCell>
-                        <TableCell>{resource.displayName}</TableCell>
-                        <TableCell className="tw:font-medium tw:whitespace-normal tw:wrap-anywhere">
-                          {resource.fullName}
-                        </TableCell>
-                        <TableCell>{resource.bestLanguageName}</TableCell>
-                        <TableCell>
-                          {typeOptions.find((type) => type.value === resource.type)?.label ??
-                            typeUnknownText}
-                        </TableCell>
-                        <TableCell>{resource.size}</TableCell>
-                        <TableCell>
-                          <div className="tw:flex tw:justify-between">
-                            {getActionContent(
-                              resource,
-                              idsBeingHandled,
-                              getText,
-                              updateText,
-                              installedText,
-                              handleInstallOrRemoveResource,
-                            )}
-                            {resource.installed && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost">
-                                    <Ellipsis className="tw:w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start">
-                                  <DropdownMenuItem
-                                    onClick={() => onOpenResource(resource.projectId)}
-                                  >
-                                    <span>{openText}</span>
-                                  </DropdownMenuItem>
-
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      handleInstallOrRemoveResource(resource.dblEntryUid, 'remove')
-                                    }
-                                  >
-                                    <span>{removeText}</span>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+          )}
+          {bodyState === 'error' && (
+            <RetryableErrorView
+              icon={<CloudOff />}
+              message={noResultsErrorText}
+              retryLabel={retryText}
+              onRetry={onRetryResources ? handleRetryResources : undefined}
+            />
+          )}
+          {bodyState === 'downloadsUnavailable' && (
+            <RetryableErrorView
+              role="status"
+              icon={<CloudOff />}
+              message={downloadsUnavailableText}
+            />
+          )}
+          {bodyState === 'empty' && (
+            <div className="tw:m-4 tw:flex tw:justify-center">
+              <Label>{noResultsText}</Label>
             </div>
+          )}
+          {bodyState === 'list' && (
+            <Table stickyHeader>
+              <TableHeader className="tw:bg-none" stickyHeader>
+                <TableRow>
+                  <TableHead />
+                  <TableHead />
+                  {buildTableHead('fullName', fullNameText)}
+                  {buildTableHead('bestLanguageName', languageText)}
+                  {buildTableHead('type', typeText)}
+                  {buildTableHead('size', sizeText)}
+                  {buildTableHead('action', actionText)}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedResources.map((resource) => (
+                  <TableRow
+                    onDoubleClick={() => {
+                      if (resource.installed) onOpenResource(resource.projectId);
+                    }}
+                    key={resource.displayName + resource.fullName}
+                  >
+                    <TableCell>
+                      <BookOpen className="tw:pr-0" size={18} />
+                    </TableCell>
+                    <TableCell>{resource.displayName}</TableCell>
+                    <TableCell className="tw:font-medium tw:whitespace-normal tw:wrap-anywhere">
+                      {resource.fullName}
+                    </TableCell>
+                    <TableCell>{resource.bestLanguageName}</TableCell>
+                    <TableCell>
+                      {typeOptions.find((type) => type.value === resource.type)?.label ??
+                        typeUnknownText}
+                    </TableCell>
+                    <TableCell>{resource.size}</TableCell>
+                    <TableCell>
+                      <div className="tw:flex tw:justify-between">
+                        {getActionContent(
+                          resource,
+                          idsBeingHandled,
+                          getText,
+                          updateText,
+                          installedText,
+                          handleInstallOrRemoveResource,
+                        )}
+                        {resource.installed && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost">
+                                <Ellipsis className="tw:w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem onClick={() => onOpenResource(resource.projectId)}>
+                                <span>{openText}</span>
+                              </DropdownMenuItem>
+
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleInstallOrRemoveResource(resource.dblEntryUid, 'remove')
+                                }
+                              >
+                                <span>{removeText}</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
         <CardFooter className="tw:shrink-0 tw:justify-center tw:border-t tw:p-4">

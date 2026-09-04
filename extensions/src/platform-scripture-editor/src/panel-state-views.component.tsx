@@ -1,13 +1,4 @@
-import {
-  Button,
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  Spinner,
-} from 'platform-bible-react';
-import { AlertTriangle } from 'lucide-react';
+import { RetryableErrorView, Spinner } from 'platform-bible-react';
 import { ReactNode } from 'react';
 
 /**
@@ -46,20 +37,17 @@ export function LoadingView({ label }: { label: ReactNode }) {
  * re-drive that read, so it renders a message alone (see `PanelReadinessView`) rather than offering
  * an inert button.
  *
- * Composes the shadcn `Empty` primitive per `adr-empty-is-zero-state-primitive` rather than
- * hand-rolling a container, and carries `role="alert"` so a screen-reader user sitting on the panel
- * is told when it flips out of the loading state, which announces through its own live region.
- *
- * The icon is the state's visual signature. Without one this and the pick prompt render as the same
- * centred text plus a button — two identical screens whose buttons do opposite things (retry vs.
- * reconfigure), which is the confusion AC-4 asks these states to avoid.
+ * Wraps the library's `RetryableErrorView` — the same one the resource picker, Get Resources, and
+ * the Text Collection grid render for these very failures — and adds only the full-panel height
+ * those surfaces do not want. The panels' own props stay as they are so their callers need no
+ * change.
  *
  * @param message Already-localized failure message (callers vary it per failure and for offline).
  * @param retryLabel Already-localized label for the retry button.
  * @param onRetry Re-attempts whatever failed — the install, or the catalog fetch.
  * @param icon Overrides the default warning glyph so distinct failures stay distinguishable.
  */
-export function RetryableErrorView({
+export function PanelRetryableErrorView({
   message,
   retryLabel,
   onRetry,
@@ -71,14 +59,12 @@ export function RetryableErrorView({
   icon?: ReactNode;
 }) {
   return (
-    <Empty className="tw:h-screen" role="alert">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">{icon ?? <AlertTriangle />}</EmptyMedia>
-        <EmptyDescription>{message}</EmptyDescription>
-      </EmptyHeader>
-      <EmptyContent>
-        <Button onClick={() => onRetry()}>{retryLabel}</Button>
-      </EmptyContent>
-    </Empty>
+    <RetryableErrorView
+      className="tw:h-screen"
+      message={message}
+      retryLabel={retryLabel}
+      onRetry={onRetry}
+      icon={icon}
+    />
   );
 }
