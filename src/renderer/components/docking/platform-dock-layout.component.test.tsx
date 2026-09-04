@@ -1,16 +1,18 @@
 import { ForwardedRef, forwardRef, useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 import DockLayout, { TabData } from 'rc-dock';
 import { anything, instance, mock, when } from 'ts-mockito';
 
 import { WebViewTabProps } from '@shared/models/docking-framework.model';
 import { resetActivationLatchForTesting } from '@renderer/services/window-activation.util';
 import { getDockLayoutSync } from '@renderer/services/web-view.service-shard';
+import { installMiddleClickTabBarHandlers } from '@renderer/components/docking/platform-dock-layout-middle-click-handlers.util';
 
 // The same file-level stubs `platform-dock-layout-storage.document-focus.test.ts` needs to import
 // the storage util cleanly, since this file exercises that same module through the component.
 vi.mock('@shared/services/logger.service');
+
 vi.mock('@renderer/services/theme.service', () => ({
   __esModule: true,
   localThemeService: {},
@@ -37,6 +39,10 @@ vi.mock('@renderer/components/docking/dock-layout-wrapper.component', () => ({
     useImperativeHandle(ref, () => mockDockLayoutInstance);
     return undefined;
   }),
+}));
+
+vi.mock('@renderer/components/docking/platform-dock-layout-middle-click-handlers.util', () => ({
+  installMiddleClickTabBarHandlers: vi.fn(),
 }));
 
 // Imported after the mocks above so `vi.mock` hoisting wires them up before this pulls in the real
@@ -107,5 +113,48 @@ describe('the dock layout facade withholds document focus by default while a win
     getDockLayoutSync().focusTab(TAB_ID);
 
     expect(focusSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('PlatformDockLayout middle-click tab-bar handlers wiring', () => {
+  /** Stand-in for the DOM node `DockLayout.getRootElement()` would return. */
+  const mockRootElement = document.createElement('div');
+
+  beforeEach(() => {
+    const localMockDockLayout = mock(DockLayout);
+    // Mounting reads the layout to name the window; an empty one is all that read needs.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    when(localMockDockLayout.getLayout()).thenReturn({
+      dockbox: { mode: 'horizontal', children: [] },
+      floatbox: { mode: 'float', children: [] },
+    } as ReturnType<DockLayout['getLayout']>);
+    when(localMockDockLayout.getRootElement()).thenReturn(mockRootElement);
+    mockDockLayoutInstance = instance(localMockDockLayout);
+    vi.mocked(installMiddleClickTabBarHandlers).mockReset();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('installs the middle-click tab-bar handlers on the dock layout’s root element on mount', () => {
+    render(<PlatformDockLayout />);
+
+    expect(installMiddleClickTabBarHandlers).toHaveBeenCalledExactlyOnceWith(
+      mockRootElement,
+      expect.objectContaining({ onTabMiddleClick: expect.any(Function) }),
+    );
+  });
+
+  it('cleans up the installed handlers on unmount', () => {
+    const removeHandlers = vi.fn();
+    vi.mocked(installMiddleClickTabBarHandlers).mockReturnValue(removeHandlers);
+
+    const { unmount } = render(<PlatformDockLayout />);
+    expect(removeHandlers).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(removeHandlers).toHaveBeenCalledTimes(1);
   });
 });
