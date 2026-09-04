@@ -505,13 +505,23 @@ export function PlatformTabTitle({
   // Middle-click (mouse button 1) closes the tab, matching the convention browsers and other
   // editors use for their own tab bars. The close itself runs on `auxclick` — the click event for
   // a non-primary button — rather than on `mousedown`, mirroring how a left-button click only acts
-  // once the button is released over the target. `mousedown` still needs its own handler: on this
-  // button, Electron's native behavior (autoscroll on Windows, primary-selection paste on Linux)
-  // fires from the mousedown itself, before any click event reaches this component.
-  const handleTabHeaderMouseDown = (event: MouseEvent<HTMLDivElement>) => {
-    if (event.button === 1) event.preventDefault();
-  };
+  // once the button is released over the target.
+  //
+  // A middle-button `mousedown` on this tab header is handled elsewhere, not here: rc-dock arms
+  // both per-tab and whole-tab-group dragging from a `mousedown` on `DragDropDiv`s that this
+  // header sits inside (see `platform-dock-layout-middle-click-guard.util.ts` for the mechanism),
+  // and the same button also triggers Electron's native middle-click default action (autoscroll,
+  // primary-selection paste on Linux). Both are suppressed by a single capture-phase listener on
+  // the dock layout's root rather than a handler on this div, because rc-dock's drag-arming
+  // `DragDropDiv`s wrap more of the tab header (the close button, the hit area) than this title
+  // renders, and a whole separate `DragDropDiv` arms dragging for the tab bar's empty space beyond
+  // this or any other tab — neither of which a handler scoped to this div alone could reach.
 
+  // Pressing on this tab and releasing elsewhere already closes nothing, with no guard needed
+  // here: `auxclick` (like `click`) targets the nearest common ancestor of the mousedown and
+  // mouseup targets. Once the release lands outside this div, that common ancestor sits above
+  // `.platform-tab-title`, so the event never bubbles back down into it and this handler never
+  // runs. Verified live (middle-press, drag off the tab, release elsewhere): nothing closed.
   const handleTabHeaderAuxClick = (event: MouseEvent<HTMLDivElement>) => {
     if (event.button !== 1 || !isClosable) return;
     handleCloseTab(id);
@@ -547,7 +557,6 @@ export function PlatformTabTitle({
             // a screen reader announces every icon-only tab in this column identically.
             aria-label={isIconOnly ? title : tabLabel}
             data-web-view-id={webViewId}
-            onMouseDown={handleTabHeaderMouseDown}
             onAuxClick={handleTabHeaderAuxClick}
           >
             <span className={dragIgnoreClass.trim()}>{icon}</span>

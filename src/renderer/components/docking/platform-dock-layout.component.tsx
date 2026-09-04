@@ -53,6 +53,7 @@ import {
 } from '@renderer/components/docking/docking-framework-internal.model';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { getDockLayoutOuterInset } from '@renderer/components/docking/platform-dock-layout-positioning.util';
+import { installMiddleClickDragGuard } from '@renderer/components/docking/platform-dock-layout-middle-click-guard.util';
 
 export function PlatformDockLayout() {
   // This ref will always be defined
@@ -133,6 +134,12 @@ export function PlatformDockLayout() {
       clearTimeout(focusTabAfterCloseTimeoutRef.current);
     };
     // Is there any situation where dockLayoutRef will change? We need to add to dependencies if so
+  }, []);
+
+  useEffect(() => {
+    const rootElement = dockLayoutRef.current.getRootElement();
+    if (!rootElement) return undefined;
+    return installMiddleClickDragGuard(rootElement);
   }, []);
 
   return (
