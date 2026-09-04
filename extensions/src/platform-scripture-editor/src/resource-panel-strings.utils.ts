@@ -14,21 +14,28 @@ export type ResourcePanelStringKeys = {
   pickButtonKey: LocalizeKey;
 };
 
-const BIBLE_TEXTS_KEYS: ResourcePanelStringKeys = {
+// `as const satisfies` rather than a `: ResourcePanelStringKeys` annotation: the annotation widens
+// every value to `LocalizeKey`, which absorbs any `%...%` string, so `RESOURCE_PANEL_STRING_KEYS`
+// and the `ResourcePanelLocalizedStrings` it keys would accept keys the panel never renders. The
+// `satisfies` clause keeps the shape checked against the documented type.
+const BIBLE_TEXTS_KEYS = {
   titleKey: '%webView_resourcePanel_bibleTexts_title%',
   titleWithResourceKey: '%webView_resourcePanel_bibleTexts_title_withResource%',
   emptyStatePromptKey: '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
   bookNotAvailableKey: '%webView_resourcePanel_bibleTexts_bookNotAvailable%',
   pickButtonKey: '%webView_resourcePanel_bibleTexts_pick%',
-};
+} as const satisfies ResourcePanelStringKeys;
 
-const COMMENTARIES_KEYS: ResourcePanelStringKeys = {
+const COMMENTARIES_KEYS = {
   titleKey: '%webView_resourcePanel_commentaries_title%',
   titleWithResourceKey: '%webView_resourcePanel_commentaries_title_withResource%',
   emptyStatePromptKey: '%webView_resourcePanel_commentaries_emptyState_prompt%',
   bookNotAvailableKey: '%webView_resourcePanel_commentaries_bookNotAvailable%',
   pickButtonKey: '%webView_resourcePanel_commentaries_pick%',
-};
+} as const satisfies ResourcePanelStringKeys;
+
+/** The keys for one resource type, each narrowed to the exact key that ships for it. */
+export type ResolvedResourcePanelStringKeys = typeof BIBLE_TEXTS_KEYS | typeof COMMENTARIES_KEYS;
 
 /**
  * Every localized string key the resource panel needs for one resource type.
@@ -48,15 +55,23 @@ const COMMENTARIES_KEYS: ResourcePanelStringKeys = {
  */
 export function resolveResourcePanelStringKeys(
   resourceType: ResourceType,
-): ResourcePanelStringKeys {
+): ResolvedResourcePanelStringKeys {
   return resourceType === 'ScriptureResource' ? BIBLE_TEXTS_KEYS : COMMENTARIES_KEYS;
 }
 
 /**
  * Every key the resource panel can render, both resource types together. Exported so the localized
- * strings parity test can drive off it rather than a hand-maintained literal list.
+ * strings parity test can drive off it rather than a hand-maintained literal list, and so
+ * `RESOURCE_PANEL_STRING_KEYS` can fold these in without restating them.
  */
-export const RESOURCE_PANEL_TYPED_STRING_KEYS: readonly LocalizeKey[] = Object.freeze([
+// Deliberately NOT annotated `: readonly LocalizeKey[]`. That annotation would widen these literals
+// back to `LocalizeKey`, which absorbs any `%...%` string — and because
+// `resource-text-panel.const.ts` spreads this into its own `as const` tuple, the widening
+// propagates: `ResourcePanelLocalizedStringKey` degrades from the exact 22-key union to "any
+// `%...%` string", so it stops constraining `localize()`'s argument and the panel's
+// `localizedStrings` prop. Nothing else checks that, and the loss is invisible at runtime — the
+// parity test iterates the same frozen array either way. Leave the type inferred.
+export const RESOURCE_PANEL_TYPED_STRING_KEYS = Object.freeze([
   ...Object.values(BIBLE_TEXTS_KEYS),
   ...Object.values(COMMENTARIES_KEYS),
 ]);
