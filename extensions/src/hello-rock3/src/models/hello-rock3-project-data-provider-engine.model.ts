@@ -1,6 +1,7 @@
 import papi, { BaseProjectDataProviderEngine } from '@papi/backend';
 import {
   DataProviderUpdateInstructions,
+  ExtensionDataListScope,
   ExtensionDataScope,
   IBaseProjectDataProviderEngine,
 } from '@papi/core';
@@ -9,6 +10,7 @@ import type {
   ProjectSettingNames,
   ProjectSettingTypes,
 } from 'papi-shared-types';
+import { slice, startsWith, stringLength } from 'platform-bible-utils';
 
 /** The `projectInterface`s the hello rock3 pdpf serves */
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
@@ -106,6 +108,21 @@ export class HelloRock3ProjectDataProviderEngine
     this.projectData.extensionData[getExtensionDataKey(scope)] = data;
     await this.saveProjectData();
     return true;
+  }
+
+  async listExtensionDataQualifiers(scope: ExtensionDataListScope): Promise<string[]> {
+    // Grapheme-aware `startsWith`/`slice`/`stringLength` rather than the native `String` methods:
+    // extension names and data qualifiers are author-chosen and not restricted to ASCII, so a
+    // native prefix match can match half of a user-perceived character. The grapheme index
+    // `stringLength` returns is only interchangeable with the grapheme-aware `slice`, so both
+    // halves of the split have to come from the same family.
+    const extensionKeyPrefix = `${scope.extensionName}/`;
+    const extensionKeyPrefixLength = stringLength(extensionKeyPrefix);
+    return Object.keys(this.projectData.extensionData)
+      .filter((key) => startsWith(key, extensionKeyPrefix))
+      .map((key) => slice(key, extensionKeyPrefixLength))
+      .filter((dataQualifier) => startsWith(dataQualifier, scope.dataQualifierPrefix ?? ''))
+      .sort();
   }
 
   async setRandomNumber(max: number, newNum: number) {
