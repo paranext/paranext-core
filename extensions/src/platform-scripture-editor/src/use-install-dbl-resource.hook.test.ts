@@ -4,12 +4,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 
 vi.mock('@papi/frontend', () => ({
+  default: { commands: { sendCommand: vi.fn() } },
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-// Imported after the mock so the underlying util picks up the mocked logger.
+// Both imported after the mock so the hook and the underlying util pick up the mocked papi.
+// eslint-disable-next-line import/first
+import papi from '@papi/frontend';
+// Same reason as the import above; the rule fires once per statement.
 // eslint-disable-next-line import/first
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
+
+const mockSendCommand = vi.mocked(papi.commands.sendCommand);
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -30,7 +36,41 @@ describe('useInstallDblResource', () => {
     expect(onInstalled).toHaveBeenCalledTimes(1);
   });
 
-  it('does not mark resources stale while the provider is unresolved (no-op)', async () => {
+  it('refreshes the catalog installed flags before marking resources stale', async () => {
+    const callOrder: string[] = [];
+    mockSendCommand.mockImplementation(async () => {
+      callOrder.push('refresh');
+      return undefined;
+    });
+    const provider = { installDblResource: vi.fn(async () => {}) };
+    const onInstalled = vi.fn(() => callOrder.push('onInstalled'));
+    const { result } = renderHook(() =>
+      useInstallDblResource(provider, 'model text panel', onInstalled),
+    );
+
+    await result.current('uid-a');
+
+    expect(mockSendCommand).toHaveBeenCalledWith('platformGetResources.refreshInstalledFlags');
+    // Order matters: re-resolving first reads the catalog as it was before this install, so the
+    // panel would report the resource it just installed as missing.
+    expect(callOrder).toEqual(['refresh', 'onInstalled']);
+  });
+
+  it('still marks resources stale when the flag refresh fails', async () => {
+    mockSendCommand.mockRejectedValue(new Error('refresh boom'));
+    const provider = { installDblResource: vi.fn(async () => {}) };
+    const onInstalled = vi.fn();
+    const { result } = renderHook(() =>
+      useInstallDblResource(provider, 'model text panel', onInstalled),
+    );
+
+    // The install succeeded, so a failed refresh must not surface as an install failure — the
+    // flags just catch up on a later read.
+    await expect(result.current('uid-a')).resolves.toBeUndefined();
+    expect(onInstalled).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh flags or mark resources stale while the provider is unresolved (no-op)', async () => {
     const onInstalled = vi.fn();
     const { result } = renderHook(() =>
       useInstallDblResource(undefined, 'model text panel', onInstalled),
@@ -39,6 +79,7 @@ describe('useInstallDblResource', () => {
     await result.current('uid-a');
 
     expect(onInstalled).not.toHaveBeenCalled();
+    expect(mockSendCommand).not.toHaveBeenCalled();
   });
 
   it('rejects and does not mark resources stale when the install fails', async () => {

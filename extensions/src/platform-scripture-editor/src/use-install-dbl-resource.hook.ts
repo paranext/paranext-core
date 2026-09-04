@@ -1,3 +1,5 @@
+import papi, { logger } from '@papi/frontend';
+import { getErrorMessage } from 'platform-bible-utils';
 import { useCallback } from 'react';
 import { installDblResource, type DblResourceInstaller } from './install-dbl-resource.util';
 
@@ -28,7 +30,23 @@ export function useInstallDblResource(
 ): (dblEntryUid: string) => Promise<void> {
   return useCallback(
     async (dblEntryUid: string) => {
-      if (await installDblResource(provider, dblEntryUid, logLabel)) onInstalled();
+      if (!(await installDblResource(provider, dblEntryUid, logLabel))) return;
+
+      // Bring the catalog's installed flags up to date before the panel re-resolves. That
+      // re-resolve reads a cache the extension host corrects in the background, so without this it
+      // answers from before this install and the panel reports the resource it just installed as
+      // missing.
+      try {
+        await papi.commands.sendCommand('platformGetResources.refreshInstalledFlags');
+      } catch (error) {
+        // The install succeeded, so this is not a failure to report: the flags catch up on a later
+        // read instead of this one.
+        logger.debug(
+          `Could not refresh installed flags for the ${logLabel}: ${getErrorMessage(error)}`,
+        );
+      }
+
+      onInstalled();
     },
     [provider, logLabel, onInstalled],
   );
