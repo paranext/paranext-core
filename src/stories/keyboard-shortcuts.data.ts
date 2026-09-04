@@ -117,7 +117,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'book-chapter-control-move-grid-highlight',
     purpose:
-      'Move the highlighted chapter or verse in the Book Chapter Control grid (mirrored horizontally in right-to-left layouts)',
+      'Move the highlighted chapter or verse in the Book Chapter Control grid (mirrored horizontally in right-to-left layouts). While the search box is on screen the horizontal arrows move the text caret first, and reach the preview grid only once the caret has nowhere left to go',
     category: 'Navigation',
     context: 'Book Chapter Control popover',
     keys: {
@@ -133,24 +133,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'book-chapter-control-activate-grid-item',
     purpose:
-      'Go to the highlighted chapter or verse in the Book Chapter Control grid — in the books view, which has no grid, Enter submits the top-match reference instead',
+      'Go to the highlighted chapter or verse in the Book Chapter Control grid. In the books view — where the search box is on screen and the grid below it is a preview of the typed reference — Enter submits that reference instead, and Space stays an ordinary character',
     category: 'Navigation',
     context: 'Book Chapter Control popover',
     keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
-    ],
-  },
-  {
-    id: 'book-chapter-control-pick-highlighted-book',
-    purpose:
-      'Go to the highlighted book in the Book Chapter Control while the search box is still empty — once anything is typed Space is an ordinary character, so names like “1 Samuel” stay searchable',
-    category: 'Navigation',
-    context: 'Book Chapter Control popover',
-    keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
-    locations: [
-      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
-      'lib/platform-bible-react/src/components/shadcn-ui/command.tsx',
     ],
   },
   {

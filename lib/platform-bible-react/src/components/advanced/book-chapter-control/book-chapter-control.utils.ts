@@ -308,7 +308,6 @@ function mirrorHorizontalKey(key: ArrowKey): ArrowKey {
  * @param max The number of items in the grid. Values of 0 or less mean the count is unknown (the
  *   Scripture data returns -1 for books it has no chapter count for), and the highlight is left
  *   alone.
- * @param columns Grid column count. Defaults to {@link GRID_COLUMNS}.
  * @param direction Layout direction. In `'rtl'` the horizontal arrows are mirrored so they follow
  *   what the user sees; the vertical arrows are unaffected.
  * @returns The item the highlight should move to, 1-based.
@@ -317,13 +316,11 @@ export function computeTargetGridItem({
   current,
   key,
   max,
-  columns = GRID_COLUMNS,
   direction = 'ltr',
 }: {
   current: number;
   key: ArrowKey;
   max: number;
-  columns?: number;
   direction?: Direction;
 }): number {
   if (max <= 0) return current;
@@ -337,9 +334,9 @@ export function computeTargetGridItem({
     case 'ArrowRight':
       return current < max ? current + 1 : 1;
     case 'ArrowUp':
-      return Math.max(1, current - columns);
+      return Math.max(1, current - GRID_COLUMNS);
     case 'ArrowDown':
-      return Math.min(max, current + columns);
+      return Math.min(max, current + GRID_COLUMNS);
     default:
       return current;
   }

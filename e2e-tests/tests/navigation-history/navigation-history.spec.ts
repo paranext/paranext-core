@@ -22,8 +22,8 @@ const FORWARD_KEY = isMac ? 'Meta+BracketRight' : 'Alt+ArrowRight';
  * next-chapter quick-nav button instead).
  *
  * @param expectedRef Display-text pattern of the committed reference on the trigger (e.g. /Mark
- *   4\b/i — word-boundary anchored so e.g. "Mark 40" cannot false-pass), asserted at the end to
- *   confirm the navigation landed.
+ *   4(?!\d)/i — anchored so e.g. "Mark 40" cannot false-pass), asserted at the end to confirm the
+ *   navigation landed.
  */
 async function navigateToRef(mainPage: Page, refText: string, expectedRef: RegExp) {
   const trigger = mainPage.locator('[aria-label="book-chapter-trigger"]');
@@ -33,10 +33,11 @@ async function navigateToRef(mainPage: Page, refText: string, expectedRef: RegEx
   await expect(commandInput).toBeVisible({ timeout: 5_000 });
   await commandInput.fill(refText);
   // Wait for the top-match row to display the reference it will submit. The match uses
-  // `expectedRef` — the DISPLAY spelling — because the row renders through
-  // `formatScrRef(..., 'English')`, so the typed book code ("MRK") never appears in it. Its `\b`
-  // anchor keeps a wrong-chapter row from false-passing: /Mark 4\b/ accepts "Mark 4:1" but rejects
-  // "Mark 12:1" (and a hypothetical "Mark 40:1").
+  // `expectedRef` — the DISPLAY spelling — because the row renders the book name, so the typed book
+  // code ("MRK") never appears in it. Its `(?!\d)` anchor keeps a wrong-chapter row from
+  // false-passing: /Mark 4(?!\d)/ accepts "Mark 4:1" but rejects "Mark 12:1" and "Mark 40:1". A
+  // `\b` anchor cannot: the row renders the reference and the book id as adjacent spans with no
+  // whitespace, so `hasText` sees "Mark 4:1MRK" and a verse-level pattern would find no boundary.
   //
   // Deliberately NOT keyed on cmdk's `data-selected` highlight: that highlight sits on a cell of
   // the chapter preview grid below this row, never on the row itself, and Enter submits the row's
@@ -90,8 +91,8 @@ test.describe('Reference history', () => {
 
     await expect(backButton).toBeVisible({ timeout: 10_000 });
 
-    await navigateToRef(mainPage, 'MRK 4', /Mark 4\b/i);
-    await navigateToRef(mainPage, 'LUK 2', /Luke 2\b/i);
+    await navigateToRef(mainPage, 'MRK 4', /Mark 4(?!\d)/i);
+    await navigateToRef(mainPage, 'LUK 2', /Luke 2(?!\d)/i);
 
     await expect(backButton).toBeEnabled();
     await backButton.click();
@@ -107,9 +108,9 @@ test.describe('Reference history', () => {
     await waitForAppReady(mainPage);
     const bcvTrigger = mainPage.locator('[aria-label="book-chapter-trigger"]');
 
-    await navigateToRef(mainPage, 'GEN 1', /Genesis 1\b/i);
-    await navigateToRef(mainPage, 'EXO 5', /Exodus 5\b/i);
-    await navigateToRef(mainPage, 'MRK 4', /Mark 4\b/i);
+    await navigateToRef(mainPage, 'GEN 1', /Genesis 1(?!\d)/i);
+    await navigateToRef(mainPage, 'EXO 5', /Exodus 5(?!\d)/i);
+    await navigateToRef(mainPage, 'MRK 4', /Mark 4(?!\d)/i);
 
     // History persists across tests in this shared app session (session-only by design — see
     // reference-history.util.ts), so the back stack can legitimately contain more than one
@@ -162,8 +163,8 @@ test.describe('Reference history', () => {
     await waitForAppReady(mainPage);
     const bcvTrigger = mainPage.locator('[aria-label="book-chapter-trigger"]');
 
-    await navigateToRef(mainPage, 'MRK 4', /Mark 4\b/i);
-    await navigateToRef(mainPage, 'LUK 2', /Luke 2\b/i);
+    await navigateToRef(mainPage, 'MRK 4', /Mark 4(?!\d)/i);
+    await navigateToRef(mainPage, 'LUK 2', /Luke 2(?!\d)/i);
 
     await mainPage.keyboard.press(BACK_KEY);
     await expect(bcvTrigger).toContainText(/Mark 4\b/i, { timeout: 10_000 });

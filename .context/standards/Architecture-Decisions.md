@@ -2958,8 +2958,8 @@ step, no automation. Just a record.
   the Enter/Space handler would silently stop finding a highlighted cell, with no compiler or type
   error to catch it. Separately, the cmdk `CommandItem` `value` string that both drives the
   highlight and gets parsed back into a chapter/verse number was hand-built inline at six call
-  sites (`git diff main...HEAD -- book-chapter-control.component.tsx` shows the six
-  `` `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ...` `` templates this branch replaced) and
+  sites, each spelling its own
+  `` `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ...` `` template, and
   parsed back with two ad hoc regexes (`commandValue.match(/:(\d+)$/)` and
   `commandValue.match(/(\d+)$/)`), each of which had to agree with every builder site by
   convention alone.
@@ -2989,9 +2989,12 @@ step, no automation. Just a record.
   arithmetic (wrap-around horizontal, clamp vertical, RTL mirroring) is now one pure function,
   `computeTargetGridItem` in `book-chapter-control.utils.ts`, shared by both grids instead of two
   near-duplicate `switch` statements that had already drifted from each other before this branch.
-- **Source:** This branch's BookChapterControl keyboard-navigation rework (PT-4345); the removed
-  DOM-query activation and the six inline value-builders are visible in `git diff main...HEAD --
-  lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx`.
+- **Source:** PT-4345 (BookChapterControl keyboard-navigation rework), PR #2750. The removed
+  DOM-query activation and the six inline value-builders are in that PR's diff of
+  `lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx`.
+  A round-trip check in `parseChapterFromItemValue` is part of the contract, not an optimization:
+  two canon books have English names that end in digits (`PS2` → "Psalm 151", `PS3` → "Psalms
+  152-155"), so a trailing-number match alone reads a book ROW as a chapter cell of itself.
 
 ## adr-z-index-ordering-invariants: The z-index scale is defined by ordering invariants, pinned by tests — not by the individual numbers
 
@@ -3037,12 +3040,22 @@ step, no automation. Just a record.
   to assert it still agrees with the TypeScript constants — a twin that drifts is worse than a
   duplicated one, because neither copy can then be trusted to say what a layer's value is.
   `Z_INDEX_OVERLAY`
-  (400) itself was left untouched as out of scope for this work: it has ten `zIndex:` call sites
-  across seven consumer files (`overlay-popover.component.tsx`, `overlay-context-menu.component.tsx`
-  (×2), `overlay-command-palette.component.tsx` (×2), `settings-sidebar.component.tsx`,
-  `project-selector.component.tsx` (×2), `manage-books-dialog.component.tsx`,
-  `character-marker-bar-overlay.component.tsx`), sits below `Z_INDEX_MODAL_BACKDROP` in the scale,
-  and is not covered by any ordering test above — it may warrant its own review.
+  (400) itself was left largely untouched as out of scope for this work: it sits below
+  `Z_INDEX_MODAL_BACKDROP` in the scale and is not covered by any ordering test above, so it may
+  warrant its own review. Its consumers were audited for the one shape this decision does forbid —
+  a consumer pinning an overlay BELOW the host it renders inside — and the two instances found in
+  `project-selector.component.tsx` (a filter menu and a row tooltip inside that component's own
+  `PopoverContent`) were removed rather than left as counterexamples. One consumer override
+  survives, in `settings-sidebar.component.tsx`, carrying a TODO: it pins a host popover rather
+  than nesting an overlay under one, and needs verifying against the surfaces that sidebar renders
+  in before it can be dropped.
+- **Follow-through:** "Every shadcn overlay sets the constant for its own tier itself" was not true
+  of `menubar.tsx` when this was written — its content and submenu were still on Tailwind's
+  `tw:z-50`, two orders of magnitude below the tier `tooltip.tsx`'s own comment named it as a member
+  of. It now sets `Z_INDEX_ABOVE_DOCK`, with a rendered-stacking test in `z-index.test.tsx`.
+  `DropdownMenuSubContent` sets `Z_INDEX_ABOVE_POPOVER` rather than copying its parent's tier, so a
+  caller that lifts a menu to that tier (the footnote type and caller dropdowns do) cannot leave its
+  own submenu painting underneath it.
 - **Source:** PT-4345 (BCV styling/keyboard-nav epic, the z-index repair task), which reconciles the
   drift left by PR #2365 (silently raised `Z_INDEX_ABOVE_DOCK` 250 → 600, burying every tooltip) and
   PR #2229 (placed a menu at `Z_INDEX_OVERLAY` underneath its own `Z_INDEX_ABOVE_DOCK` host) by

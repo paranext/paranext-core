@@ -14,16 +14,6 @@ describe('generateCommandValue', () => {
     expect(result).toBe('GEN Genesis');
   });
 
-  test('Generates command value for book with chapter', () => {
-    const result = generateCommandValue('GEN', undefined, 1);
-    expect(result).toBe('GEN Genesis 1');
-  });
-
-  test('Generates command value for book with chapter 0', () => {
-    const result = generateCommandValue('MAT', undefined, 0);
-    expect(result).toBe('MAT Matthew');
-  });
-
   const localizedBookNames = new Map([
     ['GEN', { localizedId: '创', localizedName: '创世记' }],
     ['MAT', { localizedId: '太', localizedName: '马太福音' }],
@@ -35,24 +25,19 @@ describe('generateCommandValue', () => {
     expect(result).toBe('GEN Genesis 创 创世记');
   });
 
-  test('Generates command value with localizedBookNames for book with chapter', () => {
-    const result = generateCommandValue('MAT', localizedBookNames, 5);
-    expect(result).toBe('MAT Matthew 太 马太福音 5');
-  });
-
-  test('Generates command value with localizedBookNames for book with chapter 0', () => {
-    const result = generateCommandValue('REV', localizedBookNames, 0);
-    expect(result).toBe('REV Revelation 启 启示录');
-  });
-
   test('Falls back to English name and uppercase ID if book not in localizedBookNames', () => {
-    const result = generateCommandValue('EXO', localizedBookNames, 2);
-    expect(result).toBe('EXO Exodus EXO Exodus 2');
+    const result = generateCommandValue('EXO', localizedBookNames);
+    expect(result).toBe('EXO Exodus EXO Exodus');
   });
 
   test('Generates command value for New Testament book', () => {
-    const result = generateCommandValue('REV', undefined, 22);
-    expect(result).toBe('REV Revelation 22');
+    const result = generateCommandValue('REV');
+    expect(result).toBe('REV Revelation');
+  });
+
+  test('A book row never parses as a chapter or verse cell', () => {
+    expect(parseChapterFromItemValue(generateCommandValue('GEN'))).toBeUndefined();
+    expect(parseVerseFromItemValue(generateCommandValue('GEN'))).toBeUndefined();
   });
 });
 
@@ -100,5 +85,25 @@ describe('parsing guards', () => {
   test('the top-match sentinel parses as neither', () => {
     expect(parseChapterFromItemValue(TOP_MATCH_ITEM_VALUE)).toBeUndefined();
     expect(parseVerseFromItemValue(TOP_MATCH_ITEM_VALUE)).toBeUndefined();
+  });
+
+  test.each([
+    ['PS2', 'Psalm 151'],
+    ['PS3', 'Psalms 152-155'],
+  ])(
+    'a book row for %s, whose English name (%s) ends in digits, parses as neither',
+    (bookId, englishName) => {
+      // Guards the parse against the two canon books that would otherwise read as a chapter cell of
+      // themselves — "PS2 Psalm 151" would report chapter 151, and the top-match row would submit a
+      // reference the user never typed.
+      expect(chapterItemValue(bookId, 1)).toBe(`${bookId} ${englishName} 1`);
+      expect(parseChapterFromItemValue(generateCommandValue(bookId))).toBeUndefined();
+      expect(parseVerseFromItemValue(generateCommandValue(bookId))).toBeUndefined();
+    },
+  );
+
+  test.each(['PS2', 'PS3'])('a real chapter cell of %s still round-trips', (bookId) => {
+    expect(parseChapterFromItemValue(chapterItemValue(bookId, 1))).toBe(1);
+    expect(parseVerseFromItemValue(verseItemValue(bookId, 1, 7))).toBe(7);
   });
 });

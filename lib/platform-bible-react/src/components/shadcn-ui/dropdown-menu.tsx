@@ -12,9 +12,9 @@ import {
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { IconCheck, IconChevronRight } from '@tabler/icons-react';
-// CUSTOM: Import shared z-index constant so dropdown menus join the same overlay tier as
+// CUSTOM: Import shared z-index constants so dropdown menus join the same overlay tier as
 // popover, select, and context-menu instead of falling back to Tailwind's tw:z-50.
-import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
+import { Z_INDEX_ABOVE_DOCK, Z_INDEX_ABOVE_POPOVER } from '@/components/z-index';
 
 /**
  * Dropdown Menu components providing accessible dropdown menus and submenus. Built on Radix UI
@@ -390,9 +390,13 @@ function DropdownMenuSubContent({
         'pr-twp tw:min-w-[96px] tw:origin-(--radix-dropdown-menu-content-transform-origin) tw:overflow-hidden tw:rounded-lg tw:bg-popover tw:p-1 tw:text-popover-foreground tw:shadow-lg tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 tw:animate-none! tw:bg-popover/70 tw:before:-z-1 tw:**:data-[slot$=-item]:focus:bg-foreground/10 tw:**:data-[slot$=-item]:data-highlighted:bg-foreground/10 tw:**:data-[slot$=-separator]:bg-foreground/5 tw:**:data-[slot$=-trigger]:focus:bg-foreground/10 tw:**:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! tw:**:data-[variant=destructive]:focus:bg-foreground/10! tw:**:data-[variant=destructive]:text-accent-foreground! tw:**:data-[variant=destructive]:**:text-accent-foreground! tw:relative tw:before:pointer-events-none tw:before:absolute tw:before:inset-0 tw:before:rounded-[inherit] tw:before:backdrop-blur-2xl tw:before:backdrop-saturate-150',
         className,
       )}
-      // CUSTOM: z-index uses shared constant instead of default tw:z-50 so submenus also render
-      // on the same overlay tier as their parent DropdownMenuContent
-      style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
+      // CUSTOM: z-index uses a shared constant instead of the default tw:z-50. A submenu is always
+      // the topmost menu surface on screen, so it uses the tier ABOVE the popover layer rather than
+      // copying its parent's: a caller that lifts its DropdownMenuContent to Z_INDEX_ABOVE_POPOVER
+      // (the footnote type and caller dropdowns do) would otherwise leave the submenu pinned at
+      // Z_INDEX_ABOVE_DOCK, painting it under the very menu it opened from. Against a parent
+      // already on this tier it ties and wins on portal order, which puts it later in `<body>`.
+      style={{ zIndex: Z_INDEX_ABOVE_POPOVER, ...style }}
       {...props}
     >
       {/* CUSTOM: Wrap children in dir div for RTL support */}

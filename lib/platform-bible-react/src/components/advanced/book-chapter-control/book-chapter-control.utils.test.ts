@@ -549,13 +549,7 @@ describe('book-chapter-control.utils', () => {
     });
 
     describe('column count', () => {
-      test('respects a non-default column count', () => {
-        expect(computeTargetGridItem({ current: 1, key: 'ArrowDown', max: 20, columns: 4 })).toBe(
-          5,
-        );
-      });
-
-      test('defaults to GRID_COLUMNS', () => {
+      test('steps one row using the same constant the grids lay out with', () => {
         expect(computeTargetGridItem({ current: 1, key: 'ArrowDown', max })).toBe(1 + GRID_COLUMNS);
       });
     });

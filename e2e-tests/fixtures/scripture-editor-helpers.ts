@@ -220,23 +220,27 @@ function escapeForRegExp(value: string): string {
  *
  * Commits with Enter only AFTER the top-match row displays the typed reference: the control parses
  * the input asynchronously, so an immediate Enter can race the parse and commit the previous
- * reference (observed as "typed EXO 2:3, still on Genesis 1:1"). The `\b` anchor keeps a
- * wrong-chapter row from false-matching (e.g. "Mark 4\b" accepts "Mark 4:1" but rejects "Mark
- * 40:1").
+ * reference (observed as "typed EXO 2:3, still on Genesis 1:1"). The `(?!\d)` anchor keeps a
+ * wrong-chapter row from false-matching — "Mark 4" accepts "Mark 4:1" but rejects "Mark 40:1".
+ *
+ * A `\b` anchor cannot do that job here. The row renders the reference and the book id as adjacent
+ * spans with no whitespace between them, so `hasText` sees one run of "Jonah 1:1JON" — a digit
+ * followed by a letter, which is not a word boundary, so `\b` never matches any verse-level
+ * reference. `(?!\d)` asserts what the anchor is actually for: the number must have ended.
  *
  * Deliberately NOT keyed on cmdk's `data-selected` highlight: that highlight sits on a cell of the
  * chapter preview grid below this row, never on the row itself, and Enter submits the row's
  * reference rather than whatever cmdk has highlighted.
  *
- * Pass `reference` with the ENGLISH book name ("Exodus 2:3", not "EXO 2:3"): the top-match item
- * renders through `formatScrRef(..., 'English')`, so a book CODE never matches its own item.
+ * Pass `reference` with the ENGLISH book name ("Exodus 2:3", not "EXO 2:3"): the row renders the
+ * book name localized, and the app under test runs in English, so a book CODE never matches.
  */
 export async function navigateToolbarBcv(mainPage: Page, reference: string): Promise<void> {
   await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
   const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await input.fill(reference);
   const topMatchRow = mainPage.locator('[data-radix-popper-content-wrapper] [cmdk-item]', {
-    hasText: new RegExp(`${escapeForRegExp(reference)}\\b`, 'i'),
+    hasText: new RegExp(`${escapeForRegExp(reference)}(?!\\d)`, 'i'),
   });
   await topMatchRow.first().waitFor({ timeout: 10_000 });
   await input.press('Enter');
