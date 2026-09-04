@@ -65,13 +65,18 @@ import {
 } from './nuget-set';
 import type { DirectPackageReference } from './nuget-set';
 import { corpusVersion, verifyCorpus } from './corpus';
-import { assertStaticAssetNoticesRecorded, staticAssetNoticeTexts } from './static-assets';
+import {
+  assertStaticAssetNoticesRecorded,
+  packedExtensionNames,
+  staticAssetNoticeTexts,
+} from './static-assets';
 import { buildLock, writeLock, readLock, diffLock, diffDocument, diffShippingSet } from './lock';
 import { describeBlock, openPolicyQuestions, stalePolicyEntries } from './report';
 import { render, joinTexts } from './render';
 import { declaredLicenseField, readPackageNotices, readTextFile } from './package-files';
 import { messageOf, readJsonFile } from './read-json';
 import type {
+  CopiedPlatformLibrary,
   Detection,
   Lock,
   MergedNugetPackage,
@@ -712,7 +717,35 @@ type BuiltReport = {
   snapStagePackageLicenses: Record<string, SnapStagePackage>;
   snapCopyrightTexts: NamedText[];
   staticAssetNotices: NamedText[];
+  copiedPlatformLibraries: Record<string, CopiedPlatformLibrary>;
+  packedExtensions: string[];
+  shipsElectron: boolean;
 };
+
+/**
+ * Refuses a copied-platform-library entry naming an identifier the corpus cannot reach.
+ *
+ * The document reproduces the CANONICAL text of each identifier on the library's behalf, and
+ * `build-corpus-index.ts` indexes exactly the identifiers a verdict can resolve to - which is
+ * driven by `allowed`, `copyleft` and the three instrument tables, not by this one. An identifier
+ * listed here and nowhere else has no text in the corpus, so the section would state an obligation
+ * and reproduce nothing, which is the worst of the three states this document can be in.
+ */
+export function assertCopiedPlatformLibraryIdsAllowed(policy: Policy): void {
+  const allowed = new Set(policy.allowed);
+  const unreachable = Object.entries(policy.copiedPlatformLibraries || {}).flatMap(
+    ([name, entry]) =>
+      entry.spdx.filter((id) => !allowed.has(id)).map((id) => `${name} names ${id}`),
+  );
+  if (unreachable.length)
+    throw new Error(
+      `notices-policy.json lists a copied platform library under an identifier that is not on ` +
+        `"allowed": ${unreachable.join(', ')}. The document reproduces that identifier's canonical ` +
+        'SPDX text, and only the identifiers a verdict can reach are in the corpus index - so add ' +
+        'it to "allowed" and re-run `npm run build:third-party-notices:corpus`, or record terms ' +
+        'the corpus holds.',
+    );
+}
 
 /**
  * Everything the document and its lock are written from, derived from this tree in one pass.
@@ -747,6 +780,7 @@ export function buildReport(): BuiltReport {
   // Refused BEFORE the artifact is composed, like every other whole-set assertion here: a notice
   // file nobody recorded is a claim the document would omit, not a row it would get wrong.
   assertStaticAssetNoticesRecorded(REPO, policy);
+  assertCopiedPlatformLibraryIdsAllowed(policy);
 
   const nugetVerdicts = buildNugetVerdicts({ policy, collected, directReferences, alwaysListed });
 
@@ -784,6 +818,15 @@ export function buildReport(): BuiltReport {
     // libraries: the files `copy-webpack-plugin` copies out of each extension's `assets/` and
     // `public/` trees. See `static-assets.ts` for why an inventory is the only gate available.
     staticAssetNotices: staticAssetNoticeTexts(REPO, policy),
+    // The fifth: native libraries copied out of the build machine itself, which no manifest
+    // declares and no restore resolves - see `CopiedPlatformLibrary`.
+    copiedPlatformLibraries: policy.copiedPlatformLibraries || {},
+    // What the two prose sections are gated on, so neither can survive the thing it describes. The
+    // extension set is the directory listing `extensions/dist` is built from; `electron` ships as a
+    // prebuilt runtime compiled into no bundle, so the policy's `unbundledDependencies` entry is
+    // the record that it ships at all.
+    packedExtensions: packedExtensionNames(REPO),
+    shipsElectron: Boolean((policy.unbundledDependencies || {}).electron),
   };
 }
 

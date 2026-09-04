@@ -211,9 +211,9 @@ not an SPDX license.
 resolve there: `release/app`'s `files` list is `dist`, `node_modules` and `package.json`, so
 `TERMS-OF-SERVICE.md` is never inside `app.asar`. It travels through
 `electron-builder.json5`'s `extraResources` instead, which places it in the installed `resources/`
-directory — one level above the package, beside `LICENSE`, `LICENSING.md`, `LICENSE-EXCEPTION.md`
-and `THIRD-PARTY-NOTICES.md`. The declaration names the document a user actually receives; it just
-names it from outside the archive that carries the declaration.
+directory beside `app.asar` rather than inside it — alongside `LICENSE`, `LICENSING.md`,
+`LICENSE-EXCEPTION.md` and `THIRD-PARTY-NOTICES.md`. The declaration names a document the user
+actually receives; it just names it from outside the archive that carries the declaration.
 
 The Terms are **not** an installer EULA. Section 1 says they are accepted "by ticking the agreement
 box when creating your Paratext account or installing the Paratext client" — and the agreement box

@@ -523,6 +523,60 @@ describe('collectShippedPackages - stylesheet leaf scan', () => {
     expect(packages[0].reachedVia).toEqual(['stylesheet']);
   });
 
+  it('follows a Tailwind @config target into the packages it registers as plugins', () => {
+    // `@config` names a PROGRAM, not a stylesheet, and a Tailwind plugin generates CSS that ships.
+    // Nothing else in this pipeline reaches it: `importedPackages` walks `src/` roots and the config
+    // sits at the package root, `packageOfSpecifier` returns nothing for a relative target, and the
+    // plugin's output arrives inside compiled CSS that names no package.
+    writePackage('node_modules/@tailwindcss/typography', '@tailwindcss/typography', '0.5.16');
+    writeStylesheet('src/renderer/app.css', "@config '../tailwind.config.ts';");
+    fs.writeFileSync(
+      path.join(repo, 'src', 'tailwind.config.ts'),
+      "import typography from '@tailwindcss/typography';\nexport default { plugins: [typography()] };\n",
+    );
+    writeManifest('main', []);
+    const { packages } = collectShippedPackages({
+      manifestDir: path.join(repo, '.notices', 'modules'),
+      repo,
+    });
+    expect(packages.map((p) => p.name)).toEqual(['@tailwindcss/typography']);
+    expect(packages[0].reachedVia).toEqual(['stylesheet']);
+  });
+
+  it('resolves a @config target that omits its extension', () => {
+    writePackage('node_modules/@tailwindcss/typography', '@tailwindcss/typography', '0.5.16');
+    writeStylesheet('src/renderer/app.css', "@config '../tailwind.config';");
+    fs.writeFileSync(
+      path.join(repo, 'src', 'tailwind.config.ts'),
+      "import typography from '@tailwindcss/typography';\nexport default { plugins: [typography()] };\n",
+    );
+    writeManifest('main', []);
+    const { packages } = collectShippedPackages({
+      manifestDir: path.join(repo, '.notices', 'modules'),
+      repo,
+    });
+    expect(packages.map((p) => p.name)).toEqual(['@tailwindcss/typography']);
+  });
+
+  it('does not walk a @config target that names a package rather than a local file', () => {
+    // A `@config` naming a package is already a leaf the ordinary scan records. Following that
+    // package's own config would walk its build toolchain, which is the traversal the leaf-only
+    // resolution exists to stop.
+    writePackage('node_modules/some-preset', 'some-preset', '1.0.0');
+    fs.writeFileSync(
+      path.join(repo, 'node_modules', 'some-preset', 'tailwind.config.ts'),
+      "import buildOnly from 'build-only';\nexport default { plugins: [buildOnly()] };\n",
+    );
+    writePackage('node_modules/build-only', 'build-only', '1.0.0');
+    writeStylesheet('src/renderer/app.css', "@config 'some-preset';");
+    writeManifest('main', []);
+    const { packages } = collectShippedPackages({
+      manifestDir: path.join(repo, '.notices', 'modules'),
+      repo,
+    });
+    expect(packages.map((p) => p.name)).toEqual(['some-preset']);
+  });
+
   it('discounts a bare Sass import that resolves to first-party source', () => {
     // Sass resolves relative to the IMPORTING file before any load path, and needs no `./` to do
     // it: `@use 'styles/vars'` loads `styles/_vars.scss` beside the importer. It is bare by

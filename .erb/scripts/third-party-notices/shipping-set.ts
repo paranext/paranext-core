@@ -1185,6 +1185,30 @@ function stylesheetImportSpecifiers(text: string): string[] {
   return specifiers.filter(Boolean);
 }
 
+/**
+ * The LOCAL files Tailwind's `@config` at-rule points a stylesheet at.
+ *
+ * `@config` is the one at-rule whose target is a program rather than a stylesheet, and a Tailwind
+ * config's own imports are packages whose generated CSS ships. `@tailwindcss/typography` is the
+ * live case: `lib/platform-bible-react/tailwind.config.ts` does `import typography from
+ * '@tailwindcss/typography'` and registers it as a plugin, `tw:prose-sm` in
+ * `src/renderer/components/overlays/overlay-popover.component.tsx` puts its output in the shipped
+ * bundle, and nothing else in this pipeline can see it - `importedPackages` walks `src/` roots only
+ * and the config sits at each package root, while `packageOfSpecifier` returns nothing for the
+ * relative `@config` target so the stylesheet scan stops at the file.
+ *
+ * Only relative targets are returned. A `@config` naming a PACKAGE is already a leaf the scan
+ * records the ordinary way, and following a package's own config would walk its build toolchain -
+ * the traversal `resolvePackageLeaf` exists to stop.
+ */
+function stylesheetConfigTargets(text: string): string[] {
+  const source = withoutStylesheetComments(text);
+  return [...source.matchAll(/@config\b([^;{]*)/g)]
+    .flatMap((statement) => [...statement[1].matchAll(/['"]([^'"\n]+)['"]/g)])
+    .map(([, target]) => target)
+    .filter((target) => target.startsWith('.'));
+}
+
 /** The filenames Sass will load for a specifier, in the order it tries them. */
 function sassCandidates(specifier: string): string[] {
   const dir = path.dirname(specifier);
@@ -1357,30 +1381,66 @@ function collectStylesheetLeaves(repo: string): { leaves: Leaf[]; unresolvedName
   const leaves: Leaf[] = [];
   const unresolvedNames = new Set<string>();
   const libReal = realPathOf(path.join(repo, 'lib'));
+
+  /** Records one bare specifier's package as a leaf, or as unresolved. */
+  const record = (specifier: string, fromDir: string) => {
+    const name = packageOfSpecifier(specifier);
+    if (!name) return;
+    const dir = resolvePackageLeaf(name, fromDir, repo);
+    // The same two guards `collectPrebuiltLibLeaves` applies, and for the same reasons: npm
+    // installs a workspace package as a SYMLINK, so `@import 'platform-bible-react/dist/...'`
+    // resolves to a path that looks like any other dependency until the link is followed, and
+    // emitting it would report this repository's own AGPL code as a third-party notice. A
+    // dev-linked package is described from `package-lock.json` rather than its on-disk
+    // directory, so adding it here would key a second lock entry to the very directory that
+    // policy exists to avoid.
+    if (dir && !containedPath(libReal, realPathOf(dir)) && !isDevLinked(dir))
+      leaves.push({ dir, bundle: 'stylesheet' });
+    else if (!dir) unresolvedNames.add(name);
+  };
+
   productionStylesheetRoots(repo).forEach((root) => {
     findStylesheets(root).forEach((file) => {
       const text = fs.readFileSync(file, 'utf8');
+      const fromDir = path.dirname(file);
       stylesheetImportSpecifiers(text).forEach((specifier) => {
-        const name = packageOfSpecifier(specifier);
-        if (!name) return;
-        if (firstPartyStylesheetSpecifier(specifier, path.dirname(file))) return;
-        const dir = resolvePackageLeaf(name, path.dirname(file), repo);
-        // The same two guards `collectPrebuiltLibLeaves` applies, and for the same reasons: npm
-        // installs a workspace package as a SYMLINK, so `@import 'platform-bible-react/dist/...'`
-        // resolves to a path that looks like any other dependency until the link is followed, and
-        // emitting it would report this repository's own AGPL code as a third-party notice. A
-        // dev-linked package is described from `package-lock.json` rather than its on-disk
-        // directory, so adding it here would key a second lock entry to the very directory that
-        // policy exists to avoid. `firstPartyStylesheetSpecifier` above is a different test - it
+        // `firstPartyStylesheetSpecifier` is a different test from the two `record` applies - it
         // catches a bare Sass specifier that names a file of this repository's own, not an
         // installed directory that turns out to be first-party.
-        if (dir && !containedPath(libReal, realPathOf(dir)) && !isDevLinked(dir))
-          leaves.push({ dir, bundle: 'stylesheet' });
-        else if (!dir) unresolvedNames.add(name);
+        if (firstPartyStylesheetSpecifier(specifier, fromDir)) return;
+        record(specifier, fromDir);
+      });
+      // A Tailwind config's plugins generate CSS that ships, so the config's own imports are read
+      // as if the stylesheet had named them - see `stylesheetConfigTargets`. LEAF resolution only,
+      // like everything else here: what ships is the plugin's generated CSS, not the toolchain
+      // behind it.
+      stylesheetConfigTargets(text).forEach((target) => {
+        const configFile = resolveConfigTarget(target, fromDir);
+        if (!configFile) return;
+        const configDir = path.dirname(configFile);
+        runtimeModuleSpecifiers(fs.readFileSync(configFile, 'utf8'), configFile).forEach(
+          (specifier) => record(specifier, configDir),
+        );
       });
     });
   });
   return { leaves, unresolvedNames: [...unresolvedNames].sort() };
+}
+
+/** Extensions a `@config` target may omit, in the order Tailwind's own loader tries them. */
+const CONFIG_EXTENSIONS = ['', '.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'];
+
+/**
+ * The file a relative `@config` target names, or `undefined` when nothing is there.
+ *
+ * Missing is not an error: the target is read out of stylesheet text, and the same false positives
+ * `resolvePackageLeaf` documents apply. A config that is genuinely absent breaks the Tailwind build
+ * long before it reaches this scan.
+ */
+function resolveConfigTarget(target: string, fromDir: string): string | undefined {
+  return CONFIG_EXTENSIONS.map((extension) => path.join(fromDir, `${target}${extension}`)).find(
+    (candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile(),
+  );
 }
 
 /** Source files whose imports a `lib/*` package bundles into its own published output. */

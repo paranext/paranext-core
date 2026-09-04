@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { EXTENSION_INTERFACE_MODULE_SPECIFIERS } from '@extension-host/data/extension-interface-modules.data';
 
 /*
  * Pins the module specifiers an extension may `require` at runtime.
@@ -10,18 +11,18 @@ import { describe, expect, it } from 'vitest';
  * of the AGPL to works that reach Platform.Bible only through that interface. The list is therefore
  * the boundary of a published, irrevocable license grant as well as a security control.
  *
- * This reads source text because the shim has no seam: `activateExtensions` installs it as a side
- * effect of loading extensions, and the same function deletes `globalThis.eval`/`Function` and
- * replaces `fetch`/`XMLHttpRequest`, so calling it to probe the allowlist would wreck the test
- * process. A source scan is narrow, but it fails on exactly the change that matters.
+ * The shim itself has no seam - `activateExtensions` installs it as a side effect of loading
+ * extensions, and the same function deletes `globalThis.eval`/`Function` and replaces
+ * `fetch`/`XMLHttpRequest` - and `extension.service.ts` cannot even be imported here, because it
+ * creates directories at module scope. So the shim dispatches from
+ * `EXTENSION_INTERFACE_MODULE_SPECIFIERS` instead, in a module that imports nothing, and this
+ * compares that VALUE. Any admission has to add a specifier there, in any syntax, and fail this.
  *
- * Fail-closed by construction: a rewrite that moves the allowlist out of the `moduleName === '…'`
- * shape extracts nothing and fails here too, which is the intended prompt to re-point this guard
- * rather than to delete it.
+ * The renderer half is still read as source text: `global-this-web-view.model.ts` builds its map
+ * imperatively, and its imports are not loadable outside a browser environment.
  */
 
 const REPO = path.join(__dirname, '..', '..', '..');
-const EXTENSION_SERVICE_PATH = path.join(__dirname, 'extension.service.ts');
 const WEB_VIEW_MODULE_MAP_PATH = path.join(
   REPO,
   'src',
@@ -30,15 +31,13 @@ const WEB_VIEW_MODULE_MAP_PATH = path.join(
 );
 const LICENSE_EXCEPTION_PATH = path.join(REPO, 'LICENSE-EXCEPTION.md');
 
-const SHIM_START = 'Module.prototype.require = ((moduleName: string) => {';
-const SHIM_END = '}) as typeof Module.prototype.require;';
-
 /**
- * Module specifiers the shim currently answers itself instead of refusing.
+ * Module specifiers the shim answers itself instead of refusing.
  *
  * Every entry is a promise this project has already made to extension authors. Adding one widens
  * the AGPL section 7 additional permission in `LICENSE-EXCEPTION.md`; removing one can push an
- * existing extension outside it.
+ * existing extension outside it. Written out here rather than derived, because a guard that derived
+ * it from the thing it is guarding would assert nothing.
  */
 const PERMITTED_MODULE_SPECIFIERS = [
   '@papi/backend',
@@ -57,20 +56,9 @@ const WIDENING_THE_GRANT = [
   'it to make the test pass.',
 ].join(' ');
 
-/** The specifiers the shim short-circuits, read out of its source. */
-function readPermittedModuleSpecifiers(source: string): string[] {
-  const startIndex = source.indexOf(SHIM_START);
-  if (startIndex < 0)
-    throw new Error(
-      `Could not find the require shim ('${SHIM_START}') in ${EXTENSION_SERVICE_PATH}. This guard reads source text, so check whether the shim was merely renamed or reshaped before assuming anything else. ${WIDENING_THE_GRANT}`,
-    );
-  const endIndex = source.indexOf(SHIM_END, startIndex);
-  if (endIndex < 0)
-    throw new Error(
-      `Could not find the end of the require shim ('${SHIM_END}') in ${EXTENSION_SERVICE_PATH}. This guard reads source text, so check whether the shim was merely reshaped before assuming anything else. ${WIDENING_THE_GRANT}`,
-    );
-  const shim = source.slice(startIndex, endIndex);
-  return [...shim.matchAll(/moduleName === '([^']+)'/g)].map(([, specifier]) => specifier).sort();
+/** The specifiers the extension host supplies, as the shim reads them. */
+function readPermittedModuleSpecifiers(): string[] {
+  return [...EXTENSION_INTERFACE_MODULE_SPECIFIERS].sort();
 }
 
 // The consequence lives in the test name because that is what a failing run prints. Vitest's
@@ -78,9 +66,16 @@ function readPermittedModuleSpecifiers(source: string): string[] {
 // refuses that form.
 describe('extension host require shim allowlist', () => {
   it(`permits exactly the modules the Extension Interface publishes — ${WIDENING_THE_GRANT}`, () => {
-    const permitted = readPermittedModuleSpecifiers(readFileSync(EXTENSION_SERVICE_PATH, 'utf8'));
+    expect(readPermittedModuleSpecifiers()).toEqual([...PERMITTED_MODULE_SPECIFIERS].sort());
+  });
 
-    expect(permitted).toEqual([...PERMITTED_MODULE_SPECIFIERS].sort());
+  it(`dispatches from that list rather than comparing names in the shim — ${WIDENING_THE_GRANT}`, () => {
+    // The value comparison above is only a guard while the shim is what consumes the value. A shim
+    // that compared `moduleName` against string literals could admit a module the list does not
+    // name, and every assertion in this file would still pass.
+    const source = readFileSync(path.join(__dirname, 'extension.service.ts'), 'utf8');
+    expect(source).toContain('EXTENSION_INTERFACE_MODULES[moduleName]');
+    expect(source).not.toMatch(/moduleName === /);
   });
 });
 
@@ -153,7 +148,7 @@ describe('the Extension Interface the license exception grants', () => {
     // not answer is a promise nothing keeps; this is the direction the shim-only guard above cannot
     // see, because it compares the shim against a copy of itself.
     const supplied = new Set([
-      ...readPermittedModuleSpecifiers(readFileSync(EXTENSION_SERVICE_PATH, 'utf8')),
+      ...readPermittedModuleSpecifiers(),
       ...readWebViewModuleSpecifiers(readFileSync(WEB_VIEW_MODULE_MAP_PATH, 'utf8')),
     ]);
 
@@ -165,7 +160,7 @@ describe('the Extension Interface the license exception grants', () => {
     // published carve-out is silently narrower than the interface extensions actually link against.
     const supplied = [
       ...new Set([
-        ...readPermittedModuleSpecifiers(readFileSync(EXTENSION_SERVICE_PATH, 'utf8')),
+        ...readPermittedModuleSpecifiers(),
         ...readWebViewModuleSpecifiers(readFileSync(WEB_VIEW_MODULE_MAP_PATH, 'utf8')),
       ]),
     ];

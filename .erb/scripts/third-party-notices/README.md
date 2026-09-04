@@ -78,17 +78,18 @@ The generator fails closed. A package it cannot clear stops the run, nothing is 
 message names both signals it read plus the exact JSON to paste. Every instrument below lives in
 [`notices-policy.json`](./notices-policy.json), each behind a `*Note` field describing it.
 
-| Situation                                                                           | Instrument              | What the entry must establish                                                                      |
-| ----------------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------- |
-| Package offers a **choice** of licenses (`MIT OR GPL-3.0-or-later`)                 | `elections`             | Which branch this project takes, and why. The elected id must be on `allowed`, off `copyleft`.     |
-| License **text cannot be identified**, and you have read it yourself                | `exceptions`            | What is actually in that file, a reviewer, a date. Pinned to one version AND one text hash.        |
-| Package's own metadata **establishes nothing** (legacy `<licenseUrl>`, proprietary) | `overrides`             | The terms that apply. Free text must set `nonSpdx`, which records that nothing checked it.         |
-| Package publishes its terms at a **URL** and bundles no copy                        | `licenseTexts`          | The text, checked in under `vendored-texts/`, hash-pinned and attributed to its source.            |
-| Package ships **no readable license file** at all                                   | `copyrightNotices`      | The notice read from that package's own license file by whatever route it publishes one.           |
-| A third-party file was added under an extension's `assets/`/`public/`               | `staticAssetNotices`    | Why it is there, plus a `sha256` (or `notTracked` if it is fetched at install time).               |
-| A library was added to `snap.stagePackages`                                         | `snapStagePackages`     | `copyleft`, `permissive`, or `not-established`. Guessing a specific license is worse than the gap. |
-| A declared `dependencies` entry reaches no bundle                                   | `unbundledDependencies` | Why nothing this repository ships contains it.                                                     |
-| A package ships only in another platform's installer                                | `platformOnlyPackages`  | Nothing beyond the name; CI's other legs fail if it is wrong.                                      |
+| Situation                                                                           | Instrument                | What the entry must establish                                                                        |
+| ----------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Package offers a **choice** of licenses (`MIT OR GPL-3.0-or-later`)                 | `elections`               | Which branch this project takes, and why. The elected id must be on `allowed`, off `copyleft`.       |
+| License **text cannot be identified**, and you have read it yourself                | `exceptions`              | What is actually in that file, a reviewer, a date. Pinned to one text hash; `version` is provenance. |
+| Package's own metadata **establishes nothing** (legacy `<licenseUrl>`, proprietary) | `overrides`               | The terms that apply. Free text must set `nonSpdx`, which records that nothing checked it.           |
+| Package publishes its terms at a **URL** and bundles no copy                        | `licenseTexts`            | The text, checked in under `vendored-texts/`, hash-pinned and attributed to its source.              |
+| Package ships **no readable license file** at all                                   | `copyrightNotices`        | The notice read from that package's own license file by whatever route it publishes one.             |
+| A third-party file was added under any tree an installer copies verbatim            | `staticAssetNotices`      | Why it is there, plus a `sha256` (or `notTracked` if it is fetched at install time).                 |
+| A **native library** is copied out of the build machine beside the executable       | `copiedPlatformLibraries` | Which platforms copy it, what copies it, and the identifiers whose texts discharge the notice.       |
+| A library was added to `snap.stagePackages`                                         | `snapStagePackages`       | `copyleft`, `permissive`, or `not-established`. Guessing a specific license is worse than the gap.   |
+| A declared `dependencies` entry reaches no bundle                                   | `unbundledDependencies`   | Why nothing this repository ships contains it.                                                       |
+| A package ships only in another platform's installer                                | `platformOnlyPackages`    | Nothing beyond the name; CI's other legs fail if it is wrong.                                        |
 
 An **allowed license this project has simply never met** is not a per-package problem: add the
 identifier to `allowed`, which is one reviewable line, rather than admitting it invisibly through a
@@ -165,7 +166,7 @@ and why every escape instrument is pinned.
 | `main.ts`                  | Entry point and wiring; `--verify`, `--verify-document`, `--verify-shipping-set` |
 | `shipping-set.ts`          | Which npm packages ship, from the build rather than from manifests               |
 | `nuget-set.ts`             | Which NuGet packages ship, unioned across all four runtime identifiers           |
-| `static-assets.ts`         | Third-party files copied into an extension's packed output                       |
+| `static-assets.ts`         | Third-party files copied verbatim into an installer, from any tree it packs      |
 | `identify.ts`, `detect.rb` | What a license text on disk is, per `licensee`                                   |
 | `declared.ts`              | What a manifest declares, per `spdx-expression-parse`                            |
 | `policy.ts`                | Reconciles those two signals into one verdict per package                        |

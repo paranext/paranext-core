@@ -72,6 +72,21 @@ describe('findStaticAssetNotices', () => {
     expect(findStaticAssetNotices(repo)).toEqual(['assets/THIRD-PARTY-NOTICES.md']);
   });
 
+  it('reads the .NET assets the csproj copies into the publish output', () => {
+    // `ParanextDataProvider.csproj` copies `assets/**` and `base-directory-assets/*` beside the
+    // executable, and electron-builder packs the whole publish directory as `./dotnet/` - the same
+    // redistribution as an extension's `assets/`, reached by a route neither the npm module graph
+    // nor the NuGet closure describes.
+    write('c-sharp/assets/Attribution.md', 'usfm.sty comes from ubsicap/usfm');
+    write('c-sharp/base-directory-assets/COPYING.txt', 'terms for the geolocation data');
+    write('c-sharp/Services/LicenseChecker.cs', 'not an asset - this one is compiled');
+
+    expect(findStaticAssetNotices(repo)).toEqual([
+      'c-sharp/assets/Attribution.md',
+      'c-sharp/base-directory-assets/COPYING.txt',
+    ]);
+  });
+
   it('finds a notice whose filename puts a qualifier before the word', () => {
     // Reading only the first word misses every convention that qualifies it, and these are the
     // spellings real packages use: `typescript` and `monaco-editor` ship `ThirdPartyNotices.txt`,

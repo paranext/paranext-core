@@ -1,7 +1,7 @@
 {
   "licenseeVersion": "10.1.0",
   "corpusVersion": "6.12.0",
-  "documentSha256": "5a1fffe752ceaffca1ce9c691469d6feba8cc1e2907d678188cbbe975c8219c7",
+  "documentSha256": "bc7af0b4eec9068d500884b6a9640df10c7b536282ab319115b8e8d11e9014e6",
   "packages": [
     {
       "ecosystem": "npm",
@@ -764,6 +764,15 @@
     },
     {
       "ecosystem": "npm",
+      "name": "@tailwindcss/typography",
+      "version": "0.5.16",
+      "spdxId": "MIT",
+      "confidence": 100,
+      "matchedFile": "LICENSE",
+      "textSha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    {
+      "ecosystem": "npm",
       "name": "@tanstack/react-table",
       "version": "8.21.3",
       "spdxId": "MIT",
@@ -876,6 +885,7 @@
       "version": "2.14.1",
       "spdxId": "MIT",
       "confidence": 0,
+      "matchedFile": "LICENSE",
       "textSha256": "dfde54fedc270c2a305d9a9f993d93f706d34624455a2fd2d2a05ca34d8ae8c3"
     },
     {
@@ -920,6 +930,7 @@
       "version": "3.2.0",
       "spdxId": "(BSD-3-Clause AND Apache-2.0)",
       "confidence": 0,
+      "matchedFile": "LICENSE",
       "textSha256": "85aae6740628115550c6e67a85e8f8e70835cd5b14d4a2cb878c90c998f506db"
     },
     {
@@ -1117,6 +1128,7 @@
       "version": "3.1.4",
       "spdxId": "BSD-3-Clause",
       "confidence": 0,
+      "matchedFile": "LICENSE",
       "textSha256": "b010b0dfdfdb23d7396e03b82cd4621fc9bb8f95d6b0aea70b9c24e12074c786"
     },
     {
@@ -1263,6 +1275,7 @@
       "version": "10.3.0",
       "spdxId": "MIT",
       "confidence": 0,
+      "matchedFile": "LICENSE",
       "textSha256": "f21ce68006d5bd12fef2f5463039783a50848f115d6e7287f04bb9d0fd0ed546"
     },
     {
@@ -1271,6 +1284,7 @@
       "version": "3.10.1",
       "spdxId": "MIT",
       "confidence": 0,
+      "matchedFile": "LICENSE.markdown",
       "textSha256": "566c953c6090b1218ca6217dd7359d45dde46581968586dc607d59a78af6a9c4"
     },
     {
@@ -1324,6 +1338,7 @@
       "version": "4.18.1",
       "spdxId": "MIT",
       "confidence": 0,
+      "matchedFile": "LICENSE",
       "textSha256": "f71e8ed126b46346494aad5486874cd8f0aafe95092ed67d2e3cb6110f939abc"
     },
     {
@@ -1332,6 +1347,7 @@
       "version": "4.5.0",
       "spdxId": "MIT",
       "confidence": 0,
+      "matchedFile": "LICENSE",
       "textSha256": "ffd8b33b354585f4ce119f19c53728281e48a97b074491eb6bf6d5c5ff305272"
     },
     {
@@ -1340,6 +1356,7 @@
       "version": "4.5.0",
       "spdxId": "MIT",
       "confidence": 0,
+      "matchedFile": "LICENSE",
       "textSha256": "e159c6d48c989185448658f276375bfb2300362ec6d4ae5525a2d49c4bcb947d"
     },
     {
@@ -1348,6 +1365,7 @@
       "version": "1.8.0",
       "spdxId": "(ISC AND MIT)",
       "confidence": 0,
+      "matchedFile": "LICENSE",
       "textSha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57"
     },
     {
@@ -1374,6 +1392,7 @@
       "version": "0.5.6",
       "spdxId": "MIT",
       "confidence": 0,
+      "matchedFile": "LICENSE",
       "textSha256": "05991c2e8f070b69ec5b656c2c12fd07cd0153dd157d39b050b82af59b319a01"
     },
     {
@@ -1675,6 +1694,7 @@
       "version": "2.3.8",
       "spdxId": "MIT",
       "confidence": 0,
+      "matchedFile": "LICENSE",
       "textSha256": "ec62dc96da0099b87f4511736c87309335527fb7031639493e06c95728dc8c54"
     },
     {
@@ -1764,6 +1784,7 @@
       "version": "0.6.1",
       "spdxId": "BSD-3-Clause",
       "confidence": 0,
+      "matchedFile": "LICENSE",
       "textSha256": "6cb0631f71c7749763fd3dd1d5bee52dd1070ec17f2edc1710079ad070bd2fbd"
     },
     {
@@ -1781,6 +1802,7 @@
       "version": "1.1.1",
       "spdxId": "MIT",
       "confidence": 0,
+      "matchedFile": "LICENSE",
       "textSha256": "11f2aafb37d06b3ee5bdaf06e9811141d0da05263c316f3d627f45c20d43261b"
     },
     {
@@ -1942,6 +1964,7 @@
       "version": "13.6.30",
       "spdxId": "MIT",
       "confidence": 0,
+      "matchedFile": "LICENSE",
       "textSha256": "341baa53605ed85d6f95782322854cca56c655ebc7fd4712649b8e7afc6020ff"
     },
     {

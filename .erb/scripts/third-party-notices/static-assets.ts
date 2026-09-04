@@ -85,14 +85,32 @@ export const STATIC_TREES = ['assets', 'public', 'contributions'];
 export const WHOLESALE_COPIED_EXTENSIONS = ['evil'];
 
 /**
- * Every tree `electron-builder.json5` packs verbatim, so every tree this gate has to read.
+ * The trees `ParanextDataProvider.csproj` copies into the .NET publish output verbatim.
  *
- * `extraResources` names two of them, not one: `./extensions/dist/` (which is where
- * `copy-webpack-plugin` puts each extension's `assets/`, `public/` and `contributions/`) and
- * `./assets/**` at the repository root. Both reach every installer by the same mechanism, so a
- * notice file is equally invisible and equally redistributed in either. The root tree holds only
- * first-party icons, entitlements and localization today; the point of reading it is that nothing
- * else would notice when that stops being true.
+ * `<Content Include="assets\**\*.*">` and `<Content Include="base-directory-assets\*.*">` put them
+ * beside the executable, and `electron-builder.json5` packs the whole publish directory as
+ * `./dotnet/` - so they reach every installer by the same mechanism an extension's `assets/` does,
+ * and are equally invisible to a pipeline that reads webpack manifests and npm lockfiles.
+ *
+ * They carry third-party content: `c-sharp/assets/Attribution.md` names ubsicap/usfm for `usfm.sty`
+ * and ebible.org for everything under `WEB/`, and `base-directory-assets/IP-Country.zip` is
+ * geolocation data with its own terms.
+ */
+const DOTNET_STATIC_TREES = [
+  path.join('c-sharp', 'assets'),
+  path.join('c-sharp', 'base-directory-assets'),
+];
+
+/**
+ * Every tree an installer packs verbatim, so every tree this gate has to read.
+ *
+ * `extraResources` names three sources, not one: `./extensions/dist/` (which is where
+ * `copy-webpack-plugin` puts each extension's `assets/`, `public/` and `contributions/`),
+ * `./assets/**` at the repository root, and the .NET publish output that carries
+ * `DOTNET_STATIC_TREES`. All reach every installer by the same mechanism, so a notice file is
+ * equally invisible and equally redistributed in any of them. The root tree holds only first-party
+ * icons, entitlements and localization today; the point of reading it is that nothing else would
+ * notice when that stops being true.
  *
  * `extensions/src/evil` is copied WHOLESALE rather than tree by tree (see `webpack.util.ts`), so
  * the whole extension directory is read for it - anything under it ships.
@@ -113,8 +131,28 @@ function packedStaticTrees(repo: string): string[] {
       );
 
   trees.push(path.join(repo, 'assets'));
+  trees.push(...DOTNET_STATIC_TREES.map((tree) => path.join(repo, tree)));
 
   return trees.filter((tree) => fs.existsSync(tree));
+}
+
+/**
+ * The extensions whose trees an installer packs, by folder name.
+ *
+ * Every folder under `extensions/src` is built and copied into `extensions/dist`, which
+ * `electron-builder.json5` packs as `extraResources` - so this is the set of extensions the
+ * artifact contains. Read from the same directory listing `packedStaticTrees` walks, so a section
+ * of the notices document that describes what one extension redistributes can be gated on the
+ * extension actually being there rather than asserted unconditionally.
+ */
+export function packedExtensionNames(repo: string): string[] {
+  const extensionsRoot = path.join(repo, 'extensions', 'src');
+  if (!fs.existsSync(extensionsRoot)) return [];
+  return fs
+    .readdirSync(extensionsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort(compareStrings);
 }
 
 /** An extension's own `LICENSE`, which this repository writes and ships with every extension. */
@@ -172,9 +210,11 @@ export function assertStaticAssetNoticesRecorded(repo: string, policy: Policy): 
       `${unrecorded.length} third-party notice file(s) ship inside a copied static asset tree ` +
         `and are recorded nowhere:\n  ${unrecorded.join('\n  ')}\n` +
         "electron-builder packs these trees into every installer verbatim - each extension's " +
-        'assets/ and public/ by way of extensions/dist, and ./assets/** at the repository root - ' +
+        'assets/ and public/ by way of extensions/dist, ./assets/** at the repository root, and ' +
+        "the .NET publish output's copies of c-sharp/assets and c-sharp/base-directory-assets - " +
         'so nothing else in this pipeline can see them: webpack compiles no module for a copied ' +
-        'file. Record each one in notices-policy.json under "staticAssetNotices", e.g.:\n' +
+        'file, and neither npm nor NuGet describes one. Record each in notices-policy.json under ' +
+        '"staticAssetNotices", e.g.:\n' +
         `${unrecorded
           .map(
             (file) =>

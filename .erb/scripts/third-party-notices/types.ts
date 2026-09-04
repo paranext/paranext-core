@@ -134,6 +134,32 @@ export type SnapStagePackage = {
   copyright: VendoredCopyright;
 };
 
+/**
+ * A native library the build copies beside the executable from the machine that built it.
+ *
+ * These appear in neither package graph: no manifest declares them and no restore resolves them,
+ * yet the installer redistributes them - the same "outside both graphs" shape as a snap-staged
+ * Ubuntu library. The distinguishing feature is that the VERSION is whatever the build machine had,
+ * so nothing here can pin one; what is fixed is the license the library is published under, and
+ * that is what the document reproduces.
+ */
+export type CopiedPlatformLibrary = {
+  /** Which platforms' builds copy it, in prose - "Linux and macOS". */
+  platforms: string;
+  /** How it gets into the artifact, naming the mechanism a reader can go and check. */
+  copiedBy: string;
+  /**
+   * The identifiers whose canonical texts discharge the notice obligation, every one of which must
+   * be on `allowed` so the SPDX corpus index reaches it.
+   *
+   * A list rather than one value because a library whose terms changed across releases is copied
+   * from build machines on either side of that change, and the document cannot know which.
+   */
+  spdx: string[];
+  /** What the entry establishes, in a sentence - reproduced in the document. */
+  reason: string;
+};
+
 /** A checked-in copy of a staged library's Ubuntu `copyright` file. */
 export type VendoredCopyright = {
   /** Filename under `vendored-texts/snap/`. */
@@ -172,6 +198,9 @@ export type Policy = {
   staticAssetNoticesNote?: string;
   /** Keyed by repo-relative path - see `static-assets.ts`. */
   staticAssetNotices?: Record<string, StaticAssetNotice>;
+  copiedPlatformLibrariesNote?: string;
+  /** Keyed by the library's name as the document calls it. */
+  copiedPlatformLibraries?: Record<string, CopiedPlatformLibrary>;
 };
 
 /** One npm package the build establishes as shipping, and how it was reached. */
@@ -302,6 +331,18 @@ export type Report = {
   snapCopyrightTexts?: NamedText[];
   /** Texts reproduced on behalf of files copied into `extensions/dist` - see `static-assets.ts`. */
   staticAssetNotices?: NamedText[];
+  /** Native libraries copied from the build machine - see `CopiedPlatformLibrary`. */
+  copiedPlatformLibraries?: Record<string, CopiedPlatformLibrary>;
+  /** Folder names of the extensions an installer packs - see `packedExtensionNames`. */
+  packedExtensions?: string[];
+  /**
+   * Whether the packaged application embeds the prebuilt Electron runtime.
+   *
+   * Electron is compiled into no bundle, so it has no row: the notices policy's
+   * `unbundledDependencies` entry is the record that it ships, and this carries that fact to the
+   * section that describes what it brings with it.
+   */
+  shipsElectron?: boolean;
 };
 
 /**
