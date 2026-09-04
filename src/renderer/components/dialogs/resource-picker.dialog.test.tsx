@@ -38,8 +38,16 @@ function countDblCatalogCalls() {
     .length;
 }
 
-/** Routes each command to its own outcome, defaulting the local half to "nothing on disk". */
-function mockCommands(dblCatalog: () => Promise<unknown>, localResources = async () => []) {
+/**
+ * Routes each command to its own outcome, defaulting the local half to "nothing on disk".
+ *
+ * Both parameters are typed rather than inferred: an inferred `async () => []` default narrows to
+ * `Promise<never[]>`, which then rejects every caller that supplies a populated list.
+ */
+function mockCommands(
+  dblCatalog: () => Promise<unknown>,
+  localResources: () => Promise<unknown> = async () => [],
+) {
   vi.mocked(sendCommand).mockImplementation((command: unknown) =>
     command === LOCAL_RESOURCES_COMMAND ? localResources() : dblCatalog(),
   );
