@@ -54,7 +54,7 @@ describe('Onboarding tour service shard registration', () => {
     const { objectType, attributes } = await registerShard();
 
     expect(objectType).toBe(ONBOARDING_TOUR_SERVICE_SHARD_OBJECT_TYPE);
-    expect(attributes).toEqual({ windowId: 1 });
+    expect(attributes).toEqual({ windowId: '1' });
   });
 
   test('refuses to register a shard nothing could be routed to', async () => {
