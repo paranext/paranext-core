@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import papi, { logger } from '@papi/frontend';
-import { useProjectSetting } from '@papi/frontend/react';
+import { useProjectDataProviderState, useProjectSetting } from '@papi/frontend/react';
 import { useEvent } from 'platform-bible-react';
 import { isPlatformError, type PlatformError } from 'platform-bible-utils';
 import type { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
@@ -53,7 +53,14 @@ export function useBufferedLayoutSetting<ProjectSettingName extends ProjectSetti
   key: ProjectSettingName,
   defaultValue: ProjectSettingTypes[ProjectSettingName],
 ): [ProjectSettingTypes[ProjectSettingName] | PlatformError, boolean, PlatformError | undefined] {
-  const [rawSetting, , , isLoading] = useProjectSetting(projectId, key, defaultValue);
+  // Read through a provider that is known to answer for THIS project. `useProjectSetting` keeps
+  // reporting the value it already has and raises `isLoading` from an effect a commit later, so
+  // across a project change it offers the OUTGOING project's value as settled; a `ready` provider is
+  // the reliable "there is something trustworthy to apply" signal.
+  const baseState = useProjectDataProviderState('platform.base', projectId);
+  const baseProjectDataProvider =
+    baseState.status === 'ready' ? baseState.networkObject : undefined;
+  const [rawSetting, , , isLoading] = useProjectSetting(baseProjectDataProvider, key, defaultValue);
 
   const [shouldApply, setShouldApply] = useState(true);
   // Whether anything readable has ever landed in the held copy. Gates error reporting: before the
@@ -78,6 +85,19 @@ export function useBufferedLayoutSetting<ProjectSettingName extends ProjectSetti
     previousProjectIdRef.current = projectId;
   }, [projectId]);
 
+  // Re-arm when `projectId` changes in place. Done during render, not in an effect: an effect runs
+  // after a render that would already have handed the caller the outgoing project's held value.
+  // React re-renders from this without committing the current output, so nothing downstream ever
+  // observes the stale pairing. The held copy drops to `defaultValue` rather than keeping the old
+  // project's value, because a value from a different project is not a better placeholder than none.
+  const [previousProjectId, setPreviousProjectId] = useState(projectId);
+  if (previousProjectId !== projectId) {
+    setPreviousProjectId(projectId);
+    setHeldSetting(defaultValue);
+    setHasAppliedRealValue(false);
+    setShouldApply(true);
+  }
+
   // Re-arm when the coordinator broadcasts an apply for this project.
   useEvent<{ projectId: string }>(
     papi.network.getNetworkEvent('platformScriptureEditor.onSharedLayoutApply'),
@@ -93,17 +113,25 @@ export function useBufferedLayoutSetting<ProjectSettingName extends ProjectSetti
   // disarm. Waiting for `!isLoading` avoids capturing the loading placeholder (see hook doc), and
   // skipping a PlatformError keeps the hook armed so a transient read failure cannot latch.
   useEffect(() => {
-    if (shouldApply && !isLoading && !isPlatformError(rawSetting)) {
+    if (shouldApply && baseProjectDataProvider && !isLoading && !isPlatformError(rawSetting)) {
       setHeldSetting(rawSetting);
       setHasAppliedRealValue(true);
       setShouldApply(false);
     }
-  }, [shouldApply, isLoading, rawSetting]);
+  }, [shouldApply, baseProjectDataProvider, isLoading, rawSetting]);
+
+  // An unresolved provider counts as loading, so the placeholder the re-arm just wrote is never
+  // reported as a settled, genuinely-empty answer for the new project.
+  const isLoadingForThisProject = isLoading || !baseProjectDataProvider;
 
   return [
     heldSetting,
-    isLoading,
-    isPlatformError(rawSetting) && !hasAppliedRealValue ? rawSetting : undefined,
+    isLoadingForThisProject,
+    // The error is only this project's once something has been delivered for it. Before then
+    // `rawSetting` is whatever the previous project left behind, including its errors.
+    !isLoadingForThisProject && isPlatformError(rawSetting) && !hasAppliedRealValue
+      ? rawSetting
+      : undefined,
   ];
 }
 

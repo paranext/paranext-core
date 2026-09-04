@@ -9034,6 +9034,29 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
 }
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
   import { NetworkObject, NetworkObjectDetails } from 'shared/models/network-object.model';
+  export type NetworkObjectState<T> =
+    /** No source was given, so there is nothing to look up. Not a failure — nothing was asked. */
+    | {
+        status: 'noSource';
+      }
+    /** A lookup for the CURRENT source is in flight. Whatever was shown before is now stale. */
+    | {
+        status: 'loading';
+      }
+    /** The object answers the source being asked for right now. The only state that may be acted on. */
+    | {
+        status: 'ready';
+        networkObject: T;
+      }
+    /**
+     * The lookup for the current source finished without a usable object — it rejected, nothing is
+     * registered under the name, or what was found has been disposed. Waiting will not help; report
+     * it rather than spinning.
+     */
+    | {
+        status: 'unavailable';
+        error?: unknown;
+      };
   /**
    * This function takes in a getNetworkObject function and creates a hook with that function in it
    * which will return a network object
@@ -9058,7 +9081,7 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
    *
    * @returns A function that takes in a networkObjectSource and returns a NetworkObject
    */
-  export function createUseNetworkObjectHook<THookParams extends unknown[]>(
+  function createUseNetworkObjectCoreHook<THookParams extends unknown[]>(
     getNetworkObject: (...args: THookParams) => Promise<NetworkObject<object> | undefined>,
     mapParametersToNetworkObjectSource?: (
       ...args: THookParams
@@ -9067,7 +9090,40 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
       networkObjectDetails: NetworkObjectDetails,
       networkObjectSource: string,
     ) => boolean,
+  ): (...args: THookParams) => {
+    networkObject: NetworkObject<object> | undefined;
+    state: NetworkObjectState<NetworkObject<object>>;
+  };
+  /**
+   * Creates a hook that returns the network object for a source, or `undefined`.
+   *
+   * `undefined` conflates "not yet", "nothing to ask for", and "asking failed", and across a source
+   * change this keeps serving the PREVIOUS source's object — so a consumer whose source can change in
+   * place should use {@link createUseNetworkObjectStateHook} instead, whose union can tell those
+   * apart. See {@link NetworkObjectState}.
+   *
+   * Arguments are as {@link createUseNetworkObjectStateHook}.
+   */
+  export function createUseNetworkObjectHook<THookParams extends unknown[]>(
+    ...createArgs: Parameters<typeof createUseNetworkObjectCoreHook<THookParams>>
   ): (...args: THookParams) => NetworkObject<object> | undefined;
+  /**
+   * Creates a hook that returns a {@link NetworkObjectState} for a source — which of "nothing asked",
+   * "in flight", "here it is", and "not available" the lookup is in, so a consumer can wait out a
+   * transient window, report a dead end, and act only on an object that answers the source it is
+   * asking about right now.
+   *
+   * Shares its implementation with {@link createUseNetworkObjectHook}, so re-lookup on disposal and on
+   * factory publication behave identically.
+   *
+   * @param getNetworkObject See {@link createUseNetworkObjectHook}
+   * @param mapParametersToNetworkObjectSource See {@link createUseNetworkObjectHook}
+   * @param doesCreatedNetworkObjectMatchSource See {@link createUseNetworkObjectHook}
+   * @returns A function that takes in a networkObjectSource and returns its state
+   */
+  export function createUseNetworkObjectStateHook<THookParams extends unknown[]>(
+    ...createArgs: Parameters<typeof createUseNetworkObjectCoreHook<THookParams>>
+  ): (...args: THookParams) => NetworkObjectState<NetworkObject<object>>;
   export default createUseNetworkObjectHook;
 }
 declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
@@ -10099,6 +10155,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   export default useSetting;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
+  import { type NetworkObjectState } from 'renderer/hooks/hook-generators/create-use-network-object-hook.util';
   import { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
   /**
    * Gets a project data provider with specified provider name
@@ -10122,6 +10179,34 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
     projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
     pdpFactoryId?: string,
   ) => ProjectDataProviderInterfaces[ProjectInterface] | undefined;
+  /**
+   * Gets the state of the project data provider for a project: which of "no project given", "the
+   * lookup is in flight", "here it is", and "not available" it is in.
+   *
+   * Prefer this over {@link useProjectDataProvider} whenever the project can change WITHOUT the
+   * consumer remounting — a web view that re-points itself with `updateWebViewDefinition({ projectId
+   * })`, or one that follows the active editor. `useProjectDataProvider` answers such a change with
+   * the PREVIOUS project's provider and no way to tell, so a consumer reads one project's data under
+   * another's id and writes data derived from one into the other's storage. This union makes that
+   * window visible, and separates it from a lookup that failed and will not recover on its own.
+   *
+   * Act only on `ready`. While `loading`, a consumer may keep displaying what it last rendered, but
+   * must not write through it — that distinction between what may be shown and what may be written is
+   * the point.
+   *
+   * @param projectInterface `projectInterface` that the project must support. The `networkObject` in
+   *   the `ready` state has the project data provider interface type associated with this
+   *   `projectInterface`.
+   * @param projectDataProviderSource String id of the project to get, or a project data provider to
+   *   pass straight through, or `undefined` for `noSource`
+   * @param pdpFactoryId Optional ID of the PDP factory to get the project data provider from
+   * @returns The {@link NetworkObjectState} of the project data provider
+   */
+  export const useProjectDataProviderState: <ProjectInterface extends ProjectInterfaces>(
+    projectInterface: ProjectInterface,
+    projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+    pdpFactoryId?: string,
+  ) => NetworkObjectState<ProjectDataProviderInterfaces[ProjectInterface]>;
   export default useProjectDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
@@ -10449,6 +10534,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useSetting } from 'renderer/hooks/papi-hooks/use-setting.hook';
   export { default as useProjectData } from 'renderer/hooks/papi-hooks/use-project-data.hook';
   export { default as useProjectDataProvider } from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
+  export { useProjectDataProviderState } from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
   export { default as useProjectSetting } from 'renderer/hooks/papi-hooks/use-project-setting.hook';
   export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';

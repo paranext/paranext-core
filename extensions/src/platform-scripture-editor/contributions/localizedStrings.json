@@ -188,6 +188,7 @@
       "%webView_scriptureTextGrid_viewOptions_pickerNoProjectNotice%": "No project is selected, so a resource you choose here will be downloaded to this computer but not added to a text collection.",
       "%webView_scriptureTextGrid_viewOptions_removeFromList%": "Remove {resourceName} from list",
       "%webView_scriptureTextGrid_viewOptions_textsHeader%": "Texts",
+      "%webView_scriptureTextGrid_viewOptions_unavailable%": "Text Collection settings are not available for this project.",
       "%webView_scriptureTextGrid_viewOptions_verse%": "Verse",
       "%webView_scriptureTextGrid_viewOptions_viewHeader%": "View",
       "%webView_selectDblResource_installFailed%": "Failed to install resource. Please try again."

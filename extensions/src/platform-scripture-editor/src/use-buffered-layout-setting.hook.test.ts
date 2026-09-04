@@ -8,11 +8,14 @@ import {
   type PlatformEventHandler,
 } from 'platform-bible-utils';
 import { logger } from '@papi/frontend';
-import { useProjectSetting } from '@papi/frontend/react';
+import { useProjectDataProviderState, useProjectSetting } from '@papi/frontend/react';
 import { useEvent } from 'platform-bible-react';
 import { useBufferedLayoutSetting } from './use-buffered-layout-setting.hook';
 
-vi.mock('@papi/frontend/react', () => ({ useProjectSetting: vi.fn() }));
+vi.mock('@papi/frontend/react', () => ({
+  useProjectSetting: vi.fn(),
+  useProjectDataProviderState: vi.fn(),
+}));
 vi.mock('@papi/frontend', () => ({
   default: { network: { getNetworkEvent: vi.fn(() => 'event-token') } },
   logger: { warn: vi.fn() },
@@ -27,6 +30,20 @@ vi.mock('platform-bible-react', () => ({
 }));
 
 const mockUseProjectSetting = vi.mocked(useProjectSetting);
+const mockUseProjectDataProviderState = vi.mocked(useProjectDataProviderState);
+
+/** A stable stand-in provider; identity must not change per render or the gate cannot be tested. */
+const A_PROVIDER = { forProject: 'proj-1' };
+const B_PROVIDER = { forProject: 'proj-2' };
+
+/** Serves a provider as `ready`, or `undefined` as `loading` (an unresolved lookup). */
+function setProvider(pdp: object | undefined) {
+  mockUseProjectDataProviderState.mockReturnValue(
+    // The mock only needs the discriminant and payload the hook reads.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (pdp ? { status: 'ready', networkObject: pdp } : { status: 'loading' }) as never,
+  );
+}
 const DEFAULT = { dataVersion: '1.0.0', items: [] };
 
 /**
@@ -44,6 +61,7 @@ describe('useBufferedLayoutSetting', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedHandler = undefined;
+    setProvider(A_PROVIDER);
   });
 
   it('applies the raw value on mount', () => {
@@ -211,5 +229,71 @@ describe('useBufferedLayoutSetting', () => {
     rerender();
     rerender();
     expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
+  });
+
+  it('drops the outgoing project’s value when projectId changes in place', () => {
+    const projectOneValue = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'A', id: '1' }],
+    };
+    setRaw(projectOneValue);
+    const { result, rerender } = renderHook(
+      ({ pid }) => useBufferedLayoutSetting(pid, 'platformScripture.modelTexts', DEFAULT),
+      { initialProps: { pid: 'proj-1' } },
+    );
+    expect(result.current[0]).toEqual(projectOneValue);
+
+    // The switching commit, with the timing the real stack produces: the provider for the incoming
+    // project has not resolved, while the setting still reports proj-1's value as settled (it
+    // raises `isLoading` from an effect, a commit later). Re-applying it here is the trap.
+    setProvider(undefined);
+    rerender({ pid: 'proj-2' });
+
+    expect(result.current[0]).toEqual(DEFAULT);
+    expect(result.current[1]).toBe(true);
+  });
+
+  it('applies the incoming project’s value once its provider resolves and it loads', () => {
+    const projectTwoValue = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'B', id: '2' }],
+    };
+    setRaw({ dataVersion: '1.0.0', items: [{ type: 'project', name: 'A', id: '1' }] });
+    const { result, rerender } = renderHook(
+      ({ pid }) => useBufferedLayoutSetting(pid, 'platformScripture.modelTexts', DEFAULT),
+      { initialProps: { pid: 'proj-1' } },
+    );
+
+    setProvider(undefined);
+    rerender({ pid: 'proj-2' });
+    setProvider(B_PROVIDER);
+    setRaw(DEFAULT, true);
+    rerender({ pid: 'proj-2' });
+    setRaw(projectTwoValue);
+    rerender({ pid: 'proj-2' });
+
+    expect(result.current[0]).toEqual(projectTwoValue);
+  });
+
+  it('applies the incoming value even when the setting was already loading at the switch', () => {
+    // The grid's ordinary startup: the scroll group stamps a project in place (`undefined` ->
+    // 'proj-1') while the setting is still loading, so `isLoading` never transitions again. Gating
+    // on a flag that waits for that transition would pin the held copy on the placeholder forever.
+    const value = { dataVersion: '1.0.0', items: [{ type: 'project', name: 'A', id: '1' }] };
+    const initialProps: { pid: string | undefined } = { pid: undefined };
+    setProvider(undefined);
+    setRaw(DEFAULT, true);
+    const { result, rerender } = renderHook(
+      ({ pid }: { pid: string | undefined }) =>
+        useBufferedLayoutSetting(pid, 'platformScripture.modelTexts', DEFAULT),
+      { initialProps },
+    );
+
+    setProvider(A_PROVIDER);
+    rerender({ pid: 'proj-1' });
+    setRaw(value);
+    rerender({ pid: 'proj-1' });
+
+    expect(result.current[0]).toEqual(value);
   });
 });

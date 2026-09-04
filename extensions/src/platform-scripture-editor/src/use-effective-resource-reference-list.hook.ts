@@ -7,7 +7,7 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { logger } from '@papi/frontend';
-import { useProjectDataProvider } from '@papi/frontend/react';
+import { useProjectDataProviderState } from '@papi/frontend/react';
 import {
   CURRENT_DATA_VERSION,
   DEFAULT_RESOURCE_REFERENCE_LIST as DEFAULT_LIST,
@@ -99,7 +99,13 @@ export function useEffectiveResourceReferenceList(
   const [projectResourceReferenceList, isProjectSettingLoading, projectSettingError] =
     useBufferedLayoutSetting(projectId, settingName, DEFAULT_LIST);
 
-  const userPdp = useProjectDataProvider('platformScripture.textConnectionSettings', projectId);
+  // The STATE hook, so the user layer of this merge cannot answer for a project the caller has
+  // moved off of while the admin layer answers for the current one.
+  const userPdpState = useProjectDataProviderState(
+    'platformScripture.textConnectionSettings',
+    projectId,
+  );
+  const userPdp = userPdpState.status === 'ready' ? userPdpState.networkObject : undefined;
 
   const [userResourceReferenceList, setUserResourceReferenceList] = useState<
     ResourceReferenceList | undefined
@@ -120,6 +126,9 @@ export function useEffectiveResourceReferenceList(
         : 'subscribeUserReferencedProjectsAndResources';
 
     const subscribePromise = userPdp[subscribeMethod](undefined, (value) => {
+      // Unsubscribing is an async round trip, so the outgoing subscription stays live for a moment
+      // after cleanup; a late delivery would reinstate a list this hook no longer reports on.
+      if (disposed) return;
       setUserResourceReferenceList(isPlatformError(value) ? DEFAULT_LIST : value);
     });
 
@@ -144,7 +153,13 @@ export function useEffectiveResourceReferenceList(
 
     return () => {
       disposed = true;
-      unsubscribe?.();
+      // Rejects when the provider it belongs to is already disposed, which a project switch
+      // routinely causes; unhandled without this.
+      unsubscribe?.().catch((err) =>
+        logger.warn(
+          `Failed to unsubscribe from user text connection settings: ${getErrorMessage(err)}`,
+        ),
+      );
     };
   }, [userPdp, settingName]);
 

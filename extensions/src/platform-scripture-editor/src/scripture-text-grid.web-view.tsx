@@ -82,6 +82,8 @@ const VIEW_OPTIONS_BUTTON_KEY = '%webView_scriptureTextGrid_viewOptions_openPane
 const INSTALL_FAILED_KEY = '%webView_selectDblResource_installFailed%';
 const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed%';
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
+const LOADING_KEY = '%general_loading%';
+const SETTINGS_UNAVAILABLE_KEY = '%webView_scriptureTextGrid_viewOptions_unavailable%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
 const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
@@ -97,6 +99,8 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   VIEW_OPTIONS_BUTTON_KEY,
   NO_PROJECT_KEY,
   ...VIEW_OPTIONS_NOTICE_STRING_KEYS,
+  LOADING_KEY,
+  SETTINGS_UNAVAILABLE_KEY,
   CHAPTER_CONTEXT_CLOSE_KEY,
   EMPTY_STATE_KEY,
   CELL_ACCESSIBLE_NAME_KEY,
@@ -171,7 +175,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     candidateProjectId,
   );
 
-  const { sources, textConnectionPdp } = useTextCollectionSources(effectiveProjectId);
+  const { sources, textConnectionPdp, textConnectionState, isOrderPending } =
+    useTextCollectionSources(effectiveProjectId);
 
   // Latest sources for the async callbacks below — reading the render-closure `sources` would let a
   // rapid second toggle (or a toggle mid-install) compute its next-state from a pre-write snapshot
@@ -303,17 +308,47 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     );
   }, [projectId, candidateProjectId, resources]);
 
+  // Why the View Options controls are disabled, so the panel never shows a bare header. The three
+  // statuses map onto three different things to tell the user: nothing selected, still arriving, or
+  // this project has no text-collection settings at all.
+  const disabledMessage = useMemo(() => {
+    // Resolved rather than indexed: `useLocalizedStrings` seeds its result with the key itself
+    // until the real value arrives, and rendering that shows literal `%…%` text.
+    if (textConnectionState.status === 'noSource')
+      return resolveLocalizedString(localizedStrings, NO_PROJECT_KEY);
+    if (textConnectionState.status === 'unavailable')
+      return resolveLocalizedString(localizedStrings, SETTINGS_UNAVAILABLE_KEY);
+    return resolveLocalizedString(localizedStrings, LOADING_KEY);
+  }, [textConnectionState.status, localizedStrings]);
+
+  // A chapter split names a resource in the collection that was on screen, so it cannot outlive a
+  // project change. Announced as closed as well, or a screen reader is left holding the stale
+  // "opened" message this clear silently replaces. `installing` is deliberately NOT cleared: its
+  // rows track downloads that are still running, and their own `finally` removes them.
+  useEffect(() => {
+    setChapterContext((previous) => {
+      if (previous) setAnnouncement(localizedStrings[ARIA_CLOSED_KEY] ?? '');
+      return undefined;
+    });
+    // `localizedStrings` is intentionally not a dependency: this must run when the project changes,
+    // not when strings finish loading, and the announcement only matters alongside a real clear.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveProjectId]);
+
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
 
-  // Fire first-open overlay init once per resolved projectId. The server-side marker makes repeated
+  // Fire first-open overlay init once per resolved provider. The server-side marker makes repeated
   // calls safe; this guard just avoids redundant round-trips within a single web-view lifetime.
-  const initializedProjectIds = useRef(new Set<string>());
+  // Keyed by the provider the call is made on, so the record and the call always describe the same
+  // project — keying by id let a switch mark the incoming project done while the call went to the
+  // outgoing project's provider, after which the incoming project's overlay was never seeded.
+  const initializedProviders = useRef(new WeakSet<object>());
   useEffect(() => {
-    if (!effectiveProjectId || !textConnectionPdp) return;
-    if (initializedProjectIds.current.has(effectiveProjectId)) return;
-    initializedProjectIds.current.add(effectiveProjectId);
+    if (!textConnectionPdp) return;
+    if (initializedProviders.current.has(textConnectionPdp)) return;
+    initializedProviders.current.add(textConnectionPdp);
     textConnectionPdp.initializeTextCollectionOverlay().catch((error) => {
-      initializedProjectIds.current.delete(effectiveProjectId);
+      initializedProviders.current.delete(textConnectionPdp);
       logger.error(
         `Failed to initialize text-collection overlay for ${effectiveProjectId}: ${error}`,
       );
@@ -388,13 +423,20 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     (newShownIdSequence: string[]) => {
       const { current } = sourcesRef;
       if (!current || !textConnectionPdp) return;
+      // The saved order has not arrived, so `current.order` is the empty stand-in. Reordering
+      // against it would persist only the resources on screen and drop every hidden resource's
+      // saved slot — the guarantee `reorderShownIds` exists to provide.
+      if (isOrderPending) {
+        logger.info('Ignoring a reorder: the saved cell order has not been read yet.');
+        return;
+      }
       const nextOrder = reorderShownIds(current.order, newShownIdSequence);
       persistCellOrder(textConnectionPdp, nextOrder).catch((e) => {
         papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
         logger.warn(`Failed to persist cell order: ${getErrorMessage(e)}`);
       });
     },
-    [textConnectionPdp],
+    [textConnectionPdp, isOrderPending],
   );
 
   const getReorderHandleLabel = useCallback(
@@ -472,13 +514,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // the next delivery reconciles.)
   useEffect(() => {
     const { current } = sourcesRef;
-    if (!current || !textConnectionPdp) return;
+    if (!current || !textConnectionPdp || isOrderPending) return;
     const next = reconcileCellOrder(current.order, selectedResourceIds);
     if (!next) return;
     persistCellOrder(textConnectionPdp, next).catch((e) =>
       logger.warn(`Failed to reconcile cell order: ${getErrorMessage(e)}`),
     );
-  }, [sources, textConnectionPdp, selectedResourceIds]);
+  }, [sources, textConnectionPdp, selectedResourceIds, isOrderPending]);
 
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
@@ -555,11 +597,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
               // controls. Show the "no project" prompt only when there is genuinely no project (not
               // during the brief load after one is bound).
               disabled={!sources || !textConnectionPdp}
-              disabledMessage={
-                effectiveProjectId
-                  ? undefined
-                  : resolveLocalizedString(localizedStrings, NO_PROJECT_KEY)
-              }
+              // Always supply a reason. Left undefined while a project is bound, the panel renders
+              // the TEXTS header over nothing with the controls greyed and no explanation.
+              disabledMessage={disabledMessage}
               localizedStrings={localizedStrings}
             />
           </PopoverContent>
