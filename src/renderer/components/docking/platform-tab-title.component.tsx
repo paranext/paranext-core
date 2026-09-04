@@ -2,7 +2,28 @@ import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
-import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-shard';
+import {
+  floatTab,
+  getOpenTabCountSync,
+  updateTabPartialSync,
+} from '@renderer/services/web-view.service-shard';
+import {
+  buildTabMenuItems,
+  FLOAT_TAB_COMMAND,
+  getMoveTargetWindowId,
+  MOVE_TO_NEW_WINDOW_COMMAND,
+  type TabMenuContext,
+} from '@renderer/components/docking/tab-menu.util';
+import { EMPTY_WINDOW_LABEL_KEY } from '@renderer/components/docking/window-label.util';
+import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
+import {
+  collectContextMenuKeys,
+  localizeContextMenuItems,
+} from '@renderer/components/overlays/overlay-context-menu-localization.util';
+import { menuDataService } from '@shared/services/menu-data.service';
+import type { WindowSummary } from '@shared/services/window.service-model';
+import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
+import { convertContributionToContextMenuItems } from '@renderer/services/overlays/overlay-menu-converter';
 import {
   getWebViewMoveFailureDisposition,
   WebViewMoveFailureDisposition,
@@ -16,6 +37,10 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
   Tooltip,
   TooltipContent,
@@ -23,7 +48,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { getErrorMessage, isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
 
@@ -60,6 +85,11 @@ type PlatformTabTitleProps = {
    * locale-independent selector.
    */
   webViewId?: string;
+  /**
+   * Type of the WebView this tab hosts, used to look up the menu contributed for it. `undefined`
+   * for tabs hosting no WebView, which are answered with the platform's own tab menu.
+   */
+  webViewType?: string;
 };
 
 // CSS classes for highlighting the active tab header and content
@@ -85,6 +115,75 @@ const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
 // This duration must be ≥ the tabTitleBarFlash animation duration in dock-layout-wrapper.component.scss
 const cssHighlightDurationMilliseconds = 3000;
 
+/** A tab menu with nothing in it, for a tab whose menu has not loaded or failed to */
+const EMPTY_TAB_MENU = Object.freeze({ groups: {}, items: [] });
+
+/**
+ * Web view type asked for on behalf of a tab that hosts none — a dialog, or an error tab.
+ *
+ * Nothing registers this, which is the point: the menu data provider answers a name it does not
+ * recognize with the platform's own tab items, and those are exactly what such a tab should offer.
+ * Deliberately inside the `platform.` namespace even though it is not a real web view type, because
+ * that is the one namespace no extension can contribute under — `platform` is a forbidden extension
+ * name, and the combiner rejects a `webViewMenus` key that is not prefixed with its contributor's
+ * name — so nothing can register a menu here and change what these tabs are offered.
+ */
+const TAB_WITHOUT_WEB_VIEW_TYPE = 'platform.tab';
+
+/** Render converted menu items into the context-menu primitives, submenus and all */
+function renderTabMenuItems(
+  items: OverlayContextMenuItem[],
+  onSelect: (itemId: string) => void,
+  keyPrefix = '',
+): ReactNode[] {
+  const timesIdSeen = new Map<string, number>();
+  return items.map((item, index) => {
+    // Keyed by the item's own id where it has one, so an item keeps its identity when the list
+    // around it changes — the move items come and go as the window read lands. A separator never
+    // has one and a submenu's is optional, so position remains the only key available for those.
+    //
+    // An id is not unique, though: an item's id is its command, and nothing enforces that two items
+    // carry different ones. Duplicate-order checking rejects only a repeated group-and-order pair,
+    // new-item checking looks at a contributed item's id rather than its command, and a group may
+    // be extensible — so a second item bearing the same command can arrive in the platform's own
+    // group. Repeats are numbered rather than left to collide.
+    //
+    // The count is appended to EVERY id, including the first. Numbering only the repeats would
+    // leave an unsuffixed form for an id to impersonate: `a.b`, `a.b`, `a.b-1` would key as
+    // `id-a.b`, `id-a.b-1`, `id-a.b-1` — the third colliding with the second's suffixed form. With
+    // the count always present the two live in different shapes and cannot meet.
+    //
+    // The two forms also carry different prefixes so a position can never be mistaken for an id.
+    // Nothing can currently produce that collision — a contributed id must match
+    // `^[\w\-]+\.[\w\-]+$`, so it always holds a dot and is never a bare number — which is why
+    // no test covers it; the prefixes keep the schema from being the only thing preventing it.
+    const itemId = item.type === 'separator' ? undefined : item.id;
+    let key: string;
+    if (itemId === undefined) {
+      key = `${keyPrefix}position-${index}`;
+    } else {
+      const timesSeen = timesIdSeen.get(itemId) ?? 0;
+      timesIdSeen.set(itemId, timesSeen + 1);
+      key = `${keyPrefix}id-${itemId}-${timesSeen}`;
+    }
+    if (item.type === 'separator') return <ContextMenuSeparator key={key} />;
+    if (item.type === 'submenu')
+      return (
+        <ContextMenuSub key={key}>
+          <ContextMenuSubTrigger>{item.label}</ContextMenuSubTrigger>
+          <ContextMenuSubContent>
+            {renderTabMenuItems(item.items, onSelect, `${key}-`)}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+      );
+    return (
+      <ContextMenuItem key={key} onClick={() => onSelect(item.id)}>
+        {item.label}
+      </ContextMenuItem>
+    );
+  });
+}
+
 const handleFloatTab = async (tabId: string) => {
   try {
     await floatTab(tabId);
@@ -104,10 +203,10 @@ const handleFloatTab = async (tabId: string) => {
  * {@link WebViewMoveFailureDisposition} fails to compile here until it has copy of its own.
  */
 const MOVE_FAILURE_MESSAGE_KEYS: Record<WebViewMoveFailureDisposition, LocalizeKey> = {
-  'reopened-in-source-window': '%tab_contextMenu_moveTabToNewWindow_failed%',
-  'reopened-in-focused-window': '%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%',
-  'not-reopened': '%tab_contextMenu_moveTabToNewWindow_failedNotReopened%',
-  'possibly-closed': '%tab_contextMenu_moveTabToNewWindow_failedMayHaveClosed%',
+  'reopened-in-source-window': '%tab_contextMenu_moveTab_failed%',
+  'reopened-in-focused-window': '%tab_contextMenu_moveTab_failedReopenedElsewhere%',
+  'not-reopened': '%tab_contextMenu_moveTab_failedNotReopened%',
+  'possibly-closed': '%tab_contextMenu_moveTab_failedMayHaveClosed%',
 };
 
 /**
@@ -116,7 +215,39 @@ const MOVE_FAILURE_MESSAGE_KEYS: Record<WebViewMoveFailureDisposition, LocalizeK
  * not be read — so nothing about where the tab lives has changed. A failure from a step that does
  * touch the tab names where it left it, including when that answer is "it may be gone".
  */
-const MOVE_FAILURE_DEFAULT_MESSAGE_KEY: LocalizeKey = '%tab_contextMenu_moveTabToNewWindow_failed%';
+const MOVE_FAILURE_DEFAULT_MESSAGE_KEY: LocalizeKey = '%tab_contextMenu_moveTab_failed%';
+
+/**
+ * Tell the user where a failed move left the tab, since the rejection is the only signal that it is
+ * not where they asked. Shared by both move actions: the dispositions describe where the tab ended
+ * up, which does not depend on where it was headed.
+ */
+const reportMoveFailure = async (webViewIdToMove: WebViewId, error: unknown) => {
+  const disposition = getWebViewMoveFailureDisposition(error);
+  try {
+    await notificationService.send({
+      message: disposition
+        ? MOVE_FAILURE_MESSAGE_KEYS[disposition]
+        : MOVE_FAILURE_DEFAULT_MESSAGE_KEY,
+      severity: 'error',
+    });
+  } catch (notificationError) {
+    logger.warn(
+      `Could not notify the user that moving web view ${webViewIdToMove} failed: ${getErrorMessage(notificationError)}`,
+    );
+  }
+};
+
+const handleMoveTabToWindow = async (webViewIdToMove: WebViewId, targetWindowId: number) => {
+  try {
+    await sendCommand('platform.moveWebViewToWindow', webViewIdToMove, targetWindowId);
+  } catch (error) {
+    logger.error(
+      `Failed to move web view ${webViewIdToMove} to window ${targetWindowId}: ${getErrorMessage(error)}`,
+    );
+    await reportMoveFailure(webViewIdToMove, error);
+  }
+};
 
 const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
   try {
@@ -128,19 +259,7 @@ const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
     // This menu item is a user action, and the move's rejection is the only signal that the tab is
     // not where they asked, so the failure has to reach the user and not only the log — saying
     // which failure it was, because each one calls for a different reaction
-    const disposition = getWebViewMoveFailureDisposition(error);
-    try {
-      await notificationService.send({
-        message: disposition
-          ? MOVE_FAILURE_MESSAGE_KEYS[disposition]
-          : MOVE_FAILURE_DEFAULT_MESSAGE_KEY,
-        severity: 'error',
-      });
-    } catch (notificationError) {
-      logger.warn(
-        `Could not notify the user that moving web view ${webViewIdToMove} failed: ${getErrorMessage(notificationError)}`,
-      );
-    }
+    await reportMoveFailure(webViewIdToMove, error);
   }
 };
 
@@ -162,6 +281,7 @@ export function PlatformTabTitle({
   flashTriggerTime,
   id,
   webViewId,
+  webViewType,
 }: PlatformTabTitleProps) {
   const isPowerMode = useIsPowerMode();
 
@@ -171,22 +291,172 @@ export function PlatformTabTitle({
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const containerRef = useRef<HTMLDivElement>(undefined!);
 
+  /**
+   * The contributed tab menu, converted for rendering. Empty until the read below lands, and for a
+   * tab whose read failed.
+   */
+  const [contributedItems, setContributedItems] = useState<OverlayContextMenuItem[]>([]);
+
   const tabAria: LocalizeKey = '%tab_aria_tab%';
-  const floatTabKey: LocalizeKey = '%tab_contextMenu_floatTab%';
-  const moveTabToNewWindowKey: LocalizeKey = '%tab_contextMenu_moveTabToNewWindow%';
+  // The contributed items' own keys are resolved here rather than in a second hook, so a tab asks
+  // for everything it needs to render in one round trip. They arrive unresolved whenever the menu
+  // data provider is serving its combiner's raw output — before the extension host's first
+  // contribution resync — and the tab menu is read once, so a label left raw would stay raw
+  const contributedKeys = useMemo(
+    () => collectContextMenuKeys(contributedItems),
+    [contributedItems],
+  );
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
       () =>
         isLocalizeKey(text)
-          ? [text, tabAria, floatTabKey, moveTabToNewWindowKey]
-          : [tabAria, floatTabKey, moveTabToNewWindowKey],
-      [text],
+          ? [text, tabAria, EMPTY_WINDOW_LABEL_KEY, ...contributedKeys]
+          : [tabAria, EMPTY_WINDOW_LABEL_KEY, ...contributedKeys],
+      [text, contributedKeys],
     ),
   );
   const title = isLocalizeKey(text) ? localizedStrings[text] : text;
   const tabLabel = localizedStrings[tabAria];
-  const floatTabText = localizedStrings[floatTabKey];
-  const moveTabToNewWindowText = localizedStrings[moveTabToNewWindowKey];
+  const emptyWindowLabel = localizedStrings[EMPTY_WINDOW_LABEL_KEY];
+
+  /** The contributed items with their labels resolved, ready to render */
+  const localizedContributedItems = useMemo(
+    () => localizeContextMenuItems(contributedItems, localizedStrings),
+    [contributedItems, localizedStrings],
+  );
+
+  // Read once when the tab mounts, rather than subscribed to. The platform's own items are a fixed
+  // contribution, and the two things that do change while a tab lives — which windows are open, and
+  // which actions apply to this tab — are read when the menu opens instead. A live subscription
+  // would re-read on every contribution resync for a list that had not changed.
+  //
+  // Only where the menu can open: Simple mode renders no tab menu at all, so its fixed layout would
+  // otherwise pay one cross-process read per tab for something never shown.
+  //
+  // The trade this accepts: an extension installed or removed mid-session has its tab items appear
+  // when the tab next mounts, not immediately.
+  useEffect(() => {
+    if (!isPowerMode) return undefined;
+
+    let isStillMounted = true;
+    (async () => {
+      try {
+        // Every tab has a tab menu. One hosting no web view has no type to look a contributed menu
+        // up by, and the data provider answers an unrecognized name with the platform's own items
+        const webViewMenu = await menuDataService.getWebViewMenu(
+          // Assume the web view type is correctly formatted; it has already been checked where it
+          // is set
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          (webViewType as `${string}.${string}`) ?? TAB_WITHOUT_WEB_VIEW_TYPE,
+        );
+        if (isStillMounted)
+          setContributedItems(
+            convertContributionToContextMenuItems(webViewMenu.tabMenu ?? EMPTY_TAB_MENU),
+          );
+      } catch (error) {
+        // Said out loud rather than swallowed into an empty menu: the extension host logs the cause
+        // at debug and without knowing which tab asked, so nothing here would otherwise explain a
+        // tab that quietly has no menu
+        logger.warn(
+          `Could not read the tab menu for ${webViewType ?? 'a tab hosting no web view'} (${id}): ${getErrorMessage(error)}`,
+        );
+      }
+    })();
+
+    return () => {
+      isStillMounted = false;
+    };
+  }, [isPowerMode, webViewType, id]);
+
+  /**
+   * What this tab can currently do, read when the menu opens rather than subscribed to. The menu
+   * needs it at that moment and never again, and the window names are already kept current as
+   * window titles.
+   *
+   * Read on open rather than during render because both halves are expensive to establish: the
+   * window list is a round trip to the main process, and counting this window's tabs walks the
+   * whole dock layout. Neither belongs in the render of every tab title on every layout change.
+   *
+   * Deliberately kept when the menu closes, so every open after the first renders the last known
+   * targets straight away and refreshes them behind the menu. Only the first open of a given tab's
+   * menu has nothing to show, and the move-to-window submenu appears there once the read lands.
+   *
+   * Not covered by a placeholder on purpose. Showing a disabled "loading" entry would keep the
+   * item's position stable when there ARE other windows, but it would put an entry on screen and
+   * then take it away again in the single-window case, where today nothing appears at all — trading
+   * a smaller flicker for a worse one. Keeping the item permanently and disabling it instead would
+   * contradict hiding actions that would be no-ops, which is the rule the rest of this menu
+   * follows.
+   */
+  const [menuTargets, setMenuTargets] = useState<{
+    otherWindows: WindowSummary[];
+    isOnlyTabInWindowThatWouldClose: boolean;
+  }>({ otherWindows: [], isOnlyTabInWindowThatWouldClose: false });
+
+  /**
+   * Identifies the most recent call to {@link handleMenuOpenChange}, so a round trip that resolves
+   * after a newer call was already made does not overwrite what the newer call found. The same
+   * newest-wins shape `window-label.util.ts` keeps for its own async label resolution, adapted to a
+   * ref because this guard is per tab instance rather than module-wide.
+   */
+  const latestMenuOpenRequestRef = useRef<symbol | undefined>(undefined);
+
+  const handleMenuOpenChange = async (isOpen: boolean) => {
+    // Both readers of what this fetches — the move-to-new-window item and the move-to-window
+    // submenu — are removed from the menu of a tab hosting no web view, so for a dialog or an error
+    // tab the round trip and the re-render it causes are discarded in full
+    if (!isOpen || !webViewId) return;
+
+    // Every call here passes the same `true`, so there is no resolved value of its own to compare
+    // against later the way `window-label.util.ts` compares its resolved label — a token stands in
+    // for that, identifying this call so a round trip that lands after a newer one was already
+    // asked for can tell it is stale and not overwrite what the newer one found.
+    const thisMenuOpenRequest = Symbol('menu-open-request');
+    latestMenuOpenRequestRef.current = thisMenuOpenRequest;
+
+    let windows: WindowSummary[];
+    try {
+      windows = await sendCommand('platform.getWindows');
+    } catch (error) {
+      // Leave the target list empty, which hides the submenu rather than offering an empty one. An
+      // empty list would read as "there are no other windows", which is a different claim
+      logger.warn(`Could not read the open windows for the tab menu: ${getErrorMessage(error)}`);
+      if (latestMenuOpenRequestRef.current === thisMenuOpenRequest)
+        setMenuTargets({ otherWindows: [], isOnlyTabInWindowThatWouldClose: false });
+      return;
+    }
+
+    const otherWindows = windows.filter((window) => `${window.windowId}` !== globalThis.windowId);
+
+    // Counting this window's tabs is guarded separately because it can fail for reasons that say
+    // nothing about the windows — it throws before the dock layout registers. Folding it into the
+    // read above would throw away a window list that arrived perfectly well, and report the failure
+    // as one the open windows could not be read.
+    //
+    // Moving the only web view out of a window empties that window only when nothing else is left
+    // behind — a window still holding a dialog, an error tab, or any other non-web-view tab is not
+    // emptied by the move. Counting every tab, not just web views, is what tells the two cases
+    // apart; an actually-empty window would build an identical one and lose this one, which is the
+    // no-op Paratext 9 hides its float item for.
+    //
+    // Whether emptying closes this window is decided by whether another window is standing, which
+    // is the rule main applies — it counts the windows that could be the last one and never reads
+    // which window holds the primary role. One class of window divides the two lists: a window
+    // still waiting for its content is offered as a move target here but does not count toward
+    // main's arithmetic, so while one is starting up this errs toward hiding an action that would
+    // in fact have been safe.
+    let isOnlyTabInWindowThatWouldClose = false;
+    try {
+      isOnlyTabInWindowThatWouldClose = otherWindows.length > 0 && getOpenTabCountSync() <= 1;
+    } catch (error) {
+      // Offering the action is the safe way to be wrong: at worst the user makes a window they did
+      // not want, which they can close
+      logger.warn(`Could not count this window's tabs for the tab menu: ${getErrorMessage(error)}`);
+    }
+
+    if (latestMenuOpenRequestRef.current === thisMenuOpenRequest)
+      setMenuTargets({ otherWindows, isOnlyTabInWindowThatWouldClose });
+  };
 
   // Handle applying and removing the CSS styles for flashing
   useEffect(() => {
@@ -356,6 +626,52 @@ export function PlatformTabTitle({
       if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentLastSelected);
     };
   }, [focusSubject, id, lastSelectedScriptureNavigableWebViewId, lastFocusedTabId, isPowerMode]);
+
+  // Give this menu a keyboard path. rc-tabs renders the focusable tab as `.dock-tab-btn`, and the
+  // context-menu trigger inside it sets no tabIndex — so pressing Shift+F10 or the Menu key on a
+  // focused tab fires `contextmenu` at `.dock-tab-btn` and it bubbles UP, past the trigger, opening
+  // nothing. Forwarding that event to an element INSIDE the trigger sends it back through the
+  // trigger on its way up, which is what opens the menu.
+  //
+  // Matched by class rather than by `role="tab"`, which appears TWICE in the real tab: rc-tabs sets
+  // it on the focusable `.dock-tab-btn`, and rc-dock sets it again on the DragDropDiv holding the
+  // label inside it. Walking to the nearest `[role="tab"]` therefore lands on that inner element —
+  // a descendant of the one the keypress reaches — where the event never arrives.
+  //
+  // This is the whole keyboard story for the tab menu: every item in it becomes reachable at once,
+  // including ones an extension contributes, rather than only the ones given their own shortcut.
+  useEffect(() => {
+    if (!isPowerMode) return undefined;
+    const containerElement = containerRef.current;
+    const tabElement = containerElement?.closest('.dock-tab-btn');
+    if (!containerElement || !tabElement) return undefined;
+
+    const forwardToTrigger = (event: Event) => {
+      // Read the trigger's element now rather than closing over the one that was here at mount.
+      // This component swaps its root between the plain title and the menu-wrapped title as the
+      // contributed menu arrives, and React rebuilds the whole subtree when it does — so the
+      // element captured above is detached by the time any key reaches this, and dispatching to it
+      // would go nowhere. The tab element the listener hangs off is rc-tabs' own and survives.
+      const triggerElement = containerRef.current;
+      if (!triggerElement) return;
+
+      // Anything raised inside the trigger already reaches it by bubbling, so leave it alone: every
+      // ordinary right-click on the tab's title, and the forwarded event below on its way back up,
+      // whose target is the element it was dispatched on
+      if (event.target instanceof Node && triggerElement.contains(event.target)) return;
+
+      event.preventDefault();
+      // Carry the position across so the menu opens where the event said, which for a keyboard
+      // press is the focused tab rather than wherever the pointer happens to rest
+      const { clientX, clientY } = event instanceof MouseEvent ? event : { clientX: 0, clientY: 0 };
+      triggerElement.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX, clientY }),
+      );
+    };
+
+    tabElement.addEventListener('contextmenu', forwardToTrigger);
+    return () => tabElement.removeEventListener('contextmenu', forwardToTrigger);
+  }, [isPowerMode]);
 
   // rc-dock's DragDropDiv skips drag-start entirely when the pointerdown's native target carries
   // this class (see `onPointerDown` in `node_modules/rc-dock/es/dragdrop/DragDropDiv.js`) — the
@@ -545,25 +861,62 @@ export function PlatformTabTitle({
     </TooltipProvider>
   );
 
-  // Simple mode: skip the context menu entirely. Its only item is "Float Tab", which is already a
-  // no-op because the group config has floatable: false. Removing the menu prevents a dead option
-  // from being shown.
+  const menuContext: TabMenuContext = useMemo(
+    () => ({ webViewId, ...menuTargets }),
+    [webViewId, menuTargets],
+  );
+
+  // Memoized, and above the Simple-mode return so it stays a hook: a single focus change re-renders
+  // every mounted tab title, because the focus subscription, useLastFocusedTabId and
+  // useLastSelectedScriptureNavigableWebViewId all fan out to all of them. Without this, each one
+  // re-filters and re-maps its item list on every one of those.
+  //
+  // The Simple-mode short-circuit lives inside rather than around it, so that mode still pays
+  // nothing for a menu it never shows.
+  const tabMenuItems = useMemo(
+    () =>
+      isPowerMode
+        ? buildTabMenuItems(localizedContributedItems, menuContext, emptyWindowLabel)
+        : [],
+    [isPowerMode, localizedContributedItems, menuContext, emptyWindowLabel],
+  );
+
+  // Simple mode: skip the tab menu entirely. Every item it offers is either a no-op here (floating
+  // is off, since the group config has floatable: false) or reaches a second window, which Simple
+  // mode does not have. Removing the menu prevents dead options from being shown.
   if (!isPowerMode) return titleWithTooltip;
 
+  const handleSelect = (itemId: string) => {
+    if (itemId === FLOAT_TAB_COMMAND) {
+      handleFloatTab(id);
+      return;
+    }
+    if (itemId === MOVE_TO_NEW_WINDOW_COMMAND) {
+      if (webViewId) handleMoveTabToNewWindow(webViewId);
+      return;
+    }
+    const targetWindowId = getMoveTargetWindowId(itemId);
+    if (targetWindowId !== undefined) {
+      if (webViewId) handleMoveTabToWindow(webViewId, targetWindowId);
+      return;
+    }
+    // Anything else is an extension's own item, run the way every other contributed menu runs it.
+    // The id arrives as a plain string and the command handler takes a `ReferencedItem`; TypeScript
+    // cannot narrow one to the other, and the menu schema has already validated the shape that
+    // makes the assertion true.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    handleMenuCommand({ command: itemId } as Parameters<typeof handleMenuCommand>[0], id);
+  };
+
+  // Rendering the menu with nothing in it puts an empty styled popup on screen, since the content
+  // opens whatever its children are. A tab with nothing to offer — its read has not landed, or
+  // failed — has no menu at all instead, which is what the overlay path does with the same problem.
+  if (tabMenuItems.length === 0) return titleWithTooltip;
+
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={handleMenuOpenChange}>
       <ContextMenuTrigger>{titleWithTooltip}</ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onClick={() => handleFloatTab(id)}>{floatTabText}</ContextMenuItem>
-        {/* Windows are a Power-mode feature; Simple mode's move command path is a no-op, so the
-            item would be a dead button there. Non-WebView tabs (webViewId undefined) have nothing
-            to move. */}
-        {isPowerMode && webViewId ? (
-          <ContextMenuItem onClick={() => handleMoveTabToNewWindow(webViewId)}>
-            {moveTabToNewWindowText}
-          </ContextMenuItem>
-        ) : undefined}
-      </ContextMenuContent>
+      <ContextMenuContent>{renderTabMenuItems(tabMenuItems, handleSelect)}</ContextMenuContent>
     </ContextMenu>
   );
 }

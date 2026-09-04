@@ -154,6 +154,26 @@ const MOCK_MENU_DATA: PlatformMenus = {
       },
     ],
   },
+  defaultWebViewTabMenu: {
+    groups: { 'platform.tabWindow': { order: 1, isExtensible: true } },
+    items: [
+      {
+        label: '%tab_contextMenu_floatPanel%',
+        localizeNotes: 'Tab context menu > Float tab',
+        group: 'platform.tabWindow',
+        order: 1,
+        command: 'platform.floatTab',
+      },
+      {
+        label: '%tab_contextMenu_moveTabToNewWindow%',
+        localizeNotes: 'Tab context menu > Move tab to new window',
+        group: 'platform.tabWindow',
+        order: 2,
+        command: 'platform.moveWebViewToNewWindow',
+        hiddenInterfaceModes: ['simple'],
+      },
+    ],
+  },
   webViewMenus: {
     'videoExtension.playEditWebView': {
       includeDefaults: false,
@@ -206,7 +226,12 @@ test('Get web view menu data for videoExtension', async () => {
   // If I do not specify the type for this object it will not let me index with EXTENSION_NAME
   // eslint-disable-next-line prefer-destructuring
   const webViewMenus: WebViewMenus = MOCK_MENU_DATA.webViewMenus;
-  expect(result).toEqual(webViewMenus[EXTENSION_NAME]);
+  // The tab menu is added on the way out for every web view, since its items act on the tab frame
+  // rather than on the web view's contents
+  expect(result).toEqual({
+    ...webViewMenus[EXTENSION_NAME],
+    tabMenu: MOCK_MENU_DATA.defaultWebViewTabMenu,
+  });
 });
 
 test('Setting web view menu data throws', async () => {
@@ -479,5 +504,191 @@ describe('Platform menu document interface-mode gating', () => {
     expect(
       result.items.some((item) => 'command' in item && item.command === 'platform.createWindow'),
     ).toBe(true);
+  });
+});
+
+describe('Tab menu', () => {
+  /** The shipped platform menu document, as the combiner hands it to the engine at startup */
+  function getRealPlatformMenus(): PlatformMenus {
+    const realMenus = menuDocumentCombiner.rawOutput;
+    if (!realMenus) throw new Error('Platform menu document failed to combine');
+    return realMenus;
+  }
+
+  const commandsIn = (menu: { items: unknown[] } | undefined) =>
+    (menu?.items ?? []).map((item) => {
+      // Items are either a command item or a submenu host; both are identified for these assertions
+      if (typeof item !== 'object' || !item) return undefined;
+      if ('command' in item && typeof item.command === 'string') return item.command;
+      if ('id' in item && typeof item.id === 'string') return item.id;
+      return undefined;
+    });
+
+  test('the shipped document offers both move actions and the float item', async () => {
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // A tab hosting no web view is the case that must still get the platform items
+    const result = await engine.getWebViewMenu('nothing.recognized');
+
+    expect(commandsIn(result.tabMenu)).toEqual([
+      'platform.floatTab',
+      'platform.moveWebViewToNewWindow',
+      'platform.moveTabToWindow',
+    ]);
+  });
+
+  test('a recognized web view that never asked for defaults still gets the platform items', async () => {
+    // What this pins is the engine's own fallback, not the production shape: MOCK_MENU_DATA is an
+    // unfolded fixture, so this entry reaches the engine with no `tabMenu` and the `??` supplies
+    // the platform's. In production the combiner has already folded the tab menu into every entry
+    // before the engine sees it — it does that above the `includeDefaults` gate, because these
+    // items act on the tab frame rather than on the web view — so the fallback is not reached
+    // there. The fold itself is covered in menu-document-combiner.test.ts
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+
+    expect(commandsIn(result.tabMenu)).toContain('platform.floatTab');
+  });
+
+  test('a web view carries through whatever tab menu the combiner handed it', async () => {
+    // The engine's fallback fills a gap; it does not overwrite. Folding the platform items into a
+    // web view's own tab menu is the combiner's job, pinned in menu-document-combiner.test.ts
+    const ownTabMenu = {
+      groups: { 'videoExtension.tabGroup': { order: 1 } },
+      items: [
+        {
+          label: '%rewind%',
+          localizeNotes: '',
+          group: 'videoExtension.tabGroup',
+          order: 1,
+          command: 'videoExtension.rewind',
+        },
+      ],
+    };
+    const menus = {
+      ...MOCK_MENU_DATA,
+      webViewMenus: {
+        ...MOCK_MENU_DATA.webViewMenus,
+        [EXTENSION_NAME]: { ...MOCK_MENU_DATA.webViewMenus[EXTENSION_NAME], tabMenu: ownTabMenu },
+      },
+    };
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(menus);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+
+    expect(commandsIn(result.tabMenu)).toEqual(['videoExtension.rewind']);
+  });
+
+  test('a tab hosting no web view is answered with the platform items, not with nothing', async () => {
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu('nothing.recognized');
+
+    expect(result.tabMenu).toBeDefined();
+    expect(commandsIn(result.tabMenu)).toContain('platform.floatTab');
+  });
+
+  test('hides a tab item marked hidden in simple mode', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu('nothing.recognized');
+
+    expect(commandsIn(result.tabMenu)).not.toContain('platform.moveWebViewToNewWindow');
+    // Positive control: the filter removed one item rather than the menu arriving empty
+    expect(commandsIn(result.tabMenu)).toContain('platform.floatTab');
+  });
+
+  test('shows that same item in power mode', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu('nothing.recognized');
+
+    expect(commandsIn(result.tabMenu)).toContain('platform.moveWebViewToNewWindow');
+  });
+});
+
+describe('Platform tab menu order reservation', () => {
+  /**
+   * Orders an extension is most likely to reach for first. The platform has to stay clear of these,
+   * not merely differ from them.
+   */
+  const ORDERS_AN_EXTENSION_WOULD_PICK_FIRST = 10;
+
+  test('an extension picking the first order for its tab group keeps its menus', async () => {
+    // The guarantee the reservation exists for, exercised rather than inferred: fold the shipped
+    // platform document together with an extension that takes `order: 1` — the obvious first
+    // choice — and the extension's menus have to survive it.
+    const { MenuDocumentCombiner } = await import('@shared/utils/menu-document-combiner');
+    const { default: shippedMenus } = await import('@extension-host/data/menu.data.json');
+    const combiner = new MenuDocumentCombiner(shippedMenus);
+
+    expect(() =>
+      combiner.addOrUpdateContribution('firstOrder', {
+        webViewMenus: {
+          'firstOrder.webView': {
+            includeDefaults: false,
+            tabMenu: {
+              groups: { 'firstOrder.tabGroup': { order: 1 } },
+              items: [
+                {
+                  label: '%rewind%',
+                  group: 'firstOrder.tabGroup',
+                  order: 1,
+                  command: 'firstOrder.rewind',
+                },
+              ],
+            },
+          },
+        },
+      }),
+    ).not.toThrow();
+
+    // The positive control: the contribution really is in the output, so this is a fold that
+    // happened rather than one that was dropped without throwing
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const output = combiner.rawOutput as unknown as {
+      webViewMenus: Record<string, { tabMenu?: { items: { command?: string }[] } }>;
+    };
+    expect(
+      output.webViewMenus['firstOrder.webView'].tabMenu?.items.map((item) => item.command),
+    ).toEqual(expect.arrayContaining(['firstOrder.rewind', 'platform.floatTab']));
+  });
+
+  test('the shipped tab menu leaves the low orders free for extensions', async () => {
+    // The tab menu folds into every web view's menu whether or not the web view asked for defaults,
+    // so an extension cannot opt out of sharing this order space. A collision makes
+    // `checkMenuGroupsForDuplicateOrdering` throw, the combiner drop the whole contribution, and
+    // `contribution.service` swallow it with a warn — so an extension that picks `order: 1` for its
+    // own tab group loses its entire menus.json, main menu and context menus included, with nothing
+    // on screen to explain it. Reserving high orders here is what keeps that from happening.
+    const { default: shippedMenus } = await import('@extension-host/data/menu.data.json');
+    const tabMenu = shippedMenus.defaultWebViewTabMenu;
+
+    const groupOrders = Object.values(tabMenu.groups).map((group) => group.order);
+    const itemOrders = tabMenu.items.map((item) => item.order);
+
+    expect(groupOrders.length).toBeGreaterThan(0);
+    expect(itemOrders.length).toBeGreaterThan(0);
+    expect(Math.min(...groupOrders, ...itemOrders)).toBeGreaterThan(
+      ORDERS_AN_EXTENSION_WOULD_PICK_FIRST,
+    );
   });
 });
