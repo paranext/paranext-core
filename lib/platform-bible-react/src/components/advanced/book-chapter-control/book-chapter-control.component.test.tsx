@@ -1,9 +1,16 @@
 // @vitest-environment jsdom
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createRef } from 'react';
+import { createRef, useState } from 'react';
 import { beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/shadcn-ui/dropdown-menu';
+import { PopoverPortalContainerProvider } from '@/components/shadcn-ui/popover';
 import { BookChapterControl } from './book-chapter-control.component';
 import { BookChapterControlHandle } from './book-chapter-control.types';
 import { GRID_COLUMNS } from './book-chapter-control.utils';
@@ -1452,5 +1459,76 @@ describe('BookChapterControl yields keys it does not own', () => {
     await user.keyboard('{ArrowDown}');
 
     expect(getSearchInput()).toHaveFocus();
+  });
+
+  test('a raw localization key never reaches a label or tooltip', async () => {
+    // `useLocalizedStrings` seeds `{ [key]: key }` and keeps that seed for the whole first render
+    // pass — and permanently if the localization provider errors. A key is a non-empty string, so
+    // `localizedStrings?.[key] || 'Default'` does NOT fall back. These labels used to be
+    // English-only literals or invisible `aria-label`s; several are now visible tooltip text.
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+        localizedStrings={{
+          '%webView_bookChapterControl_previousChapter%':
+            '%webView_bookChapterControl_previousChapter%',
+          '%webView_bookChapterControl_nextChapter%': '%webView_bookChapterControl_nextChapter%',
+          '%webView_bookChapterControl_showMoreBooks%':
+            '%webView_bookChapterControl_showMoreBooks%',
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+
+    expect(await screen.findByRole('button', { name: 'Previous chapter' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next chapter' })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/%webView_bookChapterControl_/);
+  });
+
+  // `ScopeSelector`'s Navigate footer renders this picker inside a `DropdownMenuItem` and portals
+  // its popover INTO the `DropdownMenuContent` (`PopoverPortalContainerProvider`, a pattern
+  // `popover.tsx` documents). Every keystroke in the picker then has `role="menu"` as a DOM
+  // ancestor, so a bail that only asks "is this inside a menu?" would disable the whole control
+  // there rather than only yielding to the recent-searches list.
+  test('keyboard navigation still works when the picker is portalled inside a menu', async () => {
+    function BcvInsideMenu() {
+      // `PopoverPortalContainerProvider` takes the container as `HTMLElement | null`, matching the
+      // ref callback's own argument type.
+      // eslint-disable-next-line no-null/no-null
+      const [container, setContainer] = useState<HTMLDivElement | null>(null);
+      return (
+        <DropdownMenu defaultOpen>
+          <DropdownMenuTrigger>scope</DropdownMenuTrigger>
+          <DropdownMenuContent ref={setContainer}>
+            <PopoverPortalContainerProvider container={container}>
+              <DropdownMenuItem onSelect={(event) => event.preventDefault()}>
+                <BookChapterControl
+                  scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+                  handleSubmit={vi.fn()}
+                  getEndVerse={() => 30}
+                />
+              </DropdownMenuItem>
+            </PopoverPortalContainerProvider>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
+
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<BcvInsideMenu />);
+
+    await user.click(await screen.findByRole('combobox', { name: 'book-chapter-trigger' }));
+    await user.keyboard('mat 12');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+
+    await user.keyboard('{ArrowRight}');
+
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '13' })).toHaveAttribute('data-selected', 'true'),
+    );
   });
 }, 15_000);

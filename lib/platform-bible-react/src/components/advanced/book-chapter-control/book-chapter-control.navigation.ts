@@ -3,6 +3,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ChevronDown, ChevronsLeft, ChevronsRight, ChevronUp } from 'lucide-react';
 import { ComponentType, useCallback, useMemo } from 'react';
 import { compareScrRefs, LanguageStrings } from 'platform-bible-utils';
+import { resolveLocalizedString } from '@/utils/localization.util';
 import {
   getNextChapterRef,
   getNextVerseRef,
@@ -70,29 +71,40 @@ export function useQuickNavButtons(
       {
         onClick: () => submitIfChanged(previousChapterRef),
         disabled: isNoOpNavigation(scrRef, previousChapterRef),
-        title:
-          localizedStrings?.['%webView_bookChapterControl_previousChapter%'] || 'Previous chapter',
+        title: resolveLocalizedString(
+          localizedStrings?.['%webView_bookChapterControl_previousChapter%'],
+          'Previous chapter',
+        ),
         icon: direction === 'ltr' ? ChevronsLeft : ChevronsRight,
         group: 'chapter' as const,
       },
       {
         onClick: () => submitIfChanged(nextChapterRef),
         disabled: isNoOpNavigation(scrRef, nextChapterRef),
-        title: localizedStrings?.['%webView_bookChapterControl_nextChapter%'] || 'Next chapter',
+        title: resolveLocalizedString(
+          localizedStrings?.['%webView_bookChapterControl_nextChapter%'],
+          'Next chapter',
+        ),
         icon: direction === 'ltr' ? ChevronsRight : ChevronsLeft,
         group: 'chapter' as const,
       },
       {
         onClick: () => submitIfChanged(previousVerseRef),
         disabled: isNoOpNavigation(scrRef, previousVerseRef),
-        title: localizedStrings?.['%webView_bookChapterControl_previousVerse%'] || 'Previous verse',
+        title: resolveLocalizedString(
+          localizedStrings?.['%webView_bookChapterControl_previousVerse%'],
+          'Previous verse',
+        ),
         icon: ChevronUp,
         group: 'verse' as const,
       },
       {
         onClick: () => submitIfChanged(nextVerseRef),
         disabled: isNoOpNavigation(scrRef, nextVerseRef),
-        title: localizedStrings?.['%webView_bookChapterControl_nextVerse%'] || 'Next verse',
+        title: resolveLocalizedString(
+          localizedStrings?.['%webView_bookChapterControl_nextVerse%'],
+          'Next verse',
+        ),
         icon: ChevronDown,
         group: 'verse' as const,
       },

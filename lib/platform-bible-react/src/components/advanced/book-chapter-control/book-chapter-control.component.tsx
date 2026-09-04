@@ -17,6 +17,7 @@ import {
 } from '@/components/shadcn-ui/tooltip';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { getKeyCharacterType, isArrowKey } from '@/utils/keyboard.util';
+import { resolveLocalizedString } from '@/utils/localization.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
@@ -581,19 +582,32 @@ export function BookChapterControl({
   // A key with no entry at all resolves to the key itself, which is truthy and so renders raw as
   // `%key%`; that case is guarded by `book-chapter-control-localization.test.ts`, which fails if any
   // key in `BOOK_CHAPTER_CONTROL_STRING_KEYS` lacks an English value.
-  const selectChapterTitle =
-    localizedStrings?.['%webView_bookChapterControl_selectChapter%'] || 'Select chapter';
-  const selectVerseTitle =
-    localizedStrings?.['%webView_bookChapterControl_selectVerse%'] || 'Select verse';
+  const selectChapterTitle = resolveLocalizedString(
+    localizedStrings?.['%webView_bookChapterControl_selectChapter%'],
+    'Select chapter',
+  );
+  const selectVerseTitle = resolveLocalizedString(
+    localizedStrings?.['%webView_bookChapterControl_selectVerse%'],
+    'Select verse',
+  );
   const backLabel =
     viewMode === 'verses'
-      ? localizedStrings?.['%webView_bookChapterControl_backToChapters%'] || 'Back to chapters'
-      : localizedStrings?.['%webView_bookChapterControl_backToBooks%'] || 'Back to books';
-  const bookNotInProjectLabel =
-    localizedStrings?.['%webView_bookChapterControl_bookNotInProject%'] || 'Not in project';
-  const bookNotInProjectDescriptionTemplate =
-    localizedStrings?.['%webView_bookChapterControl_bookNotInProjectDescription%'] ||
-    '{book} is not in this project';
+      ? resolveLocalizedString(
+          localizedStrings?.['%webView_bookChapterControl_backToChapters%'],
+          'Back to chapters',
+        )
+      : resolveLocalizedString(
+          localizedStrings?.['%webView_bookChapterControl_backToBooks%'],
+          'Back to books',
+        );
+  const bookNotInProjectLabel = resolveLocalizedString(
+    localizedStrings?.['%webView_bookChapterControl_bookNotInProject%'],
+    'Not in project',
+  );
+  const bookNotInProjectDescriptionTemplate = resolveLocalizedString(
+    localizedStrings?.['%webView_bookChapterControl_bookNotInProjectDescription%'],
+    '{book} is not in this project',
+  );
   // A localized template that places the book itself, rather than appending the short label to a
   // name here: word order, punctuation, and any inflection of the name belong to the translation.
   // Substitutes the same `Name (ID)` form BookItem announces for an undimmed row, so the id is not
@@ -608,11 +622,14 @@ export function BookChapterControl({
       }),
     [bookNotInProjectDescriptionTemplate, localizedBookNames],
   );
-  const showMoreBooksLabel =
-    localizedStrings?.['%webView_bookChapterControl_showMoreBooks%'] || 'Show more books';
-  const showProjectBooksOnlyLabel =
-    localizedStrings?.['%webView_bookChapterControl_showProjectBooksOnly%'] ||
-    'Show project books only';
+  const showMoreBooksLabel = resolveLocalizedString(
+    localizedStrings?.['%webView_bookChapterControl_showMoreBooks%'],
+    'Show more books',
+  );
+  const showProjectBooksOnlyLabel = resolveLocalizedString(
+    localizedStrings?.['%webView_bookChapterControl_showProjectBooksOnly%'],
+    'Show project books only',
+  );
 
   // #endregion
 
@@ -662,7 +679,16 @@ export function BookChapterControl({
       // submit a reference out from under it. Both roles matter, because the list is focused in two
       // stages: Radix focuses the CONTENT (`role="menu"`) when it opens and only moves focus onto a
       // row (`role="menuitem"`) once the user arrows.
-      if (eventTarget?.closest('[role="menu"], [role="menuitem"]')) return;
+      //
+      // Asking only "is this inside a menu?" is not enough, because THIS PICKER can itself live
+      // inside one: `ScopeSelector`'s Navigate footer renders it in a `DropdownMenuItem` and
+      // portals its popover into the `DropdownMenuContent` (`PopoverPortalContainerProvider`, a
+      // pattern `popover.tsx` documents). Every keystroke in the grid would then have `role="menu"`
+      // as an ancestor, and this bail would disable the whole control there. So the question is
+      // whether the keystroke landed OUTSIDE the cmdk surface this handler drives.
+      const isInOwnCommandSurface = !!eventTarget && !!commandRef.current?.contains(eventTarget);
+      if (!isInOwnCommandSurface && eventTarget?.closest('[role="menu"], [role="menuitem"]'))
+        return;
 
       const { isLetter, isDigit } = getKeyCharacterType(event.key);
 
@@ -725,7 +751,12 @@ export function BookChapterControl({
       // highlight, so cmdk would otherwise dispatch Enter at the highlighted cell — which knows
       // only a chapter and would drop the verse the user typed. Space is deliberately not included:
       // the books view is a text field, where a space is a character.
-      if (viewMode === 'books' && topMatch && event.key === 'Enter') {
+      //
+      // `!isCommandListHidden` for the same reason the arrow branch below checks it: quick
+      // navigation unmounts the list, taking the top-match row with it, while `topMatch` still
+      // reflects the stale query. Submitting it there would silently undo the quick-nav step the
+      // user just took, with nothing on screen that named the reference being submitted.
+      if (viewMode === 'books' && topMatch && !isCommandListHidden && event.key === 'Enter') {
         // The header's own controls (quick navigation, the recent-searches trigger) keep their
         // activation, and so does any input that isn't this picker's search box. The
         // recent-searches list itself never gets this far — the portalled-menu bail at the top of
@@ -787,7 +818,11 @@ export function BookChapterControl({
       // and submit a verse that was never typed. The dedicated chapter and verse views render no
       // input and take all four arrows.
       if (viewMode === 'books' && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-        const input = commandInputRef.current;
+        // Only when the caret is actually IN the input. An `<input>` keeps its selection offsets
+        // after blur, so reading them unconditionally would yield the key to a caret that cannot
+        // move — and cmdk binds no horizontal arrows on the Command root, so the keystroke would do
+        // nothing at all.
+        const input = eventTarget === commandInputRef.current ? commandInputRef.current : undefined;
         const caretStart = input?.selectionStart ?? 0;
         const caretEnd = input?.selectionEnd ?? 0;
         // Which arrow walks toward the start of the text is a property of the layout, not of the
@@ -800,6 +835,10 @@ export function BookChapterControl({
             (isTowardTextStart ? caretStart > 0 : caretEnd < input.value.length));
         if (canCaretMove) return;
       }
+
+      // Shift+arrow is a selection gesture, not a navigation one: in the search box it extends the
+      // text selection, and the grid has no notion of a range. Leave it to whatever has focus.
+      if (event.shiftKey) return;
 
       // Arrows aimed at a focused header control belong to that control — the quick-nav buttons use
       // ArrowUp / ArrowDown to hand focus back to the search input. The books view's preview grid is
@@ -1339,40 +1378,55 @@ export function BookChapterControl({
                     (
                       { onClick, disabled: isQuickNavDisabled, title, icon: Icon, group },
                       index,
-                    ) => (
-                      <Fragment key={title}>
-                        {index > 0 && group !== quickNavButtons[index - 1].group && (
-                          <ButtonGroupSeparator />
-                        )}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setIsCommandListHidden(true);
-                                onClick();
-                              }}
-                              disabled={isQuickNavDisabled}
-                              className="tw:h-8.5 tw:w-6 tw:p-0"
-                              aria-label={title}
-                              // A disabled control dispatches no pointer or focus events, so the
-                              // Tooltip below can never open on one — and these arrows come back
-                              // disabled at the edges of the canon, which is where a user is most
-                              // likely to ask what the button was for. The native tooltip is the
-                              // only hover text a disabled button can show. Set only while
-                              // disabled: alongside an open Radix tooltip it would render a second,
-                              // duplicate bubble.
-                              title={isQuickNavDisabled ? title : undefined}
-                              onKeyDown={handleQuickNavButtonKeyDown}
-                            >
-                              <Icon />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>{title}</TooltipContent>
-                        </Tooltip>
-                      </Fragment>
-                    ),
+                    ) => {
+                      const quickNavButton = (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setIsCommandListHidden(true);
+                            onClick();
+                          }}
+                          disabled={isQuickNavDisabled}
+                          className="tw:h-8.5 tw:w-6 tw:p-0"
+                          aria-label={title}
+                          onKeyDown={handleQuickNavButtonKeyDown}
+                        >
+                          <Icon />
+                        </Button>
+                      );
+
+                      return (
+                        // Keyed by position, not by `title`: the titles are localized, so they all
+                        // change together the moment the strings resolve or the UI language does.
+                        // Keying on them would remount all four buttons at that instant, dropping
+                        // focus off whichever one the user was on and destroying an open tooltip.
+                        // The set is fixed in size and order, so the index is stable.
+                        // eslint-disable-next-line react/no-array-index-key
+                        <Fragment key={`${group}-${index}`}>
+                          {index > 0 && group !== quickNavButtons[index - 1].group && (
+                            <ButtonGroupSeparator />
+                          )}
+                          {isQuickNavDisabled ? (
+                            // A disabled Button carries `pointer-events: none` from its own base
+                            // variants, so it is not hit-tested: neither a Radix tooltip nor a
+                            // `title` ON THE BUTTON can ever fire. These arrows come back disabled
+                            // at the edges of the canon — Genesis 1:1 is the default state of a
+                            // freshly opened project — which is exactly where a user asks what the
+                            // button was for. The wrapper is still hit-tested, so the native
+                            // tooltip it carries is the one hover explanation available here.
+                            <span title={title} className="tw:inline-flex">
+                              {quickNavButton}
+                            </span>
+                          ) : (
+                            <Tooltip>
+                              <TooltipTrigger asChild>{quickNavButton}</TooltipTrigger>
+                              <TooltipContent>{title}</TooltipContent>
+                            </Tooltip>
+                          )}
+                        </Fragment>
+                      );
+                    },
                   )}
                 </ButtonGroup>
               </div>

@@ -280,6 +280,15 @@ step, no automation. Just a record.
   `commandValue` state the component already owns and calls the same `handleVerseSelect` /
   `handleChapterSelect` callback the grid's own `onSelect` would call — never reading a cmdk DOM
   attribute, never synthesizing a click.
+- **Scope — one path is deliberately NOT migrated.** `CommandInput`'s `spaceSelectsHighlightedItem`
+  (`components/shadcn-ui/command.tsx`), which `BookChapterControl` opts into for the books view's
+  "Space picks the highlighted book on an empty query", still does
+  `querySelector('[cmdk-item][data-selected="true"]:not([data-disabled="true"])')` followed by
+  `.click()` — exactly the shape this decision removes from the grid path. It is shared by seven
+  pickers (project selector, book scope picker, combo boxes, the inline marker menu), so migrating
+  it is a change to all of them rather than to this control, and it is left for whoever takes the
+  roving-`tabindex` follow-up in alternative (b). Until then, the books-view Space path remains
+  bound to cmdk internals: a `cmdk` rename would break it silently, with no type or build error.
 - **Alternatives:** (a) **keep steering cmdk through its private DOM attributes** — rejected:
   nothing pins those attributes across `cmdk` versions, and a break would be silent (no type error,
   no failing build — just Enter/Space quietly doing nothing). (b) **replace the grids with a
@@ -3469,6 +3478,15 @@ step, no automation. Just a record.
   `DropdownMenuSubContent` sets `Z_INDEX_ABOVE_POPOVER` rather than copying its parent's tier, so a
   caller that lifts a menu to that tier (the footnote type and caller dropdowns do) cannot leave its
   own submenu painting underneath it.
+- **Known remaining violations — the claim above is about the overlays this work reached, not all of
+  them.** `drawer.tsx` still hard-codes `tw:z-50` on both `DrawerOverlay` and `DrawerContent`, which
+  are portalled surfaces; by the shape of the scale they belong on `Z_INDEX_MODAL_BACKDROP` /
+  `Z_INDEX_MODAL` alongside `dialog.tsx`. It is left alone deliberately: its only consumers are the
+  `platform-lexical-tools` dictionary components, re-tiering a modal surface changes what it covers,
+  and there is no test or Storybook play function that would catch a mistake. Consumer overrides
+  that pin an overlay BELOW its own host also survive in `overlay-context-menu.component.tsx`,
+  `manage-books-dialog.component.tsx` and `settings-sidebar.component.tsx`. TODO(PT-4345-followup):
+  these want their own pass, with the app running to verify each surface.
 - **Source:** PT-4345 (BCV styling/keyboard-nav epic, the z-index repair task), which reconciles the
   drift left by PR #2365 (silently raised `Z_INDEX_ABOVE_DOCK` 250 → 600, burying every tooltip) and
   PR #2229 (placed a menu at `Z_INDEX_OVERLAY` underneath its own `Z_INDEX_ABOVE_DOCK` host) by

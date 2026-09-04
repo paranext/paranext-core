@@ -136,6 +136,13 @@ export default function RecentSearches<T>({
       size="icon"
       className={buttonClassName}
       aria-label={resolvedAriaLabel}
+      // Disarm on hover. The flag is armed on every close but consumed only if a tooltip-open
+      // request actually arrives, so a close that does NOT put focus back on this button would
+      // otherwise leave it armed and silently swallow the user's next genuine hover. `pointerenter`
+      // precedes the `pointermove` Radix opens on, so clearing here always beats that request.
+      onPointerEnter={() => {
+        isRestoringFocusFromListRef.current = false;
+      }}
     >
       <Clock className="tw:h-4 tw:w-4" />
     </Button>
