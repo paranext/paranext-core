@@ -10,6 +10,24 @@ declare module 'platform-get-resources' {
 
   export type IDblResourcesProvider = IDataProvider<GetResourcesDataTypes> & {
     /**
+     * Recomputes which of the resources in the DBL catalog are installed locally, and under which
+     * project id.
+     *
+     * Callers cannot work this out for themselves: a resource project's id is unrelated to the DBL
+     * entry it was installed from — the entry uid is recorded in the project's settings, which is
+     * what ParatextData matches on — so nothing in the local project list identifies the catalog
+     * row it belongs to.
+     *
+     * Does not contact the DBL, so it is cheap enough to call on a UI refresh. In exchange it can
+     * answer for only what it already knows: the result is empty if the catalog has not been
+     * fetched yet this session, or if another DBL operation (a fetch, install, or uninstall) is in
+     * progress.
+     *
+     * @returns The local project id of each catalogued resource, keyed by DBL Entry UID; an empty
+     *   string for a resource that is not installed.
+     */
+    recomputeDblResourcesInstallStatus: () => Promise<{ [dblEntryUid: string]: string }>;
+    /**
      * Installs or updates a DBL resource to the local filesystem
      *
      * @param uid DBL Entry UID that is used to identify the resource

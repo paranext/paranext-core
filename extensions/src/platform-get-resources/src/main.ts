@@ -12,6 +12,7 @@ import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-uti
 import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
+import { reconcileInstalledFlags } from './installed-flags.util';
 import newTabReact from './new-tab.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
 
@@ -87,18 +88,17 @@ const RESOURCE_PROJECT_WAIT_DELAY_MS = 500;
 /**
  * Reads local project metadata, waiting for the C# Paratext PDPF to register its resource projects.
  *
- * The wait is what makes a newly-installed resource visible: a read that resolves before the
- * factory registers returns only the TypeScript PDPFs, and a caller that trusts it concludes
- * nothing is installed. It is spent at most once per session — once a resource project has been
+ * The wait is what makes read-only projects visible: a read that resolves before the factory
+ * registers returns only the TypeScript PDPFs, and a caller that trusts it concludes the machine
+ * has no resources at all. It is spent at most once per session — once a resource project has been
  * seen the factory is up and no wait is needed, and if the full budget passes with none seen the
  * machine has none to find, so later calls return the first read immediately.
  *
- * @returns The project metadata, and whether any read-only (resource) project was in it
+ * @returns The project metadata
  */
-async function getLocalProjectMetadata(): Promise<{
-  metadata: Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>;
-  hasResourceProjects: boolean;
-}> {
+async function getLocalProjectMetadata(): Promise<
+  Awaited<ReturnType<typeof papi.projectLookup.getMetadataForAllProjects>>
+> {
   const readMetadata = () =>
     papi.projectLookup.getMetadataForAllProjects({ includeProjectInterfaces: ['platform.base'] });
   const hasResourceProject = (
@@ -117,53 +117,37 @@ async function getLocalProjectMetadata(): Promise<{
   if (hasResourceProjects) haveLocalResourceProjectsAppeared = true;
   else if (shouldWait) hasWaitedForLocalResourceProjects = true;
 
-  return { metadata, hasResourceProjects };
+  return metadata;
 }
 
 /**
- * Syncs installed flags on `cachedResources` against live project metadata from C#. Runs in the
+ * Syncs installed flags on `cachedResources` against the install status reported by C#. Runs in the
  * background so it never blocks a dialog open. Updates `cachedResources` and writes to storage when
  * flags change.
+ *
+ * The status has to come from the backend rather than being inferred from the local project list: a
+ * resource project's id is unrelated to the DBL entry it was installed from (the entry uid lives in
+ * the project's settings), so there is nothing in the metadata to match a catalog row against.
  */
 async function syncInstalledFlags(): Promise<void> {
   if (cachedResources === undefined) return;
   try {
-    const { metadata: localProjectMetadata, hasResourceProjects } = await getLocalProjectMetadata();
-    // No read-only project in the list means either C# has not registered yet or the machine has
-    // none. Syncing against it would mark every installed resource not-installed and persist that,
-    // and it can never mark anything installed, so there is nothing to gain by continuing.
-    if (!hasResourceProjects) return;
+    const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
+    const installStatus = await provider?.recomputeDblResourcesInstallStatus();
+    // An empty status means the backend could not answer — its catalog has not loaded yet, or
+    // another DBL operation holds its gate. Syncing against it would mark every installed resource
+    // not-installed and persist that, so leave the flags alone until it can.
+    if (!installStatus || Object.keys(installStatus).length === 0) return;
 
     // Wrap the read-modify-write in fetchMutex so a concurrent fetchAndCacheResources call cannot
     // overwrite cachedResources between our map() and our assignment.
     await fetchMutex.runExclusive(async () => {
       if (cachedResources === undefined) return;
 
-      let isChanged = false;
-      const newCachedResources = cachedResources.map((resource) => {
-        const matchingLocalProject = localProjectMetadata.find((localProject) =>
-          // If the `projectId` is defined then tries to use that
-          resource.projectId
-            ? resource.projectId === localProject.id
-            : // Otherwise uses the `dblEntryUid` which contains the first part of the project id.
-              // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
-              resource.dblEntryUid !== '' &&
-              localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
-        );
-
-        const isInstalled = matchingLocalProject !== undefined;
-        if (isInstalled !== resource.installed) {
-          isChanged = true;
-          return {
-            ...resource,
-            installed: isInstalled,
-            updateAvailable: false,
-            projectId: matchingLocalProject?.id ?? '',
-          };
-        }
-
-        return resource;
-      });
+      const { resources: newCachedResources, isChanged } = reconcileInstalledFlags(
+        cachedResources,
+        installStatus,
+      );
 
       if (isChanged) {
         cachedResources = newCachedResources;
@@ -240,7 +224,7 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
     // exactly the offline, never-connected users most likely to have them.
     const dblCatalog = cachedResources ?? [];
 
-    const { metadata: allMetadata } = await getLocalProjectMetadata();
+    const allMetadata = await getLocalProjectMetadata();
     return buildLocalNonDblResources(allMetadata, dblCatalog);
   } catch (error: unknown) {
     logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);

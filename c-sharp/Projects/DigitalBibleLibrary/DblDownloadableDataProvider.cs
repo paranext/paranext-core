@@ -75,6 +75,11 @@ internal class DblResourcesDataProvider(
 
     private const int DBL_NETWORK_TIMEOUT = 0; // Don't timeout DBL network requests
 
+    // The install-status recheck runs on the front end's list-refresh path, where the gate may be
+    // held for the length of an unbounded catalog download. It gives up after this long and reports
+    // nothing rather than stalling the refresh.
+    private const int INSTALL_STATUS_GATE_TIMEOUT_MS = 2000;
+
     public const string DBL_RESOURCES = "DblResources";
 
     // Node.js services match this exact text (platform-bible-utils `isErrorMessageAboutRegistryAuthFailure`
@@ -90,7 +95,8 @@ internal class DblResourcesDataProvider(
     private bool _hasFetchedResources;
 
     // Guards every access to shared state so only one DBL operation touches it at a time:
-    //   • _resources — reassigned by FetchResourcesCore, read by FindResource
+    //   • _resources — reassigned by FetchResourcesCore, read by FindResource and by
+    //     RecomputeDblResourcesInstallStatus
     //   • the Paratext ScrTextCollection — mutated by install/uninstall, read by the fetch's projection
     //   • the process-global Trace.Listeners 401-detection bracket in FetchResourcesCore
     // GetDblResources/InstallDblResource/UninstallDblResource do their blocking work inside Task.Run
@@ -107,6 +113,7 @@ internal class DblResourcesDataProvider(
         return
         [
             ("getDblResources", GetDblResources),
+            ("recomputeDblResourcesInstallStatus", RecomputeDblResourcesInstallStatus),
             ("installDblResource", InstallDblResource),
             ("uninstallDblResource", UninstallDblResource),
             ("isGetDblResourcesAvailable", IsGetDblResourcesAvailable),
@@ -229,11 +236,61 @@ internal class DblResourcesDataProvider(
                         resource.Size,
                         resource.Installed,
                         resource.IsNewerThanCurrentlyInstalled(),
-                        resource.ExistingScrText?.Guid.ToString().ToUpperInvariant()
-                            ?? resource.ExistingDictionary?.Guid.ToString().ToUpperInvariant()
-                            ?? ""
+                        GetInstalledProjectId(resource)
                     ))
                     .ToList();
+            }
+        });
+
+    /// <summary>
+    /// The id of the local project a resource is installed as, or an empty string when it is not
+    /// installed.
+    /// </summary>
+    /// <remarks>
+    /// ParatextData resolves <c>ExistingScrText</c> by the DBL id recorded in each resource
+    /// project's settings, so this holds even for a resource whose project id has nothing in common
+    /// with its DBL entry uid — which is the normal case, not an exception.
+    /// </remarks>
+    private static string GetInstalledProjectId(InstallableResource resource) =>
+        resource.ExistingScrText?.Guid.ToString().ToUpperInvariant()
+        ?? resource.ExistingDictionary?.Guid.ToString().ToUpperInvariant()
+        ?? "";
+
+    /// <summary>
+    /// Recompute which resources in the already-loaded catalog are installed locally, and under
+    /// which project id.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately never loads the catalog, unlike every other method here: this serves the front
+    /// end's list refresh, and <see cref="FetchResourcesCore"/> is an unbounded network download.
+    /// Skipping it is sound because the catalog side is not what changes — an install or uninstall
+    /// changes what is on disk, and ParatextData reads that on every call rather than caching it.
+    /// </remarks>
+    /// <returns>
+    /// The local project id of each catalogued resource, keyed by DBL entry uid, empty for one that
+    /// is not installed. The dictionary itself is empty when the catalog has not loaded yet or when
+    /// another DBL operation holds the gate; callers then keep the values they have.
+    /// </returns>
+    private Task<Dictionary<string, string>> RecomputeDblResourcesInstallStatus() =>
+        Task.Run(() =>
+        {
+            var installStatus = new Dictionary<string, string>();
+            bool gateTaken = false;
+            try
+            {
+                Monitor.TryEnter(_providerGate, INSTALL_STATUS_GATE_TIMEOUT_MS, ref gateTaken);
+                if (!gateTaken || !_hasFetchedResources)
+                    return installStatus;
+
+                foreach (var resource in _resources)
+                    installStatus[resource.DBLEntryUid.Id] = GetInstalledProjectId(resource);
+
+                return installStatus;
+            }
+            finally
+            {
+                if (gateTaken)
+                    Monitor.Exit(_providerGate);
             }
         });
 
@@ -290,7 +347,11 @@ internal class DblResourcesDataProvider(
 
         ScrTextCollection.RefreshScrTexts();
 
-        if (!ScrTextCollection.IsPresent(installableResource.InstalledScrText))
+        // Verify through ExistingScrText, which finds the resource by the DBL id in the installed
+        // project's settings. Checking whether InstalledScrText is still in the collection instead
+        // reports a successful install as a failure whenever the project it created is keyed on an
+        // id unrelated to the DBL entry uid.
+        if (GetInstalledProjectId(installableResource) == "")
             throw new Exception(
                 LocalizationService.GetLocalizedString(
                     PapiClient,
