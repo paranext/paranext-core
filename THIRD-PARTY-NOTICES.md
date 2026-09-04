@@ -89,8 +89,22 @@ file it does not record. The notices those files state are reproduced here.
 ```
 # Attribution
 
-`usfm.sty` comes from https://github.com/ubsicap/usfm/tree/master/sty
+`usfm.sty` and `usfm_sb.sty` come from https://github.com/ubsicap/usfm/tree/master/sty
 All other files in `/WEB` come from https://ebible.org/
+```
+
+### `c-sharp/base-directory-assets/ATTRIBUTION.md`
+
+```
+# Attribution
+
+`IP-Country.zip` holds IP address ranges mapped to country codes. It is a binary form of the
+DB-IP "IP to Country Lite" database, obtained from
+https://db-ip.com/db/download/ip-to-country-lite
+
+IP geolocation data by DB-IP (https://db-ip.com), licensed under the Creative Commons
+Attribution 4.0 International License (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/
 ```
 
 ### `extensions/src/quick-verse/assets/ATTRIBUTION.md`
