@@ -23,7 +23,6 @@ import {
 } from 'platform-bible-utils';
 import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/experimental';
 import { cn } from '@/utils/shadcn-ui/utils';
-import { Z_INDEX_OVERLAY } from '@/components/z-index';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
@@ -452,8 +451,10 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
         align="center"
         sideOffset={8}
         collisionPadding={16}
+        // No `zIndex` override: `TooltipContent` sets the tooltip tier itself, which is above the
+        // popover this row is rendered inside. Pinning it to the overlay tier (400) would put the
+        // tooltip behind its own host.
         className="tw:max-w-xs tw:text-center"
-        style={{ zIndex: Z_INDEX_OVERLAY }}
       >
         <div className="tw:font-semibold">{row.fullName}</div>
         {tooltipHasLanguage && (
@@ -523,7 +524,10 @@ function FilterMenu({
           <Filter className="tw:h-4 tw:w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="tw:w-56" style={{ zIndex: Z_INDEX_OVERLAY }}>
+      {/* No `zIndex` override: this menu opens from inside this component's own `PopoverContent`,
+          so pinning it to the overlay tier (400) would put it UNDER its host popover (600).
+          `DropdownMenuContent` already sets the right tier for itself. */}
+      <DropdownMenuContent align="end" className="tw:w-56">
         <DropdownMenuLabel>{strings.groupSectionLabel}</DropdownMenuLabel>
         <DropdownMenuCheckboxItem
           checked={groupByOpenTabs}

@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createRef } from 'react';
+import { createRef, useState } from 'react';
 import { beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/shadcn-ui/dropdown-menu';
+import { PopoverPortalContainerProvider } from '@/components/shadcn-ui/popover';
 import { BookChapterControl } from './book-chapter-control.component';
 import { BookChapterControlHandle } from './book-chapter-control.types';
+import { GRID_COLUMNS } from './book-chapter-control.utils';
 
 // jsdom doesn't ship a ResizeObserver, and `Element.prototype.scrollTo` is unimplemented.
 // cmdk (used inside BookChapterControl's popover) instantiates a ResizeObserver on mount,
@@ -873,3 +881,654 @@ describe('BookChapterControl additional books', () => {
     );
   });
 });
+
+describe('BookChapterControl grid keyboard navigation', () => {
+  async function openChapterGridForCurrentBook() {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    return { handleSubmit, user };
+  }
+
+  test('the grid opens with the current chapter already highlighted', async () => {
+    await openChapterGridForCurrentBook();
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('ArrowRight moves the highlight to the next chapter', async () => {
+    const { user } = await openChapterGridForCurrentBook();
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowRight}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '13' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('ArrowDown moves the highlight one full row', async () => {
+    const { user } = await openChapterGridForCurrentBook();
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '18' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('Enter submits the highlighted chapter, not the seeded one', async () => {
+    const { handleSubmit, user } = await openChapterGridForCurrentBook();
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowRight}{Enter}');
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ book: 'MAT', chapterNum: 13 }),
+      ),
+    );
+  });
+
+  test('arrow keys move the verse highlight in the verse grid', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+        getEndVerse={() => 30}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await user.click(await screen.findByRole('option', { name: '12' }));
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '1' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '7' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('the grid renders the column count the arrow arithmetic assumes', async () => {
+    // Tailwind's JIT cannot see an interpolated class name, so the grid sets gridTemplateColumns
+    // from GRID_COLUMNS instead of a grid-cols-N class. If the two ever drift, ArrowDown lands on
+    // the wrong cell and nothing else fails.
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    const cell = await screen.findByRole('option', { name: '1' });
+    // The grid container carries the layout but has no role of its own, so no accessible query
+    // reaches it — walk up from a cell instead.
+    expect(cell.parentElement).toHaveStyle({
+      gridTemplateColumns: `repeat(${GRID_COLUMNS}, minmax(0, 1fr))`,
+    });
+  });
+
+  test('arrows still reach the list for a book whose grid is never rendered', async () => {
+    // A single-chapter book shows no chapter grid, so there is nothing for the arrow keys to
+    // drive. Claiming the keystroke anyway would write a chapter value no rendered item carries,
+    // blanking the highlight and leaving the list un-navigable.
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('Jude');
+    const topMatchRow = await screen.findByRole('option', { name: /JUD/ });
+    await waitFor(() => expect(topMatchRow).toHaveAttribute('data-selected', 'true'));
+
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{ArrowLeft}');
+
+    // Name the trigger: once the popover is open the search input carries the combobox role too.
+    expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.getByRole('option', { name: /JUD/ })).toHaveAttribute('data-selected', 'true');
+  });
+});
+
+describe('BookChapterControl selection activation', () => {
+  test('Space activates the highlighted chapter', async () => {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard(' ');
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ book: 'MAT', chapterNum: 12 }),
+      ),
+    );
+  });
+
+  test('Enter does not activate a disabled chapter', async () => {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        // Everything before Matthew 20:1 is out of bounds, so chapter 12 is disabled.
+        disableReferencesUpTo={{ book: 'MAT', chapterNum: 20, verseNum: 1 }}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await user.keyboard('{Enter}');
+    expect(handleSubmit).not.toHaveBeenCalled();
+  });
+
+  test('Enter activates the highlighted verse', async () => {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        getEndVerse={() => 30}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await user.click(await screen.findByRole('option', { name: '12' }));
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '1' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowRight}{Enter}');
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith({ book: 'MAT', chapterNum: 12, verseNum: 2 }),
+    );
+  });
+});
+
+// The heaviest block in this file: each case types a reference, renders the popover, and waits for
+// a full preview grid to settle, landing around 1.5-2s on an idle machine. That is inside vitest's
+// 5s default, but not by enough — this repo's multi-window suites already time out at that budget
+// under CI load. Raised here rather than globally so a genuinely hung test elsewhere still fails
+// fast.
+describe('BookChapterControl top-match preview', () => {
+  // Every keystroke re-renders the whole picker, so these type the shortest query that still
+  // resolves to a single book and move the highlight with one keypress rather than several.
+  test('typing a book seeds the preview grid at the current chapter', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('Matt');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('typing a book and chapter seeds the preview grid at that chapter', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('Matt 5');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '5' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('arrow keys move the highlight in the verse preview grid', async () => {
+    // A chapter-verse separator in the query swaps the chapter preview for a verse preview, so the
+    // arrow keys have to drive verse arithmetic rather than chapter arithmetic.
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+        getEndVerse={() => 30}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('Matt 12:');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '1' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowRight}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '2' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('activating the top-match row submits the highlighted chapter, not the parsed one', async () => {
+    // The row must submit what it displays, whichever way it is activated. This case drives the ROW
+    // itself; the Enter path onto the same reference is covered separately below.
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('Matt 1');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '1' })).toHaveAttribute('data-selected', 'true'),
+    );
+    // One row down from chapter 1 is chapter 7.
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '7' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.click(screen.getByRole('option', { name: /Matthew 7/ }));
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ book: 'MAT', chapterNum: 7 }),
+      ),
+    );
+  });
+
+  test('Enter submits the typed verse, not just the highlighted chapter', async () => {
+    // The main toolbar passes neither `getEndVerse` nor `submitKeys`, so a chapter preview is the
+    // only grid on screen. Enter has to reach the top-match row: the highlighted chapter cell knows
+    // no verse, and activating it would silently navigate to verse 1.
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('mat 12:5');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith({ book: 'MAT', chapterNum: 12, verseNum: 5 }),
+    );
+  });
+
+  test('Enter keeps the typed verse when an arrow key has moved the chapter', async () => {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('mat 12:5');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowRight}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '13' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith({ book: 'MAT', chapterNum: 13, verseNum: 5 }),
+    );
+  });
+
+  test('the row displays the reference it will submit', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('Matt 1');
+    await user.keyboard('{ArrowDown}');
+    expect(await screen.findByRole('option', { name: /Matthew 7/ })).toBeInTheDocument();
+  });
+}, 15_000);
+
+// Each case here clicks its way down through the popover — book list, then chapter grid, then for
+// the verse cases a verse grid — so it carries the same rendering cost as the top-match preview
+// block above and gets the same budget. Windows CI runs these roughly 2.5x slower than an idle
+// machine, which puts the deepest case past vitest's 5s default. Raised per suite rather than
+// globally so a genuinely hung test elsewhere still fails fast.
+describe('BookChapterControl back button', () => {
+  test('is labelled for returning to books while in chapters view', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    expect(await screen.findByRole('button', { name: 'Back to books' })).toBeInTheDocument();
+  });
+
+  test('is labelled for returning to chapters while in verses view', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+        getEndVerse={() => 30}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await user.click(await screen.findByRole('option', { name: '12' }));
+    expect(await screen.findByRole('button', { name: 'Back to chapters' })).toBeInTheDocument();
+  });
+
+  // Enter and Space are centralized on the Command root to activate the highlighted grid cell, so
+  // the back button — the only natively interactive element in the chapters/verses header — has to
+  // be exempted explicitly or it stops working as a button. Focus reaches it by click (it is
+  // tabIndex={-1}): clicking back from verses lands in chapters view with the button still focused,
+  // where the very next Enter or Space must go back again rather than commit a chapter.
+  async function focusBackButtonInChaptersView() {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    const backButton = await screen.findByRole('button', { name: 'Back to books' });
+    // Wait for the seeded highlight, so a failure means the guard let it through rather than that
+    // there was nothing to submit yet.
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    act(() => backButton.focus());
+    return { handleSubmit, user };
+  }
+
+  test('Enter on the focused back button goes back instead of submitting the highlighted chapter', async () => {
+    const { handleSubmit, user } = await focusBackButtonInChaptersView();
+
+    await user.keyboard('{Enter}');
+
+    expect(await screen.findByRole('option', { name: /Matthew/ })).toBeInTheDocument();
+    expect(handleSubmit).not.toHaveBeenCalled();
+  });
+
+  test('Space on the focused back button goes back instead of submitting the highlighted chapter', async () => {
+    const { handleSubmit, user } = await focusBackButtonInChaptersView();
+
+    await user.keyboard('[Space]');
+
+    expect(await screen.findByRole('option', { name: /Matthew/ })).toBeInTheDocument();
+    expect(handleSubmit).not.toHaveBeenCalled();
+  });
+
+  // The back button is deliberately out of the tab order, so Backspace is the ONLY way a keyboard
+  // user leaves a grid without committing a reference. Both levels are covered because they are
+  // separate branches with separate destinations.
+  test('Backspace returns to the book list from the chapter grid', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    expect(await screen.findByRole('button', { name: 'Back to books' })).toBeInTheDocument();
+
+    await user.keyboard('{Backspace}');
+
+    expect(await screen.findByRole('option', { name: /Matthew/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Back to books' })).not.toBeInTheDocument();
+  });
+
+  test('Backspace returns to the chapter grid from the verse grid', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+        getEndVerse={() => 30}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await user.click(await screen.findByRole('option', { name: '12' }));
+    expect(await screen.findByRole('button', { name: 'Back to chapters' })).toBeInTheDocument();
+
+    await user.keyboard('{Backspace}');
+
+    expect(await screen.findByRole('button', { name: 'Back to books' })).toBeInTheDocument();
+  });
+}, 15_000);
+
+// The picker's key handler runs as `onKeyDownCapture` on the popover, so it sees every keystroke in
+// the popover's React subtree — including a portalled menu's — before the widget the user is
+// actually interacting with does. These pin the keys it must NOT claim.
+describe('BookChapterControl yields keys it does not own', () => {
+  const RECENT = [
+    { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    { book: 'EXO', chapterNum: 2, verseNum: 3 },
+  ];
+
+  async function openPickerWithRecentSearches() {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        getEndVerse={() => 30}
+        recentSearches={RECENT}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    return { handleSubmit, user };
+  }
+
+  /**
+   * The picker's own search input. Both the trigger and the input carry `role="combobox"` once the
+   * popover is open, so the role alone is ambiguous there.
+   */
+  function getSearchInput(): HTMLInputElement {
+    const input = screen
+      .getAllByRole('combobox')
+      .find((element) => element instanceof HTMLInputElement);
+    if (!(input instanceof HTMLInputElement)) throw new Error('expected the search input');
+    return input;
+  }
+
+  test('the recent-searches list stays keyboard-navigable while a preview grid is on screen', async () => {
+    const { user } = await openPickerWithRecentSearches();
+    // A preview grid on screen is the state in which the picker claims the arrow keys.
+    await user.keyboard('mat 12');
+    await waitFor(() => expect(screen.getByRole('option', { name: '12' })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /recent/i }));
+    const items = await screen.findAllByRole('menuitem');
+    await user.keyboard('{ArrowDown}');
+
+    // Radix moves focus onto the list's first row. The picker swallowing the arrow leaves the list
+    // unnavigable, with the hidden grid's highlight moving instead.
+    await waitFor(() => expect(items[0]).toHaveFocus());
+  });
+
+  test('Enter on the recent-searches list does not submit the typed reference', async () => {
+    const { handleSubmit, user } = await openPickerWithRecentSearches();
+    await user.keyboard('mat 12');
+    await waitFor(() => expect(screen.getByRole('option', { name: '12' })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /recent/i }));
+    await screen.findAllByRole('menuitem');
+    // Radix focuses the menu CONTENT on open, not a row, so this is the state the picker sees for
+    // every Enter pressed before the user has arrowed anywhere. Enter there addresses the list, not
+    // the picker behind it: it must neither submit the typed reference nor close the picker.
+    await user.keyboard('{Enter}');
+
+    expect(handleSubmit).not.toHaveBeenCalled();
+    expect(getSearchInput()).toBeInTheDocument();
+  });
+
+  test('ArrowLeft moves the caret in the query instead of the preview highlight', async () => {
+    const { user } = await openPickerWithRecentSearches();
+    await user.keyboard('mat 12:15');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '15' })).toHaveAttribute('data-selected', 'true'),
+    );
+
+    const input = getSearchInput();
+    expect(input.selectionStart).toBe('mat 12:15'.length);
+
+    await user.keyboard('{ArrowLeft}');
+
+    // The caret has to be able to get back into the number the user typed. Claiming the key for the
+    // grid both freezes the caret and steps the highlight to 14 — which the top-match row then
+    // displays, and Enter then submits.
+    expect(input.selectionStart).toBe('mat 12:15'.length - 1);
+    expect(screen.getByRole('option', { name: '15' })).toHaveAttribute('data-selected', 'true');
+  });
+
+  test('an arrow at the end of the query still drives the preview grid', async () => {
+    const { user } = await openPickerWithRecentSearches();
+    await user.keyboard('mat 12:15');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '15' })).toHaveAttribute('data-selected', 'true'),
+    );
+
+    // The caret is already at the end, so ArrowRight has nowhere to go in the input and the grid
+    // takes it — the rule a combobox uses.
+    await user.keyboard('{ArrowRight}');
+
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '16' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('arrow keys are released once quick navigation has hidden the list', async () => {
+    const { user } = await openPickerWithRecentSearches();
+    await user.keyboard('mat 12');
+    await waitFor(() => expect(screen.getByRole('option', { name: '12' })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Next chapter' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('option', { name: '12' })).not.toBeInTheDocument(),
+    );
+
+    // With the list unmounted there is no grid to move and no refs to scroll, so claiming the key
+    // would swallow it — denying it both to cmdk and to the quick-nav buttons' own focus restore.
+    await user.keyboard('{ArrowDown}');
+
+    expect(getSearchInput()).toHaveFocus();
+  });
+
+  test('a raw localization key never reaches a label or tooltip', async () => {
+    // `useLocalizedStrings` seeds `{ [key]: key }` and keeps that seed for the whole first render
+    // pass — and permanently if the localization provider errors. A key is a non-empty string, so
+    // `localizedStrings?.[key] || 'Default'` does NOT fall back. These labels used to be
+    // English-only literals or invisible `aria-label`s; several are now visible tooltip text.
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+        localizedStrings={{
+          '%webView_bookChapterControl_previousChapter%':
+            '%webView_bookChapterControl_previousChapter%',
+          '%webView_bookChapterControl_nextChapter%': '%webView_bookChapterControl_nextChapter%',
+          '%webView_bookChapterControl_showMoreBooks%':
+            '%webView_bookChapterControl_showMoreBooks%',
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+
+    expect(await screen.findByRole('button', { name: 'Previous chapter' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next chapter' })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/%webView_bookChapterControl_/);
+  });
+
+  // `ScopeSelector`'s Navigate footer renders this picker inside a `DropdownMenuItem` and portals
+  // its popover INTO the `DropdownMenuContent` (`PopoverPortalContainerProvider`, a pattern
+  // `popover.tsx` documents). Every keystroke in the picker then has `role="menu"` as a DOM
+  // ancestor, so a bail that only asks "is this inside a menu?" would disable the whole control
+  // there rather than only yielding to the recent-searches list.
+  test('keyboard navigation still works when the picker is portalled inside a menu', async () => {
+    function BcvInsideMenu() {
+      // `PopoverPortalContainerProvider` takes the container as `HTMLElement | null`, matching the
+      // ref callback's own argument type.
+      // eslint-disable-next-line no-null/no-null
+      const [container, setContainer] = useState<HTMLDivElement | null>(null);
+      return (
+        <DropdownMenu defaultOpen>
+          <DropdownMenuTrigger>scope</DropdownMenuTrigger>
+          <DropdownMenuContent ref={setContainer}>
+            <PopoverPortalContainerProvider container={container}>
+              <DropdownMenuItem onSelect={(event) => event.preventDefault()}>
+                <BookChapterControl
+                  scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+                  handleSubmit={vi.fn()}
+                  getEndVerse={() => 30}
+                />
+              </DropdownMenuItem>
+            </PopoverPortalContainerProvider>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
+
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<BcvInsideMenu />);
+
+    await user.click(await screen.findByRole('combobox', { name: 'book-chapter-trigger' }));
+    await user.keyboard('mat 12');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+
+    await user.keyboard('{ArrowRight}');
+
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '13' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+}, 15_000);

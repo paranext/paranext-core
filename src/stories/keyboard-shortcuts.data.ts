@@ -115,6 +115,46 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
   },
   {
+    id: 'book-chapter-control-move-grid-highlight',
+    purpose:
+      'Move the highlighted chapter or verse in the Book Chapter Control grid (mirrored horizontally in right-to-left layouts). While the search box is on screen the horizontal arrows move the text caret first, and reach the preview grid only once the caret has nowhere left to go',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: {
+      macOS: '↑ / ↓ / ← / →',
+      windows: '↑ / ↓ / ← / →',
+      linux: '↑ / ↓ / ← / →',
+    },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.utils.ts',
+    ],
+  },
+  {
+    id: 'book-chapter-control-activate-grid-item',
+    purpose:
+      'Go to the highlighted chapter or verse in the Book Chapter Control grid. In the books view — where the search box is on screen and the grid below it is a preview of the typed reference — Enter submits that reference instead, and Space stays an ordinary character',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+    ],
+  },
+  {
+    id: 'book-chapter-control-back',
+    purpose:
+      'Go back one level in the Book Chapter Control — verses to chapters, chapters to books',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: { macOS: '⌫', windows: 'Backspace', linux: 'Backspace' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+    ],
+  },
+  // Escape on the Book Chapter Control popover is deliberately absent from this catalog; the
+  // reasoning is recorded once, under "Not catalogued" in keyboard-shortcuts.mdx.
+  {
     id: 'reference-history-back',
     purpose: 'Go back one Scripture reference in the active scroll group’s history',
     category: 'Navigation',
@@ -418,8 +458,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Scripture Text Grid web view',
     keys: {
       macOS: '↑ / ↓ / ← / →',
-      windows: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
-      linux: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
+      windows: '↑ / ↓ / ← / →',
+      linux: '↑ / ↓ / ← / →',
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
