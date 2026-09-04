@@ -167,15 +167,88 @@ describe('useOpenProjectBookIds', () => {
     expect(getProjectDataProvider).not.toHaveBeenCalled();
   });
 
-  test('never subscribes to the active project', async () => {
+  test("never offers the active project's own books", async () => {
     vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
       webViewDefinition('editor', { projectId: 'activeProject' }),
     ]);
+    getProjectDataProvider.mockResolvedValue(
+      pdpWithBooks(booksPresentFlags(1, 66), 'activeProject'),
+    );
 
     const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
 
+    // The active project may well be subscribed — it is filtered out of the RESULT, not out of the
+    // subscribed set, so that changing navigation target cannot churn subscriptions
     await waitFor(() => expect(result.current).toEqual([]));
-    expect(getProjectDataProvider).not.toHaveBeenCalled();
+  });
+
+  test("offers the navigation target's books while the target is briefly undefined", async () => {
+    // The documented cost of filtering at read time instead of out of the subscribed set: through a
+    // dock rebuild's `undefined` gap nothing matches the filter, so the target's own books are
+    // offered for that gap. Pinned deliberately — the alternative (holding the last non-`undefined`
+    // target in a ref) would suppress these books when `undefined` is the settled answer instead.
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      webViewDefinition('editor', { projectId: 'activeProject' }),
+      webViewDefinition('panel', { projectId: 'otherProject' }),
+    ]);
+    getProjectDataProvider.mockImplementation(async (_interface: string, projectId: string) =>
+      pdpWithBooks(
+        projectId === 'activeProject' ? booksPresentFlags(1) : booksPresentFlags(66),
+        projectId,
+      ),
+    );
+
+    const initialProps: { activeProjectId: string | undefined } = {
+      activeProjectId: 'activeProject',
+    };
+    const { result, rerender } = renderHook(
+      ({ activeProjectId }: { activeProjectId: string | undefined }) =>
+        useOpenProjectBookIds(activeProjectId),
+      { initialProps },
+    );
+    await waitFor(() => expect(result.current).toEqual(['REV']));
+
+    rerender({ activeProjectId: undefined });
+
+    // GEN is the active project's own book, offered only because nothing equals `undefined`
+    await waitFor(() => expect(result.current).toEqual(['GEN', 'REV']));
+
+    rerender({ activeProjectId: 'activeProject' });
+
+    await waitFor(() => expect(result.current).toEqual(['REV']));
+  });
+
+  test('changing the navigation target does not tear down and rebuild subscriptions', async () => {
+    // The storm this guards against: in simple mode every open panel carries the same project id,
+    // so a subscribed set that subtracts the active project swings between "one project" and "none"
+    // on every change of resolved navigation target — including the brief `undefined` a dock rebuild
+    // produces — re-subscribing everything on each swing
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      webViewDefinition('editor', { projectId: 'activeProject' }),
+      webViewDefinition('panel', { projectId: 'otherProject' }),
+    ]);
+    getProjectDataProvider.mockImplementation(async (_interface: string, projectId: string) =>
+      pdpWithBooks(booksPresentFlags(66), projectId),
+    );
+
+    const initialProps: { activeProjectId: string | undefined } = {
+      activeProjectId: 'activeProject',
+    };
+    const { result, rerender } = renderHook(
+      ({ activeProjectId }: { activeProjectId: string | undefined }) =>
+        useOpenProjectBookIds(activeProjectId),
+      { initialProps },
+    );
+    await waitFor(() => expect(result.current).toEqual(['REV']));
+    const callsAfterFirstRender = getProjectDataProvider.mock.calls.length;
+
+    // The toggle a dock rebuild produces, and back again
+    rerender({ activeProjectId: undefined });
+    rerender({ activeProjectId: 'activeProject' });
+    await waitFor(() => expect(result.current).toEqual(['REV']));
+
+    expect(getProjectDataProvider.mock.calls.length).toBe(callsAfterFirstRender);
+    expect(unsubscriberFor('otherProject')).not.toHaveBeenCalled();
   });
 
   describe('when disabled', () => {
