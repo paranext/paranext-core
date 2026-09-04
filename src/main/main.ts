@@ -90,6 +90,9 @@ import {
   focusWindow,
   getFocusedWindowId,
   getTargetWindowId,
+  getTrackedWindows,
+  getWindowById,
+  getWindowIdOf,
   getWindows,
   handleWindowBlurred,
   isWindowAbandoned,
@@ -278,7 +281,7 @@ const BOUNDS_CAPTURE_DEBOUNCE_MS = 100;
  * it is a new mid-session window that starts empty.
  */
 type WindowRestoreInfo =
-  | { kind: 'entry'; entryIndex: number; entry: WindowLayoutEntry }
+  | { kind: 'entry'; entry: WindowLayoutEntry }
   | { kind: 'legacy'; boundsState?: WindowBoundsState };
 
 /** Height of the custom title bar buttons on Windows */
@@ -414,7 +417,7 @@ async function main() {
     countWindows: countWindowsThatCouldBeTheLastOne,
     // The primary reopens Home when emptied rather than closing; only its ✕ and Quit close it
     isPrimaryWindow,
-    closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+    closeWindow: (windowId) => getWindowById(windowId)?.close(),
     // A report names its own subject and arrives over the network, so the id is the caller's word.
     // The tracker is what knows whether that word describes a window this process has.
     isWindowTracked,
@@ -446,8 +449,8 @@ async function main() {
           {
             name: 'windowId',
             required: true,
-            summary: 'Electron BrowserWindow ID of the window reporting itself empty',
-            schema: { type: 'number' },
+            summary: 'Id of the window reporting itself empty',
+            schema: { type: 'string' },
           },
           {
             name: 'reason',
@@ -572,7 +575,12 @@ async function main() {
     // so no window has OS focus and the fallback below is the ordinary path, not the edge case. It
     // asks where routed calls go, which is the window the user was last working in; the oldest
     // tracked window would be an arbitrary choice that also repoints routing there by focusing it.
-    const windowIdToRaise = BrowserWindow.getFocusedWindow()?.id ?? getTargetWindowId();
+    // Translated through the tracker rather than read off the window: `getFocusedWindow()` answers
+    // with a BrowserWindow, whose `id` is Electron's own and names nothing the platform knows.
+    // `focusWindow` takes a platform id, and the two are different values for the same window.
+    const focusedWindow = BrowserWindow.getFocusedWindow();
+    const windowIdToRaise =
+      (focusedWindow ? getWindowIdOf(focusedWindow) : undefined) ?? getTargetWindowId();
     // Deliberately NOT gated on `isApplicationFocused()` the way the in-app raises are. That gate
     // exists to stop us pulling the app in front of whatever the user is working in; this path
     // runs precisely when the app does not own the foreground, so the gate would suppress every
@@ -677,7 +685,10 @@ async function main() {
   const createWindow = async (
     restoreInfo?: WindowRestoreInfo,
     creationOptions?: { pendingContent?: boolean },
-  ): Promise<BrowserWindow> => {
+    // The platform id comes back alongside the window because this is the only place that has it:
+    // it is minted here and is not readable from the BrowserWindow, so a caller that needs to name
+    // the window afterwards would otherwise have to look it up by identity.
+  ): Promise<{ window: BrowserWindow; windowId: string }> => {
     // The menu and the `platform.createWindow` command stay live through a quit, because every
     // window sits in `preventDefault()` waiting on the shared shutdown run for as long as that run
     // takes. Opening a window in that gap would start a session the app is in no position to serve:
@@ -789,14 +800,20 @@ async function main() {
     // the waterfall's Total span.
     markStartupOnce('window-created');
 
-    // Capture the window ID before it can be destroyed (used in the `closed` handler)
-    const windowId = newWindow.id;
-
-    // Track this window immediately
-    addWindow(newWindow);
+    // Track this window immediately, which is also where it is given the platform id everything
+    // downstream names it by. Electron's own `BrowserWindow.id` is never used past this point, and
+    // the id stays valid in the `closed` handler after the window itself is gone.
+    //
+    // A window restoring a persisted entry is handed that entry's own durable id, rather than a
+    // fresh mint, so per-window state keyed by it (see `local-storage.service.ts`) survives the
+    // restart.
+    const windowId = addWindow(
+      newWindow,
+      restoreInfo?.kind === 'entry' ? restoreInfo.entry.windowId : undefined,
+    );
 
     // Tie the window to its persisted identity so layout persistence can serve and save it
-    if (restoreInfo?.kind === 'entry') assignEntryToWindow(windowId, restoreInfo.entryIndex);
+    if (restoreInfo?.kind === 'entry') assignEntryToWindow(windowId, restoreInfo.entry.windowId);
     else if (restoreInfo?.kind === 'legacy') trackLegacyWindow(windowId);
     else trackNewWindow(windowId);
 
@@ -1185,8 +1202,10 @@ async function main() {
           if (otherWindow === newWindow || otherWindow.isDestroyed()) return;
           // A window already on its way out has a close handler mid-flight. Telling it to close
           // again lands on its `isCloseInProgress` guard, which returns WITHOUT preventing the
-          // close — the escape hatch — so Electron would destroy it before its bounds flush.
-          if (isWindowMarkedClosing(otherWindow.id)) return;
+          // close — the escape hatch — so Electron would destroy it before its bounds flush. Looked
+          // up by the platform id, not Electron's own `.id`: the two namespaces no longer coincide.
+          const otherWindowId = getWindowIdOf(otherWindow);
+          if (otherWindowId !== undefined && isWindowMarkedClosing(otherWindowId)) return;
           otherWindow.close();
         });
       }
@@ -1357,7 +1376,10 @@ async function main() {
     // Built URL search parameters for use in `src/renderer/global-this.model.ts`
     const searchParamsObject: Record<string, string> = {
       [LOG_LEVEL_QUERY_PARAMETER]: globalThis.logLevel,
-      [WINDOW_ID]: `${windowId}`,
+      // Durable (see `WindowLayoutEntry.windowId`), and settled when the window was tracked above —
+      // so the renderer's per-window storage, keyed by this same id, works from the first render in
+      // every interface mode rather than waiting on a request to main after the load.
+      [WINDOW_ID]: windowId,
     };
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
@@ -1558,7 +1580,7 @@ async function main() {
     // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
     // new AppUpdater();
 
-    return newWindow;
+    return { window: newWindow, windowId };
   };
 
   // The router that serves `openWebView` starts before this closure exists, so it is handed the
@@ -1568,7 +1590,7 @@ async function main() {
   // extension-host ready signal would deadlock against that wait.
   setWebViewWindowCreator({
     createPendingContentWindow: async () =>
-      (await createWindow(undefined, { pendingContent: true })).id,
+      (await createWindow(undefined, { pendingContent: true })).windowId,
     closeWindow: (windowId) => {
       // Rolling back an open that never delivered must not put the close-all question on screen,
       // and it cannot: a window still waiting for its content never answers for the application, so
@@ -1576,7 +1598,7 @@ async function main() {
       // do without asking, and it is the reason no guard stands here — one would only ever refuse a
       // close the router does not await, leaving a blank window standing while the caller is told
       // the rollback succeeded.
-      BrowserWindow.fromId(windowId)?.close();
+      getWindowById(windowId)?.close();
     },
   });
 
@@ -1594,7 +1616,7 @@ async function main() {
     const plan = await loadWindowLayouts();
     if (plan.kind === 'legacy') {
       const legacyWindow = await createWindow({ kind: 'legacy', boundsState: plan.boundsState });
-      setMainWindowId(legacyWindow.id);
+      setMainWindowId(legacyWindow.windowId);
       return;
     }
 
@@ -1604,10 +1626,9 @@ async function main() {
     const { entries, mainEntryIndex } = plan;
     const mainWindow = await createWindow({
       kind: 'entry',
-      entryIndex: mainEntryIndex,
       entry: entries[mainEntryIndex],
     });
-    setMainWindowId(mainWindow.id);
+    setMainWindowId(mainWindow.windowId);
     if (entries.length <= 1) return;
 
     // Simple mode is single-window: restore only the main window no matter how many entries the
@@ -1629,7 +1650,7 @@ async function main() {
         // Sequential on purpose: creating windows one at a time keeps the tracked window order
         // (and so the focus fallback and save order) deterministic
         // eslint-disable-next-line no-await-in-loop
-        await createWindow({ kind: 'entry', entryIndex, entry: entries[entryIndex] });
+        await createWindow({ kind: 'entry', entry: entries[entryIndex] });
       }
     }
   };
@@ -1888,7 +1909,7 @@ async function main() {
         params: [],
         result: {
           name: 'return value',
-          schema: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+          schema: { oneOf: [{ type: 'string' }, { type: 'null' }] },
         },
       },
     },
@@ -1906,12 +1927,12 @@ async function main() {
       // starting is deliberately still offered — it is on screen, the user can see it, and work
       // sent to it lands once it is ready. Its name is the one thing it cannot supply yet, which is
       // why its readiness travels with it.
-      const availableWindows = getWindows()
-        .filter((window) => !isWindowMarkedClosing(window.id) && !isWindowAbandoned(window.id))
-        .map((window) => ({
-          id: window.id,
+      const availableWindows = getTrackedWindows()
+        .filter(({ windowId }) => !isWindowMarkedClosing(windowId) && !isWindowAbandoned(windowId))
+        .map(({ windowId, window }) => ({
+          windowId,
           getTitle: () => window.getTitle(),
-          wasEverReady: wasWindowEverReady(window.id),
+          wasEverReady: wasWindowEverReady(windowId),
         }));
       return summarizeWindows(availableWindows, isPrimaryWindow);
     },
@@ -1929,7 +1950,7 @@ async function main() {
             items: {
               type: 'object',
               properties: {
-                windowId: { type: 'number' },
+                windowId: { type: 'string' },
                 label: { type: 'string' },
                 isMain: { type: 'boolean' },
               },

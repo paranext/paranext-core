@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => {
     getAbandonedWindowIds: vi.fn(),
     wasWindowEverReady: vi.fn(),
     isWindowClosing: vi.fn(),
+    isWindowTracked: vi.fn<(windowId: string) => boolean>(() => true),
+    getWindowCreationRank: vi.fn<(windowId: string) => number | undefined>(() => undefined),
     isApplicationFocused: vi.fn(),
     focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
@@ -67,6 +69,8 @@ vi.mock('@main/services/window-state.service', () => ({
   getAbandonedWindowIds: mocks.getAbandonedWindowIds,
   wasWindowEverReady: mocks.wasWindowEverReady,
   isWindowClosing: mocks.isWindowClosing,
+  isWindowTracked: mocks.isWindowTracked,
+  getWindowCreationRank: mocks.getWindowCreationRank,
   isApplicationFocused: mocks.isApplicationFocused,
   focusWindow: mocks.focusWindow,
 }));
@@ -104,7 +108,7 @@ describe('web-view window creator wiring', () => {
     // The window the creator will report as created, already announced as ready so the router does
     // not need to wait on anything but the creator wiring this test is exercising.
     withWindows({ 7: emptyWindowShard() });
-    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
 
     const freshWindowPromise = createFreshWindow('someType');
 
@@ -164,7 +168,7 @@ describe('web-view window creator wiring', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
     setWebViewWindowCreator(creator);
 
     const freshWindow = await waitingAgain;
@@ -190,7 +194,7 @@ describe('web-view window creator wiring', () => {
     // the ordering question
     let clearCallsWhenClosed: number | undefined;
     const creator = {
-      createPendingContentWindow: vi.fn(async () => 7),
+      createPendingContentWindow: vi.fn(async () => '7'),
       closeWindow: vi.fn(() => {
         clearCallsWhenClosed = mocks.clearWindowPendingContent.mock.calls.length;
       }),
@@ -200,7 +204,7 @@ describe('web-view window creator wiring', () => {
     const freshWindow = await createFreshWindow('someType');
     await freshWindow.discard();
 
-    expect(creator.closeWindow).toHaveBeenCalledWith(7);
+    expect(creator.closeWindow).toHaveBeenCalledWith('7');
     expect(clearCallsWhenClosed).toBe(0);
   });
 });

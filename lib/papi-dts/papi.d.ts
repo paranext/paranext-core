@@ -1,6 +1,24 @@
 declare module 'shared/utils/util' {
   import { ProcessType } from 'shared/global-this.model';
   /**
+   * Source (no anchors, no flags) of the hex-grouped shape a durable window id has. Shared so every
+   * matcher that needs to recognize a window id by shape (a scoped web view id's suffix, a per-window
+   * storage key's prefix) spells the shape out once rather than once per matcher.
+   *
+   * Deliberately NOT an RFC-4122 pattern, and it has to stay that way even though every id minted now
+   * comes from `createUuid()` and is RFC-4122. A window id reaches disk only on builds that persist
+   * one, and the first of those minted it with `newGuid()` (`platform-bible-utils`), which does not
+   * constrain the variant nibble: measured over 20,000 samples, about half of its output fails an
+   * RFC-4122 pattern. Profiles carrying those ids are in use, so tightening this would stop
+   * recognizing about half of what they hold — orphaning the per-window storage those keys name,
+   * since the prune matches positively on this shape, and breaking suffix stripping on scoped web
+   * view ids. Tightening it needs a migration of persisted ids first.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const WINDOW_ID_SHAPE_PATTERN_SOURCE =
+    '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+  /**
    * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically
    * random. See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
    *
@@ -921,12 +939,15 @@ declare module 'shared/models/web-view.model' {
      * Combining it with a 'replace-tab' layout is likewise an error — the tab being replaced already
      * names the window.
      *
-     * This is a runtime-only handle: window ids are reused across sessions, so never persist one. Get
-     * the current window's id via the `platform.getFocusedWindowId` command.
+     * Window ids are assigned by the platform and never reused within a profile, in this run of the
+     * app or any later one, so an id names one window and only ever that window. Get the id of the
+     * window this code is running in with `papi.window.getWindowId()` — not
+     * `platform.getFocusedWindowId`, which answers with a different window's id whenever this one is
+     * not the focused window.
      *
      * @experimental This option is unstable and may change or disappear without notice
      */
-    targetWindowId?: number;
+    targetWindowId?: string;
   };
   /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */
   export type GetWebViewOptions = OpenWebViewOptions;
@@ -1090,10 +1111,14 @@ declare module 'shared/global-this.model' {
      */
     var startupMarks: boolean;
     /**
-     * Window id of the Electron browser window as a string (e.g. "1", "2"). This is the stringified
-     * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
-     * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via
-     * `platform.getFocusedWindowId`). `undefined` until the renderer reads the URL parameter.
+     * Id of the window this code is running in, as the platform assigns them. Set from the URL search
+     * params in the renderer process, and `undefined` outside a window — which is how code shared
+     * with the extension host tells the two apart, so test it against `undefined` rather than for
+     * truthiness.
+     *
+     * The same id names this window everywhere else: in `platform.getWindows`, in a move's
+     * `targetWindowId`, and in main. No window is ever given an id another window has had, in this
+     * run of the app or any earlier one on the same profile.
      *
      * @experimental
      */
@@ -4357,6 +4382,23 @@ declare module 'shared/services/window.service-model' {
      * `platform.getFocusedWindowId` reports which window has focus.
      */
     dataProviderName: 'platform.windowServiceDataProvider';
+    /**
+     * Get the id of the window this code is currently running in.
+     *
+     * Works from the renderer and from inside a web view. A web view's iframe has no window id of its
+     * own; it reaches this through the `papi` object it shares with the renderer hosting it, and this
+     * code runs as part of that renderer — so it answers with the id of the window the web view is
+     * in. Returns `undefined` in the extension host, which has no window of its own.
+     *
+     * This answers a different question than `platform.getFocusedWindowId`, which reports which
+     * window the user is currently looking at — that call returns a _different_ window's id whenever
+     * this one is not the focused window.
+     *
+     * @returns The id of the current window, or `undefined` if there is no current window (e.g. in
+     *   the extension host)
+     * @experimental This method is unstable and may change or disappear without notice
+     */
+    getWindowId(): string | undefined;
   }>;
   /** A window's focus is on a WebView iframe with the specified id */
   export type FocusSubjectWebView = {
@@ -4538,8 +4580,11 @@ declare module 'shared/services/window.service-model' {
    * @experimental This type is unstable and may change or disappear without notice
    */
   export type WindowSummary = {
-    /** Runtime id of the window. Not stable across restarts */
-    windowId: number;
+    /**
+     * The window's durable id: persisted in its layout entry and handed back to whichever window
+     * restores that entry, so it is stable across restarts.
+     */
+    windowId: string;
     /**
      * The window's title, which follows its own content. Two windows showing the same thing carry the
      * same label, and nothing disambiguates them.
@@ -5223,7 +5268,7 @@ declare module 'papi-shared-types' {
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
-    'platform.getFocusedWindowId': () => Promise<number | undefined>;
+    'platform.getFocusedWindowId': () => Promise<string | undefined>;
     /**
      * List every open window with the title it is currently showing, for offering the user a choice
      * of window. Titles follow each window's own content, so two windows showing the same thing
@@ -5288,8 +5333,10 @@ declare module 'papi-shared-types' {
      */
     'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
     /**
-     * Move a web view to an existing window, named by its runtime window id (see
-     * `platform.getFocusedWindowId`; window ids are reused across sessions — never persist one).
+     * Move a web view to an existing window, named by its window id (see
+     * `papi.window.getWindowId()` for the id of the window the caller is in, or
+     * `platform.getFocusedWindowId` for whichever window the user is looking at). Ids are
+     * platform-assigned and never reused within a profile.
      *
      * Same semantics as `platform.moveWebViewToNewWindow` — including the marker a failed move
      * carries to say where it left the web view — and: moving a web view to the window it is
@@ -5304,7 +5351,7 @@ declare module 'papi-shared-types' {
      */
     'platform.moveWebViewToWindow': (
       webViewId: WebViewId,
-      targetWindowId: number,
+      targetWindowId: string,
     ) => Promise<WebViewId>;
     /** Open a dialog that displays essential information about the application */
     'platform.about': () => Promise<void>;
@@ -6379,9 +6426,10 @@ declare module 'shared/models/notification.service-model' {
    * OpenRPC documentation for the notification service network object.
    *
    * Attached in two places: each window's renderer registers its window-scoped name (e.g.
-   * `NotificationService-1`) with these docs, and the main process attaches the same docs when it
-   * registers its service router under the generic {@link NotificationServiceNetworkObjectName} — the
-   * name consumers actually call — so the public name does not show undocumented in `rpc.discover`.
+   * `NotificationService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`) with these docs, and the main process
+   * attaches the same docs when it registers its service router under the generic
+   * {@link NotificationServiceNetworkObjectName} — the name consumers actually call — so the public
+   * name does not show undocumented in `rpc.discover`.
    *
    * @experimental
    */
@@ -9294,7 +9342,10 @@ declare module 'shared/data/platform.data' {
   /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
   export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
   /**
-   * Query parameter key used to pass the Electron BrowserWindow ID to the renderer process
+   * Query parameter key used to pass a window's platform id to its renderer process. Durable: on a
+   * restored window this is the id its persisted layout entry already carries (see
+   * `WindowLayoutEntry.windowId`), so the renderer's per-window storage keyed by it survives a
+   * restart under the same id.
    *
    * @experimental
    */
@@ -9326,7 +9377,7 @@ declare module 'shared/data/platform.data' {
    */
   export const THEME_STATE_QUERY_PARAMETER = 'themeState';
   /** How a query parameter's text maps to the value the app uses. */
-  type UrlParameterKind = 'flag' | 'integer' | 'enum' | 'serialized';
+  type UrlParameterKind = 'flag' | 'integer' | 'enum' | 'string' | 'serialized';
   /** What a reader needs to turn one query parameter's text into a value it can trust. */
   type UrlParameterSpec = {
     kind: UrlParameterKind;
@@ -9336,8 +9387,8 @@ declare module 'shared/data/platform.data' {
   /**
    * Every query parameter passed to a renderer, keyed by its parameter name, and what its text means:
    * a `flag` is present-or-absent (any value, including none, means true), an `integer` or `enum` is
-   * a single value read at face value, and `serialized` is the output of platform-bible-utils'
-   * `serialize`, opaque to this table.
+   * a single value read at face value, a `string` is a single opaque value used as-is, and
+   * `serialized` is the output of platform-bible-utils' `serialize`, opaque to this table.
    *
    * Declarative on purpose, not a table of encode/decode functions: this module is import-free so the
    * `ts-node` startup-waterfall CLI can read it without pulling in the logger, and codec functions

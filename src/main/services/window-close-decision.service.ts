@@ -44,7 +44,7 @@ export type WindowCloseDecision =
  * @returns What to do with this window
  */
 export async function decideWindowClose(
-  windowId: number,
+  windowId: string,
   confirmCloseAll: () => Promise<CloseAllAnswer>,
 ): Promise<WindowCloseDecision> {
   if (!isPrimaryWindow(windowId)) return 'close-this-window';

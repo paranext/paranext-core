@@ -56,7 +56,7 @@ function bookChapterControlShard() {
 }
 
 /** Wire windows, each serving its own BookChapterControl shard */
-function withWindows(shardsByWindowId: Record<number, unknown>) {
+function withWindows(shardsByWindowId: Record<string, unknown>) {
   withWindowsServingShards(mocks, BOOK_CHAPTER_CONTROL_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId);
 }
 
@@ -73,7 +73,7 @@ function registrations() {
 describe('BookChapterControl service router', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
@@ -115,7 +115,7 @@ describe('BookChapterControl service router', () => {
     const { handler } = registrations().get('command:platform.openBookChapterControl') ?? {};
 
     await handler?.();
-    mocks.getTargetWindowId.mockReturnValue(3);
+    mocks.getTargetWindowId.mockReturnValue('3');
     await handler?.();
 
     expect(shards[2].open).toHaveBeenCalledTimes(1);

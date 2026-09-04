@@ -1,8 +1,9 @@
 /**
  * Notification service shard — the notification service implementation for THIS window. Registered
- * under a window-scoped network object id (e.g. "NotificationService-1") so every window can serve
- * its own notification UI; the main process's `notification.service-router.ts` publishes the
- * generic name and forwards to the window that should show (or stop showing) a notification.
+ * under a window-scoped network object id (e.g.
+ * "NotificationService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6") so every window can serve its own
+ * notification UI; the main process's `notification.service-router.ts` publishes the generic name
+ * and forwards to the window that should show (or stop showing) a notification.
  *
  * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
  * service shard".
@@ -217,12 +218,13 @@ const notificationService: INotificationService = {
 /**
  * Register the network object that backs the notification service.
  *
- * Registered under this window's scoped name (e.g. `NotificationService-1`) so every window can
- * serve its own notification UI. The main process publishes the generic name and forwards to the
- * focused window, so a notification raised by a background task lands where the user is looking.
+ * Registered under this window's scoped name (e.g.
+ * `NotificationService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`) so every window can serve its own
+ * notification UI. The main process publishes the generic name and forwards to the focused window,
+ * so a notification raised by a background task lands where the user is looking.
  */
 export async function startNotificationServiceShard(): Promise<void> {
-  if (!globalThis.windowId)
+  if (globalThis.windowId === undefined)
     throw new Error('Cannot start NotificationService: windowId is not set');
 
   await networkObjectService.set(
