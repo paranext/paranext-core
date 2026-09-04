@@ -6257,15 +6257,16 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private indicesInUsfmByVerseRefInternal;
 	private usfmInternal;
 	/**
-	 * Messages already reported by {@link warnOnce}, so a problem with the document is reported once
-	 * per document rather than once per occurrence.
+	 * Messages already reported by {@link reportProblemOnce}, so a problem is reported once per
+	 * instance rather than once per occurrence. A caller that builds a new instance per user action
+	 * reports each problem again per action; that is bounded by the number of distinct problems, not
+	 * by the size of the document.
 	 *
-	 * Resources whose markers this class's markers map does not carry — UBS Handbooks and
-	 * commentaries especially — can repeat a single unknown marker tens of thousands of times in one
-	 * book. Every `console.warn` from a web view is forwarded over IPC to a synchronous write in the
-	 * main process, so reporting per occurrence is enough I/O to hang the whole app for minutes.
-	 * Deliberately not reset by {@link usjChanged}: these messages describe the marker, not where it
-	 * appeared, so re-reporting one after an edit would add no information.
+	 * A commentary or UBS Handbook can repeat one marker this class's markers map does not carry tens
+	 * of thousands of times per book, and a web view's console calls cross IPC to the main process's
+	 * log file — so reporting per occurrence costs work proportional to the document rather than to
+	 * the number of distinct problems in it. Deliberately not reset by {@link usjChanged}: these
+	 * describe the marker, not where it appeared.
 	 */
 	private readonly reportedProblems;
 	constructor(usj: Usj, options?: UsjReaderWriterOptions);
@@ -6497,12 +6498,16 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private static removeContentNodesFromArray;
 	removeContentNodes(searchFunction: (potentiallyMatchingNode: MarkerContent) => boolean): number;
 	/**
-	 * Reports `message` through `console.warn`, unless an identical message has already been reported
-	 * for this document. See {@link reportedProblems} for why repeats are dropped.
+	 * Reports `message`, unless an identical message has already been reported by this instance. See
+	 * {@link reportedProblems} for why repeats are dropped.
+	 *
+	 * Defaults to `warn` because these describe a document that is malformed or that this class had
+	 * to reinterpret. Pass `debug` for problems that are normal in a well-formed document.
 	 *
 	 * @param message Message to report
+	 * @param level Console level to report at. Defaults to `warn`
 	 */
-	private warnOnce;
+	private reportProblemOnce;
 	/**
 	 * Get `MarkerInfo` by marker name
 	 *
@@ -6671,7 +6676,7 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	 *   potential adjustments to handle verse ranges differently when we know better what we ought to
 	 *   do.
 	 */
-	private static transferFragmentsInfoArrayToMaps;
+	private transferFragmentsInfoArrayToMaps;
 	/**
 	 * Generates USFM representation of the USJ document passed in and returns it along with
 	 * information about how various locations in USFM and USJ map to each other

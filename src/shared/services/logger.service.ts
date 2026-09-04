@@ -17,6 +17,12 @@ if (!isRenderer()) {
     const APP_NAME: string = packageInfo.name;
 
     log.transports.file.level = globalThis.logLevel;
+    // Main only: queue and coalesce writes rather than appending synchronously per line
+    // (electron-log's default), which puts every log call on the event loop the UI depends on —
+    // and main is where every web view's console calls land after being forwarded over IPC. The
+    // extension host stays synchronous because it shuts down through `process.exit()`, which
+    // discards anything still queued. See `adr-log-file-writes-queued`.
+    if (isServer()) log.transports.file.sync = false;
     // Point electron-log to the folder to put its logs in. This is default functionality; it just
     // doesn't get set properly on the extension host without this
     log.transports.file.setAppName(globalThis.isPackaged ? APP_NAME : 'Electron');
