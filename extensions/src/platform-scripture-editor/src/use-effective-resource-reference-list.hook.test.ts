@@ -124,7 +124,7 @@ describe('useEffectiveResourceReferenceList', () => {
       items: [{ type: 'project', name: 'From Project A', id: 'a-001' }],
     };
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
-    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(userListA, 'subscribeUserModelTexts'));
+    serveProvider(makeMockPdp(userListA, 'subscribeUserModelTexts'));
 
     const { result, rerender } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-a', 'platformScripture.modelTexts'),
@@ -134,7 +134,7 @@ describe('useEffectiveResourceReferenceList', () => {
     expect(readyList(result.current).items[0]).toMatchObject({ id: 'a-001' });
 
     // PDP goes away (new project selected, PDP not yet registered).
-    mockUseProjectDataProvider.mockReturnValue(undefined);
+    serveProvider(undefined);
     rerender();
 
     // Must report loading — not a stale merge of project B's admin list with project A's user

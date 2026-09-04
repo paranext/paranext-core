@@ -5,6 +5,7 @@ export default core;
 export type { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 export type { ExecutionToken } from '@node/models/execution-token.model';
 export type { DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
+export type { NetworkObjectState } from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
 export type { UseDialogCallbackOptions } from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
 export type {
   CommandPaletteItem,

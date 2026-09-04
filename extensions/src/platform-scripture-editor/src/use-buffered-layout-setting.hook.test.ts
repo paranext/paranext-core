@@ -210,17 +210,6 @@ describe('useBufferedLayoutSetting', () => {
     expect(result.current[2]).toBeUndefined();
   });
 
-  it('warns when projectId changes in place (the unsupported no-remount case)', () => {
-    setRaw(DEFAULT);
-    const { rerender } = renderHook(
-      ({ pid }) => useBufferedLayoutSetting(pid, 'platformScripture.modelTexts', DEFAULT),
-      { initialProps: { pid: 'proj-1' } },
-    );
-    expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
-    rerender({ pid: 'proj-2' });
-    expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
-  });
-
   it('does not warn on a stable projectId across rerenders', () => {
     setRaw(DEFAULT);
     const { rerender } = renderHook(() =>

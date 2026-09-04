@@ -134,11 +134,10 @@ export function useEffectiveResourceReferenceList(
 
     subscribePromise
       .then((unsub) => {
-        if (disposed) {
-          unsub();
-        } else {
-          unsubscribe = unsub;
-        }
+        // Rejects when the provider it belongs to is already disposed. Reaching this branch means
+        // cleanup has already run, so that is the likely case rather than the exceptional one.
+        if (disposed) return unsub().then(() => undefined);
+        unsubscribe = unsub;
         return undefined;
       })
       .catch((err) => {

@@ -71,8 +71,10 @@ export function useTextCollectionSources(projectId: string | undefined) {
     const track = (promise: Promise<() => Promise<boolean>>, label: string) => {
       promise
         .then((unsub) => {
-          if (disposed) unsub();
-          else unsubscribers.push(unsub);
+          // Rejects when the provider it belongs to is already disposed. Reaching this branch means
+          // cleanup has already run, so that is the likely case rather than the exceptional one.
+          if (disposed) return unsub().then(() => undefined);
+          unsubscribers.push(unsub);
           return undefined;
         })
         .catch((err) => {
@@ -156,7 +158,15 @@ export function useTextCollectionSources(projectId: string | undefined) {
   // `textConnectionState` is returned so a consumer can tell a transient window (keep showing what
   // it last rendered) from a project that has no settings provider at all (say so).
   // `isOrderPending` guards the write paths that would otherwise derive an order from the stand-in.
-  return { sources, textConnectionPdp, textConnectionState, isOrderPending: order === undefined };
+  return {
+    sources,
+    textConnectionPdp,
+    textConnectionState,
+    isOrderPending: order === undefined,
+    // Surfaced because `sources` alone cannot distinguish "still arriving" from "cannot be read":
+    // both leave it `undefined`, and reporting the second as the first is an unending spinner.
+    hasSettingsError: !!adminReferencedError || isPlatformError(adminReferenced),
+  };
 }
 
 export default useTextCollectionSources;

@@ -6,19 +6,6 @@ import { onDidCreateNetworkObject } from '@shared/services/network-object.servic
 import { logger } from '@shared/services/logger.service';
 
 /**
- * What a network-object hook knows about the object it was asked for.
- *
- * A bare `NetworkObject | undefined` cannot separate "not yet", "there is nothing to ask for", and
- * "asking failed" — so a consumer handed `undefined` cannot tell a window it should wait out from a
- * dead end it should report. Worse, before this union existed the hook answered a source change
- * with the PREVIOUS source's object, which a consumer had no way to detect at all: it would read
- * one project's data under another's id, and write data derived from one into the other's storage.
- *
- * Deliberately a discriminated union rather than an object of flags, because the object exists in
- * exactly one of these states — see `adr-async-hook-state-shape`. Pass the whole state around; do
- * not split it into a status plus a nullable object, which reintroduces the pairing it forbids.
- */
-/**
  * A finished lookup paired with the source it answers for, carrying either what was found or why
  * the attempt failed. The failure travels IN the value rather than as a rejected promise, so a
  * failure is always attributable to a source — a rejection leaves nothing to attribute, which makes
@@ -30,6 +17,19 @@ type NetworkObjectLookup = {
   error?: unknown;
 };
 
+/**
+ * What a network-object hook knows about the object it was asked for.
+ *
+ * A bare `NetworkObject | undefined` cannot separate "not yet", "there is nothing to ask for", and
+ * "asking failed" — so a consumer handed `undefined` cannot tell a window it should wait out from a
+ * dead end it should report. It also cannot say that the object on hand answers a source the caller
+ * has stopped asking about, which is what lets one project's data be read, and written, under
+ * another's id.
+ *
+ * Deliberately a discriminated union rather than an object of flags, because the object exists in
+ * exactly one of these states — see `adr-async-hook-state-shape`. Pass the whole state around; do
+ * not split it into a status plus a nullable object, which reintroduces the pairing it forbids.
+ */
 export type NetworkObjectState<T> =
   /** No source was given, so there is nothing to look up. Not a failure — nothing was asked. */
   | { status: 'noSource' }
@@ -38,9 +38,16 @@ export type NetworkObjectState<T> =
   /** The object answers the source being asked for right now. The only state that may be acted on. */
   | { status: 'ready'; networkObject: T }
   /**
-   * The lookup for the current source finished without a usable object — it rejected, nothing is
-   * registered under the name, or what was found has been disposed. Waiting will not help; report
-   * it rather than spinning.
+   * The lookup for the current source finished without a usable object. For a project data provider
+   * this most often means the project does not implement the requested `projectInterface`, which no
+   * amount of waiting or retrying changes — so report it rather than spinning.
+   *
+   * Only a change of source re-runs the lookup; nothing else does. A transient failure (for
+   * instance the bounded wait inside `getMetadataForProject` timing out on a slow start) therefore
+   * persists for as long as the caller keeps asking for the same source, and recovers when it asks
+   * for a different one. If a consumer ever needs recovery without that, the fix is an opt-in retry
+   * on the hook — see PT-4515 — not a retry affordance built on the assumption that this status is
+   * usually transient, because it usually is not.
    */
   | { status: 'unavailable'; error?: unknown };
 
@@ -193,9 +200,8 @@ function createUseNetworkObjectCoreHook<THookParams extends unknown[]>(
     );
     /* eslint-enable react-hooks/exhaustive-deps */
 
-    // The preserved object, whoever it belongs to. This is what the plain hook has always served,
-    // kept as-is so its consumers see no behavior change; `state` below is what can tell the
-    // difference.
+    // The preserved object, whoever it belongs to — what the plain hook serves. `state` below is
+    // the one that can tell whether it answers the source being asked for.
     const networkObject = lookup?.networkObject;
     /** Whether the preserved lookup answers the source being asked for right now. */
     const isLookupForCurrentSource = lookup !== undefined && lookup.source === networkObjectSource;
@@ -289,7 +295,11 @@ function createUseNetworkObjectCoreHook<THookParams extends unknown[]>(
  * place should use {@link createUseNetworkObjectStateHook} instead, whose union can tell those
  * apart. See {@link NetworkObjectState}.
  *
- * Arguments are as {@link createUseNetworkObjectStateHook}.
+ * @param getNetworkObject See {@link createUseNetworkObjectStateHook}
+ * @param mapParametersToNetworkObjectSource See {@link createUseNetworkObjectStateHook}
+ * @param doesCreatedNetworkObjectMatchSource See {@link createUseNetworkObjectStateHook}
+ * @returns A function that takes in a networkObjectSource and returns the network object, or
+ *   `undefined`
  */
 export function createUseNetworkObjectHook<THookParams extends unknown[]>(
   ...createArgs: Parameters<typeof createUseNetworkObjectCoreHook<THookParams>>
@@ -309,9 +319,22 @@ export function createUseNetworkObjectHook<THookParams extends unknown[]>(
  * Shares its implementation with {@link createUseNetworkObjectHook}, so re-lookup on disposal and on
  * factory publication behave identically.
  *
- * @param getNetworkObject See {@link createUseNetworkObjectHook}
- * @param mapParametersToNetworkObjectSource See {@link createUseNetworkObjectHook}
- * @param doesCreatedNetworkObjectMatchSource See {@link createUseNetworkObjectHook}
+ * @param getNetworkObject Function that takes the hook's parameters and returns the network object
+ *   they name
+ * @param mapParametersToNetworkObjectSource Function that takes the parameters passed into the hook
+ *   and returns the `networkObjectSource` associated with them. Defaults to using the first
+ *   parameter.
+ *
+ *   Note: `networkObjectSource` is the string name of the network object to get OR the network object
+ *   itself (the result of this hook, if you want it handed straight back).
+ * @param doesCreatedNetworkObjectMatchSource Decides whether a network object that was just created
+ *   means the hook should look its source up again. Defaults to comparing the new object's id to
+ *   the `networkObjectSource`.
+ *
+ *   MUST be supplied by any caller whose `networkObjectSource` is not literally the id the object is
+ *   registered under — a data provider name becomes `{name}-data`, a web view id becomes
+ *   `webViewController{id}`, and so on. Left at the default, such a hook's re-lookup listener
+ *   compares two strings that can never be equal.
  * @returns A function that takes in a networkObjectSource and returns its state
  */
 export function createUseNetworkObjectStateHook<THookParams extends unknown[]>(
