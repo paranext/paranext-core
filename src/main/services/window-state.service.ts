@@ -191,8 +191,10 @@ export function getWindows(): BrowserWindow[] {
  * How many windows could still be the one the user is left with — the arithmetic behind the answer
  * a window gets when it reports its dock empty.
  *
- * Such a window closes unless it is the last one standing, which docks Home instead, so this is the
- * complete rule for which windows may stand in as another window's reason to close:
+ * Such a window closes unless something exempts it — being the last one standing, or being the
+ * window that answers for the application, either of which docks Home instead. Those exemptions are
+ * decided elsewhere; what follows is the complete rule for which windows may stand in as another
+ * window's reason to close:
  *
  * - A window whose close has begun is on its way out — see {@link markWindowClosing}. Two windows
  *   emptying at the same moment would otherwise each count the other as a reason to close and both
@@ -219,6 +221,24 @@ export function countWindowsThatCouldBeTheLastOne(): number {
       !closingWindowIds.has(windowId) &&
       !isWindowPendingContent(windowId) &&
       !abandonedWindowIds.has(windowId),
+  ).length;
+}
+
+/**
+ * How many windows would still be open after a given window closed.
+ *
+ * Deliberately NOT {@link countWindowsThatCouldBeTheLastOne}: that answers "which windows are
+ * candidates to be the last one standing", and leaves out a window still waiting for its content —
+ * a move-to-new-window target that has not finished loading. Such a window cannot be the last one,
+ * but it is very much one the user would lose if the primary went down around it. The question here
+ * is what survives, so only windows already gone or already going are left out.
+ *
+ * @param closingWindowId The window whose close is being considered
+ */
+export function countWindowsThatWouldStayOpen(closingWindowId: number): number {
+  return trackedWindows.filter(
+    ({ windowId, window }) =>
+      windowId !== closingWindowId && !window.isDestroyed() && !closingWindowIds.has(windowId),
   ).length;
 }
 

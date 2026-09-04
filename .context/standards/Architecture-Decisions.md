@@ -2899,3 +2899,193 @@ step, no automation. Just a record.
   Node 22.12 / ICU 76.1. Write-up: "Replacing stringz" artifact. Reproduction:
   `~/repos/test/grapheme-segmentation`, `npm run all`. Memory, non-V8 engines and browser runtimes
   were not measured.
+
+## adr-registration-validity-once-per-session: Registration validity resolves once per session, in a store the first-run gate and the UI share
+
+- **Date:** 2026-08-22
+- **Status:** Accepted
+- **Context:** PT-4325 needs an unobtrusive reminder dot on the user-profile popover whenever the
+  user's Paratext registration is missing or invalid. The popover's trigger lives in the toolbar and
+  is visible with the popover closed, so it needs the answer without the popover being open — the
+  existing `getParatextRegistrationData` fetch is gated on `isOpen` and, in any case, a populated
+  name/email does not mean a *valid* registration. The right question is
+  `paratextRegistration.doesUserHaveValidRegistration`, which `resolveRegistrationValidity` already
+  wraps. The complication is that `first-run-store.ts` already asks it, but only sometimes: Power
+  mode, demo mode, and a suppressed background re-check all return before probing, so the dot cannot
+  simply piggyback on the gate. The alternative — let the dot probe independently — costs something,
+  though less than first assumed: main re-dispatches a request for a not-yet-registered handler
+  through `requestWithRetry` (`shared/data/rpc.model.ts`), a **10-attempt, 1-second-apart** loop, so
+  with `resolveRegistrationValidity`'s 3 probes a second chain adds up to ~30 redundant JSON-RPC
+  round trips spread across a slow cold start. (Those retries log at `debug`, not `warn`. An earlier
+  draft of this entry claimed "warning logs", copied from `requestNoRetry`'s TSDoc in
+  `network.service.ts`, which was wrong and is corrected in this same change. The traffic is real;
+  the log spam is not.)
+- **Decision:** A renderer store, `registration-validity-store.ts`, owns **one** registration probe
+  per session. `refreshRegistrationValidity()` shares an in-flight probe with every concurrent
+  caller (forced or not — `force` bypasses the cache, never the in-flight share), caches only a
+  definitive `'valid'`/`'invalid'`, and never caches `'unknown'` — nor lets an `'unknown'` probe
+  overwrite an answer already known, since it means "couldn't ask", not "all fine".
+  `first-run-store.ts` calls it instead of `resolveRegistrationValidity` directly. The gate remains
+  the **only writer of the just-registered suppression** — the one-shot `JUST_REGISTERED_KEY` flag,
+  whose read/consume ordering differs deliberately between the gate's two sites — and expresses the
+  suppressed answer through `publishRegistrationValidity(...)` rather than through the probe. That
+  publish seeds the session; it is **not** sticky, so a later forced re-check can re-probe past it
+  (see Consequences). Every path that *acts* on the flag publishes `'valid'`, including the ones
+  that return before probing, so a suppression the gate decides always reaches the UI. A path that
+  gets `'unknown'` publishes nothing — there is no answer to hand over — so the durable flag is
+  cleared on its first read (it grants exactly one launch of trust) while the guard itself survives
+  in memory for the rest of that startup, keeping the Retry on the "couldn't verify" screen covered.
+  UI consumers read the store through `useRegistrationValidity`, which kicks the session's probe on
+  mount; that mount probe is what makes registration-dependent UI work in the
+  paths where the gate never probes. `'unknown'` renders nothing, matching the fail-open convention
+  `useSendReceiveAvailability` documents.
+- **Why not two independent probes:** the redundant traffic above is the smaller reason. The larger
+  one is that a single answer per session is what lets the gate and the UI agree. Independent probes
+  can diverge by timing, and — decisively — the just-registered suppression only reaches the UI
+  because the gate hands its decision over via `publishRegistrationValidity`. With separate probes
+  there would be no way to suppress the post-re-register nag at all.
+- **Alternatives:** **Two independent probes** — rejected per the paragraph above; the dedupe costs
+  two changed lines in the gate. **Move the just-registered suppression into the store**
+  — rejected: it is a one-shot flag consumed at two sites with intentionally different ordering, so
+  sharing it means either two consumers of a one-shot flag or a behavioural change to a critical
+  startup gate; the override publish gets the same result without touching the flag's lifecycle.
+  **Have the store wait for the gate to settle before probing** — rejected: the gate leaves
+  `'loading'` *before* its fire-and-forget background re-check runs, so the wait does not avoid the
+  race it exists for; it only adds coordination code and a timeout. **Gate the dot behind
+  `platform.showRegistrationReminderOnStartup`** — rejected as a product decision: that setting opts
+  out of the intrusive startup wizard raise ("Show re-registration reminder at startup"), and the dot
+  is precisely the unobtrusive alternative PT-4323 asks for, so the dot path never reads it.
+- **Consequences:** The first-run gate's registration answer is now **cache-mediated** — it comes
+  from the probe the toolbar started milliseconds earlier rather than from a call the gate issued
+  itself. For a local read within one startup that is semantically identical, and the gate's Retry
+  path still re-probes because `'unknown'` is never cached; but it is a new coupling, and tests that
+  simulate a relaunch must now reset the validity store alongside `resetFirstRunStore()` (one such
+  test in `first-run-store.test.ts` caught this). The store deliberately **propagates** a probe
+  rejection instead of swallowing it, because the gate logs `Background registration re-check failed`
+  on that path; every fire-and-forget caller therefore has to `.catch()`. Two states are knowingly
+  imperfect. A registration that goes invalid mid-session is not detected until the next launch or
+  the next popover open. On the launch right after re-registering, the dot can briefly appear before
+  the gate publishes its suppressed answer — and because that publish is not sticky, opening the
+  profile popover force-re-probes and can bring the dot back for the rest of that session. Both are
+  wrong answers on an unobtrusive indicator, and both self-correct on the next launch. The exposure
+  is deliberately bounded, and it is worth being precise about what "wrong" can mean here: the only
+  thing either case can get wrong is whether the reminder dot is showing. No registration detail is
+  ever rendered incorrectly, nothing the user can do is gated on the dot, and the authoritative
+  check — the first-run gate, which re-raises the wizard when registration is invalid — still runs
+  on every launch against a store that starts each session at `'unknown'`, so no answer is carried
+  across launches. A stale dot is therefore a nag to ignore or clear by opening the popover, never
+  a state the user can be stuck in or misled by.
+  One cost is new rather than merely imperfect: Power mode previously issued **zero** registration
+  commands and now issues one per launch, because the toolbar mounts unconditionally and the hook's
+  probe is what makes the dot work there at all. Demo mode is explicitly exempt — `useRegistrationValidity`
+  checks `isDemoMode()` before probing or refreshing, so that mode's promise to bypass the real
+  registration backend still holds and the reminder simply never appears there. Separately, a forced
+  re-check is unthrottled, so repeatedly opening the popover against a down provider restarts the
+  resolver's full retry chain each time. Revisit if startup traffic becomes a concern.
+  Revisit the whole shape when PT-4324 (built-in Sample project) and PT-4305 land, since both will
+  want to react to registration state.
+- **Source:** PT-4325 (registration reminder dot), sub-task of PT-4323; retry-cost evidence from
+  `requestWithRetry` and `MAX_REQUEST_ATTEMPTS` in `src/shared/data/rpc.model.ts`.
+
+## adr-tab-menu-channel-and-window-naming: The tab context menu is a contribution channel, and a window is named by its content
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** The tab context menu was hard-coded in the renderer and fed by nothing, so
+  neither the platform nor an extension could contribute to it. Two move actions had to be
+  added to it, one of them a submenu listing the open windows — which needed windows to have
+  user-facing names, and every window was showing the same title. Paratext 9 answers the
+  naming half: a floating window takes the title of its active tab, and its Window menu lists
+  windows by content with no ordinals and no de-duplication.
+- **Decision:** The tab menu is a `tabMenu` channel on the existing per-web-view menu
+  contribution system, alongside `topMenu` and `contextMenu`, rather than a data type of its
+  own. Unlike those two it is not opt-in: its items act on the tab frame rather than the web
+  view's contents, so every tab receives the platform items whether or not the web view asked
+  for defaults, and a tab hosting no web view receives them too. Runtime visibility — whether
+  an action applies to this tab, and which windows exist — is resolved in the consuming
+  component, because no contribution can express a fact about the moment a menu opens. A
+  window is named by its first docked panel's active tab, falling back to the next titled tab
+  and then to one localized string, and publishes that as its page title, which Electron
+  carries to the native window title; the move-to-window submenu reads those titles on open.
+- **Alternatives:** A standalone `tabContextMenu` document with its own `MenuDataDataTypes`
+  entry — rejected; it touches the same files and adds a public getter and subscriber for the
+  same result. Hand-rolling the submenu next to the existing items — rejected; the ticket
+  calls for the contribution point and retrofitting one later costs the same with more items
+  to migrate. Naming windows by ordinal — rejected; meaningless to the user and unstable, since
+  closing window 2 of 3 renumbers the third. Naming them by monitor — rejected; Electron's
+  display label is blank or generic on most Windows and Linux displays, and two windows on one
+  display collide immediately. A window data provider pushing names — rejected; a context menu
+  needs them at the moment it opens and never again.
+- **Consequences:** Duplicate window names are possible and accepted, as they are in Paratext
+  9: the cost of choosing wrong is one tab in the wrong window. Nothing in the main process may
+  call `setTitle`: a title set from main never sticks — at construction it lasts only until the
+  renderer publishes its first page title, and at runtime it lasts only until the renderer's next
+  page-title change — so the main process cannot hold a name against the renderer's own naming,
+  and the submenu would show a stale one until that next change. (An earlier version of this
+  bullet said the call permanently breaks the native title's link to the page title; a runtime
+  probe showed otherwise — a runtime call held indefinitely until superseded by the renderer's own
+  next title change, so the call only leaves the submenu briefly stale rather than permanently
+  wrong.) Contributed tab items carry a `command` that may name an action the menu performs
+  itself rather than a registered PAPI command, which the channel's TSDoc states. Float panels
+  are excluded from naming so a modal dialog cannot rename the window; a maximized panel is
+  read first, since it is what the user is looking at.
+- **Source:** PT-4282; design and plan in the PRD folder
+  (`2026-08-25-pt-4282-tab-move-menu-design.md`), Paratext 9 `ParatextFloatWindow.SetText`
+  and `MainForm`'s Window menu.
+
+## adr-primary-window-owns-app-lifetime: The primary window's close decides whether the app quits; the role stays a role
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** Windows were ruled equal siblings: no hierarchy, no "main window" in API or UX
+  language, and a `primary` role flag allowed only as a reassignable marker for which persisted
+  entry restores first. But the quit decision was still `window-all-closed`, a pure
+  window count that keyed on nothing. Closing the primary window while a secondary was open left
+  the app running on the secondary and spliced the primary's entry out of the persisted
+  structure, so the user's main layout did not return next launch — the NN-6 hole PT-4286's
+  window-close rule closes. Paratext 9 has the same shape: closing the main form closes
+  everything, floating windows close alone.
+- **Decision:** The primary role becomes load-bearing for the application's lifetime, and stays a
+  role. Its ✕, while other windows are open, asks once (in main, `dialog.showMessageBox`, never a
+  renderer modal — a renderer modal open during window close previously left its requester
+  hanging) and on confirm closes every window with each layout kept for next session; alone, it
+  quits as before; a secondary's ✕ closes only that window and its layout is dropped; Cmd+Q, File →
+  Quit and `platform.quit` keep their no-prompt behaviour. The primary is identified by the
+  persisted `isMain` entry: it releases its runtime id in the `closed` handler, one event after the
+  `close` handler where the close path asks, so the answer is present on every pass that asks.
+  On confirm the quit latch is set BEFORE the other windows are told to close, so each reads a quit
+  on its first pass and records `'entry-stays'` by intent rather than by the last-window count
+  happening to flip. A quit already requested is NOT the user's ✕ and never asks: the latch is set
+  before any window's close, and a quit arriving while the question is open takes the question down
+  with it (Electron closes a signalled message box and reports it as cancelled), so the latch — not
+  the reported answer — is what the decision reads. When no live window holds the marked entry at
+  all — the startup restore always leaves one that does, so this means every window it created has
+  gone and something else opened one, as an extension's `platform.createWindow` can while macOS
+  keeps the app resident with none open — the oldest live window answers instead. The marked entry
+  keeps its flag: it names the entry simple mode restores and the only one allowed the legacy
+  layout fallback, so moving it to a window created into that gap would cost the user that layout
+  next launch. An emptied primary never reaches this path at all: moving its last tab out reopens
+  Home, exactly as closing that tab does, so the primary cannot disappear except through its own ✕
+  or Quit.
+- **Alternatives:** A second main-owned live reference alongside the persisted
+  `isMain` entry — rejected as two truths for one role. A renderer-hosted confirm dialog — rejected;
+  see the hanging-requester incident above. Re-electing a new primary when the primary closes —
+  rejected as unreachable: with this rule the primary cannot disappear while secondaries live, so
+  there is nothing to elect. Relying on `areAllWindowsClosing()` flipping to make the secondaries
+  record `'entry-stays'` — rejected; it works by accident of ordering and says nothing about
+  intent. A "don't ask again" — rejected; Cmd+Q is the prompt-free path and stays so.
+- **Consequences:** Amends the equal-siblings ruling without reversing it: the primary window
+  decides the app's lifetime, and nothing else about it is special — no API or UX may call it
+  "the main window", and nothing else may route, gate, or prioritise on the role. Primary
+  re-election is deliberately not implemented and a future need for it would mean this rule has
+  been broken. The dialog's restore promise is user-visible and load-bearing, so the relaunch e2e
+  that asserts every window comes back is what keeps that sentence honest. The mode-switch half
+  of PT-4286 (a live switch to Simple must close the secondaries) is out of this decision's scope; PT-4286
+  carries it. Linux behaviour of the native dialog is best-effort and unverified on real
+  hardware at the time of writing.
+  PR #2702 has the renderer learn whether it is the primary window from a URL parameter fixed at
+  window creation (`isMainWindow`), read for one purpose: whether to draw the top-level menu. No
+  lifecycle, routing or persistence decision consults it, and it cannot describe a window that
+  becomes primary later — PT-4278's window-manager service is the durable answer for that.
+- **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
+  folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.

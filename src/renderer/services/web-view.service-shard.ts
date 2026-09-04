@@ -27,6 +27,7 @@ import {
   getFullWebViewStateById,
   setFullWebViewStateById,
 } from '@renderer/services/web-view-state.service';
+import { WindowClosingError } from '@renderer/services/window-closing-error.model';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { LogError } from '@shared/log-error.model';
@@ -2270,6 +2271,19 @@ export function getAllOpenWebViewDefinitionsSync(): SavedWebViewDefinition[] {
     });
 }
 
+/**
+ * Synchronous count of every open tab in this window's dock layout, of any type — not only web
+ * views. Mirrors the sync/async pairing already established by
+ * {@link getAllOpenWebViewDefinitionsSync} for renderer-internal callers (e.g. the tab menu deciding
+ * whether moving a tab out would leave this window empty) that need the count without an async
+ * round trip through the dock layout's async variable.
+ *
+ * @throws If the papi dock layout has not been registered
+ */
+export function getOpenTabCountSync(): number {
+  return getDockLayoutSync().getOpenTabCount();
+}
+
 // #endregion WebView definitions
 
 // #region WebViewState
@@ -2542,7 +2556,7 @@ let isWindowToldToClose = false;
  */
 export function throwIfWindowIsClosing(operation: string): void {
   if (!isWindowToldToClose) return;
-  throw new Error(
+  throw new WindowClosingError(
     `web-view.service-shard: window ${globalThis.windowId} cannot ${operation}: the main process has told this window that it is closing.`,
   );
 }

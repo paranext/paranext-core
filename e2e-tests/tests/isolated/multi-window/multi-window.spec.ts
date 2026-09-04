@@ -64,7 +64,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
-  preConfigureSettings,
   sendPapiRequestOnce,
   waitForAppReady,
   waitForOverlayGone,
@@ -73,7 +72,6 @@ import {
   APP_QUITTING_LOG,
   DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
-  HOME_TAB_UUID,
   RENDERER_STARTING_LOG,
   WEBSOCKET_PORT,
   captureAppOutput,
@@ -85,9 +83,11 @@ import {
   getFocusedWindowId,
   getWindowIdOfPage,
   homeTabTitle,
+  homeTabWebViewId,
   pollUntil,
   quitAndExpectCleanExit,
   waitForRendererRegistered,
+  closeWindowLikeAUser,
   widenWindowForToolbarReference,
 } from './multi-window.util';
 
@@ -312,10 +312,10 @@ async function expectToolbarReferenceToContain(
  * the iframe's top-left corner, which is static content in the Home view (no button to trip).
  */
 async function clickIntoHomeWebView(page: Page, windowId: number): Promise<void> {
-  const homeIframe = page.locator(`iframe[data-web-view-id="${HOME_TAB_UUID}-w${windowId}"]`);
+  const homeIframe = page.locator(`iframe[data-web-view-id="${homeTabWebViewId(windowId)}"]`);
   await expect(homeIframe).toBeVisible({ timeout: 60_000 });
   await page
-    .frameLocator(`iframe[data-web-view-id="${HOME_TAB_UUID}-w${windowId}"]`)
+    .frameLocator(`iframe[data-web-view-id="${homeTabWebViewId(windowId)}"]`)
     .locator('body')
     .click({ position: { x: 10, y: 10 } });
 }
@@ -338,6 +338,13 @@ async function waitForGenericFocusToReportWindow(windowId: number): Promise<Focu
 // #endregion
 
 test.use({
+  // Seeded through the fixture rather than a preConfigureSettings call in a hook, which the
+  // fixture would both override and then write back into the developer's shared settings.
+  // Power mode because these suites need each opened view to become its own dock tab;
+  // firstRunComplete because the wizard is a modal that aria-hides the app. The English
+  // interface language the selectors depend on is seeded by the fixture itself.
+  interfaceMode: 'power',
+  seedSettings: { 'platform.firstRunComplete': true },
   // The option fixture is named `electronLaunchOptions` (not `launchOptions`) — see
   // e2e-tests/fixtures/isolated.fixture.ts.
   //
@@ -356,22 +363,6 @@ test.describe('multi-window lifecycle', () => {
   // Each test pays full app startup (up to ~180 s worst case) plus one or two extra window
   // startups, each of which can take tens of seconds (see the poll budgets below).
   test.setTimeout(420_000);
-
-  let restoreSettings: (() => void) | undefined;
-
-  test.beforeAll(() => {
-    // Written before any launch and restored after the last test so the developer's own settings
-    // survive the suite. See the file header for why power mode is load-bearing.
-    restoreSettings = preConfigureSettings({
-      'platform.firstRunComplete': true,
-      'platform.interfaceLanguage': ['en'],
-      'platform.interfaceMode': 'power',
-    });
-  });
-
-  test.afterAll(() => {
-    restoreSettings?.();
-  });
 
   test('second window opens with Home docked, focus routing follows the focused window, and closing the secondary window does not shut the app down', async ({
     electronApp,
@@ -394,7 +385,7 @@ test.describe('multi-window lifecycle', () => {
     await focusWindowAndWaitForRouting(electronApp, window1Id);
     await clickIntoHomeWebView(mainPage, window1Id);
     const baselineFocus = await waitForGenericFocusToReportWindow(window1Id);
-    expect(baselineFocus?.id).toBe(`${HOME_TAB_UUID}-w${window1Id}`);
+    expect(baselineFocus?.id).toBe(homeTabWebViewId(window1Id));
     logStep(`generic getFocus pinned to window ${window1Id}'s Home web view`);
 
     // Create the second window through the public command, with the window listener armed first.
@@ -431,7 +422,7 @@ test.describe('multi-window lifecycle', () => {
     // (`focusType: 'tab'`, `tabType: 'webView'`; see {@link webViewIdFromFocusSubject}): a freshly
     // minted id (docked on the fly, not loaded from any shared layout, so unlike window 1's it
     // carries no `-w{id}` suffix), which can never equal window 1's
-    // `${HOME_TAB_UUID}-w${window1Id}`. Read directly off window 2's own scoped service first
+    // `homeTabWebViewId(window1Id)`. Read directly off window 2's own scoped service first
     // (bypassing the router) so this is the ground truth to poll the generic, routed answer
     // against, independent of how long window 2's own focus takes to settle.
     await focusWindowAndWaitForRouting(electronApp, window2Id);
@@ -450,20 +441,20 @@ test.describe('multi-window lifecycle', () => {
     );
     // The exact shape window 2 reports: its own Home web view id — in particular NOT window 1's.
     expect(focusInWindow2).toEqual(window2OwnFocus);
-    expect(webViewIdFromFocusSubject(focusInWindow2)).not.toBe(`${HOME_TAB_UUID}-w${window1Id}`);
+    expect(webViewIdFromFocusSubject(focusInWindow2)).not.toBe(homeTabWebViewId(window1Id));
     // Discriminate "routed to window 2" from "still answering window 1": window 1's own scoped
     // service must still hold its Home web view subject (a background window's focused element is
     // retained while the window is inactive), so the answer above cannot have come from window 1 —
     // only from the service router genuinely forwarding to window 2.
     const window1OwnFocus = await getScopedWindowFocus(window1Id);
-    expect(window1OwnFocus?.id).toBe(`${HOME_TAB_UUID}-w${window1Id}`);
+    expect(window1OwnFocus?.id).toBe(homeTabWebViewId(window1Id));
     logStep(`generic getFocus answered for window ${window2Id}`);
 
     // …and it follows focus back to window 1.
     await focusWindowAndWaitForRouting(electronApp, window1Id);
     await clickIntoHomeWebView(mainPage, window1Id);
     const focusInWindow1 = await waitForGenericFocusToReportWindow(window1Id);
-    expect(focusInWindow1?.id).toBe(`${HOME_TAB_UUID}-w${window1Id}`);
+    expect(focusInWindow1?.id).toBe(homeTabWebViewId(window1Id));
     logStep(`generic getFocus followed back to window ${window1Id}`);
 
     // Close the SECONDARY window the way a user does. The app must stay up, keep serving window 1,
@@ -494,7 +485,7 @@ test.describe('multi-window lifecycle', () => {
       `routing to answer for window ${window1Id} after the secondary window closed`,
     );
     const focusAfterClose = await waitForGenericFocusToReportWindow(window1Id);
-    expect(focusAfterClose?.id).toBe(`${HOME_TAB_UUID}-w${window1Id}`);
+    expect(focusAfterClose?.id).toBe(homeTabWebViewId(window1Id));
 
     // No shutdown-task activity and no quit from a secondary-window close.
     const afterCloseLog = output.textFrom(beforeCloseMark);
@@ -578,15 +569,15 @@ test.describe('multi-window lifecycle', () => {
     await expectWindowToRenderTheme(page3, 'paratext-dark', 60_000);
     logStep('a newly created window starts on the current reference and theme');
 
-    // Close WINDOW 1 the way a user does. It hosts neither app-global service — both live in main —
-    // so nothing about this close should be special.
+    // Close a SECONDARY window the way a user does. It hosts neither app-global service — both live
+    // in main — so nothing about this close should be special.
+    //
+    // Not the primary: closing the primary while other windows are open asks whether to close the
+    // whole application, so "the primary goes and the others stay" is not a state the app can
+    // reach. `window-close-rule.spec.ts` owns that path.
     const beforeWindowCloseMark = output.mark();
-    const page1Closed = mainPage.waitForEvent('close', { timeout: 30_000 });
-    await mainPage.evaluate(() => {
-      setTimeout(() => window.close(), 0);
-    });
-    await page1Closed;
-    logStep('window 1 closed');
+    await closeWindowLikeAUser(electronApp, page3);
+    logStep('window 3 closed');
 
     // Both services are hosted in main, which did not go anywhere, so both must keep answering
     // across the close with no handover at all.
@@ -626,12 +617,12 @@ test.describe('multi-window lifecycle', () => {
       'a scroll-group write round-trip after a window closed',
     );
     await expectToolbarReferenceToContain(page2, '8:28', 60_000);
-    await expectToolbarReferenceToContain(page3, '8:28', 60_000);
+    await expectToolbarReferenceToContain(mainPage, '8:28', 60_000);
     logStep('surviving windows followed a scroll-group write made after a window closed');
 
     await setCurrentTheme('paratext', 'light');
     await expectWindowToRenderTheme(page2, 'paratext-light', 60_000);
-    await expectWindowToRenderTheme(page3, 'paratext-light', 60_000);
+    await expectWindowToRenderTheme(mainPage, 'paratext-light', 60_000);
     logStep('surviving windows followed a theme change made after a window closed');
 
     // No window ever hosted the theme provider, so the closed window cannot have taken it with it:

@@ -46,6 +46,7 @@ import { startNetworkObjectStatusService } from '@main/services/network-object-s
 import { registerPowerMonitorListeners } from '@main/services/power-monitor-logging.service';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
+import type { WindowCloseDecision } from '@main/services/window-close-decision.service';
 import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationServiceRouter } from '@main/services/notification.service-router';
 import {
@@ -91,9 +92,11 @@ import {
   getTargetWindowId,
   getWindows,
   handleWindowBlurred,
+  isWindowAbandoned,
   isWindowClosing as isWindowMarkedClosing,
   isWindowTracked,
   isWindowReady,
+  wasWindowEverReady,
   markWindowAbandoned,
   markWindowClosing,
   markWindowNotReady,
@@ -102,6 +105,8 @@ import {
   setFocusedWindowId,
   setWindowPendingContentPredicate,
 } from '@main/services/window-state.service';
+import { confirmCloseAllWindows } from '@main/services/close-all-prompt.service';
+import { decideWindowClose } from '@main/services/window-close-decision.service';
 import {
   assignEntryToWindow,
   handleWindowRemoved,
@@ -109,6 +114,7 @@ import {
   isWindowPendingContent,
   loadWindowLayouts,
   markWindowPendingContent,
+  isPrimaryWindow,
   setMainWindowId,
   setPendingContentChangeListener,
   trackLegacyWindow,
@@ -117,6 +123,7 @@ import {
   writeNow,
 } from '@main/services/window-layout-persistence.service';
 import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
+import { summarizeWindows } from '@main/window-summary.util';
 import {
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
@@ -405,6 +412,8 @@ async function main() {
     // Which windows may stand in as another window's reason to close is the window-state tracker's
     // rule, whole — see `countWindowsThatCouldBeTheLastOne` for what it leaves out and why
     countWindows: countWindowsThatCouldBeTheLastOne,
+    // The primary reopens Home when emptied rather than closing; only its ✕ and Quit close it
+    isPrimaryWindow,
     closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
     // A report names its own subject and arrives over the network, so the id is the caller's word.
     // The tracker is what knows whether that word describes a window this process has.
@@ -413,12 +422,13 @@ async function main() {
     // The shared registry, not only this handler's own decisions: a window the user is closing can
     // report empty mid-teardown, and it must get the same "closing" answer instead of a second close
     isWindowClosing: isWindowMarkedClosing,
-    // The reporting window's own reading, asked only when a close is otherwise about to be decided
+    // The reporting window's own reading, asked whenever the answer could still change — a close
+    // for most windows, or the primary's Home dock for the primary
     hasContentArrivedSinceEmptyReport: async (windowId) => {
       // A window that is not serving requests cannot be asked, and waiting on one that will never
       // answer would hold up every window's decision behind it. `false` is what the handler reads
-      // as "could not tell", which closes the window — the report was its own word about its own
-      // dock.
+      // as "could not tell" — the same answer as "still empty," since either way the report
+      // stands: it was the window's own word about its own dock.
       if (!isWindowReady(windowId)) return false;
       const shard = await getWebViewShard(windowId);
       if (!shard) return false;
@@ -643,7 +653,12 @@ async function main() {
 
   if (isDebug) {
     const electronDebug = await import('electron-debug');
-    electronDebug.default();
+    // electron-debug docks DevTools into the window, which takes roughly 555px of a 1280px-wide
+    // window. That is fine for a human, but it silently shrinks the renderer for anything driving
+    // the UI, so layout-sensitive automation ends up interacting with a squeezed dock where tabs
+    // sit under web views. Automated runs set PT_NO_DEVTOOLS so the window they measure is the
+    // window a user would see; F12 still opens DevTools on demand.
+    electronDebug.default({ showDevTools: process.env.PT_NO_DEVTOOLS !== 'true' });
   }
 
   /** Install extensions into the Chromium renderer process */
@@ -676,13 +691,20 @@ async function main() {
     if (isAppShuttingDown())
       throw new Error('Cannot create a window while the application is quitting');
 
-    // A window is being created, so the app is alive and whatever brought the last one down is
-    // finished. On macOS that is not the same as process start: closing the final window runs the
-    // shutdown tasks and leaves the app resident, and reactivating from the dock lands here — so
-    // without this the second and every later session would come down without syncing.
-    resetShutdownLatchesForNewSession();
-
     const isFirstWindow = getWindows().length === 0;
+
+    // A window is being created where there were NONE, so the app is alive and whatever brought
+    // the last one down is finished. On macOS that is not the same as process start: closing the
+    // final window runs the shutdown tasks and leaves the app resident, and reactivating from the
+    // dock lands here — so without this the second and every later session would come down without
+    // syncing.
+    //
+    // Only when there were none. A window opened alongside living windows is not a new session,
+    // and resetting there replaces the quit signal the close path may already be waiting on: a
+    // primary showing the close-all question holds the OLD signal, so a quit afterwards would
+    // settle only the new one, the question would never resolve, and the app would sit half-quit
+    // with its latch set.
+    if (isFirstWindow) resetShutdownLatchesForNewSession();
 
     // The flags the process was launched with describe how to show the window that launch is
     // producing, and nothing after it. "No windows tracked" is not that window: on macOS the app
@@ -723,6 +745,15 @@ async function main() {
       }
     }
 
+    // Deliberately no `title` here, and nothing in main may call `setTitle` on a window either.
+    // Each renderer names its own window by publishing a page title, which Electron carries to the
+    // native title; that is what the OS switcher shows and what other windows read when they offer
+    // this one as a move target. A title set from this process does not stick: at construction it
+    // lasts only until the renderer publishes its first page title, and a runtime call holds only
+    // until the renderer's next page-title change — either way the main process cannot hold a name
+    // against the renderer's own naming. Until the renderer's first title arrives, Electron answers
+    // `getTitle()` with its own default, which is why `summarizeWindows` reads a window's readiness
+    // rather than trusting its title.
     const newWindow = new BrowserWindow({
       show: true,
       ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
@@ -737,11 +768,9 @@ async function main() {
       // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
       minWidth: 900,
       icon: getAssetPath('icon.png'),
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),
+      titleBarStyle: 'hidden',
       // re-add window controls
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      ...(process.platform !== 'darwin' && process.platform !== 'linux'
+      ...(process.platform !== 'darwin'
         ? {
             titleBarOverlay: {
               height: TITLE_BAR_BUTTON_HEIGHT,
@@ -1001,8 +1030,7 @@ async function main() {
       }
 
       // Adjust the Window button colors based on the current theme
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      if (process.platform !== 'darwin' && process.platform !== 'linux') {
+      if (process.platform !== 'darwin') {
         const paintTitleBarForTheme = (newTheme: ThemeDefinitionExpanded) => {
           if (!newTheme.cssVariables.primary) {
             logger.warn(
@@ -1074,6 +1102,12 @@ async function main() {
     // the window until the sync completes.
     let isCloseInProgress = false;
     /**
+     * Whether this window is showing the close-all question. Distinct from a close in progress: no
+     * shutdown work has started, nothing is latched, and a cancel leaves the window exactly as it
+     * was — so a further close arriving now must be ignored, not treated as an escape.
+     */
+    let isAskingAboutClose = false;
+    /**
      * Whether this window's close is the app going down, decided on the first pass through the
      * close handler below.
      *
@@ -1100,11 +1134,71 @@ async function main() {
       // Below the `isCloseInProgress` guard, though: the second close click has to reach Electron's
       // default close, which is the user's only escape from the wait this handler is about to start.
       event.preventDefault();
+
+      // While the question below is open, a further `close` on this window must not reach the
+      // escape hatch above, which exists for a close stuck in the bounded sync wait and would take
+      // this window down with none of its shutdown work. A second ✕ where the dialog is not truly
+      // modal is simply ignored; the open question still stands. A quit-driven close (Cmd+Q, OS
+      // logout) is ignored here too — the question is taken down by that same quit and the
+      // decision resolves from it, so the shutdown work runs from THAT pass and this one has
+      // nothing to add.
+      if (isAskingAboutClose) return;
+
+      // Closing the primary window while others are open takes every window with it, so the user
+      // is asked first. Decided before anything is marked closing: a cancelled close is not a close
+      // at all, and a window latched as closing that then stays open would be inert for the rest
+      // of the session. On confirm the quit latch is already set by the time this resolves, which
+      // is what makes every other window's handler record its layout as staying for next session.
+      // Secondary windows and a primary on its own skip the question and close.
+      // TODO(PT-4286): a live switch to Simple mode must also close the secondary windows.
+      isAskingAboutClose = true;
+      let decision: WindowCloseDecision;
+      try {
+        decision = await decideWindowClose(windowId, () => confirmCloseAllWindows(newWindow));
+      } catch (e) {
+        // Whatever threw here — the primary/window-count checks `decideWindowClose` runs before it
+        // ever asks, or marking the quit latch after an answer — a failure to put the question to
+        // the user is already reported and folded into `stay-open` inside the decision itself, so
+        // this is a DIFFERENT failure. Nothing has been latched and the window is already prevented
+        // from closing, so leaving it open is the safe outcome — but silently would be
+        // indistinguishable from the user cancelling, and the next ✕ would ask again with no record
+        // of why the first did nothing.
+        logger.warn(`Could not decide how to close window ${windowId}: ${getErrorMessage(e)}`);
+        decision = 'stay-open';
+      } finally {
+        isAskingAboutClose = false;
+      }
+      // A cancelled close is not a close: nothing was latched, so the next close click asks again
+      if (decision === 'stay-open') return;
+
+      // Only now is this a close in progress, and only now may a second click reach the escape
+      // hatch: the wait it escapes from starts below, not during the question.
       isCloseInProgress = true;
+      if (decision === 'quit-all') {
+        // Told to close now, ahead of this window's own shutdown work, so all of them go down
+        // together rather than after this one has finished. Each runs its own handler and finds
+        // the quit latch already set.
+        getWindows().forEach((otherWindow) => {
+          // Excluded by IDENTITY, not by id: `windowId` is this window's id in whichever namespace
+          // the app mints them, and comparing across namespaces would let the primary miss itself
+          // and close itself re-entrantly.
+          if (otherWindow === newWindow || otherWindow.isDestroyed()) return;
+          // A window already on its way out has a close handler mid-flight. Telling it to close
+          // again lands on its `isCloseInProgress` guard, which returns WITHOUT preventing the
+          // close — the escape hatch — so Electron would destroy it before its bounds flush.
+          if (isWindowMarkedClosing(otherWindow.id)) return;
+          otherWindow.close();
+        });
+      }
 
       // Everything from here down is inside the guard: the window is now prevented from closing and
       // latched as closing, so a throw that escaped would strand it exactly there — visible, inert,
       // and (from an async listener) reported only as a rejection Electron never sees.
+      //
+      // The fan-out above is deliberately outside it, and survives being so: each sibling's own
+      // close handler is async, so a throw inside one becomes a rejected promise rather than an
+      // exception travelling back through `close()` into this loop, and the process-level
+      // unhandled-rejection handler reports it.
       try {
         // Recorded before the decision below, and read by every window's handler, so that windows
         // closing at the same moment agree on what is happening rather than each leaving the
@@ -1475,7 +1569,15 @@ async function main() {
   setWebViewWindowCreator({
     createPendingContentWindow: async () =>
       (await createWindow(undefined, { pendingContent: true })).id,
-    closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+    closeWindow: (windowId) => {
+      // Rolling back an open that never delivered must not put the close-all question on screen,
+      // and it cannot: a window still waiting for its content never answers for the application, so
+      // this close is never read as the primary's. That exclusion is what makes the rollback safe to
+      // do without asking, and it is the reason no guard stands here — one would only ever refuse a
+      // close the router does not await, leaving a blank window standing while the caller is told
+      // the rollback succeeded.
+      BrowserWindow.fromId(windowId)?.close();
+    },
   });
 
   /**
@@ -1787,6 +1889,53 @@ async function main() {
         result: {
           name: 'return value',
           schema: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.getWindows',
+    async () => {
+      // Read on call rather than pushed on change: callers want this at the moment they offer the
+      // user a choice of windows and never again, so there is nothing to keep in sync.
+      //
+      // Offered windows are ones that can still take the work: a window whose close has begun is
+      // on its way out, and one whose renderer is dead with no reload coming can never receive
+      // anything. Picking either sends the user's action nowhere. A window that has not finished
+      // starting is deliberately still offered — it is on screen, the user can see it, and work
+      // sent to it lands once it is ready. Its name is the one thing it cannot supply yet, which is
+      // why its readiness travels with it.
+      const availableWindows = getWindows()
+        .filter((window) => !isWindowMarkedClosing(window.id) && !isWindowAbandoned(window.id))
+        .map((window) => ({
+          id: window.id,
+          getTitle: () => window.getTitle(),
+          wasEverReady: wasWindowEverReady(window.id),
+        }));
+      return summarizeWindows(availableWindows, isPrimaryWindow);
+    },
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          'List every open window with the title it is currently showing, for offering the user ' +
+          'a choice of window. Titles follow each window’s own content, so they can repeat',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                windowId: { type: 'number' },
+                label: { type: 'string' },
+                isMain: { type: 'boolean' },
+              },
+              required: ['windowId', 'label', 'isMain'],
+            },
+          },
         },
       },
     },

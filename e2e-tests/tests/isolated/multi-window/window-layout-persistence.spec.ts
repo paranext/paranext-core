@@ -76,6 +76,19 @@
  *   placement on the display must come back at its saved size, and one off the display must come
  *   back at the default size (see expectRestoredSizeForSavedPlacement).
  *
+ * ## Why this file imports `test` straight from `@playwright/test`
+ *
+ * Every other spec in this directory drives its app through `isolated.fixture`, which launches
+ * exactly ONE Electron instance per test and pins settings through `test.use`. This file cannot use
+ * that fixture: each of its three tests is 2–3 SEQUENTIAL manual launches into one preserved
+ * user-data profile (see the phase breakdown above) — the whole point is what a relaunch finds
+ * waiting for it, which a fixture built around a single launch per test has no way to express. So
+ * it calls `launchElectronApp`/`teardownElectronApp` itself, phase by phase, and pins the shared
+ * settings it needs once in `test.beforeAll` (`preConfigureSettings`, restored in `test.afterAll`)
+ * rather than through `test.use`, which only a fixture reads. This is deliberate, not an
+ * unconverted leftover: consuming `{ mainPage }` from the fixture here would launch a FOURTH,
+ * unwanted app on top of the three this file manages by hand.
+ *
  * ## How to run
  *
  * `npm run test:e2e:isolated multi-window`
@@ -103,6 +116,8 @@ import {
   quitAndExpectCleanExit,
   waitForAppPages,
   waitForRendererRegistered,
+  webViewTabTitle,
+  windowScopedWebViewId,
 } from './multi-window.util';
 
 /**
@@ -387,6 +402,10 @@ test.describe('window layout persistence', () => {
     // which would make phase 2's both-windows assertion fail for configuration reasons.
     restoreSettings = preConfigureSettings({
       'platform.firstRunComplete': true,
+      // See smokeAppSettingsOverrides in helpers.ts: without this, the background registration
+      // recheck can swap this suite's already-loaded app onto the wizard mid-run — and this test's
+      // three-launch, several-minute runtime gives it far longer to do so than a typical spec.
+      'platform.showRegistrationReminderOnStartup': false,
       'platform.interfaceLanguage': ['en'],
       'platform.interfaceMode': 'power',
     });
@@ -665,6 +684,11 @@ test.describe('window layout persistence', () => {
           height: Math.min(560, workArea.height - 220),
         },
       ];
+      // On a work area narrow enough that the clamp above collapses two or more widths onto
+      // WINDOW_MIN_WIDTH, the comment's premise fails silently and only the heights would still
+      // tell the entries apart. Fail loud instead.
+      const widths = sizes.map((size) => size.width);
+      expect(new Set(widths).size).toBe(widths.length);
 
       await placeWindowAndSettle(ctx.electronApp, mainId1, {
         x: workArea.x + 40,
@@ -879,10 +903,10 @@ test.describe('window layout persistence', () => {
       // fail here.
       await expect(homeTabTitle(pageB, windowBId)).toBeAttached({ timeout: 60_000 });
       await expect(
-        pageB.locator(
-          `.platform-tab-title[data-web-view-id="${LEGACY_SECOND_TAB_UUID}-w${windowBId}"]`,
-        ),
-      ).toBeAttached({ timeout: 60_000 });
+        webViewTabTitle(pageB, windowScopedWebViewId(LEGACY_SECOND_TAB_UUID, windowBId)),
+      ).toBeAttached({
+        timeout: 60_000,
+      });
       await expect(pageB.locator('.platform-tab-title')).toHaveCount(2);
       logStep('launch B: legacy layout loaded — Home tab and seeded second tab both render');
 

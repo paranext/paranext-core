@@ -10,25 +10,36 @@
  *
  * ## Viewport / Screenshot Dimension Enforcement
  *
- * Reviewer experience requires screenshots taken at a consistent, large viewport (1920x1080) so the
- * full UI layout is captured. Two failure modes have been observed in the past and are now actively
- * defended against:
+ * Two separate concerns, deliberately kept apart:
+ *
+ * - **Layout** is decided by the window size the spec declares with `test.use({ requiredWindowSize
+ *   })`, asserted here against the real OS window. The fixture cannot resize a window it did not
+ *   create, so it requires the app to have been started at that size.
+ * - **Evidence quality** is enforced where screenshots are written, by the `page.screenshot` wrapper
+ *   below. Note this floor is a fixed Full HD minimum, so a spec that writes evidence screenshots
+ *   must declare `requiredWindowSize: { width: 1920, height: 1080 }` — the fixture no longer
+ *   emulates a viewport that would satisfy it regardless of the real window.
+ *
+ * Two failure modes have been observed in the past and are defended against:
  *
  * 1. **Small renderer window** — Electron defaults to a 1024x728 window which yields a ~675x728 usable
  *    viewport; screenshots at that size hide most of the UI and produce reviews-by-vibes.
  * 2. **DevTools panel open** — when DevTools is docked-bottom or docked-right, the renderer area
  *    shrinks to the remaining sliver (~300x768 typical), producing useless screenshots that pass
- *    `toBeVisible` checks but are visually unreviewable.
+ *    `toBeVisible` checks but are visually unreviewable. Note the window-size assertion does NOT
+ *    catch this: `outerWidth` is unchanged by a docked panel. It is handled by launching with
+ *    `PT_NO_DEVTOOLS=true`, which `.erb/scripts/refresh.sh` and the launch fixtures now do.
  *
  * Mitigations applied here:
  *
  * - The fixture explicitly excludes `devtools://` URLs when finding the renderer page (so connecting
  *   to a DevTools page is impossible).
- * - The fixture calls `setViewportSize({ width: 1920, height: 1080 })` after connecting AND verifies
- *   the actual rendered viewport via `page.evaluate(() => ({ width: window.innerWidth, height:
- *   window.innerHeight }))`. The `evaluate()` reading runs IN the renderer and reflects the real
- *   constrained-by-OS-window viewport, unlike `page.viewportSize()` which only echoes Playwright's
- *   cached requested-value.
+ * - The fixture asserts the real OS window is at least the size the spec declared with `test.use({
+ *   requiredWindowSize })`, and deliberately does not call `setViewportSize()` — see
+ *   `assertDeclaredWindowSize` in `helpers.ts` for why an emulated viewport cannot be checked. Note
+ *   this size check covers the small-window case only — `outerWidth` is unchanged by a docked
+ *   DevTools panel, so the squeezed-renderer case is handled by launching with PT_NO_DEVTOOLS
+ *   instead (see `.erb/scripts/refresh.sh` and `helpers.ts`).
  * - The fixture wraps `page.screenshot` to auto-validate PNG dimensions against the Full HD minimum
  *   the moment the file lands on disk. Tests do NOT need to call `assertFullHdScreenshot` manually
  *   — it runs automatically for every `screenshot({ path })` whose path is OUTSIDE Playwright's
@@ -49,6 +60,13 @@ import {
   PageScreenshotOptions,
 } from '@playwright/test';
 import * as fs from 'fs';
+import {
+  assertDeclaredWindowSize,
+  assertInterfaceMode,
+  RequiredInterfaceMode,
+  WindowSize,
+  WINDOW_SIZE_TOLERANCE_PX,
+} from './helpers';
 
 export { expect } from '@playwright/test';
 
@@ -114,13 +132,15 @@ export function assertFullHdScreenshot(filePath: string): void {
       `Likely cause: the renderer window is smaller than 1920x1080 OR DevTools is docked, ` +
       `cropping the renderer area. Resize the Electron window OR close DevTools and re-run. ` +
       `Tiny screenshots always FAIL — no matter how nice the partial UI looks.`,
-  ).toBeGreaterThanOrEqual(MIN_SCREENSHOT_WIDTH);
+    // Same tolerance the window-size check uses: a window asked for NxM under a bare Xvfb comes
+    // back as (N-1)x(M-1), so an exact floor rejects a correctly-sized window by one pixel.
+  ).toBeGreaterThanOrEqual(MIN_SCREENSHOT_WIDTH - WINDOW_SIZE_TOLERANCE_PX);
   baseExpect(
     height,
     `Screenshot ${filePath} height ${height}px is below the ${MIN_SCREENSHOT_HEIGHT}px minimum. ` +
       `Likely cause: the renderer window is smaller than 1920x1080 OR DevTools is docked. ` +
       `Resize the Electron window OR close DevTools and re-run. Tiny screenshots always FAIL.`,
-  ).toBeGreaterThanOrEqual(MIN_SCREENSHOT_HEIGHT);
+  ).toBeGreaterThanOrEqual(MIN_SCREENSHOT_HEIGHT - WINDOW_SIZE_TOLERANCE_PX);
 }
 
 /**
@@ -140,12 +160,44 @@ function shouldValidateScreenshotPath(path: string): boolean {
 
 export interface CdpFixtures {
   mainPage: Page;
+  /**
+   * Window size this suite's layout is written against; set with `test.use({ requiredWindowSize: {
+   * width, height } })`. Defaults to the screenshot floor ({@link MIN_SCREENSHOT_WIDTH} x
+   * {@link MIN_SCREENSHOT_HEIGHT}), NOT `DEFAULT_WINDOW_SIZE` from `helpers.ts`, because any spec on
+   * this fixture may write evidence screenshots and those have a Full HD minimum. Declaring
+   * anything smaller means the app must actually have been started at that size.
+   *
+   * A spec that writes no evidence screenshots should override this down to `DEFAULT_WINDOW_SIZE`
+   * (or another size it can actually reach): a maximized Windows window under a taskbar is only
+   * about 1032px tall, short of the Full HD floor by more than the tolerance below, so inheriting
+   * the default there is a precondition failure the spec did not need to take on.
+   *
+   * Attach mode cannot resize the window — it has no main-process channel — so this is asserted
+   * rather than applied. Start the app at the declared size.
+   */
+  requiredWindowSize: WindowSize;
+  /**
+   * Interface mode this suite's layout is written against; set with `test.use({
+   * requiredInterfaceMode: 'simple' })`. Leave unset when the spec genuinely works in either mode.
+   *
+   * Asserted, not applied, for the same reason as {@link CdpFixtures.requiredWindowSize}: attach
+   * mode inherits the mode from the app you started. Declaring it converts a late, confusing
+   * timeout on an element the wrong mode never renders into an immediate, readable setup error.
+   */
+  requiredInterfaceMode: RequiredInterfaceMode | undefined;
 }
 
 export const test = base.extend<CdpFixtures>({
-  // Playwright fixtures require destructured parameter even when no dependencies are needed
-  // eslint-disable-next-line no-empty-pattern
-  mainPage: async ({}, use) => {
+  // Defaults to the screenshot floor, not DEFAULT_WINDOW_SIZE: any spec on this fixture may write
+  // evidence PNGs, and the screenshot wrapper enforces that floor at the moment one is taken —
+  // mid-test, long after setup passed. Declaring it here makes an undersized window a precondition
+  // failure instead, which is the whole point of the declared-size check.
+  requiredWindowSize: [
+    { width: MIN_SCREENSHOT_WIDTH, height: MIN_SCREENSHOT_HEIGHT },
+    { option: true },
+  ],
+  requiredInterfaceMode: [undefined, { option: true }],
+  mainPage: async ({ requiredWindowSize, requiredInterfaceMode }, use) => {
     // Deadline-based connect: a refused connection fails instantly, so a fixed attempt count
     // gives only seconds of patience while the shared app can still be cold-booting (Electron +
     // dotnet on a slow box takes ~90s). Keep retrying until the deadline instead.
@@ -194,32 +246,35 @@ export const test = base.extend<CdpFixtures>({
 
     if (!page) throw new Error('No renderer page found via CDP');
 
-    // ENFORCE Full HD viewport (1920x1080) so screenshots capture the full UI layout regardless of
-    // the underlying Electron window size or whether DevTools is docked. Without this, screenshots
-    // taken at the default 1024x728 window — or worse, the ~300x768 sliver left when DevTools is
-    // docked-right — slip into the evidence directory and produce reviews-by-vibes. See module
-    // docblock for the full failure-mode discussion.
-    await page.setViewportSize({ width: MIN_SCREENSHOT_WIDTH, height: MIN_SCREENSHOT_HEIGHT });
+    // Assert the window matches what the spec declared, instead of emulating a viewport on top of
+    // it — `assertDeclaredWindowSize` in `helpers.ts` explains why an emulated viewport reads back
+    // its own request. Attach mode has no main-process channel and so cannot genuinely resize the
+    // window; requiring the app to have been started at the size the spec needs is the honest move.
+    //
+    // Screenshot quality is NOT enforced here. It is enforced where screenshots are written, by
+    // the `page.screenshot` wrapper below calling `assertFullHdScreenshot`. Keeping the two apart
+    // is deliberate: window size decides layout, and a spec needing Full HD evidence declares it
+    // with `test.use({ requiredWindowSize: { width: 1920, height: 1080 } })`.
+    await assertDeclaredWindowSize(
+      page,
+      requiredWindowSize,
+      `Start the app at that size, e.g. MAIN_ARGS="--remote-debugging-port=9223 --window-size ` +
+        `${requiredWindowSize.width}x${requiredWindowSize.height}" npm start — or just ./.erb/scripts/refresh.sh, ` +
+        `which does exactly that. --maximize is a no-op under a bare Xvfb, since nothing is there to ` +
+        `honour it, and the size must be its own argv token: --window-size=WxH never matches, ` +
+        `because the flag is looked up by exact token (src/node/utils/command-line.util.ts:104).`,
+    );
 
-    // Sanity check: confirm the viewport ACTUALLY applied at the renderer level — not just at
-    // Playwright's bookkeeping. `page.viewportSize()` returns the cached requested-value (it just
-    // echoes back what we asked for), so it cannot detect the case where the OS window is smaller
-    // than the requested viewport (CDP can't grow a viewport past the OS window size). The only
-    // reliable signal is reading `window.innerWidth` / `window.innerHeight` IN the renderer via
-    // `page.evaluate()` — those properties reflect the actual rendered viewport.
-    const actualSize = await page.evaluate(() => ({
-      width: window.innerWidth,
-      height: window.innerHeight,
-    }));
-    if (actualSize.width < MIN_SCREENSHOT_WIDTH || actualSize.height < MIN_SCREENSHOT_HEIGHT) {
-      throw new Error(
-        `cdp.fixture: viewport enforcement failed — renderer reports ${actualSize.width}x${actualSize.height}, ` +
-          `expected at least ${MIN_SCREENSHOT_WIDTH}x${MIN_SCREENSHOT_HEIGHT}. Likely cause: the ` +
-          `Electron window itself is smaller than the requested viewport (CDP cannot grow a viewport ` +
-          `past the OS window size). Resize the Electron window before running tests, or restart the ` +
-          `app via ./.erb/scripts/refresh.sh which sizes the window to 1920x1080.`,
+    // Assert the interface mode BEFORE the screenshot wrapper is installed, so a mode mismatch
+    // reports itself rather than surfacing later as a timeout on an element the running mode never
+    // renders. Only checked when the spec declared one — plenty of specs work in either mode.
+    if (requiredInterfaceMode)
+      await assertInterfaceMode(
+        requiredInterfaceMode,
+        `Attach mode cannot set the mode — it inherits whatever app you started. Restart the app ` +
+          `in ${requiredInterfaceMode} mode, e.g. by setting 'platform.interfaceMode': ` +
+          `'${requiredInterfaceMode}' in dev-appdata/data/settings.json first.`,
       );
-    }
 
     // AUTO-VALIDATE screenshot dimensions. Wrap `page.screenshot` so every screenshot taken via
     // the fixture is validated against the Full HD minimum the moment the file lands on disk.

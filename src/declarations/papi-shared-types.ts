@@ -25,12 +25,12 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from '@shared/services/scroll-group.service-model';
+  import type { AppWindowInputEvent, WindowSummary } from '@shared/services/window.service-model';
   import type {
     CloseWebViewEvent,
     OpenWebViewEvent,
     UpdateWebViewEvent,
   } from '@shared/services/web-view.service-model';
-  import type { AppWindowInputEvent } from '@shared/services/window.service-model';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { WebViewFactory } from '@shared/models/web-view-factory.model';
@@ -92,6 +92,14 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.getFocusedWindowId': () => Promise<number | undefined>;
+    /**
+     * List every open window with the title it is currently showing, for offering the user a choice
+     * of window. Titles follow each window's own content, so two windows showing the same thing
+     * carry the same label and nothing distinguishes them.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getWindows': () => Promise<WindowSummary[]>;
     /** Increase the zoom level of the entire UI */
     'platform.zoomIn': () => Promise<void>;
     /** Decrease the zoom level of the entire UI */

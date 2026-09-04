@@ -33,7 +33,12 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { expect, type FrameLocator, type Page } from '@playwright/test';
-import { addUsersToProject, sendPapiRequestOnce, waitForPapiMethodRegistered } from './helpers';
+import {
+  addUsersToProject,
+  PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  sendPapiRequestOnce,
+  waitForPapiMethodRegistered,
+} from './helpers';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -61,6 +66,14 @@ const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProvid
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
 
+/**
+ * Paratext app-data directories are named `Paratext<major><minor>` — `Paratext80` is 8.0,
+ * `Paratext94` is 9.4, `Paratext100` is 10.0 — so the suffix read as a number orders the versions
+ * (minors are single-digit). Anything below 8.0 stored registration information in a different
+ * shape and ParatextData ignores it; see `UpgradeAppDataFiles` in ParatextData's ParatextInfo.
+ */
+const OLDEST_SUPPORTED_PARATEXT_APP_DATA_VERSION = 80;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,6 +87,66 @@ export interface CommentTestProject {
   projectId: string;
   /** Usernames added as team members (used to re-write ProjectUserAccess.xml after app start) */
   users: string[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Current Paratext user
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Root the platform's local application data lives under, matching what .NET's
+ * `Environment.SpecialFolder.LocalApplicationData` resolves to for the C# data provider:
+ * `%LOCALAPPDATA%` on Windows, `$XDG_DATA_HOME` (default `~/.local/share`) everywhere else.
+ */
+function localApplicationDataRoot(): string | undefined {
+  if (process.platform === 'win32') return process.env.LOCALAPPDATA;
+  return process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
+}
+
+/**
+ * The name ParatextData reports as the current user (`RegistrationInfo.DefaultUser.Name`), read
+ * from the machine's registration file: the highest-named `Paratext*` app-data directory holding a
+ * `RegistrationInfo.xml`, which is how ParatextData picks one (`ParatextInfo`).
+ *
+ * Read from disk rather than asked of the running app on purpose. A project's
+ * `ProjectUserAccess.xml` is loaded when ParatextData first opens the project, during the app's
+ * startup scan, and the loaded copy is kept for the session — so the current user has to be in the
+ * file BEFORE the app launches. Writing it afterwards has no effect on that session.
+ *
+ * @returns The registered user name, or undefined when this machine has no Paratext registration
+ */
+export function readCurrentParatextUserName(): string | undefined {
+  const root = localApplicationDataRoot();
+  if (!root || !fs.existsSync(root)) return undefined;
+
+  const newest = fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({
+      name: entry.name,
+      version: Number(/^Paratext(\d+)$/.exec(entry.name)?.[1]),
+    }))
+    .filter((dir) => dir.version >= OLDEST_SUPPORTED_PARATEXT_APP_DATA_VERSION)
+    .filter((dir) => fs.existsSync(path.join(root, dir.name, 'RegistrationInfo.xml')))
+    .sort((a, b) => a.version - b.version)
+    .pop();
+  if (!newest) return undefined;
+  const registrationFile = path.join(root, newest.name, 'RegistrationInfo.xml');
+
+  const name = /<Name>([^<]*)<\/Name>/.exec(fs.readFileSync(registrationFile, 'utf8'))?.[1];
+  // Decoded here because the value is scraped straight out of XML and handed to a writer that
+  // escapes it again. Without this, a registered name containing `&` arrives as `&amp;`, is
+  // re-escaped to `&amp;amp;`, and comes back out of the parser as the literal text `&amp;` — which
+  // no longer matches the name ParatextData is looking for.
+  return (
+    name
+      ?.replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, '&')
+      .trim() || undefined
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -108,11 +181,20 @@ export async function createCommentTestProject(
   //    format that Paratext projects use (e.g. "32664dc3288a28df2e2bb75ded887fc8f17a15fb").
   const projectId = crypto.randomBytes(20).toString('hex');
 
-  // 3. Give the copy a unique short name and new "Guid" so it does not collide with existing projects
+  // 3. Give the copy a unique short name and new "Guid" so it does not collide with existing
+  //    projects, and mark it editable.
+  //
+  //    The bundled WEB assets ship `<Editable>F</Editable>`, which `platform.isEditable` reports
+  //    verbatim (see GetIsEditable in c-sharp/Projects/ScrTextExtensions.cs). A non-editable
+  //    project is a published resource as far as the app is concerned, and the Simple-mode Column 3
+  //    panels — the comment list among them — deliberately do NOT follow the editor onto one
+  //    (`openOrUpdateRelatedPanels` is gated on isEditable in platform-scripture-editor/src/main.ts).
+  //    Comments belong to a translation project the user works in, so these copies model one.
   const settingsXml = fs.readFileSync(path.join(projectDir, 'Settings.xml'), 'utf8');
   const updatedSettings = settingsXml
     .replace(/<Name>[^<]*<\/Name>/, `<Name>${shortName}</Name>`)
-    .replace(/<Guid>[^<]*<\/Guid>/, `<Guid>${projectId}</Guid>`);
+    .replace(/<Guid>[^<]*<\/Guid>/, `<Guid>${projectId}</Guid>`)
+    .replace(/<Editable>[^<]*<\/Editable>/, '<Editable>T</Editable>');
   fs.writeFileSync(path.join(projectDir, 'Settings.xml'), updatedSettings);
 
   // 4. Add test users by writing ProjectUserAccess.xml before the data provider opens the project.
@@ -129,12 +211,38 @@ export async function createCommentTestProject(
         .filter(Boolean)
     : [];
 
-  const allUsers = [...new Set([...users, ...localUserNames])];
-  if (allUsers.length > 0) {
-    addUsersToProject(projectDir, allUsers);
-  }
+  // The current user matters as much as the synthetic ones: ParatextData grants full access when a
+  // project has NO ProjectUserAccess.xml ("If no project users file, always administrator" —
+  // PermissionManager.HaveRoleNotObserver), but once the file exists a user missing from it has no
+  // role and every comment write is refused. localUsers.txt only exists where Paratext 9 has run,
+  // so the machine's registered name is read directly as well.
+  const allUsers = projectUsersToWrite(users, localUserNames, readCurrentParatextUserName());
+  if (allUsers) addUsersToProject(projectDir, allUsers);
 
   return { shortName, projectDir, projectId, users };
+}
+
+/**
+ * The users to write into a project's `ProjectUserAccess.xml`, or `undefined` when none should be
+ * written at all.
+ *
+ * A caller asking for no users is asking for no file. ParatextData grants full access when a
+ * project has NO users file ("If no project users file, always administrator" —
+ * `PermissionManager.HaveRoleNotObserver`), so writing one anyway — merely because the machine
+ * happens to have a registered Paratext user — silently downgrades the project to a TeamMember with
+ * permissions explicitly denied, and does it only on machines that have a registration.
+ *
+ * Once the file does exist, a user missing from it has no role and every comment write is refused.
+ * So a caller that DID ask for users still gets the machine's own name and the local users added,
+ * or its own writes would be refused.
+ */
+export function projectUsersToWrite(
+  requested: string[],
+  localUserNames: string[],
+  currentUser: string | undefined,
+): string[] | undefined {
+  if (requested.length === 0) return undefined;
+  return [...new Set([...requested, ...localUserNames, ...(currentUser ? [currentUser] : [])])];
 }
 
 /**
@@ -236,7 +344,11 @@ export async function createCommentThreads(
   const resolvedPort = port ?? DEFAULT_WEBSOCKET_PORT;
 
   // 1. Wait for the Paratext PDPF to register getProjectDataProviderId
-  await waitForPapiMethodRegistered(PARATEXT_PDPF_METHOD, resolvedPort, 60_000);
+  await waitForPapiMethodRegistered(
+    PARATEXT_PDPF_METHOD,
+    resolvedPort,
+    PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  );
 
   // 2. Get (or lazily create) the PDP for this project.
   //    The C# factory calls projectID.ToUpperInvariant() internally, so case doesn't matter.
@@ -249,7 +361,11 @@ export async function createCommentThreads(
   );
 
   // 3. Wait for the PDP's createComment method to appear in rpc.discover
-  await waitForPapiMethodRegistered(`object:${pdpId}.createComment`, resolvedPort, 60_000);
+  await waitForPapiMethodRegistered(
+    `object:${pdpId}.createComment`,
+    resolvedPort,
+    PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  );
 
   // 4. Create each thread sequentially (the PDP is not safe to hammer in parallel)
   const threadIds: string[] = [];

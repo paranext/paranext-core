@@ -325,6 +325,58 @@ export function setMainWindowId(windowId: number): void {
   mainSlot.entry.isMain = true;
 }
 
+/**
+ * Which live window currently holds the main role, or `undefined` if none does.
+ *
+ * Undefined is a real answer, not only an error case: main-ness belongs to the entry rather than to
+ * a window, so it outlives the window that held it and the role can sit on an entry with no window
+ * living in it.
+ *
+ * Deliberately not exported: `undefined` here does not mean no window answers for the application,
+ * only that no live window holds the marked entry. {@link isPrimaryWindow} is the question callers
+ * actually want, and it resolves that case rather than passing it on.
+ */
+function getMainWindowId(): number | undefined {
+  return fileSlots.find((slot) => slot.entry.isMain === true)?.windowId;
+}
+
+/**
+ * Whether a window holds the primary role — the one whose ✕ decides whether the app quits.
+ *
+ * Answered from the persisted `isMain` slot rather than a second live pointer. The slot lets go of
+ * its runtime id in {@link handleWindowRemoved}, which runs from a window's `closed` handler, one
+ * event AFTER the `close` handler where the close path asks this — so the answer is still there
+ * every time it is needed. And the primary never goes away while the app runs: an emptied primary
+ * docks Home rather than closing, so only its own ✕ or a quit takes it down, and both of those
+ * bring the whole app with them.
+ *
+ * @param windowId Window to check
+ */
+export function isPrimaryWindow(windowId: number): boolean {
+  const mainWindowId = getMainWindowId();
+  if (mainWindowId !== undefined) return mainWindowId === windowId;
+  // No live window holds the marked entry. The startup restore always leaves one that does, so
+  // reaching here means every window it created has gone and something else opened one — on macOS
+  // the app stays resident with no windows, and an extension can call `platform.createWindow` into
+  // that gap. Some live window has to answer for the app's lifetime, or nothing would ask before
+  // closing and an emptied window would close itself; the oldest one does, matching the role the
+  // restore would have given the window it created first.
+  //
+  // The flag itself deliberately does NOT move. It names the entry simple mode restores and the
+  // only entry allowed the legacy layout fallback, so handing it to a window created into the gap
+  // would cost the user that layout on the next launch.
+  //
+  // A window still waiting for the content it was created to receive is not a candidate, for the
+  // same reason `countWindowsThatCouldBeTheLastOne` leaves it out of its own count: it starts truly
+  // empty and the operation that created it can still fail and take it away again. Answering for
+  // the app would make that rollback refuse to close it — the close would be read as the primary's
+  // — and it would then stand blank with nothing to heal it.
+  return (
+    fileSlots.find((slot) => slot.windowId !== undefined && !isWindowPendingContent(slot.windowId))
+      ?.windowId === windowId
+  );
+}
+
 /** Merge captured bounds into a window's entry and schedule a write */
 export function updateWindowBounds(windowId: number, boundsState: WindowBoundsState): void {
   const slot = findSlotByWindowId(windowId);

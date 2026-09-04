@@ -265,6 +265,136 @@ describe('window layout persistence service', () => {
     ]);
   });
 
+  test('derives the primary window from the entry marked main, not from entry order', async () => {
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [
+        { layout: layoutWithTab('one') },
+        { layout: layoutWithTab('two'), isMain: true },
+        { layout: layoutWithTab('three') },
+      ],
+      11,
+    );
+
+    expect(service.isPrimaryWindow(11)).toBe(false);
+    expect(service.isPrimaryWindow(12)).toBe(true);
+    expect(service.isPrimaryWindow(13)).toBe(false);
+  });
+
+  test('the primary role is released the moment its window is removed, and falls to the oldest live window', async () => {
+    // `isPrimaryWindow` is answered live off the marked slot's `windowId` (see its doc comment), so
+    // this has to hold without any explicit re-derivation step like `trackNewWindow`. Window 11 is
+    // the fallback here for the same reason the "no live window holds the marked entry" tests above
+    // it are: the marked entry keeps its flag, but nothing is assigned to it any more, so the oldest
+    // still-live window answers in its place.
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [
+        { layout: layoutWithTab('one') },
+        { layout: layoutWithTab('two'), isMain: true },
+        { layout: layoutWithTab('three') },
+      ],
+      11,
+    );
+
+    service.handleWindowRemoved(12, 'entry-stays');
+
+    expect(service.isPrimaryWindow(12)).toBe(false);
+    expect(service.isPrimaryWindow(11)).toBe(true);
+    expect(service.isPrimaryWindow(13)).toBe(false);
+  });
+
+  test('a window created with no others open holds the primary role', async () => {
+    const service = await startService();
+
+    service.trackNewWindow(11);
+
+    expect(service.isPrimaryWindow(11)).toBe(true);
+  });
+
+  test('a window created alongside a living window leaves the role where it is', async () => {
+    const service = await startService();
+    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
+
+    service.trackNewWindow(12);
+
+    expect(service.isPrimaryWindow(11)).toBe(true);
+    expect(service.isPrimaryWindow(12)).toBe(false);
+  });
+
+  test('a window created once every restored window has gone answers for the app, and the marked entry keeps its flag', async () => {
+    // Both halves matter and they pull in opposite directions. Some live window must answer for the
+    // app's lifetime, or nothing asks before closing and an emptied window closes itself. But the
+    // flag names the entry simple mode restores and the only entry allowed the legacy layout
+    // fallback, so handing it to a window created into this gap would lose the user that layout on
+    // the next launch.
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      11,
+    );
+    service.handleWindowRemoved(11, 'entry-stays');
+    service.handleWindowRemoved(12, 'entry-stays');
+
+    service.trackNewWindow(13);
+
+    expect(service.isPrimaryWindow(13)).toBe(true);
+    await service.writeNow();
+    const written = writtenStructure().windows;
+    expect(written.filter((entry) => entry.isMain)).toHaveLength(1);
+    expect(firstTabIdOf(written.find((entry) => entry.isMain)?.layout)).toBe('one');
+  });
+
+  test('when two windows land in that gap, the older one answers for the app, not the newer one', async () => {
+    // The doc comment on `isPrimaryWindow` promises the oldest live window answers when no marked
+    // entry survives the gap. The test above cannot tell that promise from "the only candidate
+    // wins" — it tracks exactly one window into the gap. This tracks two, so which one the
+    // fallback picks is actually pinned.
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      11,
+    );
+    service.handleWindowRemoved(11, 'entry-stays');
+    service.handleWindowRemoved(12, 'entry-stays');
+
+    service.trackNewWindow(13);
+    service.trackNewWindow(14);
+
+    expect(service.isPrimaryWindow(13)).toBe(true);
+    expect(service.isPrimaryWindow(14)).toBe(false);
+  });
+
+  test('a window still waiting for its content does not answer for the app', async () => {
+    // The fallback exists so SOME live window carries the "ask before closing" duty when no marked
+    // entry survives. A window created to receive a routed open is not a candidate for that: it
+    // starts truly empty, and the operation that created it can still fail and take it away again —
+    // which is the same reason `countWindowsThatCouldBeTheLastOne` already excludes these windows
+    // from its own arithmetic. Letting one answer here makes its rollback refuse to close it, and
+    // it then stands blank with nothing to heal it.
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      11,
+    );
+    service.handleWindowRemoved(11, 'entry-stays');
+    service.handleWindowRemoved(12, 'entry-stays');
+
+    // The older of the two is the one waiting for content, so "oldest wins" and "pending loses"
+    // disagree here — which is what makes this pin the exclusion rather than the ordering
+    service.trackNewWindow(13);
+    service.markWindowPendingContent(13);
+    service.trackNewWindow(14);
+
+    expect(service.isPrimaryWindow(13)).toBe(false);
+    expect(service.isPrimaryWindow(14)).toBe(true);
+  });
+
   test('a main entry that leaves the structure takes isMain with it; the next load picks the first', async () => {
     // Main-ness is a property of the ENTRY, so an entry that leaves takes the flag with it rather
     // than handing it to a neighbour at write time. A structure left carrying no flag at all is the
