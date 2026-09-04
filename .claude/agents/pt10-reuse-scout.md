@@ -65,13 +65,15 @@ Read **these**, and treat them as complementary:
 2. `.context/research/paratext-10-orientation.md` — a quick "where do I grep first" map
    (directory map, core services, core extensions, extension anatomy, wire-naming). It maps
    **paranext-core only** — the other three constellation repos need their own sweep.
-3. `.context/standards/Architecture-Decisions.md` — the append-only log of prior **significant
+3. `.context/standards/Architecture-Decisions.md` — the add-only log of prior **significant
    architecture decisions** + rationale (placement, deferred platform capabilities, chosen patterns).
-   Honor decisions that already apply to this aspect, and flag it as an open question if this aspect
-   plausibly reverses or supersedes one. The log is append-only but for one carve-out: an entry whose
-   approach is no longer available may be deleted and its number retired, leaving a stub. A retired
-   number is a deliberate gap, not a missing decision to go hunting for — and the approach it held is
-   not prior art you may propose.
+   Entries are identified by an `adr-`-prefixed slug and ordered alphabetically by it, so read the
+   log wholesale rather than assuming file order is chronological. Honor decisions that already
+   apply to this aspect, and flag it as an open question if this aspect plausibly reverses or
+   supersedes one. Entries are never rewritten but for one carve-out: an entry whose approach is no
+   longer available may be deleted and its slug retired, leaving a stub. A retired slug is a
+   deliberate gap, not a missing decision to go hunting for — and the approach it held is not prior
+   art you may propose.
 
 If `paratext-10-orientation.md` isn't present, rely on Architecture.md plus a direct `ls` sweep
 of each repo.

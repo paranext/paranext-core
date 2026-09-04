@@ -2,8 +2,9 @@
 
 > Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
 
-A lightweight, append-only log — with one narrow carve-out, described under "Don't rewrite history"
-below — of **significant architecture decisions** and the reasoning behind them. It holds the one
+A lightweight, add-only log — entries are never rewritten in place, with one narrow carve-out
+described under "Don't rewrite history" below — of **significant architecture decisions** and the
+reasoning behind them. New entries go in alphabetical slug position, not at the end. It holds the one
 thing the prescriptive standards (`Architecture.md`,
 `Paranext-Core-Patterns.md`, `.claude/rules/`) can't: the **why**, the **alternatives we rejected**,
 and the **history** (including superseded decisions).
@@ -908,7 +909,6 @@ step, no automation. Just a record.
 
 ## adr-layout-persistence-guard-retirement: Two layout-persistence guards kept side by side pending deliberate retirement of the older one
 
-- **Formerly:** ADR-0024
 - **Date:** 2026-08-20
 - **Status:** Accepted (interim — retirement of the superseded guard is deferred, not decided against)
 - **Context:** Two PRs independently added a guard to `saveLayout` in
@@ -962,7 +962,13 @@ step, no automation. Just a record.
   rejected: that is exactly the harness we shed.
 - **Consequences:** low-friction capture; the next PRD's scout benefits automatically. The cost is
   discipline — the log only helps if it is actually updated, which is why CLAUDE.md makes updating it
-  a standing instruction rather than an optional nicety.
+  a standing instruction rather than an optional nicety. One file for every decision also means every
+  branch edits it, so entries are inserted in alphabetical slug order rather than appended: a shared
+  append point made every pair of concurrent branches conflict on the same last line, and spreading
+  entries to unrelated offsets reduces that (it does not eliminate it — related work still picks
+  neighboring slugs). The trade is that file order no longer carries chronology, which each entry's
+  `**Date:**` records instead. Alternatives to sorted insertion — one file per decision, or a
+  `merge=union` driver in `.gitattributes` — remain open and would compose with it.
 
 ## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
