@@ -109,8 +109,12 @@ export type WindowEmptiedReason = 'emptied-by-removal' | 'born-empty';
 /**
  * What a window that reported itself empty should do, per the main process:
  *
- * - `open-home`: dock Home instead of staying empty — the window either started empty or is the last
- *   window standing, and closing it would exit the application.
+ * - `open-home`: dock Home instead of staying empty. A window that started empty gets this unless its
+ *   close is already in flight, in which case it is answered `closing` instead; an emptied one gets
+ *   it too if it is the last window standing (closing it would exit the application) or if it is
+ *   the primary, whose only door out is its own ✕ or the Quit menu. A report that names no real
+ *   window — malformed arguments, or an id nothing is tracking — gets it too, since there is
+ *   nothing to decide against.
  * - `closing`: the main process is closing this window. Windows are equal siblings; one with nothing
  *   in it has nothing to be.
  * - `stay`: do nothing at all — see below.

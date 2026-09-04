@@ -39,8 +39,9 @@ These belong to no subset; run them by path (see "How to run").
 - `comment-assignment/` (one Electron per worker) — tests for assigning comments to users
 - `find/` (one Electron per worker) — tests for the find/replace flow
 - `first-run/` (one Electron per test) — tests for the first-run wizard (PT-4175 / PT-4179)
-- `multi-window/` (one Electron per test, except `window-layout-persistence.spec.ts`, which uses no
-  fixture and calls `launchElectronApp` itself — several launches per test to exercise relaunch) — tests for multi-window lifecycle (second-window startup, focus routing, app-global scroll group and theme state reaching every window and surviving any window's close, single shutdown-task run on quit), window layout persistence (windows, layouts, and bounds surviving relaunches; a deliberately closed window staying closed; the pre-multi-window single-window upgrade path), and per-window UI isolation (overlays, dialogs, notifications, navigation targets, and web-view placement staying in their own window; scroll groups deliberately app-global)
+- `multi-window/` (one Electron per test, except `window-layout-persistence.spec.ts` and two tests
+  in `window-close-rule.spec.ts`, which use no fixture and call `launchElectronApp` themselves —
+  several launches per test to exercise relaunch) — tests for multi-window lifecycle (second-window startup, focus routing, app-global scroll group and theme state reaching every window and surviving any window's close, single shutdown-task run on quit), window layout persistence (windows, layouts, and bounds surviving relaunches; a deliberately closed window staying closed; the pre-multi-window single-window upgrade path), and per-window UI isolation (overlays, dialogs, notifications, navigation targets, and web-view placement staying in their own window; scroll groups deliberately app-global)
 - `navigation-history/` (one Electron per test) — tests for back/forward reference history navigation
 - `overlay/` (one Electron per test) — tests for the project-switch transition overlay
 - `scroll-groups/` (one Electron per test) — tests for scroll-group synchronization between scripture editors
