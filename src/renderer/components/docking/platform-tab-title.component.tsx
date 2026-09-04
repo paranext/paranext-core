@@ -27,7 +27,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { getErrorMessage, isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
-import { MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
 
@@ -65,8 +65,11 @@ type PlatformTabTitleProps = {
    */
   webViewId?: string;
   /**
-   * Whether this tab can be closed by the user. Gates middle-click-to-close (mouse button 1) on the
-   * tab header, the same way it gates rc-dock's own close button.
+   * Whether this tab can be closed by the user. Gates middle-click-to-close (mouse button 1)
+   * anywhere on the tab header (see `platform-dock-layout-middle-click-handlers.util.ts`). Callers
+   * should pass the same value given to rc-dock's own `closable` field (see
+   * `createRCDockTabFromTabInfo`) so its close (X) button and this middle-click gate agree on
+   * whether the tab can be closed.
    *
    * @default true
    */
@@ -104,9 +107,14 @@ const handleFloatTab = async (tabId: string) => {
   }
 };
 
-const handleCloseTab = async (tabId: string) => {
+/**
+ * Closes a tab, logging rather than throwing into React on failure — whether `closeTab` rejects, or
+ * resolves `false` because it found no such tab in the dock layout.
+ */
+export const handleCloseTab = async (tabId: string) => {
   try {
-    await closeTab(tabId);
+    const didClose = await closeTab(tabId);
+    if (!didClose) logger.warn(`Failed to close tab ${tabId}: tab not found in the dock layout`);
   } catch (error) {
     logger.error(`Failed to close tab ${tabId}: ${getErrorMessage(error)}`);
   }
@@ -502,31 +510,6 @@ export function PlatformTabTitle({
 
   const iconOnlyClass = isIconOnly ? ' icon-only' : '';
 
-  // Middle-click (mouse button 1) closes the tab, matching the convention browsers and other
-  // editors use for their own tab bars. The close itself runs on `auxclick` — the click event for
-  // a non-primary button — rather than on `mousedown`, mirroring how a left-button click only acts
-  // once the button is released over the target.
-  //
-  // A middle-button `mousedown` on this tab header is handled elsewhere, not here: rc-dock arms
-  // both per-tab and whole-tab-group dragging from a `mousedown` on `DragDropDiv`s that this
-  // header sits inside (see `platform-dock-layout-middle-click-guard.util.ts` for the mechanism),
-  // and the same button also triggers Electron's native middle-click default action (autoscroll,
-  // primary-selection paste on Linux). Both are suppressed by a single capture-phase listener on
-  // the dock layout's root rather than a handler on this div, because rc-dock's drag-arming
-  // `DragDropDiv`s wrap more of the tab header (the close button, the hit area) than this title
-  // renders, and a whole separate `DragDropDiv` arms dragging for the tab bar's empty space beyond
-  // this or any other tab — neither of which a handler scoped to this div alone could reach.
-
-  // Pressing on this tab and releasing elsewhere already closes nothing, with no guard needed
-  // here: `auxclick` (like `click`) targets the nearest common ancestor of the mousedown and
-  // mouseup targets. Once the release lands outside this div, that common ancestor sits above
-  // `.platform-tab-title`, so the event never bubbles back down into it and this handler never
-  // runs. Verified live (middle-press, drag off the tab, release elsewhere): nothing closed.
-  const handleTabHeaderAuxClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (event.button !== 1 || !isClosable) return;
-    handleCloseTab(id);
-  };
-
   const icon = (
     <div
       className={`tab-menu-icon${dragIgnoreClass}`}
@@ -544,11 +527,6 @@ export function PlatformTabTitle({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          {/* Middle-click has no keyboard equivalent to give this div — it targets a physical mouse
-              button a keyboard cannot press. Closing the tab stays keyboard- and screen-reader-
-              accessible through rc-dock's own tab button (the ancestor `.dock-tab-btn` this div
-              renders inside) and its close control. */}
-          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
           <div
             ref={containerRef}
             className={`platform-tab-title${dragIgnoreClass}${iconOnlyClass}`}
@@ -557,7 +535,12 @@ export function PlatformTabTitle({
             // a screen reader announces every icon-only tab in this column identically.
             aria-label={isIconOnly ? title : tabLabel}
             data-web-view-id={webViewId}
-            onAuxClick={handleTabHeaderAuxClick}
+            // Read by `platform-dock-layout-middle-click-handlers.util.ts` to resolve a middle
+            // click anywhere on this tab's header (including rc-tabs' "more" overflow dropdown,
+            // which re-renders this same element) back to a tab id, and to gate that close on
+            // whether this tab allows it.
+            data-tab-id={id}
+            data-tab-closable={isClosable}
           >
             <span className={dragIgnoreClass.trim()}>{icon}</span>
             <span className={`platform-tab-title-text ${dragIgnoreClass.trim()}`.trim()}>
