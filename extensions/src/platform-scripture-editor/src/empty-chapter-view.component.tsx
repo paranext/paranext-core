@@ -1,27 +1,19 @@
 import { Button, DisabledActionTooltip } from 'platform-bible-react';
+import {
+  EMPTY_CHAPTER_VIEW_KEYS,
+  type EmptyChapterViewLocalizedStrings,
+  type EmptyChapterViewStringKey,
+} from './empty-chapter-view.const';
 
-const MESSAGE_KEY = '%webView_platformScriptureEditor_emptyChapter_message%';
-const MESSAGE_RESOURCE_KEY = '%webView_platformScriptureEditor_emptyChapter_messageResource%';
-const ADD_CHAPTER_NUMBER_BUTTON_KEY =
-  '%webView_platformScriptureEditor_emptyChapter_addChapterNumberButton%';
-const PROTECTED_TOOLTIP_KEY = '%webView_platformScriptureEditor_emptyChapter_protectedTooltip%';
+const { MESSAGE_KEY, MESSAGE_RESOURCE_KEY, ADD_CHAPTER_NUMBER_BUTTON_KEY, PROTECTED_TOOLTIP_KEY } =
+  EMPTY_CHAPTER_VIEW_KEYS;
 
-/**
- * Localization keys used by {@link EmptyChapterView}. Spread these into the editor web-view's
- * localized-strings list so the values are loaded and passed into `localizedStrings`.
- */
-export const EMPTY_CHAPTER_VIEW_STRING_KEYS = Object.freeze([
-  MESSAGE_KEY,
-  MESSAGE_RESOURCE_KEY,
-  ADD_CHAPTER_NUMBER_BUTTON_KEY,
-  PROTECTED_TOOLTIP_KEY,
-] as const);
-
-export type EmptyChapterViewStringKey = (typeof EMPTY_CHAPTER_VIEW_STRING_KEYS)[number];
-
-export type EmptyChapterViewLocalizedStrings = {
-  [key in EmptyChapterViewStringKey]?: string;
-};
+// Re-exported so consumers keep importing the view's contract from the view.
+export {
+  EMPTY_CHAPTER_VIEW_STRING_KEYS,
+  type EmptyChapterViewLocalizedStrings,
+  type EmptyChapterViewStringKey,
+} from './empty-chapter-view.const';
 
 const localize = (strings: EmptyChapterViewLocalizedStrings, key: EmptyChapterViewStringKey) =>
   strings[key] ?? key;

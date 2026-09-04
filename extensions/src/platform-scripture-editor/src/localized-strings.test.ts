@@ -6,6 +6,7 @@ import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.const';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
+import { EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.const';
 import { RESOURCE_CELL_STRING_KEYS } from './scripture-text-grid/resource-cell.const';
 import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
 import { RESOURCE_PANEL_TYPED_STRING_KEYS } from './resource-panel-strings.utils';
@@ -267,5 +268,40 @@ describe.each([...VIEW_OPTIONS_NOTICE_STRING_KEYS])('view options notice %s', (k
 
   it('Spanish label differs from English', () => {
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The editor's blank-chapter zero state, whose message, button label, and disabled tooltip are the
+// only strings a reader sees when a chapter has no content at all.
+describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The blocks above each cover one component's exported key list, which means they only see keys
+// somebody remembered to export in a `*_STRING_KEYS` array. A key contributed straight into the
+// JSON — the `%versionHistoryCommit_*%` commit labels are the precedent — belongs to no such array
+// and so goes uncovered. This guard closes that whole class: the two shipped languages must declare
+// exactly the same key set, whether or not any component exports the key.
+describe('en/es key set parity across the whole contribution file', () => {
+  const enKeys = Object.keys(localizedStrings.en).sort();
+  const esKeys = Object.keys(localizedStrings.es).sort();
+
+  it('declares every English key in Spanish', () => {
+    expect(esKeys.filter((key) => !localizedStrings.en[key])).toEqual([]);
+    expect(enKeys.filter((key) => !localizedStrings.es[key])).toEqual([]);
+  });
+
+  it('declares the same key set in both languages', () => {
+    expect(esKeys).toEqual(enKeys);
   });
 });
