@@ -7,6 +7,7 @@ declare module 'papi-shared-types' {
     DataProviderUpdateInstructions,
   } from '@shared/models/data-provider.model';
   import type {
+    ExtensionDataListScope,
     ExtensionDataScope,
     MandatoryProjectDataTypes,
     PROJECT_INTERFACE_PLATFORM_BASE,
@@ -682,6 +683,28 @@ declare module 'papi-shared-types' {
           callback: (extensionData: string | undefined | PlatformError) => void,
           options?: DataProviderSubscriberOptions,
         ): Promise<UnsubscriberAsync>;
+        /**
+         * Lists the `dataQualifier`s an extension has data for in this project.
+         *
+         * Every returned string is a valid `dataQualifier` for `getExtensionData` under the same
+         * `extensionName`, exactly as it would be passed: forward slashes, relative to the
+         * extension's own data, nested paths included. The list is sorted and includes empty
+         * documents.
+         *
+         * Listing never creates anything, so an extension that has never written any data gets
+         * `[]`. Discovering the same thing by calling `getExtensionData` does not have that
+         * property — on the Paratext PDP a read creates the file it looked for.
+         *
+         * Note: this method is required here but optional on the engine, because not every Project
+         * Data Provider can enumerate its extension data (one over a remote store may not be able
+         * to). A PDP whose engine does not implement it rejects this call, and there is no way to
+         * detect that in advance, so callers that need to work against arbitrary PDPs should treat
+         * a rejection as "unknown", not as "no data".
+         *
+         * @param scope Which extension's `dataQualifier`s to list, optionally narrowed by a prefix
+         * @returns Sorted `dataQualifier`s that exist for that extension in this project
+         */
+        listExtensionDataQualifiers(scope: ExtensionDataListScope): Promise<string[]>;
       };
 
   /** This is just a simple example so we have more than one. It's not intended to be real. */
