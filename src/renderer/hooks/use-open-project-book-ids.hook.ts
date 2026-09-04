@@ -48,9 +48,9 @@ function getOpenProjectIds(): string[] {
   try {
     definitions = getAllOpenWebViewDefinitionsSync();
   } catch (e) {
-    // Loud rather than quiet: this read runs deferred, after the dock layout has committed (see
-    // `useDeferredDockLayoutRead`), so by this point this window's dock layout is registered. A
-    // throw here means it never was, which is an anomaly worth finding in a log rather than the
+    // Loud rather than quiet: this read runs deferred, after the dock has adopted its new layout
+    // (see `useDeferredDockLayoutRead`), so by this point this window's dock layout is registered.
+    // A throw here means it never was, which is an anomaly worth finding in a log rather than the
     // ordinary timing of a first render.
     logger.warn(`Open project books could not enumerate open web views: ${getErrorMessage(e)}`);
     return EMPTY_IDS;
@@ -91,6 +91,13 @@ function readOpenProjectIdsKey(): string {
  * the full canon the way navigation-command book lookup does — there, the fallback keeps navigation
  * permissive; here, it would advertise every book in the canon as reachable.
  *
+ * The flow, so the stages below can be checked against a whole: a web view event requests a
+ * DEFERRED read of the dock layout (deferred because the close event is emitted before the dock has
+ * adopted the new layout) → the read lands in state as a membership KEY covering every open project
+ * → the active project is excluded from it during RENDER, so a prop change lands in the same commit
+ * → a change in membership rebuilds the per-project `booksPresent` subscriptions → their values are
+ * unioned in canon order. Each stage has its own note where it is declared.
+ *
  * @param activeProjectId The project whose books are already offered, excluded from the result
  * @param isEnabled Whether to do the work at all. When false the hook subscribes to nothing and
  *   returns an empty list, so a caller that discards the result pays none of its cost. Defaults to
@@ -114,7 +121,7 @@ export function useOpenProjectBookIds(
   // this project", the exact set this hook exists to exclude. The exclusion is applied during
   // render instead, below.
   const [allOpenProjectIdsKey, setAllOpenProjectIdsKey] = useState('');
-  const refreshOpenWebViews = useDeferredDockLayoutRead(
+  const { requestRead: refreshOpenWebViews, cancelPendingRead } = useDeferredDockLayoutRead(
     useCallback(() => setAllOpenProjectIdsKey(readOpenProjectIdsKey()), []),
   );
 
@@ -128,14 +135,22 @@ export function useOpenProjectBookIds(
   // are attached and an event fired in the gap cannot be missed. There is no read during render:
   // enumerating open web views deliberately touches the WebViewState keep-alive set, which a
   // discarded or double-invoked render must not do, and by the time this deferred read runs this
-  // window's dock layout has registered — which on a first render it typically has not.
+  // window's dock layout has registered — which on a first render it typically has not. This is a
+  // fast path, not a synchronization point: if the layout registers later still, correctness comes
+  // from the open event above, at the cost of reporting no open projects for an extra render.
   //
   // Re-requested when `isEnabled` turns on, since nothing was listening while it was off. Turning
-  // off drops the key so re-enabling cannot briefly report a set that went stale while disabled.
+  // off drops the key so re-enabling cannot briefly report a set that went stale while disabled —
+  // which is why it must also revoke a read requested while still enabled. That read would
+  // otherwise run after the key was cleared and repopulate it, and with the subscriptions already
+  // gone nothing would ever correct it.
   useEffect(() => {
     if (isEnabled) refreshOpenWebViews();
-    else setAllOpenProjectIdsKey('');
-  }, [isEnabled, refreshOpenWebViews]);
+    else {
+      cancelPendingRead();
+      setAllOpenProjectIdsKey('');
+    }
+  }, [isEnabled, refreshOpenWebViews, cancelPendingRead]);
 
   // The active project is excluded HERE, during render, so a change to it lands in the same commit
   // that renders it. Identity still tracks membership rather than event count — the memo's inputs

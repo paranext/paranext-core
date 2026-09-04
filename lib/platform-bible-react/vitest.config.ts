@@ -24,12 +24,6 @@ const workspace = defineConfig({
           globals: true,
           environment: 'jsdom',
           setupFiles: [intlWarmupSetup],
-          // Vitest's 5s default is too tight for the `userEvent`-driven Radix menu tests (footnote
-          // editor caller dropdown, marker palette) on a Windows CI worker, where these tests run
-          // alongside the Playwright-backed `storybook` project and a single click can take
-          // seconds. They finish in well under a second locally, so a real hang still fails fast
-          // in development.
-          testTimeout: 20_000,
         },
       },
       // Node.js tests for build scripts

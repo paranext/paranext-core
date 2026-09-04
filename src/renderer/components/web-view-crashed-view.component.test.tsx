@@ -3,12 +3,17 @@ import path from 'path';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { logger } from '@shared/services/logger.service';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   WebViewCrashedView,
   WEB_VIEW_CRASHED_ENGLISH_DEFAULTS,
   WEB_VIEW_CRASHED_VIEW_STRING_KEYS,
 } from './web-view-crashed-view.component';
+
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(),
@@ -166,9 +171,27 @@ describe('WebViewCrashedView', () => {
 
     render(<WebViewCrashedView onReload={onReload} webViewTitle="Editor" />);
 
+    // The focus target is the screen's container, which holds the reload button; the alert region
+    // inside it is text only, so that a screen reader is not made to announce the button twice.
     const alert = screen.getByRole('alert');
     expect(alert).toBeInTheDocument();
-    expect(alert).toHaveFocus();
+    expect(alert.parentElement).toHaveFocus();
+    expect(alert).not.toContainElement(screen.getByRole('button'));
+  });
+
+  it('keeps an extension-supplied title from forging a log entry', () => {
+    // The title comes from whoever created the web view, so it is untrusted text going into a
+    // line-oriented log. A newline in it would split one warning across lines.
+    vi.mocked(useLocalizedStrings).mockImplementation(() => {
+      throw new Error('localization service unreachable');
+    });
+
+    render(
+      <WebViewCrashedView onReload={onReload} webViewTitle={'Editor\n[error] forged log line'} />,
+    );
+
+    expect(logger.warn).toHaveBeenCalled();
+    expect(vi.mocked(logger.warn).mock.calls[0][0]).not.toMatch(/[\n\r]/);
   });
 
   it('leaves focus alone when the crash happened in a pane the user was not in', () => {
@@ -182,19 +205,20 @@ describe('WebViewCrashedView', () => {
     render(<WebViewCrashedView onReload={onReload} webViewTitle="Editor" />);
 
     expect(screen.getByRole('alert')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).not.toHaveFocus();
+    expect(screen.getByRole('alert').parentElement).not.toHaveFocus();
     expect(outsideInput).toHaveFocus();
 
     outsideInput.remove();
   });
 });
 
-// `WEB_VIEW_CRASHED_ENGLISH_DEFAULTS` deliberately restates the English text that also lives in `en.json`, because
-// this view has to render when the localization service is the thing that broke. `en.json` is read
-// from disk by the extension host rather than bundled into the renderer, so importing it here to
-// derive the defaults would add a second 41KB copy to the renderer's load path for four strings -
-// the wrong trade against a startup-performance target. The duplication stays; these tests are what
-// stop it drifting, since a copy edit to `en.json` would otherwise leave the fallback silently stale.
+// `WEB_VIEW_CRASHED_ENGLISH_DEFAULTS` deliberately restates the English text that also lives in
+// `en.json`, because this view has to render when the localization service is the thing that broke.
+// `en.json` is read from disk by the extension host rather than bundled into the renderer, so
+// importing it here to derive the defaults would add a second 41KB copy to the renderer's load path
+// for four strings - the wrong trade against a startup-performance target. The duplication stays;
+// these tests are what stop it drifting, since a copy edit to `en.json` would otherwise leave the
+// fallback silently stale.
 describe('English fallbacks stay in step with en.json', () => {
   const englishStrings: Record<string, string> = JSON.parse(
     readFileSync(path.resolve(__dirname, '../../../assets/localization/en.json'), 'utf-8'),

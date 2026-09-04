@@ -65,7 +65,7 @@ const CONTAINER_STYLE: CSSProperties = {
   boxSizing: 'border-box',
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'center',
+  alignItems: 'safe center',
   justifyContent: 'safe center',
   overflow: 'auto',
   gap: '1rem',
@@ -107,6 +107,7 @@ function LocalizedCrashedView({ onReload }: WindowCrashedViewProps) {
       reloadLabel={localize(localizedStrings, RELOAD_BUTTON_KEY)}
       onReload={onReload}
       containerStyle={CONTAINER_STYLE}
+      titleHeadingLevel={1}
       buttonClass={BUTTON_CLASS}
       buttonStateCss={BUTTON_STATE_CSS}
     />
@@ -125,6 +126,7 @@ function EnglishCrashedView({ onReload }: WindowCrashedViewProps) {
       reloadLabel={WINDOW_CRASHED_ENGLISH_DEFAULTS[RELOAD_BUTTON_KEY]}
       onReload={onReload}
       containerStyle={CONTAINER_STYLE}
+      titleHeadingLevel={1}
       buttonClass={BUTTON_CLASS}
       buttonStateCss={BUTTON_STATE_CSS}
     />

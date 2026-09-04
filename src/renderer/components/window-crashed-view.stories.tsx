@@ -6,13 +6,13 @@ import { WindowCrashedView } from './window-crashed-view.component';
  *
  * The `transform` is what makes this work: the component is `position: fixed`, which is normally
  * measured from the viewport, but a transformed ancestor becomes the containing block for fixed
- * descendants. Without it every story here would ignore its box and paint over the whole Docs page
+ * descendants. Without it every story here would ignore its box and paint over the whole Docs page,
+ * description and controls and neighbouring stories included. Applied per story rather than on
+ * `meta` so a story's own box is its only box: story decorators compose with `meta` ones rather
+ * than replacing them, so a `meta` box would nest inside every story's.
  *
- * - The description, the controls and the other stories included - which is why this sits on `meta`
- *   rather than on one story.
- *
- * @param height Box height. The default is roomy enough to show the screen as a user meets it; a
- *   short one exercises the too-short-to-center path.
+ * @param height Box height. The roomy one shows the screen as a user meets it; a short one
+ *   exercises the too-short-to-center path.
  */
 function inWindowOfHeight(height: string): Decorator {
   return function InWindow(Story: Parameters<Decorator>[0]): ReturnType<Decorator> {
@@ -36,7 +36,6 @@ const meta: Meta<typeof WindowCrashedView> = {
   component: WindowCrashedView,
   tags: ['autodocs'],
   args: { onReload: () => {} },
-  decorators: [inWindowOfHeight('22rem')],
   parameters: {
     docs: {
       description: {
@@ -71,7 +70,9 @@ export default meta;
 type Story = StoryObj<typeof WindowCrashedView>;
 
 /** The screen as a user meets it, filling the window. */
-export const Default: Story = {};
+export const Default: Story = {
+  decorators: [inWindowOfHeight('22rem')],
+};
 
 /**
  * A window too short to center the content in. `justify-content: safe center` plus `overflow: auto`

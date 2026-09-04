@@ -113,22 +113,28 @@ export type ProjectPickerData = {
   isLoading: boolean;
 };
 
+/**
+ * The three project lists the picker shows, plus the current project and its loading/error state.
+ *
+ * The flow, so the stages below can be checked against a whole: which project is ACTIVE comes from
+ * a DEFERRED read of this window's dock layout, requested on every web view event (deferred because
+ * a close event is emitted before the dock has adopted the new layout) and held in state as the
+ * project id itself → the project METADATA comes from one service fan-out per refresh generation,
+ * cached and shared by all three sections, invalidated only by events that can change which
+ * projects exist → each section derives from those two, with its own failure handling, and the
+ * current project falls back to a direct single-project lookup when it is absent from the shared
+ * snapshot. Each stage has its own note where it is declared.
+ */
 export function useProjectPickerData(): ProjectPickerData {
-  // Two independent refresh generations, so cheap "which project is active?" updates don't drag in
+  // Two independent invalidation signals, so cheap "which project is active?" updates don't drag in
   // the expensive project-metadata fan-out:
-  // - metadataRefreshCounter invalidates the shared metadata fetch. Bumped only by events that can
-  //   change the SET of available projects (extensions reloading, C# project-list changes).
-  // - activeEditorProjectId re-derives the current project from the open web views on web view
-  //   open/update/close - frequent during startup tab restoration - which re-runs only the cheap
-  //   local web view enumeration and reuses the cached metadata. Those are network events, so every
-  //   window's web view activity re-reads it; the derivation reads only this window's dock layout,
-  //   so another window's event resolves the same id and the state update bails out.
+  // - metadataRefreshCounter is a GENERATION that invalidates the shared metadata fetch. Bumped
+  //   only by events that can change the SET of available projects (extensions reloading, C#
+  //   project-list changes), since "go refetch the list" has no value to compare against.
+  // - activeEditorProjectId is the derived VALUE itself, re-read from the open web views on web
+  //   view open/update/close - frequent during startup tab restoration - which costs only the
+  //   cheap local web view enumeration and reuses the cached metadata.
   const [metadataRefreshCounter, setMetadataRefreshCounter] = useState(0);
-  // The active editor's project id, held as a VALUE rather than derived from a refresh counter. A
-  // web view event that leaves the active editor's project unchanged produces the same string, and
-  // `useState` bails out on an unchanged value — so the burst of web view events a project switch
-  // fires cannot re-render this hook's consumer. A counter would re-render on every event by
-  // construction, because its value changes even when the thing it stands in for did not.
   const readActiveEditorProjectId = useCallback((): string | undefined => {
     // THIS window's open web views, from the local dock layout — the same source
     // `navigation-target.util` resolves the main editor from. Deliberately not the `webViews`
@@ -139,12 +145,12 @@ export function useProjectPickerData(): ProjectPickerData {
     try {
       return findFirstEditorWebViewDefinition(getAllOpenWebViewDefinitionsSync())?.projectId;
     } catch (e) {
-      // Loud rather than quiet: this read runs deferred, after the dock layout has committed (see
-      // `useDeferredDockLayoutRead`), so by this point this window's dock layout is registered. A
-      // throw here means it never was, which is an anomaly worth finding in a log rather than the
-      // ordinary timing of a first render. The whole read is inside the try — a throw from
-      // resolving the editor, or from building this very message, must not escape a deferred
-      // callback and become an unhandled error.
+      // Loud rather than quiet: this read runs deferred, after the dock has adopted its new layout
+      // (see `useDeferredDockLayoutRead`), so by this point this window's dock layout is
+      // registered. A throw here means it never was, which is an anomaly worth finding in a log
+      // rather than the ordinary timing of a first render. Both the enumeration and resolving the
+      // editor from it are inside the try, so neither can escape a deferred callback and become an
+      // unhandled error.
       logger.warn(
         `ProjectPicker: could not enumerate this window's web views: ${getErrorMessage(e)}`,
       );
@@ -152,16 +158,24 @@ export function useProjectPickerData(): ProjectPickerData {
     }
   }, []);
 
-  // No read during render. Enumerating open web views deliberately touches the WebViewState
-  // keep-alive set, which a discarded or double-invoked render must not do, and a render-phase read
-  // could not see this window's dock layout on a first render anyway. The deferred read below fills
-  // this in, one commit later at the outside.
+  // Held as a VALUE rather than derived from a refresh counter. A web view event that leaves the
+  // active editor's project unchanged produces the same string, and `useState` bails out on an
+  // unchanged value — so the burst of web view events a project switch fires cannot re-render this
+  // hook's consumer. A counter would re-render on every event by construction, because its value
+  // changes even when the thing it stands in for did not. Those are network events, so every
+  // window's web view activity re-reads it; the read above sees only THIS window's dock layout, so
+  // another window's event resolves the same id and this update bails out.
+  //
+  // Starts undefined because there is no read during render: enumerating open web views
+  // deliberately touches the WebViewState keep-alive set, which a discarded or double-invoked
+  // render must not do, and a render-phase read could not see this window's dock layout on a first
+  // render anyway. The deferred read below fills it in, one commit later at the outside.
   const [activeEditorProjectId, setActiveEditorProjectId] = useState<string | undefined>(undefined);
   const [currentSimpleProjectError, setCurrentSimpleProjectError] = useState<string | undefined>(
     undefined,
   );
   const refreshMetadata = useCallback(() => setMetadataRefreshCounter((n) => n + 1), []);
-  const refreshActiveEditor = useDeferredDockLayoutRead(
+  const { requestRead: refreshActiveEditor } = useDeferredDockLayoutRead(
     useCallback(
       () => setActiveEditorProjectId(readActiveEditorProjectId()),
       [readActiveEditorProjectId],
@@ -175,6 +189,13 @@ export function useProjectPickerData(): ProjectPickerData {
   // unavailable host does not loop forever.
   const [isRetryPending, setIsRetryPending] = useState(false);
   const fetchRetryCountRef = useRef(0);
+  // A SECOND budget, for the current-project lookup, because that failure is independent of the
+  // shared fan-out's. The two cannot share `fetchRetryCountRef`: the fan-out's success handler
+  // resets it every generation, and it runs before this hook's own await, so a lookup that fails
+  // while the fan-out succeeds would read a budget of 0 forever and retry for the life of the
+  // window. Spent where the retry is armed rather than when the timer fires, since the shared
+  // timer serves both budgets and cannot tell which one asked for it.
+  const currentProjectRetryCountRef = useRef(0);
 
   const onDidOpenWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW), []);
   useEvent(onDidOpenWebView, refreshActiveEditor);
@@ -320,6 +341,7 @@ export function useProjectPickerData(): ProjectPickerData {
         const m = metadata.find((md) => normalizeProjectId(md.id) === key);
         if (m) {
           setCurrentSimpleProjectError(undefined);
+          currentProjectRetryCountRef.current = 0;
           return metadataToProjectItem(m);
         }
         // Miss: the active editor references a project not in the USJ-filtered snapshot yet - e.g.
@@ -330,19 +352,25 @@ export function useProjectPickerData(): ProjectPickerData {
         // only decides list inclusion, not which fields a project carries.
         const single = await projectLookupService.getMetadataForProject(currentProjectId);
         setCurrentSimpleProjectError(undefined);
+        currentProjectRetryCountRef.current = 0;
         return metadataToProjectItem(single);
       } catch (e) {
         logger.error(
           `ProjectPicker: could not fetch details for current project ${currentProjectId}: ${getErrorMessage(e)}`,
         );
         setCurrentSimpleProjectError('Unable to load current project details');
-        // Arm the same bounded retry the shared metadata fetch uses. `usePromise` re-runs only when
-        // its callback identity changes, and neither of this callback's inputs changes while the
-        // same editor stays open — so without arming it here, a lookup that failed once leaves the
-        // error card up for the life of the window. The retry bumps the metadata generation, which
-        // is what changes the identity and re-runs this. Bounded by the same counter and cap, so a
-        // project that cannot be resolved at all stops after MAX_METADATA_FETCH_RETRIES.
-        if (fetchRetryCountRef.current < MAX_METADATA_FETCH_RETRIES) setIsRetryPending(true);
+        // Arm the same bounded retry timer the shared metadata fetch uses. `usePromise` re-runs
+        // only when its callback identity changes, and neither of this callback's inputs changes
+        // while the same editor stays open — so without arming it here, a lookup that failed once
+        // leaves the error card up for the life of the window. The retry bumps the metadata
+        // generation, which is what changes the identity and re-runs this. Bounded by this lookup's
+        // OWN budget, spent here, so a project that cannot be resolved at all stops after
+        // MAX_METADATA_FETCH_RETRIES attempts; the budget is restored above whenever the project
+        // does resolve, so a transient failure that heals does not permanently spend it.
+        if (currentProjectRetryCountRef.current < MAX_METADATA_FETCH_RETRIES) {
+          currentProjectRetryCountRef.current += 1;
+          setIsRetryPending(true);
+        }
         return {
           id: currentProjectId,
           fullName: 'Unable to load current project details',

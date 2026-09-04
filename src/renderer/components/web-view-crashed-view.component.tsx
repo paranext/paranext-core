@@ -76,7 +76,7 @@ const CONTAINER_STYLE: CSSProperties = {
   boxSizing: 'border-box',
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'center',
+  alignItems: 'safe center',
   justifyContent: 'safe center',
   overflow: 'auto',
   // Mirrors the `Empty` primitive this would compose if Tailwind were available here: gap-4, p-6
@@ -157,6 +157,7 @@ function LocalizedCrashedView({ onReload, webViewTitle }: WebViewCrashedViewProp
       reloadLabel={localize(localizedStrings, RELOAD_BUTTON_KEY)}
       onReload={onReload}
       containerStyle={CONTAINER_STYLE}
+      titleHeadingLevel={2}
       buttonClass={BUTTON_CLASS}
       buttonStateCss={BUTTON_STATE_CSS}
     />
@@ -186,6 +187,7 @@ function EnglishCrashedView({ onReload, webViewTitle }: WebViewCrashedViewProps)
       reloadLabel={WEB_VIEW_CRASHED_ENGLISH_DEFAULTS[RELOAD_BUTTON_KEY]}
       onReload={onReload}
       containerStyle={CONTAINER_STYLE}
+      titleHeadingLevel={2}
       buttonClass={BUTTON_CLASS}
       buttonStateCss={BUTTON_STATE_CSS}
     />

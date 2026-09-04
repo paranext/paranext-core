@@ -8,6 +8,7 @@ import {
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
 } from '@shared/services/web-view.service-model';
 import { type SavedWebViewDefinition } from '@shared/models/web-view.model';
+import { logger } from '@shared/services/logger.service';
 import { useOpenProjectBookIds } from './use-open-project-book-ids.hook';
 
 // Hoisted so the vi.mock factories below can close over them — vi.mock is lifted above module init.
@@ -174,6 +175,11 @@ describe('useOpenProjectBookIds', () => {
         await emitWebViewEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW);
       }
 
+      // The deferred read really did run for every event — otherwise the bound below would hold by
+      // deferral alone and would say nothing about the `useState` bailout it is written to pin.
+      expect(vi.mocked(getAllOpenWebViewDefinitionsSync).mock.calls.length).toBeGreaterThanOrEqual(
+        eventCount,
+      );
       // Not zero extra renders: `useState` has to render the component once to discover the value
       // is unchanged before it can bail out. What matters is that the count does not scale with the
       // number of events — a refresh counter would add one render per event.
@@ -534,6 +540,90 @@ describe('useOpenProjectBookIds', () => {
       expect(getProjectDataProvider).toHaveBeenCalledTimes(1);
       expect(unsubscriberFor('resourceProject')).not.toHaveBeenCalled();
       expect(result.current).toEqual(['REV']);
+    });
+  });
+
+  describe('reading the dock layout', () => {
+    test('reports no open projects and warns when the enumeration throws', async () => {
+      // The read runs in a deferred callback, so an escaping throw is an unhandled error in a
+      // scheduled task rather than a rejected promise anything is watching. The whole read is
+      // inside the try for that reason, and this pins it: without the guard the hook does not
+      // settle to an empty list, it blows up out of band.
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockImplementation(() => {
+        throw new Error('dock layout not registered');
+      });
+
+      const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
+      await waitFor(() => expect(logger.warn).toHaveBeenCalled());
+
+      expect(result.current).toEqual([]);
+      expect(vi.mocked(logger.warn).mock.calls[0][0]).toContain('dock layout not registered');
+      expect(getProjectDataProvider).not.toHaveBeenCalled();
+    });
+
+    test('recovers on a later event once the enumeration succeeds', async () => {
+      // A throw must not wedge the hook: the next web view event requests a fresh read.
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockImplementationOnce(() => {
+        throw new Error('dock layout not registered');
+      });
+
+      const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
+      await waitFor(() => expect(logger.warn).toHaveBeenCalled());
+      expect(result.current).toEqual([]);
+
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+        webViewDefinition('a', { projectId: 'resourceProject' }),
+      ]);
+      getProjectDataProvider.mockResolvedValue(
+        pdpWithBooks(booksPresentFlags(66), 'resourceProject'),
+      );
+      await emitWebViewEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW);
+
+      await waitFor(() => expect(result.current).toEqual(['REV']));
+    });
+
+    test('a read requested before the hook is disabled cannot resurrect a closed project', async () => {
+      // The deferred read is already queued when `isEnabled` flips to false. The disable path
+      // clears the key, and with the subscriptions gone nothing would ever correct a read that
+      // landed afterwards — so the disable revokes it. Without that, the key holds the pre-disable
+      // membership, and re-enabling subscribes to a project that has since closed before the fresh
+      // read replaces it.
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+        webViewDefinition('a', { projectId: 'closesWhileDisabled' }),
+      ]);
+      getProjectDataProvider.mockResolvedValue(
+        pdpWithBooks(booksPresentFlags(66), 'closesWhileDisabled'),
+      );
+
+      const { result, rerender } = renderHook(
+        ({ isEnabled }: { isEnabled: boolean }) =>
+          useOpenProjectBookIds('activeProject', isEnabled),
+        { initialProps: { isEnabled: true } },
+      );
+      await waitFor(() => expect(result.current).toEqual(['REV']));
+      const acquisitionsWhileEnabled = getProjectDataProvider.mock.calls.length;
+
+      // Request a read, then disable in the same tick — the read is still queued at this point
+      const handlers = webViewEventHandlers.get(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW);
+      act(() => {
+        handlers?.forEach((handler) => handler(undefined));
+        rerender({ isEnabled: false });
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // The project closes while nothing is listening, then the hook is re-enabled
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([]);
+      rerender({ isEnabled: true });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current).toEqual([]);
+      // No fresh acquisition for the project that closed: re-enabling started from no membership,
+      // not from the revoked read's stale one
+      expect(getProjectDataProvider.mock.calls.length).toBe(acquisitionsWhileEnabled);
     });
   });
 });

@@ -4,14 +4,32 @@ import { CSSProperties } from 'react';
 
 // Styling data shared by the app's crash screens - `WebViewCrashedView`, which replaces a single
 // pane, and `WindowCrashedView`, which replaces a whole window. The two are meant to read as one
-// thing, so the parts that decide how they LOOK live here rather than being copied. Their markup and
-// their localization boundary are shared too, in `crashed-view.component.tsx`; the only thing either
-// screen still owns is its container style, because one is measured from a pane and the other from
-// the viewport.
+// thing, so the parts that decide how they LOOK live here rather than being copied. Their markup,
+// focus handling and localization boundary are shared too, in `crashed-view.component.tsx`.
+//
+// What each screen still owns: its container style (one is measured from a pane, the other from the
+// viewport), its own localization keys and English defaults, and the small wrapper that pairs a
+// localized render with an English one. Those are per-surface by nature - the strings differ, and
+// so does what the screen is positioned against - so they are duplicated in shape rather than
+// shared. A third crash surface would be the point at which that shape is worth extracting too.
 //
 // Everything here is plain data and pure functions evaluated at module load. Nothing reaches a
 // service, which is what lets a crash screen depend on it - see each screen's own notes on why it
 // takes as few dependencies as it can.
+
+/**
+ * The announced region: the title and message, and nothing focusable.
+ *
+ * A nested flex column rather than a bare wrapper, because grouping the two paragraphs makes them
+ * one item of the container's column - so the container's own centering and gap have to be repeated
+ * here to keep the layout identical to the ungrouped one.
+ */
+export const CRASHED_VIEW_ALERT_STYLE: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: '0.5rem',
+};
 
 /** Mirrors `EmptyTitle`: text-sm, font-medium, tracking-tight */
 export const CRASHED_VIEW_TITLE_STYLE: CSSProperties = {

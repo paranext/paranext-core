@@ -257,12 +257,24 @@ function collapseAndTrim(description: string): string {
   return `${slice(collapsed, 0, MAX_SELECTOR_DESCRIPTION_LENGTH)}…`;
 }
 
-/** One selector property, rendered without walking into it. */
+/**
+ * One selector property, rendered without walking into it.
+ *
+ * A string property gets the same grapheme-safe cut {@link collapseAndTrim} applies to the whole
+ * description, and for the same reason: a selector's string values are project names, queries and
+ * file paths rather than anything ASCII by construction. Cutting here natively would put a lone
+ * surrogate inside the assembled description, where `collapseAndTrim`'s own length check then finds
+ * the total short enough to leave alone — so the damage escapes into both the log warning and the
+ * `PlatformError` message every consumer of the tripped hook receives.
+ */
 function describeSelectorValue(value: unknown): string {
-  if (isString(value))
-    return value.length > MAX_SELECTOR_DESCRIPTION_LENGTH
-      ? `${value.slice(0, MAX_SELECTOR_DESCRIPTION_LENGTH)}…`
-      : value;
+  if (isString(value)) {
+    // Same cheap native gate as `collapseAndTrim`: code units are never fewer than graphemes, so a
+    // string this says is short enough needs no segmenting.
+    if (value.length <= MAX_SELECTOR_DESCRIPTION_LENGTH) return value;
+    if (stringLength(value) <= MAX_SELECTOR_DESCRIPTION_LENGTH) return value;
+    return `${slice(value, 0, MAX_SELECTOR_DESCRIPTION_LENGTH)}…`;
+  }
   if (typeof value === 'object' && value) return Array.isArray(value) ? '[…]' : '{…}';
   return String(value);
 }
@@ -276,9 +288,16 @@ function describeSelectorValue(value: unknown): string {
  * of the result could be thrown away — a selector holding a USJ chapter or a comment thread list is
  * megabytes. The input is bounded instead: own enumerable properties, one shallow line each, and
  * the walk stops as soon as there is more text than the warning can show.
+ *
+ * Three layers bound the result, and the LAST one owns the guarantee: `describeSelectorValue` caps
+ * each value, the walk here stops once the budget is spent, and `collapseAndTrim` makes the final
+ * cut. Only that last cut is promised to hold - the first two keep the work bounded, but the
+ * assembled `{ a: …, b: … }` scaffolding can still push the total past the limit on its own.
  */
 function describeSelector(selector: unknown): string {
-  if (isString(selector)) return selector;
+  // A bare string selector is bounded HERE rather than left to `collapseAndTrim`, whose regex
+  // `.replace` would otherwise scan the whole string before any length check reached it.
+  if (isString(selector)) return describeSelectorValue(selector);
   if (typeof selector !== 'object' || !selector) return String(selector);
 
   const rendered: string[] = [];

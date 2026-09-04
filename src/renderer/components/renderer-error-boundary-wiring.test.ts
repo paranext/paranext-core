@@ -70,15 +70,16 @@ describe('renderer error boundary wiring', () => {
   it('checks the crash flag before purging web view state on unload', () => {
     const index = readRendererFile('index.tsx');
 
-    // `cleanupOldWebViewState` deletes the saved state of every web view it did not see load, so
-    // running it after a crash that interrupted tab restoration throws away the unrestored tabs'
-    // state. The crash screen's reload button makes that unload reachable
+    // Why the guard exists: see `hasRendererCrashed` in renderer-error-boundary.component.tsx.
+    // Pinned here because deleting the guard compiles, lints and leaves every unit test green.
     const teardownStart = index.indexOf("addEventListener('beforeunload'");
     expect(teardownStart).toBeGreaterThanOrEqual(0);
     const cleanupCall = index.indexOf('cleanupOldWebViewState()', teardownStart);
     expect(cleanupCall).toBeGreaterThan(teardownStart);
 
-    const guard = index.indexOf('hasRendererCrashed()', teardownStart);
+    // Matched as a UNIT, guard and early return together: asserting only that the call appears
+    // before the purge passes just as well with the `return` deleted, which restores the bug.
+    const guard = index.indexOf('if (hasRendererCrashed()) return;', teardownStart);
     expect(guard).toBeGreaterThan(teardownStart);
     expect(guard).toBeLessThan(cleanupCall);
   });

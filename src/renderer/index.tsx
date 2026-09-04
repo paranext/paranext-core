@@ -190,9 +190,8 @@ applyThemeSafe(getCurrentThemeSync(), 'first load');
 // This doesn't run if the renderer has an uncaught exception (which is a good thing)
 window.addEventListener('beforeunload', () => {
   // `cleanupOldWebViewState` deletes the saved state of every web view it did not see load, so it
-  // is only correct once they all have. A tree that crashed partway through restoring tabs never
-  // got there, and the crash screen's reload button unloads the window on purpose — so running the
-  // purge on that path would delete the saved state of every tab that had not been restored yet.
+  // is only correct once they all have — which a crashed tree never reached. See
+  // `hasRendererCrashed` for why the crash screen's reload button makes this path reachable.
   if (hasRendererCrashed()) return;
   cleanupOldWebViewState();
 });

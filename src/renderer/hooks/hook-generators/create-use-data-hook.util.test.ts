@@ -666,4 +666,16 @@ describe('createUseDataHook runaway-loop guard', () => {
     expect(description).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
     expect(stringLength(description)).toBeLessThanOrEqual(MAX_SELECTOR_DESCRIPTION_LENGTH + 1);
   });
+
+  it("never cuts a grapheme in half inside an OBJECT selector's string property", async () => {
+    // The per-property cut is a second, independent cut, and the outer trim cannot repair it: the
+    // assembled description comes back under the grapheme budget, so the outer check leaves it
+    // alone and a lone surrogate reaches the log and the PlatformError message.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const selector = { projectName: `x${'👍'.repeat(100)}` } as unknown as TestSelector;
+
+    const description = await describeSelectorInWarning(selector);
+
+    expect(description).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+  });
 });
