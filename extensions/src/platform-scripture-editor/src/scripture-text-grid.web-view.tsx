@@ -24,7 +24,7 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 import type { DblResourceReference, ProjectReference } from 'platform-scripture';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
 import {
   getOrderedScriptureTextGridContents,
@@ -48,7 +48,11 @@ import {
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
 import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
-import { resolveTextCollectionProjectId } from './scripture-text-grid-project.utils';
+import {
+  resolveGridBodyState,
+  resolveTextCollectionProjectId,
+} from './scripture-text-grid-project.utils';
+import { LoadingView } from './panel-state-views.component';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 import {
   ResourceCollectionOptions,
@@ -84,6 +88,10 @@ const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
+// The resource panels' generic loading string, reused rather than duplicated: this body renders
+// the same shared LoadingView they do, and the Localization-Guide forbids a new key for a
+// generic string that already exists.
+const LOADING_KEY = '%webView_resourcePanel_loading%';
 const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
 // Screen-reader announcements for the chapter-context split opening/closing.
 const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
@@ -99,6 +107,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   ...VIEW_OPTIONS_NOTICE_STRING_KEYS,
   CHAPTER_CONTEXT_CLOSE_KEY,
   EMPTY_STATE_KEY,
+  LOADING_KEY,
   CELL_ACCESSIBLE_NAME_KEY,
   ARIA_OPENED_KEY,
   ARIA_CLOSED_KEY,
@@ -158,20 +167,24 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   );
 
   // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid. The
-  // 5th tuple member is the project driving the active Scripture reference (the editor's project):
-  // follow it when opened without an explicit project — e.g. from the default layout, whose tab
-  // carries no projectId. An explicit `projectId` (e.g. a direct openWebView) takes precedence.
-  const [scrRef, setScrRef, , , activeEditorProjectId] = useWebViewScrollGroupScrRef();
-  const candidateProjectId = projectId ?? activeEditorProjectId;
+  // 5th tuple member is the group's SOURCE project — whichever project last SET the group's
+  // reference — which is not the same thing as the active editor's project: a project switch does
+  // not change the reference, so this value lags a switch until the user next navigates. It is only
+  // a fallback for a grid opened without an explicit project (e.g. from the default layout, whose
+  // tab carries no projectId). An explicit `projectId` takes precedence, and a project switch
+  // re-points this panel by supplying exactly that (see updateRelatedTextCollectionPanel).
+  const [scrRef, setScrRef, , , scrollGroupSourceProjectId] = useWebViewScrollGroupScrRef();
+  const candidateProjectId = projectId ?? scrollGroupSourceProjectId;
 
   // `effectiveProjectId` is the project whose text collection the grid shows. It starts from the
-  // active editor and is refined by a latch effect (below, once `resources` is known) so that
+  // candidate above and is refined by a latch effect (below, once `resources` is known) so that
   // focusing one of the grid's own resource cells doesn't hijack it. See resolveTextCollectionProjectId.
   const [effectiveProjectId, setEffectiveProjectId] = useState<string | undefined>(
     candidateProjectId,
   );
 
-  const { sources, textConnectionPdp } = useTextCollectionSources(effectiveProjectId);
+  const { sources, textConnectionPdp, hasSourcesError } =
+    useTextCollectionSources(effectiveProjectId);
 
   // Latest sources for the async callbacks below — reading the render-closure `sources` would let a
   // rapid second toggle (or a toggle mid-install) compute its next-state from a pre-write snapshot
@@ -284,13 +297,16 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     useWebViewState,
     displayedProjectIds,
     sources !== undefined && !isLoadingCachedResources,
+    // A project switch re-points this panel by reloading it, which reuses the web view id, so the
+    // published list would otherwise outlive the project it was built for.
+    effectiveProjectId,
   );
 
-  // Latch the displayed project. Each grid resource cell is itself a Scripture editor, so focusing
-  // one (e.g. clicking a verse in Chapter view) makes that resource the active editor. Never switch
-  // the grid to one of its own displayed resources — that project has no text collection and would
-  // blank the grid; keep the current project instead. Still follow the active editor to a genuinely
-  // different text-collection project.
+  // Latch the displayed project. Each grid resource cell is itself a Scripture editor, so navigating
+  // from one (e.g. clicking a verse in Chapter view) makes that resource the scroll group's source
+  // project. Never switch the grid to one of its own displayed resources — that project has no text
+  // collection and would blank the grid; keep the current project instead. Still follow the
+  // candidate to a genuinely different text-collection project.
   useEffect(() => {
     setEffectiveProjectId((previous) =>
       resolveTextCollectionProjectId(previous, {
@@ -507,6 +523,72 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   const installingResourceNames = useMemo(() => installing.map((info) => info.name), [installing]);
 
+  // The decision itself lives in `resolveGridBodyState` so it can be unit-tested without a web view
+  // harness (the repo has none) — the same split the sibling Column 3 panels make with
+  // `resolveResourceContentState`. The ordering rules it encodes are documented on that function.
+  // This window opens on every Simple-mode project switch, not only at first mount, because the
+  // switch re-points this panel by reloading it (see `updateRelatedTextCollectionPanel`), which is
+  // why the body gets a real loading state rather than an empty container.
+  const bodyState = resolveGridBodyState({
+    hasResources: resources.length > 0,
+    hasProject: effectiveProjectId !== undefined,
+    areSourcesResolved: sources !== undefined,
+    hasSourcesError,
+    isLoadingCachedResources,
+    isLoadingLocalizedStrings,
+  });
+
+  let bodyContent: ReactNode;
+  if (bodyState === 'cells') {
+    bodyContent = (
+      <ScriptureTextGrid
+        ariaLabel={localizedStrings[TITLE_KEY]}
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode={viewMode}
+        zoom={zoom}
+        zoomMenuLabels={zoomMenuLabels}
+        chapterContext={chapterContext}
+        onChapterContextChange={handleChapterContextChange}
+        onChapterContextClose={handleCloseChapterContext}
+        closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
+        cellAccessibleNameTemplate={localizedStrings[CELL_ACCESSIBLE_NAME_KEY]}
+        onReorder={handleReorder}
+        getReorderHandleLabel={getReorderHandleLabel}
+        reorderHint={localizedStrings[REORDER_HINT_KEY]}
+        getReorderAnnouncement={getReorderAnnouncement}
+      />
+    );
+  } else if (bodyState === 'loading') {
+    // The same LoadingView the three sibling Column 3 panels use, resized for this body — it
+    // defaults to `h-screen` for a whole-panel state, which would overflow the flex body beneath
+    // this view's header. Sharing it rather than hand-copying keeps the spinner's accessible name
+    // guaranteed: `label` is required there precisely because a bare Spinner announces nothing.
+    bodyContent = (
+      <LoadingView className="tw:h-full tw:p-4" label={localizedStrings[LOADING_KEY]} />
+    );
+  } else {
+    // Covers both 'empty' and 'error'. They are distinguished in `resolveGridBodyState` because the
+    // distinction is real and testable, but they render alike here: a dedicated failure message
+    // would need a new localized string, which is deliberately out of scope for this fix. What
+    // matters either way is that a failure lands on a terminal state rather than an endless spinner.
+    //
+    // Centered in the grid body; the message names the View Options button by interpolating
+    // its own localized label so a rename can't desync the copy.
+    bodyContent = (
+      <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
+        <EmptyState
+          id="scripture-text-grid-empty-state"
+          className="tw:text-center"
+          message={formatReplacementString(localizedStrings[EMPTY_STATE_KEY], {
+            viewOptionsLabel: localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
+          })}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       data-testid="scripture-text-grid"
@@ -565,48 +647,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           </PopoverContent>
         </Popover>
       </div>
-      {/* Grid body: the empty state when nothing is renderable, otherwise the verse-cell rows.
-          Gate the empty state on loading being finished so it can't flash before data arrives —
-          `sources` undefined and `cachedResources` still loading each make `resources` transiently
-          empty (a DBL ref resolves to a cell only once the cached list loads). The
-          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`. */}
-      <div className="tw:flex-1 tw:overflow-hidden">
-        {resources.length === 0 &&
-        sources !== undefined &&
-        !isLoadingCachedResources &&
-        !isLoadingLocalizedStrings ? (
-          // Centered in the grid body; the message names the View Options button by interpolating
-          // its own localized label so a rename can't desync the copy.
-          <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
-            <EmptyState
-              id="scripture-text-grid-empty-state"
-              className="tw:text-center"
-              message={formatReplacementString(localizedStrings[EMPTY_STATE_KEY], {
-                viewOptionsLabel: localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
-              })}
-            />
-          </div>
-        ) : (
-          <ScriptureTextGrid
-            ariaLabel={localizedStrings[TITLE_KEY]}
-            resources={resources}
-            scrRef={scrRef}
-            setScrRef={setScrRef}
-            viewMode={viewMode}
-            zoom={zoom}
-            zoomMenuLabels={zoomMenuLabels}
-            chapterContext={chapterContext}
-            onChapterContextChange={handleChapterContextChange}
-            onChapterContextClose={handleCloseChapterContext}
-            closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
-            cellAccessibleNameTemplate={localizedStrings[CELL_ACCESSIBLE_NAME_KEY]}
-            onReorder={handleReorder}
-            getReorderHandleLabel={getReorderHandleLabel}
-            reorderHint={localizedStrings[REORDER_HINT_KEY]}
-            getReorderAnnouncement={getReorderAnnouncement}
-          />
-        )}
-      </div>
+      {/* Grid body: a labelled spinner while any input is still resolving, then the empty state
+          when there is genuinely nothing to show, otherwise the verse-cell rows. See
+          `bodyContent` above for why each branch exists. */}
+      <div className="tw:flex-1 tw:overflow-hidden">{bodyContent}</div>
     </div>
   );
 };

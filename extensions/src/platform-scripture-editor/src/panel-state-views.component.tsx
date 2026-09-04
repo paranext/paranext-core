@@ -6,6 +6,7 @@ import {
   EmptyHeader,
   EmptyMedia,
   Spinner,
+  cn,
 } from 'platform-bible-react';
 import { AlertTriangle } from 'lucide-react';
 import { ReactNode } from 'react';
@@ -20,13 +21,22 @@ import { ReactNode } from 'react';
  * and tells a sighted user nothing either — and these panels can now wait through a whole resource
  * catalog fetch, so that silence is not brief.
  *
+ * Sized for a whole panel by default. A caller rendering it into a smaller region — a body beneath
+ * its own header, say — passes `className` to override the height and padding rather than
+ * hand-copying this block, so every panel keeps one loading view and the required `label` above.
+ *
  * @param label Already-localized status text shown next to the spinner (e.g. "Installing
  *   resource…"). Doubles as the state's accessible name.
+ * @param className Overrides the default full-panel sizing. Conflicting Tailwind utilities win over
+ *   the defaults.
  */
-export function LoadingView({ label }: { label: ReactNode }) {
+export function LoadingView({ label, className }: { label: ReactNode; className?: string }) {
   return (
     <div
-      className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center"
+      className={cn(
+        'tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center',
+        className,
+      )}
       role="status"
     >
       <Spinner aria-hidden />
