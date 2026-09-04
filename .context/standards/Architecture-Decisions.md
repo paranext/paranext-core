@@ -1,11 +1,14 @@
 # Architecture Decisions
 
-> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03. This stamp records when the
+> file's claims were last checked against the code by `/verify-standards`, not when the file was last
+> edited — refresh it only when you actually re-run that verification.
 
-A lightweight, add-only log — entries are never rewritten in place, with one narrow carve-out
-described under "Don't rewrite history" below — of **significant architecture decisions** and the
-reasoning behind them. New entries go in alphabetical slug position, not at the end. It holds the one
-thing the prescriptive standards (`Architecture.md`,
+A lightweight, add-only log of **significant architecture decisions** and the reasoning behind them.
+Entries are added, not deleted — a decision that no longer holds has its `**Status:**` revised or an
+`**Amended YYYY-MM-DD:**` note appended, rather than being rewritten away; the one narrow carve-out
+is described under "Don't rewrite history" below. New entries go in byte-order slug position, not at
+the end. It holds the one thing the prescriptive standards (`Architecture.md`,
 `Paranext-Core-Patterns.md`, `.claude/rules/`) can't: the **why**, the **alternatives we rejected**,
 and the **history** (including superseded decisions).
 
@@ -29,23 +32,33 @@ step, no automation. Just a record.
   during `/investigate-prd`), and an entry that reads as a considered option is one they can propose
   again. When you take the carve-out, leave a stub in its place so the gap is explained, and never
   reuse the slug; git history keeps the text.
-- **Insert in alphabetical order by slug**, not at the end. Identify entries by an `adr-`-prefixed
-  kebab-case **slug**, not a number: `## adr-per-window-service-scoping: {short title}`. Choose a
-  slug that reads as the decision itself, short enough to type in a code comment, and cross-reference
-  it in backticks. Name the decision, never its status — a slug never changes, but a status does, so
-  record `Withdrawn`/`Superseded` on the entry's `**Status:**` line rather than in its slug. Each
-  entry carries its own `**Date:**`, so chronology is still recorded; it just isn't the file order.
-- **Alphabetical order exists to spread out merge conflicts.** Every branch appending at the end of
-  the file meant every pair of branches conflicted on the same last line, whatever the entries were
-  called. Sorted insertion puts unrelated decisions at unrelated offsets. It is a reduction, not a
-  cure — closely related work in flight tends to pick neighboring slugs — so conflicts here are
-  still expected, just rarer.
+- **Insert in byte order by slug**, not at the end. Byte order — what `LC_ALL=C sort` produces — is
+  the tiebreak that matters, because slugs are hyphenated: locale-aware collation can weigh `-` below
+  a letter and put `adr-node-…` before `adr-no-create-…`, which byte order does not. Don't reach for
+  `localeCompare` (`.erb/scripts/sort-cspell-words.js` uses it, but for a different file). Identify
+  entries by an `adr-`-prefixed kebab-case **slug**, not a number:
+  `## adr-per-window-service-scoping: {short title}`. Choose a slug that reads as the decision
+  itself, short enough to type in a code comment, and cross-reference it in backticks. Name the
+  decision, never its status — a slug never changes, but a status does, so record
+  `Withdrawn`/`Superseded` on the entry's `**Status:**` line rather than in its slug. Chronology
+  lives in each entry's `**Date:**` rather than in the file order, so date every new entry.
+- **Sorted order exists to spread out merge conflicts** — a shared append point made every pair of
+  concurrent branches conflict on the same last line. It makes them rarer, not impossible: closely
+  related work still picks neighboring slugs. See `adr-decision-log-sorted-insertion` for the full
+  rationale and the alternatives that were rejected.
 - **Slugs are chosen at write time and never change.** Two branches in flight pick different slugs
-  on their own, so nothing has to be claimed, reserved, or reconciled at merge. When git does report
-  a conflict here, resolve it by **keeping both entries** in slug order — there is nothing to
-  renumber and no cross-reference to update. (Entries predating the switch from numbering to slugs
-  each carry a `**Formerly:** ADR-NNNN` line so older references still resolve. Don't add
-  `**Formerly:**` to new entries.)
+  on their own, so nothing has to be claimed, reserved, or reconciled at merge. (The 28
+  originally-numbered entries, `ADR-0001` through `ADR-0028` with no gaps, each carry a
+  `**Formerly:** ADR-NNNN` line so older references still resolve. Don't add `**Formerly:**` to new
+  entries.)
+- **Resolving a conflict here: reconcile by slug, never by hunk.** Both sides of a conflict in this
+  file are runs of whole entries, and the same entry can appear on both sides at different offsets —
+  so "keep both sides" is not a safe resolution and will silently duplicate entries. Instead, take
+  the union of the two sides **keyed by slug**: every slug appears exactly once, entries that are new
+  on either side are inserted at their own byte-order slug position, and nothing is renumbered
+  because there are no numbers. Then check your work — the `## adr-` headings must be free of
+  duplicates and in `LC_ALL=C sort` order. Nothing in CI or `/verify-standards` checks this, so a
+  duplicated entry will merge cleanly and go unnoticed.
 
 ### Entry template
 
@@ -386,6 +399,43 @@ step, no automation. Just a record.
   and only partly covered is skipped without notification — be reported to the user.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
+
+## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** `adr-lightweight-decision-log` put every decision in one file, and CLAUDE.md asks all
+  code work to add an entry — so nearly every branch edits it. Entries were appended at the end,
+  which made the last line of the file a shared insertion point: every pair of concurrent branches
+  conflicted there, whatever their entries were about. In the month before this decision, 34
+  first-parent landings touched the file, 28 of them on days that saw two or more. An earlier change
+  had already replaced `ADR-NNNN` numbers with `adr-` slugs, which made those conflicts trivial to
+  resolve but no rarer — the identifier was never what collided, the shared offset was.
+- **Decision:** Entries are inserted in **byte order** by slug (`LC_ALL=C sort`), not appended.
+  Unrelated decisions then land at unrelated offsets in the file. Byte order rather than
+  "alphabetical" because slugs are hyphenated and locale-aware collation can weigh `-` differently
+  from a letter, so the two orders disagree on pairs like `adr-no-create-…`/`adr-node-…`. Because
+  both sides of a conflict here are runs of whole entries, and the same entry can appear on both
+  sides at different offsets, conflicts are resolved by taking the union **keyed by slug** rather
+  than by keeping both sides.
+- **Alternatives:** (a) Slug rename alone — already tried, and shown insufficient: it addressed
+  resolution cost, not conflict frequency. (b) One file per decision — would eliminate the shared
+  file entirely; deferred as of 2026-09-03 because it is a larger migration and loses the
+  single-file grep that both people and `pt10-reuse-scout` rely on. (c) A `merge=union` driver in
+  `.gitattributes` — **rejected.** Union merge is line-wise, so on multi-line prose entries it
+  interleaves two entries' bodies with no conflict marker and auto-merges disjoint insertions out of
+  slug order, producing silent corruption that is worse than the conflict it avoids. It is only safe
+  for line-oriented files.
+- **Consequences:** conflicts in this file are rarer but not gone — entries average ~55 lines, so
+  two branches collide only when inserting into the same gap between neighboring slugs, which still
+  happens when closely related work lands together. File order no longer carries chronology; each
+  entry's `**Date:**` does, so new entries must be dated. The one-time reorder cost a git-blame
+  rewrite across the file, and made the transition merge for every then-open branch a conflict whose
+  naive "keep both sides" resolution duplicates entries. The invariant is convention-enforced only:
+  nothing in CI, lint, or `/verify-standards` checks that entries stay sorted and unduplicated, so a
+  hand-added entry can silently break it — no such check existed as of 2026-09-03, and adding one is
+  open follow-up work.
+- **Source:** PR #2770.
 
 ## adr-durable-window-ids: Window ids are durable across a restart; the separate persisted-layout "slot" indirection is removed
 
@@ -1041,12 +1091,8 @@ step, no automation. Just a record.
 - **Consequences:** low-friction capture; the next PRD's scout benefits automatically. The cost is
   discipline — the log only helps if it is actually updated, which is why CLAUDE.md makes updating it
   a standing instruction rather than an optional nicety. One file for every decision also means every
-  branch edits it, so entries are inserted in alphabetical slug order rather than appended: a shared
-  append point made every pair of concurrent branches conflict on the same last line, and spreading
-  entries to unrelated offsets reduces that (it does not eliminate it — related work still picks
-  neighboring slugs). The trade is that file order no longer carries chronology, which each entry's
-  `**Date:**` records instead. Alternatives to sorted insertion — one file per decision, or a
-  `merge=union` driver in `.gitattributes` — remain open and would compose with it.
+  branch edits it, which is a standing source of merge conflicts; see
+  `adr-decision-log-sorted-insertion` for how entry placement addresses that.
 
 ## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
