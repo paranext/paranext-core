@@ -94,7 +94,17 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       const actionFunction = action === 'install' ? installResource : uninstallResource;
 
       return actionFunction(dblEntryUid)
-        .then(() => {
+        .then(async () => {
+          // Bring the catalog's installed flags up to date before re-reading it. Without this the
+          // refetch below answers from a cache that predates this install, the row never sees
+          // `installed` turn true, and its spinner runs until the dialog is reopened.
+          try {
+            await papi.commands.sendCommand('platformGetResources.refreshInstalledFlags');
+          } catch (error) {
+            // The action itself succeeded, so this is not a failure to report: without the refresh
+            // the row's flags simply catch up on a later read instead of this one.
+            logger.debug(getErrorMessage(error));
+          }
           // Trigger a refetch so the resource list reflects the new installed state.
           setFetchResources(true);
           return undefined;

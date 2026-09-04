@@ -73,6 +73,22 @@ declare module 'papi-shared-types' {
     'platformGetResources.openHome': () => Promise<string | undefined>;
 
     /**
+     * Brings the `installed` flags on the cached DBL resource list up to date, so that the next
+     * `platformGetResources.getCachedResources` call reflects an install or removal that just
+     * finished.
+     *
+     * Call this after `installDblResource` or `uninstallDblResource` resolves and before re-reading
+     * the list. `getCachedResources` on its own answers from the cache and corrects it in the
+     * background, so a caller that reads it once immediately after installing gets the flags from
+     * before its own install and never sees them change.
+     *
+     * Waits for the flags to be recomputed, but not indefinitely: it gives up after a few seconds
+     * (a concurrent DBL catalog download can hold the lock it needs for an unbounded time) and the
+     * recompute then finishes in the background instead.
+     */
+    'platformGetResources.refreshInstalledFlags': () => Promise<void>;
+
+    /**
      * Opens a "New Tab" web view and returns the WebView id
      *
      * @param tabGroupId Id of the tab group (panel) to put the new tab in

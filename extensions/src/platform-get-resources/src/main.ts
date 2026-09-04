@@ -8,7 +8,13 @@ import {
   WebViewDefinition,
 } from '@papi/core';
 import type { DblResourceData } from 'platform-bible-utils';
-import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isString,
+  Mutex,
+  retryUntil,
+  waitForDuration,
+} from 'platform-bible-utils';
 import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
@@ -165,6 +171,33 @@ async function syncInstalledFlags(): Promise<void> {
 }
 
 /**
+ * How long {@link refreshInstalledFlags} waits for a sync before giving up on it. The sync queues
+ * behind `fetchMutex`, which a catalog fetch holds for an unbounded network download, so the wait
+ * has to be capped to stay well inside the JSON-RPC request timeout.
+ */
+const INSTALLED_FLAGS_SYNC_WAIT_MS = 5000;
+
+/**
+ * Brings the cached `installed` flags up to date, for a caller that just installed or uninstalled a
+ * resource and needs the next read of the catalog to reflect it.
+ *
+ * `getCachedResources` answers from the cache and corrects it in the background, which is right for
+ * opening a dialog and wrong right after an install: the caller would get the flags from before its
+ * own install and, having asked only once, would never see them change.
+ *
+ * Resolves either when the sync finishes or when the wait above expires, whichever comes first; on
+ * expiry the sync still completes in the background, so the flags are correct by the next read.
+ */
+async function refreshInstalledFlags(): Promise<void> {
+  if (cachedResources === undefined) return;
+
+  // Deliberately not `ensureInstalledFlagsSynced`: a sync already in flight started before the
+  // caller's install and would answer without it. Overlapping syncs are safe — they derive the same
+  // flags from the same backend and serialize on `fetchMutex` to write them.
+  await waitForDuration(syncInstalledFlags, INSTALLED_FLAGS_SYNC_WAIT_MS);
+}
+
+/**
  * Starts the installed-flag sync if one is not already running, and returns the promise for it.
  * Callers that only need the catalog let it run in the background; callers whose answer depends on
  * the flags being current await it and re-read `cachedResources` afterwards.
@@ -182,9 +215,9 @@ function ensureInstalledFlagsSynced(): Promise<void> {
 
 async function getCachedResources(): Promise<DblResourceData[] | undefined> {
   if (cachedResources !== undefined) {
-    // Run the installed-flag sync in the background so the dialog open is never blocked by
-    // getMetadataForAllProjects retries (which can exceed the 30-second JSON-RPC timeout when
-    // the C# PDPF is still initializing). The next dialog open picks up the updated flags.
+    // Answer from the cache and correct it in the background so opening a dialog never waits on
+    // the provider call or on `fetchMutex` behind a catalog fetch. A caller that needs the flags to
+    // include a change it just made calls `refreshInstalledFlags` first.
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
     ensureInstalledFlagsSynced();
     return cachedResources;
@@ -395,6 +428,11 @@ export async function activate(context: ExecutionActivationContext) {
     getCachedResources,
   );
 
+  const refreshInstalledFlagsCommandPromise = papi.commands.registerCommand(
+    'platformGetResources.refreshInstalledFlags',
+    refreshInstalledFlags,
+  );
+
   const getLocalNonDblResourcesCommandPromise = papi.commands.registerCommand(
     'platformGetResources.getLocalNonDblResources',
     getLocalNonDblResources,
@@ -431,6 +469,7 @@ export async function activate(context: ExecutionActivationContext) {
     await openHomeWebViewCommandPromise,
     await openNewTabWebViewCommandPromise,
     await getCachedResourcesCommandPromise,
+    await refreshInstalledFlagsCommandPromise,
     await getLocalNonDblResourcesCommandPromise,
     await isSendReceiveAvailableCommandPromise,
   );
