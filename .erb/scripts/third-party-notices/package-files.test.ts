@@ -75,6 +75,16 @@ describe('readPackageNotices', () => {
     expect(readPackageNotices(undefined)).toEqual([]);
     expect(readPackageNotices(path.join(os.tmpdir(), 'notices-does-not-exist'))).toEqual([]);
   });
+
+  // An unreadable directory may hold every NOTICE the document is obliged to reproduce. Reporting
+  // it as "no notices" drops an Apache-2.0 section 4(d) attribution at exit 0, which is the one
+  // outcome this module exists to prevent. ENOTDIR stands in for EACCES/EMFILE/ELOOP: a path that
+  // exists and cannot be read as a directory.
+  it('refuses to read a directory it cannot read as absence', () => {
+    const notADirectory = path.join(packageDir({}), 'package-is-a-file');
+    fs.writeFileSync(notADirectory, 'not a directory');
+    expect(() => readPackageNotices(notADirectory)).toThrow(/ENOTDIR/);
+  });
 });
 
 describe('declaredLicenseField', () => {

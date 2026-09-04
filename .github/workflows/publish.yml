@@ -215,29 +215,33 @@ jobs:
           mkdir release/staged
           mv release/build/*.dmg release/staged
 
-      - name: Prepare release and publish to the snap store - Linux
+      # No snap-store upload, and no `release/staged` staging. This repository does not distribute a
+      # built application (see LICENSING.md, "The distributed application"): the Linux artifact is
+      # built so that the Linux leg is exercised and so it can be shared internally, and the S3 step
+      # below deliberately excludes Linux. Paratext 10 is released from `paranext/paratext-10-studio`.
+      - name: Prepare release - Linux
         if: ${{ matrix.os == env.OS_LINUX }}
         env:
           # no hardlinks so dependencies are copied
           USE_HARD_LINKS: false
           # This is used by electron-builder to prepare the release
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # This is required to upload automatically to the snap store
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.LINUX_SNAP_STORE_CREDENTIALS }}
         run: |
           npx electron-builder --publish never --linux
-          snapcraft upload --release=edge ./release/build/*.snap
-          mkdir release/staged
-          mv release/build/*.snap release/staged
 
+      # Creates the tag, the draft and the generated notes, and attaches NO binaries. Those are the
+      # fixed points in Git history that the Paratext 10 Studio build constructs its own releases
+      # from; the installers stay internal (see the Linux step above). `artifacts` is an optional
+      # input, so omitting it leaves everything else about the release intact.
+      #
+      # One leg only: with nothing per-platform to contribute, running it on all three legs would
+      # only race three jobs to create the same release.
       - name: Publish draft release
+        if: ${{ matrix.os == env.OS_LINUX }}
         uses: ncipollo/release-action@v1
         with:
-          # Need to allow updates in order to upload artifacts from each OS
+          # Need to allow updates in order to re-run this workflow against an existing draft
           allowUpdates: true
-          artifactErrorsFailBuild: true
-          artifacts: |
-            release/staged/*
           bodyFile: .github/assets/release-body.md
           # make the new release a draft instead of automatically publishing
           draft: true

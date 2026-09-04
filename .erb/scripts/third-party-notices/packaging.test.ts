@@ -103,11 +103,17 @@ describe('where the per-platform notices check may run', () => {
   // production build - between the two it would verify a graph that never ships. That ordering is
   // only cold because `extensionCacheDirectory` gives each bundle its own directory per mode.
   //
-  // The `package` script cannot host it at all: its build is by construction a rebuild - CI's
-  // `check packaging` step runs `npm run package` after the job has already built once - so the
-  // caches are warm and the shipping-set half would fail on every leg. It runs `--verify-document`
-  // instead, which compares two committed files and reads no manifest, so no cache state can stop
-  // it answering - and the document is what electron-builder packs.
+  // The `package` script runs `--verify-document` instead, and the reason is NOT cache temperature:
+  // `clean.ts` is the first step of `package` and its glob removes every `node_modules/.cache/
+  // webpack-*` directory, including each extension bundle's per-mode one, so the caches on that
+  // path are cold by construction. The reason is that `package` is not run only from this
+  // repository. Paratext 10 Studio clones this repo, patches it, copies private extensions in,
+  // yalc-links a local `scripture-editors`, and runs `npm run package` inside the patched clone -
+  // a build whose npm graph genuinely differs from the committed one. `--verify-shipping-set` ends
+  // in `diffShippingSet` and refuses ANY drift in either direction, so it would fail there on every
+  // build. `--verify-document` compares the committed document against the sha256 in the committed
+  // lock - two committed files, no build inputs - so it answers the same way in a patched clone as
+  // it does here, and the document is what electron-builder packs.
   //
   // Neither placement is visible in a diff, and the release one would only fail at release time, so
   // both are pinned here.
@@ -118,16 +124,16 @@ describe('where the per-platform notices check may run', () => {
   const workflow = (name: string) =>
     fs.readFileSync(path.join(REPO, '.github', 'workflows', name), 'utf8');
 
-  it('is not run by the package script, whose build is always a rebuild', () => {
+  it('is not run by the package script, which downstream repositories package from too', () => {
     expect(script('package')).toContain('electron-builder');
     expect(script('package')).not.toContain('verify:third-party-notices:shipping-set');
   });
 
-  it('checks the document itself before packaging it, which no cache state can prevent', () => {
+  it('checks the document itself before packaging it, which a patched clone can also answer', () => {
     // THIRD-PARTY-NOTICES.md is in `extraResources`, so `npm run package` embeds it into every
-    // installer. The shipping-set half cannot run here (warm caches), but `--verify-document`
-    // can, so this path is checked by that one rather than left unchecked. It has to run BEFORE
-    // electron-builder, or it verifies a file that has already been packaged.
+    // installer. `--verify-document` reads only committed files, so this path is checked by that
+    // half rather than left unchecked. It has to run BEFORE electron-builder, or it verifies a file
+    // that has already been packaged.
     const packageScript = script('package');
     expect(packageScript).toContain('verify:third-party-notices:document');
     expect(packageScript.indexOf('verify:third-party-notices:document')).toBeLessThan(

@@ -52,16 +52,21 @@
     <PackageReference Include="ParatextData" Version="$(ParatextPackageVersion)" />
     <PackageReference Include="StreamJsonRpc" Version="2.22.11" />
     <!--
-      Suppressed, not consumed. SIL.Core targets netstandard2.0 and declares System.Net.Http 4.3.4,
-      which is newer than the 4.3.0 the .NET 8 shared framework supersedes - so without this the
-      package's netstandard1.6 assembly wins over the framework's and lands in the publish output.
-      ExcludeAssets="all" keeps the framework's implementation and drops the shim.
+      Suppressed, not consumed, and the suppression is about the LEGAL ARTIFACT rather than the
+      binary. SIL.Core targets netstandard2.0 and declares System.Net.Http 4.3.4 transitively, which
+      is past the 4.3.0 the .NET 8 shared framework supersedes. The published assembly is the
+      framework's either way - this project publishes SelfContained, so conflict resolution picks by
+      assembly version and 8.0.0.0 beats 4.x - but project.assets.json still resolves the package's
+      own runtimes/unix/lib/netstandard1.6 asset, and that assets file is what
+      .erb/scripts/third-party-notices derives the .NET closure from. Without ExcludeAssets="all" the
+      package gets a row in THIRD-PARTY-NOTICES.md; with it, the assets file records `_._`
+      placeholders and the closure does not see it.
 
-      This is a licensing decision as much as a technical one. The package carries the pre-MIT
-      "MICROSOFT .NET LIBRARY" terms rather than an SPDX expression, and those terms include an
-      "Excluded License" clause whose effect on an AGPL binary nobody has determined. Not shipping
-      it removes the question rather than answering it. System.Net.WebSockets 4.3.0 is the same
-      shape and must not be referenced either, for the same reason (see LICENSING.md).
+      That distinction is the whole point. The package carries the pre-MIT "MICROSOFT .NET LIBRARY"
+      terms rather than an SPDX expression, and those terms include an "Excluded License" clause
+      whose effect on an AGPL binary nobody has determined. Disclosing a package whose assembly does
+      not ship would raise that question over nothing. System.Net.WebSockets 4.3.0 is the same shape
+      and must not be referenced for its assets either, for the same reason (see LICENSING.md).
     -->
     <PackageReference Include="System.Net.Http" Version="4.3.4" ExcludeAssets="all" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.9" />

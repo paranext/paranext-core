@@ -22,14 +22,9 @@ This repository contains the core Platform.Bible software (Electron client, exte
 
 ## Users
 
-This software is not yet ready for users. We'll update here with where you can install it when it is ready.
-
-If you would still like to try it, you can [download early releases here on GitHub](https://github.com/paranext/paranext-core/releases).
+This repository does not distribute a built application. The application released to users is **Paratext 10**, which is built from this source in [`paranext/paratext-10-studio`](https://github.com/paranext/paratext-10-studio); see [LICENSING.md](./LICENSING.md) for how the source and the released binary are licensed. To try Platform.Bible itself, build it from source with the [developer install instructions](#developer-install) below.
 
 ### Linux Users
-
-We produce [`snap` packages](<https://en.wikipedia.org/wiki/Snap_(software)>) available [on the snap store](https://snapcraft.io/platform-bible) for users to run our
-software on Linux. Once you have all the `snap` tools installed for your flavor of Linux, run `sudo snap install platform-bible` for our most recent stable build (none yet) or `sudo snap install platform-bible --channel=edge` for our most recent, pre-release build that has passed our limited, automated testing suite.
 
 To install a locally created `snap` package, run the following commands:
 
@@ -362,12 +357,11 @@ These steps will walk you through releasing a version on GitHub and bumping the 
    - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
    - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
    - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
-   - `uploadReleaseAssets`: whether to upload the release assets to [Amazon S3](https://aws.amazon.com/s3/). If false, the release will still be created in GitHub, but no assets will be uploaded to S3.
+   - `uploadReleaseAssets`: whether to upload the Windows and macOS installers to [Amazon S3](https://aws.amazon.com/s3/) for internal sharing. This is the only place the built installers go; the GitHub release itself carries no assets.
 
-4. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release.
+4. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release. The release carries no installers - it is the version tag and the generated notes, which is what a downstream build constructs its own release from.
 5. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
 6. Update the [Software Version Info](https://github.com/paranext/paranext/wiki/Software-Version-Info) page with information about this release.
-7. When appropriate, in [Snapcraft](https://snapcraft.io/platform-bible/releases), promote the newly uploaded release to the appropriate channel.
 
 ### Configure uploading release assets to Amazon S3
 

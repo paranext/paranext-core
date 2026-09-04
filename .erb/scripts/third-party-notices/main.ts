@@ -39,6 +39,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import JSON5 from 'json5';
 
+import { compareStrings } from './compare';
 import { identify } from './identify';
 import { copyrightNoticeIn } from './credit';
 import { snapCopyrightText, vendoredLicenseText } from './vendored-text';
@@ -438,6 +439,27 @@ export function alwaysListedPackages(
         'module graph, which needs no such instrument; remove the flag, or fix the derivation if ' +
         'a package that ships is missing from it.',
     );
+
+  // The set difference `missingDirectReferences` cannot make. `alwaysList` synthesises a row from
+  // the POLICY KEY, so the row survives the reference that justified it: delete the csproj's
+  // `Microsoft.ICU.ICU4C.Runtime` line and the document keeps asserting the Windows installer
+  // redistributes it, indefinitely and with every gate green - `stalePolicyEntries` exempts
+  // `alwaysList` entries by name, and `missingDirectReferences` only looks at references that are
+  // present. Unlike "is it in the restore closure?", this question is answerable on any machine.
+  const referenced = new Set(directReferences.map((reference) => reference.id.toLowerCase()));
+  const unreferenced = alwaysListed
+    .map(([key]) => key.slice('nuget:'.length))
+    .filter((name) => !referenced.has(name.toLowerCase()))
+    .sort(compareStrings);
+  if (unreferenced.length)
+    throw new Error(
+      `notices-policy.json sets "alwaysList" for ${unreferenced.join(', ')}, but ` +
+        `${DOTNET_PROJECT} has no PackageReference for it. "alwaysList" exists to list a package ` +
+        'no restore on this machine resolves - not one the project stopped referencing, which the ' +
+        'document would go on claiming the installer ships. Remove the override, or restore the ' +
+        'reference.',
+    );
+
   return alwaysListed
     .map(([key]) => key.slice('nuget:'.length))
     .filter((name) => !present.has(name.toLowerCase()))

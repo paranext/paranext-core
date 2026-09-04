@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { compareStrings } from './compare';
+import { codeOf } from './read-json';
 import type { NamedText } from './types';
 
 /**
@@ -102,7 +103,14 @@ export function normalizeText(text: unknown): string {
 }
 
 /**
- * Reads a text file, or `undefined` when it cannot be read.
+ * Reads a text file, or `undefined` when the file does not exist.
+ *
+ * ENOENT is an answer - the package ships no such file - and nothing else is. EACCES, EMFILE and
+ * ELOOP describe a file that may well exist and hold a NOTICE this document is obliged to
+ * reproduce, so they propagate rather than being reported as absence: a permissive verdict drawn
+ * from absent information is what drops an Apache-2.0 section 4(d) notice at exit 0, from the one
+ * module whose job is finding the files that discharge it. `readJsonFile` in `read-json.ts` makes
+ * the same distinction for structural reads.
  *
  * Line endings are normalized to LF: some upstream files are CRLF, and git normalizes them on
  * commit. Without this the committed artifact would never match freshly generated output, so it
@@ -111,8 +119,9 @@ export function normalizeText(text: unknown): string {
 export function readTextFile(file: string): string | undefined {
   try {
     return normalizeText(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return undefined;
+  } catch (error: unknown) {
+    if (codeOf(error) === 'ENOENT') return undefined;
+    throw error;
   }
 }
 
@@ -132,8 +141,11 @@ function readPackageFiles(
   let entries;
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return [];
+  } catch (error: unknown) {
+    // Same distinction as `readTextFile`: a directory that is not there ships no license or notice
+    // files, while one that cannot be read may hold every one of them.
+    if (codeOf(error) === 'ENOENT') return [];
+    throw error;
   }
   return (
     entries

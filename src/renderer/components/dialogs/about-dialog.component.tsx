@@ -11,7 +11,7 @@ import {
   formatReplacementStringToArray,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { Fragment, ReactNode, useCallback, useId, useMemo } from 'react';
+import { Fragment, ReactNode, useCallback, useId, useMemo, useState } from 'react';
 import packageInfo from '../../../../release/app/package.json';
 import { resolveLicenseDisplay } from './about-dialog.data';
 import './about-dialog.component.scss';
@@ -42,6 +42,7 @@ const STRING_KEYS: LocalizeKey[] = [
   '%about_db_ip_attribution_intro%',
   '%about_db_ip_attribution_terms%',
   '%about_ariaLabel_opensTermsOfService%',
+  '%about_error_couldNotOpenTermsOfService%',
 ];
 
 const defaultAppInfo: AppInfo = {
@@ -62,6 +63,7 @@ function AboutDialog() {
       '%about_db_ip_attribution_intro%': dbIpAttributionIntro,
       '%about_db_ip_attribution_terms%': dbIpAttributionTerms,
       '%about_ariaLabel_opensTermsOfService%': opensTermsOfServiceLabel,
+      '%about_error_couldNotOpenTermsOfService%': couldNotOpenTermsOfService,
     },
   ] = useLocalizedStrings(STRING_KEYS);
 
@@ -87,10 +89,18 @@ function AboutDialog() {
   );
 
   const opensTermsOfServiceId = useId();
+  const [didOpenTermsOfServiceFail, setDidOpenTermsOfServiceFail] = useState(false);
 
+  // The command reports an open it could not perform, and this is the only place a user can be told
+  // about it: the main process reveals the document in the file manager as a fallback, but on a
+  // stock Windows machine with no Markdown handler that leaves the user looking at a file manager
+  // they did not ask for, and inside the snap - whose confinement does not reach
+  // `org.freedesktop.FileManager1` - the button appears to do nothing at all.
   const openTermsOfService = useCallback(() => {
+    setDidOpenTermsOfServiceFail(false);
     sendCommand('platform.openTermsOfService').catch((e) => {
       logger.warn(`About dialog could not open the Terms of Service. ${e}`);
+      setDidOpenTermsOfServiceFail(true);
     });
   }, []);
 
@@ -147,6 +157,11 @@ function AboutDialog() {
             <Fragment key={`key-${index}`}>{contribution}</Fragment>
           ))}
         </p>
+        {didOpenTermsOfServiceFail && (
+          <p className="about-license-error" role="alert">
+            {couldNotOpenTermsOfService}
+          </p>
+        )}
         <p className="about-attribution">
           {formatReplacementString(copyrightFormat, { years: COPYRIGHT_YEARS })}
         </p>

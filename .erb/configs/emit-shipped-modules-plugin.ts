@@ -90,13 +90,21 @@ export function isWarmFilesystemCache(cache: webpack.Configuration['cache']): bo
     // be read. Answering "cold" there is a permissive verdict drawn from absent information, which
     // is exactly what the comment above refuses for the missing-`cacheDirectory` case: the manifest
     // would be stamped trustworthy and a module list a cache hit has shortened would go into a
-    // legal artifact. The safe answer to "is this cache warm?" when the cache cannot be read is to
-    // stop, not to guess.
-    throw new Error(
-      `could not read the webpack cache directory ${dir} to decide whether this build was served ` +
-        `from a warm cache (${error instanceof Error ? error.message : String(error)}). A warm ` +
-        'cache can under-report the modules a bundle contains, so the answer cannot be assumed.',
+    // legal artifact.
+    //
+    // Answering "warm" is the fail-closed direction and is what happens instead of throwing:
+    // `shipping-set.ts` refuses a warm-stamped manifest set and names the reason, so a notices run
+    // still stops - while a build that never generates notices is not killed. This plugin is tapped
+    // on `beforeRun` AND `watchRun` in every extension config, so throwing here would take down
+    // `npm run build` through `concurrently --kill-others-on-fail`, or end an `npm start` watch
+    // session, over a legal artifact that run was not producing.
+    console.warn(
+      `[${NAME}] could not read the webpack cache directory ${dir} to decide whether this build ` +
+        `was served from a warm cache (${error instanceof Error ? error.message : String(error)}). ` +
+        'Recording the build as warm, which refuses to certify its manifest for the notices ' +
+        'generator.',
     );
+    return true;
   }
 }
 
@@ -139,7 +147,9 @@ export class EmitShippedModulesPlugin {
     compiler.hooks.beforeRun.tap(NAME, startRun);
     compiler.hooks.watchRun.tap(NAME, startRun);
 
-    // The PARENT compilation only. A child compiler (`compilation.createChildCompiler()`) runs its
+    // The PARENT compilation only, which is what `thisCompilation` means: `createChildCompiler`
+    // copies every hook's taps to the child EXCEPT the six webpack names in its exclusion list, and
+    // `thisCompilation` is on that list while `compilation` is not. A child compiler runs its
     // own module graph that this hook never sees, and two kinds exist in webpack: one whose output
     // ships (`new Worker(new URL(…))`) and one whose output is executed at build time and thrown
     // away (`HtmlWebpackPlugin`, which compiles `src/renderer/index.ejs` to a function that emits
@@ -156,7 +166,7 @@ export class EmitShippedModulesPlugin {
     // What changes that: the first `new Worker(new URL('./x', import.meta.url))` in this codebase.
     // Its child compilation DOES ship, and it would need tapping - excluding `HtmlWebpackCompiler`
     // by the name the `childCompiler` hook passes.
-    compiler.hooks.compilation.tap(NAME, (compilation) => {
+    compiler.hooks.thisCompilation.tap(NAME, (compilation) => {
       compilation.hooks.finishModules.tap(NAME, (modules) => {
         // `Iterable<Module>`, not an array: webpack passes a Set at runtime, so `.forEach` happens
         // to work, but the declared type carries no such method. `Array.from` is what that type

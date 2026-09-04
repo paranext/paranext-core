@@ -412,7 +412,7 @@
       "license": "Proprietary — SIL Global / United Bible Societies",
       "nonSpdx": true,
       "versionIndependent": true,
-      "note": "First-party. Its nuspec declares no license and its copyright notice reserves all rights, but it is code of the same SIL Global / United Bible Societies team that owns Platform.Bible, published from a different product release on the same internal feed as ParatextData. Listed here because it ships in the packaged application, not because it carries a third-party disclosure obligation."
+      "note": "First-party. Its nuspec declares no license and its copyright notice reserves all rights, but it is code of the same SIL Global / United Bible Societies team that owns Platform.Bible, published from a different product release. Listed here because it ships in the packaged application, not because it carries a third-party disclosure obligation."
     },
     "nuget:Microsoft.ICU.ICU4C.Runtime": {
       "license": "Unicode-DFS-2016",

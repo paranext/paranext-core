@@ -99,7 +99,31 @@ function normalizeDetectedId(id: string): string {
 export function loadPolicy(file: string): Policy {
   const policy = readJsonFile<Policy>(file, 'the notices policy');
   assertOneExceptionPerPackage(policy);
+  assertLicenseTextsAreNuget(policy);
   return policy;
+}
+
+/**
+ * Refuses a `licenseTexts` key under any ecosystem but `nuget:`.
+ *
+ * `vendoredLicenseText` is consulted only by `nugetVerdict`, which always builds the key as
+ * `nuget:<name>`, so an entry under any other prefix is a legal text checked in, hash-pinned and
+ * reproduced nowhere. `stalePolicyEntries` cannot report it either - the package it names is in the
+ * shipping set, so the entry looks used. Refusing it where the policy is READ puts the failure at
+ * the moment someone edits the file, which is when they can act on it; a guard at the consumer can
+ * never fire, because the consumer only ever asks about NuGet packages.
+ */
+function assertLicenseTextsAreNuget(policy: Policy): void {
+  const wrongEcosystem = Object.keys(policy.licenseTexts || {})
+    .filter((key) => !key.startsWith('nuget:'))
+    .sort(compareStrings);
+  if (wrongEcosystem.length)
+    throw new Error(
+      `the notices policy holds vendored license texts for ${wrongEcosystem.join(', ')}, but only ` +
+        'NuGet packages read that table - an npm package that ships no license file has its ' +
+        'declared identifier\u2019s canonical SPDX text reproduced instead. Remove the entry, or ' +
+        'say which reader should consult it.',
+    );
 }
 
 /**
@@ -1210,14 +1234,21 @@ export function classify({
   const pinned = objectingFile || best || anyText;
   const sha256 = pinned?.sha256;
 
-  // All three describe ONE file, so they move together. Recording `best`'s identifier beside the
-  // objecting file's hash would leave a block message naming a permissive license and an exception
-  // pinned to a restrictive text - and `exceptionRemedy` reads `detected` to decide whether an
-  // exception could clear the block at all.
+  // `matchedFile` and `textSha256` describe ONE file, so they are both taken from `pinned`.
+  // Recording `best`'s filename beside the objecting file's hash would leave a block message naming
+  // a permissive license and an exception pinned to a restrictive text - and taking the hash from
+  // `anyText` while leaving the filename undefined is what makes `diffLock`'s most important
+  // message read "Inspect undefined before accepting", for exactly the packages whose license text
+  // nothing identified and which therefore need a hand review.
+  //
+  // `detected` is the one that legitimately does not follow: on the `anyText` branch nothing
+  // identified the text, so there is no identifier to record. `exceptionRemedy` reads `detected` to
+  // decide whether an exception could clear the block at all, and an invented id would answer that
+  // question wrongly.
   const common = {
     declared: declaredField,
     detected: objectingFile ? objectingFile.spdxId : best?.spdxId,
-    matchedFile: objectingFile ? objectingFile.filename : best?.filename,
+    matchedFile: pinned?.filename,
     textSha256: sha256,
   };
 

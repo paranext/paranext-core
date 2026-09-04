@@ -74,7 +74,7 @@ function statesTerms(name: string): boolean {
  * all three wholesale, so a notice file dropped in any of them reaches every installer with no
  * webpack module compiled for it and nothing else in this pipeline able to see it.
  */
-const STATIC_TREES = ['assets', 'public', 'contributions'];
+export const STATIC_TREES = ['assets', 'public', 'contributions'];
 
 /**
  * Extensions whose whole source directory `copy-webpack-plugin` copies, not just the static trees.
@@ -82,7 +82,7 @@ const STATIC_TREES = ['assets', 'public', 'contributions'];
  * `extensions/src/evil` is copied wholesale so that its deliberately-misbehaving source ships as
  * source. Reading only `STATIC_TREES` under it would miss a notice file anywhere else in the tree.
  */
-const WHOLESALE_COPIED_EXTENSIONS = ['evil'];
+export const WHOLESALE_COPIED_EXTENSIONS = ['evil'];
 
 /**
  * Every tree `electron-builder.json5` packs verbatim, so every tree this gate has to read.

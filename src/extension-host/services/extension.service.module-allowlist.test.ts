@@ -91,8 +91,9 @@ describe('extension host require shim allowlist', () => {
  * from either host's list: both supply first-party and third-party modules side by side. An
  * additional permission can only carve out rights in a work its grantors hold copyright in, so
  * React and Node's built-ins are supplied but ungranted - they carry their own terms, and no
- * permission from this project is needed to use them. `@sillsdev/scripture` is included as SIL's
- * own.
+ * permission from this project is needed to use them. `@sillsdev/scripture` is in that same group:
+ * SIL's, but separately published under the MIT License and not this project's to relicense, so an
+ * additional permission over it would grant an extension author nothing MIT does not already.
  *
  * Adding a FIRST-PARTY module to either host widens the published grant and must be accompanied by
  * a new version of `LICENSE-EXCEPTION.md`; adding a third-party one does not. That is the decision
@@ -103,7 +104,6 @@ const FIRST_PARTY_SUPPLIED_MODULES = [
   '@papi/core',
   '@papi/frontend',
   '@papi/frontend/react',
-  '@sillsdev/scripture',
   'platform-bible-react',
   'platform-bible-utils',
 ];
@@ -174,6 +174,7 @@ describe('the Extension Interface the license exception grants', () => {
     // Everything the hosts supply that the grant does not name must be a module this project does
     // not own - Node built-ins and React. Each is listed so that adding one is a deliberate line.
     expect(ungranted.sort()).toEqual([
+      '@sillsdev/scripture',
       'crypto',
       'react',
       'react-dom',

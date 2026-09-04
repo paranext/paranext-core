@@ -1,15 +1,20 @@
 import * as fsPromises from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import * as prettier from 'prettier';
 import { BUNDLED_EXTENSION_LICENSE, decideLicenseStamp, stampExtensionLicense } from './git.util';
 import type { DeclaredLicense } from './git.util';
 
-const declared = (file: string, license: unknown): DeclaredLicense => ({
+const declared = (
+  file: string,
+  license: unknown,
+  licenseIsDeliberate?: unknown,
+): DeclaredLicense => ({
   file,
   present: true,
   license,
+  licenseIsDeliberate,
 });
 const absent = (file: string): DeclaredLicense => ({ file, present: false, license: undefined });
 
@@ -18,6 +23,19 @@ describe('decideLicenseStamp', () => {
     expect(
       decideLicenseStamp([declared('package.json', 'MIT'), declared('manifest.json', 'MIT')]),
     ).toEqual({ stamp: true });
+  });
+
+  it('leaves a folder whose MIT is declared deliberate', () => {
+    // The value alone cannot tell the template's untouched default from a decision: LICENSING.md
+    // requires a runtime-linked package to stay MIT so third-party extension authors do not inherit
+    // AGPL obligations, and an extension in that position would otherwise be relicensed by a
+    // routine template merge, in a commit whose subject is "update from templates".
+    const decision = decideLicenseStamp([
+      declared('package.json', 'MIT', true),
+      declared('manifest.json', 'MIT'),
+    ]);
+    expect(decision.stamp).toBe(false);
+    expect(decision.reason).toContain('licenseIsDeliberate');
   });
 
   it('stamps a folder whose files declare nothing yet', () => {
@@ -74,9 +92,15 @@ describe('decideLicenseStamp', () => {
 });
 
 describe('stampExtensionLicense', () => {
+  const created: string[] = [];
+  afterAll(() =>
+    Promise.all(created.map((dir) => fsPromises.rm(dir, { recursive: true, force: true }))),
+  );
+
   /** A throwaway repository root: a root `LICENSE`, and one extension folder under it. */
   async function makeTree(rootLicense: string, manifest: Record<string, unknown>) {
     const root = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'stamp-license-'));
+    created.push(root);
     await fsPromises.writeFile(path.join(root, 'LICENSE'), rootLicense, 'utf8');
     const folder = 'extensions/src/example';
     await fsPromises.mkdir(path.join(root, folder), { recursive: true });

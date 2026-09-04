@@ -52,9 +52,17 @@ describe('clean', () => {
   });
 
   it('removes the build output a packaging build must not inherit', () => {
-    const folders = printedFolders().join('\n');
-    ['dist', 'build', 'dll', `extensions${path.sep}dist`].forEach((expected) => {
-      expect(folders).toContain(expected);
+    // Path-anchored membership over the ARRAY, not a substring search over the joined output:
+    // `toContain('dist')` on one string is satisfied by `extensions/dist`, so the packaging output
+    // this test is named for could drop out of `clean.ts` without failing anything.
+    const folders = printedFolders();
+    [
+      `release${path.sep}app${path.sep}dist`,
+      `release${path.sep}build`,
+      `.erb${path.sep}dll`,
+      `extensions${path.sep}dist`,
+    ].forEach((expected) => {
+      expect(folders.some((folder) => folder.endsWith(expected))).toBe(true);
     });
   });
 
