@@ -1211,10 +1211,11 @@ function readAppGlobalBackup(): AppGlobalBackup | undefined {
  * Empty the main process's app-global storage for the duration of a run, parking the developer's
  * own values so they can be put back.
  *
- * The whole directory rather than a list of keys: what must not carry over is "app-global state the
- * main process persists outside the isolated user-data directory", and a named list silently stops
- * covering that the next time a service starts persisting something. Emptying it means a future
- * spec that seeds main-side storage before launch fails visibly instead of leaking quietly.
+ * Every entry {@link storedKeyNames} enumerates, rather than a fixed list of keys: what must not
+ * carry over is "app-global state the main process persists outside the isolated user-data
+ * directory", and a fixed list would silently stop covering that the next time a service starts
+ * persisting something. Parking and emptying every enumerated entry means a future spec that seeds
+ * main-side storage before launch fails visibly instead of leaking quietly.
  *
  * Only the FIRST pin writes a backup, so a relaunch chain (which pins once and reads the state its
  * own earlier launch wrote) cannot overwrite the developer's values with test ones.
