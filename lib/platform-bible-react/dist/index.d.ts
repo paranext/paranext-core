@@ -2396,7 +2396,24 @@ export declare function PopoverPortalContainerProvider({ container, children, }:
 	container: HTMLElement | null;
 	children: React$1.ReactNode;
 }): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Popover */
+/**
+ * @inheritdoc Popover
+ *
+ * By default the content is capped to the height Radix has available on whichever side it lands
+ * (`max-h-(--radix-popover-content-available-height)`) and scrolls whatever does not fit
+ * (`overflow-y-auto`, plus `overflow-x-hidden` so the y-axis scroller cannot promote the x-axis to
+ * `auto`). Two consequences to know about:
+ *
+ * - The content is a scroll container, so a floating child that is not portaled out gets clipped
+ *   rather than overflowing. Portal nested popovers in with `PopoverPortalContainerProvider`.
+ * - A child whose own `overflow` is not `visible` shrinks inside the capped flex column on its
+ *   own, because that gives it an automatic minimum size of 0 — a `Command`/`CommandList` pair
+ *   keeps its search input in place and scrolls the list with no extra classes. A child that does
+ *   NOT manage its own overflow is sized by its content instead, so it holds the column open and
+ *   the outer scroller here is what makes the overspill reachable.
+ *
+ * Pass `className` to override any of these.
+ */
 export declare function PopoverContent({ className, align, sideOffset, style, ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Popover */
 export declare function PopoverAnchor({ ...props }: React$1.ComponentProps<typeof PopoverPrimitive.Anchor>): import("react/jsx-runtime").JSX.Element;

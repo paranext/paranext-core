@@ -31,6 +31,10 @@ describe('PopoverContent', () => {
     expect(renderOpenPopover()).toContain('tw:overflow-y-auto');
   });
 
+  it('hides horizontal overflow so the y-axis scroller cannot promote the x-axis to `auto`', () => {
+    expect(renderOpenPopover()).toContain('tw:overflow-x-hidden');
+  });
+
   it('lets a call site override the defaults', () => {
     const className = renderOpenPopover('tw:max-h-[70vh] tw:overflow-y-visible');
 

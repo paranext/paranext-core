@@ -1101,13 +1101,7 @@ export function Find({
                 <ChevronDown className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground" />
               </Button>
             </PopoverTrigger>
-            {/* overflow-x-hidden keeps PopoverContent's default y-axis scroller from computing the
-                x-axis to `auto` and adding a second, horizontal scrollbar. */}
-            <PopoverContent
-              align="start"
-              className="tw:w-auto tw:overflow-x-hidden tw:p-3"
-              collisionPadding={8}
-            >
+            <PopoverContent align="start" className="tw:w-auto tw:p-3" collisionPadding={8}>
               <ScopeSelector
                 scope={scope}
                 availableScopes={['chapter', 'book', 'selectedBooks']}
