@@ -34,7 +34,7 @@ import {
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
-import { RetryableErrorView, LoadingView } from './panel-state-views.component';
+import { PanelRetryableErrorView, LoadingView } from './panel-state-views.component';
 import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
@@ -534,7 +534,7 @@ export function ModelTextPanel({
   // (the usual first-run cause), hint at the connection.
   if (installFailed) {
     return (
-      <RetryableErrorView
+      <PanelRetryableErrorView
         message={localize(
           localizedStrings,
           isOnline

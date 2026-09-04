@@ -72,6 +72,10 @@ function renderContent(overrides: Partial<Parameters<typeof ShareLayoutDialogCon
         initialCommentaryResources={[]}
         allResources={ALL_RESOURCES}
         isResourcesLoading={false}
+        hasResourcesError={false}
+        onRetryResources={vi.fn()}
+        areDownloadsUnavailable={false}
+        hiddenResourceCount={0}
         resourcePickerLocalizedStrings={{}}
         localizedStrings={{}}
         onConfirm={onConfirm}
@@ -185,6 +189,29 @@ describe('ShareLayoutDialogContent', () => {
     expect(result.scriptureResources).not.toContainEqual(
       expect.objectContaining({ id: 'esv-uid' }),
     );
+  });
+
+  // This dialog embeds the picker twice — the per-tab manage popover and the model-text popover —
+  // so a failed catalog fetch has to reach both. Wiring only one leaves the other reporting the
+  // failure as an empty catalog.
+  it('reports a failed catalog fetch in the manage popover instead of claiming there are no results', () => {
+    renderContent({ allResources: [], hasResourcesError: true });
+
+    const [manageButton] = screen.getAllByText(
+      '%shareLayoutDialog_manageScriptureResources_label%',
+    );
+    fireEvent.click(manageButton);
+
+    expect(screen.getByText('%resourcePicker_load_error%')).toBeInTheDocument();
+    expect(screen.queryByText('%resourcePicker_no_results%')).not.toBeInTheDocument();
+  });
+
+  it('reports a failed catalog fetch in the model-text popover too', () => {
+    renderContent({ allResources: [], hasResourcesError: true, initialModelText: undefined });
+
+    fireEvent.click(screen.getByText('%shareLayoutDialog_modelText_none%'));
+
+    expect(screen.getByText('%resourcePicker_load_error%')).toBeInTheDocument();
   });
 
   it('closes the manage popover when its close button is clicked', () => {
