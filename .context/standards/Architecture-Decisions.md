@@ -3046,3 +3046,174 @@ step, no automation. Just a record.
   becomes primary later — PT-4278's window-manager service is the durable answer for that.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
+
+## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
+
+- **Date:** 2026-08-26
+- **Status:** Superseded by adr-durable-window-ids. Of this entry's three headline claims, "minted
+  by main" and "never reused" still hold; **"numeric on every surface" does not** — ids are GUID
+  strings. Two decisions in the body are also reversed: ids are no longer minted fresh on every
+  launch, and with that the slot indirection described under "Per-window renderer state moves off
+  the window id and onto the slot" and "State whose slot has left the structure is pruned" is gone.
+  Non-reuse survives but stopped being the interesting property: a durable id answers "which window
+  was this", which is the question the slot existed to answer. Read this entry as the reasoning of
+  2026-08-26, not as current guidance — the Alternatives below in particular reject an approach that
+  was subsequently adopted, over blockers that adr-durable-window-ids removed rather than dismissed.
+- **Context:** Every window-id surface exported Electron's `BrowserWindow.id`. Electron assigns
+  those per session and hands the same number to a later window, so every mention of a window id
+  carried a "runtime-only, reused, never persist" caveat, and several behaviours existed only to
+  defend against reuse — the per-window mark cleanup in `removeWindow`, and the refusal to cache a
+  resolved shard in `getWindowServiceShard`. The ids were also two shapes at once: `globalThis.windowId`
+  is a string because it arrives as a URL parameter, while `targetWindowId`, `WindowSummary.windowId`,
+  every wire schema and all of main are numbers. The two shapes met in exactly one place, where a
+  tab menu stringified the number to compare it against the string.
+- **Decision:** Main mints window ids from its own counter and persists the counter, so an id is
+  never handed out twice — across launches as well as within one. `trackedWindows` in
+  `window-state.service.ts` is the one map from platform id to `BrowserWindow`, and `BrowserWindow.fromId`
+  is no longer used to resolve one. The platform id **replaces** Electron's on the PAPI rather than
+  joining it: one namespace, main translating internally. The id is a **number** on every surface,
+  which makes `globalThis.windowId` a number rather than a string — the renderer parses the URL
+  parameter once at the boundary, which is what `URL_PARAMETERS[WINDOW_ID]`'s `kind: 'integer'`
+  already declares and nothing consulted.
+- **Alternatives:** Keep `globalThis.windowId` a string and change only the minting — rejected: it
+  is the cheapest option and leaves the split in place, with one surface disagreeing with the two
+  public ones, with main, and with every wire schema, bridged only by a template literal at a single
+  comparison site. Make the id a string everywhere — rejected on two hard blockers: the move
+  subsystem's `MoveWebViewTarget = number | 'new'` discriminates on number-versus-string-literal, so
+  a string id makes `'new'` a possible id and collapses the union; and `getServiceShardWindowId`
+  returns `undefined` for anything that is not a number, so a half-typed build would route nothing
+  while looking healthy, with only a `logger.warn`. An opaque or uuid id — rejected: three regexes
+  require digits (`/-w\d+$/`, the prefixed dock-layout key, `Number.isInteger` in
+  `getServiceShardAttributes`) and two tie-breaks require creation order. Joining the platform id
+  alongside Electron's — rejected by the lead dev; two namespaces is the thing being removed.
+- **Consequences:** A monotonic counter preserves the creation-order property that the two
+  `a.windowId - b.windowId` tie-breaks and the e2e page sort rely on, so those keep working for the
+  reason they always assumed rather than by luck. Truthiness tests on a window id become wrong —
+  `if (!globalThis.windowId)` in `getWindowService` distinguishes "renderer" from "extension host",
+  and a numeric `0` is falsy, so identity checks must compare against `undefined`; the counter also
+  starts at 1 so no window ever holds 0. Data already on disk is keyed by the old ids — per-window
+  `localStorage` prefixes, `-w{id}` suffixes inside saved layouts, and the legacy prefixed
+  dock-layout keys — so this is a migration, not only a swap. The reuse-defence code may now be
+  simplified, but deliberately: `removeWindow`'s cleanup stays correct as hygiene even though its
+  stated reason is gone. Positional identity for persisted layout slots (PT-4285) is untouched: a
+  never-reused id answers "has this number been handed out", not "which window was this".
+
+  **Per-window renderer state moves off the window id and onto the slot.** Web view state was
+  keyed in `localStorage` by window id, which worked only because Electron's ids restarted at 1
+  each launch, so the same window usually found its own blob. Once an id is never reused, a
+  restored window's id never matches the one that saved its state, and every launch would start
+  empty. Each entry in the persisted structure therefore carries a stable `slotId`, minted when
+  the slot is created — and written to the file by the load that minted it — and never changed.
+  Main settles a window's slot when it tracks the window, ahead of the window's first load, and
+  hands it over on the renderer URL beside the window id: not in the layout-get answer, which
+  Simple mode never asks for and which a routed move into a brand-new window can outrun. The
+  renderer's boot module records it before anything else runs, so per-window storage works from
+  the first render in every interface mode. Storage is keyed by that. It is deliberately not the
+  entry's list position: `handleWindowRemoved` splices entries, so a position can silently come to
+  mean a neighbouring slot's state. This does not reopen PT-4285's decision — position still
+  decides which saved layout and bounds a restored window gets, and the id still names one runtime
+  window rather than a cross-restart identity (PT-4285's sense); what changed is that the id can
+  no longer double as the storage key by coincidence. The blobs already on disk under the old
+  `${windowId}_web-view-state` keys cannot be mapped to slots (nothing recorded the pairing, and
+  windows were never created in slot order), so they are removed on first use and per-tab UI
+  state resets once; layouts, bounds and open tabs live in the structure and are untouched, and so
+  is every other digit-prefixed key — the pre-multi-window dock layout is still read from its
+  window-id-prefixed key, and the renderer's `localStorage` is shared with every web view iframe.
+  The unprefixed blob that predates even the window-id scheme goes with them, because that scheme
+  copied it and left it in place: sweeping only the newer keys would let the legacy migration hand
+  a window state older than the state just dropped, turning a one-time reset into a silent
+  rollback. Existing structures get a `slotId` minted per entry on first load, and every mint —
+  on load, on the legacy startup window, on a window opened mid-session — writes the structure,
+  since an id that exists only in memory orphans whatever the renderer stored under it if the
+  session ends before anything else writes.
+
+  **State whose slot has left the structure is pruned, and the main process decides what has
+  left.** A slot id is never reissued, so a blob under a departed slot can never be read again;
+  under the window-id scheme the key set stayed bounded only because Electron reused ids and a
+  later window overwrote the blob. Each renderer therefore asks main once, at startup, which of
+  the slot ids it actually holds state for no longer have an entry (`windowLayout:filterDeadSlots`)
+  and drops those. Asked rather than worked out locally on two grounds: only main holds the
+  structure, and a renderer filtering against a snapshot could delete the state of a window created
+  while that snapshot was in flight, whereas an answer about ids the renderer already holds cannot
+  name a slot that did not exist when it asked. A process with no slots loaded answers "none", so a
+  caller can never be told that everything is dead.
+- **Source:** PT-4464; lead dev's review of PR #2670 (2026-08-25), item 11. Surface inventory
+  measured against the top of the multi-window stack.
+
+## adr-durable-window-ids: Window ids are durable across a restart; the separate persisted-layout "slot" indirection is removed
+
+- **Date:** 2026-08-28
+- **Status:** Accepted
+- **Context:** `adr-platform-minted-window-ids` made ids never-reused but still minted fresh on
+  every launch, so a restored window's id never matched the one that had saved its state. That
+  forced a second identity per window — a `slotId` on the persisted layout entry, handed to the
+  window on a dedicated `WINDOW_SLOT_ID_QUERY_PARAMETER` alongside the ordinary window id, with its
+  own dead-id sweep (`windowLayout:filterDeadSlots`) and its own vocabulary throughout
+  `local-storage.service.ts`, `window-scoped-web-view-ids.util.ts`, and the web view service shard.
+  Two ids naming the same window is exactly the kind of split `adr-platform-minted-window-ids`
+  removed for Electron's id versus the platform's; here it was reintroduced for a reason (id reuse)
+  that a durable id removes at the source. This decision also reverses
+  `adr-platform-minted-window-ids`'s numeric-id decision, which the same PT-4464 work had already
+  carried out a step earlier. That entry rejected an opaque or uuid id over four concrete blockers,
+  and each was removed deliberately rather than found to be untrue. `MoveWebViewTarget` was
+  `number | 'new'`, discriminating a numeric id from a string literal, so a string id would have
+  made `'new'` a possible id and collapsed the union — it is now a tagged union discriminating on a
+  `kind` field, so no id value can collide with `'new'` whatever its type. `getServiceShardWindowId`
+  answered `undefined` for anything non-numeric, so a half-typed build would have routed nothing
+  while looking healthy — `getServiceShardAttributes` now throws on a non-string, moving that
+  failure from silent-at-routing to loud-at-registration. The digit-requiring matchers were
+  retargeted at the GUID shape, and the two tie-breaks that needed `a.windowId - b.windowId` to be
+  arithmetic now read creation order from `getWindowCreationRank` off the creation-ordered window
+  list, which is what they always meant.
+- **Decision:** `mintWindowId` (`window-state.service.ts`) mints a random GUID instead of a
+  counter value, and `addWindow` accepts an optional `existingId` — supplied only when a window is
+  restoring a persisted entry, in which case `main.ts`'s `createWindow` passes
+  `restoreInfo.entry.windowId` rather than letting a fresh one be minted. The persisted entry's own
+  identity field is renamed `slotId` → `windowId` (`WindowLayoutEntry`,
+  `window-layout-persistence.model.ts`): it no longer names a second concept, it IS the window's own
+  durable id. The renderer's `globalThis.windowId` (already on the URL as `WINDOW_ID`) is therefore
+  both the id a restored window is given and the key its per-window storage
+  (`local-storage.service.ts`) uses directly — `WINDOW_SLOT_ID_QUERY_PARAMETER`, `setWindowSlotId`,
+  `getSlotIdOrThrow` and the module-level `windowSlotId` are deleted outright, not merely renamed.
+  `FILTER_DEAD_WINDOW_SLOTS_REQUEST_TYPE` becomes `FILTER_DEAD_WINDOW_IDS_REQUEST_TYPE` (wire name
+  `filterDeadWindowIds`) and answers about window ids instead of slot ids, on the same reasoning as
+  before. `FileSlot.windowId` in `window-layout-persistence.service.ts` — which live window
+  currently occupies a slot, separate from the slot's own persisted identity — is deliberately left
+  alone: collapsing it into the entry is a distinct, separately reviewable step this decision does
+  not take.
+- **Alternatives:** Keep the slot indirection and only stop re-minting the window id on restore —
+  rejected: it still carries two ids per window, one of them (`slotId`) doing nothing a durable
+  window id would not do itself, for the sole remaining reason of the old reuse defence this removes.
+  Collapse `FileSlot.windowId` into the entry at the same time, so a slot's occupancy and its
+  identity are one field — deferred, not rejected: it changes a second, independent axis (whether a
+  preserved entry with no live window can be told apart from one that has one) that deserves its own
+  review rather than riding in on an id-durability change.
+- **Consequences:** The matchers that recognize a *live* window id by requiring digits
+  (`WINDOW_SUFFIX_PATTERN` in `window-scoped-web-view-ids.util.ts`, the per-window storage prune in
+  `local-storage.service.ts`) now take the GUID shape
+  (`WINDOW_ID_SHAPE_PATTERN_SOURCE`, `shared/utils/util.ts`) — deliberately shape-only rather than
+  RFC-4122-strict, since the first builds to persist a window id minted it with `newGuid()`
+  (`platform-bible-utils`), which leaves the variant nibble unconstrained, and profiles carrying
+  those ids are in use. The suffix matcher takes the numeric shape **as well**, because a layout
+  saved by a build that scoped by numeric window id is still on disk and its ids have to strip;
+  the storage prune deliberately does not, because it decides what to delete from storage shared
+  with every web view iframe, where a bare run of digits is a plausible prefix for a key belonging
+  to an extension. One digit-requiring matcher is deliberately
+  left alone: `PREFIXED_DOCK_LAYOUT_KEY_PATTERN` (`web-view.service-shard.ts`) is a one-way reader
+  for pre-multi-window layouts, whose keys were written by builds that scoped storage by *numeric*
+  window id, and `getLegacySavedLayout` picks the lowest such id as the newest saved layout.
+  Widening it to the GUID shape would be a bug twice over — it would make current-scheme keys look
+  like legacy ones, and its `Number(match[1])` ordering would go `NaN`. A matcher that reads only
+  historical data must keep matching the historical shape. The storage prune flips from an exclusion
+  (accept any prefix, reject all-digit ones) to a positive match, closing a real gap where an
+  extension's own `<prefix>_web-view-state` key in the shared origin storage could be swept up as a
+  dead window's. `loadWindowLayouts` tracks whether a structure was actually parsed from disk
+  (`hasStructureBeenLoaded`) and `handleFilterDeadWindowIdsRequest` gates on that instead of
+  `fileSlots.length === 0`: the legacy startup fallback (missing, unreadable, or empty structure
+  file) synchronously tracks one window — giving `fileSlots` a freshly minted entry — before any
+  renderer could ask, so the old empty-list guard never actually fired for the case it existed to
+  guard, and a transient read error would report every id a renderer already held as dead. The
+  pre-slot-era `${windowId}_dock-saved-layout` reader, its lowest-id heuristic, and the
+  `^\d+_web-view-state$` obsolete-key sweep are all untouched: they read numeric-era data no future
+  build can add to, and durability changes nothing about them.
+- **Source:** PT-4464.

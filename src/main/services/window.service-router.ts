@@ -1,7 +1,7 @@
 /**
  * Service router for the window service. Publishes a data provider under the generic
  * "platform.windowServiceDataProvider" name that forwards to the focused window's shard (e.g.
- * "platform.windowServiceDataProvider-1").
+ * "platform.windowServiceDataProvider-f81d4fae-7dec-11d0-a765-00a0c91e6bf6").
  *
  * Each renderer registers its window service shard under a window-scoped name so several windows
  * can coexist, which would otherwise leave the generic name — the one declared in `papi.d.ts` and
@@ -43,7 +43,7 @@ import { getErrorMessage, Mutex, Unsubscriber, UnsubscriberAsync } from 'platfor
  * Resolve the window service shard for a given window. Injected so the engine can be tested without
  * the Electron window plumbing that owns the real lookup.
  */
-export type GetWindowService = (windowId: number) => Promise<IWindowService | undefined>;
+export type GetWindowService = (windowId: string) => Promise<IWindowService | undefined>;
 
 /**
  * The window service shard each window registers, found by network object type and window attribute
@@ -65,15 +65,14 @@ const windowServiceShards = createServiceShardIndex<WindowServiceShard>({
  *
  * Deliberately a plain lookup rather than a caching layer, even though the main process's input
  * handlers call it on every keystroke and mouse press: the network object service already keeps
- * what it resolves, serializes concurrent lookups of the same ID behind one lock, and drops what it
+ * what it resolves, serializes concurrent lookups of the same id behind one lock, and drops what it
  * holds when the object is disposed or its window closes. A second cache of resolved providers
- * could only go stale — and because Electron reuses `BrowserWindow.id`, a stale entry would be
- * handed to the next window opened with that ID rather than merely being useless.
+ * could only go stale, and a stale entry here answers for a window that has gone.
  *
- * @param windowId The Electron BrowserWindow ID
+ * @param windowId Platform id of the window whose shard to get
  */
 export async function getWindowServiceShard(
-  windowId: number,
+  windowId: string,
 ): Promise<WindowServiceShard | undefined> {
   return windowServiceShards.getShard(windowId);
 }
@@ -107,7 +106,7 @@ export const onDidRegisterWindowServiceShard = windowServiceShards.onDidAddShard
  * that registered before the subscription is never marked ready and stays unroutable for the rest
  * of the session.
  */
-export function getWindowIdsWithServiceShard(): number[] {
+export function getWindowIdsWithServiceShard(): string[] {
   return windowServiceShards.getShardWindowIds();
 }
 
