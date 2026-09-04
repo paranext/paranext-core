@@ -79,6 +79,19 @@ function getMissingStagedDependencies(): string[] {
   return [...missing];
 }
 
+/**
+ * Whether an environment variable is set to something meaning "on".
+ *
+ * `!!process.env.X` is true for `"0"`, `"false"` and `"no"`. `CI=false` is set explicitly by
+ * several container images and CI-emulation shells, and reading it as "on" here turns the
+ * repairable fresh-clone re-run into a hard failure whose diagnosis is wrong.
+ */
+function isEnvFlagEnabled(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized !== '' && normalized !== '0' && normalized !== 'false' && normalized !== 'no';
+}
+
 function runBuildChain(): void {
   execSync('npm run postinstall:build', { stdio: 'inherit', cwd: REPO_ROOT });
 }
@@ -94,13 +107,21 @@ function postinstall(): void {
   // `npm ci` cannot repair this: it installs the closure `package-lock.json` records and never
   // re-resolves, so a second pass would arrive here with the same missing dependencies. Only an
   // `npm install` — whose lockfile change has to be committed — can.
-  if (process.env[RERUN_GUARD] || process.env.CI || process.env.npm_command === 'ci') {
+  if (
+    isEnvFlagEnabled(process.env[RERUN_GUARD]) ||
+    isEnvFlagEnabled(process.env.CI) ||
+    process.env.npm_command === 'ci'
+  ) {
     console.error(
       `\nThe staged dev packages declare dependencies that are not installed:\n\n  ${missing.join(
         '\n  ',
       )}\n\nThis means scripture-editors' dependencies changed but this repo's package-lock.json was\nnot updated to match. To fix: run \`npm install\` in this repo (with the scripture-editors\ncheckout present) and commit the package-lock.json change.\n`,
     );
-    process.exit(1);
+    // Not `process.exit`: it tears down the process synchronously, dropping anything still
+    // queued on a piped stderr (which is how npm runs lifecycle scripts) past the ~64KB buffer.
+    // The explicit `return` is what keeps the re-run below from firing on the way past.
+    process.exitCode = 1;
+    return;
   }
 
   // Fresh-clone `npm install`: staging did not exist when npm resolved the tree, so the closure was

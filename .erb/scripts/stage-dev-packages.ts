@@ -60,9 +60,22 @@ const STAGING_FORMAT = 2;
 /** Build from the current checkout state instead of the pinned revision; always rebuild. */
 const isLocalMode: boolean = process.argv.includes('--local');
 
+/**
+ * Whether an environment variable is set to something meaning "on".
+ *
+ * `!!process.env.X` is true for `"0"`, `"false"` and `"no"`, so the natural way to turn one of
+ * these flags back off instead turns it on — and the flags here choose between staging the pinned
+ * revision and staging whatever a checkout happens to hold, which is invisible once it goes wrong.
+ */
+function isEnvFlagEnabled(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized !== '' && normalized !== '0' && normalized !== 'false' && normalized !== 'no';
+}
+
 /** Resolve the pinned revision against the checkout's existing refs rather than fetching. */
 const isFetchSkipped: boolean =
-  process.argv.includes('--skip-fetch') || !!process.env.PT_SKIP_DEV_PACKAGE_FETCH;
+  process.argv.includes('--skip-fetch') || isEnvFlagEnabled(process.env.PT_SKIP_DEV_PACKAGE_FETCH);
 
 // #region Types — keep in sync with dev-packages.schema.json (both must be updated together)
 
@@ -187,6 +200,22 @@ function cloneRepoIfNeeded(repo: DevRepo): void {
  * building the wrong source with no visible error.
  */
 function verifyOrigin(repo: DevRepo, repoPath: string): void {
+  // A checkout cloned with `-o <name>`, or one whose remote was renamed during an org migration
+  // (`docs/transferring-work-from-eten-tech-foundation.md` recommends exactly that), has no
+  // `origin`. Ask before reading, so that case gets these instructions instead of a bare
+  // `Command failed: git remote get-url origin`.
+  const remotes = execSync('git remote', { cwd: repoPath, encoding: 'utf8' })
+    .split('\n')
+    .map((remote: string) => remote.trim())
+    .filter((remote: string) => remote.length > 0);
+  if (!remotes.includes('origin')) {
+    throw new Error(
+      `The ${repo.folder} repo at ${repoPath} has no remote named "origin"${
+        remotes.length > 0 ? ` (it has: ${remotes.join(', ')})` : ''
+      }.\n\nThis script fetches and resolves ${repo.revision} through \`origin\`. Point one at the expected URL:\n\n  git -C "${repoPath}" remote add origin "${repo.cloneUrl}"\n\nAlternatively, move this checkout aside and let this script clone a fresh one.\n`,
+    );
+  }
+
   const origin = execSync('git remote get-url origin', { cwd: repoPath, encoding: 'utf8' }).trim();
   // Reduce every URL form git accepts for one repo to `<host>/<path>` before comparing. Only the
   // repo identity matters here, not the transport: anyone who pushes to the dev repo has an SSH
@@ -239,7 +268,10 @@ function checkoutRevision(repo: DevRepo): void {
   } else {
     console.log(`Fetching latest in ${repo.folder}...`);
     try {
-      execSync('git fetch origin --tags', { stdio: 'inherit', cwd: repoPath });
+      // `--force` so a re-pointed tag updates instead of aborting the fetch (releases are cut as
+      // tags, and an unreleased one can be re-cut). `--prune` so a branch deleted upstream stops
+      // resolving through a stale `origin/<branch>` and silently staging last month's source.
+      execSync('git fetch origin --tags --force --prune', { stdio: 'inherit', cwd: repoPath });
     } catch (error) {
       throw new Error(
         `Could not fetch ${repo.cloneUrl} in ${repoPath}.\n\nIf you are offline and that checkout already has ${repo.revision}, stage what it has instead of fetching:\n\n  PT_SKIP_DEV_PACKAGE_FETCH=1 npm install\n\nWhatever the checkout resolves ${repo.revision} to is then what gets staged, which may be older than the remote.\n\nFetch failed with: ${error instanceof Error ? error.message : error}\n`,
@@ -552,7 +584,10 @@ function stageDevPackages(): void {
     console.error('Error: Failed to stage dev packages.');
     console.error('Error object:', error);
     if (error instanceof Error) console.error('Stack:', error.stack);
-    process.exit(1);
+    // Not `process.exit`: it tears down the process synchronously, dropping anything still
+    // queued on a piped stderr (which is how npm runs lifecycle scripts) past the ~64KB buffer.
+    // Setting the code lets the remediation text above finish writing.
+    process.exitCode = 1;
   }
 }
 
