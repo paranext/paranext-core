@@ -95,6 +95,14 @@
     // The base version needs to align with the Ubuntu runners in the GitHub Actions workflows.
     // Some things are built in the host OS, and some are built in the snap environment. If they
     // don't match, there will likely be compatibility issues.
+    //
+    // It must also align with the GNOME platform content snap mounted at $SNAP/gnome-platform,
+    // which is NOT configurable here: electron-builder's snapcraft template hardcodes that plug
+    // and config can replace a template plug entry but never rename or remove one. Renaming it is
+    // what matters -- snapd matches stored connections by plug NAME on refresh, so an attribute-only
+    // override leaves existing installs mounting the old platform. The pairing therefore lives in
+    // the `app-builder-lib` patch under `patches/`, and is enforced against this `base` value by
+    // .erb/scripts/electron-builder-snap-config.test.ts
     base: 'core22',
     category: 'Development',
     environment: {

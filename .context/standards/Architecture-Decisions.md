@@ -2943,3 +2943,58 @@ step, no automation. Just a record.
   want to react to registration state.
 - **Source:** PT-4325 (registration reminder dot), sub-task of PT-4323; retry-cost evidence from
   `requestWithRetry` and `MAX_REQUEST_ATTEMPTS` in `src/shared/data/rpc.model.ts`.
+## adr-snap-gnome-plug-renamed-by-patch: The snap's GNOME platform plug is renamed by patching electron-builder's template, not overridden in config
+
+- **Date:** 2026-09-02
+- **Status:** Accepted
+- **Context:** electron-builder's snapcraft template hardcodes a `gnome-3-28-1804` content plug
+  (Ubuntu 18.04) at `$SNAP/gnome-platform` and rewrites only `snap.base` when `base` is set, so a
+  `core22` snap mounted a bionic GNOME platform: mismatched Mesa/DRI, libdbus and GTK/Wayland, and
+  no window on launch. The template is wrong at its own default too (`base: core20` paired with the
+  bionic plug), so this is not an artefact of overriding `base`. The first fix overrode the plug's
+  `content`/`default-provider` under the template's original *name*, which config can do. It worked
+  on cold installs and failed on upgrades: snapd matches stored connections by plug **name**, so
+  `reloadConnections` found the old connection, failed the policy re-check against the new
+  `content`, logged `cannot refresh static attributes of the connection`, revived it with the old
+  attributes anyway, and auto-connected the new one alongside. Two content plugs then compete for
+  one mount point and snapd renames one aside to break the tie — arbitrarily. Measured on Ubuntu
+  22.04: 16 in-place upgrades launched 9 times and segfaulted 7, from an identical build.
+- **Decision:** Rename the plug so the old name no longer exists for snapd to match, which lets the
+  stale connection be dropped rather than revived. electron-builder's config **cannot** express
+  this — it merges config plugs into the template's map by key (`snap.plugs[plugName] =
+  plugOptions`), so it can replace a template entry but never rename or remove one, and introducing
+  a second key leaves both plugs declared. The rename therefore lives in a `patch-package` patch on
+  `app-builder-lib`'s template. `base` is the single source of truth for the pairing, enforced
+  against the patched template and the workflow runners by
+  `.erb/scripts/electron-builder-snap-config.test.ts`.
+- **Alternatives:** Override the attributes under the template's name — rejected, empirically: it
+  makes every existing install a coin flip. Declare a second, correctly-named plug in config —
+  rejected: config cannot remove the template's plug, so both ship and collide. Neutralise the
+  template's plug by retargeting it to an unused mount point and adding a correct one — rejected:
+  ships a permanent vestigial plug and relies on snapd tolerating a stale connection to a bogus
+  target. A `post-refresh` hook that disconnects the stale plug — rejected: strict confinement has
+  no `snapd-control`.
+- **Consequences:** paratext-10-studio *creates* `patches/app-builder-lib+26.7.0.patch` in this repo
+  from its own `repo-patches/paranext-core.patch`, to add mercurial snap parts to the same template.
+  A second core-owned patch at that same path would collide — the studio applies repo patches with
+  `git apply --3way`, which turns an add/add case into conflict markers written *into the patch
+  file*, leaving patch-package unable to parse it. **patch-package supports sequenced patches**
+  (`<pkg>+<version>+<NNN>+<description>.patch`), so this patch is named
+  `app-builder-lib+26.7.0+002+rename-gnome-platform-plug.patch` and occupies a different path
+  entirely. Both patches then apply in sequence to the same template — verified with the studio's
+  real patch body: the result carries the mercurial parts *and* `gnome-42-2204`. There is therefore
+  **no collision, no forced merge order and no companion studio change**. The two hunks touch
+  disjoint regions (~line 21 vs ~line 130), so apply order does not matter.
+- **Footgun:** regenerating this patch later with plain `npx patch-package app-builder-lib`, without
+  `--append`, collapses the sequence back into a single unsequenced `app-builder-lib+26.7.0.patch`
+  — which reintroduces exactly the collision the sequenced name avoids. Regenerate with `--append`,
+  or rename the output back.
+- **Also:** a renamed plug is a new content tag from the snap store's perspective, so store-granted
+  auto-connection for it should be confirmed on a published build rather than inferred from sideload
+  testing, which bypasses store assertions.
+- **Source:** PT-4496. PR #2747 review raised the upgrade path, which the original cold-install
+  diagnosis had not considered; its re-review then established the sequenced-patch mechanism above,
+  correcting an earlier belief that patch-package allows only one patch per package+version and that
+  a coordinated studio merge was therefore unavoidable. Verification report, including the 12 renamed
+  cycles against live controls and the `snap disconnect` repair for an already-broken install:
+  https://claude.ai/code/artifact/cc4c4c08-2e75-4dd5-855a-312fc4a6a57e
