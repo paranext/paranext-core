@@ -673,7 +673,14 @@ describe('handleSwitchToSimpleMode', () => {
     dataProviderGetMock.mockReset();
     dataProviderGetMock.mockResolvedValue(undefined);
     sendCommandMock.mockReset();
-    sendCommandMock.mockResolvedValue(undefined);
+    // A real one-window answer for `platform.getWindows`, so the whole suite reaches the switch by
+    // the ordinary route. Answering `undefined` made every test here arrive through a TypeError the
+    // gate's catch swallowed: the switch ran only because the question had failed, and the suite
+    // could not tell that from the question being answered.
+    sendCommandMock.mockImplementation(async (command: string) =>
+      command === 'platform.getWindows' ? [{ windowId: 1, label: '', isMain: true }] : undefined,
+    );
+    globalThis.windowId = '1';
     buildSimpleLayoutForProjectMock.mockClear();
     simpleLayoutTabIdsMock.length = 0;
     visibleSimpleLayoutTabIdsMock.length = 0;
@@ -681,6 +688,122 @@ describe('handleSwitchToSimpleMode', () => {
 
   afterEach(() => {
     localStorage.clear();
+  });
+
+  /** Answer `platform.getWindows` with these summaries, and this window's own id */
+  function setWindowsAndThisWindow(
+    windows: { windowId: number; label: string; isMain: boolean }[],
+    thisWindowId: number,
+  ) {
+    globalThis.windowId = String(thisWindowId);
+    sendCommandMock.mockImplementation(async (command: string) =>
+      command === 'platform.getWindows' ? windows : undefined,
+    );
+  }
+
+  it('a window that is not the primary does no switch work at all', async () => {
+    // Main closes this window as part of the same switch, and the switch writes state shared by
+    // every window — a send/receive, the shared layout apply, the recently-opened record, and a
+    // browser-storage cache under one key for all windows. Running it here duplicates all four.
+    setWindowsAndThisWindow(
+      [
+        { windowId: 1, label: '', isMain: true },
+        { windowId: 2, label: '', isMain: false },
+      ],
+      2,
+    );
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject, getLastOpenedProject } = await import(
+      '@renderer/services/last-opened-project-cache'
+    );
+    setLastOpenedProject({ id: 'proj-cached' });
+    buildSimpleLayoutForProjectMock.mockClear();
+
+    await host.handleSwitchToSimpleMode();
+
+    // The three things the switch would otherwise do, each of which is shared by every window:
+    // build and load a project-bound layout, finalize the project switch, and write the
+    // application-wide last-opened cache
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
+    expect(sendCommandMock).not.toHaveBeenCalledWith(
+      'platformScriptureEditor.finalizeProjectSwitch',
+      expect.anything(),
+    );
+    expect(getLastOpenedProject()?.id).toBe('proj-cached');
+  });
+
+  it('the primary window runs the switch', async () => {
+    setWindowsAndThisWindow([{ windowId: 1, label: '', isMain: true }], 1);
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-cached' });
+    buildSimpleLayoutForProjectMock.mockClear();
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-cached');
+  });
+
+  it('a window missing from the list does no switch work', async () => {
+    // Main records a window as closing just before it closes it, and the window list leaves out
+    // windows already recorded that way — so an absent id means this window is on its way out
+    setWindowsAndThisWindow([{ windowId: 1, label: '', isMain: true }], 2);
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-cached' });
+    buildSimpleLayoutForProjectMock.mockClear();
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
+  });
+
+  it('a question that cannot be answered runs the switch rather than refusing it', async () => {
+    globalThis.windowId = '2';
+    sendCommandMock.mockImplementation(async (command: string) => {
+      if (command === 'platform.getWindows') throw new Error('no answer');
+      return undefined;
+    });
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-cached' });
+    buildSimpleLayoutForProjectMock.mockClear();
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-cached');
+  });
+
+  it('a list naming no primary at all stands the window down', async () => {
+    // Fail closed. A list with no primary means the primary is absent from it — given up on, or
+    // already recorded as closing — not that this window is it. Inferring otherwise let every
+    // secondary run the switch at once, duplicating the shared writes and putting the fixed
+    // simple-mode tab ids in several windows together.
+    setWindowsAndThisWindow(
+      [
+        { windowId: 2, label: '', isMain: false },
+        { windowId: 3, label: '', isMain: false },
+      ],
+      2,
+    );
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-cached' });
+    buildSimpleLayoutForProjectMock.mockClear();
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
   });
 
   it('fast path: builds the layout for the cached project id', async () => {
@@ -1152,13 +1275,13 @@ describe('handleSwitchToSimpleMode', () => {
     await vi.waitFor(() => expect(fakeDockLayout.loadLayout).toHaveBeenCalled());
     mocks.networkRequest.mockClear();
 
-    // `globalThis.windowId` is `'2'` (file-wide beforeEach), matching the `-w2` suffix
-    // `withWindowScopedWebViewIds` would have appended to this id had it come through a real scoped
-    // load.
+    // The suffix has to be THIS window's — `globalThis.windowId` is `'1'` in this describe — because
+    // that is what `withWindowScopedWebViewIds` would have appended had the id come through a real
+    // scoped load. Another window's suffix would pass a guard that only ever strips its own.
     const contaminatedLayout = {
       dockbox: {
         mode: 'horizontal',
-        children: [{ tabs: [{ id: 'simple-fixed-tab-1-w2', tabType: 'webView', data: {} }] }],
+        children: [{ tabs: [{ id: 'simple-fixed-tab-1-w1', tabType: 'webView', data: {} }] }],
       },
     };
     // onLayoutChangeRef.current's real type (OnLayoutChange) is rc-dock's own LayoutInfo-shaped
@@ -1223,9 +1346,11 @@ describe('handleSwitchToSimpleMode', () => {
     const { getWorkspaceUpdating } = await import('@renderer/services/workspace-updating-store');
 
     const switchPromise = host.handleSwitchToSimpleMode();
-    // No await has happened yet inside handleSwitchToSimpleMode's synchronous prefix, so the
-    // overlay must already be up by the time this line runs.
-    expect(getWorkspaceUpdating()).toBe(true);
+    // Up while the switch is still running, and raised before any lookup — which is what this
+    // guards. Awaited rather than read synchronously because the switch first asks the main
+    // process whether this window is the one that should run it, and that question is a round
+    // trip; the overlay is the first thing after it, still ahead of every lookup below.
+    await vi.waitFor(() => expect(getWorkspaceUpdating()).toBe(true));
 
     await switchPromise;
     expect(getWorkspaceUpdating()).toBe(false);
@@ -1305,7 +1430,12 @@ describe('handleSwitchToSimpleMode', () => {
 
     await host.handleSwitchToSimpleMode();
 
-    expect(sendCommandMock).not.toHaveBeenCalled();
+    // Named rather than blanket: the switch asks which window should run it before it does
+    // anything, so a bare "sent no command" would now be true of a switch that finalized too
+    expect(sendCommandMock).not.toHaveBeenCalledWith(
+      'platformScriptureEditor.finalizeProjectSwitch',
+      expect.anything(),
+    );
   });
 });
 
@@ -2134,6 +2264,62 @@ describe('loadLayout when the saved-layout request fails', () => {
     expect(layoutPushes()).toHaveLength(1);
   });
 
+  test('warns again when a second fallback episode starts holding pushes', async () => {
+    // The warning is the only sign a window is silently dropping the user's layout changes, and it
+    // is latched so one episode does not log per push. The latch was never reset, so a window that
+    // fell back, recovered, and fell back again held every push with nothing said at all.
+    const { logger } = await import('@shared/services/logger.service');
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    settingsSubscribeMock.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down');
+      return undefined;
+    });
+    const heldPushWarnings = () =>
+      vi
+        .mocked(logger.warn)
+        .mock.calls.filter(([message]) =>
+          String(message).includes('Not pushing dock layout changes'),
+        ).length;
+
+    // Episode one: the load fails, the dock falls back, and the first held push says so
+    const { dockLayout } = await registerWindowThroughRetries(layoutWithAnchor());
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('held-one'), undefined, undefined);
+    expect(heldPushWarnings()).toBe(1);
+
+    // The transport recovers and a mode round trip reloads the layout, lifting the hold
+    respondToGetLayout({ kind: 'entry', layout: layoutWithTab('saved-tab') });
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+    await interfaceModeCallback('simple');
+    await interfaceModeCallback('power');
+
+    // Episode two: the transport goes again, and the next held push has to say so too
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down again');
+      return undefined;
+    });
+    // Bracketed the way `registerWindowThroughRetries` brackets the first episode: this reload runs
+    // the same 3-attempt retry loop, and on real timers its two 2-second waits leave the test with
+    // no margin against the 5-second default on a loaded runner. Both notifications need the
+    // bracket — awaiting the switch to simple under fake timers without advancing them hangs.
+    vi.useFakeTimers();
+    const backToSimple = interfaceModeCallback('simple');
+    await vi.advanceTimersByTimeAsync(60_000);
+    await backToSimple;
+    const secondFallbackLoad = interfaceModeCallback('power');
+    await vi.advanceTimersByTimeAsync(60_000);
+    await secondFallbackLoad;
+    vi.useRealTimers();
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('held-two'), undefined, undefined);
+
+    expect(heldPushWarnings()).toBe(2);
+  });
+
   test('a window on a fallback layout does not report itself born empty', async () => {
     mocks.networkRequest.mockImplementation(async (requestType: string) => {
       if (requestType === 'windowLayout:get') throw new Error('transport is down');
@@ -2299,6 +2485,19 @@ describe('a dock emptied by removal while running on a fallback layout', () => {
 });
 
 describe('loadLayout discards a load a newer one has superseded', () => {
+  beforeEach(() => {
+    // This suite drives the switch to Simple too, so it needs the same ordinary route: a real
+    // one-window answer for `platform.getWindows` naming this window as the primary. Without it the
+    // switch would reach its body only because the question failed. Derived from whatever window id
+    // the test is running as, so it cannot fight a test that chooses its own.
+    sendCommandMock.mockReset();
+    sendCommandMock.mockImplementation(async (command: string) =>
+      command === 'platform.getWindows'
+        ? [{ windowId: Number(globalThis.windowId), label: '', isMain: true }]
+        : undefined,
+    );
+  });
+
   /**
    * Let every already-scheduled continuation run. A superseded load produces no observable call, so
    * there is nothing to wait FOR — drain the queue instead and then assert nothing arrived. Several

@@ -9,6 +9,8 @@
 import {
   app,
   BrowserWindow,
+  dialog,
+  type MessageBoxOptions,
   ipcMain,
   powerMonitor,
   RenderProcessGoneDetails,
@@ -45,7 +47,11 @@ import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { registerPowerMonitorListeners } from '@main/services/power-monitor-logging.service';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
-import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
+import {
+  performShutdownTasks,
+  performWindowCloseTasks,
+  startWindowCloseTasksWithoutWaiting,
+} from '@main/shutdown-tasks';
 import type { WindowCloseDecision } from '@main/services/window-close-decision.service';
 import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationServiceRouter } from '@main/services/notification.service-router';
@@ -99,6 +105,7 @@ import {
   wasWindowEverReady,
   markWindowAbandoned,
   markWindowClosing,
+  markWindowNotClosing,
   markWindowNotReady,
   markWindowReady,
   removeWindow,
@@ -115,7 +122,11 @@ import {
   loadWindowLayouts,
   markWindowPendingContent,
   isPrimaryWindow,
+  assignEntryToWindowBySlotId,
+  getEntryBySlotId,
+  getPreservedEntrySlotIds,
   setMainWindowId,
+  setModeSwitchClosePredicate,
   setPendingContentChangeListener,
   trackLegacyWindow,
   trackNewWindow,
@@ -123,10 +134,25 @@ import {
   writeNow,
 } from '@main/services/window-layout-persistence.service';
 import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
+import {
+  clearModeSwitchClose,
+  undoModeSwitchClose,
+  getCachedInterfaceMode,
+  getSwitchGeneration,
+  handleInterfaceModeChanged,
+  initializeModeSwitchOrchestration,
+  isAdditionalWindowRefusedInSimpleMode,
+  isClosingForModeSwitch,
+  seedInterfaceMode,
+} from '@main/services/interface-mode-windows.service';
 import { summarizeWindows } from '@main/window-summary.util';
 import {
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
+  areCapturedBoundsTrustworthy,
+  correctBoundsForDisplayScale,
+  trackDisplaySettle,
+  type DisplaySettleState,
   ensureBoundsVisibleOnSomeDisplay,
 } from '@main/window-bounds.util';
 import {
@@ -134,10 +160,17 @@ import {
   MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS,
   NO_RENDERER_CRASH_RELOADS_YET,
 } from '@main/renderer-crash-reload-budget.util';
+import { keepsItsEntryOnClose } from '@main/window-entry-disposition.util';
+import {
+  chooseNoticeParentWindowId,
+  decideAbandonedWindowNotice,
+  type AbandonedWindowNoticeParent,
+} from '@main/abandoned-window-notice.util';
 import {
   WINDOW_EMPTIED_REQUEST_TYPE,
   type WindowBoundsState,
   type WindowLayoutEntry,
+  type WindowRectangle,
 } from '@shared/data/window-layout-persistence.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import {
@@ -161,6 +194,7 @@ import {
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import * as commandService from '@shared/services/command.service';
+import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -174,8 +208,10 @@ import { CommandNames, SettingTypes } from 'papi-shared-types';
 import {
   getErrorMessage,
   isPlatformError,
+  LocalizeKey,
   serialize,
   ThemeDefinitionExpanded,
+  UnsubscriberAsync,
   UnsubscriberAsyncList,
   wait,
   waitForDuration,
@@ -268,8 +304,19 @@ const PROCESS_CLOSE_TIME_OUT_MS = 2000;
  */
 const WINDOW_CLOSE_TIME_OUT_MS = 10000;
 
+/**
+ * How long to wait for the abandoned-window notice's localized strings before showing it in
+ * English.
+ *
+ * Short on purpose: the window is already unreachable and the notice is what tells the user so, and
+ * a wait long enough to notice is worse than untranslated text.
+ */
+const NOTICE_LOCALIZE_TIME_OUT_MS = 3000;
+
 /** How long to coalesce a window's resize/move events before capturing its bounds */
 const BOUNDS_CAPTURE_DEBOUNCE_MS = 100;
+// A window that has just crossed to another display is left untrusted for longer than this
+// debounce — see `DISPLAY_SETTLE_MS` in `window-bounds.util.ts`, which says why.
 
 /**
  * How a window being created relates to the persisted window-layouts structure: it restores a saved
@@ -279,6 +326,12 @@ const BOUNDS_CAPTURE_DEBOUNCE_MS = 100;
  */
 type WindowRestoreInfo =
   | { kind: 'entry'; entryIndex: number; entry: WindowLayoutEntry }
+  /**
+   * A window re-created for an entry a previous power session left behind. Named by slot id rather
+   * than position, because a window the user closes while the reopen runs splices its slot out and
+   * shifts every later position.
+   */
+  | { kind: 'preserved-entry'; slotId: number; entry: WindowLayoutEntry }
   | { kind: 'legacy'; boundsState?: WindowBoundsState };
 
 /** Height of the custom title bar buttons on Windows */
@@ -686,6 +739,14 @@ async function main() {
     if (isAppShuttingDown())
       throw new Error('Cannot create a window while the application is quitting');
 
+    // Simple mode is single-window, so a second window has nowhere to be: its chrome is hidden,
+    // and nothing in that mode offers a way back to it. Thrown for the same reason as the guard
+    // above — both callers await this, and resolving with nothing would report a window that does
+    // not exist as created. Refuses nothing until the mode is known, which is what lets the
+    // startup restore create its windows before the mode read it depends on has landed.
+    if (isAdditionalWindowRefusedInSimpleMode(getCachedInterfaceMode(), getWindows().length))
+      throw new Error('Cannot create a window in simple interface mode, which is single-window');
+
     const isFirstWindow = getWindows().length === 0;
 
     // A window is being created where there were NONE, so the app is alive and whatever brought
@@ -713,7 +774,9 @@ async function main() {
     // legacy startup — validated against the displays connected right now so a window can never
     // come back on a monitor that is gone. A window with no saved placement gets defaults.
     const savedBoundsState =
-      restoreInfo?.kind === 'entry' ? restoreInfo.entry : restoreInfo?.boundsState;
+      restoreInfo?.kind === 'entry' || restoreInfo?.kind === 'preserved-entry'
+        ? restoreInfo.entry
+        : restoreInfo?.boundsState;
     const boundsState = savedBoundsState
       ? ensureBoundsVisibleOnSomeDisplay(
           savedBoundsState,
@@ -792,7 +855,11 @@ async function main() {
 
     // Tie the window to its persisted identity so layout persistence can serve and save it
     if (restoreInfo?.kind === 'entry') assignEntryToWindow(windowId, restoreInfo.entryIndex);
-    else if (restoreInfo?.kind === 'legacy') trackLegacyWindow(windowId);
+    // The slot can have gone while this window was starting; it then tracks as a new window rather
+    // than adopting whichever slot moved into that position
+    else if (restoreInfo?.kind === 'preserved-entry') {
+      if (!assignEntryToWindowBySlotId(windowId, restoreInfo.slotId)) trackNewWindow(windowId);
+    } else if (restoreInfo?.kind === 'legacy') trackLegacyWindow(windowId);
     else trackNewWindow(windowId);
 
     if (creationOptions?.pendingContent) markWindowPendingContent(windowId);
@@ -826,14 +893,68 @@ async function main() {
      * normal state, so maximizing/minimizing/full-screening cannot overwrite the last normal
      * placement — only flip the flags.
      */
+    // On Windows, getBounds() reports a window's size in the PRIMARY display's units rather than
+    // the units of the display it is actually on whenever the two differ in scale factor (see
+    // correctBoundsForDisplayScale). Every reading of this window's bounds — the settle-clock seed
+    // below and every debounced capture — goes through this first, so the settle tracker, the
+    // trustworthiness check, and the persisted state all agree on one corrected value; seeding the
+    // clock from an uncorrected reading while captures use a corrected one would make the seed
+    // disagree with the display the first real capture lands on, costing the seeded wait it exists
+    // to save.
+    const captureCorrectedBounds = (bounds: WindowRectangle): WindowRectangle => {
+      if (process.platform !== 'win32') return bounds;
+      const containingDisplay = screen.getDisplayNearestPoint({ x: bounds.x, y: bounds.y });
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const corrected = correctBoundsForDisplayScale(bounds, containingDisplay, primaryDisplay);
+      logger.debug(
+        `window bounds captured: raw ${bounds.width}x${bounds.height} on display ${containingDisplay.id} (scale ${containingDisplay.scaleFactor}, primary ${primaryDisplay.scaleFactor}) -> stored ${corrected.width}x${corrected.height}`,
+      );
+      return corrected;
+    };
+
+    // The settle clock is seeded from where the window is being placed, rather than left unknown
+    // until the first capture, so a drag away from the creation display starts counting from
+    // creation rather than from that later drag. `lastAcceptedDisplayId` stays unknown, though: the
+    // window's own creation is a landing like any other — Win32 and Chromium can disagree about a
+    // freshly created window's DPI on a scaled display the same way they can mid-drag — so a
+    // capture on the creation display still has to clear `areCapturedBoundsTrustworthy`'s settle
+    // wait before it earns the trust that lets later captures on that same display through at once.
+    const initialDisplaySettle = trackDisplaySettle(
+      captureCorrectedBounds(newWindow.getBounds()),
+      screen.getAllDisplays(),
+      { displayId: undefined, since: Date.now() },
+      Date.now(),
+    );
+    /** Display the last accepted placement was on, so a move between displays can be recognized */
+    let lastAcceptedDisplayId: number | undefined;
+    /** Which display this window's bounds lie within, and since when — see `trackDisplaySettle` */
+    let displaySettle: DisplaySettleState = initialDisplaySettle;
+
     const captureWindowBoundsState = (): WindowBoundsState => {
       const isMaximized = newWindow.isMaximized();
       const isFullScreen = newWindow.isFullScreen();
       const capturedState: WindowBoundsState = { isMaximized, isFullScreen };
       if (!isMaximized && !isFullScreen && !newWindow.isMinimized()) {
         const { x, y, width, height } = newWindow.getBounds();
-        capturedState.bounds = { x, y, width, height };
-        capturedState.displayBounds = { ...screen.getDisplayMatching(capturedState.bounds).bounds };
+        const bounds = captureCorrectedBounds({ x, y, width, height });
+        const displays = screen.getAllDisplays();
+        const now = Date.now();
+        displaySettle = trackDisplaySettle(bounds, displays, displaySettle, now);
+        // A placement the platform has not finished agreeing about is left out entirely, the same
+        // way a maximized or minimized window's is: `updateWindowBounds` keeps the last one it was
+        // given when a capture carries none, so the window keeps the placement it last held rather
+        // than gaining a wrong one. See `areCapturedBoundsTrustworthy`.
+        if (
+          areCapturedBoundsTrustworthy(
+            bounds,
+            displays,
+            lastAcceptedDisplayId,
+            now - displaySettle.since,
+          )
+        ) {
+          capturedState.bounds = bounds;
+          lastAcceptedDisplayId = displaySettle.displayId;
+        }
       }
       return capturedState;
     };
@@ -852,7 +973,22 @@ async function main() {
       boundsCaptureTimeout = setTimeout(() => {
         boundsCaptureTimeout = undefined;
         if (newWindow.isDestroyed()) return;
-        updateWindowBounds(windowId, captureWindowBoundsState());
+        const capturedState = captureWindowBoundsState();
+        updateWindowBounds(windowId, capturedState);
+        // A placement withheld only because the window has just reached this display is not lost:
+        // nothing else will ask again — the window is sitting still, so no further resize or move
+        // is coming — so look once more when the settle period is up. The conditions are exactly
+        // the ones under which bounds are withheld for that reason and no other, which is what
+        // keeps a straddling window (no containing display) or a minimized one from re-arming
+        // this forever.
+        if (
+          !capturedState.bounds &&
+          !capturedState.isMaximized &&
+          !capturedState.isFullScreen &&
+          !newWindow.isMinimized() &&
+          displaySettle.displayId !== undefined
+        )
+          captureBoundsSoon();
       }, BOUNDS_CAPTURE_DEBOUNCE_MS);
     };
     newWindow.on('resize', captureBoundsSoon);
@@ -864,6 +1000,10 @@ async function main() {
     // What this window has spent of its crash-reload budget. Per window, because a crash loop is
     // one window's page failing rather than the app's.
     let crashReloadBudget = NO_RENDERER_CRASH_RELOADS_YET;
+    // Whether the user has been told this window was given up on. Per window and set once, because
+    // `render-process-gone` can fire again for a window already abandoned and the question has
+    // already been answered.
+    let hasAskedAboutAbandonment = false;
     newWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) => {
       logger.warn(`Window ${windowId} render process gone: ${JSON.stringify(details)}`);
       // Everything this window registered died with its renderer, so routing has to move to a window
@@ -894,7 +1034,7 @@ async function main() {
       const reloadDecision = decideRendererCrashReload(crashReloadBudget, Date.now());
       if (!reloadDecision.shouldReload) {
         logger.error(
-          `Window ${windowId} renderer died ${reloadDecision.reloadsAlreadySpent} times in a row despite being reloaded each time, so it is being left down. Close the window and open a new one.`,
+          `Window ${windowId} renderer died ${reloadDecision.reloadsAlreadySpent} times in a row despite being reloaded each time, so it is being left down. Closing it keeps what it held, so it comes back next launch or on a switch back to power mode.`,
         );
         // The reload was the only thing that would ever have put this window back in the app, so
         // the window has to stop being treated as one that is coming back. `markWindowNotReady`
@@ -907,11 +1047,25 @@ async function main() {
         // same window in the same state, and one flag recorded on both paths is what keeps this
         // from needing a second mechanism for the case that is harder to see.
         //
-        // The window is deliberately left open and tracked. It is still on screen with the user's
-        // tabs' worth of layout behind it, and closing it here would rewrite the persisted window
-        // layout without it — taking away the one recovery they have left, which is to quit and
-        // relaunch.
+        // The window is deliberately left open and tracked rather than closed from under the user:
+        // it is still on screen with the user's tabs' worth of layout behind it, and taking a
+        // window away unasked is not this handler's to do. Closing it costs nothing now — an
+        // abandoned window keeps its entry, so it comes back holding what it held — which is what
+        // makes the offer below worth putting to them rather than deciding for them.
         markWindowAbandoned(windowId);
+        // Nothing awaits this: the handler is synchronous and the window is already dead, so the
+        // notice runs on its own and reports its own failures. The user is told what happened and
+        // offered the way out — closing it keeps its entry, so the window comes back next launch.
+        //
+        // The notice records that it asked, rather than this line recording it in advance: a
+        // decision to stay silent, and a box that could not be shown, both leave the question
+        // unasked, and latching either of those would mean the user is never told at all.
+        //
+        // Not awaited and deliberately not `.catch`-ed: the notice reports its own failures and
+        // never rejects, and swallowing here would hide one if that ever stopped being true
+        offerToCloseAbandonedWindow(newWindow, windowId, hasAskedAboutAbandonment, () => {
+          hasAskedAboutAbandonment = true;
+        });
         return;
       }
       crashReloadBudget = reloadDecision.budget;
@@ -1137,7 +1291,15 @@ async function main() {
       // logout) is ignored here too — the question is taken down by that same quit and the
       // decision resolves from it, so the shutdown work runs from THAT pass and this one has
       // nothing to add.
-      if (isAskingAboutClose) return;
+      //
+      // An interface-mode switch's close lands here too, and for it this return IS the close not
+      // happening — so its claim comes off, exactly as at the `stay-open` exit below. The question
+      // already open decides this window's fate now; leaving it claimed would hold it off screen
+      // behind a dialog about it. Does nothing for a window the switch never claimed.
+      if (isAskingAboutClose) {
+        undoModeSwitchClose(windowId);
+        return;
+      }
 
       // Closing the primary window while others are open takes every window with it, so the user
       // is asked first. Decided before anything is marked closing: a cancelled close is not a close
@@ -1145,7 +1307,6 @@ async function main() {
       // of the session. On confirm the quit latch is already set by the time this resolves, which
       // is what makes every other window's handler record its layout as staying for next session.
       // Secondary windows and a primary on its own skip the question and close.
-      // TODO(PT-4286): a live switch to Simple mode must also close the secondary windows.
       isAskingAboutClose = true;
       let decision: WindowCloseDecision;
       try {
@@ -1163,8 +1324,15 @@ async function main() {
       } finally {
         isAskingAboutClose = false;
       }
-      // A cancelled close is not a close: nothing was latched, so the next close click asks again
-      if (decision === 'stay-open') return;
+      // A cancelled close is not a close: nothing was latched, so the next close click asks again.
+      // One thing may already have been: an interface-mode switch marks a window closing and takes
+      // it off screen before its handler decides anything, so that layouts pushed on the way out
+      // are dropped. This is the exit where that decision comes back "not closing", so it is where
+      // that has to be undone — for a window the switch did not claim it does nothing.
+      if (decision === 'stay-open') {
+        undoModeSwitchClose(windowId);
+        return;
+      }
 
       // Only now is this a close in progress, and only now may a second click reach the escape
       // hatch: the wait it escapes from starts below, not during the question.
@@ -1248,6 +1416,27 @@ async function main() {
           // On a multi-window quit every window reaches this line, so the tasks are shared rather
           // than run once per window — each window waits on the same run before destroying itself.
           await runShutdownTasksOnce(performShutdownTasks);
+        } else if (isClosingForModeSwitch(windowId)) {
+          // A window closing because the interface mode changed keeps its entry, so that entry has
+          // to hold where the window actually is. Its placement is captured here because the
+          // debounced capture is cancelled once the window has gone, and nothing else on this path
+          // records it — so without this a window moved just before the switch would come back at
+          // its old position. Wrapped, because the window can be destroyed underneath this: a
+          // capture that throws must not take the rest of the close with it.
+          try {
+            cancelPendingBoundsCapture();
+            updateWindowBounds(windowId, captureWindowBoundsState());
+          } catch (e) {
+            logger.warn(
+              `Could not capture the placement of window ${windowId} as the interface mode changed: ${getErrorMessage(e)}`,
+            );
+          }
+          // Started, but not waited for. The close tasks are a send/receive of what this window
+          // had open, and that is still worth pushing — but this window is only changing mode, not
+          // going away for good, so holding it on screen for the length of a sync would make a mode
+          // change take as long as a send/receive, once per window. The sync is registered as
+          // in-flight, so a quit arriving mid-sync still waits for it rather than cancelling it.
+          startWindowCloseTasksWithoutWaiting(windowId);
         } else {
           // The app stays up, but this window's editors go with it. Only this window can say what
           // it had open, so a sync that runs after it is gone can never cover it — the fan-out asks
@@ -1301,7 +1490,13 @@ async function main() {
       // Everything here is keyed off the ID captured while the window was alive. The BrowserWindow
       // is destroyed by now, and reading a property off it can throw — which would abandon the rest
       // of this teardown, leaving the window tracked forever and the app never told it closed.
-      removeWindow(newWindow, windowId);
+      //
+      // The removal reports what this window's marks said, because it is what clears them. Asking
+      // afterwards would answer for a window that is no longer there, and asking beforehand is an
+      // ordering rule nothing enforces. Taking it from the return leaves no order to get wrong. The
+      // other two marks below are cleared later, by `handleWindowRemoved` and
+      // `clearModeSwitchClose`, so they are still true here.
+      const { wasAbandoned } = removeWindow(newWindow, windowId);
 
       // What this window's disappearance means for its entry. A deliberate close — the app stays up
       // — takes the entry with it, and the structure is rewritten without it below so the window
@@ -1312,7 +1507,19 @@ async function main() {
       // before the unsubscribers below, which spend the network service's whole registration retry
       // failing against a renderer that is already gone.
       cancelPendingBoundsCapture();
-      handleWindowRemoved(windowId, isAppGoingDown ? 'entry-stays' : 'entry-goes-with-it');
+      // A window closed because the interface mode changed is not leaving the structure either: it
+      // is meant to come back when the user switches to power again, so its entry stays exactly as
+      // it does for a window going down with the app. A window still waiting for its content is the
+      // exception — its entry holds nothing, so keeping it would resurrect a blank window on every
+      // later switch.
+      const keepsItsEntry = keepsItsEntryOnClose({
+        isAppGoingDown,
+        isAbandoned: wasAbandoned,
+        isClosingForModeSwitch: isClosingForModeSwitch(windowId),
+        isPendingContent: isWindowPendingContent(windowId),
+      });
+      handleWindowRemoved(windowId, keepsItsEntry ? 'entry-stays' : 'entry-goes-with-it');
+      clearModeSwitchClose(windowId);
       // A window told to close counts as gone from the moment it is told, and stops counting for
       // real only here — its close runs the async work above, and it is open and counted for all of
       // it. Told or not, every window passes through here, and untracked ids are ignored.
@@ -1576,6 +1783,28 @@ async function main() {
   });
 
   /**
+   * The interface mode, read once a window exists to show the user something.
+   *
+   * Every path through the restore reports what it read, because the mode the restore ACTED on is
+   * what the window orchestration is seeded with. A path that returned nothing would leave the
+   * orchestration's mode unknown, and the first notification to arrive would then look like a
+   * change — running a switch reaction on an ordinary launch, which un-minimizes a window started
+   * minimized and pulls a window in front of a user who has already moved on.
+   */
+  const readInterfaceModeForRestore = async (): Promise<
+    SettingTypes['platform.interfaceMode'] | undefined
+  > => {
+    try {
+      return await settingsService.get('platform.interfaceMode');
+    } catch (e) {
+      logger.warn(
+        `Could not read platform.interfaceMode; restoring only the main window: ${getErrorMessage(e)}`,
+      );
+      return undefined;
+    }
+  };
+
+  /**
    * Create the app's windows from the persisted window-layouts structure: one window per saved
    * entry, in entry order — except in simple interface mode, which is single-window, so only the
    * main entry's window is created and the other entries stay preserved in the structure. With no
@@ -1585,12 +1814,12 @@ async function main() {
    * Runs at startup and again on macOS re-activation after the last window closed (the quit-like
    * close path flushed the structure when that window went down).
    */
-  const restoreWindows = async () => {
+  const restoreWindows = async (): Promise<SettingTypes['platform.interfaceMode'] | undefined> => {
     const plan = await loadWindowLayouts();
     if (plan.kind === 'legacy') {
       const legacyWindow = await createWindow({ kind: 'legacy', boundsState: plan.boundsState });
       setMainWindowId(legacyWindow.id);
-      return;
+      return readInterfaceModeForRestore();
     }
 
     // The main entry's window is created first — before the interface-mode read below, which can
@@ -1603,21 +1832,18 @@ async function main() {
       entry: entries[mainEntryIndex],
     });
     setMainWindowId(mainWindow.id);
-    if (entries.length <= 1) return;
 
     // Simple mode is single-window: restore only the main window no matter how many entries the
     // structure holds. Same when the mode cannot be read — restoring too few is recoverable
     // because an entry not assigned to a window this session is preserved in the structure, while
     // restoring too many would put a Power user's secondary windows on a Simple user's screen.
-    let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
-    try {
-      interfaceMode = await settingsService.get('platform.interfaceMode');
-    } catch (e) {
-      logger.warn(
-        `Could not read platform.interfaceMode; restoring only the main window: ${getErrorMessage(e)}`,
-      );
-    }
-    if (interfaceMode !== 'power') return;
+    //
+    // Read even when there is only one entry, which is every Simple user and every fresh install:
+    // the value is what seeds the orchestration, and a single-entry launch that reported nothing
+    // would leave the mode unknown and make the first notification look like a switch.
+    const interfaceMode = await readInterfaceModeForRestore();
+    if (entries.length <= 1) return interfaceMode;
+    if (interfaceMode !== 'power') return interfaceMode;
 
     for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
       if (entryIndex !== mainEntryIndex) {
@@ -1627,7 +1853,150 @@ async function main() {
         await createWindow({ kind: 'entry', entryIndex, entry: entries[entryIndex] });
       }
     }
+    return interfaceMode;
   };
+
+  /**
+   * Which window an abandoned-window notice should be shown on.
+   *
+   * @param parent Where the decision said to put it
+   * @param abandonedWindow The window the notice is about
+   * @param abandonedWindowId That window's id, read while it was still alive
+   * @returns The window to parent the box to, or `undefined` to show it unparented
+   */
+  function resolveNoticeParent(
+    parent: AbandonedWindowNoticeParent,
+    abandonedWindow: BrowserWindow,
+    abandonedWindowId: number,
+  ): BrowserWindow | undefined {
+    if (parent === 'abandoned-window') return abandonedWindow;
+    // The runtime answer, as the mode switch uses — including its fallback to the oldest live
+    // window — rather than the persisted flag, which is empty whenever no live window holds the
+    // marked entry. `getWindows` has already left out the destroyed ones.
+    const liveWindows = getWindows();
+    const parentWindowId = chooseNoticeParentWindowId(
+      abandonedWindowId,
+      liveWindows.map((window) => ({
+        windowId: window.id,
+        isPrimary: isPrimaryWindow(window.id),
+      })),
+    );
+    return liveWindows.find((window) => window.id === parentWindowId);
+  }
+
+  /**
+   * Tell the user a window has been given up on, and offer to close it.
+   *
+   * A window whose renderer crash-looped past its budget is left open on purpose — taking a window
+   * away unasked is not the crash handler's to do. But left alone it is a dead page with no
+   * explanation, absent from `platform.getWindows`, and the only advice for it is a log line nobody
+   * reads. This puts the question to the user instead, and the close is safe to offer:
+   * {@link keepsItsEntryOnClose} keeps an abandoned window's entry, so closing it brings the window
+   * back — next launch, or sooner on a switch back to power mode — rather than costing them its
+   * tabs.
+   *
+   * Failures are swallowed and logged. The window is already dead either way, and a notice that
+   * could not be shown or localized must not also take down the crash handling around it.
+   *
+   * @param abandonedWindow Window whose renderer was given up on
+   * @param abandonedWindowId That window's id
+   * @param hasAlreadyAsked Whether the user has been asked about this window before
+   * @param recordAsked Called as the question goes up, so a notice that stayed silent, or gave up
+   *   before reaching the box, leaves the offer available rather than spending it. As the box goes
+   *   up rather than once it has: a second `render-process-gone` arriving while the dialog is open
+   *   must not put a duplicate beside it, and that is the likelier of the two. The gap left is a
+   *   `showMessageBox` that itself fails, which spends the offer on a box nobody saw.
+   */
+  async function offerToCloseAbandonedWindow(
+    abandonedWindow: BrowserWindow,
+    abandonedWindowId: number,
+    hasAlreadyAsked: boolean,
+    recordAsked: () => void,
+  ): Promise<void> {
+    try {
+      const decision = decideAbandonedWindowNotice({
+        isAppShuttingDown: isAppShuttingDown(),
+        isWindowClosing: isWindowMarkedClosing(abandonedWindowId),
+        hasAlreadyAsked,
+        // Asked of the window rather than assumed: a minimized or hidden window would carry the
+        // question off screen with it
+        isAbandonedWindowVisible: !abandonedWindow.isMinimized() && abandonedWindow.isVisible(),
+        isAbandonedWindowPendingContent: isWindowPendingContent(abandonedWindowId),
+      });
+      if (decision.kind === 'stay-silent') return;
+
+      const parentWindow = resolveNoticeParent(decision.parent, abandonedWindow, abandonedWindowId);
+      const messageKey = '%abandonedWindow_confirm_message%' satisfies LocalizeKey;
+      const detailKey = '%abandonedWindow_confirm_detail%' satisfies LocalizeKey;
+      const closeKey = '%abandonedWindow_confirm_close%' satisfies LocalizeKey;
+      const leaveOpenKey = '%abandonedWindow_confirm_leaveOpen%' satisfies LocalizeKey;
+      const fallbackStrings: Record<
+        typeof messageKey | typeof detailKey | typeof closeKey | typeof leaveOpenKey,
+        string
+      > = {
+        [messageKey]: 'This window stopped responding',
+        [detailKey]:
+          'It could not be restored after several attempts. Closing it will bring it back the next time you open the application.',
+        [closeKey]: 'Close window',
+        [leaveOpenKey]: 'Leave it open',
+      };
+      let strings = fallbackStrings;
+      try {
+        // Bounded for the same reason the close-all prompt is: a hang would leave the user with a
+        // dead window and no explanation at all, and English on time beats localized eventually.
+        strings = {
+          ...fallbackStrings,
+          ...(await Promise.race([
+            localizationService.getLocalizedStrings({
+              localizeKeys: [messageKey, detailKey, closeKey, leaveOpenKey],
+            }),
+            wait(NOTICE_LOCALIZE_TIME_OUT_MS).then<never>(() => {
+              throw new Error(`no answer within ${NOTICE_LOCALIZE_TIME_OUT_MS} ms`);
+            }),
+          ])),
+        };
+      } catch (e) {
+        logger.warn(
+          `Could not localize the abandoned-window notice; showing English: ${getErrorMessage(e)}`,
+        );
+      }
+
+      const closeIndex = 0;
+      const leaveOpenIndex = 1;
+      const noticeOptions: MessageBoxOptions = {
+        type: 'warning',
+        // No `title`, matching the close-all prompt: macOS hides it and the others print it twice
+        message: strings[messageKey],
+        detail: strings[detailKey],
+        buttons: [strings[closeKey], strings[leaveOpenKey]],
+        // Closing is the useful answer, but it is still a window going away, so it is not what a
+        // reflex press lands on. Esc and the window manager's dismiss both leave the window alone.
+        defaultId: leaveOpenIndex,
+        cancelId: leaveOpenIndex,
+        // As the close-all prompt does, so the application's two native questions look alike:
+        // without it Windows may render these as command links rather than buttons
+        noLink: true,
+      };
+      // Recorded here rather than on return: from this line the box is going up, and a second
+      // `render-process-gone` for the same window must not put a duplicate beside it. The trade is
+      // named in the parameter's doc — a `showMessageBox` that fails spends the offer — and it is
+      // the right way round, because a duplicate dialog is the commoner accident.
+      recordAsked();
+      // Unparented when no window can carry it. Every window there is is either the one this is
+      // about — off screen, which is why the question is not on it — or gone, and a question the
+      // platform floats on its own still reaches the user.
+      const { response } = parentWindow
+        ? await dialog.showMessageBox(parentWindow, noticeOptions)
+        : await dialog.showMessageBox(noticeOptions);
+      if (response !== closeIndex) return;
+      logger.info(`Closing abandoned window ${abandonedWindowId} at the user's request`);
+      abandonedWindow.close();
+    } catch (e) {
+      logger.warn(
+        `Could not offer to close abandoned window ${abandonedWindowId}: ${getErrorMessage(e)}`,
+      );
+    }
+  }
 
   app.on('window-all-closed', () => {
     // The macOS convention of keeping the application resident after its last window closes only
@@ -1645,6 +2014,12 @@ async function main() {
    * subscription is made, and once it has been run — the quit teardown below runs it exactly once.
    */
   let unsubscribeMacosMenubar: (() => Promise<boolean>) | undefined;
+
+  /**
+   * Ends the one process-global interface-mode subscription. Undefined before the subscription is
+   * made and once it has been run — the quit teardown below runs it exactly once.
+   */
+  let unsubscribeInterfaceMode: UnsubscriberAsync | undefined;
 
   let isAppQuitting = false;
   app.on('will-quit', async (e) => {
@@ -1671,26 +2046,46 @@ async function main() {
       isAppQuitting = true;
 
       // Cleared before it is run so a second pass through here cannot run it again
+      const unsubscribeMode = unsubscribeInterfaceMode;
+      unsubscribeInterfaceMode = undefined;
       const unsubscribeMenubar = unsubscribeMacosMenubar;
       unsubscribeMacosMenubar = undefined;
-      if (unsubscribeMenubar) {
-        // Bounded like every other wait on this path. The unsubscribe is an RPC to the extension
-        // host, which is still up at this point and should answer at once — but an extension host
-        // that has stopped answering would otherwise hold the whole quit for the request timeout,
-        // and a subscription left behind in a process that is about to exit costs nothing.
+
+      /**
+       * Unsubscribe one session-long subscription on the way out, bounded.
+       *
+       * Each is an RPC to the extension host, which is still up at this point and should answer at
+       * once — but one that has stopped answering would otherwise hold the whole quit for the
+       * request timeout, and a subscription left behind in a process about to exit costs nothing.
+       *
+       * @param name What is being unsubscribed, for the log
+       * @param unsubscribe The unsubscriber, if there is one
+       */
+      const unsubscribeBounded = async (
+        name: string,
+        unsubscribe: (() => Promise<boolean>) | undefined,
+      ) => {
+        if (!unsubscribe) return;
         const didFinishUnsubscribing = await waitForDuration(async () => {
           try {
-            await unsubscribeMenubar();
+            await unsubscribe();
           } catch (error) {
-            logger.warn(`Failed to unsubscribe the macOS menubar: ${getErrorMessage(error)}`);
+            logger.warn(`Failed to unsubscribe ${name}: ${getErrorMessage(error)}`);
           }
           return true;
         }, PROCESS_CLOSE_TIME_OUT_MS);
         if (!didFinishUnsubscribing)
           logger.warn(
-            `The macOS menubar did not unsubscribe within ${PROCESS_CLOSE_TIME_OUT_MS} ms; quitting anyway`,
+            `${name} did not unsubscribe within ${PROCESS_CLOSE_TIME_OUT_MS} ms; quitting anyway`,
           );
-      }
+      };
+
+      // Together rather than one after the other: they are independent, and waiting on them in turn
+      // would make the quit's worst case before the process-close waits the sum of their bounds.
+      await Promise.all([
+        unsubscribeBounded('the interface mode', unsubscribeMode),
+        unsubscribeBounded('the macOS menubar', unsubscribeMenubar),
+      ]);
 
       await Promise.all([
         dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
@@ -1758,10 +2153,81 @@ async function main() {
       // quit and the restore reads from disk, so this can fail — and a rejection would skip the
       // `activate` registration below, which is the only thing that brings windows back on macOS
       // after the last one closes.
+      let startupInterfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
       try {
-        await restoreWindows();
+        // The mode the restore ACTED on, rather than a second read of the same setting. Two reads
+        // with an await between them can disagree — the user can change the mode while the restore
+        // is still creating windows — and seeding the orchestration with the later one would leave
+        // it recording a mode whose window set was never built, which the same-value guard below
+        // would then never correct.
+        startupInterfaceMode = await restoreWindows();
       } catch (e) {
         logger.error(`Failed to restore windows at startup: ${getErrorMessage(e)}`);
+      }
+
+      // Which windows the application has is the interface mode's to decide from here on: simple
+      // mode is single-window, power mode is not. Wired AFTER the restore, so the restore creates
+      // its windows against an unknown mode and is never refused by the single-window guard.
+      //
+      // Subscribed once for the session rather than per window, like the macOS menubar above: the
+      // mode is one global value, and the reaction is about the set of windows rather than about
+      // any one of them.
+      setModeSwitchClosePredicate(isClosingForModeSwitch);
+      initializeModeSwitchOrchestration(
+        {
+          getTrackedWindowIds: () => getWindows().map((window) => window.id),
+          isPrimaryWindow,
+          isWindowClosing: isWindowMarkedClosing,
+          isWindowAbandoned,
+          markWindowClosing,
+          unmarkWindowClosing: markWindowNotClosing,
+          hideWindow: (windowId) => BrowserWindow.fromId(windowId)?.hide(),
+          // `showInactive`, not `show`: a window coming back from a close that did not happen must
+          // not pull focus off whichever window the switch brought forward. A window the user had
+          // minimized still comes back restored — `hide` does not record that it was minimized —
+          // which is a smaller wrong than stealing focus.
+          showWindow: (windowId) => BrowserWindow.fromId(windowId)?.showInactive(),
+          closeWindow: (windowId) => {
+            const window = BrowserWindow.fromId(windowId);
+            if (!window) return false;
+            window.close();
+            return true;
+          },
+          focusWindow,
+          isAppShuttingDown,
+          getPreservedEntrySlotIds,
+          createWindowForEntry: async (slotId) => {
+            const entry = getEntryBySlotId(slotId);
+            if (!entry) {
+              logger.warn(`Not reopening window entry ${slotId}; it is no longer in the structure`);
+              return;
+            }
+            await createWindow({ kind: 'preserved-entry', slotId, entry });
+          },
+          writeInterfaceModeSetting: async (mode) => {
+            await settingsService.set('platform.interfaceMode', mode);
+          },
+        },
+        startupInterfaceMode,
+      );
+      try {
+        unsubscribeInterfaceMode = await settingsService.subscribe(
+          'platform.interfaceMode',
+          async (newMode) => {
+            if (isPlatformError(newMode)) {
+              logger.warn(`Could not read the updated interface mode: ${getErrorMessage(newMode)}`);
+              return;
+            }
+            await handleInterfaceModeChanged(newMode);
+          },
+          // Not retrieved immediately. The restore reports the mode it acted on and that value is
+          // the seed, so an initial delivery could only ever repeat it — and treating it as a
+          // change would run a switch reaction on an ordinary launch, un-minimizing a window
+          // started minimized and pulling a window in front of a user who has moved on.
+          { retrieveDataImmediately: false },
+        );
+      } catch (e) {
+        logger.warn(`Failed to subscribe to interface mode changes: ${getErrorMessage(e)}`);
       }
 
       // Collapse overlapping restores: 'activate' can fire again (rapid dock clicks) while a
@@ -1769,7 +2235,13 @@ async function main() {
       // no-windows guard below does not catch that. A second concurrent restoreWindows run would
       // reset the layout persistence tracking mid-restore and create duplicate windows, so late
       // callers await the in-flight run instead of starting their own.
-      let restoreWindowsInFlight: Promise<void> | undefined;
+      let restoreWindowsInFlight:
+        | Promise<SettingTypes['platform.interfaceMode'] | undefined>
+        | undefined;
+      // The switch generation as of the moment the in-flight restore started reading the mode.
+      // Seeding below compares against it, so a real switch delivered while the restore was
+      // running is not clobbered by the restore's now-stale reading once it finishes.
+      let restoreGeneration = 0;
       app.on('activate', async () => {
         // On macOS it's common to re-create windows in the app when the
         // dock icon is clicked and there are no other windows open.
@@ -1781,11 +2253,15 @@ async function main() {
         // failure to restore windows is what this avoids.
         if (getWindows().length !== 0 || isAppShuttingDown()) return;
         try {
-          if (!restoreWindowsInFlight)
+          if (!restoreWindowsInFlight) {
+            restoreGeneration = getSwitchGeneration();
             restoreWindowsInFlight = restoreWindows().finally(() => {
               restoreWindowsInFlight = undefined;
             });
-          await restoreWindowsInFlight;
+          }
+          // Seeded from this restore too. A session that reactivates with no windows reads the mode
+          // again, and the orchestration has to agree with the window set this restore just built.
+          seedInterfaceMode(await restoreWindowsInFlight, restoreGeneration);
         } catch (e) {
           logger.error(`Failed to restore windows on activate: ${getErrorMessage(e)}`);
         }
@@ -1858,7 +2334,9 @@ async function main() {
     {
       method: {
         'x-experimental': true,
-        summary: 'Create a new application window',
+        summary:
+          'Create a new application window. Rejected in simple interface mode, which is ' +
+          'single-window',
         params: [],
         result: {
           name: 'return value',

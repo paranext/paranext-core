@@ -1,4 +1,8 @@
 {
+  "%abandonedWindow_confirm_close%": "Close window",
+  "%abandonedWindow_confirm_detail%": "It could not be restored after several attempts. Closing it will bring it back the next time you open the application.",
+  "%abandonedWindow_confirm_leaveOpen%": "Leave it open",
+  "%abandonedWindow_confirm_message%": "This window stopped responding",
   "%about_db_ip_attribution_format%": "{intro} {websiteLink} ({license}, {terms})",
   "%about_db_ip_attribution_intro%": "Internet safety features use data from",
   "%about_db_ip_attribution_terms%": "Terms",

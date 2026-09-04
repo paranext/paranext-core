@@ -240,6 +240,11 @@ export type WindowSummary = {
    * This is the live answer, not the persisted flag of the same name. Usually they agree, but when
    * no open window holds the marked entry the role falls to one of the windows that are open while
    * the flag stays where it is, and this reports the window that actually answers.
+   *
+   * At most one window carries it, and possibly none — the window holding the role may be absent
+   * from the list it appears in, because a window whose close has begun and one whose renderer has
+   * been given up on are both left out. So a caller must not read "no window is flagged" as "then
+   * it must be me".
    */
   isMain: boolean;
 };
