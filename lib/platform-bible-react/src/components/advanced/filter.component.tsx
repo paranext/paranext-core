@@ -30,6 +30,7 @@ export function Filter({
   customSelectedText,
   isDisabled,
   sortSelected,
+  showScrollCue,
   icon,
   className,
   badgesPlaceholder,
@@ -47,6 +48,7 @@ export function Filter({
         customSelectedText={customSelectedText}
         isDisabled={isDisabled}
         sortSelected={sortSelected}
+        showScrollCue={showScrollCue}
         icon={icon}
         className={className}
       />

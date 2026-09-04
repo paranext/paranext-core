@@ -5,11 +5,17 @@ import { Dialog } from '@/components/shadcn-ui/dialog';
 import ResourcePickerDialog, {
   ResourcePickerDialogLocalizedStrings,
 } from './resource-picker-dialog.component';
-import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS } from './resource-picker-dialog.data';
+import {
+  MANY_LANGUAGE_RESOURCES,
+  SAMPLE_RESOURCES,
+  SAMPLE_SELECTED_IDS,
+} from './resource-picker-dialog.data';
 
-// jsdom implements neither IntersectionObserver (used by the progressive list) nor ResizeObserver
-// (wired by the language filter's popover) — stub both so the dialog can mount and be interacted
-// with.
+// jsdom implements none of what opening the language list needs: IntersectionObserver for the
+// progressive-list hook, ResizeObserver for cmdk's command list, and scrollIntoView for the option
+// cmdk highlights. Stubbed per file rather than globally — components that feature-detect
+// ResizeObserver take a different path when one exists, so defining it for every suite would
+// change what unrelated tests measure.
 const originalScrollIntoView = Element.prototype.scrollIntoView;
 beforeAll(() => {
   vi.stubGlobal(
@@ -490,5 +496,52 @@ describe('ResourcePickerDialog', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Only resources already on this computer are shown.',
     );
+  });
+
+  describe('language filter', () => {
+    // Once the popover is open the cmdk search input carries the combobox role too, so the
+    // trigger is identified by being the button.
+    const languageTrigger = () => {
+      const trigger = screen
+        .getAllByRole('combobox')
+        .find((element) => element.tagName === 'BUTTON');
+      if (!trigger) throw new Error('Language filter trigger not found');
+      return trigger;
+    };
+
+    const toggleLanguageFilter = () => {
+      fireEvent.click(languageTrigger());
+      return screen.queryAllByRole('option').map((option) => option.textContent ?? '');
+    };
+
+    it('holds the option order steady while the list is open', () => {
+      renderDialog({ allResources: MANY_LANGUAGE_RESOURCES, selectedResourceIds: [] });
+      const optionsBefore = toggleLanguageFilter();
+
+      // A language far enough down that re-sorting would visibly move it, and unstarred so that
+      // selecting it is what would float it up.
+      const target = screen.getAllByRole('option')[optionsBefore.length - 1];
+      const targetLabel = target.textContent ?? '';
+      fireEvent.click(target);
+
+      const optionsAfter = screen.getAllByRole('option').map((option) => option.textContent ?? '');
+      expect(optionsAfter).toEqual(optionsBefore);
+      expect(optionsAfter[optionsAfter.length - 1]).toBe(targetLabel);
+    });
+
+    it('re-sorts the selection to the top the next time the list is opened', () => {
+      renderDialog({ allResources: MANY_LANGUAGE_RESOURCES, selectedResourceIds: [] });
+      const optionsBefore = toggleLanguageFilter();
+      const target = screen.getAllByRole('option')[optionsBefore.length - 1];
+      const targetLabel = target.textContent ?? '';
+      fireEvent.click(target);
+
+      // Close and reopen: the snapshot refreshes, so the choice is now grouped with the starred
+      // languages instead of sitting at the far end of a 130-row list.
+      fireEvent.click(languageTrigger());
+      const reopened = toggleLanguageFilter();
+
+      expect(reopened.indexOf(targetLabel)).toBeLessThan(optionsBefore.length - 1);
+    });
   });
 });
