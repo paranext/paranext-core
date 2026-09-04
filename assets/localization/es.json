@@ -491,6 +491,8 @@
   "%resourcePicker_button_use%": "Usar",
   "%resourcePicker_language_filter_any%": "Cualquier idioma",
   "%resourcePicker_language_filter_multipleSelected%": "{selectCount} idiomas",
+  "%resourcePicker_language_filter_no_results%": "No se encontraron idiomas",
+  "%resourcePicker_language_filter_search_placeholder%": "Buscar idiomas…",
   "%resourcePicker_no_results%": "No se encontraron resultados",
   "%resourcePicker_notice_allResourcesUnavailable%": "No se puede cargar la lista de recursos en este momento. Revise su conexión y luego cierre y vuelva a abrir el selector de recursos.",
   "%resourcePicker_notice_dblCatalogUnavailable%": "No se puede acceder a la Biblioteca Digital de Biblias (DBL) en este momento, así que solo se muestran los recursos que ya están en esta computadora.",
