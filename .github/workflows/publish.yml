@@ -215,10 +215,14 @@ jobs:
           mkdir release/staged
           mv release/build/*.dmg release/staged
 
-      # No snap-store upload, and no `release/staged` staging. This repository does not distribute a
-      # built application (see LICENSING.md, "The distributed application"): the Linux artifact is
-      # built so that the Linux leg is exercised and so it can be shared internally, and the S3 step
-      # below deliberately excludes Linux. Paratext 10 is released from `paranext/paratext-10-studio`.
+      # Builds the Linux installer and publishes it nowhere. This repository does not distribute a
+      # built application (see LICENSING.md, "The distributed application"); Paratext 10 is released
+      # from `paranext/paratext-10-studio`. The build still runs on every release so that a broken
+      # Linux packaging path surfaces while the release is being cut rather than afterward.
+      #
+      # No `release/staged` step, unlike Windows and macOS: staging exists to feed the S3 upload
+      # below, and that step excludes Linux. Internal Linux builds come from `package-main.yml`,
+      # which uploads a per-platform artifact on every push.
       - name: Prepare release - Linux
         if: ${{ matrix.os == env.OS_LINUX }}
         env:
@@ -229,13 +233,13 @@ jobs:
         run: |
           npx electron-builder --publish never --linux
 
-      # Creates the tag, the draft and the generated notes, and attaches NO binaries. Those are the
-      # fixed points in Git history that the Paratext 10 Studio build constructs its own releases
-      # from; the installers stay internal (see the Linux step above). `artifacts` is an optional
-      # input, so omitting it leaves everything else about the release intact.
+      # Creates the tag, the draft and the generated notes, and attaches NO binaries. The release is
+      # a fixed point in Git history for the Paratext 10 Studio build to construct its own releases
+      # from, not a download (see LICENSING.md, "The distributed application"). `artifacts` is an
+      # optional input, so omitting it leaves everything else about the release intact.
       #
-      # One leg only: with nothing per-platform to contribute, running it on all three legs would
-      # only race three jobs to create the same release.
+      # One leg only: with no per-platform asset to contribute, running on all three would race three
+      # jobs to create the same release.
       - name: Publish draft release
         if: ${{ matrix.os == env.OS_LINUX }}
         uses: ncipollo/release-action@v1
