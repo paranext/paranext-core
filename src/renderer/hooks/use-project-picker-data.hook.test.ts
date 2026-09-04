@@ -1,7 +1,10 @@
 import { renderHook, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
-import { EVENT_NAME_ON_DID_UPDATE_WEB_VIEW } from '@shared/services/web-view.service-model';
+import {
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
+  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
+} from '@shared/services/web-view.service-model';
 import {
   useProjectPickerData,
   type ProjectPickerData,
@@ -138,6 +141,19 @@ async function importMocks() {
  * it is ever hit, the follow-up assertions fail loudly rather than the whole test timing out.
  */
 async function settle(result: { current: ProjectPickerData }) {
+  // One timer turn first, unconditionally: the hook reads the dock layout on a deferred MACROtask
+  // (see `useDeferredDockLayoutRead` for why it must not read inside the event handler), which a
+  // microtask drain would never reach — and which every assertion about the active editor depends
+  // on having run.
+  await act(async () => {
+    // Advanced rather than awaited under fake timers, which several tests below install for the
+    // metadata retry timer — a real `setTimeout` would never fire there.
+    if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(0);
+    else
+      await new Promise((resolve) => {
+        setTimeout(resolve);
+      });
+  });
   for (let i = 0; i < 20 && result.current.isLoading; i += 1) {
     // Each turn must run sequentially so React commits the resulting state before the next check
     // eslint-disable-next-line no-await-in-loop
@@ -442,10 +458,8 @@ describe('useProjectPickerData', () => {
         }) as never,
     );
 
-    // Empty for both reads that happen before any event: the first render's initializer and the
-    // mount effect that re-reads once the subscriptions are attached.
+    // Empty for the one read that happens before any event: the deferred read requested on mount.
     vi.mocked(getAllOpenWebViewDefinitionsSync)
-      .mockReturnValueOnce([])
       .mockReturnValueOnce([])
       .mockReturnValue([
         { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-xyz' },
@@ -466,28 +480,76 @@ describe('useProjectPickerData', () => {
     expect(result.current.currentSimpleProject?.fullName).toBe('Updated Project');
   });
 
-  it('re-reads the active editor after mount when the first render could not enumerate web views', async () => {
-    // The first read runs during the first render, when this window's dock layout is typically not
-    // registered yet and `getAllOpenWebViewDefinitionsSync` throws. Without the mount effect that
-    // re-reads once the subscriptions are attached, the picker would stay blank until some later
-    // web view event happened to arrive.
+  it('reads the active editor after mount rather than during render', async () => {
+    // Enumerating open web views is not a pure read - it touches the WebViewState keep-alive set -
+    // and on a first render this window's dock layout is typically not registered yet, so a
+    // render-phase read both mutates for a tree that may never commit and answers nothing. The read
+    // is requested on mount and deferred instead.
     const { getAllOpenWebViewDefinitionsSync, projectLookupService } = await importMocks();
-    vi.mocked(getAllOpenWebViewDefinitionsSync)
-      .mockImplementationOnce(() => {
-        throw new Error('platformDockLayout is not registered');
-      })
-      .mockReturnValue([
-        { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-xyz' },
-      ] as never);
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-xyz' },
+    ] as never);
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
       metadataList([{ id: 'proj-xyz', fullName: 'Recovered Project', name: 'Recovered' }]) as never,
     );
 
     const { result } = renderHook(() => useProjectPickerData());
+
+    // Nothing has enumerated web views yet: rendering the hook did not.
+    expect(getAllOpenWebViewDefinitionsSync).not.toHaveBeenCalled();
+
     await settle(result);
 
-    // No web view event was ever fired - only the mount effect can have produced this.
+    // No web view event was ever fired - only the deferred mount read can have produced this.
+    expect(getAllOpenWebViewDefinitionsSync).toHaveBeenCalled();
     expect(result.current.currentSimpleProject?.fullName).toBe('Recovered Project');
+  });
+
+  it('names the project that is still open after the closing tab’s event, not the one closing', async () => {
+    // rc-dock calls `onLayoutChange` BEFORE it commits the new layout, and the web view service
+    // emits the close event as that callback's first statement, synchronously - so a read taken
+    // inside the handler still sees the tab that is going away. Because that read resolves the same
+    // project id as before, `useState` bails out and NOTHING ever corrects it: the picker would keep
+    // naming the project whose tab the user just closed.
+    const { getNetworkEvent, getAllOpenWebViewDefinitionsSync, projectLookupService } =
+      await importMocks();
+    let closeCallback: (() => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      (eventName: string) =>
+        vi.fn((cb: () => void) => {
+          if (eventName === EVENT_NAME_ON_DID_CLOSE_WEB_VIEW) closeCallback = cb;
+          return vi.fn();
+        }) as never,
+    );
+
+    // Two editors open; closing one leaves the other. The layout only reports the post-close state
+    // AFTER the handler has returned, which is what rc-dock does.
+    let openDefs: unknown[] = [
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-closing' },
+      { id: 'wv-2', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-staying' },
+    ];
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockImplementation(() => openDefs as never);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        { id: 'proj-closing', fullName: 'Closing Project', name: 'Closing' },
+        { id: 'proj-staying', fullName: 'Staying Project', name: 'Staying' },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+    expect(result.current.currentSimpleProject?.id).toBe('proj-closing');
+
+    expect(closeCallback).toBeDefined();
+    act(() => {
+      // Fired while the layout still reports the pre-close tabs, exactly as rc-dock fires it...
+      closeCallback!();
+      // ...and committed only after the handler returned.
+      openDefs = [{ id: 'wv-2', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-staying' }];
+    });
+    await settle(result);
+
+    expect(result.current.currentSimpleProject?.id).toBe('proj-staying');
   });
 
   it('resolves the current project by direct lookup when it is absent from the filtered list snapshot', async () => {

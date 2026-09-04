@@ -2,25 +2,33 @@ import type { Decorator, Meta, StoryObj } from '@storybook/react-webpack5';
 import { WindowCrashedView } from './window-crashed-view.component';
 
 /**
- * Constrains the screen to a short box so the too-short-to-center case can be inspected.
+ * Gives the screen a box of its own to fill.
  *
  * The `transform` is what makes this work: the component is `position: fixed`, which is normally
  * measured from the viewport, but a transformed ancestor becomes the containing block for fixed
- * descendants. Without it the story would ignore the box and fill the preview frame.
+ * descendants. Without it every story here would ignore its box and paint over the whole Docs page
+ *
+ * - The description, the controls and the other stories included - which is why this sits on `meta`
+ *   rather than on one story.
+ *
+ * @param height Box height. The default is roomy enough to show the screen as a user meets it; a
+ *   short one exercises the too-short-to-center path.
  */
-function InShortWindow(Story: Parameters<Decorator>[0]): ReturnType<Decorator> {
-  return (
-    <div
-      style={{
-        position: 'relative',
-        transform: 'translate(0)',
-        height: '9rem',
-        border: '1px dashed var(--border, #d4d4d4)',
-      }}
-    >
-      <Story />
-    </div>
-  );
+function inWindowOfHeight(height: string): Decorator {
+  return function InWindow(Story: Parameters<Decorator>[0]): ReturnType<Decorator> {
+    return (
+      <div
+        style={{
+          position: 'relative',
+          transform: 'translate(0)',
+          height,
+          border: '1px dashed var(--border, #d4d4d4)',
+        }}
+      >
+        <Story />
+      </div>
+    );
+  };
 }
 
 const meta: Meta<typeof WindowCrashedView> = {
@@ -28,6 +36,7 @@ const meta: Meta<typeof WindowCrashedView> = {
   component: WindowCrashedView,
   tags: ['autodocs'],
   args: { onReload: () => {} },
+  decorators: [inWindowOfHeight('22rem')],
   parameters: {
     docs: {
       description: {
@@ -36,9 +45,9 @@ const meta: Meta<typeof WindowCrashedView> = {
           'failure, so the window shows what happened instead of going blank.',
           '',
           'It is the window-level counterpart to `WebViewCrashedView`, which replaces a single pane.',
-          'The two are meant to read as one pattern and share their type, message and button styling',
-          'through `crashed-view.util.ts`; they differ in how they are positioned and in whether they',
-          'claim focus on mount.',
+          'The two are meant to read as one pattern, and are: they share their markup, their styling',
+          'and their localization boundary through `crashed-view.component.tsx` and',
+          '`crashed-view.util.ts`. All either screen still owns is how it is positioned.',
           '',
           '**Why this story matters more than most.** The screen it shows is nearly impossible to',
           'reach on purpose in a running build — that is the whole difficulty of the crash it exists',
@@ -46,7 +55,8 @@ const meta: Meta<typeof WindowCrashedView> = {
           'behaviour before it ships.',
           '',
           '**What this story does and does not show.** The component is `position: fixed; inset: 0`,',
-          'so it fills the preview frame the way it fills a real window. Text is resolved through the',
+          'so each story is given a transformed box to be measured from and fills it the way it fills',
+          'a real window. Text is resolved through the',
           'localization service when that works and falls back to built-in English when it does not;',
           'both paths render identical layout, so what you see here is accurate either way. What a',
           'story cannot reproduce is the condition it renders under — a React tree that has already',
@@ -68,5 +78,5 @@ export const Default: Story = {};
  * keep the title reachable — plain `center` would push it out of the scrollable area.
  */
 export const ShortWindow: Story = {
-  decorators: [InShortWindow],
+  decorators: [inWindowOfHeight('9rem')],
 };

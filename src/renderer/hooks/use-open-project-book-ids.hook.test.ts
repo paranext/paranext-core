@@ -261,10 +261,10 @@ describe('useOpenProjectBookIds', () => {
 
   test('follows a change of active project without waiting for a web view event', async () => {
     // The active project is excluded from the result, so swapping which project is active swaps
-    // which one's books are reported. Nothing above re-reads the open projects when
-    // `activeProjectId` changes - only the hook's mount/dependency effect does - so this is what
-    // holds that effect in place through a later refactor. Without it the hook would keep
-    // reporting the previous project's set.
+    // which one's books are reported. Nothing re-reads the open web views when `activeProjectId`
+    // changes - web view events are the only trigger for that - so the exclusion has to be applied
+    // during render, and this holds it there through a later refactor. Applied in an effect
+    // instead, the hook would report the previous project's set for a commit.
     vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
       webViewDefinition('editor', { projectId: 'activeProject' }),
       webViewDefinition('resource', { projectId: 'otherProject' }),
@@ -285,8 +285,49 @@ describe('useOpenProjectBookIds', () => {
 
     rerender({ activeProjectId: 'otherProject' });
 
+    // Asserted WITHOUT waiting: the exclusion has to land in the same commit that renders the new
+    // active project. A commit computed with the previous value would offer the newly-active
+    // project's own books (REV) as books outside it - the exact set this hook exists to exclude.
+    // Its replacement (GEN) cannot appear that fast, since including a project means subscribing to
+    // it, so what the same commit guarantees is that the wrong answer is never shown.
+    expect(result.current).not.toContain('REV');
+
     // The exclusion moves with the active project: now 'activeProject' (GEN) is the one reported
     await waitFor(() => expect(result.current).toEqual(['GEN']));
+  });
+
+  test('reports the set left open after the closing tab’s event, not the one closing', async () => {
+    // rc-dock calls `onLayoutChange` BEFORE it commits the new layout, and the web view service
+    // emits the close event as that callback's first statement, synchronously - so a read taken
+    // inside the handler still sees the tab that is going away. The membership key would come back
+    // unchanged, `useState` would bail out, and the closed project would keep both its books and
+    // its `booksPresent` subscription until some unrelated web view event happened along.
+    let openDefinitions = [
+      webViewDefinition('staysView', { projectId: 'stays' }),
+      webViewDefinition('closesView', { projectId: 'closes' }),
+    ];
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockImplementation(() => openDefinitions);
+    getProjectDataProvider.mockImplementation(async (_projectInterface, projectId) =>
+      projectId === 'stays'
+        ? pdpWithBooks(booksPresentFlags(1), 'stays')
+        : pdpWithBooks(booksPresentFlags(66), 'closes'),
+    );
+
+    const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
+    await waitFor(() => expect(result.current).toEqual(['GEN', 'REV']));
+
+    const handlers = webViewEventHandlers.get(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW);
+    if (!handlers?.size) throw new Error('The hook is not subscribed to the close event');
+    await act(async () => {
+      // Fired while the layout still reports the pre-close tabs, exactly as rc-dock fires it...
+      handlers.forEach((handler) => handler(undefined));
+      // ...and committed only after the handler returned.
+      openDefinitions = [webViewDefinition('staysView', { projectId: 'stays' })];
+    });
+
+    await waitFor(() => expect(result.current).toEqual(['GEN']));
+    // The closed project's subscription goes with its books rather than outliving them.
+    await waitFor(() => expect(unsubscriberFor('closes')).toHaveBeenCalled());
   });
 
   describe('when disabled', () => {

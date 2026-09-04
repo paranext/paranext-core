@@ -2,19 +2,16 @@ import { LocalizationData } from '@shared/services/localization.service-model';
 import { LocalizeKey } from 'platform-bible-utils';
 import { CSSProperties } from 'react';
 
-/**
- * Pieces shared by the app's crash screens - {@link WebViewCrashedView}, which replaces a single
- * pane, and {@link WindowCrashedView}, which replaces a whole window.
- *
- * The two screens are meant to read as one thing, so the parts that decide how they LOOK live here
- * rather than being copied. Only what is genuinely identical is shared: each screen keeps its own
- * container style, because they differ in how they are positioned, and its own shell, because they
- * differ in whether they claim focus on mount.
- *
- * Everything here is plain data and pure functions evaluated at module load. Nothing reaches a
- * service, which is what lets a crash screen depend on it - see each screen's own notes on why it
- * takes as few dependencies as it can.
- */
+// Styling data shared by the app's crash screens - `WebViewCrashedView`, which replaces a single
+// pane, and `WindowCrashedView`, which replaces a whole window. The two are meant to read as one
+// thing, so the parts that decide how they LOOK live here rather than being copied. Their markup and
+// their localization boundary are shared too, in `crashed-view.component.tsx`; the only thing either
+// screen still owns is its container style, because one is measured from a pane and the other from
+// the viewport.
+//
+// Everything here is plain data and pure functions evaluated at module load. Nothing reaches a
+// service, which is what lets a crash screen depend on it - see each screen's own notes on why it
+// takes as few dependencies as it can.
 
 /** Mirrors `EmptyTitle`: text-sm, font-medium, tracking-tight */
 export const CRASHED_VIEW_TITLE_STYLE: CSSProperties = {

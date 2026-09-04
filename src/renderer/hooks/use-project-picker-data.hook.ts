@@ -1,5 +1,6 @@
 import { useData } from '@renderer/hooks/papi-hooks';
 import { useEvent, usePromise } from 'platform-bible-react';
+import { useDeferredDockLayoutRead } from '@renderer/hooks/use-deferred-dock-layout-read.hook';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-shard';
@@ -18,10 +19,7 @@ import {
 } from '@shared/services/web-view.service-model';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
-import {
-  findFirstEditorWebViewDefinition,
-  type SavedWebViewDefinition,
-} from '@shared/models/web-view.model';
+import { findFirstEditorWebViewDefinition } from '@shared/models/web-view.model';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 
 /** How long to wait before retrying a failed metadata fetch. */
@@ -138,34 +136,37 @@ export function useProjectPickerData(): ProjectPickerData {
     // picker names the project of the editor in this window and feeds a toolbar that navigates
     // this window's target, so a background window's editor must never become this window's
     // current project.
-    let allDefs: SavedWebViewDefinition[] = [];
     try {
-      allDefs = getAllOpenWebViewDefinitionsSync();
+      return findFirstEditorWebViewDefinition(getAllOpenWebViewDefinitionsSync())?.projectId;
     } catch (e) {
-      // The dock layout may not be registered yet on the first render, so this read comes back
-      // empty rather than answering "nothing is open". Every web view that ends up open announces
-      // itself through the web view events below, including ones restored from a saved layout, so
-      // a later event re-reads this. One of these while a window is starting up is the expected
-      // transient; one after the layout has registered means nothing is left to re-trigger it,
-      // which is why it is loud enough to find in a log.
+      // Loud rather than quiet: this read is deferred until after the dock layout has committed
+      // (see `useDeferredDockLayoutRead`), by which point this window's dock layout is registered,
+      // so a throw here is a real anomaly rather than the startup transient it once was. The whole
+      // read is inside the try — a throw from resolving the editor, or from building this very
+      // message, must not escape a deferred callback and become an unhandled error.
       logger.warn(
         `ProjectPicker: could not enumerate this window's web views: ${getErrorMessage(e)}`,
       );
+      return undefined;
     }
-    return findFirstEditorWebViewDefinition(allDefs)?.projectId;
   }, []);
 
-  const [activeEditorProjectId, setActiveEditorProjectId] = useState<string | undefined>(
-    readActiveEditorProjectId,
-  );
+  // No read during render. Enumerating open web views deliberately touches the WebViewState
+  // keep-alive set, which a discarded or double-invoked render must not do, and a render-phase read
+  // could not see this window's dock layout on a first render anyway. The deferred read below fills
+  // this in, one commit later at the outside.
+  const [activeEditorProjectId, setActiveEditorProjectId] = useState<string | undefined>(undefined);
   const [currentSimpleProjectError, setCurrentSimpleProjectError] = useState<string | undefined>(
     undefined,
   );
   const refreshMetadata = useCallback(() => setMetadataRefreshCounter((n) => n + 1), []);
-  const refreshActiveEditor = useCallback(
-    () => setActiveEditorProjectId(readActiveEditorProjectId()),
-    [readActiveEditorProjectId],
+  const refreshActiveEditor = useDeferredDockLayoutRead(
+    useCallback(
+      () => setActiveEditorProjectId(readActiveEditorProjectId()),
+      [readActiveEditorProjectId],
+    ),
   );
+
   // When getMetadataForAllProjects rejects (e.g. a PDPF's getAvailableProjects RPC times out
   // during startup), isRetryPending becomes true and the effect below schedules a re-fetch after
   // METADATA_FETCH_RETRY_DELAY_MS — by which time the extension host has typically drained its
@@ -180,14 +181,16 @@ export function useProjectPickerData(): ProjectPickerData {
   useEvent(onDidUpdateWebView, refreshActiveEditor);
   const onDidCloseWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW), []);
   useEvent(onDidCloseWebView, refreshActiveEditor);
-  // Re-read once the subscriptions above are attached. The initial read runs during the first
-  // render, when this window's dock layout is typically not registered yet, so it comes back empty
-  // and warns; declaring this after the `useEvent` calls means a web view event fired between that
-  // render and the subscriptions cannot be missed. Without it the picker would depend entirely on a
-  // later event arriving to correct a value read too early.
+  // The first read. Declared AFTER the `useEvent` calls so it is requested once the subscriptions
+  // are attached and an event fired in the gap cannot be missed.
+  //
+  // This is a fast path, not a synchronization point. It is what makes the picker name the current
+  // project on the common startup, where the dock layout has registered and loaded its saved layout
+  // by the time this deferred read runs; if the layout loads later than that, correctness comes from
+  // the open event above, at the cost of the picker naming no current project for an extra render.
   useEffect(() => {
-    setActiveEditorProjectId(readActiveEditorProjectId());
-  }, [readActiveEditorProjectId]);
+    refreshActiveEditor();
+  }, [refreshActiveEditor]);
   const onDidReloadExtensions = useMemo(
     () => getNetworkEvent('platform.onDidReloadExtensions'),
     [],
@@ -332,6 +335,13 @@ export function useProjectPickerData(): ProjectPickerData {
           `ProjectPicker: could not fetch details for current project ${currentProjectId}: ${getErrorMessage(e)}`,
         );
         setCurrentSimpleProjectError('Unable to load current project details');
+        // Arm the same bounded retry the shared metadata fetch uses. `usePromise` re-runs only when
+        // its callback identity changes, and neither of this callback's inputs changes while the
+        // same editor stays open — so without arming it here, a lookup that failed once leaves the
+        // error card up for the life of the window. The retry bumps the metadata generation, which
+        // is what changes the identity and re-runs this. Bounded by the same counter and cap, so a
+        // project that cannot be resolved at all stops after MAX_METADATA_FETCH_RETRIES.
+        if (fetchRetryCountRef.current < MAX_METADATA_FETCH_RETRIES) setIsRetryPending(true);
         return {
           id: currentProjectId,
           fullName: 'Unable to load current project details',

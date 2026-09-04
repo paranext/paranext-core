@@ -20,17 +20,47 @@ function reloadWindow() {
 }
 
 /**
+ * Whether a render failure has reached the renderer root in this window's lifetime.
+ *
+ * Module scope rather than component state because the reader is `index.tsx`'s teardown, which runs
+ * outside React. Never reset: a window whose tree has crashed once is not a window whose web view
+ * state can be trusted to be complete, whatever it renders afterwards.
+ */
+let rendererHasCrashed = false;
+
+/**
+ * Whether this window's React tree has crashed.
+ *
+ * Read by the `beforeunload` teardown in `index.tsx`, which purges saved web view state for every
+ * web view it did not see load. That purge is only correct once every web view HAS loaded, and a
+ * tree that crashed partway through restoring tabs never got there - so an unload after a crash
+ * (the reload button below is one) would delete the saved state of every tab that had not been
+ * restored yet. Before this component existed the crash simply prevented the unload; now that the
+ * window survives to be reloaded on purpose, the same protection has to be asked for.
+ */
+export function hasRendererCrashed(): boolean {
+  return rendererHasCrashed;
+}
+
+/**
  * Reports a render failure that reached the renderer root.
  *
  * A module-level function for the same reason as {@link reloadWindow}.
+ *
+ * Includes the error's own stack, not only its message: the component stack React supplies names
+ * the components that were rendering but never the frame that threw, and in a packaged build with
+ * no devtools attached React's own console output does not reach the file log. Without it the one
+ * log line a reporter can send back names no code at all, which for a crash this hard to reproduce
+ * on purpose is most of the diagnostic value.
  */
 function logRendererCrash(error: unknown, errorInfo: ErrorInfo) {
   // `ErrorInfo.componentStack` is typed `string | null`, and this repo does not write `null`. The
   // explicit newline keeps the stack readable even if a React version returns one that does not
   // already start with a line break.
   const componentStack = errorInfo.componentStack ? `\n${errorInfo.componentStack}` : '';
+  const errorStack = error instanceof Error && error.stack ? `\n${error.stack}` : '';
   logger.error(
-    `The renderer's React tree crashed while rendering: ${getErrorMessage(error)}${componentStack}`,
+    `The renderer's React tree crashed while rendering: ${getErrorMessage(error)}${errorStack}${componentStack}`,
   );
 }
 
@@ -73,7 +103,18 @@ export class RendererErrorBoundary extends Component<
   // module-level function keeps it that way rather than inventing a use for `this`.
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
-    logRendererCrash(error, errorInfo);
+    rendererHasCrashed = true;
+    // React hands a throw from `componentDidCatch` to the NEXT boundary up, and above the renderer
+    // root there is none — so an exception while REPORTING the crash would unmount the root and
+    // produce the very blank window this component exists to prevent. Reporting is not worth the
+    // window: `getErrorMessage` can throw on a value whose `toString` throws, and a logger call
+    // reaches a service that may be as unwell as the tree.
+    try {
+      logRendererCrash(error, errorInfo);
+    } catch {
+      // Nothing here can be reported through the channel that just failed, and the crash screen
+      // still renders, which is the part the user needs.
+    }
   }
 
   render(): ReactNode {

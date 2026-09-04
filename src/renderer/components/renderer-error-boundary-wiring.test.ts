@@ -12,9 +12,10 @@ import { describe, expect, it } from 'vitest';
  * module scope, mounting React and starting services. So this reads the source as text, the way the
  * web view boundary's wiring test does.
  *
- * What this pins: that the boundary is imported and that the root render passes the app as its
- * child. What it cannot pin: that the boundary catches anything at runtime - the boundary's own
- * unit tests cover that.
+ * What this pins: that the boundary is imported, that the root render puts the app INSIDE it rather
+ * than beside it, and that the teardown consults the crash flag before purging web view state. What
+ * it cannot pin: that the boundary catches anything at runtime - the boundary's own unit tests
+ * cover that.
  */
 
 const RENDERER_DIR = path.resolve(__dirname, '..');
@@ -35,21 +36,50 @@ describe('renderer error boundary wiring', () => {
   it('imports the boundary into the renderer entry point', () => {
     const index = readRendererFile('index.tsx');
 
-    expect(index).toMatch(new RegExp(`import \\{ ${BOUNDARY_NAME} \\} from`));
+    // Matches across newlines: the import is a braced list that prettier may wrap over several
+    // lines as more names are pulled from this module
+    expect(index).toMatch(new RegExp(`import \\{[^}]*\\b${BOUNDARY_NAME}\\b[^}]*\\} from`, 's'));
   });
 
   it('wraps the app in the boundary at the root render call', () => {
     const index = readRendererFile('index.tsx');
 
     const renderStart = index.indexOf('root.render(');
+    expect(renderStart).toBeGreaterThanOrEqual(0);
     // `markStartup` is called several times before this point, so the end anchor must be the first
-    // one AFTER the render call rather than the first in the file
-    const renderCall = index.slice(renderStart, index.indexOf('markStartup(', renderStart));
+    // one AFTER the render call rather than the first in the file. Asserted rather than assumed: a
+    // missing anchor gives `indexOf` -1, and `slice(start, -1)` would silently widen the window to
+    // the rest of the file and let anything below the render call satisfy the checks
+    const renderEnd = index.indexOf('markStartup(', renderStart);
+    expect(renderEnd).toBeGreaterThan(renderStart);
+    const renderCall = index.slice(renderStart, renderEnd);
 
-    // Asserting both the wrapper and the app, in that order, orders out the failure where the
-    // boundary is present but the app is rendered beside it rather than inside it
-    expect(renderCall).toMatch(new RegExp(`<${BOUNDARY_NAME}>`));
-    expect(renderCall).toContain('<App />');
-    expect(renderCall.indexOf(BOUNDARY_NAME)).toBeLessThan(renderCall.indexOf('<App />'));
+    // CONTAINMENT, not just order: the app must appear between the boundary's opening and closing
+    // tags. Asserting the two tags in order would be satisfied by
+    // `<RendererErrorBoundary></RendererErrorBoundary><App />`, which wraps nothing and restores
+    // the blank-window bug in full
+    const boundaryOpen = renderCall.indexOf(`<${BOUNDARY_NAME}>`);
+    const app = renderCall.indexOf('<App />');
+    const boundaryClose = renderCall.indexOf(`</${BOUNDARY_NAME}>`);
+
+    expect(boundaryOpen).toBeGreaterThanOrEqual(0);
+    expect(app).toBeGreaterThan(boundaryOpen);
+    expect(boundaryClose).toBeGreaterThan(app);
+  });
+
+  it('checks the crash flag before purging web view state on unload', () => {
+    const index = readRendererFile('index.tsx');
+
+    // `cleanupOldWebViewState` deletes the saved state of every web view it did not see load, so
+    // running it after a crash that interrupted tab restoration throws away the unrestored tabs'
+    // state. The crash screen's reload button makes that unload reachable
+    const teardownStart = index.indexOf("addEventListener('beforeunload'");
+    expect(teardownStart).toBeGreaterThanOrEqual(0);
+    const cleanupCall = index.indexOf('cleanupOldWebViewState()', teardownStart);
+    expect(cleanupCall).toBeGreaterThan(teardownStart);
+
+    const guard = index.indexOf('hasRendererCrashed()', teardownStart);
+    expect(guard).toBeGreaterThan(teardownStart);
+    expect(guard).toBeLessThan(cleanupCall);
   });
 });

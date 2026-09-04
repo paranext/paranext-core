@@ -12,6 +12,7 @@ import {
   newPlatformError,
   PlatformError,
   RESOURCE_EXHAUSTED,
+  stringLength,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -520,7 +521,7 @@ describe('createUseDataHook runaway-loop guard', () => {
     deliverTimes(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 1);
 
     expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining('Data of type Stuff (selector: {"book":"GEN","chapterNum":1})'),
+      expect.stringContaining('Data of type Stuff (selector: { book: GEN, chapterNum: 1 })'),
     );
   });
 
@@ -571,42 +572,98 @@ describe('createUseDataHook runaway-loop guard', () => {
     );
   });
 
-  it('truncates a long selector rather than putting all of it in the warning', async () => {
-    const longSelector: TestSelector = { book: 'G'.repeat(200), chapterNum: 1 };
-    const expectedDescription = `${JSON.stringify(longSelector).slice(
-      0,
-      MAX_SELECTOR_DESCRIPTION_LENGTH,
-    )}…`;
+  /** The selector description out of the one warning the guard logged. */
+  function loggedSelectorDescription(): string {
+    expect(logger.warn).toHaveBeenCalledOnce();
+    const warning = String(vi.mocked(logger.warn).mock.calls[0][0]);
+    const match = /\(selector: (.*)\)/.exec(warning);
+    if (!match) throw new Error(`The warning named no selector: ${warning}`);
+    return match[1];
+  }
 
-    renderUseStuff(longSelector);
+  /** Trips the guard on `selector` and returns the selector description it logged. */
+  async function describeSelectorInWarning(selector: TestSelector): Promise<string> {
+    renderUseStuff(selector);
     await act(async () => harness.subscriptions[0].resolveSubscribe());
 
     deliverTimes(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 1);
 
-    expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining(`Data of type Stuff (selector: ${expectedDescription})`),
-    );
-    // The point of truncating: the whole selector must not reach the log
+    return loggedSelectorDescription();
+  }
+
+  it('bounds a long selector rather than putting all of it in the warning', async () => {
+    const description = await describeSelectorInWarning({ book: 'G'.repeat(200), chapterNum: 1 });
+
+    expect(stringLength(description)).toBeLessThanOrEqual(MAX_SELECTOR_DESCRIPTION_LENGTH + 1);
+    expect(description.endsWith('…')).toBe(true);
+    // The point of bounding: the whole selector must not reach the log
     expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('G'.repeat(200)));
   });
 
-  it('describes an unserializable selector instead of throwing while reporting a trip', async () => {
-    // This runs inside the trip handler, so a `JSON.stringify` throw here would replace the warning
-    // with a fresh exception at the moment the app is already misbehaving - which is the failure
-    // this whole guard exists to report rather than cause.
+  it('does not serialize a large selector just to throw all but 80 characters away', async () => {
+    // This runs inside the trip handler, on the delivery path of the very loop being reported, so a
+    // full `JSON.stringify` walk of a selector holding a chapter's worth of USJ is a stall at the
+    // worst possible moment. Nested values are named, not walked.
+    const deepValue = { usj: { content: Array.from({ length: 5000 }, () => 'deep-content') } };
+    // A nested selector cannot be built within `TestSelector`'s shape; the assertion is confined to
+    // attaching it.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const selector = { book: 'GEN', chapterNum: 1, deep: deepValue } as unknown as TestSelector;
+
+    const description = await describeSelectorInWarning(selector);
+
+    expect(description).toContain('book: GEN');
+    expect(description).not.toContain('deep-content');
+  });
+
+  it('describes a circular selector instead of throwing while reporting a trip', async () => {
+    // A throw here would replace the warning with a fresh exception at the moment the app is
+    // already misbehaving - which is the failure this whole guard exists to report rather than
+    // cause. `JSON.stringify` throws on a cycle; naming nested values rather than walking them
+    // means this one never arises.
     const circularSelector: TestSelector = { book: 'GEN', chapterNum: 1 };
     // A circular selector cannot be built without stepping outside `TestSelector`'s shape; the
     // assertion is confined to attaching the cycle.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     (circularSelector as unknown as { self: unknown }).self = circularSelector;
 
-    renderUseStuff(circularSelector);
-    await act(async () => harness.subscriptions[0].resolveSubscribe());
+    const description = await describeSelectorInWarning(circularSelector);
 
-    deliverTimes(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 1);
+    expect(description).toContain('book: GEN');
+    expect(description).toContain('self: {…}');
+  });
 
-    expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining('Data of type Stuff (selector: [unserializable])'),
-    );
+  it('falls back to a placeholder when the selector cannot be described at all', async () => {
+    const hostileSelector = {
+      book: 'GEN',
+      get chapterNum(): number {
+        throw new Error('this getter is as unwell as the tree');
+      },
+    };
+    // A selector whose property getter throws is outside `TestSelector`'s shape; the assertion is
+    // confined to handing it over, which is the whole point of the case.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const selector = hostileSelector as unknown as TestSelector;
+
+    const description = await describeSelectorInWarning(selector);
+
+    expect(description).toBe('[undescribable]');
+  });
+
+  it('keeps the warning to one log line and never cuts a grapheme in half', async () => {
+    // Selectors carry project names, queries and file paths, so they are not ASCII by construction:
+    // a native cut can land inside a surrogate pair, and a raw newline splits one warning across
+    // log lines.
+    // A bare string selector is outside `TestSelector`'s shape - this is how the settings provider
+    // is read - so the assertion is confined to building one.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const selector = `a\nb\t${'👍'.repeat(100)}` as unknown as TestSelector;
+
+    const description = await describeSelectorInWarning(selector);
+
+    expect(description).not.toMatch(/[\n\r\t]/);
+    // A lone high surrogate is a half-character the log viewer renders as a replacement glyph
+    expect(description).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+    expect(stringLength(description)).toBeLessThanOrEqual(MAX_SELECTOR_DESCRIPTION_LENGTH + 1);
   });
 });

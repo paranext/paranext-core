@@ -15,12 +15,19 @@ import {
   NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
 } from 'platform-bible-utils/experimental';
 import { Canon } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredDockLayoutRead } from '@renderer/hooks/use-deferred-dock-layout-read.hook';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 /** Canon order for the returned union, so consumers can group by section without re-sorting. */
 const CANON_BOOK_IDS = Canon.allBookIds;
 
 const EMPTY_IDS: string[] = [];
+
+/**
+ * Joins the open project ids into one comparable key. NUL, so no pair of distinct id sets can
+ * collide into the same key — a space would let {'A B'} and {'A', 'B'} agree.
+ */
+const SEPARATOR = '\u0000';
 
 /**
  * Project ids reachable from this window's open web views: each view's own `projectId`, plus any it
@@ -32,15 +39,19 @@ const EMPTY_IDS: string[] = [];
  * open anywhere in the window is one they are working with, and the books it reports are the same
  * books either way.
  *
- * `activeProjectId` is excluded — its books are already the control's baseline, so subscribing
- * again would be pure cost.
+ * The active project is NOT excluded here. Which project is active is not something a web view
+ * event reports, so it is applied where it can react to a prop changing - during render, in the
+ * caller - rather than baked into the value this read produces.
  */
-function getOpenProjectIds(activeProjectId: string | undefined): string[] {
+function getOpenProjectIds(): string[] {
   let definitions;
   try {
     definitions = getAllOpenWebViewDefinitionsSync();
   } catch (e) {
-    logger.debug(`Open project books could not enumerate open web views: ${getErrorMessage(e)}`);
+    // Loud rather than quiet: this read is deferred until after the dock layout has committed (see
+    // `useDeferredDockLayoutRead`), by which point this window's dock layout is registered. A throw
+    // here is therefore a real anomaly and not the startup transient it once was.
+    logger.warn(`Open project books could not enumerate open web views: ${getErrorMessage(e)}`);
     return EMPTY_IDS;
   }
 
@@ -55,8 +66,15 @@ function getOpenProjectIds(activeProjectId: string | undefined): string[] {
         if (projectId) projectIds.add(projectId);
       });
   });
-  if (activeProjectId) projectIds.delete(activeProjectId);
   return [...projectIds];
+}
+
+/**
+ * The open project ids as a single comparable value. Sorted, because set equality rather than order
+ * is what matters.
+ */
+function readOpenProjectIdsKey(): string {
+  return getOpenProjectIds().sort().join(SEPARATOR);
 }
 
 /**
@@ -88,23 +106,15 @@ export function useOpenProjectBookIds(
   // fires cannot re-render this hook's consumer. A counter would re-render on every event by
   // construction, because its value changes even when nothing it is standing in for did.
   //
-  // Sorted because set equality, not order, is what matters. NUL-separated so no pair of distinct
-  // id sets can collide into the same key — a space would let {'A B'} and {'A', 'B'} agree,
-  // silently suppressing a real change.
-  const readOpenProjectIdsKey = useCallback(
-    () => (isEnabled ? [...getOpenProjectIds(activeProjectId)].sort().join('\u0000') : ''),
-    [isEnabled, activeProjectId],
-  );
-
-  const [openProjectIdsKey, setOpenProjectIdsKey] = useState(readOpenProjectIdsKey);
-  // Read through a ref so this callback keeps one identity for the life of the hook. Depending on
-  // `readOpenProjectIdsKey` directly would tear down and rebuild all three event subscriptions
-  // every time the active project changes, which is churn the effect below already covers.
-  const readOpenProjectIdsKeyRef = useRef(readOpenProjectIdsKey);
-  readOpenProjectIdsKeyRef.current = readOpenProjectIdsKey;
-  const refreshOpenWebViews = useCallback(
-    () => setOpenProjectIdsKey(readOpenProjectIdsKeyRef.current()),
-    [],
+  // The key covers EVERY open project, with the active one still in it. Deriving the exclusion here
+  // would put a value that changes with a prop behind a read that only web view events trigger, so
+  // an `activeProjectId` change would not reach the returned list until a commit later — one
+  // committed frame in which the newly active project's own books are offered as "books outside
+  // this project", the exact set this hook exists to exclude. The exclusion is applied during
+  // render instead, below.
+  const [allOpenProjectIdsKey, setAllOpenProjectIdsKey] = useState('');
+  const refreshOpenWebViews = useDeferredDockLayoutRead(
+    useCallback(() => setAllOpenProjectIdsKey(readOpenProjectIdsKey()), []),
   );
 
   // Undefined while disabled: `useEvent` subscribes to nothing when its event is undefined, so a
@@ -113,19 +123,30 @@ export function useOpenProjectBookIds(
   useEvent(isEnabled ? onDidUpdateWebView : undefined, refreshOpenWebViews);
   useEvent(isEnabled ? onDidCloseWebView : undefined, refreshOpenWebViews);
 
-  // `activeProjectId` and `isEnabled` are not web view events, so nothing above re-reads the key
-  // when they change. Without this the hook would keep reporting the previous project's set.
+  // The first read. Declared AFTER the `useEvent` calls so it is requested once the subscriptions
+  // are attached and an event fired in the gap cannot be missed. There is no read during render:
+  // enumerating open web views deliberately touches the WebViewState keep-alive set, which a
+  // discarded or double-invoked render must not do, and by the time this deferred read runs this
+  // window's dock layout has registered — which on a first render it typically has not.
+  //
+  // Re-requested when `isEnabled` turns on, since nothing was listening while it was off. Turning
+  // off drops the key so re-enabling cannot briefly report a set that went stale while disabled.
   useEffect(() => {
-    setOpenProjectIdsKey(readOpenProjectIdsKey());
-  }, [readOpenProjectIdsKey]);
+    if (isEnabled) refreshOpenWebViews();
+    else setAllOpenProjectIdsKey('');
+  }, [isEnabled, refreshOpenWebViews]);
 
-  // Identity tracks membership rather than event count, so the subscription effect, the returned
-  // book list, and the consumers that memoize on it all stay stable across an unchanged set. The
-  // empty key must short-circuit: `''.split('\u0000')` yields `['']`, not `[]`.
-  const openProjectIds = useMemo(
-    () => (openProjectIdsKey ? openProjectIdsKey.split('\u0000') : EMPTY_IDS),
-    [openProjectIdsKey],
-  );
+  // The active project is excluded HERE, during render, so a change to it lands in the same commit
+  // that renders it. Identity still tracks membership rather than event count — the memo's inputs
+  // are the key and the props, none of which a no-op web view event changes — so the subscription
+  // effect, the returned book list, and the consumers that memoize on it all stay stable across an
+  // unchanged set. The empty key must short-circuit: splitting it yields `['']`, not `[]`.
+  const openProjectIds = useMemo(() => {
+    if (!isEnabled) return EMPTY_IDS;
+    const ids = allOpenProjectIdsKey ? allOpenProjectIdsKey.split(SEPARATOR) : EMPTY_IDS;
+    const withoutActive = activeProjectId ? ids.filter((id) => id !== activeProjectId) : ids;
+    return withoutActive.length > 0 ? withoutActive : EMPTY_IDS;
+  }, [allOpenProjectIdsKey, activeProjectId, isEnabled]);
 
   // Entries persist for projects that have since closed rather than being pruned as each project
   // closes; the final useMemo below filters them out by membership at read time. This is fine

@@ -21,6 +21,8 @@ import {
   PlatformEventAsync,
   PlatformEventHandler,
   RESOURCE_EXHAUSTED,
+  slice,
+  stringLength,
 } from 'platform-bible-utils';
 import { ExtractDataProviderDataTypes } from '@shared/models/extract-data-provider-data-types.model';
 import { logger } from '@shared/services/logger.service';
@@ -237,6 +239,62 @@ type UseDataHookGeneric<TUseDataProviderParams extends unknown[]> = {
 export const MAX_SELECTOR_DESCRIPTION_LENGTH = 80;
 
 /**
+ * Collapses the characters that would break a line-oriented log, then trims to
+ * {@link MAX_SELECTOR_DESCRIPTION_LENGTH} on a grapheme boundary.
+ *
+ * A selector carries project names, queries and file paths, so it is not ASCII by construction: a
+ * native cut can land inside a surrogate pair and write a lone surrogate into both the warning and
+ * the `PlatformError` message every consumer of the tripped hook receives. A raw newline would
+ * split one warning across log lines, the way `sanitizeForLog` prevents for RPC payloads.
+ */
+function collapseAndTrim(description: string): string {
+  const collapsed = description.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ');
+  // Segmenting is the expensive part of the grapheme helpers, so this only reaches for them once
+  // the cheap native length says there may be something to cut. Native `length` counts code units,
+  // which is never fewer than the graphemes, so a string this says is short enough is short enough.
+  if (collapsed.length <= MAX_SELECTOR_DESCRIPTION_LENGTH) return collapsed;
+  if (stringLength(collapsed) <= MAX_SELECTOR_DESCRIPTION_LENGTH) return collapsed;
+  return `${slice(collapsed, 0, MAX_SELECTOR_DESCRIPTION_LENGTH)}…`;
+}
+
+/** One selector property, rendered without walking into it. */
+function describeSelectorValue(value: unknown): string {
+  if (isString(value))
+    return value.length > MAX_SELECTOR_DESCRIPTION_LENGTH
+      ? `${value.slice(0, MAX_SELECTOR_DESCRIPTION_LENGTH)}…`
+      : value;
+  if (typeof value === 'object' && value) return Array.isArray(value) ? '[…]' : '{…}';
+  return String(value);
+}
+
+/**
+ * Renders a selector for the warning WITHOUT serializing all of it.
+ *
+ * This runs inside the guard's trip handler, on the delivery path of the very update loop being
+ * reported, so what it costs is paid at the worst possible moment. `JSON.stringify` of the whole
+ * selector would walk an arbitrarily large object graph synchronously just so all but 80 characters
+ * of the result could be thrown away — a selector holding a USJ chapter or a comment thread list is
+ * megabytes. The input is bounded instead: own enumerable properties, one shallow line each, and
+ * the walk stops as soon as there is more text than the warning can show.
+ */
+function describeSelector(selector: unknown): string {
+  if (isString(selector)) return selector;
+  if (typeof selector !== 'object' || !selector) return String(selector);
+
+  const rendered: string[] = [];
+  let remaining = MAX_SELECTOR_DESCRIPTION_LENGTH;
+  // `some` rather than `forEach` so the walk can stop; `Object.entries` reads own enumerable
+  // properties only, so a prototype chain cannot lengthen it.
+  Object.entries(selector).some(([key, value]) => {
+    const entry = `${key}: ${describeSelectorValue(value)}`;
+    rendered.push(entry);
+    remaining -= entry.length + 2;
+    return remaining <= 0;
+  });
+  return `{ ${rendered.join(', ')} }`;
+}
+
+/**
  * Renders a data type and its selector for the runaway-render warning.
  *
  * Some data providers expose unnamed data types - `useSetting` reads the settings provider through
@@ -247,16 +305,14 @@ export const MAX_SELECTOR_DESCRIPTION_LENGTH = 80;
 function describeDataType(dataType: unknown, selector: unknown): string {
   const typeName = String(dataType) || '(unnamed)';
   let selectorDescription: string;
-  if (isString(selector)) selectorDescription = selector;
-  else {
-    try {
-      selectorDescription = JSON.stringify(selector) ?? String(selector);
-    } catch {
-      selectorDescription = '[unserializable]';
-    }
+  try {
+    selectorDescription = collapseAndTrim(describeSelector(selector));
+  } catch {
+    // A getter or a `toString` on the selector can throw. This runs while the app is already
+    // misbehaving, so a throw here would replace a useful warning with a fresh exception at exactly
+    // the wrong moment.
+    selectorDescription = '[undescribable]';
   }
-  if (selectorDescription.length > MAX_SELECTOR_DESCRIPTION_LENGTH)
-    selectorDescription = `${selectorDescription.slice(0, MAX_SELECTOR_DESCRIPTION_LENGTH)}…`;
   return `${typeName} (selector: ${selectorDescription})`;
 }
 

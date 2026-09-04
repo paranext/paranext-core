@@ -25,6 +25,13 @@ function Boom(): ReactNode {
   throw new Error("Cannot read properties of undefined (reading 'length')");
 }
 
+/** Throws an error whose stack names a frame no component stack would mention. */
+function BoomWithStack(): ReactNode {
+  const error = new Error('threw with a stack');
+  error.stack = 'Error: threw with a stack\n    at theFrameThatActuallyThrew (some-module.ts:42:7)';
+  throw error;
+}
+
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
@@ -74,6 +81,53 @@ describe('RendererErrorBoundary', () => {
     const loggedMessage = vi.mocked(logger.error).mock.calls[0][0];
     expect(loggedMessage).toContain("Cannot read properties of undefined (reading 'length')");
     expect(loggedMessage).toContain('Boom');
+  });
+
+  it('logs the error’s own stack, which the component stack never names', () => {
+    render(
+      <RendererErrorBoundary>
+        <BoomWithStack />
+      </RendererErrorBoundary>,
+    );
+
+    expect(vi.mocked(logger.error).mock.calls[0][0]).toContain('theFrameThatActuallyThrew');
+  });
+
+  it('keeps the crash screen up when reporting the crash itself throws', () => {
+    // React hands a `componentDidCatch` throw to the next boundary up, and above the renderer root
+    // there is none - so an unguarded throw here would unmount the root and blank the window, the
+    // exact failure this boundary exists to prevent.
+    vi.mocked(logger.error).mockImplementation(() => {
+      throw new Error('the logger is as unwell as the tree');
+    });
+
+    expect(() =>
+      render(
+        <RendererErrorBoundary>
+          <Boom />
+        </RendererErrorBoundary>,
+      ),
+    ).not.toThrow();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
+
+  it('reports that the window crashed, so teardown can skip the web view state purge', async () => {
+    // Module-level and deliberately never reset, so this needs a fresh module registry to observe
+    // the transition rather than a flag some earlier test in this file already set.
+    vi.resetModules();
+    const { RendererErrorBoundary: FreshBoundary, hasRendererCrashed } = await import(
+      './renderer-error-boundary.component'
+    );
+
+    expect(hasRendererCrashed()).toBe(false);
+
+    render(
+      <FreshBoundary>
+        <Boom />
+      </FreshBoundary>,
+    );
+
+    expect(hasRendererCrashed()).toBe(true);
   });
 
   it('reloads the window when the crash screen’s reload button is pressed', () => {
