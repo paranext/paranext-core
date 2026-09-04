@@ -56,7 +56,7 @@ function onboardingTourShard() {
 }
 
 /** Wire windows, each serving its own onboarding tour service shard */
-function withWindows(shardsByWindowId: Record<number, unknown>) {
+function withWindows(shardsByWindowId: Record<string, unknown>) {
   withWindowsServingShards(mocks, ONBOARDING_TOUR_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId);
 }
 
@@ -73,7 +73,7 @@ function registrations() {
 describe('Onboarding tour service router', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
@@ -103,7 +103,7 @@ describe('Onboarding tour service router', () => {
     const { handler } = registrations().get('command:platform.showOnboardingTour') ?? {};
 
     await handler?.();
-    mocks.getTargetWindowId.mockReturnValue(3);
+    mocks.getTargetWindowId.mockReturnValue('3');
     await handler?.();
 
     expect(shards[2].show).toHaveBeenCalledTimes(1);
