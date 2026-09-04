@@ -91,9 +91,11 @@ import {
   getTargetWindowId,
   getWindows,
   handleWindowBlurred,
+  isWindowAbandoned,
   isWindowClosing as isWindowMarkedClosing,
   isWindowTracked,
   isWindowReady,
+  wasWindowEverReady,
   markWindowAbandoned,
   markWindowClosing,
   markWindowNotReady,
@@ -104,6 +106,7 @@ import {
 } from '@main/services/window-state.service';
 import {
   assignEntryToWindow,
+  getMainWindowId,
   handleWindowRemoved,
   initializeWindowLayoutPersistence,
   isWindowPendingContent,
@@ -117,6 +120,7 @@ import {
   writeNow,
 } from '@main/services/window-layout-persistence.service';
 import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
+import { summarizeWindows } from '@main/window-summary.util';
 import {
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
@@ -644,7 +648,12 @@ async function main() {
 
   if (isDebug) {
     const electronDebug = await import('electron-debug');
-    electronDebug.default();
+    // electron-debug docks DevTools into the window, which takes roughly 555px of a 1280px-wide
+    // window. That is fine for a human, but it silently shrinks the renderer for anything driving
+    // the UI, so layout-sensitive automation ends up interacting with a squeezed dock where tabs
+    // sit under web views. Automated runs set PT_NO_DEVTOOLS so the window they measure is the
+    // window a user would see; F12 still opens DevTools on demand.
+    electronDebug.default({ showDevTools: process.env.PT_NO_DEVTOOLS !== 'true' });
   }
 
   /** Install extensions into the Chromium renderer process */
@@ -724,6 +733,15 @@ async function main() {
       }
     }
 
+    // Deliberately no `title` here, and nothing in main may call `setTitle` on a window either.
+    // Each renderer names its own window by publishing a page title, which Electron carries to the
+    // native title; that is what the OS switcher shows and what other windows read when they offer
+    // this one as a move target. A title set from this process does not stick: at construction it
+    // lasts only until the renderer publishes its first page title, and a runtime call holds only
+    // until the renderer's next page-title change — either way the main process cannot hold a name
+    // against the renderer's own naming. Until the renderer's first title arrives, Electron answers
+    // `getTitle()` with its own default, which is why `summarizeWindows` reads a window's readiness
+    // rather than trusting its title.
     const newWindow = new BrowserWindow({
       show: true,
       ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
@@ -731,11 +749,9 @@ async function main() {
       height: windowHeight,
       minWidth: WINDOW_MIN_WIDTH_PX,
       icon: getAssetPath('icon.png'),
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),
+      titleBarStyle: 'hidden',
       // re-add window controls
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      ...(process.platform !== 'darwin' && process.platform !== 'linux'
+      ...(process.platform !== 'darwin'
         ? {
             titleBarOverlay: {
               height: TITLE_BAR_BUTTON_HEIGHT,
@@ -995,8 +1011,7 @@ async function main() {
       }
 
       // Adjust the Window button colors based on the current theme
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      if (process.platform !== 'darwin' && process.platform !== 'linux') {
+      if (process.platform !== 'darwin') {
         const paintTitleBarForTheme = (newTheme: ThemeDefinitionExpanded) => {
           if (!newTheme.cssVariables.primary) {
             logger.warn(
@@ -1781,6 +1796,53 @@ async function main() {
         result: {
           name: 'return value',
           schema: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.getWindows',
+    async () => {
+      // Read on call rather than pushed on change: callers want this at the moment they offer the
+      // user a choice of windows and never again, so there is nothing to keep in sync.
+      //
+      // Offered windows are ones that can still take the work: a window whose close has begun is
+      // on its way out, and one whose renderer is dead with no reload coming can never receive
+      // anything. Picking either sends the user's action nowhere. A window that has not finished
+      // starting is deliberately still offered — it is on screen, the user can see it, and work
+      // sent to it lands once it is ready. Its name is the one thing it cannot supply yet, which is
+      // why its readiness travels with it.
+      const availableWindows = getWindows()
+        .filter((window) => !isWindowMarkedClosing(window.id) && !isWindowAbandoned(window.id))
+        .map((window) => ({
+          id: window.id,
+          getTitle: () => window.getTitle(),
+          wasEverReady: wasWindowEverReady(window.id),
+        }));
+      return summarizeWindows(availableWindows, getMainWindowId());
+    },
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          'List every open window with the title it is currently showing, for offering the user ' +
+          'a choice of window. Titles follow each window’s own content, so they can repeat',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                windowId: { type: 'number' },
+                label: { type: 'string' },
+                isMain: { type: 'boolean' },
+              },
+              required: ['windowId', 'label', 'isMain'],
+            },
+          },
         },
       },
     },

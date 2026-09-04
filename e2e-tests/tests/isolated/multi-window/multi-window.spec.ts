@@ -64,7 +64,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
-  preConfigureSettings,
   sendPapiRequestOnce,
   waitForAppReady,
   waitForOverlayGone,
@@ -338,6 +337,13 @@ async function waitForGenericFocusToReportWindow(windowId: number): Promise<Focu
 // #endregion
 
 test.use({
+  // Seeded through the fixture rather than a preConfigureSettings call in a hook, which the
+  // fixture would both override and then write back into the developer's shared settings.
+  // Power mode because these suites need each opened view to become its own dock tab;
+  // firstRunComplete because the wizard is a modal that aria-hides the app. The English
+  // interface language the selectors depend on is seeded by the fixture itself.
+  interfaceMode: 'power',
+  seedSettings: { 'platform.firstRunComplete': true },
   // The option fixture is named `electronLaunchOptions` (not `launchOptions`) — see
   // e2e-tests/fixtures/isolated.fixture.ts.
   //
@@ -356,22 +362,6 @@ test.describe('multi-window lifecycle', () => {
   // Each test pays full app startup (up to ~180 s worst case) plus one or two extra window
   // startups, each of which can take tens of seconds (see the poll budgets below).
   test.setTimeout(420_000);
-
-  let restoreSettings: (() => void) | undefined;
-
-  test.beforeAll(() => {
-    // Written before any launch and restored after the last test so the developer's own settings
-    // survive the suite. See the file header for why power mode is load-bearing.
-    restoreSettings = preConfigureSettings({
-      'platform.firstRunComplete': true,
-      'platform.interfaceLanguage': ['en'],
-      'platform.interfaceMode': 'power',
-    });
-  });
-
-  test.afterAll(() => {
-    restoreSettings?.();
-  });
 
   test('second window opens with Home docked, focus routing follows the focused window, and closing the secondary window does not shut the app down', async ({
     electronApp,

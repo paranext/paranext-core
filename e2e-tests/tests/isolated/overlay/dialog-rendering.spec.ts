@@ -91,11 +91,41 @@ function showDialogViaWebSocketOnce<T = unknown>(
 }
 
 /**
+ * Minimum gap this spec leaves between overlay requests.
+ *
+ * The overlay service rejects a second request inside its own 50 ms cooldown with `Overlay request
+ * dropped by debounce cooldown` (`DEBOUNCE_COOLDOWN_MS` in
+ * `src/renderer/services/overlays/overlay.service-host.ts`). That guard is deliberate and has unit
+ * tests asserting it fires, so a spec that trips it has found working behaviour, not a bug — this
+ * one opens dialogs back to back, faster than any user could.
+ *
+ * Paced rather than retried on purpose. Retrying past the rejection would turn the spec green while
+ * quietly asserting that a documented product guard does not happen, and would hide a real
+ * regression if the cooldown ever stopped working. Comfortably above 50 ms so ordinary scheduling
+ * jitter cannot land two requests inside the window.
+ */
+const OVERLAY_REQUEST_SPACING_MS = 150;
+
+/** When the last overlay request was sent, so the next one can wait out the service's cooldown. */
+let lastOverlayRequestAt = 0;
+
+/** Hold off until the overlay service's debounce cooldown has certainly elapsed. */
+async function waitOutOverlayCooldown(): Promise<void> {
+  const sinceLastRequest = Date.now() - lastOverlayRequestAt;
+  if (sinceLastRequest < OVERLAY_REQUEST_SPACING_MS) {
+    await delay(OVERLAY_REQUEST_SPACING_MS - sinceLastRequest);
+  }
+  lastOverlayRequestAt = Date.now();
+}
+
+/**
  * Send a PAPI `dialog:showDialog` JSON-RPC command over WebSocket. Returns a promise that resolves
  * with the dialog result once the user dismisses it. Uses a generous timeout because the dialog
  * stays open until Playwright interacts with it.
  *
- * Retries on transient WebSocket / PAPI connection errors (e.g. renderer bridge not ready yet).
+ * Paces itself past the overlay service's debounce cooldown (see {@link OVERLAY_REQUEST_SPACING_MS})
+ * and retries on transient WebSocket / PAPI connection errors (e.g. renderer bridge not ready
+ * yet).
  */
 async function showDialogViaWebSocket<T = unknown>(
   dialogType: string,
@@ -105,6 +135,9 @@ async function showDialogViaWebSocket<T = unknown>(
   const maxAttempts = 4;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
+      // Sequential by design: the point is to space this request from the previous one.
+      // eslint-disable-next-line no-await-in-loop
+      await waitOutOverlayCooldown();
       return await showDialogViaWebSocketOnce<T>(dialogType, options, port);
     } catch (e) {
       if (attempt < maxAttempts - 1 && isTransientPapiWebSocketError(e)) {

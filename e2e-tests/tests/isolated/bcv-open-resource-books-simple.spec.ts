@@ -1,7 +1,6 @@
 import { expect, test } from '../../fixtures/isolated.fixture';
 import {
   preConfigureRecentlyOpenedProjects,
-  preConfigureSettings,
   sendPapiRequestOnce,
   waitForAppReady,
   waitForOverlayGone,
@@ -122,7 +121,16 @@ async function openScriptureEditor(projectId: string, maxRetries = 2): Promise<s
 
 // DEV_NOISY=false keeps the test-only extensions and their tabs out of the layout, so the only web
 // views carrying a project are the ones this test puts there.
-test.use({ electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } } });
+// Seeded through the fixture rather than a preConfigureSettings call in a hook, which the fixture
+// would both override and then write back into the developer's shared settings. 'simple' is also
+// the shipped default, but this suite is only meaningful in simple mode, so it states its own
+// precondition rather than inheriting one. The English interface language its selectors depend on
+// is seeded by the fixture itself.
+test.use({
+  electronLaunchOptions: { envOverrides: { DEV_NOISY: 'false' } },
+  interfaceMode: 'simple',
+  seedSettings: { 'platform.firstRunComplete': true },
+});
 
 test.describe('simple mode: book/chapter/verse control reaches books in an open resource', () => {
   // App startup, the editor open with its four related-panel commands, the resource panel re-point,
@@ -131,18 +139,9 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
 
   let targetProject: CommentTestProject;
   let resourceProject: CommentTestProject;
-  let restoreSettings: (() => void) | undefined;
   let restoreRecentProjects: (() => void) | undefined;
 
   test.beforeAll(async () => {
-    restoreSettings = preConfigureSettings({
-      'platform.firstRunComplete': true,
-      'platform.interfaceLanguage': ['en'],
-      // 'simple' is also the shipped default, but this test is only meaningful in simple mode, so it
-      // states its own precondition rather than inheriting one.
-      'platform.interfaceMode': 'simple',
-    });
-
     // Two disposable copies of the bundled WEB project. The helper is comment-flavored only in name
     // — it creates a plain project copy with a unique id. The suffixes keep the two copies' short
     // names (and therefore their folders and dock tab titles) distinct even when both are created
@@ -165,7 +164,6 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     cleanupCommentTestProject(targetProject);
     cleanupCommentTestProject(resourceProject);
     restoreRecentProjects?.();
-    restoreSettings?.();
   });
 
   test('offers a book from an open resource, greyed, and navigates to it', async ({ mainPage }) => {

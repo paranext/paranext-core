@@ -4194,6 +4194,16 @@ declare module 'shared/models/docking-framework.model' {
      */
     getAllWebViewDefinitions: () => WebViewDefinition[];
     /**
+     * Counts every open tab in the dock layout, of any type — not only web views.
+     *
+     * Used to tell whether moving a tab out of a window would leave that window with nothing at all,
+     * which depends on every tab it holds, not only on its web views.
+     *
+     * @returns The number of tabs open anywhere in the layout, whatever its docking state
+     * @experimental
+     */
+    getOpenTabCount: () => number;
+    /**
      * Gets the WebView definition for the web view with the specified ID
      *
      * @param webViewId The ID of the WebView whose web view definition to get
@@ -4301,6 +4311,245 @@ declare module 'shared/models/docking-framework.model' {
      * TODO: Same as `testLayout` — should be imported directly once PT-2799 is resolved.
      */
     simpleLayout: LayoutInfo;
+  };
+}
+declare module 'shared/services/window.service-model' {
+  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { DirectionFromTab } from 'shared/models/docking-framework.model';
+  /**
+   *
+   * This name identifies the window data provider on the papi. Every window registers a provider of
+   * its own under a window-scoped name — this name with the window's id appended — and what you get
+   * from this property depends on where you read it.
+   *
+   * From a renderer or a web view, it is that window's own scoped name, so the provider found by it
+   * — with the useData hook, for instance — both reports and changes the focus of the window you
+   * are in. Read it from `papi.window` and use it as it comes.
+   *
+   * From the extension host, which runs in no window, it is the bare unscoped name. That name
+   * resolves to whichever window the router is currently targeting, so two reads can answer for
+   * different windows. The bare {@link windowServiceProviderName} constant behaves the same way
+   * wherever it is imported. To act on one particular window from there,
+   * `platform.getFocusedWindowId` reports which window has focus.
+   */
+  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
+  export const windowServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name identifies the window data provider on the papi. Every window registers a provider of
+     * its own under a window-scoped name — this name with the window's id appended — and what you get
+     * from this property depends on where you read it.
+     *
+     * From a renderer or a web view, it is that window's own scoped name, so the provider found by it
+     * — with the useData hook, for instance — both reports and changes the focus of the window you
+     * are in. Read it from `papi.window` and use it as it comes.
+     *
+     * From the extension host, which runs in no window, it is the bare unscoped name. That name
+     * resolves to whichever window the router is currently targeting, so two reads can answer for
+     * different windows. The bare {@link windowServiceProviderName} constant behaves the same way
+     * wherever it is imported. To act on one particular window from there,
+     * `platform.getFocusedWindowId` reports which window has focus.
+     */
+    dataProviderName: 'platform.windowServiceDataProvider';
+  }>;
+  /** A window's focus is on a WebView iframe with the specified id */
+  export type FocusSubjectWebView = {
+    focusType: 'webView';
+    /** ID of the WebView in focus (its tab ID is the same) */
+    id: string;
+  };
+  /**
+   * A window's focus is somewhere in a tab (header, toolbar, menu, content, etc.)
+   *
+   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
+   * focused in the WebView's iframe
+   */
+  export type FocusSubjectTab = {
+    focusType: 'tab';
+    /** The type of tab. `webView` if it is a WebView tab. */
+    tabType: 'webView' | string;
+    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
+    id: string;
+  };
+  /** A window's focus is somewhere not in a tab (app menu, app toolbar, etc.) */
+  export type FocusSubjectOther = {
+    focusType: 'other';
+  };
+  /** Current item that is the subject of top-level focus in a window */
+  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
+  /**
+   * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
+   * itself (`focusType: 'webView'`) or a web view's tab (`focusType: 'tab'` with
+   * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns `undefined`
+   * for focus subjects that do not refer to a web view.
+   *
+   * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
+   * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
+   * focus subject shapes change.
+   */
+  export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
+  /**
+   * A raw input gesture in the app window that transient overlays (context menus, command palettes,
+   * dismissable popovers) treat as a request to dismiss.
+   *
+   * - `'mouseDown'` — a mouse button went down anywhere in the window
+   * - `'escape'` — the Escape key went down anywhere in the window
+   *
+   * These two gestures are deliberately the ONLY inputs this type can describe. Do not add other keys
+   * or richer mouse detail — see the security note on {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT}.
+   *
+   * @experimental
+   */
+  export type AppWindowInputKind = 'mouseDown' | 'escape';
+  /**
+   * Payload of the {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} network event.
+   *
+   * Deliberately carries nothing but which of the two gestures happened — no key identity, no mouse
+   * coordinates, button, or target. See the security note on
+   * {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} before adding fields.
+   *
+   * @experimental
+   */
+  export type AppWindowInputEvent = {
+    /** Which input gesture happened */
+    kind: AppWindowInputKind;
+  };
+  /**
+   * Name of the network event the main process emits for every mouse-down and every Escape key-down
+   * in the app window.
+   *
+   * The main process's `before-mouse-event`/`before-input-event` hooks see input in EVERY frame,
+   * including WebView iframes whose events never reach the parent document. Overlays render in the
+   * parent document, so this event is the only way they learn that a click landed inside a WebView.
+   * Escape is announced without `preventDefault`, so the focused frame still receives the key and can
+   * act on it too.
+   *
+   * SECURITY: network events are visible to every process and every extension, and the hooks feeding
+   * this one see ALL input in the window — including keystrokes typed into other extensions' web
+   * views. The announcement is therefore restricted to the two overlay-dismissal gestures, with no
+   * key identity, coordinates, or any other detail, so the event cannot be used as a keylogger or to
+   * surveil user input. Do not broaden what is announced here without a security review.
+   */
+  export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
+  /** Specific item that is intended to be focused at the top level of a window */
+  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
+  /** Instructions that indicate how to change the focus within a window */
+  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
+  export type WindowDataTypes = {
+    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [windowServiceProviderName]: IWindowService;
+    }
+  }
+  /**
+   *
+   * Service for interacting with an application window. Every window hosts its own, so a call from a
+   * renderer acts on the window it runs in.
+   *
+   * The extension host is in no window, so a call made there acts on the window that most recently
+   * had focus — `platform.getFocusedWindowId`, which stays set while the application is in the
+   * background. Two calls can answer for different windows, and a subscription binds to the window
+   * focused when it was made rather than following focus afterwards. If there is no focused window,
+   * or the focused window has not registered its window service — either because it is still starting
+   * or because it has just gone away — the call throws rather than falling back to another window.
+   *
+   * This is a different resolver from the one the `windowServiceProviderName` doc describes: the bare
+   * unscoped name goes through the router; `papi.window` does not.
+   */
+  export type IWindowService = {
+    /**
+     *
+     * Get information about the current subject of focus in the current window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the current window's current subject of focus
+     */
+    getFocus(selector: undefined): Promise<FocusSubject>;
+    /**
+     *
+     * Get information about the current subject of focus in the current window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the current window's current subject of focus
+     */
+    getFocus(): Promise<FocusSubject>;
+    /**
+     * Sets the subject of focus in the current window.
+     *
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
+     *   that window to update its current focus based on what is actually focused in it (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Sets the subject of focus in the current window.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
+     *   that window to update its current focus based on what is actually focused in it (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     *
+     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
+     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
+     *   `'detect'`.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      selector: undefined,
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the current window's subject of focus is changed
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param callback Function to run with the window's updated subject of focus. If there is an
+     *   error while retrieving the updated data, the function will run with a {@link PlatformError}
+     *   instead of the data. You can call {@link isPlatformError} on this value to check if it is an
+     *   error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeFocus(
+      selector: undefined,
+      callback: (focusSubject: FocusSubject | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof windowServiceObjectToProxy &
+    IDataProvider<WindowDataTypes>;
+  /**
+   * One open application window, as a caller choosing a window to act on needs to see it.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export type WindowSummary = {
+    /** Runtime id of the window. Not stable across restarts */
+    windowId: number;
+    /**
+     * The window's title, which follows its own content. Two windows showing the same thing carry the
+     * same label, and nothing disambiguates them.
+     */
+    label: string;
+    /**
+     * Whether this window currently holds the primary role. The role is reassignable, so this follows
+     * the role rather than which window happened to be created first.
+     */
+    isMain: boolean;
   };
 }
 declare module 'shared/models/network-object-status.service-model' {
@@ -4553,193 +4802,6 @@ declare module 'shared/services/web-view.service-model' {
     webView: SavedWebViewDefinition;
   };
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
-}
-declare module 'shared/services/window.service-model' {
-  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
-  import {
-    DataProviderDataType,
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { IDataProvider } from 'shared/models/data-provider.interface';
-  import { DirectionFromTab } from 'shared/models/docking-framework.model';
-  /**
-   *
-   * This name is used to register the window data provider on the papi. You can use this name to
-   * find the data provider when accessing it using the useData hook
-   */
-  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
-  export const windowServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the window data provider on the papi. You can use this name to
-     * find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.windowServiceDataProvider';
-  }>;
-  /** Focus of the window is on a WebView iframe with the specified id */
-  export type FocusSubjectWebView = {
-    focusType: 'webView';
-    /** ID of the WebView in focus (its tab ID is the same) */
-    id: string;
-  };
-  /**
-   * Focus of the window is somewhere in a tab (header, toolbar, menu, content, etc.)
-   *
-   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
-   * focused in the WebView's iframe
-   */
-  export type FocusSubjectTab = {
-    focusType: 'tab';
-    /** The type of tab. `webView` if it is a WebView tab. */
-    tabType: 'webView' | string;
-    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
-    id: string;
-  };
-  /** Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.) */
-  export type FocusSubjectOther = {
-    focusType: 'other';
-  };
-  /** Current item that is the subject of top-level focus in the window */
-  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
-  /**
-   * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
-   * itself (`focusType: 'webView'`) or a web view's tab (`focusType: 'tab'` with
-   * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns `undefined`
-   * for focus subjects that do not refer to a web view.
-   *
-   * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
-   * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
-   * focus subject shapes change.
-   */
-  export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
-  /**
-   * A raw input gesture in the app window that transient overlays (context menus, command palettes,
-   * dismissable popovers) treat as a request to dismiss.
-   *
-   * - `'mouseDown'` — a mouse button went down anywhere in the window
-   * - `'escape'` — the Escape key went down anywhere in the window
-   *
-   * These two gestures are deliberately the ONLY inputs this type can describe. Do not add other keys
-   * or richer mouse detail — see the security note on {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT}.
-   *
-   * @experimental
-   */
-  export type AppWindowInputKind = 'mouseDown' | 'escape';
-  /**
-   * Payload of the {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} network event.
-   *
-   * Deliberately carries nothing but which of the two gestures happened — no key identity, no mouse
-   * coordinates, button, or target. See the security note on
-   * {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} before adding fields.
-   *
-   * @experimental
-   */
-  export type AppWindowInputEvent = {
-    /** Which input gesture happened */
-    kind: AppWindowInputKind;
-  };
-  /**
-   * Name of the network event the main process emits for every mouse-down and every Escape key-down
-   * in the app window.
-   *
-   * The main process's `before-mouse-event`/`before-input-event` hooks see input in EVERY frame,
-   * including WebView iframes whose events never reach the parent document. Overlays render in the
-   * parent document, so this event is the only way they learn that a click landed inside a WebView.
-   * Escape is announced without `preventDefault`, so the focused frame still receives the key and can
-   * act on it too.
-   *
-   * SECURITY: network events are visible to every process and every extension, and the hooks feeding
-   * this one see ALL input in the window — including keystrokes typed into other extensions' web
-   * views. The announcement is therefore restricted to the two overlay-dismissal gestures, with no
-   * key identity, coordinates, or any other detail, so the event cannot be used as a keylogger or to
-   * surveil user input. Do not broaden what is announced here without a security review.
-   */
-  export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
-  /** Specific item that is intended to be focused in the top-level app window */
-  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
-  /** Instructions that indicate how to change the focus within the window */
-  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
-  export type WindowDataTypes = {
-    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [windowServiceProviderName]: IWindowService;
-    }
-  }
-  /**
-   *
-   * Service that allows to interact with the current application window
-   */
-  export type IWindowService = {
-    /**
-     *
-     * Get information about the current subject of focus in the current window
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the current window's current subject of focus
-     */
-    getFocus(selector: undefined): Promise<FocusSubject>;
-    /**
-     *
-     * Get information about the current subject of focus in the current window
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the current window's current subject of focus
-     */
-    getFocus(): Promise<FocusSubject>;
-    /**
-     * Sets the subject of focus in the current window.
-     *
-     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    setFocus(
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Sets the subject of focus in the current window.
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     *
-     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
-     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
-     *   `'detect'`.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    setFocus(
-      selector: undefined,
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Subscribe to run a callback function when the current window's subject of focus is changed
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param callback Function to run with the updated localized menuContent for this selector. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-     */
-    subscribeFocus(
-      selector: undefined,
-      callback: (focusSubject: FocusSubject | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-  } & OnDidDispose &
-    typeof windowServiceObjectToProxy &
-    IDataProvider<WindowDataTypes>;
 }
 declare module 'shared/models/web-view-provider.model' {
   import {
@@ -5102,12 +5164,12 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from 'shared/services/scroll-group.service-model';
+  import type { AppWindowInputEvent, WindowSummary } from 'shared/services/window.service-model';
   import type {
     CloseWebViewEvent,
     OpenWebViewEvent,
     UpdateWebViewEvent,
   } from 'shared/services/web-view.service-model';
-  import type { AppWindowInputEvent } from 'shared/services/window.service-model';
   import { WebViewId } from 'shared/models/web-view.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
@@ -5157,6 +5219,14 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.getFocusedWindowId': () => Promise<number | undefined>;
+    /**
+     * List every open window with the title it is currently showing, for offering the user a choice
+     * of window. Titles follow each window's own content, so two windows showing the same thing
+     * carry the same label and nothing distinguishes them.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getWindows': () => Promise<WindowSummary[]>;
     /** Increase the zoom level of the entire UI */
     'platform.zoomIn': () => Promise<void>;
     /** Decrease the zoom level of the entire UI */
@@ -10435,6 +10505,38 @@ declare module 'renderer/services/overlays/overlay-store' {
     },
   ): boolean;
 }
+declare module 'renderer/components/overlays/overlay-context-menu-localization.util' {
+  import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+  import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
+  /**
+   * Recursively collects every LocalizeKey label in a tree of context menu items.
+   *
+   * Shared rather than owned by the overlay context menu because the tab menu renders the same item
+   * union through its own ContextMenu primitives, and both have to resolve their labels before
+   * rendering them — a contributed menu can arrive carrying raw keys.
+   *
+   * @param items Context menu items to walk, submenus included
+   * @returns Every LocalizeKey found, in the order encountered
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function collectContextMenuKeys(items: OverlayContextMenuItem[]): LocalizeKey[];
+  /**
+   * Recursively resolves LocalizeKey labels in context menu items using localized strings.
+   *
+   * Used as a pair with {@link collectContextMenuKeys}: collect the keys, resolve them through
+   * `useLocalizedStrings`, then map the items through this. A label with no resolution is left as it
+   * is, so a missing string shows the key rather than nothing.
+   *
+   * @param items Context menu items to resolve, submenus included
+   * @param localizedStrings Resolved strings, keyed by LocalizeKey
+   * @returns The items with their labels resolved
+   * @experimental This function is unstable and may change or disappear without notice
+   */
+  export function localizeContextMenuItems(
+    items: OverlayContextMenuItem[],
+    localizedStrings: LanguageStrings,
+  ): OverlayContextMenuItem[];
+}
 declare module 'renderer/components/overlays/overlay-context-menu.component' {
   import { OverlayEntry } from 'renderer/services/overlays/overlay.service-model';
   import { LocalizeKey } from 'platform-bible-utils';
@@ -10461,6 +10563,14 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
       }
     | {
         type: 'submenu';
+        /**
+         * Id of the contributed menu item this submenu was built from, when it came from a
+         * contribution. Lets a consumer recognize a particular submenu — for one whose contents are
+         * only known at the moment the menu opens, for instance — without matching on its label.
+         *
+         * @experimental This field is unstable and may change or disappear without notice
+         */
+        id?: string;
         label: string | LocalizeKey;
         icon?: PlatformIconName;
         items: OverlayContextMenuItem[];
@@ -11796,6 +11906,7 @@ declare module '@papi/core' {
     FocusSubject,
     SetFocusSubject,
     SetFocusSpecifier,
+    WindowSummary,
   } from 'shared/services/window.service-model';
 }
 declare module 'shared/services/menu-data.service-model' {
@@ -12766,7 +12877,18 @@ declare module '@papi/backend' {
     notifications: INotificationService;
     /**
      *
-     * Service that allows to interact with the current application window
+     * Service for interacting with an application window. Every window hosts its own, so a call from a
+     * renderer acts on the window it runs in.
+     *
+     * The extension host is in no window, so a call made there acts on the window that most recently
+     * had focus — `platform.getFocusedWindowId`, which stays set while the application is in the
+     * background. Two calls can answer for different windows, and a subscription binds to the window
+     * focused when it was made rather than following focus afterwards. If there is no focused window,
+     * or the focused window has not registered its window service — either because it is still starting
+     * or because it has just gone away — the call throws rather than falling back to another window.
+     *
+     * This is a different resolver from the one the `windowServiceProviderName` doc describes: the bare
+     * unscoped name goes through the router; `papi.window` does not.
      */
     window: IWindowService;
   };
@@ -13024,7 +13146,18 @@ declare module '@papi/backend' {
   export const notifications: INotificationService;
   /**
    *
-   * Service that allows to interact with the current application window
+   * Service for interacting with an application window. Every window hosts its own, so a call from a
+   * renderer acts on the window it runs in.
+   *
+   * The extension host is in no window, so a call made there acts on the window that most recently
+   * had focus — `platform.getFocusedWindowId`, which stays set while the application is in the
+   * background. Two calls can answer for different windows, and a subscription binds to the window
+   * focused when it was made rather than following focus afterwards. If there is no focused window,
+   * or the focused window has not registered its window service — either because it is still starting
+   * or because it has just gone away — the call throws rather than falling back to another window.
+   *
+   * This is a different resolver from the one the `windowServiceProviderName` doc describes: the bare
+   * unscoped name goes through the router; `papi.window` does not.
    */
   export const window: IWindowService;
 }
@@ -13627,7 +13760,18 @@ declare module '@papi/frontend' {
     notifications: INotificationService;
     /**
      *
-     * Service that allows to interact with the current application window
+     * Service for interacting with an application window. Every window hosts its own, so a call from a
+     * renderer acts on the window it runs in.
+     *
+     * The extension host is in no window, so a call made there acts on the window that most recently
+     * had focus — `platform.getFocusedWindowId`, which stays set while the application is in the
+     * background. Two calls can answer for different windows, and a subscription binds to the window
+     * focused when it was made rather than following focus afterwards. If there is no focused window,
+     * or the focused window has not registered its window service — either because it is still starting
+     * or because it has just gone away — the call throws rather than falling back to another window.
+     *
+     * This is a different resolver from the one the `windowServiceProviderName` doc describes: the bare
+     * unscoped name goes through the router; `papi.window` does not.
      */
     window: IWindowService;
     /**
@@ -13796,7 +13940,18 @@ declare module '@papi/frontend' {
   export const notifications: INotificationService;
   /**
    *
-   * Service that allows to interact with the current application window
+   * Service for interacting with an application window. Every window hosts its own, so a call from a
+   * renderer acts on the window it runs in.
+   *
+   * The extension host is in no window, so a call made there acts on the window that most recently
+   * had focus — `platform.getFocusedWindowId`, which stays set while the application is in the
+   * background. Two calls can answer for different windows, and a subscription binds to the window
+   * focused when it was made rather than following focus afterwards. If there is no focused window,
+   * or the focused window has not registered its window service — either because it is still starting
+   * or because it has just gone away — the call throws rather than falling back to another window.
+   *
+   * This is a different resolver from the one the `windowServiceProviderName` doc describes: the bare
+   * unscoped name goes through the router; `papi.window` does not.
    */
   export const window: IWindowService;
   /**

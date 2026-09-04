@@ -133,6 +133,7 @@ describe('overlay-menu-converter', () => {
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({
         type: 'submenu',
+        id: 'ext.submenuItem',
         label: 'My Submenu',
         items: [
           {
@@ -225,6 +226,7 @@ describe('overlay-menu-converter', () => {
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({
         type: 'submenu',
+        id: 'ext.mySubmenu',
         label: 'Submenu',
         items: [
           { type: 'item', id: 'ext.subA', label: 'Sub A' },
