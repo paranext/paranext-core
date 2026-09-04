@@ -180,22 +180,26 @@ global.webViewComponent = function FindWebView({
   useWebViewScrollGroupScrRef,
   updateWebViewDefinition,
 }: WebViewProps) {
-  const [
-    verseRefSetting,
-    setVerseRefSetting,
-    findScrollGroupId,
-    setFindScrollGroupId,
-    scrollGroupSourceProjectId,
-  ] = useWebViewScrollGroupScrRef();
+  const [verseRefSetting, setVerseRefSetting, findScrollGroupId, setFindScrollGroupId] =
+    useWebViewScrollGroupScrRef();
 
   // The project to search. Normally the tab's own — `openFind` sets it from the trigger (the
-  // editor's project, or the resource a reference panel is displaying). The simple-mode layout also
-  // seeds a Find tab that carries no projectId at all, so fall back to whichever project is driving
-  // this web view's scroll group reference (the Scripture editor, since the provider puts Find in
-  // group 0 in simple mode). Without the fallback that seeded tab renders a search box that silently
-  // searches nothing until the user's first Ctrl+F. Mirrors the Text Collection tab, which resolves
-  // its own default-layout tab the same way.
-  const projectId = webViewProjectId ?? scrollGroupSourceProjectId;
+  // editor's project, or the resource a reference panel is displaying), and the project selector's
+  // own `handleSelectProjectScrollGroup` keeps it current after that. The simple-mode layout also
+  // seeds a Find tab that carries no projectId at all, so fall back to the project driving BCV
+  // navigation in this window until one of those sets an explicit id. Without the fallback, that
+  // seeded tab renders a search box that silently searches nothing until the user's first Ctrl+F.
+  // Deliberately NOT scroll group 0's source project (`useWebViewScrollGroupScrRef`'s 5th tuple
+  // member): that field's only job is tagging which versification frame the current reference is
+  // in, and it changes for reasons that have nothing to do with which project is active (Back/
+  // Forward, a resource cell's own click, a click in the Comments or Checks panel).
+  const [activeEditorProjectIdPossiblyError] = useData(
+    papi.window.dataProviderName,
+  ).ActiveEditorProjectId(undefined, undefined);
+  const activeEditorProjectId = isPlatformError(activeEditorProjectIdPossiblyError)
+    ? undefined
+    : activeEditorProjectIdPossiblyError;
+  const projectId = webViewProjectId ?? activeEditorProjectId;
 
   // Each instance needs its own mutex — a module-level mutex would cause operations from one Find
   // panel to block another if two panels are open for different projects simultaneously.

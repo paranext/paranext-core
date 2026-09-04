@@ -158,8 +158,9 @@ class FocusedWindowDataProviderEngine
     super();
     this.#resolveWindowService = resolveWindowService;
 
-    // The routing target moving to another window changes what `getFocus` answers even though no
-    // window's own focus changed, so it has to reach subscribers as an update in its own right.
+    // The routing target moving to another window changes what `getFocus`/`getActiveEditorProjectId`
+    // answer even though no window's own data changed, so it has to reach subscribers of both data
+    // types as an update in its own right.
     this.#unsubscribeFromRoutingTargetChanges = onDidChangeRoutingTarget(() => {
       this.#relayUpdatesFromTargetWindow().catch((e) =>
         logger.warn(`Window routing could not follow the routing target: ${getErrorMessage(e)}`),
@@ -169,6 +170,7 @@ class FocusedWindowDataProviderEngine
       // window's teardown, so a routing fault stays a routing fault
       try {
         this.notifyUpdate('Focus');
+        this.notifyUpdate('ActiveEditorProjectId');
       } catch (e) {
         logger.warn(
           `Window routing could not notify subscribers of a routing target change: ${getErrorMessage(e)}`,
@@ -198,6 +200,21 @@ class FocusedWindowDataProviderEngine
 
   async getFocus(): Promise<FocusSubject | undefined> {
     return (await this.#getTargetWindowService()).getFocus();
+  }
+
+  async getActiveEditorProjectId(): Promise<string | undefined> {
+    return (await this.#getTargetWindowService()).getActiveEditorProjectId();
+  }
+
+  /**
+   * Read-only; does nothing and always resolves `false`. Unlike {@link setFocus}, this does not
+   * route through a target window — the answer is the same regardless of window availability, so
+   * routing it would only add a "no windows available" failure mode to an operation that never does
+   * anything in the first place.
+   */
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setActiveEditorProjectId(): Promise<false> {
+    return false;
   }
 
   /** Drop both subscriptions. Called when the router's provider itself is disposed */
@@ -247,18 +264,45 @@ class FocusedWindowDataProviderEngine
     // Attach before detaching, so an update arriving in the newly targeted window during the
     // handover still reaches subscribers. A brief overlap costs at most one redundant notify, where
     // the reverse order drops the update entirely.
+    //
+    // Both data types subscribe together (`Promise.all`), and the combined unsubscriber below awaits
+    // both — every other invariant in this class (mutex-serialized re-points, disposed-mid-flight
+    // undo, etc.) operates on that combined value as an opaque `UnsubscriberAsync` and needs no
+    // change for the second data type.
+    const subscriberOptions = {
+      // The relay exists to forward later changes; a subscriber gets its initial value from its
+      // own retrieval, so replaying it here would just emit a duplicate
+      retrieveDataImmediately: false,
+      // Forward every update the window reports, including one whose value matches what this
+      // subscription saw last. Whether an update is worth passing on is each subscriber of the
+      // generic name's judgment to make against its own last value — one that re-pointed from
+      // another window holds a different one — and the default comparison here would make it for
+      // them.
+      whichUpdates: '*' as const,
+    };
+    const [unsubscribeFocusFromNewWindow, unsubscribeActiveEditorProjectIdFromNewWindow] =
+      windowService
+        ? await Promise.all([
+            windowService.subscribeFocus(
+              undefined,
+              () => this.notifyUpdate('Focus'),
+              subscriberOptions,
+            ),
+            windowService.subscribeActiveEditorProjectId(
+              undefined,
+              () => this.notifyUpdate('ActiveEditorProjectId'),
+              subscriberOptions,
+            ),
+          ])
+        : [undefined, undefined];
     const unsubscribeFromNewWindow = windowService
-      ? await windowService.subscribeFocus(undefined, () => this.notifyUpdate('Focus'), {
-          // The relay exists to forward later changes; a subscriber gets its initial value from its
-          // own retrieval, so replaying it here would just emit a duplicate
-          retrieveDataImmediately: false,
-          // Forward every update the window reports, including one whose focus value matches what
-          // this subscription saw last. Whether an update is worth passing on is each subscriber of
-          // the generic name's judgment to make against its own last value — one that re-pointed
-          // from another window holds a different one — and the default comparison here would make
-          // it for them.
-          whichUpdates: '*',
-        })
+      ? async () => {
+          await Promise.all([
+            unsubscribeFocusFromNewWindow?.(),
+            unsubscribeActiveEditorProjectIdFromNewWindow?.(),
+          ]);
+          return true;
+        }
       : undefined;
 
     const unsubscribeFromPreviousWindow = this.#unsubscribeFromWindowUpdates;

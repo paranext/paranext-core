@@ -60,9 +60,11 @@ const SUBSCRIBER_HAS_NO_PREVIOUS_VALUE = Symbol('no previous value');
  * `createDataProviderSubscriber`). `emitUpdate` makes the window report an update, so a test can
  * see what reaches subscribers rather than how the relay is wired.
  */
-function windowShard(focusSubject: unknown) {
+function windowShard(focusSubject: unknown, activeEditorProjectId: unknown = undefined) {
   const unsubscribe = vi.fn(async () => true);
+  const unsubscribeActiveEditorProjectId = vi.fn(async () => true);
   let notifyOfUpdate: (() => Promise<void>) | undefined;
+  let notifyOfActiveEditorProjectIdUpdate: (() => Promise<void>) | undefined;
   const service = {
     getFocus: vi.fn(async () => focusSubject),
     // Widened past `true` because the engine forwards whatever the scoped provider answers, and
@@ -85,9 +87,31 @@ function windowShard(focusSubject: unknown) {
         return unsubscribe;
       },
     ),
+    getActiveEditorProjectId: vi.fn(async () => activeEditorProjectId),
+    setActiveEditorProjectId: vi.fn(async (): Promise<false> => false),
+    subscribeActiveEditorProjectId: vi.fn(
+      async (
+        _: undefined,
+        callback: (projectId: unknown) => void,
+        options?: { retrieveDataImmediately?: boolean; whichUpdates?: 'deeply-equal' | '*' },
+      ) => {
+        let previousProjectId: unknown = SUBSCRIBER_HAS_NO_PREVIOUS_VALUE;
+        notifyOfActiveEditorProjectIdUpdate = async () => {
+          const currentProjectId = await service.getActiveEditorProjectId();
+          const isUnchanged = previousProjectId === currentProjectId;
+          previousProjectId = currentProjectId;
+          if (isUnchanged && options?.whichUpdates !== '*') return;
+          callback(currentProjectId);
+        };
+        return unsubscribeActiveEditorProjectId;
+      },
+    ),
     unsubscribe,
+    unsubscribeActiveEditorProjectId,
     /** Simulate this window reporting that its focus data changed */
     emitUpdate: async () => notifyOfUpdate?.(),
+    /** Simulate this window reporting that its active editor project changed */
+    emitActiveEditorProjectIdUpdate: async () => notifyOfActiveEditorProjectIdUpdate?.(),
   };
   return service;
 }
@@ -408,10 +432,12 @@ describe('window service router', () => {
       engine as unknown as { [property: string]: unknown },
     );
 
-    expect([...visibleFunctionNames].filter((name) => name.startsWith('get'))).toEqual([
+    expect([...visibleFunctionNames].filter((name) => name.startsWith('get')).sort()).toEqual([
+      'getActiveEditorProjectId',
       'getFocus',
     ]);
-    expect([...visibleFunctionNames].filter((name) => name.startsWith('set'))).toEqual([
+    expect([...visibleFunctionNames].filter((name) => name.startsWith('set')).sort()).toEqual([
+      'setActiveEditorProjectId',
       'setFocus',
     ]);
   });
@@ -485,6 +511,79 @@ describe('window service router', () => {
     expect(second.unsubscribe).toHaveBeenCalledTimes(1);
     await settle();
     expect(second.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  test('reads the active editor project id from the focused window', async () => {
+    const first = windowShard('focus-in-window-1', 'project-1');
+    const second = windowShard('focus-in-window-2', 'project-2');
+    const engine = new FocusedWindowDataProviderEngine(
+      async (id) => (id === 1 ? first : second) as never,
+    );
+    mocks.getTargetWindowId.mockReturnValue(2);
+
+    expect(await engine.getActiveEditorProjectId()).toBe('project-2');
+  });
+
+  test('setActiveEditorProjectId is read-only and always resolves false without needing a window', async () => {
+    // Unlike setFocus, this must never fail for want of a routable window: it does nothing
+    // regardless of window availability
+    mocks.getTargetWindowId.mockReturnValue(undefined);
+    const engine = new FocusedWindowDataProviderEngine(async () => undefined);
+
+    expect(await engine.setActiveEditorProjectId()).toBe(false);
+  });
+
+  test('tells subscribers both answers changed when the routing target moves', async () => {
+    const engine = new FocusedWindowDataProviderEngine(async () => windowShard('a') as never);
+    const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
+
+    moveRoutingTargetTo(2);
+
+    expect(notifyUpdate).toHaveBeenCalledWith('Focus');
+    expect(notifyUpdate).toHaveBeenCalledWith('ActiveEditorProjectId');
+  });
+
+  test('relays the focused window’s own active editor project updates', async () => {
+    const only = windowShard('a', 'project-1');
+    const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+    await engine.getActiveEditorProjectId();
+    const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
+
+    await only.emitActiveEditorProjectIdUpdate();
+    await settle();
+
+    expect(notifyUpdate).toHaveBeenCalledWith('ActiveEditorProjectId');
+  });
+
+  test('subscribes to both data types on a re-point and unsubscribes both when it moves on', async () => {
+    const first = windowShard('a', 'project-1');
+    const second = windowShard('b', 'project-2');
+    const engine = new FocusedWindowDataProviderEngine(
+      async (id) => (id === 1 ? first : second) as never,
+    );
+    await engine.getFocus();
+
+    expect(first.subscribeFocus).toHaveBeenCalledTimes(1);
+    expect(first.subscribeActiveEditorProjectId).toHaveBeenCalledTimes(1);
+
+    moveRoutingTargetTo(2);
+    await engine.getFocus();
+
+    expect(first.unsubscribe).toHaveBeenCalled();
+    expect(first.unsubscribeActiveEditorProjectId).toHaveBeenCalled();
+    expect(second.subscribeFocus).toHaveBeenCalledTimes(1);
+    expect(second.subscribeActiveEditorProjectId).toHaveBeenCalledTimes(1);
+  });
+
+  test('drops both windows’ subscriptions when disposed', async () => {
+    const only = windowShard('a', 'project-1');
+    const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+    await engine.getFocus();
+
+    await engine.dispose();
+
+    expect(only.unsubscribe).toHaveBeenCalled();
+    expect(only.unsubscribeActiveEditorProjectId).toHaveBeenCalled();
   });
 
   test('leaves nothing subscribed when disposal races an in-flight relay', async () => {

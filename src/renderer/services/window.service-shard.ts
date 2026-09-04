@@ -333,6 +333,12 @@ class WindowDataProviderEngine
    */
   #focusSubjectInitialPromise: Promise<boolean> | undefined;
   #unsubscribeOnDidFocus: Unsubscriber | undefined;
+  /**
+   * Last project id this engine notified subscribers about, so a webViewId-only change (same
+   * project, different tab) does not trigger a redundant `ActiveEditorProjectId` notify.
+   */
+  #lastActiveEditorProjectId: string | undefined;
+  #unsubscribeFromNavigationTargetChange: Unsubscriber | undefined;
 
   /**
    * Debounced version of {@link #setDetectFocusInternal}. Debounced because because it takes a sec
@@ -358,6 +364,14 @@ class WindowDataProviderEngine
       window.removeEventListener('focusout', handleChangeFocus);
       return true;
     };
+
+    this.#lastActiveEditorProjectId = getNavigationTargetWebView()?.definition.projectId;
+    this.#unsubscribeFromNavigationTargetChange = onDidChangeNavigationTargetWebView((target) => {
+      const newProjectId = target?.definition.projectId;
+      if (newProjectId === this.#lastActiveEditorProjectId) return;
+      this.#lastActiveEditorProjectId = newProjectId;
+      this.notifyUpdate('ActiveEditorProjectId');
+    });
   }
 
   /**
@@ -482,7 +496,28 @@ class WindowDataProviderEngine
     return didChangeFocus;
   }
 
+  /**
+   * See {@link getNavigationTargetWebView}. Reads module state directly, like {@link getFocus} reads
+   * `#focusSubject` — the answer is the same for every engine instance in this window, so there is
+   * no per-instance state to consult.
+   */
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async getActiveEditorProjectId(): Promise<string | undefined> {
+    return getNavigationTargetWebView()?.definition.projectId;
+  }
+
+  /**
+   * Read-only; does nothing and always resolves `false`. Provided to match
+   * `getActiveEditorProjectId`.
+   */
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setActiveEditorProjectId(): Promise<false> {
+    return false;
+  }
+
   async dispose(): Promise<boolean> {
+    this.#unsubscribeFromNavigationTargetChange?.();
+    this.#unsubscribeFromNavigationTargetChange = undefined;
     if (this.#unsubscribeOnDidFocus) {
       const success = this.#unsubscribeOnDidFocus();
       this.#unsubscribeOnDidFocus = undefined;

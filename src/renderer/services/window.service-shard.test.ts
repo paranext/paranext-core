@@ -517,3 +517,78 @@ describe('getNavigationContext', () => {
     expect(isIgnored).toBe(true);
   });
 });
+
+describe('active editor project id', () => {
+  const EDITOR_DEFINITION = {
+    id: 'editor-active-1',
+    webViewType: 'platformScriptureEditor.react',
+    projectId: 'project-1',
+  };
+
+  beforeEach(() => {
+    getTabInfoByIdMock.mockReset();
+    getTabInfoByIdMock.mockReturnValue(undefined);
+    readDirectionMock.mockReturnValue('ltr');
+    getSavedWebViewDefinitionSyncMock.mockReset();
+    getSavedWebViewDefinitionSyncMock.mockImplementation((id: string) => ({
+      id,
+      projectId: 'project-1',
+    }));
+    getAllOpenWebViewDefinitionsSyncMock.mockReset();
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([]);
+    const tracked = getLastSelectedScriptureNavigableWebViewId();
+    if (tracked) emitCloseWebView(tracked);
+    emitOpenWebView();
+  });
+
+  test('returns undefined when there is no navigation target', async () => {
+    const engine = createTestEngine();
+
+    expect(await engine.getActiveEditorProjectId()).toBeUndefined();
+  });
+
+  test("resolves the navigation target's projectId", async () => {
+    const engine = createTestEngine();
+    await engine.setFocus({ focusType: 'webView', id: 'web-view-active-1' });
+
+    expect(await engine.getActiveEditorProjectId()).toBe('project-1');
+  });
+
+  test('setActiveEditorProjectId is read-only and always resolves false', async () => {
+    const engine = createTestEngine();
+
+    expect(await engine.setActiveEditorProjectId()).toBe(false);
+  });
+
+  test('notifies ActiveEditorProjectId when the resolved target project changes', () => {
+    const engine = createTestEngine();
+    const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
+
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
+    emitOpenWebView();
+
+    expect(notifyUpdate).toHaveBeenCalledWith('ActiveEditorProjectId');
+  });
+
+  test('does not notify ActiveEditorProjectId when only the webViewId changes but the project stays the same', async () => {
+    const engine = createTestEngine();
+    await engine.setFocus({ focusType: 'webView', id: 'web-view-active-2' });
+    const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
+
+    // Same project ('project-1' per the default getSavedWebViewDefinitionSyncMock), different tab
+    await engine.setFocus({ focusType: 'webView', id: 'web-view-active-3' });
+
+    expect(notifyUpdate).not.toHaveBeenCalledWith('ActiveEditorProjectId');
+  });
+
+  test('stops notifying ActiveEditorProjectId once disposed', async () => {
+    const engine = createTestEngine();
+    await engine.dispose();
+    const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
+
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
+    emitOpenWebView();
+
+    expect(notifyUpdate).not.toHaveBeenCalledWith('ActiveEditorProjectId');
+  });
+});
