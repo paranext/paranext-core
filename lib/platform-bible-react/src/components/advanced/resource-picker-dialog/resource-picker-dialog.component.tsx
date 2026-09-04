@@ -187,9 +187,19 @@ export default function ResourcePickerDialog({
   const [searchText, setSearchText] = useState('');
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
 
-  const languageOptions: MultiSelectComboBoxEntry[] = useMemo(
-    () => buildLanguageFilterOptions(allResources, resourceType),
+  /**
+   * The catalogue narrowed to the requested type, and the single source of "in play" for everything
+   * below: the rendered rows, the language options and the total. Deriving all three from one list
+   * is what keeps them from disagreeing about which resources count.
+   */
+  const typeScopedResources = useMemo(
+    () => allResources.filter((r) => matchesResourceType(r, resourceType)),
     [allResources, resourceType],
+  );
+
+  const languageOptions: MultiSelectComboBoxEntry[] = useMemo(
+    () => buildLanguageFilterOptions(typeScopedResources),
+    [typeScopedResources],
   );
 
   /**
@@ -210,13 +220,12 @@ export default function ResourcePickerDialog({
 
   const filteredResources = useMemo(
     () =>
-      allResources
-        .filter((r) => matchesResourceType(r, resourceType))
+      typeScopedResources
         .filter((r) => matchesSearch(r, searchText))
         .filter(
           (r) => effectiveLanguages.length === 0 || effectiveLanguages.includes(r.bestLanguageName),
         ),
-    [allResources, resourceType, searchText, effectiveLanguages],
+    [typeScopedResources, searchText, effectiveLanguages],
   );
 
   const alreadySelected = useMemo(
@@ -305,6 +314,7 @@ export default function ResourcePickerDialog({
           commandEmptyMessage={noLanguagesText}
           variant="outline"
           sortSelected
+          showScrollCue
         />
       </div>
       {/* The live region stays mounted and only its content changes: assistive tech announces
@@ -327,7 +337,7 @@ export default function ResourcePickerDialog({
             filtered: filteredResources.length,
             // Counted against the resources this picker could ever offer, not the whole catalogue:
             // a type-scoped picker reporting "5 of 300" measures against rows it never shows.
-            total: allResources.filter((r) => matchesResourceType(r, resourceType)).length,
+            total: typeScopedResources.length,
           })}
         </p>
       )}

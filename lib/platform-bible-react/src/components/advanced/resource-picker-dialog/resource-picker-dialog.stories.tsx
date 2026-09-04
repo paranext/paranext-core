@@ -197,9 +197,12 @@ export const ManyLanguages: Story = {
 
     await step('A below-the-fold cue marks the list as continuing past the fold', async () => {
       // The negative control is the Default story, whose four languages fit and draw no cue.
-      await expect(
-        canvasElement.ownerDocument.querySelector('[data-slot="command-list-scroll-cue"]'),
-      ).not.toBeNull();
+      // Appearance takes an effect plus a re-render, so it is awaited like the retirements below.
+      await waitFor(async () => {
+        await expect(
+          canvasElement.ownerDocument.querySelector('[data-slot="command-list-scroll-cue"]'),
+        ).not.toBeNull();
+      });
     });
 
     await step('Scrolling to the end retires the cue', async () => {

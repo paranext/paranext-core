@@ -2457,6 +2457,85 @@ step, no automation. Just a record.
   startup, teardown and quit. That is its own change with its own tests, not a rename.
 - **Source:** PT-4275 epic (multi-window architecture plan step 2).
 
+## adr-shared-components-take-localized-strings: Shared components take localized strings; they never compose them
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `MultiSelectComboBox` built its dropdown search placeholder in code as
+  `` `Search ${placeholder.toLowerCase()}...` ``. That is English sentence-building — it assumes the
+  noun can be lowercased, that the verb precedes it, and that a placeholder is a noun at all — and
+  `toLowerCase()` is wrong in any locale with different casing rules. The same component defaulted
+  its empty-list message to the hardcoded English `'No entries found'`.
+- **Decision:** A component in `platform-bible-react` never composes user-facing text from other
+  user-facing text. Each string is a separate prop the caller supplies already localized
+  (`searchPlaceholder`, `commandEmptyMessage`), which makes the localization contract part of the
+  component's API: adding one is a breaking-ish change every call site must answer, and the answer
+  is a key in that surface's own localized-strings file.
+- **Alternatives:** Keep composing but localize the template — rejected: a single template cannot
+  hold for every language, and the component cannot know the grammatical role of the caller's noun.
+  Have the component resolve keys itself — rejected: components in this library take strings, not
+  keys, so extensions and the host stay in charge of their own localization and fallback chains.
+- **Consequences:** Adding a user-facing string to a shared component means touching every caller,
+  including the ones in extensions; the compiler does not enforce it for optional props, so the
+  review question "did every call site get a real string?" is the check. This is what pulled two
+  extensions into PT-4430's diff, and it is the intended cost.
+- **Source:** PT-4430 (from bug PT-4135); PR #2746 review.
+
+## adr-shared-list-scope-predicate: One predicate decides which resources are "in play" for a filtered list
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** The resource picker and Get Resources both render a language filter over a resource
+  catalogue and both narrow the catalogue by resource type first. Each had its own notion of the
+  narrowed set: the picker filtered rows inline while the language options were built from the whole
+  catalogue, and Get Resources built its options from the unscoped list while its grid filtered by
+  the type multi-select. Either way the dropdown offered a language whose only entries were of a
+  type the grid was hiding, and selecting it landed on "No results" — the dead end PT-4135 reports.
+- **Decision:** The scope is one exported predicate (`matchesResourceType`, exported from
+  `platform-bible-react/experimental`), and each surface derives its rows, its filter options and its
+  result count from a single type-scoped list built with it. An empty array means "nothing is
+  filtering", so a multi-select with no selection reads naturally. A filter selection that the
+  options no longer offer is derived away rather than reset, so narrowing the type filter cannot
+  strand a persisted language selection on an empty grid.
+- **Alternatives:** Leave each surface to scope its own list — rejected: that is the bug, and the
+  two definitions drifted apart within one component. Reset the language selection when the type
+  filter changes — rejected: in Get Resources that selection is persisted web view state seeded from
+  installed resources, so a reset destroys a user's choice on a transient type change. Pass the raw
+  `string[]` selection into the predicate — rejected: it would widen the signature to `string`, and
+  narrowing the persisted state against the canonical type list also drops values retired from it.
+- **Consequences:** A new surface with a resource list gets the scoping by using the predicate and
+  deriving from one list; the invariant is stated in the predicate's own TSDoc and testable at the
+  helper. Any future filter dimension on these lists must join the same scoped list rather than
+  filtering the raw catalogue, or the dead end returns by another route.
+
+## adr-shared-option-list-affordances-opt-in: New visual affordances on shared option-list components ship opt-in
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** The resource picker's language dropdown clipped ~130 languages flush at a row
+  boundary, so a full list looked complete. The scrollbar alone was measured as too weak a signal —
+  with a few hundred options the thumb is ~7% of the track, and `command.tsx` already carries a
+  `// CUSTOM` note about having made it visible for exactly this case, with `gutterWidth: 0`
+  reserving no layout width at all. The fade cue that fixes it lives in `MultiSelectComboBox`, which
+  every `Filter` in the app renders — Get Resources, the Checks side panel — so a fix aimed at one
+  dropdown changed the look of every dropdown, with no entry in the design guidelines to point at.
+- **Decision:** A shared option-list component may host a new visual affordance, but it ships behind
+  an opt-in prop that defaults to off (`showScrollCue` on `MultiSelectComboBox`/`Filter`,
+  `lib/platform-bible-react/src/components/advanced/multi-select-combo-box.component.tsx`). Only the
+  surface whose ticket motivated it turns it on. Flipping the default to on is a separate change
+  that needs design sign-off.
+- **Alternatives:** Ship it app-wide by default — rejected: it makes an unreviewed visual change to
+  every dropdown, and the cue's gradient is painted in the popover's own background colour
+  (`tw:from-popover`), so a differently-themed popover would show it as a mismatched band. An
+  opt-out prop with the affordance on by default — rejected for the same reason; it still makes the
+  app-wide change the default. Keeping the cue out of the shared component and drawing it in the
+  dialog — rejected: the effect must run when Radix mounts the popover content, which only a
+  component inside the portal sees.
+- **Consequences:** Long lists elsewhere keep the weak scrollbar signal until someone opts in, which
+  is the intended trade: the blast radius of a component-library visual change stays with the team
+  that asked for it. Revisit when design rules on the fade as a general affordance; the change then
+  is a default flip, not a rewrite.
+
 ## adr-simple-mode-column-minimums: Simple-mode column minimums are derived from the window minimum, dividers included
 
 - **Date:** 2026-08-19

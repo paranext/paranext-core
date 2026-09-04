@@ -1,7 +1,11 @@
 import { renderHook, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { DblResourceData } from 'platform-bible-utils';
-import { buildLanguageFilterOptions, useProgressiveList } from './resource-picker-dialog.utils';
+import {
+  buildLanguageFilterOptions,
+  matchesResourceType,
+  useProgressiveList,
+} from './resource-picker-dialog.utils';
 import {
   MANY_LANGUAGE_INSTALLED_LANGUAGES,
   MANY_LANGUAGE_NON_SCRIPTURE_LANGUAGES,
@@ -92,11 +96,45 @@ describe('useProgressiveList', () => {
   });
 });
 
+describe('matchesResourceType', () => {
+  const scriptureResource: DblResourceData = {
+    dblEntryUid: 'uid',
+    displayName: 'RES',
+    fullName: 'Resource',
+    bestLanguageName: 'Swahili',
+    type: 'ScriptureResource',
+    size: 1000,
+    installed: false,
+    updateAvailable: false,
+    projectId: 'prj',
+  };
+
+  it('matches everything when no type is requested', () => {
+    expect(matchesResourceType(scriptureResource, undefined)).toBe(true);
+  });
+
+  it('matches a single requested type', () => {
+    expect(matchesResourceType(scriptureResource, 'ScriptureResource')).toBe(true);
+    expect(matchesResourceType(scriptureResource, 'XmlResource')).toBe(false);
+  });
+
+  it('matches any type in a requested list', () => {
+    expect(matchesResourceType(scriptureResource, ['XmlResource', 'ScriptureResource'])).toBe(true);
+    expect(matchesResourceType(scriptureResource, ['XmlResource', 'CommentaryResource'])).toBe(
+      false,
+    );
+  });
+
+  it('treats an empty list as no filter, which is what an untouched multi-select hands over', () => {
+    expect(matchesResourceType(scriptureResource, [])).toBe(true);
+  });
+});
+
 describe('buildLanguageFilterOptions', () => {
   const resource = (
     overrides: Partial<DblResourceData> & Pick<DblResourceData, 'bestLanguageName'>,
   ): DblResourceData => ({
-    dblEntryUid: `uid-${overrides.bestLanguageName}-${overrides.dblEntryUid ?? '0'}`,
+    dblEntryUid: `uid-${overrides.bestLanguageName}`,
     displayName: 'RES',
     fullName: 'Resource',
     type: 'ScriptureResource',
@@ -174,15 +212,28 @@ describe('buildLanguageFilterOptions', () => {
     expect(options.find((o) => o.label === 'Swahili')?.secondaryLabel).toBe('1');
   });
 
+  it('offers only languages holding a resource of one of several requested types', () => {
+    const options = buildLanguageFilterOptions(
+      [
+        resource({ bestLanguageName: 'Amharic', type: 'ScriptureResource' }),
+        resource({ bestLanguageName: 'Nepali', dblEntryUid: '2', type: 'CommentaryResource' }),
+        resource({ bestLanguageName: 'Swahili', dblEntryUid: '3', type: 'XmlResource' }),
+      ],
+      ['ScriptureResource', 'CommentaryResource'],
+    );
+
+    expect(options.map((o) => o.label)).toEqual(['Amharic', 'Nepali']);
+  });
+
   it('orders the real catalogue fixture alphabetically rather than in catalogue order', () => {
     const options = buildLanguageFilterOptions(MANY_LANGUAGE_RESOURCES);
     const labels = options.map((o) => o.label);
 
     // The fixture is emitted in a deliberately non-alphabetical order, so this fails if the
-    // sort is dropped and catalogue order leaks through.
-    expect(labels).not.toEqual(
-      MANY_LANGUAGE_RESOURCES.map((r) => r.bestLanguageName).slice(0, labels.length),
-    );
+    // sort is dropped and deduplicated catalogue order leaks through.
+    expect(labels).not.toEqual([
+      ...new Set(MANY_LANGUAGE_RESOURCES.map((r) => r.bestLanguageName)),
+    ]);
     expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)));
   });
 

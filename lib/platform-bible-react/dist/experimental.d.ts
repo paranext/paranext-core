@@ -331,6 +331,15 @@ export interface ResourcePickerDialogProps {
  */
 export function ResourcePickerDialog({ allResources, isResourcesLoading, resourceType, selectedResourceIds, localizedStrings, notice, allowSelectingInstalled, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Whether a resource belongs to the section of the catalogue currently on display. An undefined
+ * `resourceType` means "no type filter", so everything matches, as does an empty array — that is
+ * what a multi-select with nothing chosen hands over.
+ *
+ * Shared by the resource rows and the language filter so the two can never disagree about which
+ * resources are in play — a language offered by the filter always has rows behind it.
+ */
+export declare function matchesResourceType(resource: DblResourceData, resourceType?: ResourceType | ResourceType[]): boolean;
+/**
  * Builds the language filter's options from a resource catalogue.
  *
  * Languages are returned alphabetically, never in catalogue order — a DBL catalogue arrives in an
