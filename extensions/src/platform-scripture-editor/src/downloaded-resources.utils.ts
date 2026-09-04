@@ -167,7 +167,17 @@ function downloadedToRow(
   };
 }
 
-/** Union referenced items with downloaded-but-unreferenced projects, deduped (referenced wins). */
+/**
+ * Union referenced items with downloaded-but-unreferenced projects, deduped (referenced wins).
+ *
+ * The per-reference-kind typing this applies is mirrored by `splitResourcesByTab` in
+ * `src/renderer/components/dialogs/share-layout.utils.ts`, which sorts the same setting into the
+ * Share Layout dialog's tabs. It cannot import from an extension, so the two are kept in step by
+ * hand: change a typing rule here and change it there. Note they diverge on purpose for a reference
+ * the rules cannot place — a `dblResource` missing from the catalog is dropped here (see
+ * `resolveReferenced`) and preserved there, because that side round-trips the setting instead of
+ * rendering it.
+ */
 export function buildPickerResources(
   effectiveItems: EffectiveResourceReference[],
   downloaded: DownloadedResource[],
