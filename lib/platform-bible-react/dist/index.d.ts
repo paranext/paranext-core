@@ -844,6 +844,12 @@ interface MultiSelectComboBoxProps {
 	onChange: (values: string[]) => void;
 	/** Placeholder text when no items are selected. */
 	placeholder: string;
+	/**
+	 * Placeholder for the search box inside the dropdown. Localize it in the caller — this component
+	 * cannot build one, because composing a sentence around {@link placeholder} only works in English.
+	 * Defaults to {@link placeholder}.
+	 */
+	searchPlaceholder?: string;
 	/** Whether to show select all/clear all buttons. */
 	hasToggleAllFeature?: boolean;
 	/** Text for the select all button. */
@@ -860,8 +866,19 @@ interface MultiSelectComboBoxProps {
 	onOpenChange?: (open: boolean) => void;
 	/** Flag to disable the component. */
 	isDisabled?: boolean;
-	/** Flag to sort selected items. */
+	/**
+	 * Flag to sort selected items. The order is snapshotted when the dropdown opens, so selecting an
+	 * entry does not move rows out from under the pointer.
+	 */
 	sortSelected?: boolean;
+	/**
+	 * Whether to fade the bottom edge of the option list while more entries remain below the fold.
+	 *
+	 * Off by default: the cue's gradient is drawn in the popover's own background colour, so a
+	 * popover themed differently would show it as a band. Opt in on long lists where the scrollbar
+	 * alone is too weak a signal.
+	 */
+	showScrollCue?: boolean;
 	/** Optional icon to display in the button. */
 	icon?: React$1.ReactNode;
 	/** Additional class names for styling. */
@@ -872,7 +889,7 @@ interface MultiSelectComboBoxProps {
 	id?: string;
 }
 /** MultiSelectComboBox component for selecting multiple items from a list. */
-export declare function MultiSelectComboBox({ entries, selected, onChange, placeholder, hasToggleAllFeature, selectAllText, clearAllText, commandEmptyMessage, customSelectedText, isOpen, onOpenChange, isDisabled, sortSelected, icon, className, variant, id, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
+export declare function MultiSelectComboBox({ entries, selected, onChange, placeholder, searchPlaceholder, hasToggleAllFeature, selectAllText, clearAllText, commandEmptyMessage, customSelectedText, isOpen, onOpenChange, isDisabled, sortSelected, showScrollCue, icon, className, variant, id, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 interface FilterProps extends MultiSelectComboBoxProps {
 	/**
 	 * Placeholder text that will be displayed when no items are selected. It will appear at the
@@ -888,7 +905,7 @@ interface FilterProps extends MultiSelectComboBoxProps {
  * selected options. A placeholder text must be provided through 'badgesPlaceholder'. This will be
  * displayed if no items are selected,
  */
-export declare function Filter({ entries, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
+export declare function Filter({ entries, selected, onChange, placeholder, searchPlaceholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, showScrollCue, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 export type FootnoteLayout = "horizontal" | "vertical";
 /** Interface defining the properties for a single footnote item component */
 export interface FootnoteItemProps {
@@ -3828,6 +3845,19 @@ export declare const useViewVisibility: () => boolean;
  *   effect re-firing on every visibility flip.
  */
 export declare function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void;
+/**
+ * Tracks whether `scrollerRef`'s element still has content below the fold.
+ *
+ * A long option list clipped flush at a row boundary looks complete, and the scrollbar alone is a
+ * weak signal — with a few hundred options the thumb is only a few pixels tall, and on platforms
+ * with overlay scrollbars it reserves no width at all. Callers use this to draw an explicit cue.
+ *
+ * @param scrollerRef Ref to the scrolling element.
+ * @param isEnabled Whether to observe at all. When false the hook reports `false` and attaches
+ *   nothing. Defaults to `true`.
+ * @returns Whether the scroller currently has content below its visible area.
+ */
+export declare function useHasContentBelow(scrollerRef: React$1.RefObject<HTMLElement | null>, isEnabled?: boolean): boolean;
 /** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
 export type TabIconUrls = {
 	/** Dark theme (any selection). */

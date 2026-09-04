@@ -267,6 +267,9 @@ export function ChecksSidePanel({
           selected={selectedCheckTypeIds}
           onChange={onSelectCheckTypes}
           placeholder={localizedStrings['%webView_checksSidePanel_checkTypeFilter_label%']}
+          searchPlaceholder={
+            localizedStrings['%webView_checksSidePanel_checkTypeFilter_searchPlaceholder%']
+          }
           hasToggleAllFeature
           selectAllText={localizedStrings['%webview_checksSidePanel_checkTypeFilter_selectAll%']}
           clearAllText={localizedStrings['%webview_checksSidePanel_checkTypeFilter_deselectAll%']}

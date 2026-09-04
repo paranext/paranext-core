@@ -140,3 +140,213 @@ function generateResources(count: number): DblResourceData[] {
 }
 
 export const LARGE_SAMPLE_RESOURCES: DblResourceData[] = generateResources(2500);
+
+/**
+ * A realistic spread of language names. Real DBL catalogues carry hundreds of languages, which is
+ * the only regime where the language filter's scrolling, ordering, and below-the-fold behavior are
+ * observable — {@link SAMPLE_RESOURCES} has 4 distinct languages and {@link LARGE_SAMPLE_RESOURCES}
+ * has 10, so neither exercises any of it.
+ */
+const MANY_LANGUAGES = [
+  'Afrikaans',
+  'Akan',
+  'Albanian',
+  'Amharic',
+  'Arabic',
+  'Armenian',
+  'Assamese',
+  'Aymara',
+  'Azerbaijani',
+  'Balinese',
+  'Bambara',
+  'Basque',
+  'Belarusian',
+  'Bemba',
+  'Bengali',
+  'Bikol',
+  'Bosnian',
+  'Bulgarian',
+  'Burmese',
+  'Cebuano',
+  'Chichewa',
+  'Chin, Hakha',
+  'Chuvash',
+  'Coptic',
+  'Croatian',
+  'Czech',
+  'Danish',
+  'Dinka',
+  'Dutch',
+  'Dzongkha',
+  'Efik',
+  'English',
+  'Estonian',
+  'Ewe',
+  'Faroese',
+  'Fijian',
+  'Finnish',
+  'French',
+  'Fulfulde',
+  'Ga',
+  "Ge'ez",
+  'Georgian',
+  'German',
+  'Gikuyu',
+  'Greek',
+  'Guarani',
+  'Gujarati',
+  'Haitian Creole',
+  'Hausa',
+  'Hebrew',
+  'Hiligaynon',
+  'Hindi',
+  'Hmong',
+  'Hungarian',
+  'Icelandic',
+  'Igbo',
+  'Ilocano',
+  'Indonesian',
+  'Inuktitut',
+  'Italian',
+  'Japanese',
+  'Javanese',
+  'Kannada',
+  'Kanuri',
+  'Kazakh',
+  'Khmer',
+  'Kinyarwanda',
+  'Kirundi',
+  'Konkani',
+  'Korean',
+  'Kurdish',
+  'Kyrgyz',
+  'Lao',
+  'Latvian',
+  'Lingala',
+  'Lithuanian',
+  'Luganda',
+  'Luo',
+  'Macedonian',
+  'Malagasy',
+  'Malay',
+  'Malayalam',
+  'Maltese',
+  'Mandarin',
+  'Maori',
+  'Marathi',
+  'Mongolian',
+  'Nahuatl',
+  'Nepali',
+  'Norwegian',
+  'Odia',
+  'Oromo',
+  'Pashto',
+  'Persian',
+  'Polish',
+  'Portuguese',
+  'Punjabi',
+  'Quechua',
+  'Romanian',
+  'Russian',
+  'Samoan',
+  'Sango',
+  'Serbian',
+  'Sesotho',
+  'Shona',
+  'Sindhi',
+  'Sinhala',
+  'Slovak',
+  'Slovenian',
+  'Somali',
+  'Spanish',
+  'Swahili',
+  'Swedish',
+  'Syriac',
+  'Tagalog',
+  'Tajik',
+  'Tamil',
+  'Telugu',
+  'Thai',
+  'Tigrinya',
+  'Tongan',
+  'Tsonga',
+  'Turkish',
+  'Ugaritic',
+  'Ukrainian',
+  'Urdu',
+  'Uzbek',
+  'Vietnamese',
+  'Wolof',
+  'Xhosa',
+  'Yoruba',
+  'Zulu',
+];
+
+/**
+ * Languages carrying at least one installed resource in {@link MANY_LANGUAGE_RESOURCES}. The
+ * language filter is expected to promote these above the rest.
+ */
+export const MANY_LANGUAGE_INSTALLED_LANGUAGES = [
+  'Amharic',
+  'Nepali',
+  'Portuguese',
+  'Quechua',
+  'Swahili',
+  'Tagalog',
+];
+
+/**
+ * Languages deliberately forced to carry only non-Scripture resources in
+ * {@link MANY_LANGUAGE_RESOURCES}. A picker scoped to `ScriptureResource` must not offer these,
+ * because selecting one yields zero rows.
+ *
+ * These are named so a test can assert against them by name; they are NOT the complete set of
+ * languages without a Scripture resource — the generator's type cycle leaves many more in the same
+ * position. Assert set equality against the fixture rather than using this list as a complement.
+ */
+export const MANY_LANGUAGE_NON_SCRIPTURE_LANGUAGES = ['Coptic', "Ge'ez", 'Syriac', 'Ugaritic'];
+
+/**
+ * A catalogue-sized resource list: 132 languages, six of them with an installed resource.
+ *
+ * 47 of the languages end up with no Scripture resource at all — the four named in
+ * {@link MANY_LANGUAGE_NON_SCRIPTURE_LANGUAGES}, which are forced to `XmlResource`, plus every
+ * language whose `step % 3 === 1` and so receives only `SourceLanguageResource` + `XmlResource`.
+ * Scoping this fixture to Scripture therefore drops about a third of the list, not four entries.
+ *
+ * Emitted in a deliberately non-alphabetical order (a fixed coprime stride over the language list)
+ * so it mimics a real DBL catalogue's arbitrary ordering. Any test asserting alphabetical ordering
+ * against this fixture is therefore falsifiable — it fails if the sort is dropped.
+ */
+function generateManyLanguageResources(): DblResourceData[] {
+  const resources: DblResourceData[] = [];
+  // 37 is coprime with the language count, so this visits every language exactly once in an order
+  // that is stable across runs but unrelated to alphabetical order.
+  const stride = 37;
+  for (let step = 0; step < MANY_LANGUAGES.length; step++) {
+    const language = MANY_LANGUAGES[(step * stride) % MANY_LANGUAGES.length];
+    const isNonScriptureOnly = MANY_LANGUAGE_NON_SCRIPTURE_LANGUAGES.includes(language);
+    const isInstalledLanguage = MANY_LANGUAGE_INSTALLED_LANGUAGES.includes(language);
+    const countForLanguage = 1 + (step % 3);
+    for (let n = 0; n < countForLanguage; n++) {
+      resources.push({
+        dblEntryUid: `many-${step}-${n}`,
+        displayName: `${language.slice(0, 3).toUpperCase()}${n + 1}`,
+        fullName: `${language} Resource ${n + 1}`,
+        bestLanguageName: language,
+        type: isNonScriptureOnly
+          ? 'XmlResource'
+          : GENERATED_TYPES[(step + n) % GENERATED_TYPES.length],
+        size: 4_000_000 + step * 10_000 + n * 1000,
+        // Only the first resource of an installed language is installed, so the per-language
+        // counts stay distinguishable from the installed flag.
+        installed: isInstalledLanguage && n === 0,
+        updateAvailable: false,
+        projectId: `prj-many-${step}-${n}`,
+      });
+    }
+  }
+  return resources;
+}
+
+export const MANY_LANGUAGE_RESOURCES: DblResourceData[] = generateManyLanguageResources();

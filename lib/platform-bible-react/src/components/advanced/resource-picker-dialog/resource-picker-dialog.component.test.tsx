@@ -5,14 +5,29 @@ import { Dialog } from '@/components/shadcn-ui/dialog';
 import ResourcePickerDialog, {
   ResourcePickerDialogLocalizedStrings,
 } from './resource-picker-dialog.component';
-import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS } from './resource-picker-dialog.data';
+import {
+  MANY_LANGUAGE_RESOURCES,
+  SAMPLE_RESOURCES,
+  SAMPLE_SELECTED_IDS,
+} from './resource-picker-dialog.data';
 
-// jsdom does not implement IntersectionObserver — stub it so the hook can mount
+// jsdom implements none of what opening the language list needs: IntersectionObserver for the
+// progressive-list hook, ResizeObserver for cmdk's command list, and scrollIntoView for the option
+// cmdk highlights. Stubbed per file rather than globally — components that feature-detect
+// ResizeObserver take a different path when one exists, so defining it for every suite would
+// change what unrelated tests measure.
 beforeAll(() => {
   vi.stubGlobal(
     'IntersectionObserver',
     vi.fn(() => ({ observe: vi.fn(), disconnect: vi.fn() })),
   );
+  vi.stubGlobal(
+    'ResizeObserver',
+    vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
+  );
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
 });
 afterAll(() => {
   vi.unstubAllGlobals();
@@ -26,6 +41,8 @@ const STRINGS: ResourcePickerDialogLocalizedStrings = {
   '%resourcePicker_no_results%': 'No results found',
   '%resourcePicker_search_placeholder%': 'Search resources…',
   '%resourcePicker_language_filter_any%': 'Any language',
+  '%resourcePicker_language_filter_search_placeholder%': 'Search languages…',
+  '%resourcePicker_language_filter_no_results%': 'No languages found',
   '%resourcePicker_showing_count%': 'Showing {filtered} of {total} resources',
 };
 
@@ -228,6 +245,53 @@ describe('ResourcePickerDialog', () => {
     expect(
       screen.getByText('Only resources already on this computer are shown.'),
     ).toBeInTheDocument();
+  });
+
+  describe('language filter', () => {
+    // Once the popover is open the cmdk search input carries the combobox role too, so the
+    // trigger is identified by being the button.
+    const languageTrigger = () => {
+      const trigger = screen
+        .getAllByRole('combobox')
+        .find((element) => element.tagName === 'BUTTON');
+      if (!trigger) throw new Error('Language filter trigger not found');
+      return trigger;
+    };
+
+    const toggleLanguageFilter = () => {
+      fireEvent.click(languageTrigger());
+      return screen.queryAllByRole('option').map((option) => option.textContent ?? '');
+    };
+
+    it('holds the option order steady while the list is open', () => {
+      renderDialog({ allResources: MANY_LANGUAGE_RESOURCES, selectedResourceIds: [] });
+      const optionsBefore = toggleLanguageFilter();
+
+      // A language far enough down that re-sorting would visibly move it, and unstarred so that
+      // selecting it is what would float it up.
+      const target = screen.getAllByRole('option')[optionsBefore.length - 1];
+      const targetLabel = target.textContent ?? '';
+      fireEvent.click(target);
+
+      const optionsAfter = screen.getAllByRole('option').map((option) => option.textContent ?? '');
+      expect(optionsAfter).toEqual(optionsBefore);
+      expect(optionsAfter[optionsAfter.length - 1]).toBe(targetLabel);
+    });
+
+    it('re-sorts the selection to the top the next time the list is opened', () => {
+      renderDialog({ allResources: MANY_LANGUAGE_RESOURCES, selectedResourceIds: [] });
+      const optionsBefore = toggleLanguageFilter();
+      const target = screen.getAllByRole('option')[optionsBefore.length - 1];
+      const targetLabel = target.textContent ?? '';
+      fireEvent.click(target);
+
+      // Close and reopen: the snapshot refreshes, so the choice is now grouped with the starred
+      // languages instead of sitting at the far end of a 130-row list.
+      fireEvent.click(languageTrigger());
+      const reopened = toggleLanguageFilter();
+
+      expect(reopened.indexOf(targetLabel)).toBeLessThan(optionsBefore.length - 1);
+    });
   });
 
   it('renders only the first 50 "Available to Download" resources when there are more than 50', () => {
