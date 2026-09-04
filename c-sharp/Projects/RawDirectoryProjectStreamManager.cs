@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
@@ -29,10 +27,21 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
             );
     }
 
-    public string[] GetExistingDataStreamNames() // TODO: This doesn't seem to be used
+    public string[] GetExistingDataStreamNames(string? underPath = null)
     {
+        // Resolving through GetFileNameFromStreamName keeps the validation and separator handling
+        // identical to GetDataStream, so a name this returns is a name that can be read back.
+        var rootDir = string.IsNullOrEmpty(underPath)
+            ? _writableRootDir
+            : GetFileNameFromStreamName(underPath);
+
+        // Enumerating a path that does not exist must not create it - callers use this to discover
+        // what exists without writing to the project
+        if (!Directory.Exists(rootDir))
+            return [];
+
         var files = Directory.GetFiles(
-            _writableRootDir,
+            rootDir,
             "*",
             new EnumerationOptions
             {
@@ -42,23 +51,13 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
             }
         );
 
-        DirectoryInfo projectDirectory = new(_writableRootDir);
-        List<string> retVal = new();
-        foreach (var file in files)
-        {
-            FileInfo fileInfo = new(file);
-            StringBuilder streamName = new(fileInfo.Name);
-            DirectoryInfo? walkingUp = fileInfo.Directory;
-            while (walkingUp != null && walkingUp.FullName != projectDirectory.FullName)
-            {
-                streamName.Insert(0, Path.DirectorySeparatorChar);
-                streamName.Insert(0, walkingUp.Name);
-                walkingUp = walkingUp.Parent;
-            }
-            retVal.Add(streamName.ToString());
-        }
-
-        return retVal.ToArray();
+        var streamNames = files
+            .Select(file =>
+                Path.GetRelativePath(rootDir, file).Replace(Path.DirectorySeparatorChar, '/')
+            )
+            .ToList();
+        streamNames.Sort(StringComparer.Ordinal);
+        return [.. streamNames];
     }
 
     public Stream? GetDataStream(string streamName, bool createIfNotExists = false)

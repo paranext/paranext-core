@@ -24,6 +24,12 @@ namespace TestParanextDataProvider
         public List<string> GetRegisteredFunctionNames() =>
             GetFunctions().Select(function => function.functionName).ToList();
 
+        /// <summary>
+        /// The stream names this PDP currently holds data for, so tests can assert which calls
+        /// create files and which do not.
+        /// </summary>
+        public List<string> GetStoredStreamNames() => [.. _inMemoryFiles.Keys];
+
         protected override IProjectStreamManager CreateStreamManager(ProjectDetails projectDetails)
         {
             return new InMemoryStreamManager(this);
@@ -47,9 +53,20 @@ namespace TestParanextDataProvider
                 // Nothing to do
             }
 
-            public string[] GetExistingDataStreamNames()
+            public string[] GetExistingDataStreamNames(string? underPath = null)
             {
-                throw new NotImplementedException();
+                // Stream names are already '/'-joined here, so a plain prefix match gives the same
+                // recursive, relative, forward-slash names the file-based manager produces
+                var prefix = string.IsNullOrEmpty(underPath) ? "" : $"{underPath}/";
+                return
+                [
+                    .. _owner
+                        ._inMemoryFiles.Keys.Where(streamName =>
+                            streamName.StartsWith(prefix, StringComparison.Ordinal)
+                        )
+                        .Select(streamName => streamName[prefix.Length..])
+                        .OrderBy(streamName => streamName, StringComparer.Ordinal),
+                ];
             }
 
             public Stream? GetDataStream(string streamName, bool createIfNotExists = false)

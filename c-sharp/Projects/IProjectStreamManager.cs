@@ -12,10 +12,17 @@ internal interface IProjectStreamManager
     void Initialize();
 
     /// <summary>
-    /// Get a list of all data streams current part of the project
+    /// Get the names of the data streams under <paramref name="underPath"/>, relative to it, using
+    /// '/' as the separator. Recursive, so a stream nested in subdirectories is returned with those
+    /// subdirectories in its name. Creates nothing: if the path does not exist, returns an empty
+    /// array.
     /// </summary>
-    /// <returns></returns>
-    string[] GetExistingDataStreamNames();
+    /// <param name="underPath">
+    /// Path to enumerate under, relative to the project, using '/' or the platform's separator. Null
+    /// or empty lists every stream in the project, relative to the project root.
+    /// </param>
+    /// <returns>Stream names, sorted with <see cref="StringComparer.Ordinal"/></returns>
+    string[] GetExistingDataStreamNames(string? underPath = null);
 
     /// <summary>
     /// Get a read/write data stream for project data providers to use
