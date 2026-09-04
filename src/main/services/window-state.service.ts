@@ -615,9 +615,10 @@ export function addWindow(window: BrowserWindow, existingId?: string): string {
     // untouched here. The id below already names this live window, so the value is never wrong for
     // any reader — including an extension that calls the experimental `platform.getFocusedWindowId`
     // command directly — only early: it names the window that is about to take focus, never a
-    // corpse and never a different window. Internal routing is additionally safe on its own:
-    // `getRoutingTarget` only acts on `focusedWindowId` once `readyWindowIds` holds this id too,
-    // which it does not until this window's own renderer registers.
+    // corpse and never a different window. `getRoutingTarget`'s ready branches only return
+    // `focusedWindowId` once `readyWindowIds` holds it too; its final not-ready fallback can still
+    // return the same id early, but that fallback returns an equally not-yet-ready window's own id
+    // for an ordinary starting window with no reclaim involved, so a reclaim adds no new case there.
   }
   trackedWindows.push({ windowId, window });
   announceRoutingTargetIfChanged();
