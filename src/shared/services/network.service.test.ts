@@ -97,8 +97,8 @@ describe('onDidLoseConnection', () => {
   it('relays the handler event to its own subscribers', async () => {
     const networkService = await importNetworkService();
 
-    let fireFromHandler: ((event: undefined) => void) | undefined;
-    mockRpcHandler.onDidLoseConnection = vi.fn((callback: (event: undefined) => void) => {
+    let fireFromHandler: ((event: void) => void) | undefined;
+    mockRpcHandler.onDidLoseConnection = vi.fn((callback: (event: void) => void) => {
       fireFromHandler = callback;
       return () => true;
     });
@@ -117,8 +117,8 @@ describe('onDidLoseConnection', () => {
   it('does not relay after shutdown() has begun', async () => {
     const networkService = await importNetworkService();
 
-    let fireFromHandler: ((event: undefined) => void) | undefined;
-    mockRpcHandler.onDidLoseConnection = vi.fn((callback: (event: undefined) => void) => {
+    let fireFromHandler: ((event: void) => void) | undefined;
+    mockRpcHandler.onDidLoseConnection = vi.fn((callback: (event: void) => void) => {
       fireFromHandler = callback;
       return () => true;
     });
@@ -135,8 +135,8 @@ describe('onDidLoseConnection', () => {
   it('still tells the other subscribers when one of them throws', async () => {
     const networkService = await importNetworkService();
 
-    let fireFromHandler: ((event: undefined) => void) | undefined;
-    mockRpcHandler.onDidLoseConnection = vi.fn((callback: (event: undefined) => void) => {
+    let fireFromHandler: ((event: void) => void) | undefined;
+    mockRpcHandler.onDidLoseConnection = vi.fn((callback: (event: void) => void) => {
       fireFromHandler = callback;
       return () => true;
     });

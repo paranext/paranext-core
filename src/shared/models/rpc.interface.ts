@@ -135,6 +135,10 @@ export interface IRpcMethodRegistrar extends IRpcHandler {
    * Event that fires when this process's own connection to the network is lost unexpectedly — the
    * websocket closed without the app having asked it to.
    *
+   * This is platform-internal core plumbing between the process that holds a client connection and
+   * the services that react to losing one, not part of the `@papi/*` surface — the same status as
+   * `onDidDisconnectClient` above, which is this seam in the opposite direction.
+   *
    * This is a local, in-process event. Only a process that holds a client connection can lose one,
    * so it fires exclusively on clients; in the process that owns the websocket server it is a real
    * event that simply never fires. A deliberate disconnect does not fire it: intent travels in the

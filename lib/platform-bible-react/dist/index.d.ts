@@ -2848,8 +2848,6 @@ export declare function Alert({ className, variant, ...props }: React$1.Componen
 export declare function AlertTitle({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Alert */
 export declare function AlertDescription({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
-/** @inheritdoc Alert */
-export declare function AlertAction({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /**
  * The Avatar component displays a user's profile picture or initials. The component is built and
  * styled by Shadcn UI.

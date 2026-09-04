@@ -1,89 +1,76 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const mockOnDidLoseConnection = vi.fn();
-vi.mock('@shared/services/network.service', () => ({
-  onDidLoseConnection: (callback: () => void) => mockOnDidLoseConnection(callback),
-}));
-
-// The mock must be registered before the module under test reads the network service at import time.
-// eslint-disable-next-line import/first
 import {
   getIsConnectionLost,
-  initConnectionLostStore,
+  markShuttingDown,
+  reportConnectionLost,
   resetConnectionLost,
   subscribeToConnectionLost,
 } from '@renderer/services/connection-lost-store';
 
-/** Wires the store to a fake network service and hands back the trigger for a lost connection. */
-function initAndCaptureTrigger(): { fire: () => void; teardown: () => void } {
-  let captured: (() => void) | undefined;
-  const unsubscribe = vi.fn();
-  mockOnDidLoseConnection.mockImplementation((callback: () => void) => {
-    captured = callback;
-    return unsubscribe;
-  });
-  const teardown = initConnectionLostStore();
-  return {
-    fire: () => captured?.(),
-    teardown,
-  };
-}
-
 describe('connection-lost store', () => {
   beforeEach(() => {
     resetConnectionLost();
-    mockOnDidLoseConnection.mockReset();
   });
 
   it('starts out reporting a live connection', () => {
     expect(getIsConnectionLost()).toBe(false);
   });
 
-  it('reports a lost connection once the network service says so', () => {
-    const { fire } = initAndCaptureTrigger();
-    fire();
+  it('reports a lost connection once one is reported', () => {
+    reportConnectionLost();
     expect(getIsConnectionLost()).toBe(true);
   });
 
   it('notifies subscribers exactly once', () => {
-    const { fire } = initAndCaptureTrigger();
     const listener = vi.fn();
     subscribeToConnectionLost(listener);
 
-    fire();
+    reportConnectionLost();
 
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  it('stays lost — a second announcement does not re-notify', () => {
-    const { fire } = initAndCaptureTrigger();
+  it('stays lost — a second report does not re-notify', () => {
     const listener = vi.fn();
     subscribeToConnectionLost(listener);
 
-    fire();
-    fire();
+    reportConnectionLost();
+    reportConnectionLost();
 
     expect(getIsConnectionLost()).toBe(true);
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
   it('stops notifying a listener that unsubscribed', () => {
-    const { fire } = initAndCaptureTrigger();
     const listener = vi.fn();
     const unsubscribe = subscribeToConnectionLost(listener);
     unsubscribe();
 
-    fire();
+    reportConnectionLost();
 
     expect(listener).not.toHaveBeenCalled();
   });
 
-  it('unsubscribes from the network service when torn down', () => {
-    const { teardown } = initAndCaptureTrigger();
-    const unsubscribe = mockOnDidLoseConnection.mock.results[0].value;
+  // Every websocket dies with 1006 on an ordinary quit, so without this latch the store flips true
+  // on the way out and the overlay is asked to render — leaving whether the user sees a farewell
+  // error banner up to paint timing rather than up to the code.
+  it('ignores a loss reported after the app has started closing', () => {
+    const listener = vi.fn();
+    subscribeToConnectionLost(listener);
 
-    teardown();
+    markShuttingDown();
+    reportConnectionLost();
 
-    expect(unsubscribe).toHaveBeenCalled();
+    expect(getIsConnectionLost()).toBe(false);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  // The latch only suppresses losses that arrive AFTER it. A real disconnect the user is already
+  // looking at must survive them starting to close the window.
+  it('keeps a loss that was already reported before the app started closing', () => {
+    reportConnectionLost();
+    markShuttingDown();
+
+    expect(getIsConnectionLost()).toBe(true);
   });
 });

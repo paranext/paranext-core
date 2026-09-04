@@ -25,6 +25,10 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { VisuallyHidden } from 'radix-ui';
+import {
+  getIsConnectionLost,
+  subscribeToConnectionLost,
+} from '@renderer/services/connection-lost-store';
 import { FirstRunStep } from '@renderer/services/first-run.model';
 import { REGISTRATION_RESOLVE_TIMEOUT_MS } from '@renderer/services/resolve-registration-validity';
 import { FirstRunShell } from './first-run-shell.component';
@@ -47,8 +51,11 @@ const KEYS: LocalizeKey[] = [
 
 // Full-viewport, above the menubar, opaque, square corners. `tw:block` overrides DialogContent's
 // default `tw:grid`; the rest override its centered rounded card so the gate covers the whole app.
+// `tw:data-open:zoom-in-100` cancels the card's `zoom-in-95` open animation, which on a
+// full-viewport layer scales the gate about its centre and leaves a band of un-gated app visible
+// around all four edges while it animates.
 const FULL_SCREEN_CONTENT =
-  'tw:fixed tw:inset-0 tw:top-0 tw:start-0 tw:block tw:h-screen tw:w-screen tw:max-w-none tw:sm:max-w-none tw:translate-x-0 tw:rtl:translate-x-0 tw:translate-y-0 tw:gap-0 tw:overflow-auto tw:rounded-none tw:bg-background tw:p-0 tw:ring-0';
+  'tw:fixed tw:inset-0 tw:top-0 tw:start-0 tw:block tw:h-screen tw:w-screen tw:max-w-none tw:sm:max-w-none tw:translate-x-0 tw:rtl:translate-x-0 tw:translate-y-0 tw:gap-0 tw:overflow-auto tw:rounded-none tw:bg-background tw:p-0 tw:ring-0 tw:data-open:zoom-in-100';
 
 /**
  * How long the gate can sit in `loading` before it reveals a "continue without setup" escape
@@ -249,6 +256,17 @@ export function FirstRunOverlay({
   // useSyncExternalStore re-reads on subscribe, so a status change emitted between the initial
   // render and the subscription cannot be missed (unlike a manual useState + useEffect).
   const status = useSyncExternalStore(subscribeToFirstRun, getFirstRunStatus);
+  const isConnectionLost = useSyncExternalStore(subscribeToConnectionLost, getIsConnectionLost);
+
+  // Stand down once the connection is lost, even though `Z_INDEX_CONNECTION_LOST` (800) already
+  // paints above this gate (700). Radix's `FocusScope` and `DismissableLayer` arbitrate between two
+  // open modal dialogs by MOUNT ORDER, not by z-index, so a gate that mounts after the
+  // connection-lost state would take the focus trap and leave the visible Reload button
+  // unreachable — behind a scrim, in a wizard the user cannot see and whose every step needs the
+  // PAPI connection that just died. The gate can still be raised late: a background registration
+  // re-check, or a registration probe that was in flight when the socket dropped, both resolve into
+  // `applyStatus` long after startup.
+  if (isConnectionLost) return undefined;
 
   if (status.kind === 'app') return undefined;
 

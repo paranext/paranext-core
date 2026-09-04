@@ -3066,28 +3066,45 @@ step, no automation. Just a record.
 - **Decision:** Detect and render the connection-lost state entirely inside the renderer process,
   using no PAPI round trip anywhere in the reaction path, from a component mounted unconditionally
   at app startup rather than mounted in response to the disconnect.
-  - **Signal:** a new local event, `onDidLoseConnection: PlatformEvent<undefined>`, added to
-    `IRpcMethodRegistrar` (`src/shared/models/rpc.interface.ts:148`). It is real on `RpcClient`
-    (`src/client/services/rpc-client.ts:68`, emitted at line 380:
-    `if (!isCleanCloseEvent(ev)) this.connectionLostEmitter.emit(undefined);`, guarded by
-    `onWebSocketClose`'s own early return on `this.hasCompletedTeardown` (lines 368-369) so it
-    cannot double-fire) and inert on `RpcWebSocketListener`
-    (`src/main/services/rpc-websocket-listener.ts:72`, documented as "never fires here" because
-    only a process holding a client connection can lose one). This deliberately mirrors
-    `onDidDisconnectClient`, which is the same seam in the opposite direction — real in main, inert
-    on the client — so the pair reads as one convention rather than two unrelated ones. The payload
-    is `undefined` on purpose: PT-4434's instrumentation already logs the rich close detail where it
-    is observed, and the UI shows the same one message regardless of close code, so a payload would
-    have no reader. `network.service.ts` relays it through its own emitter
-    (`onDidLoseConnection` at line 158, subscribed inside `initialize()` at line 199) using the same
-    shape as the existing `onDidDisconnectClient` relay immediately above it — the `hasShutDown`
-    guard so quit-time teardown isn't reported as a failure, and `emitIsolated` with an error log so
-    one throwing subscriber doesn't cost the others the news.
+  - **Signal:** a new local event, `onDidLoseConnection: PlatformEvent<void>`, added to
+    `IRpcMethodRegistrar` (`src/shared/models/rpc.interface.ts`). It is real on `RpcClient`
+    (`src/client/services/rpc-client.ts`, emitted from `onWebSocketClose`'s unclean-close branch
+    via `connectionLostEmitter.emitIsolated(...)` with a logging handler, and guarded by that
+    method's own early return on `this.hasCompletedTeardown` so it cannot double-fire) and inert on
+    `RpcWebSocketListener` (`src/main/services/rpc-websocket-listener.ts`, documented as "never
+    fires here" because only a process holding a client connection can lose one). This deliberately
+    mirrors `onDidDisconnectClient`, which is the same seam in the opposite direction — real in
+    main, inert on the client — so the pair reads as one convention rather than two unrelated ones.
+    Both are marked platform-internal core plumbing rather than part of the `@papi/*` surface, even
+    though both are emitted verbatim into `papi.d.ts`. The event carries no payload on purpose:
+    PT-4434's instrumentation already logs the rich close detail where it is observed, and the UI
+    shows the same one message regardless of close code, so a payload would have no reader.
+    `network.service.ts` relays it through its own emitter, subscribed inside `initialize()`, using
+    the shared `relayWhileUp(...)` helper that both this relay and `onDidDisconnectClient`'s were
+    extracted into — so the `hasShutDown` guard (quit-time teardown isn't reported as a failure)
+    and `emitIsolated` with an error log (one throwing subscriber doesn't cost the others the news)
+    cannot be forgotten by the next event added to `IRpcMethodRegistrar`.
+
+    Line numbers are deliberately omitted throughout this entry: they went stale within one review
+    round of being written.
   - **Store:** `src/renderer/services/connection-lost-store.ts` is a one-way latch — `isConnectionLost`
-    starts `false`, flips to `true` on the first event, and nothing in the module ever sets it back
-    (the `resetConnectionLost` export is explicitly test-only). `initConnectionLostStore()` is called
-    from `Main` in `src/renderer/app.component.tsx:21`, alongside the pre-existing
-    `initWorkspaceUpdatingService()` call it was modelled on.
+    starts `false`, flips to `true` on the first reported loss, and nothing in the module ever sets
+    it back (the `resetConnectionLost` export is explicitly test-only). State and wiring are split
+    across two modules, following the `workspace-updating-store.ts` / `workspace-updating-service.ts`
+    pair: the store has zero imports, and `connection-lost-service.ts` holds the network
+    subscription. That split is what lets a consumer's test drive the store directly instead of
+    mocking a service graph to reach it — the collapsed version forced `app.component.test.tsx` to
+    mock the store outright to keep the network service out of the suite.
+  - **Startup wiring:** `initConnectionLostService()` is called at module evaluation in
+    `src/renderer/index.tsx`, before the async service-startup IIFE, NOT from a React effect.
+    `onDidLoseConnection` is a module-level emitter on the network service, so it exists before
+    `initialize()` runs, and subscribing before any await closes the startup window entirely rather
+    than merely relocating it. This follows the `onDidChangeCurrentTheme` subscription in the same
+    file, which is placed at module evaluation for the same "no change can slip through the gap"
+    reason, and the three renderer-lifetime services (`initAutoSyncBlockingService`,
+    `initAutoSyncEditBlockDriver`, `initSyncActivityService`) started from that file. Like those
+    three, the call site itself is untested and the behaviour is pinned at the service level
+    (`connection-lost-service.test.ts`).
   - **Component:** `ConnectionLostOverlay`
     (`src/renderer/components/overlays/overlay-connection-lost.component.tsx`) is mounted
     unconditionally in `Main`'s JSX (`app.component.tsx:43`) and returns `undefined` until the store
@@ -3119,13 +3136,47 @@ step, no automation. Just a record.
     renders at `Z_INDEX_MODAL_BACKDROP` (450) and accepts no `style`, so it cannot be raised to
     `Z_INDEX_CONNECTION_LOST` (800); the full-viewport content is therefore itself the scrim, which
     is the same override `FirstRunOverlay` applies to that card for the same reason.
-  - **Banner composition:** the banner is the exported `Alert`/`AlertTitle`/`AlertDescription`/
-    `AlertAction` family with `variant="destructive"`, not hand-rolled utility classes, so the
-    destructive tone tokens and the icon size slot come from the design system. `DialogTitle` and
-    `DialogDescription` wrap the banner's own title and message with `asChild`, so the dialog's
-    accessible name is the visible text rather than a hidden second copy that could drift from it.
-    `AlertAction` had to be added to `platform-bible-react`'s public index; it existed but was
-    unexported while its three siblings were.
+    `DialogContent` always renders that backdrop, so this state passes `overlayClassName` to
+    neutralize it rather than letting a `bg-black/10` + blur layer compound with its own scrim, and
+    cancels the card's `zoom-in-95` open animation, which on a full-viewport layer would leave a
+    band of undimmed app around all four edges while it animated.
+
+    **The gate is not total, and that is a documented limit rather than a claim.** A `FocusScope`
+    constrains where DOM focus lands; it does not stop handlers bound above or outside the focused
+    element. Main-process `before-input-event` accelerators (F12, Ctrl+Tab, the Paratext 9
+    verse-navigation set) are seen by main before any renderer frame gets them, and the
+    `document`-level toaster hotkeys (Sonner's own, plus `notification-display.tsx`'s Alt+T focus
+    cycling) bubble out of the dialog regardless of the focus scope. All of them still travel over
+    the dead socket. Gating the first category needs main to be told this renderer has latched,
+    which is exactly what this renderer-local design does not do — so it is left open and recorded
+    at the component, in the ADR, and in the keyboard-shortcuts catalog entry rather than papered
+    over. Escape is separately prevented (`onEscapeKeyDown`), making this the one dialog in the app
+    where Escape closes nothing; that is catalogued as its own entry.
+
+  - **Arbitration with the other app-gating modal:** `FirstRunOverlay` stands down entirely once
+    the connection-lost state has latched. `Z_INDEX_CONNECTION_LOST` (800) above `Z_INDEX_FIRST_RUN`
+    (700) decides only what is VISIBLE; Radix's `FocusScope` and `DismissableLayer` arbitrate
+    between two open modal `Dialog`s by MOUNT ORDER. A first-run gate raised after the
+    connection-lost state would therefore take the focus trap and leave the visible Reload button
+    unreachable, behind a scrim, in a wizard whose every step needs the connection that just died.
+    The gate genuinely can be raised late — a background registration re-check, or a registration
+    probe in flight when the socket dropped, both resolve into `applyStatus` long after startup — so
+    z-index alone was not enough to implement what this entry's ordering argument intended.
+  - **Banner composition:** the banner is the exported `Alert`/`AlertTitle`/`AlertDescription`
+    family with `variant="destructive"`, not hand-rolled utility classes, so the destructive tone
+    tokens and the icon size slot come from the design system. `DialogTitle` and `DialogDescription`
+    wrap the banner's own title and message with `asChild`, so the dialog's accessible name is the
+    visible text rather than a hidden second copy that could drift from it. Two consequences of
+    `asChild` are load-bearing: Radix's `Slot` merges as `{...slotProps, ...childProps}`, so
+    `data-slot="alert-description"` has to be restated on the child or the dialog's own slot name
+    replaces it and silently drops the destructive variant's description colour.
+
+    The reload button is placed in a third grid column in normal flow rather than in `Alert`'s
+    `AlertAction` slot. That slot positions its children absolutely and reserves 72px for them,
+    which suits a one-word action or an icon; this label is two words and this strip is as wide as
+    the window, so the button would overlap the message at narrow widths or in a locale with a
+    longer label. `AlertAction` is consequently NOT exported from `platform-bible-react` — an
+    earlier round of this work added it to the public index for a consumer that no longer uses it.
   - **Reload label:** "Reload anyway", not a bare "Reload". Reloading discards whatever the message
     just warned may be unsaved, and the scrim means the user cannot select and copy that text out
     first, so the label carries the consequence — the `Guidelines/Applying Changes` rule that a
@@ -3168,26 +3219,36 @@ step, no automation. Just a record.
     renderer needs a new main→renderer network event and different wording ("extensions have
     stopped working" is a materially different claim than "you are disconnected," since the
     renderer's own socket is still alive). Deferred to a follow-up ticket.
-  - **A quit-time false positive is possible and unverified as of this writing.**
+  - **The quit-time false positive is closed in code rather than left to paint timing.**
     `adr-renderer-websocket-suspend-disconnect` records that `INTENTIONAL_CLOSE_CODE` (4000) is
     currently unreachable from every peer, and that every socket dies with 1006 on the way down. The
     gate here, `isCleanCloseEvent`, rejects 1006 the same as any other unclean close — it cannot
     distinguish "the app is quitting" from "the network just broke." Main copes by asking
-    `isAppShuttingDown()` (`src/main/services/shutdown-latch.service.ts:45`) before deciding how loud
-    to log a handshake-less close; the renderer's `onWebSocketClose` has no equivalent check before
-    emitting `onDidLoseConnection`. So the store may latch `true` during an ordinary quit. Whether
-    anything is actually VISIBLE to the user depends on whether the renderer gets a chance to paint
-    the overlay before its `BrowserWindow` is destroyed — an empirical question, being checked
-    against the running app rather than assumed either way.
-  - **A startup window exists where a loss can be missed.** React runs child effects before a
-    parent's, so `ConnectionLostOverlay`'s subscribe effect (inside `useEffect` in
-    `overlay-connection-lost.component.tsx`) runs before `Main`'s own
-    `useEffect(() => initConnectionLostStore(), [])` at `app.component.tsx:21` — both are top-level
-    effects in the same component tree, and children mount before the parent's effects run. Because
-    the underlying `PlatformEvent` does not replay past emissions to a late subscriber, a connection
-    loss that happens to land in that window is never seen by anything. Left as-is: it matches how
-    `initWorkspaceUpdatingService()` is already wired in the same component, and closing it would
-    mean restructuring effect ordering for a race this feature did not introduce.
+    `isAppShuttingDown()` (`src/main/services/shutdown-latch.service.ts`) before deciding how loud
+    to log a handshake-less close; the renderer has no access to that latch, since it is main's.
+
+    So the renderer keeps its own equivalent: `markShuttingDown()` in the store, latched by
+    `connection-lost-service.ts` from the browser's `beforeunload` and `pagehide`, and consulted by
+    `reportConnectionLost()`. A loss reported after the latch is ignored; a loss already reported
+    before it survives, so a real disconnect the user is looking at is not erased by them starting
+    to close the window. `pagehide` as well as `beforeunload` because a reload from inside this
+    state leaves by that path.
+
+    Originally this entry left the question open — recording that the store may latch during an
+    ordinary quit, and that whether the user SEES a farewell error banner depended only on whether
+    the renderer painted before its `BrowserWindow` was destroyed, "an empirical question, being
+    checked against the running app." Live checking found no visible banner on quit, but a
+    correct-by-paint-timing invisible is not the same as a correct one: the same code on a slower
+    machine, or with a slower teardown, is a coin flip. Hence the latch. The behaviour is pinned by
+    `connection-lost-store.test.ts` and `connection-lost-service.test.ts` rather than by that
+    observation.
+  - **The startup window where a loss could be missed is closed.** An earlier revision wired the
+    subscription from a React effect in `Main`, which lost to `ConnectionLostOverlay`'s own subscribe
+    effect (React runs child effects before a parent's) — and since `PlatformEvent` does not replay
+    to a late subscriber, a loss landing in that window was seen by nothing. Subscribing at module
+    evaluation in `index.tsx` removes the window rather than documenting it; see **Startup wiring**
+    above. The component's own read of the store is a `useSyncExternalStore`, which re-reads on
+    subscribe, so the component cannot miss a flip that happened before it mounted either.
   - **Reconnect stays entirely out of scope.** The three pre-existing `RpcClient` reconnect blockers
     pinned by `test.fails` cases in
     `src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts` (a premature `Connected`

@@ -2,10 +2,9 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { onDidLoseConnection } from '@shared/services/network.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import {
-  initConnectionLostStore,
+  reportConnectionLost,
   resetConnectionLost,
 } from '@renderer/services/connection-lost-store';
 import {
@@ -41,17 +40,13 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
   useIsPowerMode: vi.fn(() => true),
 }));
 
-vi.mock('@shared/services/network.service', () => ({
-  onDidLoseConnection: vi.fn(() => () => true),
-}));
-
-/** Flips the store to lost, the way a real disconnect would. */
+/**
+ * Flips the store to lost, the way a real disconnect would. Calls the store directly: the store is
+ * import-free, and the wiring that reaches it from the network service is
+ * `connection-lost-service.ts`'s job and is tested there.
+ */
 function loseConnection() {
-  const subscribe = vi.mocked(onDidLoseConnection);
-  const teardown = initConnectionLostStore();
-  const callback = subscribe.mock.calls[subscribe.mock.calls.length - 1][0];
-  callback(undefined);
-  return teardown;
+  reportConnectionLost();
 }
 
 const PROPS = {
@@ -176,8 +171,17 @@ describe('ConnectionLostOverlay', () => {
   // The scrim blocks pointers, not keyboards. Without a focus trap, Tab off Reload walks into the
   // toolbar and dock, where every control is still focusable and Enter-activatable over the socket
   // that just died — the silent failure this state exists to end, reached by keyboard.
-  it('keeps Tab and Shift+Tab on reload instead of letting focus reach the app behind it', async () => {
-    render(
+  //
+  // Asserted through `aria-hidden` rather than by driving Tab. `userEvent.tab()` does not move
+  // focus out of a `DialogContent` in this jsdom setup even with `modal={false}` — which disables
+  // Radix's `trapFocus` — so a Tab-based assertion passes whether or not the trap is armed and
+  // pins nothing. Radix's `hideOthers` marks everything outside the dialog `aria-hidden` from the
+  // same `modal` flag that arms the trap, so this DOES flip when containment is disabled. It is a
+  // proxy: it pins that the modal behaviour is on, and is itself the guarantee screen-reader users
+  // get. Real Tab containment needs a browser, and is covered by the live verification rather than
+  // here.
+  it('marks the app behind it hidden, so the modal containment Reload depends on is armed', () => {
+    const { container } = render(
       <button type="button" data-testid="behind-the-overlay">
         Behind the overlay
       </button>,
@@ -186,19 +190,13 @@ describe('ConnectionLostOverlay', () => {
     act(() => {
       loseConnection();
     });
-    // Rendered second so the overlay's portal lands after the background control in the document
-    // order Tab follows.
+    // Rendered second so the overlay's portal lands after the background control.
     render(<ConnectionLostOverlay />);
 
-    const reload = screen.getByRole('button', { name: 'Reload' });
-    expect(reload).toHaveFocus();
-
-    await userEvent.tab();
-    expect(reload).toHaveFocus();
-
-    await userEvent.tab({ shift: true });
-    expect(reload).toHaveFocus();
-    expect(screen.getByTestId('behind-the-overlay')).not.toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Reload' })).toHaveFocus();
+    // `hideOthers` walks document.body's children, so it is the render container — not the button
+    // inside it — that gets marked.
+    expect(container).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('reloads the window when reload is clicked', async () => {
