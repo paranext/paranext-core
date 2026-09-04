@@ -347,6 +347,7 @@ export { ShrinkStepContext, useShrinkStepValue, SHRINK_STEP } from './context/sh
 // Z-index scale
 export {
   Z_INDEX_ABOVE_DOCK,
+  Z_INDEX_CONNECTION_LOST,
   Z_INDEX_FIRST_RUN,
   Z_INDEX_ABOVE_POPOVER,
   Z_INDEX_OVERLAY,

@@ -4041,6 +4041,16 @@ export declare const Z_INDEX_MODAL = 500;
  */
 export declare const Z_INDEX_FIRST_RUN = 700;
 /**
+ * Z-index for the connection-lost state. Sits above every other layer, {@link Z_INDEX_FIRST_RUN}
+ * included.
+ *
+ * When the websocket to the rest of the app dies, every layer beneath this one is inert — the
+ * first-run wizard cannot submit, modals cannot resolve, the toolbar cannot navigate. Anything
+ * rendering over this state would be offering the user a control that silently does nothing. Pinned
+ * by `z-index.test.ts`.
+ */
+export declare const Z_INDEX_CONNECTION_LOST = 800;
+/**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using
  * object syntax, and uses [`tailwind-merge`](https://www.npmjs.com/package/tailwind-merge) to make

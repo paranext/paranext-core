@@ -3046,3 +3046,218 @@ step, no automation. Just a record.
   becomes primary later — PT-4278's window-manager service is the durable answer for that.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
+
+## adr-connection-lost-is-renderer-local: The connection-lost state is detected and rendered entirely within the renderer, using no PAPI
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** PT-4434 diagnosed the renderer's Chromium `WebSocket` as the peer that dies on a
+  suspend, and left instrumentation but no user-visible reaction — NN-6 ("app never dies silently")
+  needs one. Every channel the app would normally reach for to report a failure travels over the
+  socket that just died: `notificationService` is a network object, so toasts are unavailable;
+  `sendCommand` needs the same connection to reach main; `useLocalizedStrings`
+  (`src/renderer/hooks/papi-hooks/use-localized-strings-hook.ts:45-54`) fetches over PAPI and, on
+  failure or before the first response, returns `defaultState`, whose values are the raw keys
+  themselves (`defaultState[key] = key`) — so an unfetched string renders as literal
+  `%overlay_connectionLost%`; and `useIsPowerMode`
+  (`src/renderer/hooks/use-is-power-mode.hook.ts:9-12`) reads the interface-mode setting over PAPI
+  and falls back to `false` (Simple) while loading or on failure. A state meant to tell the user the
+  backend is unreachable cannot itself depend on the backend to render.
+- **Decision:** Detect and render the connection-lost state entirely inside the renderer process,
+  using no PAPI round trip anywhere in the reaction path, from a component mounted unconditionally
+  at app startup rather than mounted in response to the disconnect.
+  - **Signal:** a new local event, `onDidLoseConnection: PlatformEvent<void>`, added to
+    `IRpcMethodRegistrar` (`src/shared/models/rpc.interface.ts`). It is real on `RpcClient`
+    (`src/client/services/rpc-client.ts`, emitted from `onWebSocketClose`'s unclean-close branch
+    via `connectionLostEmitter.emitIsolated(...)` with a logging handler, and guarded by that
+    method's own early return on `this.hasCompletedTeardown` so it cannot double-fire) and inert on
+    `RpcWebSocketListener` (`src/main/services/rpc-websocket-listener.ts`, documented as "never
+    fires here" because only a process holding a client connection can lose one). This deliberately
+    mirrors `onDidDisconnectClient`, which is the same seam in the opposite direction — real in
+    main, inert on the client — so the pair reads as one convention rather than two unrelated ones.
+    Both are marked platform-internal core plumbing rather than part of the `@papi/*` surface, even
+    though both are emitted verbatim into `papi.d.ts`. The event carries no payload on purpose:
+    PT-4434's instrumentation already logs the rich close detail where it is observed, and the UI
+    shows the same one message regardless of close code, so a payload would have no reader.
+    `network.service.ts` relays it through its own emitter, subscribed inside `initialize()`, using
+    the shared `relayWhileUp(...)` helper that both this relay and `onDidDisconnectClient`'s were
+    extracted into — so the `hasShutDown` guard (quit-time teardown isn't reported as a failure)
+    and `emitIsolated` with an error log (one throwing subscriber doesn't cost the others the news)
+    cannot be forgotten by the next event added to `IRpcMethodRegistrar`.
+
+    Line numbers are deliberately omitted throughout this entry: they went stale within one review
+    round of being written.
+  - **Store:** `src/renderer/services/connection-lost-store.ts` is a one-way latch — `isConnectionLost`
+    starts `false`, flips to `true` on the first reported loss, and nothing in the module ever sets
+    it back (the `resetConnectionLost` export is explicitly test-only). State and wiring are split
+    across two modules, following the `workspace-updating-store.ts` / `workspace-updating-service.ts`
+    pair: the store has zero imports, and `connection-lost-service.ts` holds the network
+    subscription. That split is what lets a consumer's test drive the store directly instead of
+    mocking a service graph to reach it — the collapsed version forced `app.component.test.tsx` to
+    mock the store outright to keep the network service out of the suite.
+  - **Startup wiring:** `initConnectionLostService()` is called at module evaluation in
+    `src/renderer/index.tsx`, before the async service-startup IIFE, NOT from a React effect.
+    `onDidLoseConnection` is a module-level emitter on the network service, so it exists before
+    `initialize()` runs, and subscribing before any await closes the startup window entirely rather
+    than merely relocating it. This follows the `onDidChangeCurrentTheme` subscription in the same
+    file, which is placed at module evaluation for the same "no change can slip through the gap"
+    reason, and the three renderer-lifetime services (`initAutoSyncBlockingService`,
+    `initAutoSyncEditBlockDriver`, `initSyncActivityService`) started from that file. Like those
+    three, the call site itself is untested and the behaviour is pinned at the service level
+    (`connection-lost-service.test.ts`).
+  - **Component:** `ConnectionLostOverlay`
+    (`src/renderer/components/overlays/overlay-connection-lost.component.tsx`) is mounted
+    unconditionally in `Main`'s JSX (`app.component.tsx:43`) and returns `undefined` until the store
+    flips. This is load-bearing, not stylistic: mounted from startup, its `useLocalizedStrings` and
+    `useIsPowerMode` calls resolve while the connection is alive, and their resolved values persist
+    in the component's own React state afterwards because `useData`'s subscription state is not
+    re-fetched just because the underlying provider stops answering — it holds the last good value.
+    Mounted only on the disconnect, both hooks would be reading a PAPI that has already broken:
+    `useLocalizedStrings` would show the raw `%overlay_connectionLost%` key, and `useIsPowerMode`
+    would report `false`, misplacing the banner at the Simple-mode toolbar height even in Power mode.
+    This property cannot be honestly pinned at the component level — the persistence lives in
+    `useData`'s state caching, not in this component's own code — so it is pinned instead at the app
+    level: `src/renderer/app.component.test.tsx` mounts `<App />` and asserts the connection-lost
+    overlay is present in `Main`'s rendered tree ("mounts the connection-lost overlay so it is
+    listening from startup"), the same pattern already used to pin `<FirstRunOverlay />`'s presence
+    in the same file.
+  - **Scrim:** a blocking scrim, not a `pointer-events: none` dimming, covering the toolbar as well
+    as the dock (`overlay-connection-lost.component.tsx`, `tw:fixed tw:inset-0` at
+    `Z_INDEX_CONNECTION_LOST`). Every toolbar control — project selector, reference, sync, menus —
+    reaches the rest of the app over the same dead socket, so leaving the toolbar clickable would
+    leave the exact silent failure NN-6 exists to end: controls that look live but do nothing.
+  - **Keyboard gate:** a scrim stops pointers only, so the state is a Radix modal `Dialog` with
+    `role="alertdialog"`, following the `FirstRunOverlay` precedent. Radix's `FocusScope` supplies
+    the trap and focuses Reload on open. Without the gate, Tab off Reload reaches the toolbar and
+    dock, where every control is still focusable and Enter-activatable — the same silent failure by
+    keyboard. A hand-rolled document-level Tab handler was tried first and rejected: a `document`
+    listener cannot see keydowns raised inside a web view's iframe, which has its own document, so
+    focus starting inside a web view would not have been contained. `DialogContent`'s own backdrop
+    renders at `Z_INDEX_MODAL_BACKDROP` (450) and accepts no `style`, so it cannot be raised to
+    `Z_INDEX_CONNECTION_LOST` (800); the full-viewport content is therefore itself the scrim, which
+    is the same override `FirstRunOverlay` applies to that card for the same reason.
+    `DialogContent` always renders that backdrop, so this state passes `overlayClassName` to
+    neutralize it rather than letting a `bg-black/10` + blur layer compound with its own scrim, and
+    cancels the card's `zoom-in-95` open animation, which on a full-viewport layer would leave a
+    band of undimmed app around all four edges while it animated.
+
+    **The gate is not total, and that is a documented limit rather than a claim.** A `FocusScope`
+    constrains where DOM focus lands; it does not stop handlers bound above or outside the focused
+    element. Main-process `before-input-event` accelerators (F12, Ctrl+Tab, the Paratext 9
+    verse-navigation set) are seen by main before any renderer frame gets them, and the
+    `document`-level toaster hotkeys (Sonner's own, plus `notification-display.tsx`'s Alt+T focus
+    cycling) bubble out of the dialog regardless of the focus scope. All of them still travel over
+    the dead socket. Gating the first category needs main to be told this renderer has latched,
+    which is exactly what this renderer-local design does not do — so it is left open and recorded
+    at the component, in the ADR, and in the keyboard-shortcuts catalog entry rather than papered
+    over. Escape is separately prevented (`onEscapeKeyDown`), making this the one dialog in the app
+    where Escape closes nothing; that is catalogued as its own entry.
+
+  - **Arbitration with the other app-gating modal:** `FirstRunOverlay` stands down entirely once
+    the connection-lost state has latched. `Z_INDEX_CONNECTION_LOST` (800) above `Z_INDEX_FIRST_RUN`
+    (700) decides only what is VISIBLE; Radix's `FocusScope` and `DismissableLayer` arbitrate
+    between two open modal `Dialog`s by MOUNT ORDER. A first-run gate raised after the
+    connection-lost state would therefore take the focus trap and leave the visible Reload button
+    unreachable, behind a scrim, in a wizard whose every step needs the connection that just died.
+    The gate genuinely can be raised late — a background registration re-check, or a registration
+    probe in flight when the socket dropped, both resolve into `applyStatus` long after startup — so
+    z-index alone was not enough to implement what this entry's ordering argument intended.
+  - **Banner composition:** the banner is the exported `Alert`/`AlertTitle`/`AlertDescription`
+    family with `variant="destructive"`, not hand-rolled utility classes, so the destructive tone
+    tokens and the icon size slot come from the design system. `DialogTitle` and `DialogDescription`
+    wrap the banner's own title and message with `asChild`, so the dialog's accessible name is the
+    visible text rather than a hidden second copy that could drift from it. Two consequences of
+    `asChild` are load-bearing: Radix's `Slot` merges as `{...slotProps, ...childProps}`, so
+    `data-slot="alert-description"` has to be restated on the child or the dialog's own slot name
+    replaces it and silently drops the destructive variant's description colour.
+
+    The reload button is placed in a third grid column in normal flow rather than in `Alert`'s
+    `AlertAction` slot. That slot positions its children absolutely and reserves 72px for them,
+    which suits a one-word action or an icon; this label is two words and this strip is as wide as
+    the window, so the button would overlap the message at narrow widths or in a locale with a
+    longer label. `AlertAction` is consequently NOT exported from `platform-bible-react` — an
+    earlier round of this work added it to the public index for a consumer that no longer uses it.
+  - **Reload label:** "Reload anyway", not a bare "Reload". Reloading discards whatever the message
+    just warned may be unsaved, and the scrim means the user cannot select and copy that text out
+    first, so the label carries the consequence — the `Guidelines/Applying Changes` rule that a
+    control which discards work must state or confirm it. A confirmation step was rejected: a second
+    dialog in a state where nothing else works is one more thing to get stuck in.
+  - **English fallback:** `localizedOrEnglish`
+    (`overlay-connection-lost.component.tsx`) substitutes the `en.json` text when a value is
+    still the raw key. The unconditional mount is necessary but not sufficient: a socket that dies
+    before localization has answered leaves `useLocalizedStrings` returning `defaultState`, and
+    there is no live PAPI left to wait for.
+  - **Recovery:** the Reload button calls `window.location.reload()` directly
+    (`overlay-connection-lost.component.tsx`) — no command, no main-process round trip,
+    because both are unreachable by definition once the socket is dead. A page load also reruns
+    every method registration the renderer made, which is what makes reload a genuine recovery
+    rather than a cosmetic one; PT-4434 verified this empirically (a broken renderer's reload logged
+    `Websocket client 7 connected` and restored the UI). The store is never cleared by anything else
+    in this component or in the reload path, matching the one-way design above.
+- **Alternatives:**
+  - **A toast via `notificationService`** — rejected outright: it is a network object, so calling it
+    would itself be a PAPI call over the socket that just died.
+  - **A non-blocking banner with no scrim** — rejected: it would leave every toolbar and dock control
+    clickable and silently non-functional, which is the exact failure this feature exists to end.
+  - **A `pointer-events: none` dimming scrim** instead of a blocking one — rejected. It would keep
+    on-screen text selectable and copyable, which the chosen scrim does not, but it would let clicks
+    reach dead controls underneath, reintroducing the silent-failure problem to save a smaller,
+    unrelated one (text selection).
+  - **Reconnect instead of a one-way state** — deferred, not rejected on the merits: reconnecting
+    needs the socket re-established AND every method this renderer registered re-announced to main,
+    neither of which this branch implements. `initConnectionLostStore()` is deliberately kept simple
+    (no ref-counting, no safety leash) because a state that could flip back to `false` on its own
+    would be claiming a recovery that had not actually happened.
+- **Consequences:**
+  - Content behind the scrim is readable but not selectable — a user who was mid-sentence when the
+    socket died cannot copy out what they just typed. This is an accepted, explicit tradeoff for
+    blocking interaction with a single layer rather than layering a separate no-select-but-clickable
+    scrim on top.
+  - **Extension-host disconnect is not covered.** Main already learns of an extension-host
+    disconnect through `onDidDisconnectClient`
+    (`src/shared/services/network.service.ts:146`/`185`), but relaying that specific case to the
+    renderer needs a new main→renderer network event and different wording ("extensions have
+    stopped working" is a materially different claim than "you are disconnected," since the
+    renderer's own socket is still alive). Deferred to a follow-up ticket.
+  - **The quit-time false positive is closed in code rather than left to paint timing.**
+    `adr-renderer-websocket-suspend-disconnect` records that `INTENTIONAL_CLOSE_CODE` (4000) is
+    currently unreachable from every peer, and that every socket dies with 1006 on the way down. The
+    gate here, `isCleanCloseEvent`, rejects 1006 the same as any other unclean close — it cannot
+    distinguish "the app is quitting" from "the network just broke." Main copes by asking
+    `isAppShuttingDown()` (`src/main/services/shutdown-latch.service.ts`) before deciding how loud
+    to log a handshake-less close; the renderer has no access to that latch, since it is main's.
+
+    So the renderer keeps its own equivalent: `markShuttingDown()` in the store, latched by
+    `connection-lost-service.ts` from the browser's `beforeunload` and `pagehide`, and consulted by
+    `reportConnectionLost()`. A loss reported after the latch is ignored; a loss already reported
+    before it survives, so a real disconnect the user is looking at is not erased by them starting
+    to close the window. `pagehide` as well as `beforeunload` because a reload from inside this
+    state leaves by that path.
+
+    Originally this entry left the question open — recording that the store may latch during an
+    ordinary quit, and that whether the user SEES a farewell error banner depended only on whether
+    the renderer painted before its `BrowserWindow` was destroyed, "an empirical question, being
+    checked against the running app." Live checking found no visible banner on quit, but a
+    correct-by-paint-timing invisible is not the same as a correct one: the same code on a slower
+    machine, or with a slower teardown, is a coin flip. Hence the latch. The behaviour is pinned by
+    `connection-lost-store.test.ts` and `connection-lost-service.test.ts` rather than by that
+    observation.
+  - **The startup window where a loss could be missed is closed.** An earlier revision wired the
+    subscription from a React effect in `Main`, which lost to `ConnectionLostOverlay`'s own subscribe
+    effect (React runs child effects before a parent's) — and since `PlatformEvent` does not replay
+    to a late subscriber, a loss landing in that window was seen by nothing. Subscribing at module
+    evaluation in `index.tsx` removes the window rather than documenting it; see **Startup wiring**
+    above. The component's own read of the store is a `useSyncExternalStore`, which re-reads on
+    subscribe, so the component cannot miss a flip that happened before it mounted either.
+  - **Reconnect stays entirely out of scope.** The three pre-existing `RpcClient` reconnect blockers
+    pinned by `test.fails` cases in
+    `src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts` (a premature `Connected`
+    status, a permanently-fatal timed-out first connect, and stacking `applyMiddleware` calls) are
+    untouched by this work and remain the reconnect branch's problem to resolve.
+  - `Z_INDEX_CONNECTION_LOST = 800` (`lib/platform-bible-react/src/components/z-index.ts`) sits
+    above `Z_INDEX_FIRST_RUN = 700` in the same module rather than below it. The first-run wizard is
+    itself entirely PAPI-driven, so a socket death mid-wizard would otherwise strand a brand-new user
+    in a form that can no longer submit, with no visible explanation why. Pinned by
+    `z-index.test.ts`.
+- **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
+  (PT-4434). Branch `pt-4435-visible-connection-lost-state`.

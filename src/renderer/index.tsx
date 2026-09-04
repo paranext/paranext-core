@@ -7,6 +7,7 @@ import { App } from '@renderer/app.component';
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
 import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
+import { initConnectionLostService } from '@renderer/services/connection-lost-service';
 import { startBookChapterControlServiceShard } from '@renderer/services/book-chapter-control.service-shard';
 import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
 import { startNotificationServiceShard } from '@renderer/services/notification.service-shard';
@@ -87,6 +88,14 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
   });
   throw new Error(`${reasons}`);
 }
+
+// Subscribed here, at module evaluation, rather than inside the async startup below or from a React
+// effect: `onDidLoseConnection` is a module-level emitter on the network service, so it exists
+// before `initialize()` runs, and subscribing before any await means a loss cannot land in a window
+// where nothing is listening. `PlatformEvent` does not replay to a late subscriber, so a missed loss
+// is missed for good — and this store is the one thing that tells the user the app has stopped
+// working. Returns an unsubscriber we intentionally never call; it runs for the renderer's lifetime.
+initConnectionLostService();
 
 // App-wide service setup
 // We are not awaiting these service startups for a few reasons:

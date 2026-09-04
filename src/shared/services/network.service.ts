@@ -120,6 +120,9 @@ let jsonRpc: IRpcMethodRegistrar | undefined;
 const clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
 /** Stops relaying the RPC handler's client disconnects, once there is a handler to stop relaying */
 let unsubscribeFromClientDisconnects: Unsubscriber | undefined;
+const connectionLostEmitter = new PlatformEventEmitter<void>();
+/** Stops relaying the RPC handler's lost connections, once there is a handler to stop relaying */
+let unsubscribeFromConnectionLost: Unsubscriber | undefined;
 
 /**
  * Event that fires when a process disconnects from the network, carrying the names of the methods
@@ -140,10 +143,54 @@ let unsubscribeFromClientDisconnects: Unsubscriber | undefined;
  */
 export const onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent> =
   clientDisconnectEmitter.event;
+
+/**
+ * Fires when this process's own connection to the network is lost unexpectedly.
+ *
+ * Relayed through this service's own emitter so subscribers can subscribe before there is an RPC
+ * handler to subscribe to. Local to this process, and silent on a deliberate disconnect — see
+ * {@link IRpcMethodRegistrar.onDidLoseConnection}.
+ *
+ * @experimental
+ */
+export const onDidLoseConnection: PlatformEvent<void> = connectionLostEmitter.event;
 // Set once {@link shutdown} has begun so {@link initialize} refuses to re-open a torn-down
 // connection. `jsonRpc` alone can't distinguish "not initialized yet" from "already shut down" —
 // both leave it `undefined` — so a late request after shutdown would otherwise re-connect.
 let hasShutDown = false;
+
+/**
+ * Subscribes to one of the RPC handler's events and re-emits it through this service's own emitter,
+ * but only while this process still considers itself up.
+ *
+ * Both guards it applies are easy to forget on the next event added to `IRpcMethodRegistrar`, and
+ * both matter:
+ *
+ * - The `hasShutDown` check: every socket closes at quit, and the emitters a subscriber would act
+ *   through are already being torn down by {@link shutdown}. Relaying then would report routine
+ *   teardown as the app breaking on its way out, through emitters that throw 'Emitter is disposed'
+ *   as they go.
+ * - `emitIsolated` rather than `emit`: one subscriber that throws must not cost the others the news,
+ *   because this is the only time they are told.
+ *
+ * @param subscribe The handler event to relay from.
+ * @param emitter This service's emitter to relay through.
+ * @param describeError Builds the log line for a throwing subscriber, given the event and the
+ *   error's message.
+ * @returns Unsubscriber for the relay.
+ */
+function relayWhileUp<T>(
+  subscribe: PlatformEvent<T>,
+  emitter: PlatformEventEmitter<T>,
+  describeError: (event: T, error: string) => string,
+): Unsubscriber {
+  return subscribe((event) => {
+    if (hasShutDown) return;
+    emitter.emitIsolated(event, (error) => {
+      logger.error(describeError(event, getErrorMessage(error)));
+    });
+  });
+}
 
 export async function initialize(): Promise<void> {
   if (jsonRpc) return;
@@ -164,21 +211,21 @@ export async function initialize(): Promise<void> {
       throw new Error(`ConnectionService: Failed to create NetworkConnector object: ${e}`);
     }
 
-    // Relayed through this service's own emitter so subscribers can subscribe before there is an
-    // RPC handler to subscribe to
-    unsubscribeFromClientDisconnects = jsonRpc.onDidDisconnectClient((clientDisconnect) => {
-      // Every socket closes at quit, and the emitters a subscriber would act through are already
-      // being torn down by `shutdown`. Relaying then would report routine teardown as processes
-      // dying, through emitters that throw 'Emitter is disposed' as they go.
-      if (hasShutDown) return;
-      // One subscriber that throws must not cost the others the news: this is the only time they are
-      // told, and what they do with it is drop registrations that are already unreachable.
-      clientDisconnectEmitter.emitIsolated(clientDisconnect, (error) => {
-        logger.error(
-          `A subscriber threw while being told a process disconnected, taking ${clientDisconnect.removedMethodNames.length} methods with it; the rest were still told: ${getErrorMessage(error)}`,
-        );
-      });
-    });
+    // Relayed through this service's own emitters so subscribers can subscribe before there is an
+    // RPC handler to subscribe to.
+    unsubscribeFromClientDisconnects = relayWhileUp(
+      jsonRpc.onDidDisconnectClient,
+      clientDisconnectEmitter,
+      (clientDisconnect, error) =>
+        `A subscriber threw while being told a process disconnected, taking ${clientDisconnect.removedMethodNames.length} methods with it; the rest were still told: ${error}`,
+    );
+
+    unsubscribeFromConnectionLost = relayWhileUp(
+      jsonRpc.onDidLoseConnection,
+      connectionLostEmitter,
+      (_event, error) =>
+        `A subscriber threw while being told this process lost its connection; the rest were still told: ${error}`,
+    );
 
     const connected = await jsonRpc.connect(handleEventFromNetwork);
     if (!connected) throw new Error(`Unable to connect protocol handler`);
@@ -199,6 +246,8 @@ export const shutdown = async () => {
     // dying while the emitters that carry the news are themselves being disposed.
     unsubscribeFromClientDisconnects?.();
     unsubscribeFromClientDisconnects = undefined;
+    unsubscribeFromConnectionLost?.();
+    unsubscribeFromConnectionLost = undefined;
     await jsonRpc.disconnect();
     // Tear down the handler reference before disposing emitters so their disposers skip the
     // now-pointless per-event unregister call — the whole connection is already going away.

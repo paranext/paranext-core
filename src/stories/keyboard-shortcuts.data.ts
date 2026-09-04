@@ -143,6 +143,37 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/renderer/components/notification-display.tsx'],
   },
   {
+    id: 'connection-lost-contain-focus',
+    purpose:
+      'Keep focus on Reload while the connection-lost state is shown, so the keyboard cannot reach controls that can no longer work',
+    category: 'Navigation',
+    context: 'Renderer (global, only while the connection-lost state is shown)',
+    // Containment is the Radix modal `Dialog`'s default, shared with every other dialog in the app
+    // and not catalogued for them. Listed for this one because here it is load-bearing rather than
+    // incidental: every control it keeps focus away from is one that can no longer do anything.
+    // Not total — `document`-level handlers (Sonner's toaster hotkey, Alt+T below) and main's
+    // `before-input-event` accelerators still fire, since a focus scope only constrains where focus
+    // lands. See the component doc block.
+    keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
+    locations: [
+      'src/renderer/components/overlays/overlay-connection-lost.component.tsx',
+      'lib/platform-bible-react/src/components/shadcn-ui/dialog.tsx',
+    ],
+  },
+  {
+    id: 'connection-lost-swallow-escape',
+    purpose:
+      'Do nothing — the connection-lost state deliberately cannot be dismissed, so Escape is inert while it is shown',
+    category: 'Menus',
+    context: 'Renderer (global, only while the connection-lost state is shown)',
+    // `onEscapeKeyDown` is prevented on the state's DialogContent. Catalogued because it is the one
+    // dialog in the app where Escape does NOT close anything, and because the `dismiss-overlays`
+    // entry says a modal dialog on top is left to its own shell — this is that shell, and it
+    // swallows the key. Reload is the only way out.
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: ['src/renderer/components/overlays/overlay-connection-lost.component.tsx'],
+  },
+  {
     id: 'zoom-in',
     purpose: 'Zoom in',
     category: 'Zoom',
