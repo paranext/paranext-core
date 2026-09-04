@@ -92,6 +92,7 @@ describe('useOpenProjectTabs', () => {
         projectId: 'p-1',
         scrollGroupId: 0,
         webViewType: 'platformScriptureEditor.react',
+        projectSource: 'container',
       },
     ]);
   });
@@ -149,6 +150,7 @@ describe('useOpenProjectTabs', () => {
         projectId: 'p-1',
         scrollGroupId: 0,
         webViewType: 'platformScriptureEditor.react',
+        projectSource: 'container',
       },
     ]);
   });
@@ -172,6 +174,7 @@ describe('useOpenProjectTabs', () => {
         projectId: 'abcdef',
         scrollGroupId: 0,
         webViewType: 'platformScriptureEditor.react',
+        projectSource: 'container',
       },
     ]);
   });
@@ -223,6 +226,7 @@ describe('useOpenProjectTabs', () => {
       projectId: 'p-editor',
       scrollGroupId: 0,
       webViewType: 'platformScriptureEditor.react',
+      projectSource: 'container',
     });
   });
 
@@ -478,18 +482,21 @@ describe('useOpenProjectTabs', () => {
       expect(result.current[0].projectId).toBe('res-1');
     });
 
-    it('prefers the declared resource over the container project', () => {
+    it('reports the container project and the declared resource, tagged by source', () => {
+      // The key documents the declared ids as projects displayed BEYOND the view's own, so both
+      // belong here. Narrowing to "what this tab displays" is the caller's rule, and `projectSource`
+      // is what lets it apply one — Find drops a reference panel's container project.
       const result = openWith({
         id: 'wv-panel',
         webViewType: BIBLE_TEXTS,
-        // The container is the editable project whose reference list is shown; the resource on
-        // screen is what Find must search.
         projectId: 'CONTAINER-1',
         scrollGroupScrRef: 0,
         state: { navigableProjectIds: ['RES-1'] },
       });
-      expect(result.current).toHaveLength(1);
-      expect(result.current[0].projectId).toBe('res-1');
+      expect(result.current.map((tab) => [tab.projectId, tab.projectSource]).sort()).toEqual([
+        ['container-1', 'container'],
+        ['res-1', 'declared'],
+      ]);
     });
 
     it('yields one tab per declared project for a view hosting several', () => {
@@ -533,9 +540,9 @@ describe('useOpenProjectTabs', () => {
       expect(result.current.map((tab) => tab.projectId)).toEqual(['res-2']);
     });
 
-    it('offers nothing for a view declaring an empty list, even with a container project', () => {
-      // An empty declaration means "I display nothing" — falling back to the container project
-      // would offer a project this tab is not showing.
+    it('adds nothing for a view declaring an empty list', () => {
+      // `[]` says "nothing beyond my own project", so the union is just the container. A caller
+      // that must not offer the container (Find, for a reference panel) filters it out by source.
       const result = openWith({
         id: 'wv-panel',
         webViewType: BIBLE_TEXTS,
@@ -543,7 +550,9 @@ describe('useOpenProjectTabs', () => {
         scrollGroupScrRef: 0,
         state: { navigableProjectIds: [] },
       });
-      expect(result.current).toEqual([]);
+      expect(result.current.map((tab) => [tab.projectId, tab.projectSource])).toEqual([
+        ['container-1', 'container'],
+      ]);
     });
 
     it('falls back to the container project when a view declares nothing at all', () => {

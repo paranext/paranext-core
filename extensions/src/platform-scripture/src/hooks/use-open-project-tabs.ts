@@ -12,17 +12,33 @@ export interface OpenProjectTabWithWebView {
   projectId: string;
   scrollGroupId: ScrollGroupId;
   webViewType: string;
+  /**
+   * Where `projectId` came from: the web view definition's own `projectId` (`'container'`), or the
+   * list the view declares under `NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY` (`'declared'`).
+   *
+   * Always `'container'` unless the caller passed `includeNavigableProjectIds`. Callers that must
+   * distinguish "the project this tab belongs to" from "the project this tab is displaying" — a
+   * reference panel's container is the editable project whose reference list it shows, not the
+   * resource on screen — filter on this rather than re-reading web view state.
+   */
+  projectSource: 'container' | 'declared';
 }
 
 export type WebViewFilter = (webView: { webViewType: string }) => boolean;
 
 export interface UseOpenProjectTabsOptions {
   /**
-   * Report the projects a web view declares under `NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY`
-   * instead of its container `projectId`, yielding one tab per declared project.
+   * Also report the projects a web view declares under `NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY`,
+   * yielding one tab per project.
+   *
+   * The declared list is UNIONED with the container `projectId`, which is what that key documents
+   * ("readers just union the lists") and what the toolbar's `useOpenProjectBookIds` does. Each tab
+   * carries `projectSource` so a caller can tell the two apart and apply its own rule — Find drops
+   * a reference panel's container project, because the panel is not displaying that project's
+   * text.
    *
    * Off by default: the existing consumers (checklist, checks-side-panel) ask "which project does
-   * this tab belong to", and a reference panel's answer to that is still its container project.
+   * this tab belong to", for which the container project is the whole answer.
    */
   includeNavigableProjectIds?: boolean;
 }
@@ -125,17 +141,19 @@ export function useOpenProjectTabs(
       ) {
         scrollGroup = 0;
       }
-      // A view that declares navigable projects reports those instead of its container project —
-      // a reference panel's container is the editable project whose reference list it shows, not
-      // the resource on screen. Falls back to the container project, which is what an editor tab
-      // (and every opted-out caller) reports.
+      // Union, not replace: the declared list names projects displayed BEYOND the view's own
+      // `projectId`, so both belong in the output. `projectSource` lets a caller narrow that —
+      // see `UseOpenProjectTabsOptions.includeNavigableProjectIds`.
       const declaredProjectIds = includeNavigableProjectIds
         ? getNavigableProjectIds(state)
         : undefined;
-      const tabProjectIds = (
-        declaredProjectIds ?? (typeof projectId === 'string' ? [projectId] : [])
-      ).filter((tabProjectId) => tabProjectId.length > 0);
-      const passes = tabProjectIds.length > 0 && scrollGroup !== undefined && passesFilter;
+      const containerProjectIds: [string, 'container'][] =
+        typeof projectId === 'string' && projectId.length > 0 ? [[projectId, 'container']] : [];
+      const declaredEntries: [string, 'declared'][] = (declaredProjectIds ?? [])
+        .filter((declaredProjectId) => declaredProjectId.length > 0)
+        .map((declaredProjectId) => [declaredProjectId, 'declared']);
+      const tabEntries = [...containerProjectIds, ...declaredEntries];
+      const passes = tabEntries.length > 0 && scrollGroup !== undefined && passesFilter;
       setTabsMap((prev) => {
         const keyPrefix = `${id}\u0000`;
         const previousKeys = [...prev.keys()].filter((key) => key.startsWith(keyPrefix));
@@ -149,16 +167,19 @@ export function useOpenProjectTabs(
         // Drop what this web view contributed before re-adding: its declared set can shrink, and a
         // stale entry would keep offering a project the view no longer displays.
         previousKeys.forEach((key) => next.delete(key));
-        tabProjectIds.forEach((tabProjectId) => {
+        tabEntries.forEach(([tabProjectId, projectSource]) => {
           // Lowercased for backward-compatibility with existing consumers. This casing is NOT
           // authoritative — canonical project ids are UPPERCASE — so consumers must match
           // case-insensitively (see normalizeProjectId / I12).
           const normalizedProjectId = tabProjectId.toLowerCase();
+          // A view that declares its own container project would otherwise yield the same key
+          // twice; the declared entry is the meaningful one, so it wins.
           next.set(tabKey(id, normalizedProjectId), {
             webViewId: id,
             projectId: normalizedProjectId,
             scrollGroupId: scrollGroup,
             webViewType: webViewType ?? '',
+            projectSource,
           });
         });
         return next;

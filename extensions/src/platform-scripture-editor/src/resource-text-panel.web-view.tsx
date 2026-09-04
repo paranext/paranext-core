@@ -663,6 +663,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
       lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
       return undefined;
     }
+    // The latch is only ever valid for the very NEXT reference, so any other reference discards it.
+    // Otherwise a publish whose echo never arrives as its own update — a Find result writing to the
+    // group before the round-trip lands — leaves the latch armed forever, and a later genuine "go to
+    // result" onto that verse would match it and be swallowed.
+    lastPublishedScrRefRef.current = undefined;
 
     // `isUsjLoading` is the guard that keeps a scroll off the PREVIOUS chapter: `useProjectData`
     // holds the old USJ across a selector change, and that content is fully laid out, so the settle
@@ -692,17 +697,25 @@ globalThis.webViewComponent = function ResourceTextPanel({
     let highlightedVerseElement: HTMLElement | undefined;
     const scrollWhenSettled = () => {
       if (cancelled) return;
+      const timedOut = Date.now() - start > SCROLL_MAX_WAIT_MS;
 
-      // Below verse 1 means the chapter top, which `scrollToVerse` handles without a verse marker
-      // and so without settled geometry. Verse 1 is NOT in this case: it has a real marker and real
-      // geometry to measure, so it goes through the settle loop like any other verse.
+      // Below verse 1 means the chapter top, which `scrollToVerse` reaches without a verse marker
+      // and so without settled geometry — but it still needs the container in the DOM, and it
+      // cannot report that, since it returns an element only when it matched a marker. So the
+      // container is checked here before recording; otherwise a reveal that beat the container into
+      // the DOM would scroll nothing and still be recorded as done. Verse 1 is NOT in this case: it
+      // has a real marker and real geometry, so it goes through the settle loop like any other.
       if (scrRef.verseNum < 1) {
-        scrollToVerse(scrRef);
-        lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
+        if (document.querySelector('.editor-container')) {
+          scrollToVerse(scrRef);
+          lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
+          return;
+        }
+        if (timedOut) return;
+        requestAnimationFrame(scrollWhenSettled);
         return;
       }
 
-      const timedOut = Date.now() - start > SCROLL_MAX_WAIT_MS;
       // `.editor-container` is sampled as a CONTENT-GROWTH PROXY, not as the scroll container.
       // Which element actually scrolls differs by host — `_editor-overrides.scss` warns that this
       // one is auto-height in the Scripture editor and its wrapper scrolls instead — so the scroll
@@ -715,18 +728,26 @@ globalThis.webViewComponent = function ResourceTextPanel({
       const isSettled = !!contentElement && scrollHeight === lastScrollHeight;
       lastScrollHeight = scrollHeight;
 
-      if (isSettled || timedOut) {
+      if (isSettled) {
         highlightedVerseElement = scrollToVerse(scrRef);
         // Only a scroll that actually landed is recorded. The verse marker can be genuinely absent
-        // — a `\v 16-17` range publishes no `[data-number="17"]` — and the pane may not have
-        // produced overflow yet. Recording regardless would make `hasNewScrollTarget` answer "same
-        // target" forever, so the panel would never catch up on a later reveal.
+        // — a `\v 16-17` range publishes no `[data-number="17"]` — so recording regardless would
+        // make `hasNewScrollTarget` answer "same target" forever and the panel would never catch up
+        // on a later reveal.
         if (highlightedVerseElement) {
           lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
           highlightedVerseElement.classList.add('highlighted');
+          return;
         }
-        return;
+        // Settled but no marker yet. Two consecutive equal heights are cheap to reach — an empty,
+        // flex-sized container reports the same height every frame before Lexical has reconciled
+        // the chapter — so "settled" is not "rendered". Keep waiting rather than treating one
+        // agreeing pair as the answer; `scrollToVerse` does not scroll without a marker, so
+        // re-calling it cannot restart an animation.
       }
+      // Out of time: give up WITHOUT recording, so a later reveal tries again instead of being
+      // told the target is unchanged.
+      if (timedOut) return;
       requestAnimationFrame(scrollWhenSettled);
     };
     scrollWhenSettled();
@@ -734,8 +755,10 @@ globalThis.webViewComponent = function ResourceTextPanel({
       cancelled = true;
       highlightedVerseElement?.classList.remove('highlighted');
     };
-    // `scrollToVerse` and the two predicates are stable module-level imports; listing them would
-    // cause spurious re-runs.
+    // The rule wants `scrRef` itself, but this effect is keyed on the three fields that decide where
+    // to scroll. `useWebViewScrollGroupScrRef` hands back a fresh object whenever the scroll group
+    // publishes, including for a reference that did not change, so depending on the object would
+    // restart the settle loop on updates that cannot move the target.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isViewVisible, usjFromPdp, isUsjLoading, scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
 

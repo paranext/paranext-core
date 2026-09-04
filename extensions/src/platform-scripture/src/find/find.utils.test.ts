@@ -2,22 +2,24 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { newPlatformError } from 'platform-bible-utils';
 import { FindJobStatusReport } from 'platform-scripture';
 import {
+  CharacterCategorizer,
+  MAX_CONSECUTIVE_POLL_MISSES,
+  OpenScrollGroupTab,
   applyPreserveCase,
   armBoundedWait,
   buildSearchRegex,
   callControllerSafely,
-  CharacterCategorizer,
   classifyPollAttempt,
   gateStartSearch,
   isDifferentProjectSelection,
   isFindQueryValid,
   isSimpleInterfaceMode,
-  MAX_CONSECUTIVE_POLL_MISSES,
   nextPollMissState,
-  OpenScrollGroupTab,
   prunePresentBookIds,
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
+  resolveTargetEditorWebViewId,
+  resolveTargetReferencePanelWebViewId,
   shouldClearResultsForInvalidQuery,
 } from './find.utils';
 
@@ -606,17 +608,59 @@ describe('shouldClearResultsForInvalidQuery', () => {
   });
 });
 
+/**
+ * The two scroll-group resolvers under test, with the Scripture editor's web view type defaulted.
+ * That parameter is required in production so the editor preference cannot be silently skipped;
+ * defaulting it here keeps each case below about the behaviour it is pinning. Pass it explicitly to
+ * vary it.
+ */
+const EDITOR_WEB_VIEW_TYPE = 'platformScriptureEditor.react';
+const resolveSelected = (
+  currentProjectId: string,
+  currentScrollGroupId: number | undefined,
+  openTabs: readonly OpenScrollGroupTab[],
+  preferredWebViewId: string | undefined,
+  editorWebViewType: string = EDITOR_WEB_VIEW_TYPE,
+) =>
+  resolveSelectedProjectScrollGroup(
+    currentProjectId,
+    currentScrollGroupId,
+    openTabs,
+    preferredWebViewId,
+    editorWebViewType,
+  );
+const resolveForPicked = (
+  pickedProjectId: string,
+  currentScrollGroupId: number | undefined,
+  openTabs: readonly OpenScrollGroupTab[],
+  preferredWebViewId: string | undefined,
+  editorWebViewType: string = EDITOR_WEB_VIEW_TYPE,
+) =>
+  resolveScrollGroupForPickedProject(
+    pickedProjectId,
+    currentScrollGroupId,
+    openTabs,
+    preferredWebViewId,
+    editorWebViewType,
+  );
+
 describe('resolveSelectedProjectScrollGroup', () => {
   const tab = (
     projectId: string,
     scrollGroupId: number,
     webViewId: string,
     webViewType = 'platformScriptureEditor.react',
-  ): OpenScrollGroupTab => ({ projectId, scrollGroupId, webViewId, webViewType });
+  ): OpenScrollGroupTab => ({
+    projectId,
+    scrollGroupId,
+    webViewId,
+    webViewType,
+    projectSource: 'container',
+  });
 
   it('keeps the current selection unchanged when its tab is still open', () => {
     const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-B', 1, 'wv-2')];
-    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, undefined)).toEqual({
+    expect(resolveSelected('PROJ-A', 0, openTabs, undefined)).toEqual({
       projectId: 'PROJ-A',
       scrollGroupId: 0,
     });
@@ -624,7 +668,7 @@ describe('resolveSelectedProjectScrollGroup', () => {
 
   it('matches the open tab case-insensitively against the current project id', () => {
     const openTabs = [tab('proj-a', 0, 'wv-1')];
-    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, undefined)).toEqual({
+    expect(resolveSelected('PROJ-A', 0, openTabs, undefined)).toEqual({
       projectId: 'PROJ-A',
       scrollGroupId: 0,
     });
@@ -632,7 +676,7 @@ describe('resolveSelectedProjectScrollGroup', () => {
 
   it('falls back to another open tab of the same project when the current pair closed', () => {
     const openTabs = [tab('PROJ-A', 1, 'wv-2')];
-    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, undefined)).toEqual({
+    expect(resolveSelected('PROJ-A', 0, openTabs, undefined)).toEqual({
       projectId: 'PROJ-A',
       scrollGroupId: 1,
     });
@@ -652,7 +696,7 @@ describe('resolveSelectedProjectScrollGroup', () => {
       const editorTab = tab('PROJ-A', 1, 'wv-editor', 'platformScriptureEditor.react');
 
       expect(
-        resolveSelectedProjectScrollGroup(
+        resolveSelected(
           'PROJ-A',
           2,
           [panelTab, editorTab],
@@ -661,7 +705,7 @@ describe('resolveSelectedProjectScrollGroup', () => {
         ),
       ).toEqual(expected);
       expect(
-        resolveSelectedProjectScrollGroup(
+        resolveSelected(
           'PROJ-A',
           2,
           [editorTab, panelTab],
@@ -679,26 +723,14 @@ describe('resolveSelectedProjectScrollGroup', () => {
         tab('PROJ-A', 1, 'wv-editor', 'platformScriptureEditor.react'),
       ];
       expect(
-        resolveSelectedProjectScrollGroup(
-          'PROJ-A',
-          2,
-          tabs,
-          'wv-panel',
-          'platformScriptureEditor.react',
-        ),
+        resolveSelected('PROJ-A', 2, tabs, 'wv-panel', 'platformScriptureEditor.react'),
       ).toEqual({ projectId: 'PROJ-A', scrollGroupId: 1 });
     });
 
     it('honours preferredWebViewId when the project has no editor open', () => {
       const tabs = [panel('PROJ-A', 0, 'wv-panel-1'), panel('PROJ-A', 3, 'wv-panel-2')];
       expect(
-        resolveSelectedProjectScrollGroup(
-          'PROJ-A',
-          2,
-          tabs,
-          'wv-panel-2',
-          'platformScriptureEditor.react',
-        ),
+        resolveSelected('PROJ-A', 2, tabs, 'wv-panel-2', 'platformScriptureEditor.react'),
       ).toEqual({ projectId: 'PROJ-A', scrollGroupId: 3 });
     });
 
@@ -709,19 +741,13 @@ describe('resolveSelectedProjectScrollGroup', () => {
         tab('PROJ-C', 2, 'wv-editor', 'platformScriptureEditor.react'),
       ];
       expect(
-        resolveSelectedProjectScrollGroup(
-          'PROJ-A',
-          0,
-          tabs,
-          undefined,
-          'platformScriptureEditor.react',
-        ),
+        resolveSelected('PROJ-A', 0, tabs, undefined, 'platformScriptureEditor.react'),
       ).toEqual({ projectId: 'PROJ-C', scrollGroupId: 2 });
     });
 
     it('still resolves to a panel when the project has no editor tab open', () => {
       expect(
-        resolveSelectedProjectScrollGroup(
+        resolveSelected(
           'PROJ-A',
           0,
           [panel('PROJ-A', 3, 'wv-panel')],
@@ -734,7 +760,7 @@ describe('resolveSelectedProjectScrollGroup', () => {
 
   it('prefers the tab matching preferredWebViewId over other tabs of the same project', () => {
     const openTabs = [tab('PROJ-A', 1, 'wv-2'), tab('PROJ-A', 2, 'wv-3')];
-    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, 'wv-3')).toEqual({
+    expect(resolveSelected('PROJ-A', 0, openTabs, 'wv-3')).toEqual({
       projectId: 'PROJ-A',
       scrollGroupId: 2,
     });
@@ -742,7 +768,7 @@ describe('resolveSelectedProjectScrollGroup', () => {
 
   it('ignores preferredWebViewId when it belongs to a different project', () => {
     const openTabs = [tab('PROJ-A', 1, 'wv-2'), tab('PROJ-B', 2, 'wv-3')];
-    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, 'wv-3')).toEqual({
+    expect(resolveSelected('PROJ-A', 0, openTabs, 'wv-3')).toEqual({
       projectId: 'PROJ-A',
       scrollGroupId: 1,
     });
@@ -750,7 +776,7 @@ describe('resolveSelectedProjectScrollGroup', () => {
 
   it('resolves an initial (undefined) scroll group by preferring preferredWebViewId', () => {
     const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-A', 1, 'wv-2')];
-    expect(resolveSelectedProjectScrollGroup('PROJ-A', undefined, openTabs, 'wv-2')).toEqual({
+    expect(resolveSelected('PROJ-A', undefined, openTabs, 'wv-2')).toEqual({
       projectId: 'PROJ-A',
       scrollGroupId: 1,
     });
@@ -758,14 +784,14 @@ describe('resolveSelectedProjectScrollGroup', () => {
 
   it('falls back to a different project entirely once the current project has no open tabs', () => {
     const openTabs = [tab('PROJ-B', 3, 'wv-9')];
-    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, undefined)).toEqual({
+    expect(resolveSelected('PROJ-A', 0, openTabs, undefined)).toEqual({
       projectId: 'PROJ-B',
       scrollGroupId: 3,
     });
   });
 
   it('returns undefined when no tabs are open anywhere', () => {
-    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, [], undefined)).toBeUndefined();
+    expect(resolveSelected('PROJ-A', 0, [], undefined)).toBeUndefined();
   });
 
   // `openTabs` arrives in web-view-event arrival order (`[...tabsMap.values()]`), so picking
@@ -775,13 +801,9 @@ describe('resolveSelectedProjectScrollGroup', () => {
     const tabs = [tab('PROJ-C', 2, 'wv-c'), tab('PROJ-B', 1, 'wv-b'), tab('PROJ-D', 1, 'wv-d')];
     const expected = { projectId: 'PROJ-B', scrollGroupId: 1 };
 
-    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, tabs, undefined)).toEqual(expected);
-    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, [...tabs].reverse(), undefined)).toEqual(
-      expected,
-    );
-    expect(
-      resolveSelectedProjectScrollGroup('PROJ-A', 0, [tabs[2], tabs[0], tabs[1]], undefined),
-    ).toEqual(expected);
+    expect(resolveSelected('PROJ-A', 0, tabs, undefined)).toEqual(expected);
+    expect(resolveSelected('PROJ-A', 0, [...tabs].reverse(), undefined)).toEqual(expected);
+    expect(resolveSelected('PROJ-A', 0, [tabs[2], tabs[0], tabs[1]], undefined)).toEqual(expected);
   });
 });
 
@@ -919,7 +941,13 @@ describe('resolveScrollGroupForPickedProject', () => {
     scrollGroupId: number,
     webViewId: string,
     webViewType = 'platformScriptureEditor.react',
-  ): OpenScrollGroupTab => ({ projectId, scrollGroupId, webViewId, webViewType });
+  ): OpenScrollGroupTab => ({
+    projectId,
+    scrollGroupId,
+    webViewId,
+    webViewType,
+    projectSource: 'container',
+  });
 
   // The regression this pins: the simple-mode picker reports only a project id, so re-picking the
   // project Find is ALREADY on must not move which of its tabs Find targets. Resolving with an
@@ -927,7 +955,7 @@ describe('resolveScrollGroupForPickedProject', () => {
   // Find from group 1 to group 0.
   it('keeps the tab Find already targets when the same project is picked again', () => {
     const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-A', 1, 'wv-2')];
-    expect(resolveScrollGroupForPickedProject('PROJ-A', 1, openTabs, undefined)).toEqual({
+    expect(resolveForPicked('PROJ-A', 1, openTabs, undefined)).toEqual({
       projectId: 'PROJ-A',
       scrollGroupId: 1,
     });
@@ -938,17 +966,15 @@ describe('resolveScrollGroupForPickedProject', () => {
   it('resolves identically no matter what order the open tabs arrive in', () => {
     const tabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-A', 1, 'wv-2'), tab('PROJ-B', 2, 'wv-3')];
     const expected = { projectId: 'PROJ-A', scrollGroupId: 1 };
-    expect(resolveScrollGroupForPickedProject('PROJ-A', 1, tabs, undefined)).toEqual(expected);
-    expect(resolveScrollGroupForPickedProject('PROJ-A', 1, [...tabs].reverse(), undefined)).toEqual(
-      expected,
-    );
+    expect(resolveForPicked('PROJ-A', 1, tabs, undefined)).toEqual(expected);
+    expect(resolveForPicked('PROJ-A', 1, [...tabs].reverse(), undefined)).toEqual(expected);
   });
 
   // Matches what `projectScrollGroup` mode does for a not-open-project row: the newly picked
   // project lands in the group the user was already reading in.
   it('inherits the current scroll group when the newly picked project has a tab there', () => {
     const openTabs = [tab('PROJ-A', 2, 'wv-1'), tab('PROJ-B', 2, 'wv-2'), tab('PROJ-B', 5, 'wv-3')];
-    expect(resolveScrollGroupForPickedProject('PROJ-B', 2, openTabs, undefined)).toEqual({
+    expect(resolveForPicked('PROJ-B', 2, openTabs, undefined)).toEqual({
       projectId: 'PROJ-B',
       scrollGroupId: 2,
     });
@@ -956,7 +982,7 @@ describe('resolveScrollGroupForPickedProject', () => {
 
   it('prefers the tab shown in the triggering editor when the current group has none', () => {
     const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-B', 4, 'wv-2'), tab('PROJ-B', 7, 'wv-3')];
-    expect(resolveScrollGroupForPickedProject('PROJ-B', 0, openTabs, 'wv-3')).toEqual({
+    expect(resolveForPicked('PROJ-B', 0, openTabs, 'wv-3')).toEqual({
       projectId: 'PROJ-B',
       scrollGroupId: 7,
     });
@@ -964,7 +990,7 @@ describe('resolveScrollGroupForPickedProject', () => {
 
   it('falls back to the picked project’s own tab when neither the group nor the editor matches', () => {
     const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-B', 4, 'wv-2')];
-    expect(resolveScrollGroupForPickedProject('PROJ-B', 0, openTabs, 'wv-1')).toEqual({
+    expect(resolveForPicked('PROJ-B', 0, openTabs, 'wv-1')).toEqual({
       projectId: 'PROJ-B',
       scrollGroupId: 4,
     });
@@ -972,7 +998,7 @@ describe('resolveScrollGroupForPickedProject', () => {
 
   it('matches the picked project case-insensitively', () => {
     const openTabs = [tab('proj-a', 3, 'wv-1')];
-    expect(resolveScrollGroupForPickedProject('PROJ-A', undefined, openTabs, undefined)).toEqual({
+    expect(resolveForPicked('PROJ-A', undefined, openTabs, undefined)).toEqual({
       projectId: 'PROJ-A',
       scrollGroupId: 3,
     });
@@ -983,10 +1009,141 @@ describe('resolveScrollGroupForPickedProject', () => {
   // project the user did not pick. Rejecting it here leaves the reassignment effect to choose.
   it('returns undefined rather than retargeting a project the user did not pick', () => {
     const openTabs = [tab('PROJ-B', 3, 'wv-9')];
-    expect(resolveScrollGroupForPickedProject('PROJ-A', 0, openTabs, undefined)).toBeUndefined();
+    expect(resolveForPicked('PROJ-A', 0, openTabs, undefined)).toBeUndefined();
   });
 
   it('returns undefined when no tabs are open anywhere', () => {
-    expect(resolveScrollGroupForPickedProject('PROJ-A', 0, [], undefined)).toBeUndefined();
+    expect(resolveForPicked('PROJ-A', 0, [], undefined)).toBeUndefined();
+  });
+});
+
+describe('resolveTargetEditorWebViewId', () => {
+  const EDITOR = 'platformScriptureEditor.react';
+  const PANEL = 'platformScriptureEditor.bibleTexts';
+  const tab = (
+    projectId: string,
+    scrollGroupId: number,
+    webViewId: string,
+    webViewType: string,
+  ): OpenScrollGroupTab => ({
+    projectId,
+    scrollGroupId,
+    webViewId,
+    webViewType,
+    projectSource: 'container',
+  });
+
+  it('returns the editor tab matching the selected project and scroll group', () => {
+    const tabs = [tab('PROJ-A', 0, 'wv-other', EDITOR), tab('PROJ-A', 1, 'wv-target', EDITOR)];
+    expect(resolveTargetEditorWebViewId('PROJ-A', 1, tabs, EDITOR)).toBe('wv-target');
+  });
+
+  it('matches the project id case-insensitively', () => {
+    expect(
+      resolveTargetEditorWebViewId('PROJ-A', 0, [tab('proj-a', 0, 'wv-1', EDITOR)], EDITOR),
+    ).toBe('wv-1');
+  });
+
+  it('never returns a reference panel, which registers no web view controller', () => {
+    // Handing a panel's id to useWebViewController leaves it waiting ~20s for a controller that
+    // never arrives, then rejecting unhandled — the trap this resolver exists to avoid.
+    expect(
+      resolveTargetEditorWebViewId('PROJ-A', 0, [tab('PROJ-A', 0, 'wv-panel', PANEL)], EDITOR),
+    ).toBeUndefined();
+  });
+
+  it('does not match an editor of the same project in another scroll group', () => {
+    expect(
+      resolveTargetEditorWebViewId('PROJ-A', 0, [tab('PROJ-A', 1, 'wv-1', EDITOR)], EDITOR),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined before a project or scroll group is selected', () => {
+    const tabs = [tab('PROJ-A', 0, 'wv-1', EDITOR)];
+    expect(resolveTargetEditorWebViewId(undefined, 0, tabs, EDITOR)).toBeUndefined();
+    expect(resolveTargetEditorWebViewId('PROJ-A', undefined, tabs, EDITOR)).toBeUndefined();
+  });
+});
+
+describe('resolveTargetReferencePanelWebViewId', () => {
+  const EDITOR = 'platformScriptureEditor.react';
+  const BIBLE_TEXTS = 'platformScriptureEditor.bibleTexts';
+  const COMMENTARIES = 'platformScriptureEditor.commentaries';
+  const REVEALABLE = new Set([BIBLE_TEXTS, COMMENTARIES]);
+  const tab = (
+    projectId: string,
+    scrollGroupId: number,
+    webViewId: string,
+    webViewType: string,
+  ): OpenScrollGroupTab => ({
+    projectId,
+    scrollGroupId,
+    webViewId,
+    webViewType,
+    projectSource: 'declared',
+  });
+
+  it('returns the panel displaying the selected scripture', () => {
+    const tabs = [tab('PROJ-A', 0, 'wv-editor', EDITOR), tab('RES-1', 0, 'wv-panel', BIBLE_TEXTS)];
+    expect(resolveTargetReferencePanelWebViewId('RES-1', tabs, REVEALABLE)).toBe('wv-panel');
+  });
+
+  it('matches the project id case-insensitively', () => {
+    expect(
+      resolveTargetReferencePanelWebViewId(
+        'RES-1',
+        [tab('res-1', 0, 'wv-panel', BIBLE_TEXTS)],
+        REVEALABLE,
+      ),
+    ).toBe('wv-panel');
+  });
+
+  it('ignores scroll group, unlike the editor resolver', () => {
+    // The panel follows the reference through its own group membership; the only action here is
+    // activating the tab, so which group it sits in does not decide whether it is the target.
+    expect(
+      resolveTargetReferencePanelWebViewId(
+        'RES-1',
+        [tab('RES-1', 3, 'wv-panel', BIBLE_TEXTS)],
+        REVEALABLE,
+      ),
+    ).toBe('wv-panel');
+  });
+
+  it('returns undefined for a project open only in an editor', () => {
+    expect(
+      resolveTargetReferencePanelWebViewId(
+        'PROJ-A',
+        [tab('PROJ-A', 0, 'wv-editor', EDITOR)],
+        REVEALABLE,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('ignores a panel type that is not revealable', () => {
+    // The Model text panel is searchable but withheld from reveal — see
+    // REVEALABLE_REFERENCE_PANEL_WEB_VIEW_TYPES.
+    const tabs = [tab('RES-1', 0, 'wv-model', 'platformScriptureEditor.modelText')];
+    expect(resolveTargetReferencePanelWebViewId('RES-1', tabs, REVEALABLE)).toBeUndefined();
+  });
+
+  it('takes the first match when two panels show the same resource', () => {
+    // Documented as arbitrary: every candidate shows the same resource at the same reference, so
+    // any of them is a correct destination.
+    const tabs = [
+      tab('RES-1', 0, 'wv-bible', BIBLE_TEXTS),
+      tab('RES-1', 0, 'wv-comm', COMMENTARIES),
+    ];
+    expect(resolveTargetReferencePanelWebViewId('RES-1', tabs, REVEALABLE)).toBe('wv-bible');
+  });
+
+  it('returns undefined when no project is selected', () => {
+    expect(
+      resolveTargetReferencePanelWebViewId(
+        undefined,
+        [tab('RES-1', 0, 'wv-panel', BIBLE_TEXTS)],
+        REVEALABLE,
+      ),
+    ).toBeUndefined();
   });
 });
