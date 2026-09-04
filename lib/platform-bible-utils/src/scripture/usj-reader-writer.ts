@@ -312,6 +312,19 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   private indicesInUsfmByVerseRefInternal: IndicesInUsfmByVerseRef | undefined;
   private usfmInternal: string | undefined;
 
+  /**
+   * Messages already reported by {@link warnOnce}, so a problem with the document is reported once
+   * per document rather than once per occurrence.
+   *
+   * Resources whose markers this class's markers map does not carry — UBS Handbooks and
+   * commentaries especially — can repeat a single unknown marker tens of thousands of times in one
+   * book. Every `console.warn` from a web view is forwarded over IPC to a synchronous write in the
+   * main process, so reporting per occurrence is enough I/O to hang the whole app for minutes.
+   * Deliberately not reset by {@link usjChanged}: these messages describe the marker, not where it
+   * appeared, so re-reporting one after an edit would add no information.
+   */
+  private readonly reportedProblems = new Set<string>();
+
   constructor(usj: Usj, options?: UsjReaderWriterOptions) {
     this.usj = usj;
 
@@ -1903,6 +1916,18 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   // #region transform USJ to USFM
 
   /**
+   * Reports `message` through `console.warn`, unless an identical message has already been reported
+   * for this document. See {@link reportedProblems} for why repeats are dropped.
+   *
+   * @param message Message to report
+   */
+  private warnOnce(message: string): void {
+    if (this.reportedProblems.has(message)) return;
+    this.reportedProblems.add(message);
+    console.warn(message);
+  }
+
+  /**
    * Get `MarkerInfo` by marker name
    *
    * @param markerName Name of the marker for which to get `MarkerInfo`
@@ -2010,7 +2035,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       markerInfo = { type: marker.type };
       markerIsUnknown = true;
 
-      console.warn(
+      this.warnOnce(
         `Unknown marker ${markerNameOriginal}. Creating MarkerInfo to use: ${JSON.stringify(markerInfo)}`,
       );
     }
@@ -2036,7 +2061,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           marker.type !== markerTypeInfo.markerTypeUsx &&
           marker.type !== markerTypeInfo.markerTypeUsj))
     ) {
-      console.warn(
+      this.warnOnce(
         `Warning: Mismatching marker type in the USJ content ${marker.type} vs marker type in the marker info ${markerInfo.type} for marker ${markerNameOriginal}. Using the type from the USJ content.`,
       );
       markerType = marker.type;

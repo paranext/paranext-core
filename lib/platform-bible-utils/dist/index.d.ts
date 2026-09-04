@@ -6256,6 +6256,18 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private fragmentsByJsonPathInternal;
 	private indicesInUsfmByVerseRefInternal;
 	private usfmInternal;
+	/**
+	 * Messages already reported by {@link warnOnce}, so a problem with the document is reported once
+	 * per document rather than once per occurrence.
+	 *
+	 * Resources whose markers this class's markers map does not carry — UBS Handbooks and
+	 * commentaries especially — can repeat a single unknown marker tens of thousands of times in one
+	 * book. Every `console.warn` from a web view is forwarded over IPC to a synchronous write in the
+	 * main process, so reporting per occurrence is enough I/O to hang the whole app for minutes.
+	 * Deliberately not reset by {@link usjChanged}: these messages describe the marker, not where it
+	 * appeared, so re-reporting one after an edit would add no information.
+	 */
+	private readonly reportedProblems;
 	constructor(usj: Usj, options?: UsjReaderWriterOptions);
 	usjChanged(): void;
 	private static areUsjVersionsCompatible;
@@ -6484,6 +6496,13 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	extractTextBetweenPoints(start: UsjNodeAndDocumentLocation, end: UsjNodeAndDocumentLocation, maxLength?: number): string;
 	private static removeContentNodesFromArray;
 	removeContentNodes(searchFunction: (potentiallyMatchingNode: MarkerContent) => boolean): number;
+	/**
+	 * Reports `message` through `console.warn`, unless an identical message has already been reported
+	 * for this document. See {@link reportedProblems} for why repeats are dropped.
+	 *
+	 * @param message Message to report
+	 */
+	private warnOnce;
 	/**
 	 * Get `MarkerInfo` by marker name
 	 *
