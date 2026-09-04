@@ -48,9 +48,10 @@ function getOpenProjectIds(): string[] {
   try {
     definitions = getAllOpenWebViewDefinitionsSync();
   } catch (e) {
-    // Loud rather than quiet: this read is deferred until after the dock layout has committed (see
-    // `useDeferredDockLayoutRead`), by which point this window's dock layout is registered. A throw
-    // here is therefore a real anomaly and not the startup transient it once was.
+    // Loud rather than quiet: this read runs deferred, after the dock layout has committed (see
+    // `useDeferredDockLayoutRead`), so by this point this window's dock layout is registered. A
+    // throw here means it never was, which is an anomaly worth finding in a log rather than the
+    // ordinary timing of a first render.
     logger.warn(`Open project books could not enumerate open web views: ${getErrorMessage(e)}`);
     return EMPTY_IDS;
   }

@@ -139,11 +139,12 @@ export function useProjectPickerData(): ProjectPickerData {
     try {
       return findFirstEditorWebViewDefinition(getAllOpenWebViewDefinitionsSync())?.projectId;
     } catch (e) {
-      // Loud rather than quiet: this read is deferred until after the dock layout has committed
-      // (see `useDeferredDockLayoutRead`), by which point this window's dock layout is registered,
-      // so a throw here is a real anomaly rather than the startup transient it once was. The whole
-      // read is inside the try — a throw from resolving the editor, or from building this very
-      // message, must not escape a deferred callback and become an unhandled error.
+      // Loud rather than quiet: this read runs deferred, after the dock layout has committed (see
+      // `useDeferredDockLayoutRead`), so by this point this window's dock layout is registered. A
+      // throw here means it never was, which is an anomaly worth finding in a log rather than the
+      // ordinary timing of a first render. The whole read is inside the try — a throw from
+      // resolving the editor, or from building this very message, must not escape a deferred
+      // callback and become an unhandled error.
       logger.warn(
         `ProjectPicker: could not enumerate this window's web views: ${getErrorMessage(e)}`,
       );

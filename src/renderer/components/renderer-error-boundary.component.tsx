@@ -34,9 +34,9 @@ let rendererHasCrashed = false;
  * Read by the `beforeunload` teardown in `index.tsx`, which purges saved web view state for every
  * web view it did not see load. That purge is only correct once every web view HAS loaded, and a
  * tree that crashed partway through restoring tabs never got there - so an unload after a crash
- * (the reload button below is one) would delete the saved state of every tab that had not been
- * restored yet. Before this component existed the crash simply prevented the unload; now that the
- * window survives to be reloaded on purpose, the same protection has to be asked for.
+ * would delete the saved state of every tab that had not been restored yet. A crashed window can
+ * reach that unload deliberately, through the reload button below, so the teardown has to be told
+ * to hold off.
  */
 export function hasRendererCrashed(): boolean {
   return rendererHasCrashed;
