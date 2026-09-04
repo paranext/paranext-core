@@ -3738,6 +3738,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               canAddChapterNumber(lastVerse)
             }
             onAddChapterNumber={handleAddChapterNumber}
+            announcementKey={`${projectId}:${scrRef.book} ${scrRef.chapterNum}`}
           />
         )}
         {/* The empty-chapter view HIDES this subtree rather than replacing it, for the same reason

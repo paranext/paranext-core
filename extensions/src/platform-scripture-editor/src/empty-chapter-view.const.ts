@@ -1,5 +1,5 @@
 /**
- * Localize keys for {@link EmptyChapterView}.
+ * Localize keys for `EmptyChapterView`.
  *
  * Split out of the component module so consumers that must not pull in React can import them.
  * `localized-strings.test.ts` is the one that forces this: it runs in the node environment (it only
@@ -28,12 +28,7 @@ export const EMPTY_CHAPTER_VIEW_KEYS = {
  * Also imported by `localized-strings.test.ts`, which iterates every exported `*_STRING_KEYS` array
  * to assert en/es parity — so a key added here without a Spanish value fails that test.
  */
-export const EMPTY_CHAPTER_VIEW_STRING_KEYS = Object.freeze([
-  MESSAGE_KEY,
-  MESSAGE_RESOURCE_KEY,
-  ADD_CHAPTER_NUMBER_BUTTON_KEY,
-  PROTECTED_TOOLTIP_KEY,
-] as const);
+export const EMPTY_CHAPTER_VIEW_STRING_KEYS = Object.freeze(Object.values(EMPTY_CHAPTER_VIEW_KEYS));
 
 export type EmptyChapterViewStringKey = (typeof EMPTY_CHAPTER_VIEW_STRING_KEYS)[number];
 
