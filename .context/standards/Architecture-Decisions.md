@@ -1760,6 +1760,56 @@ step, no automation. Just a record.
 - **Source:** manage-books port (`AlertCapture` introduced for `ImportBooks`). See
   `Paranext-Core-Patterns.md` for the code pattern.
 
+## adr-pdp-enumerates-extension-data-qualifiers: A PDP lists its extension-data qualifiers through a `list*` method, required of consumers but optional on engines
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `platform.base` exposed only `getExtensionData`/`setExtensionData`
+  (`project-data-provider.model.ts`, `WithProjectDataProviderEngineExtensionDataMethods`), so an
+  extension could read only a `dataQualifier` it could already name. Two costs followed. Probing for
+  a qualifier by reading it **creates** it: `ParatextProjectDataProvider.GetExtensionData` calls
+  `GetExtensionStream(scope, createIfNotExists: true)` and
+  `RawDirectoryProjectStreamManager.GetDataStream` does `Directory.CreateDirectory` +
+  `FileMode.OpenOrCreate`, leaving a zero-byte file under `shared/**` that Send/Receive commits to
+  every clone, with no delete API. And because Send/Receive replaces rather than merges files under
+  `shared/**`, multi-writer data has to be split one file per writer — after which an extension has
+  no way to find the files, so it hand-maintains an index document that Send/Receive can itself
+  overwrite. `IProjectStreamManager.GetExistingDataStreamNames` had existed unused (marked
+  `// TODO: This doesn't seem to be used`) the whole time.
+- **Decision:** add one method to the mandatory `platform.base` surface,
+  `listExtensionDataQualifiers(scope)`, returning sorted `dataQualifier`s that round-trip verbatim
+  into `getExtensionData` — forward slashes on every platform, recursive, scoped to
+  `{EXTENSION_DATA_SUBDIRECTORY}/{extensionName}`, empty documents included, and **creating
+  nothing**. Three shape choices go with it. (1) `list*`, not `get*`: `get`/`set`/`subscribe` are
+  magic prefixes for the data-provider service, and a `get*` name would demand a paired setter with
+  nothing to set and imply a subscriber with nothing to notify. (2) **Optional on the engine,
+  required on the consumer** (`IBaseProjectDataProvider`): the `platform.base` registration guard
+  keeps checking only `getExtensionData`/`getSetting`, so engines that predate the method — and ones
+  like `platform-lexical-tools` that hold no extension data — still register. (3) No
+  `subscribeExtensionDataQualifiers`: there is no data type behind the method, and
+  `subscribeExtensionData` on a known qualifier already covers change notification.
+- **Alternatives:** *A required engine method* — rejected: it breaks every third-party PDP engine at
+  compile time, and the guard change would stop existing in-repo engines from registering.
+  *Optional on the consumer too*, so callers could feature-detect with `?.` — rejected as actively
+  misleading: a remote PDP proxy fabricates a request function for **any** property name
+  (`createRemoteProxy` in `network-object.service.ts`), so the optional check can never short-circuit
+  over the wire; it would always call and then reject. Hence the consumer contract is "required, may
+  reject" and callers treat a rejection as "unknown", not "no data". *Enumerate the project root and
+  filter afterwards* — rejected: project directories hold thousands of files, and returning
+  `Settings.xml` and every book file to an extension asking about its own data leaks the project
+  layout. *A new C# scope class* — rejected: `ProjectDataScope` already carries `ExtensionName`, and
+  a `DataQualifierPrefix` property was added beside `DataQualifier` so the TS type can name the field
+  for what it is instead of overloading `dataQualifier` to sometimes mean a prefix.
+- **Consequences:** extensions can drop hand-maintained index documents and their self-healing
+  repair logic (the Checking Assistant carries two such indexes; `platform-scripture` stores
+  `deniedResultsList` as one shared read-modify-write blob). `GetExistingDataStreamNames` gained an
+  optional `underPath` and now normalizes to `/` — the parameterless whole-project call still works,
+  but its result is forward-slashed on Windows where it used to be backslashed; it had no callers.
+  A PDP over a store that cannot enumerate must document that its call rejects, since consumers
+  cannot detect it in advance. The method takes no Send/Receive write scope: it is a read.
+- **Source:** PDP extension-data enumeration work. The `list*`-vs-`get*` naming rule it applies is
+  already in `Paranext-Core-Patterns.md` ("Naming rule (read first)").
+
 ## adr-per-web-view-ctrl-f-for-find: Per-web-view Ctrl+F for Find, not a main-process `before-input-event` branch
 
 - **Formerly:** ADR-0015
