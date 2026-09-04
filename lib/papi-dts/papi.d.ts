@@ -3532,6 +3532,19 @@ declare module 'shared/models/project-data-provider.model' {
      */
     dataQualifier: string;
   };
+  /** Indicates to a PDP which of an extension's `dataQualifier`s to list */
+  export type ExtensionDataListScope = {
+    /** Name of an extension as provided in its manifest */
+    extensionName: string;
+    /**
+     * Optional prefix. When provided, only `dataQualifier`s that start with it are returned, so
+     * `byMachine/` lists everything the extension stores under that directory.
+     *
+     * Matched as a plain string prefix on the forward-slash form, so `byMachine` (no trailing slash)
+     * also matches `byMachineOther/x`. Include the trailing slash if you mean the directory.
+     */
+    dataQualifierPrefix?: string;
+  };
   /**
    * `DataProviderDataTypes` that each project data provider **must** implement. They are assumed to
    * exist and are used by other data providers.
@@ -3632,6 +3645,26 @@ declare module 'shared/models/project-data-provider.model' {
       dataScope: ExtensionDataScope,
       data: string,
     ): Promise<DataProviderUpdateInstructions<TProjectDataTypes>>;
+    /**
+     * Lists the `dataQualifier`s an extension has data for in this project.
+     *
+     * Every returned string is a valid `dataQualifier` for `getExtensionData` under the same
+     * `extensionName`, exactly as it would be passed: forward slashes, relative to the extension's
+     * own data, nested paths included. The list is sorted and includes empty documents.
+     *
+     * Listing never creates anything, so an extension that has never written any data gets `[]`.
+     * Discovering the same thing by calling `getExtensionData` does not have that property — on the
+     * Paratext PDP a read creates the file it looked for.
+     *
+     * Optional, because not every Project Data Provider can enumerate its extension data (one over a
+     * remote store may not be able to). A PDP that cannot simply does not implement it, and the call
+     * fails. Callers that need to work against arbitrary PDPs should treat a failed call as
+     * "unknown", not as "no data".
+     *
+     * @param scope Which extension's `dataQualifier`s to list, optionally narrowed by a prefix
+     * @returns Sorted `dataQualifier`s that exist for that extension in this project
+     */
+    listExtensionDataQualifiers?(scope: ExtensionDataListScope): Promise<string[]>;
   };
 }
 declare module 'shared/models/data-provider.interface' {
@@ -5243,6 +5276,7 @@ declare module 'papi-shared-types' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import type {
+    ExtensionDataListScope,
     ExtensionDataScope,
     MandatoryProjectDataTypes,
     PROJECT_INTERFACE_PLATFORM_BASE,
@@ -5875,6 +5909,28 @@ declare module 'papi-shared-types' {
           callback: (extensionData: string | undefined | PlatformError) => void,
           options?: DataProviderSubscriberOptions,
         ): Promise<UnsubscriberAsync>;
+        /**
+         * Lists the `dataQualifier`s an extension has data for in this project.
+         *
+         * Every returned string is a valid `dataQualifier` for `getExtensionData` under the same
+         * `extensionName`, exactly as it would be passed: forward slashes, relative to the
+         * extension's own data, nested paths included. The list is sorted and includes empty
+         * documents.
+         *
+         * Listing never creates anything, so an extension that has never written any data gets
+         * `[]`. Discovering the same thing by calling `getExtensionData` does not have that
+         * property — on the Paratext PDP a read creates the file it looked for.
+         *
+         * Note: this method is required here but optional on the engine, because not every Project
+         * Data Provider can enumerate its extension data (one over a remote store may not be able
+         * to). A PDP whose engine does not implement it rejects this call, and there is no way to
+         * detect that in advance, so callers that need to work against arbitrary PDPs should treat
+         * a rejection as "unknown", not as "no data".
+         *
+         * @param scope Which extension's `dataQualifier`s to list, optionally narrowed by a prefix
+         * @returns Sorted `dataQualifier`s that exist for that extension in this project
+         */
+        listExtensionDataQualifiers(scope: ExtensionDataListScope): Promise<string[]>;
       };
   /** This is just a simple example so we have more than one. It's not intended to be real. */
   type NotesOnlyProjectDataTypes = MandatoryProjectDataTypes & {
@@ -11961,6 +12017,7 @@ declare module '@papi/core' {
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
   export type {
+    ExtensionDataListScope,
     ExtensionDataScope,
     MandatoryProjectDataTypes,
   } from 'shared/models/project-data-provider.model';
