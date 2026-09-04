@@ -2028,6 +2028,110 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
   });
 });
 
+describe('Marker problems are reported once each, not once per occurrence', () => {
+  /**
+   * Builds a book whose content repeats one char marker. Handbook and commentary resources use
+   * markers the markers map does not carry (HBKENG uses `scr` and `ver`; TNNESP uses `li6`, `pi8`
+   * and `brk`), so serializing one of their books takes the unknown-marker path once for every
+   * occurrence.
+   */
+  function usjRepeatingMarker(marker: string, occurrences: number): Usj {
+    return {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        { type: 'chapter', marker: 'c', number: '1' },
+        { type: 'verse', marker: 'v', number: '1' },
+        ...Array.from(
+          { length: occurrences },
+          (_unused, index): MarkerObject => ({
+            type: 'char',
+            marker,
+            content: [`text ${index}`],
+          }),
+        ),
+      ],
+    };
+  }
+
+  /** Serializes `usj` and returns everything the writer passed to `console.warn`. */
+  function collectWarningsFromToUsfm(usj: Usj): string[] {
+    const warnings: string[] = [];
+    const consoleWarnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation((message) => warnings.push(String(message)));
+
+    try {
+      new UsjReaderWriter(usj, usjReaderWriterOptionsParatext3_0).toUsfm();
+    } finally {
+      consoleWarnSpy.mockRestore();
+    }
+
+    return warnings;
+  }
+
+  test('reports an unknown marker the same number of times whether it occurs 10 times or 500', () => {
+    const fewWarnings = collectWarningsFromToUsfm(usjRepeatingMarker('scr', 10));
+    const manyWarnings = collectWarningsFromToUsfm(usjRepeatingMarker('scr', 500));
+
+    // The marker is unknown, so it has to be reported — but reporting it is about the marker, not
+    // about each place it appears. 500 occurrences of one unknown marker is one problem.
+    expect(fewWarnings.length).toBeGreaterThan(0);
+    expect(manyWarnings).toHaveLength(fewWarnings.length);
+  });
+
+  test('never emits the same warning twice', () => {
+    const warnings = collectWarningsFromToUsfm(usjRepeatingMarker('scr', 500));
+
+    expect([...new Set(warnings)]).toHaveLength(warnings.length);
+  });
+
+  test('still names the unknown marker so the warning stays diagnostic', () => {
+    const warnings = collectWarningsFromToUsfm(usjRepeatingMarker('scr', 500));
+
+    expect(warnings.some((warning) => warning.includes('scr'))).toBe(true);
+  });
+
+  test('reports each distinct unknown marker', () => {
+    const usjWithTwoUnknownMarkers: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        ...(usjRepeatingMarker('scr', 50).content ?? []),
+        ...(usjRepeatingMarker('brk', 50).content ?? []),
+      ],
+    };
+
+    const warnings = collectWarningsFromToUsfm(usjWithTwoUnknownMarkers);
+
+    expect(warnings.some((warning) => warning.includes('scr'))).toBe(true);
+    expect(warnings.some((warning) => warning.includes('brk'))).toBe(true);
+  });
+
+  test('reports a mismatching marker type once however many times it occurs', () => {
+    // The markers map types `ca` as `char`, so typing it as `chapter` takes the
+    // mismatching-marker-type path.
+    const usjWithRepeatedMistypedCa = (occurrences: number): Usj => ({
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: Array.from(
+        { length: occurrences },
+        (_unused, index): MarkerObject => ({
+          type: 'chapter',
+          marker: 'ca',
+          content: [`${index}`],
+        }),
+      ),
+    });
+
+    const fewWarnings = collectWarningsFromToUsfm(usjWithRepeatedMistypedCa(10));
+    const manyWarnings = collectWarningsFromToUsfm(usjWithRepeatedMistypedCa(500));
+
+    expect(fewWarnings.some((warning) => warning.includes('Mismatching marker type'))).toBe(true);
+    expect(manyWarnings).toHaveLength(fewWarnings.length);
+  });
+});
+
 describe('toUsfm transform USJ 3.1 to spec USFM 3.1', () => {
   test('2SA 1 testUSFM', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh1UsjCanonical3_1, usjReaderWriterOptions3_1);
