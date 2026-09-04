@@ -371,8 +371,6 @@ export function PlatformBibleToolbar() {
 
       // no need to reserve space for macos "traffic lights" when in full screen
       if (osPlatform === 'darwin' && isFullScreen) return undefined;
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      if (osPlatform === 'linux') return undefined;
       return osPlatform;
     }, []),
 

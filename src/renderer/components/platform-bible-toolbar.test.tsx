@@ -1114,6 +1114,25 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
     expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-0');
   });
 
+  it('reserves the live-measured overlay width on Linux, the same as Windows', async () => {
+    // Linux takes the frameless path with its own caption buttons, so the toolbar has to leave room
+    // for them. Without the reservation the account icon draws on top of the maximize glyph.
+    vi.mocked(useWindowControlsOverlay).mockReturnValue(
+      new DOMRect(0, 0, window.innerWidth - 150, 32),
+    );
+    mockSendCommandForOS('linux');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-reserved-space-wrapper')).toHaveStyle({
+        paddingRight: '154px',
+      });
+    });
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:border-0');
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:pe-0');
+  });
+
   it('does not reserve space on macOS regardless of overlay geometry, keeping the static traffic-lights class', async () => {
     vi.mocked(useWindowControlsOverlay).mockReturnValue(new DOMRect(0, 0, 700, 32));
     mockSendCommandForOS('darwin');
