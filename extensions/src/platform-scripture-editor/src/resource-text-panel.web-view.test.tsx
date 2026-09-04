@@ -69,6 +69,10 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     ...original,
     useExtraValidMarkers: () => [],
     useTabIconSelection: () => 'papi-extension://platformScriptureEditor/assets/book-open.svg',
+    // The real hook builds an IntersectionObserver, which jsdom does not implement. These
+    // renders stand in for a visible panel; visibility gates only the reveal-scroll effect,
+    // never which empty state — or disclosure — is rendered.
+    useViewVisibility: () => true,
     usePromise: vi.fn(() => [undefined, false]),
   };
 });
