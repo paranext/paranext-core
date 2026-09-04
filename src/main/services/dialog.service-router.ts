@@ -108,7 +108,7 @@ function getLiftedTimeoutKeys(shardNetworkObjectId: string) {
  * process and cannot rewrite its own keys, where main's process outlives every window. Re-setting
  * the same value is a no-op, so a window registering again costs nothing.
  */
-function liftRequestTimeoutForWindowDialogs(windowId: number): void {
+function liftRequestTimeoutForWindowDialogs(windowId: string): void {
   const shardNetworkObjectId = dialogShards.getShardNetworkObjectId(windowId);
   if (!shardNetworkObjectId) {
     logger.warn(

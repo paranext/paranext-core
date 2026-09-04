@@ -10,11 +10,11 @@ import { settle } from '@main/services/__tests__/service-router-test.util';
 import { dataProviderService } from '@shared/services/data-provider.service';
 
 /** Handler the engine registers against the routing-target-change event, so tests can fire it */
-type RoutingTargetChangeHandler = (windowId: number | undefined) => void;
+type RoutingTargetChangeHandler = (windowId: string | undefined) => void;
 
 const mocks = vi.hoisted(() => ({
   getTargetWindowId: vi.fn(),
-  routingTargetChangeHandlers: new Set<(windowId: number | undefined) => void>(),
+  routingTargetChangeHandlers: new Set<(windowId: string | undefined) => void>(),
 }));
 
 vi.mock('@main/services/window-state.service', () => ({
@@ -93,7 +93,7 @@ function windowShard(focusSubject: unknown) {
 }
 
 /** Fire the routing-target-change event the way window-state.service would */
-function moveRoutingTargetTo(windowId: number | undefined) {
+function moveRoutingTargetTo(windowId: string | undefined) {
   mocks.getTargetWindowId.mockReturnValue(windowId);
   mocks.routingTargetChangeHandlers.forEach((handler) => handler(windowId));
 }
@@ -102,7 +102,7 @@ describe('window service router', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.routingTargetChangeHandlers.clear();
-    mocks.getTargetWindowId.mockReturnValue(1);
+    mocks.getTargetWindowId.mockReturnValue('1');
   });
 
   test('claims the generic provider name so callers of it reach a live provider', async () => {
@@ -118,9 +118,9 @@ describe('window service router', () => {
     const first = windowShard('focus-in-window-1');
     const second = windowShard('focus-in-window-2');
     const engine = new FocusedWindowDataProviderEngine(
-      async (id) => (id === 1 ? first : second) as never,
+      async (id) => (id === '1' ? first : second) as never,
     );
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
 
     expect(await engine.getFocus()).toBe('focus-in-window-2');
   });
@@ -129,11 +129,11 @@ describe('window service router', () => {
     const first = windowShard('focus-in-window-1');
     const second = windowShard('focus-in-window-2');
     const engine = new FocusedWindowDataProviderEngine(
-      async (id) => (id === 1 ? first : second) as never,
+      async (id) => (id === '1' ? first : second) as never,
     );
 
     const beforeMove = await engine.getFocus();
-    moveRoutingTargetTo(2);
+    moveRoutingTargetTo('2');
     const afterMove = await engine.getFocus();
 
     expect(beforeMove).toBe('focus-in-window-1');
@@ -144,9 +144,9 @@ describe('window service router', () => {
     const first = windowShard('a');
     const second = windowShard('b');
     const engine = new FocusedWindowDataProviderEngine(
-      async (id) => (id === 1 ? first : second) as never,
+      async (id) => (id === '1' ? first : second) as never,
     );
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
 
     await engine.setFocus(undefined, 'detect');
 
@@ -201,7 +201,7 @@ describe('window service router', () => {
     const engine = new FocusedWindowDataProviderEngine(async () => windowShard('a') as never);
     const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
 
-    moveRoutingTargetTo(2);
+    moveRoutingTargetTo('2');
 
     expect(notifyUpdate).toHaveBeenCalledWith('Focus');
   });
@@ -251,11 +251,11 @@ describe('window service router', () => {
     const first = windowShard('a');
     const second = windowShard('b');
     const engine = new FocusedWindowDataProviderEngine(
-      async (id) => (id === 1 ? first : second) as never,
+      async (id) => (id === '1' ? first : second) as never,
     );
     await engine.getFocus();
 
-    moveRoutingTargetTo(2);
+    moveRoutingTargetTo('2');
     await engine.getFocus();
 
     expect(first.unsubscribe).toHaveBeenCalled();
@@ -265,13 +265,13 @@ describe('window service router', () => {
     const first = windowShard('a');
     const second = windowShard('b');
     const engine = new FocusedWindowDataProviderEngine(
-      async (id) => (id === 1 ? first : second) as never,
+      async (id) => (id === '1' ? first : second) as never,
     );
 
     await engine.getFocus();
-    moveRoutingTargetTo(2);
+    moveRoutingTargetTo('2');
     await engine.getFocus();
-    moveRoutingTargetTo(1);
+    moveRoutingTargetTo('1');
     await engine.getFocus();
 
     expect(first.subscribeFocus).toHaveBeenCalledTimes(2);
@@ -356,12 +356,12 @@ describe('window service router', () => {
     const second = windowShard('focus-in-window-2');
     first.subscribeFocus.mockRejectedValue(new Error('transient subscribe failure'));
     const engine = new FocusedWindowDataProviderEngine(
-      async (id) => (id === 1 ? first : second) as never,
+      async (id) => (id === '1' ? first : second) as never,
     );
 
     await expect(engine.getFocus()).rejects.toThrow('transient subscribe failure');
 
-    moveRoutingTargetTo(2);
+    moveRoutingTargetTo('2');
     await settle();
 
     expect(second.subscribeFocus).toHaveBeenCalledTimes(1);
@@ -394,7 +394,7 @@ describe('window service router', () => {
       throw new Error('Emitter is disposed');
     });
 
-    expect(() => moveRoutingTargetTo(2)).not.toThrow();
+    expect(() => moveRoutingTargetTo('2')).not.toThrow();
   });
 
   test('exposes exactly one matched get/set pair, which is what registration validates', () => {
@@ -436,11 +436,11 @@ describe('window service router', () => {
     const second = windowShard('b');
     first.unsubscribe.mockRejectedValue(new Error('previous window socket is gone'));
     const engine = new FocusedWindowDataProviderEngine(
-      async (id) => (id === 1 ? first : second) as never,
+      async (id) => (id === '1' ? first : second) as never,
     );
     await engine.getFocus();
 
-    moveRoutingTargetTo(2);
+    moveRoutingTargetTo('2');
     await settle();
 
     // Still relaying window 2, and it knows it — a second read must not subscribe all over again
@@ -472,11 +472,11 @@ describe('window service router', () => {
       return attachToUpdates?.(...args) ?? second.unsubscribe;
     });
     const engine = new FocusedWindowDataProviderEngine(
-      async (id) => (id === 1 ? first : second) as never,
+      async (id) => (id === '1' ? first : second) as never,
     );
     await engine.getFocus();
 
-    moveRoutingTargetTo(2);
+    moveRoutingTargetTo('2');
     await settle();
     const disposal = engine.dispose();
     releaseSubscribe?.();
@@ -499,7 +499,7 @@ describe('window service router', () => {
       return only as never;
     });
 
-    moveRoutingTargetTo(2);
+    moveRoutingTargetTo('2');
     await settle();
     const disposal = engine.dispose();
     releaseLookup?.();

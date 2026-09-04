@@ -268,7 +268,7 @@ export function isSimpleInterfaceMode(interfaceMode: 'simple' | 'power' | Platfo
  * `@papi/frontend` import `use-open-project-tabs.ts` performs, and remains importable by the
  * presentational component, its story, and this file's unit tests.
  */
-export type OpenScrollGroupTab = Omit<OpenProjectTabWithWebView, 'webViewType'>;
+export type OpenScrollGroupTab = OpenProjectTabWithWebView;
 
 /**
  * Runs a web-view-controller call, containing BOTH ways a controller for a CLOSED editor tab fails.
@@ -377,6 +377,13 @@ export function prunePresentBookIds(
  *   tabs left at all.
  * - Returns `undefined` when no tabs are open anywhere.
  *
+ * Wherever several tabs qualify, an EDITOR wins over a reference panel. Find drives results through
+ * the Scripture editor's web view controller, and `resolveTargetEditorWebViewId` matches on
+ * (project, scroll group) — so landing on a panel's group while the project also has an editor open
+ * in another group leaves that resolver with no match, silently dropping the editor's select and
+ * highlight. Panels became candidates here once the picker started listing resources shown only in
+ * a reference panel, and they sort ahead of editors by default because they sit in group 0.
+ *
  * @param currentProjectId Find's current project id.
  * @param currentScrollGroupId The currently selected scroll group, or `undefined` before an initial
  *   selection has been made.
@@ -389,10 +396,17 @@ export function resolveSelectedProjectScrollGroup(
   currentScrollGroupId: ScrollGroupId | undefined,
   openTabs: readonly OpenScrollGroupTab[],
   preferredWebViewId: string | undefined,
+  scriptureEditorWebViewType: string,
 ): SelectedProjectScrollGroup | undefined {
   const normalizedCurrentProjectId = normalizeProjectId(currentProjectId);
   const matchesCurrentProject = (tab: OpenScrollGroupTab) =>
     normalizeProjectId(tab.projectId) === normalizedCurrentProjectId;
+  const isEditor = (tab: OpenScrollGroupTab) => tab.webViewType === scriptureEditorWebViewType;
+  /** Editors first, original order preserved within each group. */
+  const editorsFirst = (tabs: readonly OpenScrollGroupTab[]) => [
+    ...tabs.filter(isEditor),
+    ...tabs.filter((tab) => !isEditor(tab)),
+  ];
 
   if (
     currentScrollGroupId !== undefined &&
@@ -401,15 +415,18 @@ export function resolveSelectedProjectScrollGroup(
     return { projectId: currentProjectId, scrollGroupId: currentScrollGroupId };
   }
 
+  // `preferredWebViewId` names the tab that opened Find, but it does not override the editor
+  // preference: when the same project also has an editor open, resolving to the panel that
+  // triggered Find would cost the editor's select and highlight on every subsequent result click.
+  const sameProjectTabs = editorsFirst(openTabs.filter(matchesCurrentProject));
   const preferredTab =
     preferredWebViewId !== undefined
-      ? openTabs.find((tab) => tab.webViewId === preferredWebViewId && matchesCurrentProject(tab))
+      ? sameProjectTabs.find((tab) => tab.webViewId === preferredWebViewId)
       : undefined;
-  if (preferredTab) {
-    return { projectId: currentProjectId, scrollGroupId: preferredTab.scrollGroupId };
-  }
-
-  const sameProjectTab = openTabs.find(matchesCurrentProject);
+  const sameProjectTab =
+    preferredTab && (isEditor(preferredTab) || !sameProjectTabs.some(isEditor))
+      ? preferredTab
+      : sameProjectTabs[0];
   if (sameProjectTab) {
     return { projectId: currentProjectId, scrollGroupId: sameProjectTab.scrollGroupId };
   }
@@ -420,13 +437,97 @@ export function resolveSelectedProjectScrollGroup(
   // events happened to land, so taking `openTabs[0]` made the landing project depend on event timing
   // and differ between otherwise identical sessions. Order by scroll group, then project id, so the
   // same set of open tabs always resolves to the same fallback.
+  // Editors sort ahead of panels here too: panels are pinned to group 0, so ordering by scroll
+  // group alone would systematically land on a panel over an editor in any higher group.
   const fallbackTab = [...openTabs].sort(
     (a, b) =>
+      Number(isEditor(b)) - Number(isEditor(a)) ||
       a.scrollGroupId - b.scrollGroupId ||
       normalizeProjectId(a.projectId).localeCompare(normalizeProjectId(b.projectId)),
   )[0];
   if (!fallbackTab) return undefined;
   return { projectId: fallbackTab.projectId, scrollGroupId: fallbackTab.scrollGroupId };
+}
+
+/**
+ * Resolve which open tab a Find result click should drive through the Scripture editor's web view
+ * controller — the tab matching the selected `(project, scroll group)` pair, but ONLY when it is a
+ * real Scripture editor.
+ *
+ * The read-only reference panels (model text, Bible texts, commentaries) are searchable and so are
+ * listed in the project picker, but they register no web view controller. Handing one of their ids
+ * to `useWebViewController(SCRIPTURE_EDITOR_WEBVIEW_TYPE, ...)` leaves it waiting on a controller
+ * that never arrives (~20s, then an unhandled rejection) — the same trap `resolveFindInvocation`
+ * avoids for the Ctrl+F path.
+ *
+ * `undefined` is a correct, expected answer whenever the selected scripture is only open in a
+ * reference panel: both result handlers navigate via `setVerseRefSetting` before consulting the
+ * controller, so results still navigate — only the editor-side select/highlight is skipped, which
+ * is right when no editor is showing that scripture.
+ *
+ * @param projectId Find's currently selected project id, or `undefined` when none is selected.
+ * @param selectedScrollGroupId The selected scroll group, or `undefined` before an initial
+ *   selection.
+ * @param openTabs Currently open searchable tabs, editors and reference panels alike.
+ * @param scriptureEditorWebViewType The Scripture editor's web view type.
+ * @returns The editor tab's web view id, or `undefined` when no editor tab matches.
+ */
+export function resolveTargetEditorWebViewId(
+  projectId: string | undefined,
+  selectedScrollGroupId: ScrollGroupId | undefined,
+  openTabs: readonly OpenProjectTabWithWebView[],
+  scriptureEditorWebViewType: string,
+): string | undefined {
+  if (!projectId || selectedScrollGroupId === undefined) return undefined;
+  const normalizedProjectId = normalizeProjectId(projectId);
+  return openTabs.find(
+    (tab) =>
+      tab.webViewType === scriptureEditorWebViewType &&
+      normalizeProjectId(tab.projectId) === normalizedProjectId &&
+      tab.scrollGroupId === selectedScrollGroupId,
+  )?.webViewId;
+}
+
+/**
+ * Resolve which read-only reference panel tab is displaying the selected scripture, so a "go to
+ * result" activation can bring that tab to the front.
+ *
+ * Used only when {@link resolveTargetEditorWebViewId} finds no editor: a project open in a real
+ * editor is driven through the editor's web view controller, which also selects and highlights the
+ * match. A reference panel exposes no controller, so activating its tab is the whole interaction —
+ * a panel following Find's scroll group has already been moved by the write that precedes the
+ * activation, so it renders the right place on its own once shown. A panel detached from every
+ * scroll group is the exception: it ignores that write, and `useOpenProjectTabs` reports it as
+ * group 0 regardless, so it can still be picked here and revealed at an unrelated reference.
+ *
+ * Deliberately does NOT match on scroll group, unlike the editor resolver. That resolver's group
+ * match picks _which_ of several editor tabs a result click drives; here the only action is
+ * activating a tab showing this scripture, and the panel's own group membership is what moves its
+ * content.
+ *
+ * When the same resource is open in more than one panel (Bible texts and Commentaries, or two
+ * panels in Power mode), the first match wins. Tab order comes from `useOpenProjectTabs`' `Map`
+ * iteration, so which panel is revealed is arbitrary — accepted deliberately, because every
+ * candidate is showing the same resource at the same reference, so any of them is a correct
+ * destination.
+ *
+ * @param projectId Find's currently selected project id, or `undefined` when none is selected.
+ * @param openTabs Currently open searchable tabs, editors and reference panels alike.
+ * @param referencePanelWebViewTypes The reference panel web view types.
+ * @returns The reference panel tab's web view id, or `undefined` when no panel shows this project.
+ */
+export function resolveTargetReferencePanelWebViewId(
+  projectId: string | undefined,
+  openTabs: readonly OpenProjectTabWithWebView[],
+  referencePanelWebViewTypes: ReadonlySet<string>,
+): string | undefined {
+  if (!projectId) return undefined;
+  const normalizedProjectId = normalizeProjectId(projectId);
+  return openTabs.find(
+    (tab) =>
+      referencePanelWebViewTypes.has(tab.webViewType) &&
+      normalizeProjectId(tab.projectId) === normalizedProjectId,
+  )?.webViewId;
 }
 
 /**
@@ -452,12 +553,14 @@ export function resolveScrollGroupForPickedProject(
   currentScrollGroupId: ScrollGroupId | undefined,
   openTabs: readonly OpenScrollGroupTab[],
   preferredWebViewId: string | undefined,
+  scriptureEditorWebViewType: string,
 ): SelectedProjectScrollGroup | undefined {
   const resolved = resolveSelectedProjectScrollGroup(
     pickedProjectId,
     currentScrollGroupId,
     openTabs,
     preferredWebViewId,
+    scriptureEditorWebViewType,
   );
   if (!resolved) return undefined;
   if (normalizeProjectId(resolved.projectId) !== normalizeProjectId(pickedProjectId))

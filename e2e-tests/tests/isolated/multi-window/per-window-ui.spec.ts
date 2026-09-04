@@ -41,10 +41,11 @@ import type { Frame, Page } from '@playwright/test';
 import WebSocket from 'ws';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
-  preConfigureSettings,
+  PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  SAMPLE_WEB_PROJECT_ID,
   sendPapiRequestOnce,
   waitForAppReady,
-  waitForAtLeastOneProjectMetadata,
+  waitForProjectMetadata,
   waitForPapiMethodRegistered,
 } from '../../../fixtures/helpers';
 import { openScriptureEditorForProject } from '../../../fixtures/scripture-editor-helpers';
@@ -63,10 +64,8 @@ import {
   pollUntil,
   waitForRendererRegistered,
   widenWindowForToolbarReference,
+  withPlatformWindow,
 } from './multi-window.util';
-
-/** Fixed GUID of the bundled sample WEB project (c-sharp/assets/WEB/Settings.xml <Guid>). */
-const SAMPLE_WEB_PROJECT_ID = '32664dc3288a28df2e2bb75ded887fc8f17a15fb';
 
 /**
  * The toolbar's book-chapter-verse control trigger (`platform-bible-toolbar.tsx` →
@@ -75,6 +74,13 @@ const SAMPLE_WEB_PROJECT_ID = '32664dc3288a28df2e2bb75ded887fc8f17a15fb';
  * reach into iframes, so this always addresses the window's own toolbar.
  */
 const BCV_TRIGGER = 'button[aria-label="book-chapter-trigger"]';
+/**
+ * The scripture editor's web view type. `showContextMenu` looks its menu up from the type's
+ * `webViewMenus` contributions, so this must match the key
+ * `extensions/src/platform-scripture-editor/contributions/menus.json` registers — a type with no
+ * contributions renders no menu, and the assertion would fail for the wrong reason.
+ */
+const SCRIPTURE_EDITOR_WEB_VIEW_TYPE = 'platformScriptureEditor.react';
 
 /**
  * Matches a reference in the BCV trigger whichever label form the toolbar has room for.
@@ -152,6 +158,36 @@ async function raisePopoverFromWebView(frame: Frame, bodyText: string): Promise<
       webViewWindow.webViewId,
     );
   }, bodyText);
+}
+
+/**
+ * Raise a context menu from INSIDE a web view iframe through the papi object the iframe inherits.
+ * Resolves with the command the user chose, or undefined when the menu is dismissed — so the
+ * promise stays pending until something closes the menu, and callers must not await it until then.
+ */
+async function showContextMenuFromWebView(
+  frame: Frame,
+  webViewType: string,
+): Promise<string | undefined> {
+  return frame.evaluate(async (type) => {
+    // See raisePopoverFromWebView for why this cast is needed.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const webViewWindow = window as unknown as {
+      papi: {
+        overlays: {
+          showContextMenu(
+            webViewType: string,
+            webViewId: string,
+            options?: { position?: { x: number; y: number } },
+          ): Promise<string | undefined>;
+        };
+      };
+      webViewId: string;
+    };
+    return webViewWindow.papi.overlays.showContextMenu(type, webViewWindow.webViewId, {
+      position: { x: 40, y: 40 },
+    });
+  }, webViewType);
 }
 
 /** Dismiss a popover through the same inherited papi surface that raised it. */
@@ -254,6 +290,13 @@ async function setScrollGroupRef(
 }
 
 test.use({
+  // Seeded through the fixture rather than a preConfigureSettings call in a hook, which the
+  // fixture would both override and then write back into the developer's shared settings.
+  // Power mode because these suites need each opened view to become its own dock tab;
+  // firstRunComplete because the wizard is a modal that aria-hides the app. The English
+  // interface language the selectors depend on is seeded by the fixture itself.
+  interfaceMode: 'power',
+  seedSettings: { 'platform.firstRunComplete': true },
   // Same launch shape as the sibling multi-window specs — see multi-window.spec.ts's test.use
   // comment for the full rationale.
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
@@ -262,20 +305,6 @@ test.use({
 test.describe('per-window UI isolation', () => {
   // One launch (up to ~180 s worst case) plus a second window and a dozen quick scenarios.
   test.setTimeout(420_000);
-
-  let restoreSettings: (() => void) | undefined;
-
-  test.beforeAll(() => {
-    restoreSettings = preConfigureSettings({
-      'platform.firstRunComplete': true,
-      'platform.interfaceLanguage': ['en'],
-      'platform.interfaceMode': 'power',
-    });
-  });
-
-  test.afterAll(() => {
-    restoreSettings?.();
-  });
 
   test('overlays, dialogs, notifications, and navigation targets stay in their own window', async ({
     electronApp,
@@ -308,7 +337,12 @@ test.describe('per-window UI isolation', () => {
 
     // ── Navigation target follows only the OWN window's tabs ───────────────────────────────────
     // Open an editor in window 1 (the generic web-view command routes to the focused window).
-    await waitForAtLeastOneProjectMetadata(WEBSOCKET_PORT, 60_000);
+    await waitForProjectMetadata(
+      (project) => project.id?.toLowerCase() === SAMPLE_WEB_PROJECT_ID,
+      'the bundled sample WEB project',
+      WEBSOCKET_PORT,
+      60_000,
+    );
     await focusWindowAndWaitForRouting(electronApp, window1Id);
     const editorId1 = await openScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
     // Placement proof: the new editor's iframe attached in window 1 (the helper waits for it
@@ -355,6 +389,28 @@ test.describe('per-window UI isolation', () => {
     await expect(popover2).toHaveCount(0, { timeout: 15_000 });
     logStep('popover from window 2 web view rendered in window 2 only');
 
+    // ── Context menu raised from window 2's WEB VIEW renders only in window 2 ──────────────────
+    // The popover proof above covers one overlay kind through the inherited papi; the context menu
+    // is the other, and it takes a different path — the menu is fetched from the web view type's
+    // contributions before anything renders, so a regression that resolved contributions against
+    // the wrong window would surface here and not there. Unlike showPopover, showContextMenu stays
+    // pending until the menu is dismissed, so the promise is held un-awaited while the DOM is
+    // asserted, exactly as the dialog below does.
+    const contextMenuPromise = showContextMenuFromWebView(
+      editorFrame2,
+      SCRIPTURE_EDITOR_WEB_VIEW_TYPE,
+    );
+    // The rendered menu, not `[data-overlay-context-menu]`: that marks the trigger, which is a
+    // zero-size, opacity-0, aria-hidden anchor button and so is never visible by design.
+    const contextMenu2 = page2.locator('.overlay-context-menu-content');
+    await expect(contextMenu2).toBeVisible({ timeout: 15_000 });
+    await expect(mainPage.locator('.overlay-context-menu-content')).toHaveCount(0);
+    // Escape dismisses it, which resolves the pending request with undefined (no command chosen).
+    await page2.keyboard.press('Escape');
+    expect(await contextMenuPromise).toBeUndefined();
+    await expect(contextMenu2).toHaveCount(0, { timeout: 15_000 });
+    logStep('context menu from window 2 web view rendered in window 2 only');
+
     // ── Modal dialog through the generic request lands in the FOCUSED window ───────────────────
     // Window 2 still holds focus. The pending request resolves only when the dialog is answered
     // or dismissed, so it is held un-awaited while the DOM assertions run.
@@ -365,7 +421,7 @@ test.describe('per-window UI isolation', () => {
     await waitForPapiMethodRegistered(
       new RegExp(`^object:DialogService-${window2Id}\\.showDialog$`),
       WEBSOCKET_PORT,
-      60_000,
+      PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
     );
     const dialogPrompt = 'per-window dialog probe';
     const dialogResponsePromise = showModalAlertViaWebSocket(dialogPrompt);
@@ -425,16 +481,18 @@ test.describe('per-window UI isolation', () => {
     await waitForPapiMethodRegistered(
       new RegExp(`^object:NotificationService-${window2Id}\\.send$`),
       WEBSOCKET_PORT,
-      60_000,
+      PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
     );
     // Record (not assert) whether the compositor honored window 1's minimize: WSLg does not
     // reliably reflect a programmatic minimize in isMinimized(), and the behaviour under test —
     // the notification following FOCUS, which the routing wait above pinned deterministically —
     // does not depend on the compositor cooperating with the set dressing.
-    const window1Minimized = await electronApp.evaluate(
-      ({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.isMinimized(),
-      window1Id,
-    );
+    // `.catch` for the same reason: a probe that records rather than asserts must not be able to
+    // abort the spec, and a window the helper cannot resolve is as much a non-answer as a
+    // compositor that does not cooperate
+    const window1Minimized = await withPlatformWindow(electronApp, window1Id, (win) =>
+      win.isMinimized(),
+    ).catch(() => undefined);
     logStep(
       `window ${window1Id} minimize requested; compositor reports minimized=${String(window1Minimized)}`,
     );
@@ -454,11 +512,7 @@ test.describe('per-window UI isolation', () => {
     // window's (hidden) document, and it is simply visible when the window is restored. That
     // matches single-window behaviour: a notification sent while the app is minimized shows when
     // the user brings the app back up, and none of it is lost or stuck.
-    await electronApp.evaluate(({ BrowserWindow }, id) => {
-      const win = BrowserWindow.fromId(id);
-      if (!win) throw new Error(`No BrowserWindow with id ${id}`);
-      win.minimize();
-    }, window2Id);
+    await withPlatformWindow(electronApp, window2Id, (win) => win.minimize());
     const probeToastText = 'per-window notification probe (minimized)';
     // The send must not hang or reject with every window minimized.
     const probeToastId = await sendNotification(probeToastText);

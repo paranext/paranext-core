@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => {
     getUnreachableWindowIds: vi.fn(),
     getAbandonedWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
+    isWindowTracked: vi.fn(() => true),
     getFocusedWindowId: vi.fn(),
     focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
@@ -59,8 +60,8 @@ const mocks = vi.hoisted(() => {
 
 /** Wire windows whose WebView service shards are the given objects */
 function withWindows(
-  shardsByWindowId: Record<number, unknown>,
-  options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
+  shardsByWindowId: Record<string, unknown>,
+  options?: { startingWindowIds?: string[]; unreachableWindowIds?: string[] },
 ) {
   withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId, options);
 }
@@ -73,10 +74,15 @@ vi.mock('@main/services/window-state.service', () => ({
   isWindowReady: mocks.isWindowReady,
   // No test here names a closing window; the routed-open guard just needs an answer
   isWindowClosing: () => false,
+  // Driven by the window fixture, so a routed open names a window these tests actually set up
+  isWindowTracked: mocks.isWindowTracked,
   getFocusedWindowId: mocks.getFocusedWindowId,
   // No test here is about the cross-window raise; the app holding focus is what allows one
   isApplicationFocused: () => true,
   focusWindow: mocks.focusWindow,
+  // Ids are still minted from a numeric counter (stringified) in this slice, so a numeric
+  // comparison recovers the creation-order ranking the real function reads from the tracked list.
+  getWindowCreationRank: (windowId: string) => Number(windowId),
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
@@ -123,12 +129,12 @@ const FLOAT_LAYOUT: Layout = {
 describe('float layouts are untouched by multi-window routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getTargetWindowId.mockReturnValue(1);
+    mocks.getTargetWindowId.mockReturnValue('1');
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
-    mocks.getFocusedWindowId.mockReturnValue(1);
+    mocks.getFocusedWindowId.mockReturnValue('1');
     mocks.settingsGet.mockResolvedValue('power');
   });
 
@@ -136,7 +142,7 @@ describe('float layouts are untouched by multi-window routing', () => {
     const focused = windowShard([]);
     const other = windowShard([]);
     withWindows({ 1: focused, 2: other });
-    const creator = { createPendingContentWindow: vi.fn(async () => 99), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '99'), closeWindow: vi.fn() };
     setWebViewWindowCreator(creator);
     const router = await getRouter();
 
@@ -153,14 +159,14 @@ describe('float layouts are untouched by multi-window routing', () => {
     const focused = windowShard([]);
     const named = windowShard([]);
     withWindows({ 1: focused, 2: named });
-    const creator = { createPendingContentWindow: vi.fn(async () => 99), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '99'), closeWindow: vi.fn() };
     setWebViewWindowCreator(creator);
     const router = await getRouter();
 
-    await router.openWebView('someType', FLOAT_LAYOUT, { targetWindowId: 2 });
+    await router.openWebView('someType', FLOAT_LAYOUT, { targetWindowId: '2' });
 
     expect(named.openWebView).toHaveBeenCalledWith('someType', FLOAT_LAYOUT, {
-      targetWindowId: 2,
+      targetWindowId: '2',
     });
     expect(focused.openWebView).not.toHaveBeenCalled();
     expect(creator.createPendingContentWindow).not.toHaveBeenCalled();

@@ -13,13 +13,43 @@ export const windowServiceObjectToProxy = Object.freeze({
   /**
    * JSDOC SOURCE windowServiceProviderName
    *
-   * This name is used to register the window data provider on the papi. You can use this name to
-   * find the data provider when accessing it using the useData hook
+   * This name identifies the window data provider on the papi. Every window registers a provider of
+   * its own under a window-scoped name — this name with the window's id appended — and what you get
+   * from this property depends on where you read it.
+   *
+   * From a renderer or a web view, it is that window's own scoped name, so the provider found by it
+   * — with the useData hook, for instance — both reports and changes the focus of the window you
+   * are in. Read it from `papi.window` and use it as it comes.
+   *
+   * From the extension host, which runs in no window, it is the bare unscoped name. That name
+   * resolves to whichever window the router is currently targeting, so two reads can answer for
+   * different windows. The bare {@link windowServiceProviderName} constant behaves the same way
+   * wherever it is imported. To act on one particular window from there,
+   * `platform.getFocusedWindowId` reports which window has focus.
    */
   dataProviderName: windowServiceProviderName,
+  /**
+   * Get the id of the window this code is currently running in.
+   *
+   * Works from the renderer and from inside a web view. A web view's iframe has no window id of its
+   * own; it reaches this through the `papi` object it shares with the renderer hosting it, and this
+   * code runs as part of that renderer — so it answers with the id of the window the web view is
+   * in. Returns `undefined` in the extension host, which has no window of its own.
+   *
+   * This answers a different question than `platform.getFocusedWindowId`, which reports which
+   * window the user is currently looking at — that call returns a _different_ window's id whenever
+   * this one is not the focused window.
+   *
+   * @returns The id of the current window, or `undefined` if there is no current window (e.g. in
+   *   the extension host)
+   * @experimental This method is unstable and may change or disappear without notice
+   */
+  getWindowId(): string | undefined {
+    return globalThis.windowId;
+  },
 });
 
-/** Focus of the window is on a WebView iframe with the specified id */
+/** A window's focus is on a WebView iframe with the specified id */
 export type FocusSubjectWebView = {
   focusType: 'webView';
   /** ID of the WebView in focus (its tab ID is the same) */
@@ -27,7 +57,7 @@ export type FocusSubjectWebView = {
 };
 
 /**
- * Focus of the window is somewhere in a tab (header, toolbar, menu, content, etc.)
+ * A window's focus is somewhere in a tab (header, toolbar, menu, content, etc.)
  *
  * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
  * focused in the WebView's iframe
@@ -40,12 +70,12 @@ export type FocusSubjectTab = {
   id: string;
 };
 
-/** Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.) */
+/** A window's focus is somewhere not in a tab (app menu, app toolbar, etc.) */
 export type FocusSubjectOther = {
   focusType: 'other';
 };
 
-/** Current item that is the subject of top-level focus in the window */
+/** Current item that is the subject of top-level focus in a window */
 export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
 
 /**
@@ -111,10 +141,10 @@ export type AppWindowInputEvent = {
  */
 export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
 
-/** Specific item that is intended to be focused in the top-level app window */
+/** Specific item that is intended to be focused at the top level of a window */
 export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
 
-/** Instructions that indicate how to change the focus within the window */
+/** Instructions that indicate how to change the focus within a window */
 export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
 
 // Data Type to initialize data provider engine with
@@ -131,7 +161,18 @@ declare module 'papi-shared-types' {
 /**
  * JSDOC SOURCE windowService
  *
- * Service that allows to interact with the current application window
+ * Service for interacting with an application window. Every window hosts its own, so a call from a
+ * renderer acts on the window it runs in.
+ *
+ * The extension host is in no window, so a call made there acts on the window that most recently
+ * had focus — `platform.getFocusedWindowId`, which stays set while the application is in the
+ * background. Two calls can answer for different windows, and a subscription binds to the window
+ * focused when it was made rather than following focus afterwards. If there is no focused window,
+ * or the focused window has not registered its window service — either because it is still starting
+ * or because it has just gone away — the call throws rather than falling back to another window.
+ *
+ * This is a different resolver from the one the `windowServiceProviderName` doc describes: the bare
+ * unscoped name goes through the router; `papi.window` does not.
  */
 export type IWindowService = {
   /**
@@ -149,7 +190,7 @@ export type IWindowService = {
    * Sets the subject of focus in the current window.
    *
    * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
-   *   the window to update the current focus based on what is actually focused in the window (only
+   *   that window to update its current focus based on what is actually focused in it (only
    *   necessary when an action happens that changes the focus but the window service does not
    *   detect already). In most cases, you will not need to set `'detect'` manually.
    * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
@@ -163,7 +204,7 @@ export type IWindowService = {
    *
    * @param selector `undefined`. Does not have to be provided
    * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
-   *   the window to update the current focus based on what is actually focused in the window (only
+   *   that window to update its current focus based on what is actually focused in it (only
    *   necessary when an action happens that changes the focus but the window service does not
    *   detect already). In most cases, you will not need to set `'detect'` manually.
    *
@@ -181,10 +222,10 @@ export type IWindowService = {
    * Subscribe to run a callback function when the current window's subject of focus is changed
    *
    * @param selector `undefined`. Does not have to be provided
-   * @param callback Function to run with the updated localized menuContent for this selector. If
-   *   there is an error while retrieving the updated data, the function will run with a
-   *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-   *   to check if it is an error.
+   * @param callback Function to run with the window's updated subject of focus. If there is an
+   *   error while retrieving the updated data, the function will run with a {@link PlatformError}
+   *   instead of the data. You can call {@link isPlatformError} on this value to check if it is an
+   *   error.
    * @param options Various options to adjust how the subscriber emits updates
    * @returns Unsubscriber function (run to unsubscribe from listening for updates)
    */
@@ -196,3 +237,31 @@ export type IWindowService = {
 } & OnDidDispose &
   typeof windowServiceObjectToProxy &
   IDataProvider<WindowDataTypes>;
+
+/**
+ * One open application window, as a caller choosing a window to act on needs to see it.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type WindowSummary = {
+  /**
+   * The window's durable id: persisted in its layout entry and handed back to whichever window
+   * restores that entry, so it is stable across restarts.
+   */
+  windowId: string;
+  /**
+   * The window's title, which follows its own content. Two windows showing the same thing carry the
+   * same label, and nothing disambiguates them.
+   */
+  label: string;
+  /**
+   * Whether this window is the one answering for the application's lifetime right now — the window
+   * whose close asks about closing everything, and which docks Home rather than closing when it is
+   * emptied.
+   *
+   * This is the live answer, not the persisted flag of the same name. Usually they agree, but when
+   * no open window holds the marked entry the role falls to one of the windows that are open while
+   * the flag stays where it is, and this reports the window that actually answers.
+   */
+  isMain: boolean;
+};

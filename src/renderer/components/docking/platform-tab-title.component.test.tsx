@@ -19,13 +19,34 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%tab_aria_tab%': 'tab',
-      '%tab_contextMenu_floatTab%': 'Float Tab',
+      '%window_label_empty%': 'Empty window',
     },
   ]),
   useData: vi.fn(() => ({
     Focus: () => [mockFocusSubject, vi.fn()],
   })),
   useDataProvider: vi.fn(() => undefined),
+}));
+
+vi.mock('@shared/services/menu-data.service', () => ({
+  menuDataService: {
+    dataProviderName: 'platform.menuDataServiceDataProvider',
+    // Each tab reads its contributed menu once at mount rather than subscribing to it
+    getWebViewMenu: vi.fn(async () => ({
+      includeDefaults: true,
+      tabMenu: {
+        groups: { 'platform.tabWindow': { order: 100, isExtensible: true } },
+        items: [
+          {
+            label: 'Float Tab',
+            group: 'platform.tabWindow',
+            order: 100,
+            command: 'platform.floatTab',
+          },
+        ],
+      },
+    })),
+  },
 }));
 
 vi.mock('@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook', () => ({
@@ -52,6 +73,8 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   floatTab: vi.fn(),
   updateTabPartialSync: vi.fn(),
+  // Two tabs open, so a tab is never the only one in its window unless a test says otherwise
+  getOpenTabCountSync: vi.fn(() => 2),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -213,12 +236,14 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('adds the last-selected class to the header and content pane when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (undefined focus subject)', () => {
+  it('adds the last-selected class to the header and content pane when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (undefined focus subject)', async () => {
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     vi.mocked(useLastFocusedTabId).mockReturnValue('web-view-1');
     mockFocusSubject = undefined;
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).toHaveClass(cssClassTabHeaderLastSelected);
     expect(container.querySelector('.dock-tabpane-active')).toHaveClass(
@@ -226,12 +251,14 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('adds the last-selected class to the header and content pane when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (focusType "other")', () => {
+  it('adds the last-selected class to the header and content pane when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (focusType "other")', async () => {
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     vi.mocked(useLastFocusedTabId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'other' };
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).toHaveClass(cssClassTabHeaderLastSelected);
     expect(container.querySelector('.dock-tabpane-active')).toHaveClass(
@@ -239,7 +266,7 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('does not add the last-selected class when the user focused a different (e.g. non-navigable) tab after this one, even though this tab is still the navigation target', () => {
+  it('does not add the last-selected class when the user focused a different (e.g. non-navigable) tab after this one, even though this tab is still the navigation target', async () => {
     // Reproduces: click scripture-navigable web view 1, click non-navigable web view 2 (tracker
     // retains web view 1), click the top toolbar (focus outside all tabs). Web view 1 still drives
     // BCV navigation but must not be tinted because it was not the tab the user was last in.
@@ -248,6 +275,8 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     mockFocusSubject = { focusType: 'other' };
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
       cssClassTabHeaderLastSelected,
@@ -257,11 +286,13 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('removes the last-selected class from the header and content pane when this tab becomes focused', () => {
+  it('removes the last-selected class from the header and content pane when this tab becomes focused', async () => {
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'webView', id: 'web-view-1' };
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
       cssClassTabHeaderLastSelected,
@@ -271,11 +302,13 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('removes the last-selected class from the header and content pane when a DIFFERENT tab is focused (PT9 parity: no dual highlight)', () => {
+  it('removes the last-selected class from the header and content pane when a DIFFERENT tab is focused (PT9 parity: no dual highlight)', async () => {
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'tab', tabType: 'webView', id: 'some-other-tab' };
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
       cssClassTabHeaderLastSelected,
@@ -285,11 +318,13 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('removes the last-selected class from the header and content pane when a DIFFERENT web view is focused (PT9 parity: no dual highlight)', () => {
+  it('removes the last-selected class from the header and content pane when a DIFFERENT web view is focused (PT9 parity: no dual highlight)', async () => {
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
     mockFocusSubject = { focusType: 'webView', id: 'some-other-web-view' };
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
       cssClassTabHeaderLastSelected,
@@ -299,11 +334,13 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('does not add the last-selected class to the header or content pane when this tab is not the last-selected web view', () => {
+  it('does not add the last-selected class to the header or content pane when this tab is not the last-selected web view', async () => {
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('some-other-web-view');
     mockFocusSubject = undefined;
 
     const { container } = renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
       cssClassTabHeaderLastSelected,
@@ -313,7 +350,7 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     );
   });
 
-  it('does not tint a sibling tab header or pane when the last-selected tab is not the front tab in its panel', () => {
+  it('does not tint a sibling tab header or pane when the last-selected tab is not the front tab in its panel', async () => {
     // The last-selected web view's tab is NOT the active tab in its panel: a sibling tab (e.g.
     // Settings) is active instead, so the sibling's header and pane carry
     // .dock-tab-active/.dock-tabpane-active and this tab's header does not
@@ -329,6 +366,8 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
         <div className="dock-tabpane-active" />
       </div>,
     );
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
       cssClassTabHeaderLastSelected,
@@ -345,9 +384,11 @@ describe('PlatformTabTitle context-menu gating', () => {
     vi.mocked(useIsPowerMode).mockReturnValue(true);
   });
 
-  it('power mode: wraps the title in a ContextMenu', () => {
+  it('power mode: wraps the title in a ContextMenu', async () => {
     vi.mocked(useIsPowerMode).mockReturnValue(true);
     render(<PlatformTabTitle text="Tab" id="tab-1" />);
+    // The tab reads its contributed menu when it mounts, and renders no menu until that lands
+    await act(async () => {});
     expect(screen.queryByTestId('context-menu')).toBeInTheDocument();
   });
 
@@ -409,9 +450,11 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
     expect(container.querySelector('.platform-tab-title')).not.toHaveClass('icon-only');
   });
 
-  it('never observes for resize in Power mode', () => {
+  it('never observes for resize in Power mode', async () => {
     vi.mocked(useIsPowerMode).mockReturnValue(true);
     renderTabTitle('web-view-1');
+    // This tab mounts in Power mode, so it reads its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(mockResizeObserve).not.toHaveBeenCalled();
   });
@@ -502,7 +545,7 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
     ).toBeInTheDocument();
   });
 
-  it('resets icon-only state on a Simple->Power mode switch at runtime, so a tab that was collapsed in Simple mode does not stay stuck icon-only-styled in Power mode', () => {
+  it('resets icon-only state on a Simple->Power mode switch at runtime, so a tab that was collapsed in Simple mode does not stay stuck icon-only-styled in Power mode', async () => {
     // Regression test for a real bug: the icon-only effect's early return for Power mode never
     // reset `isIconOnly`, and both modes render the tab title through the same code path that
     // applies the icon-only class — so a tab collapsed to icon-only in Simple mode stayed stuck
@@ -517,6 +560,8 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
 
     vi.mocked(useIsPowerMode).mockReturnValue(true);
     rerender(tabTitleTree('web-view-1'));
+    // The switch to Power mode makes this tab read its contributed menu; let that settle first.
+    await act(async () => {});
 
     expect(container.querySelector('.platform-tab-title')).not.toHaveClass('icon-only');
   });

@@ -32,7 +32,11 @@ import {
   useRef,
   useState,
 } from 'react';
-import { isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { LocalizeKey } from 'platform-bible-utils';
+import {
+  collectContextMenuKeys,
+  localizeContextMenuItems,
+} from '@renderer/components/overlays/overlay-context-menu-localization.util';
 
 // ── Public Types ──
 
@@ -58,6 +62,14 @@ export type OverlayContextMenuItem =
   | { type: 'separator' }
   | {
       type: 'submenu';
+      /**
+       * Id of the contributed menu item this submenu was built from, when it came from a
+       * contribution. Lets a consumer recognize a particular submenu — for one whose contents are
+       * only known at the moment the menu opens, for instance — without matching on its label.
+       *
+       * @experimental This field is unstable and may change or disappear without notice
+       */
+      id?: string;
       label: string | LocalizeKey;
       icon?: PlatformIconName;
       items: OverlayContextMenuItem[];
@@ -282,34 +294,6 @@ export function OverlayContextMenuPresentational({
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-// ── Localization Helpers ──
-
-/** Recursively collects all LocalizeKey values from context menu items */
-function collectContextMenuKeys(items: OverlayContextMenuItem[]): LocalizeKey[] {
-  return items.reduce<LocalizeKey[]>((keys, item) => {
-    if (item.type === 'separator') return keys;
-    if (isLocalizeKey(item.label)) keys.push(item.label);
-    if (item.type === 'submenu') keys.push(...collectContextMenuKeys(item.items));
-    return keys;
-  }, []);
-}
-
-/** Recursively resolves LocalizeKey labels in context menu items using localized strings */
-function localizeContextMenuItems(
-  items: OverlayContextMenuItem[],
-  localizedStrings: LanguageStrings,
-): OverlayContextMenuItem[] {
-  return items.map((item) => {
-    if (item.type === 'separator') return item;
-    const label = isLocalizeKey(item.label)
-      ? (localizedStrings[item.label] ?? item.label)
-      : item.label;
-    if (item.type === 'submenu')
-      return { ...item, label, items: localizeContextMenuItems(item.items, localizedStrings) };
-    return { ...item, label };
-  });
 }
 
 // ── Store-Connected Component ──

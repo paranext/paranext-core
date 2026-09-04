@@ -1,8 +1,8 @@
 /**
  * WebView service shard — the WebView service implementation for THIS window. Registered under a
- * window-scoped network object id (e.g. "WebViewService-1") so several windows can coexist; the
- * main process's `web-view.service-router.ts` publishes the generic name and forwards each call to
- * the window that should handle it.
+ * window-scoped network object id (e.g. "WebViewService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6") so
+ * several windows can coexist; the main process's `web-view.service-router.ts` publishes the
+ * generic name and forwards each call to the window that should handle it.
  *
  * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
  * service shard".
@@ -27,6 +27,7 @@ import {
   getFullWebViewStateById,
   setFullWebViewStateById,
 } from '@renderer/services/web-view-state.service';
+import { WindowClosingError } from '@renderer/services/window-closing-error.model';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { LogError } from '@shared/log-error.model';
@@ -121,6 +122,11 @@ import {
 } from '@renderer/components/docking/simple-layout.builder';
 import { trackSimpleLayoutTabsResolved as trackSimpleLayoutTabsResolvedImpl } from '@renderer/services/simple-layout-tabs-resolved.tracker';
 import {
+  getWindowIdsWithStoredState,
+  removeStateOfWindows,
+} from '@renderer/services/local-storage.service';
+import {
+  FILTER_DEAD_WINDOW_IDS_REQUEST_TYPE,
   GET_WINDOW_LAYOUT_REQUEST_TYPE,
   SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
   WindowLayoutGetResponse,
@@ -628,15 +634,15 @@ const PREFIXED_DOCK_LAYOUT_KEY_PATTERN = new RegExp(`^(\\d+)_${DOCK_LAYOUT_KEY}$
 const EMPTY_DOCK_LAYOUT: LayoutInfo = { dockbox: { mode: 'horizontal', children: [] } };
 
 /**
- * This window's id as a number, for addressing the main process's window layout persistence
+ * This window's id, for addressing the main process's window layout persistence
  *
  * @throws If the window id is not set
  */
-function getWindowIdOrThrow(): number {
-  const windowId = Number.parseInt(globalThis.windowId ?? '', 10);
-  if (Number.isNaN(windowId))
+function getWindowIdOrThrow(): string {
+  // The id is read and validated once, where the renderer reads the URL.
+  if (globalThis.windowId === undefined)
     throw new Error('windowId is not set. Check that the URL includes the windowId parameter.');
-  return windowId;
+  return globalThis.windowId;
 }
 
 /**
@@ -1129,9 +1135,11 @@ async function loadLayout(
     const didDockGainWebViewsDuringLoad = () =>
       webViewsBeforeLoad.length === 0 && dockLayoutVar.getAllWebViewDefinitions().length > 0;
     // Every layout gets its web view ids scoped to this window, including one restored from
-    // persistence: a saved entry's ids carry the window id of the session that saved them (window
-    // ids are not stable across restarts), and the legacy pre-multi-window layout carries unscoped
-    // ids. Re-scoping replaces the suffix rather than stacking another one, so it is safe on both.
+    // persistence. Re-scoping is idempotent — it replaces any existing `-w<id>` suffix rather than
+    // stacking another one — so it is correct whichever ids the layout carries: this window's own
+    // id (the ordinary restore case, now that a window's id is durable and comes back with it),
+    // another window's id (a layout that came from elsewhere), or no scope at all (the legacy
+    // pre-multi-window layout).
     const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
     if (isPendingContent) {
       if (didDockGainWebViewsDuringLoad()) {
@@ -1292,7 +1300,7 @@ async function getPersistedLayout(
     try {
       // Sequential retries: each attempt must settle before the next may start
       // eslint-disable-next-line no-await-in-loop
-      response = await sendNetworkRequest<[number], WindowLayoutGetResponse>(
+      response = await sendNetworkRequest<[string], WindowLayoutGetResponse>(
         GET_WINDOW_LAYOUT_REQUEST_TYPE,
         getWindowIdOrThrow(),
       );
@@ -2270,6 +2278,19 @@ export function getAllOpenWebViewDefinitionsSync(): SavedWebViewDefinition[] {
     });
 }
 
+/**
+ * Synchronous count of every open tab in this window's dock layout, of any type — not only web
+ * views. Mirrors the sync/async pairing already established by
+ * {@link getAllOpenWebViewDefinitionsSync} for renderer-internal callers (e.g. the tab menu deciding
+ * whether moving a tab out would leave this window empty) that need the count without an async
+ * round trip through the dock layout's async variable.
+ *
+ * @throws If the papi dock layout has not been registered
+ */
+export function getOpenTabCountSync(): number {
+  return getDockLayoutSync().getOpenTabCount();
+}
+
 // #endregion WebView definitions
 
 // #region WebViewState
@@ -2542,7 +2563,7 @@ let isWindowToldToClose = false;
  */
 export function throwIfWindowIsClosing(operation: string): void {
   if (!isWindowToldToClose) return;
-  throw new Error(
+  throw new WindowClosingError(
     `web-view.service-shard: window ${globalThis.windowId} cannot ${operation}: the main process has told this window that it is closing.`,
   );
 }
@@ -3260,7 +3281,7 @@ async function reportDockEmptied(reason: WindowEmptiedReason): Promise<void> {
       );
       // Sequential attempts: each one must settle before the next may start
       // eslint-disable-next-line no-await-in-loop
-      response = await sendNetworkRequest<[number, WindowEmptiedReason], WindowEmptiedResponse>(
+      response = await sendNetworkRequest<[string, WindowEmptiedReason], WindowEmptiedResponse>(
         WINDOW_EMPTIED_REQUEST_TYPE,
         windowId,
         reason,
@@ -3811,16 +3832,40 @@ const webViewServiceShard: WebViewServiceShard = {
   adoptWebView,
 };
 
+/**
+ * Drop the state this profile is still storing for windows that no longer exist.
+ *
+ * Window ids are never reissued, so state under an id whose entry has gone can never be read again,
+ * and nothing else removes it: every window a user deliberately closes would leave a blob behind
+ * for the life of the profile, in the storage every window of the profile shares, until writes
+ * start failing for all of them.
+ *
+ * Which windows are dead is the main process's answer, not this window's guess — it holds the
+ * structure, and it answers about the ids this window actually holds state for, so a window created
+ * while the question was in flight cannot have its state deleted by it.
+ */
+async function removeStateOfDeadWindows(): Promise<void> {
+  const candidateWindowIds = getWindowIdsWithStoredState();
+  if (candidateWindowIds.length === 0) return;
+  const deadWindowIds = await sendNetworkRequest<[string[]], string[]>(
+    FILTER_DEAD_WINDOW_IDS_REQUEST_TYPE,
+    candidateWindowIds,
+  );
+  removeStateOfWindows(deadWindowIds);
+}
+
 /** Register the network object that backs the PAPI webview service */
 // To use this service, you should use `web-view.service.ts`
 export async function startWebViewServiceShard(): Promise<void> {
   await initialize();
-  if (!globalThis.windowId) throw new Error('Cannot start WebViewService: windowId is not set');
+  if (globalThis.windowId === undefined)
+    throw new Error('Cannot start WebViewService: windowId is not set');
 
-  // Register this window's shard under a window-scoped name (e.g. "WebViewService-1") so multiple
-  // renderers can coexist. The main process's WebView service router registers the generic name and
-  // forwards to the shard that should handle each call. The object type and window id are how the
-  // router finds this shard; the name it is registered under is nobody else's business.
+  // Register this window's shard under a window-scoped name (e.g.
+  // "WebViewService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6") so multiple renderers can coexist. The
+  // main process's WebView service router registers the generic name and forwards to the shard that
+  // should handle each call. The object type and window id are how the router finds this shard; the
+  // name it is registered under is nobody else's business.
   await networkObjectService.set<WebViewServiceShard>(
     `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`,
     webViewServiceShard,
@@ -3831,4 +3876,11 @@ export async function startWebViewServiceShard(): Promise<void> {
     // between what a shard answers and what its router answers are still moving.
     { 'x-experimental': true },
   );
+
+  // Housekeeping, deliberately not awaited: it costs one request and no window's startup should
+  // wait on it, or fail because it failed. Every window does it — the storage is shared, so
+  // whichever gets there first cleans up for all of them.
+  removeStateOfDeadWindows().catch((e) => {
+    logger.warn(`Could not drop the stored state of windows that are gone: ${getErrorMessage(e)}`);
+  });
 }

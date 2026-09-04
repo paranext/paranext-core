@@ -12,3 +12,14 @@
 .user-profile-popover-text-3xs {
   font-size: 10px;
 }
+
+/* Windows High Contrast forces every background to a system color and drops box-shadow, which
+   between them are the reminder dot's entire visual — leaving an invisible 8px box. An outline
+   survives forced-colors (the UA repaints it in a system color), so it is what keeps the marker
+   visible. Written here rather than as a `tw:forced-colors:*` utility because that variant emits
+   no CSS in this build. */
+@media (forced-colors: active) {
+  .user-profile-popover-reminder-dot {
+    outline: 1px solid CanvasText;
+  }
+}
