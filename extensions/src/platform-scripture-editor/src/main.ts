@@ -1065,9 +1065,10 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
       title: SCRIPTURE_TEXT_GRID_TITLE_KEY,
       tooltip: titleLocalizedStrings[SCRIPTURE_TEXT_GRID_TITLE_KEY],
       // This webview is dual-mode: in simple mode it's part of Column 3's fixed layout and must
-      // always remain open (the X-button is omitted and there is no keyboard close shortcut, so
-      // this covers both close paths), so it's non-closable there. Power mode allows closing
-      // freely, matching the other Column 3 providers (ScriptureEditorWebViewFactory,
+      // always remain open, so it's non-closable there — isClosable === false disables all three
+      // close paths (the X-button is omitted, a middle click on the tab header is ignored, and
+      // there is no keyboard close shortcut). Power mode allows closing freely, matching the
+      // other Column 3 providers (ScriptureEditorWebViewFactory,
       // createResourceTextPanelProvider) — this also determines its rc-dock group (getTabGroup):
       // isClosable === false routes it to TAB_GROUP_RESOURCES, which getGroups() only registers in
       // Simple mode, so leaving this unconditionally false left the tab pointing at a group with no

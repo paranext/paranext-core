@@ -30,6 +30,12 @@ export function createRCDockTabFromTabInfo(
   const { shouldFlash = false } = options;
   // Update the flash trigger time if we are supposed to bring the tab to the front
   const flashTriggerTime = shouldFlash ? Date.now() : tabInfo.flashTriggerTime;
+  // Tabs are closable by default; a WebView can opt out by setting `isClosable: false` (e.g. the
+  // fixed 3-column simple-mode layout's own webviews, which force this per interface mode so
+  // floating dialogs like About/Settings stay closable in simple mode while the fixed columns
+  // don't — see each webview provider's own `isClosable` computation). Resolved once here so
+  // rc-dock's own close button and the tab title's middle-click close agree on the same value.
+  const closable = tabInfo.isClosable ?? true;
 
   // Translate the data from the loaded tab to be in the form needed by rc-dock
   return {
@@ -44,15 +50,12 @@ export function createRCDockTabFromTabInfo(
         id={tabInfo.id}
         // For WebView tabs, the tab id IS the web view id
         webViewId={tabInfo.tabType === TAB_TYPE_WEBVIEW ? tabInfo.id : undefined}
+        isClosable={closable}
       />
     ),
     content: <PlatformPanel id={tabInfo.id}>{tabInfo.content}</PlatformPanel>,
     group: getTabGroup(tabInfo),
-    // Tabs are closable by default; a WebView can opt out by setting `isClosable: false` (e.g. the
-    // fixed 3-column simple-mode layout's own webviews, which force this per interface mode so
-    // floating dialogs like About/Settings stay closable in simple mode while the fixed columns
-    // don't — see each webview provider's own `isClosable` computation).
-    closable: tabInfo.isClosable ?? true,
+    closable,
   };
 }
 

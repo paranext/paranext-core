@@ -53,6 +53,8 @@ import {
 } from '@renderer/components/docking/docking-framework-internal.model';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { getDockLayoutOuterInset } from '@renderer/components/docking/platform-dock-layout-positioning.util';
+import { installMiddleClickTabBarHandlers } from '@renderer/components/docking/platform-dock-layout-middle-click-handlers.util';
+import { handleCloseTab } from '@renderer/components/docking/platform-tab-title.component';
 
 export function PlatformDockLayout() {
   // This ref will always be defined
@@ -133,6 +135,12 @@ export function PlatformDockLayout() {
       clearTimeout(focusTabAfterCloseTimeoutRef.current);
     };
     // Is there any situation where dockLayoutRef will change? We need to add to dependencies if so
+  }, []);
+
+  useEffect(() => {
+    const rootElement = dockLayoutRef.current.getRootElement();
+    if (!rootElement) return undefined;
+    return installMiddleClickTabBarHandlers(rootElement, { onTabMiddleClick: handleCloseTab });
   }, []);
 
   return (

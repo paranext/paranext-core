@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
-import { PlatformTabTitle } from './platform-tab-title.component';
+import { closeTab } from '@renderer/services/web-view.service-shard';
+import { logger } from '@shared/services/logger.service';
+import { handleCloseTab, PlatformTabTitle } from './platform-tab-title.component';
 
 // #region mocks
 
@@ -36,8 +38,11 @@ vi.mock('@renderer/hooks/use-last-focused-tab-id.hook', () => ({
   useLastFocusedTabId: vi.fn(() => undefined),
 }));
 
-// Mock heavy transitive deps that run side-effects at module init in jsdom.
-vi.mock('../../../shared/services/logger.service');
+// Mock heavy transitive deps that run side-effects at module init in jsdom. `logger.service` is
+// mocked once, below, via its alias — a second mock of it under a relative specifier previously
+// coexisted here and raced the aliased one for which mock implementation "won" depending on
+// module-resolution order, which stayed invisible only because nothing in this file asserted on
+// `logger.*` until the `handleCloseTab` tests below.
 vi.mock('@renderer/services/theme.service', () => ({
   __esModule: true,
   localThemeService: {},
@@ -50,6 +55,7 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
 }));
 
 vi.mock('@renderer/services/web-view.service-shard', () => ({
+  closeTab: vi.fn(),
   floatTab: vi.fn(),
   updateTabPartialSync: vi.fn(),
 }));
@@ -519,5 +525,75 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
     rerender(tabTitleTree('web-view-1'));
 
     expect(container.querySelector('.platform-tab-title')).not.toHaveClass('icon-only');
+  });
+});
+
+describe('PlatformTabTitle data-tab-id / data-tab-closable attributes', () => {
+  // Read by `platform-dock-layout-middle-click-handlers.util.ts` to resolve a middle click
+  // anywhere on a tab header back to a tab id and its closable state.
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('stamps this tab’s id and closable state onto its root element', () => {
+    const { container } = render(<PlatformTabTitle id="tab-1" text="Tab" isClosable />);
+
+    const header = container.querySelector('.platform-tab-title');
+    expect(header).toHaveAttribute('data-tab-id', 'tab-1');
+    expect(header).toHaveAttribute('data-tab-closable', 'true');
+  });
+
+  it('stamps data-tab-closable="false" when isClosable is explicitly false', () => {
+    const { container } = render(<PlatformTabTitle id="tab-1" text="Tab" isClosable={false} />);
+
+    expect(container.querySelector('.platform-tab-title')).toHaveAttribute(
+      'data-tab-closable',
+      'false',
+    );
+  });
+
+  it('defaults data-tab-closable to "true" when isClosable is not passed, so a caller that omits it still gets a working middle-click-to-close gesture', () => {
+    const { container } = render(<PlatformTabTitle id="tab-1" text="Tab" />);
+
+    expect(container.querySelector('.platform-tab-title')).toHaveAttribute(
+      'data-tab-closable',
+      'true',
+    );
+  });
+});
+
+describe('handleCloseTab', () => {
+  afterEach(() => {
+    vi.mocked(closeTab).mockReset();
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(logger.error).mockClear();
+  });
+
+  it('closes the tab and logs nothing when closeTab resolves true', async () => {
+    vi.mocked(closeTab).mockResolvedValue(true);
+
+    await handleCloseTab('tab-1');
+
+    expect(closeTab).toHaveBeenCalledExactlyOnceWith('tab-1');
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('warns rather than throwing into React when closeTab resolves false (no such tab in the dock layout)', async () => {
+    vi.mocked(closeTab).mockResolvedValue(false);
+
+    await handleCloseTab('tab-1');
+
+    expect(logger.warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('tab-1'));
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('logs rather than throwing into React when closeTab rejects', async () => {
+    vi.mocked(closeTab).mockRejectedValue(new Error('tab already gone'));
+
+    await handleCloseTab('tab-1');
+
+    expect(logger.error).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('tab-1'));
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });
