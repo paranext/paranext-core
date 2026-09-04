@@ -282,7 +282,10 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     );
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
 
-    fireEvent.click(screen.getByText('Move tab to new window'));
+    // Waits for the menu item rather than assuming it is already there: the tab's contributed menu
+    // can take a render pass of its own to arrive, and clicking before it does misses the item
+    // entirely instead of exercising this disposition.
+    fireEvent.click(await screen.findByText('Move tab to new window'));
 
     await waitFor(() =>
       expect(notificationService.send).toHaveBeenCalledWith(
