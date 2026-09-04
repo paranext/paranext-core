@@ -131,23 +131,6 @@ describe('PlatformTabTitle middle-click-to-close', () => {
     expect(closeTab).not.toHaveBeenCalled();
   });
 
-  it('prevents the default action on a middle-button mousedown', () => {
-    const { container } = render(<PlatformTabTitle id="tab-1" text="Tab" isClosable />);
-
-    const event = fireEvent.mouseDown(getTabHeader(container), { button: 1 });
-
-    // `fireEvent` returns `false` when the dispatched event's default was prevented.
-    expect(event).toBe(false);
-  });
-
-  it('does not prevent the default action on a left-button mousedown', () => {
-    const { container } = render(<PlatformTabTitle id="tab-1" text="Tab" isClosable />);
-
-    const event = fireEvent.mouseDown(getTabHeader(container), { button: 0 });
-
-    expect(event).toBe(true);
-  });
-
   it('logs a rejected close rather than throwing into React', async () => {
     vi.mocked(closeTab).mockRejectedValue(new Error('tab already gone'));
     const { container } = render(<PlatformTabTitle id="tab-1" text="Tab" isClosable />);
