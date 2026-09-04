@@ -134,17 +134,29 @@ internal class ParatextProjectSendReceiveService(
     }
 
     /// <summary>
-    /// Syncs projects from the provided IDs: filters for editable projects and S/Rs them,
-    /// then reads each editable project's connected resources and projects (one level deep —
-    /// connections of connections are not included) and S/Rs connected translation projects
-    /// or DBL-updates connected resources. Non-editable and unknown IDs are skipped.
-    /// Deduplication is handled internally.
+    /// Syncs the given projects (S/Rs them), then reads each synced project's connected resources
+    /// and projects (one level deep — connections of connections are not included) and S/Rs
+    /// connected translation projects or DBL-updates connected resources as needed. Unknown IDs are
+    /// skipped. Deduplication is handled internally.
     /// Exception is thrown if this function is not implemented in the current application
     /// or if an error was encountered syncing.
     /// </summary>
     /// <param name="projectIds">
-    /// IDs of the projects to sync. If <see langword="null"/>, all shared projects that are already
-    /// present locally (i.e., not new) are synced. An empty array is a no-op.
+    /// IDs of the projects to sync.
+    /// <list type="bullet">
+    /// <item>If explicit IDs are given, each one is synced regardless of whether it is already
+    /// present locally — a <c>new</c> (not yet downloaded) project among them is downloaded, not
+    /// skipped.</item>
+    /// <item>If <see langword="null"/> and at least one shared project the account knows about is
+    /// already present locally (not new), every locally-present project is synced; new projects
+    /// are left alone.</item>
+    /// <item>If <see langword="null"/> and every shared project the account knows about is
+    /// currently new (a true first sync, or the rarer case where every previously-local project
+    /// has since gone missing from disk), downloading stops as soon as one synced project gives
+    /// the current user a non-Observer role — trying a small initial batch, then the rest one at a
+    /// time — rather than unconditionally syncing the whole account.</item>
+    /// <item>An empty array is a no-op.</item>
+    /// </list>
     /// </param>
     protected void SyncProjects(String[]? projectIds)
     {

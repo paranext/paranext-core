@@ -476,9 +476,20 @@ declare module 'papi-shared-types' {
      * Send/Receive extension's own declaration also returns the S/R results; core does not consume
      * them.
      *
-     * @param projectIds IDs of the projects to sync. If omitted, all shared projects that are
-     *   already present locally (i.e., not new) are synced. If provided, only projects already
-     *   present locally are synced; new projects (not yet received) and unknown IDs are skipped.
+     * @param projectIds IDs of the projects to sync.
+     *
+     *   - If provided, each given ID is synced regardless of whether it is already present locally — a
+     *       `new` (not yet downloaded) project among them is downloaded, not skipped. Unknown IDs
+     *       are skipped.
+     *   - If omitted and at least one shared project the account knows about is already present locally
+     *       (not new), every locally-present project is synced; new projects are left alone.
+     *   - If omitted and every shared project the account knows about is currently new (a true first
+     *       sync, or the rarer case where every previously-local project has since gone missing
+     *       from disk), downloading stops as soon as one synced project gives the current user a
+     *       non-Observer role — trying a small initial batch, then the rest one at a time — rather
+     *       than unconditionally syncing the whole account.
+     *   - An empty array is a no-op.
+     *
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10 Studio)
      */
