@@ -10,6 +10,7 @@ import { SAMPLE_RESOURCES, SAMPLE_SELECTED_IDS } from './resource-picker-dialog.
 // jsdom implements neither IntersectionObserver (used by the progressive list) nor ResizeObserver
 // (wired by the language filter's popover) — stub both so the dialog can mount and be interacted
 // with.
+const originalScrollIntoView = Element.prototype.scrollIntoView;
 beforeAll(() => {
   vi.stubGlobal(
     'IntersectionObserver',
@@ -24,6 +25,11 @@ beforeAll(() => {
 });
 afterAll(() => {
   vi.unstubAllGlobals();
+  // `vi.unstubAllGlobals` does not reach a prototype assignment, so restore it by hand rather than
+  // leaving a stub on `Element` for every test file that runs after this one in the same worker.
+  // jsdom ships no `scrollIntoView`, so the captured value is usually `undefined` — putting that
+  // back is what restores the original absence.
+  Element.prototype.scrollIntoView = originalScrollIntoView;
 });
 
 const STRINGS: ResourcePickerDialogLocalizedStrings = {
@@ -264,6 +270,73 @@ describe('ResourcePickerDialog', () => {
 
     rerender({ allResources: [], hasResourcesError: true });
     expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+  });
+
+  // A count of zero above a message saying downloads are unavailable contradicts it: it reads as a
+  // search that came up empty, which is the reading the message exists to prevent.
+  it('suppresses the count over the downloads-unavailable message, filter or no filter', () => {
+    const { rerender } = renderDialogForRerender();
+
+    fireEvent.change(screen.getByPlaceholderText('Search resources…'), {
+      target: { value: 'NIV' },
+    });
+    expect(screen.getByText(/^Showing/)).toBeInTheDocument();
+
+    rerender({ allResources: [], areDownloadsUnavailable: true });
+
+    expect(
+      screen.getByText("Resource downloads aren't available on this installation."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+  });
+
+  it('suppresses the count over a genuinely empty catalog, filter or no filter', () => {
+    const { rerender } = renderDialogForRerender();
+
+    fireEvent.change(screen.getByPlaceholderText('Search resources…'), {
+      target: { value: 'NIV' },
+    });
+    expect(screen.getByText(/^Showing/)).toBeInTheDocument();
+
+    rerender({ allResources: [] });
+
+    expect(screen.getByText('No results found')).toBeInTheDocument();
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+  });
+
+  // The language predicate runs over the type-scoped set, so the "is this narrowing anything?"
+  // question has to be asked of that same set. Asked of the whole catalog it answers about
+  // languages this picker never shows.
+  it('does not call a language selection a filter when it excludes nothing of this type', () => {
+    // Every XmlResource in the sample catalog is English; Spanish, Greek and Hebrew exist only on
+    // resources this picker filters out anyway.
+    renderDialog({ resourceType: 'XmlResource' });
+
+    fireEvent.click(screen.getByRole('combobox'));
+    const english = screen.getByRole('option', { name: 'English' });
+    fireEvent.click(english);
+
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+  });
+
+  // The costlier direction: a selection that hides every row while reporting itself as no filter
+  // withdraws the one control that could reveal them again.
+  it('keeps Clear filters when the catalog changes out from under a selected language', () => {
+    const { rerender } = renderDialogForRerender();
+
+    fireEvent.click(screen.getByRole('combobox'));
+    fireEvent.click(screen.getByRole('option', { name: 'Spanish' }));
+
+    // A retry, or a host that persists the language filter, can deliver a catalog whose languages
+    // no longer include the selected one.
+    rerender({
+      allResources: SAMPLE_RESOURCES.filter((r) => r.bestLanguageName === 'English'),
+      selectedResourceIds: [],
+    });
+
+    expect(screen.getByText('No resources match the current filters.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
   });
 
   // The button lives inside the region it removes, so without a deliberate move focus falls to

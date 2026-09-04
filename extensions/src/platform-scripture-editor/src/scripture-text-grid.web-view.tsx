@@ -7,15 +7,16 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  RetryableErrorView,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-  usePromise,
+  useRetryablePromise,
   useTabIconSelection,
   type TabIconUrls,
 } from 'platform-bible-react';
-import { Settings2 } from 'lucide-react';
+import { CloudOff, Settings2 } from 'lucide-react';
 import {
   DblResourceData,
   formatReplacementString,
@@ -54,6 +55,7 @@ import {
 } from './scripture-text-grid/scripture-text-grid.component';
 import { GridResource } from './scripture-text-grid/resource-cell.component';
 import { toGridResources } from './scripture-text-grid/grid-resources.utils';
+import { getGridBodyState } from './scripture-text-grid/grid-body-state.utils';
 import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
 import { useResourceZoom } from './scripture-text-grid/use-resource-zoom.hook';
 import {
@@ -76,6 +78,8 @@ const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
+const CATALOG_ERROR_KEY = '%webView_scriptureTextGrid_catalogUnavailable%';
+const CATALOG_RETRY_KEY = '%webView_scriptureTextGrid_retry%';
 const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
 // Screen-reader announcements for the chapter-context split opening/closing.
 const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
@@ -90,6 +94,8 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   NO_PROJECT_KEY,
   CHAPTER_CONTEXT_CLOSE_KEY,
   EMPTY_STATE_KEY,
+  CATALOG_ERROR_KEY,
+  CATALOG_RETRY_KEY,
   CELL_ACCESSIBLE_NAME_KEY,
   ARIA_OPENED_KEY,
   ARIA_CLOSED_KEY,
@@ -241,20 +247,42 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // also supplies the DBL `fullName` shown as the long name in the View Options list.
   // Re-fetched on `refreshCounter` bumps so a newly-installed resource's `installed` flag is
   // current when `toGridResources` resolves it.
-  const [catalog, isLoadingCachedResources] = usePromise(
+  const {
+    data: catalog,
+    isLoading: isCatalogLoading,
+    hasError: hasCatalogFetchError,
+    hasSettled: hasCatalogSettled,
+    refetch: refetchCatalog,
+  } = useRetryablePromise(
     useCallback(
       () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
       // refreshCounter is a refresh-trigger counter: the factory doesn't use its value, but each
-      // bump creates a new function reference so usePromise re-runs and re-validates installed
+      // bump creates a new function reference so the fetch re-runs and re-validates installed
       // flags — necessary after any installation completes.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [refreshCounter],
     ),
-    undefined,
   );
 
-  // This grid only ever reads the catalog to resolve names and installed project ids, so a build
-  // that cannot download DBL resources is simply a catalog with nothing in it.
+  // `!hasCatalogSettled` counts as loading, not just `isLoading`, so the render between a retry
+  // click and the effect that restarts the fetch cannot paint a settled-looking empty grid.
+  const isLoadingCachedResources = isCatalogLoading || !hasCatalogSettled;
+
+  // An installation with no DBL credentials is a catalog with nothing in it — an answer this grid
+  // can render, because it only reads the catalog to resolve long names and installed project ids.
+  // A rejected fetch and a provider that has not registered yet are NOT that answer: the catalog is
+  // still coming, and folding either into an empty one turns every configured DBL reference into an
+  // unavailable cell under a truthful-looking "add some texts" prompt.
+  const hasCatalogError =
+    hasCatalogFetchError || (catalog?.status === 'unavailable' && catalog.reason === 'notReady');
+
+  useEffect(() => {
+    if (hasCatalogError)
+      logger.warn(
+        'Scripture Text Grid: the DBL resource catalog is unavailable, so DBL references cannot be resolved',
+      );
+  }, [hasCatalogError]);
+
   const cachedResources = useMemo(
     () => (catalog?.status === 'available' ? catalog.resources : EMPTY_DBL_RESOURCES),
     [catalog],
@@ -278,6 +306,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       toGridResources(sources ? getOrderedScriptureTextGridContents(sources) : [], cachedResources),
     [sources, cachedResources],
   );
+
+  const gridBodyState = getGridBodyState({
+    hasRows: resources.length > 0,
+    hasSources: sources !== undefined,
+    hasCatalogError,
+    isLoading: isLoadingCachedResources || isLoadingLocalizedStrings,
+  });
 
   // Ctrl+F opens Find for the resource the caret is in. Unlike the single-resource reference panels,
   // this view shows several texts at once, so there is no "displayed resource" to fall back to —
@@ -594,16 +629,23 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           </PopoverContent>
         </Popover>
       </div>
-      {/* Grid body: the empty state when nothing is renderable, otherwise the verse-cell rows.
-          Gate the empty state on loading being finished so it can't flash before data arrives —
+      {/* Grid body: a message when nothing is renderable, otherwise the verse-cell rows.
+          Gate the message on loading being finished so it can't flash before data arrives —
           `sources` undefined and `cachedResources` still loading each make `resources` transiently
           empty (a DBL ref resolves to a cell only once the cached list loads). The
           `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`. */}
       <div className="tw:flex-1 tw:overflow-hidden">
-        {resources.length === 0 &&
-        sources !== undefined &&
-        !isLoadingCachedResources &&
-        !isLoadingLocalizedStrings ? (
+        {gridBodyState === 'catalogError' && (
+          <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
+            <RetryableErrorView
+              icon={<CloudOff />}
+              message={localizedStrings[CATALOG_ERROR_KEY]}
+              retryLabel={localizedStrings[CATALOG_RETRY_KEY]}
+              onRetry={refetchCatalog}
+            />
+          </div>
+        )}
+        {gridBodyState === 'empty' && (
           // Centered in the grid body; the message names the View Options button by interpolating
           // its own localized label so a rename can't desync the copy.
           <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
@@ -615,7 +657,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
               })}
             />
           </div>
-        ) : (
+        )}
+        {gridBodyState === 'grid' && (
           <ScriptureTextGrid
             ariaLabel={localizedStrings[TITLE_KEY]}
             resources={resources}

@@ -24,6 +24,8 @@ export {
   type ResourcePickerDialogProps,
   type ResourcePickerDialogLocalizedStrings,
   RESOURCE_PICKER_DIALOG_STRING_KEYS,
+  getResourcePickerBodyState,
+  type ResourcePickerBodyState,
 } from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
 export type { ScopeSelectorVariant } from './components/advanced/scope-selector/scope-selector.component';
 export {

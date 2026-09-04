@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   useLocalizedStrings,
   useProjectDataProvider,
@@ -6,18 +6,7 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { isPlatformError } from 'platform-bible-utils';
-import {
-  Button,
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  Spinner,
-  usePromise,
-  useRetryablePromise,
-} from 'platform-bible-react';
-import { CloudOff } from 'lucide-react';
+import { Spinner, usePromise, useRetryablePromise } from 'platform-bible-react';
 import { RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react/experimental';
 import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { DIALOG_BASE, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
@@ -31,7 +20,6 @@ import {
   ShareLayoutResult,
   SHARE_LAYOUT_DIALOG_STRING_KEYS,
   isShareLayoutActiveTab,
-  localizeString,
 } from '@renderer/components/dialogs/share-layout.component';
 import {
   seedResourceList,
@@ -80,29 +68,34 @@ function ShareLayoutDialogWrapper({
 
   const allResources = catalog?.status === 'available' ? catalog.resources : undefined;
 
-  // `notReady` is transient, so it earns the retryable error state; `notConfigured` is permanent for
-  // this installation, so the dialog still renders and the embedded pickers explain the empty list
-  // rather than showing an unexplained "no results".
+  // `notReady` is transient — the DBL provider registers in the background — so it earns the
+  // retryable error state the embedded pickers render. `notConfigured` is permanent for this
+  // installation, so it gets its own message and no retry. Neither replaces the dialog: the tab and
+  // model-text settings have nothing to do with DBL, and on a build with no DBL credentials
+  // `notConfigured` is the normal state, so a dialog that refuses to open on it would never open.
   const isCatalogNotReady = catalog?.status === 'unavailable' && catalog.reason === 'notReady';
   const areDownloadsUnavailable =
     catalog?.status === 'unavailable' && catalog.reason === 'notConfigured';
-  const hasUnrecoverableCatalogError = hasResourcesError || isCatalogNotReady;
+  const hasRetryableCatalogError = hasResourcesError || isCatalogNotReady;
 
-  const [projectResourcesSetting, setProjectResources] = useProjectSetting(
-    projectId,
-    'platformScripture.referencedProjectsAndResources',
-    EMPTY_RESOURCE_LIST,
-  );
-  const [projectModelTextsSetting, setProjectModelTexts] = useProjectSetting(
-    projectId,
-    'platformScripture.modelTexts',
-    EMPTY_RESOURCE_LIST,
-  );
-  const [projectActiveTabSetting, setProjectActiveTab] = useProjectSetting(
-    projectId,
-    'platformScripture.sharedLayoutDefaultTab',
-    '',
-  );
+  // Latches on the FIRST settle and never re-opens. The gate below exists to stop the content
+  // mounting before there is a catalog to snapshot from; a refetch driven from inside the mounted
+  // dialog is a different thing entirely, and unmounting for it would throw away the tab,
+  // model-text and resource edits the admin has made since.
+  const hasCatalogSettledOnceRef = useRef(false);
+  if (hasResourcesSettled) hasCatalogSettledOnceRef.current = true;
+  const hasCatalogSettledOnce = hasCatalogSettledOnceRef.current;
+
+  const [projectResourcesSetting, setProjectResources, , isProjectResourcesLoading] =
+    useProjectSetting(
+      projectId,
+      'platformScripture.referencedProjectsAndResources',
+      EMPTY_RESOURCE_LIST,
+    );
+  const [projectModelTextsSetting, setProjectModelTexts, , isProjectModelTextsLoading] =
+    useProjectSetting(projectId, 'platformScripture.modelTexts', EMPTY_RESOURCE_LIST);
+  const [projectActiveTabSetting, setProjectActiveTab, , isProjectActiveTabLoading] =
+    useProjectSetting(projectId, 'platformScripture.sharedLayoutDefaultTab', '');
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
@@ -121,14 +114,14 @@ function ShareLayoutDialogWrapper({
     if (!isCanWriteLoading && canWrite === false) cancelDialog();
   }, [isCanWriteLoading, canWrite, cancelDialog]);
 
-  const [personalResources] = usePromise(
+  const [personalResources, isPersonalResourcesLoading] = usePromise(
     useCallback(
       async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
       [textConnectionsProvider],
     ),
     undefined,
   );
-  const [personalModelTexts] = usePromise(
+  const [personalModelTexts, isPersonalModelTextsLoading] = usePromise(
     useCallback(
       async () => textConnectionsProvider?.getUserModelTexts(),
       [textConnectionsProvider],
@@ -153,6 +146,16 @@ function ShareLayoutDialogWrapper({
   const { scriptureResources, commentaryResources, otherResources } = useMemo(
     () => splitResourcesByTab(seededItems, allResources ?? []),
     [seededItems, allResources],
+  );
+
+  // Saved DBL references the dialog cannot show, because without a catalog it cannot tell a Bible
+  // text from a commentary. Confirm round-trips them unchanged, but silently: without this count the
+  // admin reads an empty Bible-texts row under a heading promising a review of what is about to be
+  // shared. Counted only when there is no catalog at all — an id missing from a delivered catalog is
+  // a different story, and not one a retry or a credential would change.
+  const hiddenResourceCount = useMemo(
+    () => (allResources ? 0 : otherResources.filter((item) => item.type === 'dblResource').length),
+    [allResources, otherResources],
   );
 
   const seededModelTextItems = useMemo(
@@ -197,43 +200,14 @@ function ShareLayoutDialogWrapper({
   // Defense-in-depth admin gate: menu items in this codebase have no declarative
   // visibility/condition mechanism, so a non-admin can still trigger the command that opens this
   // dialog. Reject here instead. This check must run after all hooks above (Rules of Hooks
-  // forbids an early return between hook calls), so it sits just before the render branch.
-  // Also gated on the catalog: `ShareLayoutDialogContent` snapshots its initial resource lists in
-  // `useState` at mount, and `splitResourcesByTab` cannot classify a saved dblResource reference
-  // without the catalog — every one of them lands in `otherResources` instead. Mounting before the
-  // catalog settles therefore seeds the content with empty lists while the memo above later
-  // recomputes `otherResources` to empty too, so a Confirm from that mount writes an EMPTY
-  // referenced-resources list and erases the project's shared selection.
-  if (isCanWriteLoading || !hasResourcesSettled) {
+  // forbids an early return between hook calls), so it sits just before the render branch — and
+  // ahead of every other branch, so a user who may not write here is never handed a control that
+  // acts on the project.
+  if (isCanWriteLoading) {
     return (
       <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
         <Spinner />
       </div>
-    );
-  }
-
-  // The failure is reported HERE rather than only inside the embedded pickers. Letting the dialog
-  // body render against an empty catalog would show "nothing is shared" beside a popover saying the
-  // catalog failed — two adjacent surfaces disagreeing — over a Confirm that writes the misleading
-  // state back. A retry that lands after the body mounted cannot fix the snapshot it took, so the
-  // body must not mount until there is a catalog to take it from.
-  if (hasUnrecoverableCatalogError) {
-    return (
-      <Empty className="tw:flex-1" role="alert">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <CloudOff />
-          </EmptyMedia>
-          <EmptyDescription>
-            {localizeString(localizedStrings, '%shareLayoutDialog_loadError%')}
-          </EmptyDescription>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button variant="outline" size="sm" onClick={onRetryResources}>
-            {localizeString(localizedStrings, '%shareLayoutDialog_retry%')}
-          </Button>
-        </EmptyContent>
-      </Empty>
     );
   }
 
@@ -246,6 +220,35 @@ function ShareLayoutDialogWrapper({
     return <></>;
   }
 
+  // `ShareLayoutDialogContent` snapshots every list it edits into `useState` at mount, and Confirm
+  // writes that snapshot back over the project settings. So the body must not mount until each
+  // input to the snapshot has actually been DELIVERED — none of them can be recognised as absent
+  // once it is in hand:
+  //
+  // - the project settings resolve to `EMPTY_RESOURCE_LIST` while loading, byte-identical to a
+  //   genuinely empty shared list, so mounting early seeds `[]` and a Confirm erases the list;
+  // - the personal lists are `undefined` in flight, and `seedResourceList` falls back to them, so
+  //   mounting between the two arriving can share the personal selection to the whole team;
+  // - the catalog is what `splitResourcesByTab` classifies saved dblResource references with.
+  //
+  // The window is the normal case rather than a narrow race: mounting needs only `canWrite` (one
+  // method round-trip), while a project setting needs a second PDP plus a subscribe plus its first
+  // delivery.
+  if (
+    !hasCatalogSettledOnce ||
+    isProjectResourcesLoading ||
+    isProjectModelTextsLoading ||
+    isProjectActiveTabLoading ||
+    isPersonalResourcesLoading ||
+    isPersonalModelTextsLoading
+  ) {
+    return (
+      <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+        <Spinner />
+      </div>
+    );
+  }
+
   return (
     <ShareLayoutDialogContent
       initialModelText={seededModelText}
@@ -253,10 +256,15 @@ function ShareLayoutDialogWrapper({
       initialScriptureResources={scriptureResources}
       initialCommentaryResources={commentaryResources}
       allResources={allResources ?? []}
-      isResourcesLoading={isResourcesLoading}
-      hasResourcesError={hasUnrecoverableCatalogError}
+      // `!hasResourcesSettled` counts as loading, as it does in the other two picker hosts. The
+      // mount gate above consumed only the FIRST settle; a refetch driven from inside the mounted
+      // dialog has not started during the render between the click and `usePromise`'s effect, and
+      // reading `isLoading` alone there paints a settled picker body over a fetch that has not run.
+      isResourcesLoading={isResourcesLoading || !hasResourcesSettled}
+      hasResourcesError={hasRetryableCatalogError}
       onRetryResources={onRetryResources}
       areDownloadsUnavailable={areDownloadsUnavailable}
+      hiddenResourceCount={hiddenResourceCount}
       resourcePickerLocalizedStrings={resourcePickerLocalizedStrings}
       localizedStrings={localizedStrings}
       onConfirm={handleConfirm}

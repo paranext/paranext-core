@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
+import type { DblResourceCatalog } from 'platform-get-resources';
 import {
   resolveDblCatalog,
+  shouldReportCatalogFailure,
   shouldStopBackgroundFetch,
   type DblCatalogSource,
 } from './dbl-catalog.utils';
@@ -93,5 +95,33 @@ describe('shouldStopBackgroundFetch', () => {
 
   it('keeps retrying while the provider has merely not registered yet', () => {
     expect(shouldStopBackgroundFetch({ status: 'unavailable', reason: 'notReady' })).toBe(false);
+  });
+});
+
+describe('shouldReportCatalogFailure', () => {
+  const AVAILABLE: DblResourceCatalog = { status: 'available', resources: [] };
+
+  it('reports a rejected fetch when there is nothing else to show', () => {
+    expect(shouldReportCatalogFailure(undefined, true, false)).toBe(true);
+  });
+
+  it('reports a provider that has not registered yet, because a retry can work', () => {
+    expect(
+      shouldReportCatalogFailure({ status: 'unavailable', reason: 'notReady' }, false, false),
+    ).toBe(true);
+  });
+
+  it('does not report an installation with no DBL credentials as a failure', () => {
+    expect(
+      shouldReportCatalogFailure({ status: 'unavailable', reason: 'notConfigured' }, false, false),
+    ).toBe(false);
+  });
+
+  it('keeps a populated list on screen when a later fetch fails', () => {
+    expect(shouldReportCatalogFailure(AVAILABLE, true, true)).toBe(false);
+  });
+
+  it('reports nothing for a catalog that simply came back empty', () => {
+    expect(shouldReportCatalogFailure(AVAILABLE, false, false)).toBe(false);
   });
 });

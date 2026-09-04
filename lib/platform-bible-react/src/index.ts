@@ -227,6 +227,8 @@ export type {
 export { default as ResultsCard } from './components/basics/results-card.component';
 export { EmptyState } from './components/basics/empty-state.component';
 export type { EmptyStateProps } from './components/basics/empty-state.component';
+export { RetryableErrorView } from './components/basics/retryable-error-view.component';
+export type { RetryableErrorViewProps } from './components/basics/retryable-error-view.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Spinner } from './components/basics/spinner.component';

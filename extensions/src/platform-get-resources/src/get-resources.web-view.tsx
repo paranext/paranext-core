@@ -4,6 +4,7 @@ import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { useRetryablePromise } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { shouldReportCatalogFailure } from './dbl-catalog.utils';
 import {
   GetResources,
   GET_RESOURCES_STRING_KEYS,
@@ -49,12 +50,17 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   );
 
   // The two unavailable reasons need opposite treatments. `notReady` means the provider has not
-  // registered yet — transient, so a retry genuinely can work and it earns the error state.
-  // `notConfigured` means this installation has no DBL credentials, which no retry can change; it
-  // gets its own message rather than an unexplained empty list.
-  const isCatalogNotReady = catalog?.status === 'unavailable' && catalog.reason === 'notReady';
+  // registered yet — transient, so a retry genuinely can work and it earns the error state (see
+  // `shouldReportCatalogFailure`). `notConfigured` means this installation has no DBL credentials,
+  // which no retry can change; it gets its own message rather than an unexplained empty list.
   const areDownloadsUnavailable =
     catalog?.status === 'unavailable' && catalog.reason === 'notConfigured';
+
+  const isResourcesUnavailable = shouldReportCatalogFailure(
+    catalog,
+    isResourcesError,
+    resolvedResources.length > 0,
+  );
 
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
@@ -157,7 +163,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
       resources={resolvedResources}
       isLoadingResources={isLoadingResources}
-      isResourcesError={isResourcesError || isCatalogNotReady}
+      isResourcesError={isResourcesUnavailable}
       onRetryResources={refetchResources}
       areDownloadsUnavailable={areDownloadsUnavailable}
       idsBeingHandled={idsBeingHandled}

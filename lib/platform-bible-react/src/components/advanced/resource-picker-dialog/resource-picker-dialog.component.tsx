@@ -1,12 +1,5 @@
-import { Button } from '@/components/shadcn-ui/button';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-} from '@/components/shadcn-ui/empty';
 import { EmptyState } from '@/components/basics/empty-state.component';
+import { RetryableErrorView } from '@/components/basics/retryable-error-view.component';
 import { DialogHeader, DialogTitle } from '@/components/shadcn-ui/dialog';
 import { Label } from '@/components/shadcn-ui/label';
 import { Table, TableBody, TableCell, TableRow } from '@/components/shadcn-ui/table';
@@ -343,9 +336,23 @@ export default function ResourcePickerDialog({
   );
   const showingCountTemplate = localizeString(localizedStrings, '%resourcePicker_showing_count%');
 
+  // Whether the language selection actually excludes something THIS picker would otherwise show.
+  // Measured against the type-scoped set, because that is the set the predicate is applied to:
+  // counting selections against every language in the whole catalog calls a selection a filter when
+  // it excludes nothing of this resource type (a "showing 4 of 4" count, and an offer to clear a
+  // filter that is not filtering), and calls it no filter when the catalog has changed under a
+  // mounted picker such that a still-selected language is no longer among the options — which is the
+  // worse direction, because it withdraws the "Clear filters" escape from a selection that is hiding
+  // every row.
+  const isLanguageFiltered =
+    selectedLanguages.length > 0 &&
+    typeScopedResources.some((r) => !selectedLanguages.includes(r.bestLanguageName));
+  const isFiltered = searchText.length > 0 || isLanguageFiltered;
+
   const customLanguageSelectText = useMemo(() => {
-    if (selectedLanguages.length === languageOptions.length || selectedLanguages.length === 0)
-      return anyLanguageText;
+    // Reads "Any language" whenever the selection is not narrowing anything, so the trigger and the
+    // "Clear filters" affordance never disagree about whether a filter is in effect.
+    if (!isLanguageFiltered) return anyLanguageText;
     if (selectedLanguages.length === 1) {
       const matchingType = languageOptions.find((type) => type.value === selectedLanguages[0]);
       if (matchingType) return matchingType.label;
@@ -356,14 +363,7 @@ export default function ResourcePickerDialog({
         selectCount: selectedLanguages.length,
       },
     );
-  }, [selectedLanguages, languageOptions, anyLanguageText, localizedStrings]);
-
-  // Selecting every language narrows nothing, which is why the trigger keeps reading "Any language"
-  // in that state. Treating it as filtered anyway would report a "showing 9 of 9" count and offer to
-  // clear a filter that is not excluding anything.
-  const isLanguageFiltered =
-    selectedLanguages.length > 0 && selectedLanguages.length < languageOptions.length;
-  const isFiltered = searchText.length > 0 || isLanguageFiltered;
+  }, [isLanguageFiltered, selectedLanguages, languageOptions, anyLanguageText, localizedStrings]);
 
   // Offering "Clear filters" is only honest when clearing would actually reveal something. With a
   // `resourceType` that matches nothing in the catalog the list is empty no matter what the user
@@ -371,10 +371,12 @@ export default function ResourcePickerDialog({
   // them to the same dead end by a longer path.
   const canClearFiltersHelp = isFiltered && typeScopedResources.length > 0;
 
-  // Filtering a catalog that has not arrived, or one whose fetch failed, cannot change what is on
-  // screen — `GetResources` disables its own filters in the same situation, and leaving these live
-  // invites the user to narrow an empty list and conclude their search was at fault.
-  const areFiltersInert = !!isResourcesLoading || !!hasResourcesError;
+  // Filtering cannot change what is on screen when there is nothing to filter — a catalog that has
+  // not arrived, one whose fetch failed, and an installation that can download none of it all leave
+  // the same empty set. `GetResources` disables its own filters in the same situation, and leaving
+  // these live invites the user to narrow an empty list and conclude their search was at fault.
+  const areFiltersInert =
+    !!isResourcesLoading || !!hasResourcesError || typeScopedResources.length === 0;
 
   const bodyState = getResourcePickerBodyState({
     isResourcesLoading: !!isResourcesLoading,
@@ -408,11 +410,13 @@ export default function ResourcePickerDialog({
           isDisabled={areFiltersInert}
         />
       </div>
-      {/* Suppressed while loading or failed: a count of a catalog that never arrived reads as a
-          confident "0 of 0" directly above the message explaining that nothing could be loaded. The
-          total is the type-scoped set, not the whole catalog — reporting entries this picker filters
-          out anyway implies candidates the user could reach by clearing something. */}
-      {isFiltered && bodyState !== 'loading' && bodyState !== 'error' && (
+      {/* Shown only where a count describes something the user can act on. Every other body state
+          renders its own explanation of why the list is empty, and a count above one of those reads
+          as a confident "0 of 0" contradicting it — the catalog never loaded, or this installation
+          cannot download any of it. The total is the type-scoped set, not the whole catalog:
+          reporting entries this picker filters out anyway implies candidates the user could reach by
+          clearing something. */}
+      {isFiltered && (bodyState === 'list' || bodyState === 'filteredEmpty') && (
         <p className="tw:px-4 tw:pb-1 tw:text-right tw:text-xs tw:text-muted-foreground">
           {formatReplacementString(showingCountTemplate, {
             filtered: filteredResources.length,
@@ -427,46 +431,28 @@ export default function ResourcePickerDialog({
           </p>
         )}
         {bodyState === 'error' && (
-          <Empty role="alert">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <CloudOff />
-              </EmptyMedia>
-              <EmptyDescription>{loadErrorText}</EmptyDescription>
-            </EmptyHeader>
-            {onRetryResources && (
-              <EmptyContent>
-                <Button variant="outline" size="sm" onClick={onRetryResources}>
-                  {retryText}
-                </Button>
-              </EmptyContent>
-            )}
-          </Empty>
+          <RetryableErrorView
+            icon={<CloudOff />}
+            message={loadErrorText}
+            retryLabel={retryText}
+            onRetry={onRetryResources}
+          />
         )}
         {bodyState === 'filteredEmpty' && (
-          <Empty role="status">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <SearchX />
-              </EmptyMedia>
-              <EmptyDescription>{noResultsFilteredText}</EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button variant="outline" size="sm" onClick={clearFilters}>
-                {clearFiltersText}
-              </Button>
-            </EmptyContent>
-          </Empty>
+          <RetryableErrorView
+            role="status"
+            icon={<SearchX />}
+            message={noResultsFilteredText}
+            retryLabel={clearFiltersText}
+            onRetry={clearFilters}
+          />
         )}
         {bodyState === 'downloadsUnavailable' && (
-          <Empty role="status">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <CloudOff />
-              </EmptyMedia>
-              <EmptyDescription>{downloadsUnavailableText}</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+          <RetryableErrorView
+            role="status"
+            icon={<CloudOff />}
+            message={downloadsUnavailableText}
+          />
         )}
         {bodyState === 'empty' && (
           <EmptyState className="tw:py-8 tw:text-center" message={noResultsText} />

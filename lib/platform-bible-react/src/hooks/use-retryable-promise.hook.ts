@@ -54,7 +54,7 @@ export type RetryablePromiseState<T> = {
  *   nothing to run.
  *
  *   WARNING: MUST BE STABLE - const or wrapped in useCallback. A reference that is updated every
- *   render re-runs the fetch every render.
+ *   render re-runs the fetch every render, exactly as it does with `usePromise`.
  * @returns See {@link RetryablePromiseState}.
  */
 export const useRetryablePromise = <T>(
@@ -62,29 +62,27 @@ export const useRetryablePromise = <T>(
 ): RetryablePromiseState<T> => {
   const [hasError, setHasError] = useState(false);
   const [hasSettled, setHasSettled] = useState(false);
+  const [refetchCount, setRefetchCount] = useState(0);
 
-  // Which fetch currently owns the error flag. Bumped SYNCHRONOUSLY at every point a fetch is
-  // superseded — both ways that can happen — so an in-flight invocation can tell whether its result
-  // is still wanted. `usePromise` guards only the state it owns; the flags below are ours.
+  // The wrapped fetch the COMMITTED tree is waiting on. A late result compares itself against this
+  // to decide whether its outcome is still wanted: anything superseded — by a new factory, by a
+  // factory going away, or by a retry — is no longer the value here, so it cannot resurrect an
+  // error the supersession just cleared.
   //
-  // Bumping a ref beats deriving the generation from state: state lands a render later, leaving a
-  // window in which an already-superseded fetch still compares equal and can resurrect the error
-  // `refetch` just cleared.
-  const fetchGenerationRef = useRef(0);
+  // Identity comparison rather than a counter because the identity is established where the fetch
+  // is created and committed where it starts, with no separate bookkeeping to keep in step.
+  const committedFetchRef = useRef<(() => Promise<T | undefined>) | undefined>(undefined);
 
-  // Re-created on every supersession so `usePromise` sees a new identity and re-drives. Capturing
-  // the generation at creation time is what lets a late result recognise that it has been replaced.
-  const [trackedFetch, setTrackedFetch] = useState<(() => Promise<T | undefined>) | undefined>(
-    undefined,
-  );
-
-  const wrapFetch = useCallback((factory: () => Promise<T>) => {
-    fetchGenerationRef.current += 1;
-    const generation = fetchGenerationRef.current;
-    return async () => {
+  // Built during render but deliberately SIDE-EFFECT FREE, so a render React starts and then throws
+  // away (a transition, a Suspense retry, an offscreen prerender) leaves nothing behind. Only the
+  // effect below — which runs on commit, as does `usePromise`'s own fetch — makes one of these the
+  // fetch this hook is waiting on.
+  const trackedFetch = useMemo(() => {
+    if (!promiseFactoryCallback) return undefined;
+    const wrapped = async () => {
       try {
-        const result = await factory();
-        if (generation === fetchGenerationRef.current) {
+        const result = await promiseFactoryCallback();
+        if (committedFetchRef.current === wrapped) {
           setHasError(false);
           setHasSettled(true);
         }
@@ -92,49 +90,38 @@ export const useRetryablePromise = <T>(
       } catch (error) {
         // Record the failure, then rethrow so `usePromise` clears its loading flag and logs the
         // rejection. Swallowing it here would hide it from both.
-        if (generation === fetchGenerationRef.current) {
+        if (committedFetchRef.current === wrapped) {
           setHasError(true);
           setHasSettled(true);
         }
         throw error;
       }
     };
-  }, []);
+    return wrapped;
+    // `refetchCount` is a re-run trigger: its value is unused, but each bump builds a fresh wrapped
+    // fetch, which is what supersedes the in-flight one and re-drives `usePromise`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promiseFactoryCallback, refetchCount]);
 
-  // A changed `promiseFactoryCallback` supersedes any in-flight fetch exactly as `refetch` does, so
-  // it bumps the same generation rather than relying on `usePromise`'s currency flag, which does not
-  // cover the flags owned here.
   useEffect(() => {
+    committedFetchRef.current = trackedFetch;
     setHasError(false);
-    if (!promiseFactoryCallback) {
-      setTrackedFetch(undefined);
-      // Nothing to wait for, so the caller is not mid-fetch. Reporting "not settled" forever would
-      // strand any host that gates its render on this — and `refetch` could not rescue it, because
-      // there is no factory to re-run.
-      setHasSettled(true);
-      return;
-    }
-    setHasSettled(false);
-    // Wrapped before the setter rather than inside it: `wrapFetch` bumps the generation ref, and
-    // React may invoke a state updater more than once.
-    const wrapped = wrapFetch(promiseFactoryCallback);
-    setTrackedFetch(() => wrapped);
-  }, [promiseFactoryCallback, wrapFetch]);
+    // Nothing to wait for means the caller is not mid-fetch. Reporting "not settled" forever would
+    // strand any host that gates its render on this — and `refetch` could not rescue it, because
+    // there is no factory to re-run.
+    setHasSettled(!trackedFetch);
+  }, [trackedFetch]);
 
   const [data, isLoading] = usePromise<T | undefined>(trackedFetch, undefined);
 
-  const promiseFactoryCallbackRef = useRef(promiseFactoryCallback);
-  promiseFactoryCallbackRef.current = promiseFactoryCallback;
-
   const refetch = useCallback(() => {
-    const factory = promiseFactoryCallbackRef.current;
-    if (!factory) return;
+    // Reads the committed fetch, not a render-phase value, so a retry fired from a user event can
+    // never run a factory belonging to a render that was thrown away.
+    if (!committedFetchRef.current) return;
     setHasError(false);
     setHasSettled(false);
-    // See the effect above: wrapped outside the updater because `wrapFetch` mutates the generation.
-    const wrapped = wrapFetch(factory);
-    setTrackedFetch(() => wrapped);
-  }, [wrapFetch]);
+    setRefetchCount((count) => count + 1);
+  }, []);
 
   return useMemo(
     () => ({ data, isLoading, hasError, hasSettled, refetch }),

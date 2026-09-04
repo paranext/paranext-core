@@ -30,6 +30,11 @@ const SHARE_LAYOUT_STRINGS: ShareLayoutDialogLocalizedStrings = {
   '%shareLayoutDialog_closePicker_label%': 'Close',
   '%shareLayoutDialog_cancel_label%': 'Cancel',
   '%shareLayoutDialog_confirm_label%': 'Save',
+  '%shareLayoutDialog_hiddenResources_loadError%':
+    "{count} shared resources can't be shown because the list of available resources couldn't be loaded. They will be kept unchanged when you save.",
+  '%shareLayoutDialog_hiddenResources_unavailable%':
+    "{count} shared resources can't be shown because resource downloads aren't available on this installation. They will be kept unchanged when you save.",
+  '%shareLayoutDialog_retry%': 'Try again',
 };
 
 const RESOURCE_PICKER_STRINGS: ResourcePickerDialogLocalizedStrings = {
@@ -146,6 +151,7 @@ const meta: Meta<typeof ShareLayoutDialogContent> = {
     isResourcesLoading: false,
     hasResourcesError: false,
     areDownloadsUnavailable: false,
+    hiddenResourceCount: 0,
     // Storybook story — console.log is the intended demo handler
     // eslint-disable-next-line no-console
     onRetryResources: () => console.log('Retry requested'),
@@ -170,6 +176,28 @@ export const NoResourcesYet: Story = {
   args: { initialScriptureResources: [], initialCommentaryResources: [] },
 };
 export const ResourcesLoading: Story = { args: { isResourcesLoading: true, allResources: [] } };
+
+/** The catalog fetch failed, so saved DBL references cannot be sorted into their tabs. */
+export const HiddenResourcesAfterCatalogFailure: Story = {
+  args: {
+    allResources: [],
+    initialScriptureResources: [],
+    initialCommentaryResources: [],
+    hasResourcesError: true,
+    hiddenResourceCount: 3,
+  },
+};
+
+/** This installation has no DBL credentials, so there is nothing to retry. */
+export const HiddenResourcesWithoutDownloads: Story = {
+  args: {
+    allResources: [],
+    initialScriptureResources: [],
+    initialCommentaryResources: [],
+    areDownloadsUnavailable: true,
+    hiddenResourceCount: 3,
+  },
+};
 export const ManyResourcesScrolling: Story = {
   args: {
     initialScriptureResources: MANY_SCRIPTURE_REFERENCES,

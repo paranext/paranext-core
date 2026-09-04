@@ -3,6 +3,8 @@ import { formatReplacementString } from 'platform-bible-utils';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
 import {
+  Alert,
+  AlertDescription,
   Button,
   Checkbox,
   Dialog,
@@ -68,7 +70,8 @@ export const SHARE_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_cancel_label%',
   '%shareLayoutDialog_closePicker_label%',
   '%shareLayoutDialog_confirm_label%',
-  '%shareLayoutDialog_loadError%',
+  '%shareLayoutDialog_hiddenResources_loadError%',
+  '%shareLayoutDialog_hiddenResources_unavailable%',
   '%shareLayoutDialog_retry%',
 ] as const);
 
@@ -89,13 +92,19 @@ export type ShareLayoutDialogContentProps = {
   onRetryResources: () => void;
   /** Whether this installation cannot download resources at all; forwarded to every picker. */
   areDownloadsUnavailable: boolean;
+  /**
+   * How many saved resource references this dialog cannot display, because classifying them needs a
+   * DBL catalog it does not have. They are preserved on confirm; the count is what turns an
+   * unexplained short list into a stated one.
+   */
+  hiddenResourceCount: number;
   resourcePickerLocalizedStrings: ResourcePickerDialogLocalizedStrings;
   localizedStrings: ShareLayoutDialogLocalizedStrings;
   onConfirm: (result: ShareLayoutResult) => void;
   onCancel: () => void;
 };
 
-export function localizeString(
+function localizeString(
   strings: ShareLayoutDialogLocalizedStrings,
   key: keyof ShareLayoutDialogLocalizedStrings,
 ) {
@@ -165,6 +174,7 @@ export function ShareLayoutDialogContent({
   hasResourcesError,
   onRetryResources,
   areDownloadsUnavailable,
+  hiddenResourceCount,
   resourcePickerLocalizedStrings,
   localizedStrings: strings,
   onConfirm,
@@ -298,6 +308,32 @@ export function ShareLayoutDialogContent({
       </DialogHeader>
 
       <div className="tw:flex tw:min-h-0 tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4">
+        {/* Named here rather than left to the embedded pickers. A picker explains why ITS list is
+            empty only once the admin opens it; the rows on this screen are what the dialog promises
+            a review of, and a saved resource missing from them is invisible until someone notices it
+            is gone. */}
+        {hiddenResourceCount > 0 && (
+          <Alert className="tw:shrink-0">
+            <AlertDescription className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+              <span>
+                {formatReplacementString(
+                  localizeString(
+                    strings,
+                    areDownloadsUnavailable
+                      ? '%shareLayoutDialog_hiddenResources_unavailable%'
+                      : '%shareLayoutDialog_hiddenResources_loadError%',
+                  ),
+                  { count: hiddenResourceCount },
+                )}
+              </span>
+              {hasResourcesError && (
+                <Button variant="outline" size="sm" onClick={onRetryResources}>
+                  {localizeString(strings, '%shareLayoutDialog_retry%')}
+                </Button>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="tw:shrink-0 tw:divide-y tw:divide-border tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
           <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-4 tw:py-3">
             <span className="tw:font-medium">

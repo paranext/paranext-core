@@ -2867,7 +2867,7 @@ step, no automation. Just a record.
   failure by resolving `undefined`, which `useDblResourceCatalog` read as "not ready yet", so the
   panels spun forever with no message and no retry on a build with no DBL credentials — the most
   common case in the wild. The picker surfaces those panels hand off to were worse still: the
-  `platform.resourcePicker` dialog, the Send Layout dialog's two embedded pickers, and the Get
+  `platform.resourcePicker` dialog, the Share Layout dialog's two embedded pickers, and the Get
   Resources web view all reported a failed catalog as "no results", which reads as a truthful empty
   catalog and leaves the user no control that could change it. Worse, Get Resources is where the
   picker's empty state points, so the two screens agreed on a false answer. The
@@ -2910,3 +2910,57 @@ step, no automation. Just a record.
   legitimate result — the hook stays deliberately generic about that, and the `status` branching
   lives in the hosts.
 - **Source:** PT-4433 (NN5d, Sprint 89 Simple Quality), resource-picker dead-ends.
+
+## adr-share-layout-renders-without-a-catalog: Share Layout always renders, and states what it cannot show
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** `ShareLayoutDialogContent` snapshots the lists it edits into `useState` at mount, and
+  Confirm writes that snapshot back over `platformScripture.referencedProjectsAndResources`. Every
+  input to that snapshot is indistinguishable from a legitimate empty value while it is in flight: a
+  project setting resolves to its `defaultValue` (`createUseDataHook`), the personal lists are
+  `undefined`, and without the DBL catalog `splitResourcesByTab` cannot tell a saved `dblResource`
+  reference's tab, so all of them land in `otherResources`. Mounting early therefore lets Confirm
+  erase a project's shared resource list, or publish the admin's personal list to the team. The
+  first attempt at a fix gated the mount on the catalog alone and, when the catalog was unavailable,
+  replaced the entire dialog with an error card — which put the tab and model-text settings (nothing
+  to do with DBL) out of reach, and on a core build with no DBL credentials the dialog would then
+  never open at all, because `notConfigured` is the normal state there.
+- **Decision:** The dialog blocks on **delivery**, not on success. It renders a spinner until
+  `canWrite`, all three project settings, both personal lists and the catalog have each settled once
+  — and then it always renders, whatever the catalog said. References it cannot classify stay in
+  `otherResources` (round-tripped unchanged by Confirm, as before) and are **counted out loud** in a
+  notice above the tabs, carrying a retry only when the reason is recoverable. The settle gate
+  latches on the FIRST settle, so a retry driven from inside the mounted dialog cannot unmount the
+  body and discard the admin's in-progress edits.
+- **Alternatives:** **Keep blocking on a failed catalog** — rejected: it makes a transient provider
+  registration (~10s of background retries) hide unrelated settings, and a retry landing after the
+  body mounted cannot fix a snapshot anyway, which is what the delivery gate already handles.
+  **Render with no catalog and say nothing** — rejected: that is the dead end this epic exists to
+  remove, under a heading that promises a review of what is about to be shared.
+- **Consequences:** Any new input to the mount-time snapshot must be added to the settle gate, or it
+  reintroduces the erasure. A surface that cannot show part of its own subject should say how much
+  it is hiding rather than rendering a short list silently.
+- **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13).
+
+## adr-retryable-error-view-is-the-shared-failure-zero-state: One icon+message+retry view for every surface
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** `adr-empty-is-zero-state-primitive` says zero states compose the shadcn `Empty`
+  primitive, but composing it is not the same as agreeing on the result. The DBL catalog failure is
+  reported by five surfaces — the resource panels, the resource picker, Get Resources, the Text
+  Collection grid and Share Layout — and each had independently chosen its own `role`, icon and
+  `Button` variant/size, so the same failure offered a visibly different retry control depending on
+  which screen the user reached it from. `RetryableErrorView` already existed with the right shape,
+  but it lived in `platform-scripture-editor`, which `lib/platform-bible-react` cannot import from.
+- **Decision:** `RetryableErrorView` moves to `platform-bible-react` (`components/basics/`, stable
+  export) with `onRetry`/`retryLabel` optional — omitting them renders the message alone rather than
+  an inert button, which is what a permanent condition such as "this installation cannot download
+  resources" needs. `panel-state-views.component.tsx` keeps a thin `PanelRetryableErrorView` wrapper
+  that adds only the full-panel height the panels want.
+- **Alternatives:** **Leave the copies and align them by review** — rejected: they had already
+  drifted once with no reviewer catching it, and each new surface is another chance.
+- **Consequences:** Restyling this failure state is now one edit. A surface that wants a different
+  look should pass `className`/`icon` rather than re-composing `Empty`.
+- **Source:** PT-4433 review round 2 (finding 15).

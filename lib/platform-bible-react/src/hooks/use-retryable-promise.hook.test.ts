@@ -199,4 +199,87 @@ describe('useRetryablePromise', () => {
     expect(result.current.hasSettled).toBe(true);
     expect(result.current.data).toBeUndefined();
   });
+
+  // The third way a fetch is superseded, alongside a changed factory and a retry: the factory goes
+  // away. A caller passing `useCallback(condition ? fn : undefined, [condition])` supersedes an
+  // in-flight fetch by flipping the condition, and an error raised by that abandoned fetch would
+  // be permanent — `refetch` returns early with no factory to run, so the retry button a host
+  // renders for `hasError` could provably do nothing.
+  it('ignores a rejection from a fetch abandoned by the factory going away', async () => {
+    let rejectFetch: (error: Error) => void = () => {};
+    const factory = vi.fn(
+      async () =>
+        new Promise<string>((_resolve, reject) => {
+          rejectFetch = reject;
+        }),
+    );
+
+    const initialProps: { currentFactory: (() => Promise<string>) | undefined } = {
+      currentFactory: factory,
+    };
+    const { result, rerender } = renderHook(
+      ({ currentFactory }: { currentFactory: (() => Promise<string>) | undefined }) =>
+        useRetryablePromise(currentFactory),
+      { initialProps },
+    );
+
+    await waitFor(() => expect(factory).toHaveBeenCalledTimes(1));
+
+    rerender({ currentFactory: undefined });
+    expect(result.current.hasSettled).toBe(true);
+
+    await act(async () => {
+      rejectFetch(new Error('the abandoned fetch blew up'));
+      await Promise.resolve();
+    });
+
+    expect(result.current.hasError).toBe(false);
+  });
+
+  // Equally, a value from an abandoned fetch must not present itself as a fresh success.
+  it('ignores a resolution from a fetch abandoned by the factory going away', async () => {
+    let resolveFetch: (value: string) => void = () => {};
+    const factory = vi.fn(
+      async () =>
+        new Promise<string>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    const initialProps: { currentFactory: (() => Promise<string>) | undefined } = {
+      currentFactory: factory,
+    };
+    const { result, rerender } = renderHook(
+      ({ currentFactory }: { currentFactory: (() => Promise<string>) | undefined }) =>
+        useRetryablePromise(currentFactory),
+      { initialProps },
+    );
+
+    await waitFor(() => expect(factory).toHaveBeenCalledTimes(1));
+
+    rerender({ currentFactory: undefined });
+
+    await act(async () => {
+      resolveFetch('a catalog nobody is waiting for');
+      await Promise.resolve();
+    });
+
+    expect(result.current.data).toBeUndefined();
+  });
+
+  // An unstable factory is documented misuse and re-fetches on every render, exactly as it does
+  // with `usePromise`. What it must NOT do is drive renders on its own: storing a fresh wrapper in
+  // state on every effect run gives React nothing to bail out on, so the tree dies with "Maximum
+  // update depth exceeded" before any promise settles. This hook sits on the stable export surface,
+  // where a caller who missed the TSDoc warning gets no deprecation cycle to learn from.
+  it('does not drive renders of its own when handed a new factory identity every render', () => {
+    const neverSettles = () => new Promise<string>(() => {});
+
+    // Nothing here can produce a second render except the hook itself: the promise never settles.
+    const { result } = renderHook(() => useRetryablePromise(neverSettles));
+
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.hasSettled).toBe(false);
+    expect(result.current.hasError).toBe(false);
+  });
 });

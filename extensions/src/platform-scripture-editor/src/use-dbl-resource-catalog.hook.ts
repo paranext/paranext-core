@@ -18,8 +18,11 @@ export type DblResourceCatalogState = {
    */
   isCatalogReady: boolean;
   /**
-   * Whether the last fetch failed. Recoverable — call
-   * {@link DblResourceCatalogState.refetchCatalog}.
+   * Whether the catalog is not coming from the last fetch — it rejected, or the provider had not
+   * registered yet. Recoverable either way — call {@link DblResourceCatalogState.refetchCatalog}.
+   *
+   * Distinct from a delivered empty catalog, which is what an installation with no DBL credentials
+   * has: that one is an answer, and no retry can improve on it.
    */
   hasCatalogError: boolean;
   /** Re-runs the fetch, clearing any previous error. */
@@ -36,12 +39,14 @@ export type DblResourceCatalogState = {
  * A rejected fetch is caught deliberately. `usePromise` has no rejection path — an uncaught
  * rejection never reaches its `setIsLoading(false)`, so the panel would spin forever with no
  * message and no way out. Resolving to an empty catalog and reporting `hasCatalogError` lets the
- * panel say what happened and offer a retry that can actually re-drive the fetch.
+ * panel say what happened and offer a retry that can actually re-drive the fetch. A `notReady`
+ * catalog takes the same path for the same reason: it is a catalog still on its way, not an empty
+ * one.
  *
  * TODO: Migrate onto `useRetryablePromise` from `platform-bible-react`, which now provides this
  * hook's whole mechanism generically — the supersession guard, the error flag cleared on refetch,
  * and the settled-vs-loading distinction this hook spells `isCatalogReady`. Only the PAPI call and
- * the `unavailable`-to-empty mapping below would remain here. Deliberately deferred rather than
+ * the `unavailable`-reason mapping below would remain here. Deliberately deferred rather than
  * missed; see `adr-picker-recovery-injected-fetch-hook` in
  * `.context/standards/Architecture-Decisions.md` for why, and note that migrating means keeping
  * this hook's own tests green.
@@ -69,13 +74,27 @@ export function useDblResourceCatalog(): DblResourceCatalogState {
 
       try {
         const catalog = await papi.commands.sendCommand('platformGetResources.getCachedResources');
-        if (generation === fetchGenerationRef.current) setHasCatalogError(false);
+        const isCurrent = generation === fetchGenerationRef.current;
 
-        // A build that cannot download DBL resources has ARRIVED at its answer — there is no
-        // catalog and there never will be. Returning `undefined` here would leave `isCatalogReady`
-        // false forever, and the panels read that as "still loading": a spinner with no message and
-        // no retry, in exactly the offline/no-credentials case this hook exists to explain.
-        return catalog.status === 'available' ? catalog.resources : [];
+        // The two `unavailable` reasons are opposite answers and must not collapse into one empty
+        // catalog. `notConfigured` — a build that cannot download DBL resources — has ARRIVED at its
+        // answer: there is no catalog and there never will be, so it reports a delivered empty one.
+        // (Returning `undefined` instead would leave `isCatalogReady` false forever, which the panels
+        // read as "still loading": a spinner with no message and no retry, in exactly the
+        // no-credentials case this hook exists to explain.)
+        //
+        // `notReady` is the opposite: the provider registers in the background, so the catalog is
+        // still coming and a retry genuinely works. Reporting it as a delivered empty catalog would
+        // tell a panel that a project's configured resources are gone — and would let
+        // `canPublishResourcePanelProjectIds` publish an empty navigable-project-id list over a
+        // correct persisted one.
+        if (catalog.status !== 'available') {
+          if (isCurrent) setHasCatalogError(catalog.reason === 'notReady');
+          return [];
+        }
+
+        if (isCurrent) setHasCatalogError(false);
+        return catalog.resources;
       } catch (error) {
         logger.warn(`Failed to load the DBL resource catalog: ${getErrorMessage(error)}`);
         if (generation === fetchGenerationRef.current) setHasCatalogError(true);

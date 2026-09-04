@@ -39,12 +39,21 @@ async function fetchAndCacheResources(): Promise<DblResourceCatalog> {
   if (catalog.status !== 'available') return catalog;
 
   cachedResources = catalog.resources;
+  // The catalog is already in hand, so a failed persistence write must not be reported as a failed
+  // fetch. `getCachedResources` rejects on failure and every host paints "couldn't load the list of
+  // available resources" with a retry — over a complete catalog, and a retry that appears to fix it
+  // only because it takes the cache fast path. Losing the cache costs a refetch next launch; losing
+  // the catalog costs the user the feature.
   if (executionToken)
-    await papi.storage.writeUserData(
-      executionToken,
-      RESOURCES_CACHE_KEY,
-      JSON.stringify(cachedResources),
-    );
+    try {
+      await papi.storage.writeUserData(
+        executionToken,
+        RESOURCES_CACHE_KEY,
+        JSON.stringify(cachedResources),
+      );
+    } catch (e) {
+      logger.warn(`Failed to cache the DBL resource catalog: ${getErrorMessage(e)}`);
+    }
   return catalog;
 }
 

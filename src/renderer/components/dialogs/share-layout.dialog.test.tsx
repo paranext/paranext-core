@@ -44,6 +44,13 @@ type MockState = {
    * admin-gate's loading -> resolved transition explicitly.
    */
   canWritePromise: Promise<boolean> | undefined;
+  /**
+   * `useProjectSetting`'s 4th element, per setting key. Hard-coding it to `false` would make every
+   * test render against settings that have already been delivered — the one state in which the
+   * mount gate cannot be wrong — and sharing one flag across all three keys would let a gate that
+   * checks only one of them still look correct.
+   */
+  loadingProjectSettingKeys: Set<string>;
 };
 
 const mockState: MockState = {
@@ -54,6 +61,7 @@ const mockState: MockState = {
   sharedLayoutDefaultTab: '',
   setSharedLayoutDefaultTab: vi.fn(),
   canWritePromise: undefined,
+  loadingProjectSettingKeys: new Set<string>(),
 };
 
 const mockTextConnectionsProvider = {
@@ -71,23 +79,24 @@ const mockTextConnectionsProvider = {
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [{}, false]),
   useProjectSetting: vi.fn((_projectDataProviderSource: unknown, key: string) => {
+    const isProjectSettingLoading = mockState.loadingProjectSettingKeys.has(key);
     if (key === 'platformScripture.referencedProjectsAndResources')
       return [
         mockState.referencedProjectsAndResources,
         mockState.setReferencedProjectsAndResources,
         vi.fn(),
-        false,
+        isProjectSettingLoading,
       ];
     if (key === 'platformScripture.modelTexts')
-      return [mockState.modelTexts, mockState.setModelTexts, vi.fn(), false];
+      return [mockState.modelTexts, mockState.setModelTexts, vi.fn(), isProjectSettingLoading];
     if (key === 'platformScripture.sharedLayoutDefaultTab')
       return [
         mockState.sharedLayoutDefaultTab,
         mockState.setSharedLayoutDefaultTab,
         vi.fn(),
-        false,
+        isProjectSettingLoading,
       ];
-    return [undefined, vi.fn(), vi.fn(), false];
+    return [undefined, vi.fn(), vi.fn(), isProjectSettingLoading];
   }),
   useProjectDataProvider: vi.fn(() => mockTextConnectionsProvider),
 }));
@@ -123,7 +132,9 @@ function renderWrapper(
   // Mirror the real `DIALOG_BASE.loadDialog` (`dialog-base.data.ts`), which always wraps a
   // dialog's `Component` output in a non-modal `Dialog` root so Radix primitives like
   // `DialogTitle`/`DialogDescription` used inside the dialog content have the required context.
-  render(
+  // Built fresh on each call: React bails out of reconciliation when handed the very same element
+  // reference, so a re-render would not re-read the mocked hook state a test just changed.
+  const buildElement = () => (
     <Dialog open modal={false}>
       <SHARE_LAYOUT_DIALOG.Component
         isDialog
@@ -132,9 +143,12 @@ function renderWrapper(
         cancelDialog={cancelDialog}
         rejectDialog={rejectDialog}
       />
-    </Dialog>,
+    </Dialog>
   );
-  return { submitDialog, cancelDialog, rejectDialog };
+  const { rerender } = render(buildElement());
+  // Re-renders the SAME component instance so a test can flip the mocked hook state a real
+  // delivery would flip, without mounting a second copy of the dialog beside the first.
+  return { submitDialog, cancelDialog, rejectDialog, rerender: () => rerender(buildElement()) };
 }
 
 beforeEach(() => {
@@ -145,6 +159,7 @@ beforeEach(() => {
   mockState.sharedLayoutDefaultTab = '';
   mockState.setSharedLayoutDefaultTab = vi.fn();
   mockState.canWritePromise = undefined;
+  mockState.loadingProjectSettingKeys = new Set<string>();
   mockTextConnectionsProvider.canUserWriteProjectTextConnectionSettings.mockClear();
   mockTextConnectionsProvider.getUserReferencedProjectsAndResources.mockClear();
   mockTextConnectionsProvider.getUserModelTexts.mockClear();
@@ -199,7 +214,73 @@ describe('ShareLayoutDialogWrapper catalog gate', () => {
     });
   });
 
-  it('reports a failed catalog with a retry rather than rendering a body it cannot trust', async () => {
+  it('waits for the project setting to be delivered, so Confirm cannot erase the saved resource list', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    // What `createUseDataHook` returns while a project setting is in flight: the default value,
+    // byte-identical to a genuinely empty shared list. Only the loading flag tells them apart.
+    mockState.referencedProjectsAndResources = EMPTY_RESOURCE_LIST;
+    // Only this one setting is in flight: a gate that waits on a different setting instead would
+    // still look correct if they all reported loading together.
+    mockState.loadingProjectSettingKeys = new Set([
+      'platformScripture.referencedProjectsAndResources',
+    ]);
+
+    const { rerender } = renderWrapper();
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('%shareLayoutDialog_confirm_label%')).not.toBeInTheDocument();
+
+    const savedResource: ResourceReference = { type: 'dblResource', name: 'ESV', id: 'esv-uid' };
+    mockState.referencedProjectsAndResources = { dataVersion: '2.0.0', items: [savedResource] };
+    mockState.loadingProjectSettingKeys = new Set<string>();
+    // The delivery a real subscription would make; the body mounts and snapshots the real list.
+    await act(async () => {
+      rerender();
+      await Promise.resolve();
+    });
+
+    const confirmButton = await screen.findByText('%shareLayoutDialog_confirm_label%');
+    act(() => {
+      confirmButton.click();
+    });
+
+    expect(mockState.setReferencedProjectsAndResources).toHaveBeenCalledWith({
+      dataVersion: '2.0.0',
+      items: [savedResource],
+    });
+  });
+
+  it('waits for the personal resource list too, so Save cannot share it before the project list arrives', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    let resolvePersonal: (value: ResourceReferenceList) => void = () => {};
+    mockTextConnectionsProvider.getUserReferencedProjectsAndResources.mockImplementation(
+      async () =>
+        new Promise<ResourceReferenceList>((resolve) => {
+          resolvePersonal = resolve;
+        }),
+    );
+
+    renderWrapper();
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('%shareLayoutDialog_confirm_label%')).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolvePersonal(EMPTY_RESOURCE_LIST);
+      await Promise.resolve();
+    });
+
+    await screen.findByText('%shareLayoutDialog_confirm_label%');
+    mockTextConnectionsProvider.getUserReferencedProjectsAndResources.mockImplementation(
+      async () => EMPTY_RESOURCE_LIST,
+    );
+  });
+
+  it('renders the dialog with a stated count and a retry when the catalog fetch failed', async () => {
     // `usePromise` logs every rejection it sees; this one rejects on purpose.
     vi.spyOn(console, 'error').mockImplementation(() => {});
     mockState.canWritePromise = Promise.resolve(true);
@@ -216,15 +297,77 @@ describe('ShareLayoutDialogWrapper catalog gate', () => {
 
     renderWrapper();
 
-    // The dialog owns its own copy of this message rather than borrowing the picker's key: this is
-    // the Share Layout body, not a resource picker.
-    await waitFor(() =>
-      expect(screen.getByText('%shareLayoutDialog_loadError%')).toBeInTheDocument(),
-    );
-    expect(screen.queryByText('%shareLayoutDialog_confirm_label%')).not.toBeInTheDocument();
-    expect(mockState.setReferencedProjectsAndResources).not.toHaveBeenCalled();
+    // The dialog still opens: the tab and model-text settings have nothing to do with DBL, and
+    // replacing the whole dialog would put them out of reach over a transient fetch.
+    await screen.findByText('%shareLayoutDialog_confirm_label%');
+    // The saved DBL reference cannot be classified without a catalog, so it is absent from the
+    // rows — said out loud rather than left for the admin to notice.
+    expect(screen.getByText('%shareLayoutDialog_hiddenResources_loadError%')).toBeInTheDocument();
+    expect(screen.getByText('%shareLayoutDialog_retry%')).toBeInTheDocument();
 
     vi.restoreAllMocks();
+  });
+
+  it('states the hidden count without a retry when this installation has no DBL credentials', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.referencedProjectsAndResources = {
+      dataVersion: '2.0.0',
+      items: [{ type: 'dblResource', name: 'ESV', id: 'esv-uid' }],
+    };
+    vi.mocked(sendCommand).mockResolvedValue({ status: 'unavailable', reason: 'notConfigured' });
+
+    renderWrapper();
+
+    await screen.findByText('%shareLayoutDialog_confirm_label%');
+    expect(screen.getByText('%shareLayoutDialog_hiddenResources_unavailable%')).toBeInTheDocument();
+    // Nothing to retry — the credentials are not coming.
+    expect(screen.queryByText('%shareLayoutDialog_retry%')).not.toBeInTheDocument();
+  });
+
+  it('preserves references it could not classify when the catalog never arrives', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    const savedResource: ResourceReference = { type: 'dblResource', name: 'ESV', id: 'esv-uid' };
+    mockState.referencedProjectsAndResources = { dataVersion: '2.0.0', items: [savedResource] };
+    vi.mocked(sendCommand).mockResolvedValue({ status: 'unavailable', reason: 'notConfigured' });
+
+    renderWrapper();
+
+    const confirmButton = await screen.findByText('%shareLayoutDialog_confirm_label%');
+    act(() => {
+      confirmButton.click();
+    });
+
+    expect(mockState.setReferencedProjectsAndResources).toHaveBeenCalledWith({
+      dataVersion: '2.0.0',
+      items: [savedResource],
+    });
+  });
+
+  it('keeps the mounted body through a retry, so edits made in the dialog survive it', async () => {
+    mockState.canWritePromise = Promise.resolve(true);
+    mockState.referencedProjectsAndResources = {
+      dataVersion: '2.0.0',
+      items: [{ type: 'dblResource', name: 'ESV', id: 'esv-uid' }],
+    };
+    // The retry's fetch stays IN FLIGHT, which is the state the gate would react to: a retry that
+    // resolves before the assertion would let a gate reading the live settled flag look correct.
+    vi.mocked(sendCommand)
+      .mockResolvedValueOnce({ status: 'unavailable', reason: 'notReady' })
+      .mockImplementation(async () => new Promise(() => {}));
+
+    renderWrapper();
+
+    const retry = await screen.findByText('%shareLayoutDialog_retry%');
+    await screen.findByText('%shareLayoutDialog_confirm_label%');
+
+    await act(async () => {
+      retry.click();
+      await Promise.resolve();
+    });
+
+    // The mount gate consumed the FIRST settle only. Unmounting here would discard the tab,
+    // model-text and resource edits the admin has made since the dialog opened.
+    expect(screen.getByText('%shareLayoutDialog_confirm_label%')).toBeInTheDocument();
   });
 });
 

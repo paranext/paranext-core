@@ -52,6 +52,35 @@ describe('useDblResourceCatalog', () => {
     expect(result.current.isLoadingResources).toBe(false);
   });
 
+  // The opposite of `notConfigured`: the DBL provider registers in the BACKGROUND, so this answer
+  // means the catalog is still coming and a retry genuinely works. Delivering it as an empty
+  // catalog would tell a panel that a project's configured resources are gone — and would let
+  // `canPublishResourcePanelProjectIds` publish an empty navigable-project-id list over a correct
+  // persisted one.
+  it('reports an error, not a delivered empty catalog, when the provider is not registered yet', async () => {
+    mockSendCommand.mockResolvedValue({ status: 'unavailable', reason: 'notReady' });
+
+    const { result } = renderHook(() => useDblResourceCatalog());
+
+    await waitFor(() => expect(result.current.hasCatalogError).toBe(true));
+    expect(result.current.isCatalogReady).toBe(false);
+    expect(result.current.isLoadingResources).toBe(false);
+  });
+
+  it('recovers from a not-registered-yet catalog when the retry finds the provider', async () => {
+    mockSendCommand.mockResolvedValueOnce({ status: 'unavailable', reason: 'notReady' });
+
+    const { result } = renderHook(() => useDblResourceCatalog());
+    await waitFor(() => expect(result.current.hasCatalogError).toBe(true));
+
+    mockSendCommand.mockResolvedValue({ status: 'available', resources: [RESOURCE] });
+    act(() => result.current.refetchCatalog());
+
+    await waitFor(() => expect(result.current.isCatalogReady).toBe(true));
+    expect(result.current.dblResources).toEqual([RESOURCE]);
+    expect(result.current.hasCatalogError).toBe(false);
+  });
+
   it('reports an error instead of loading forever when the fetch rejects', async () => {
     // `usePromise` has no rejection path, so an uncaught rejection leaves `isLoading` true forever
     // and strands the panel on a spinner it can never leave.

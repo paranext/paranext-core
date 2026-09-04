@@ -70,7 +70,7 @@ import {
   RESOURCE_PANEL_TYPED_STRING_KEYS,
   resolveResourcePanelStringKeys,
 } from './resource-panel-strings.utils';
-import { RetryableErrorView, LoadingView } from './panel-state-views.component';
+import { PanelRetryableErrorView, LoadingView } from './panel-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
@@ -645,7 +645,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // (the usual first-run cause), hint at the connection.
   if (installFailed) {
     return (
-      <RetryableErrorView
+      <PanelRetryableErrorView
         message={
           localizedStrings[
             isOnline

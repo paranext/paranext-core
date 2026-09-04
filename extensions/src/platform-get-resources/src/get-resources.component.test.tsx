@@ -138,4 +138,42 @@ describe('GetResources', () => {
     expect(screen.getByText('No resources found')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
+
+  // PAPI rewrites a rejection that crosses a process boundary as
+  // `JSON-RPC Request error (-32000): <original>`. The sentinel is a public export, so the next
+  // caller may well raise it from the extension host rather than from inside the web view's own
+  // React tree — an equality check would fall through and put the raw machine token, JSON-RPC
+  // prefix and all, in front of the user.
+  it('recognises the provider-not-ready sentinel through a cross-process rejection prefix', async () => {
+    const resource = {
+      dblEntryUid: 'uid-1',
+      displayName: 'NIV',
+      fullName: 'New International Version',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1000,
+      installed: false,
+      updateAvailable: false,
+      projectId: 'proj-1',
+    };
+
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[STRINGS, false]}
+        resources={[resource]}
+        selectedTypes={['ScriptureResource']}
+        selectedLanguages={['English']}
+        onInstallOrRemoveResource={() =>
+          Promise.reject(
+            new Error(`JSON-RPC Request error (-32000): ${RESOURCE_ACTION_PROVIDER_NOT_READY}`),
+          )
+        }
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get' }));
+
+    expect(await screen.findByText('Resources are not ready yet, translated')).toBeInTheDocument();
+    expect(screen.queryByText(/JSON-RPC/)).not.toBeInTheDocument();
+  });
 });

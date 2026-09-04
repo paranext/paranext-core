@@ -321,6 +321,36 @@ export interface ResourcePickerDialogProps {
 	onSelect: (resource: DblResourceData) => void;
 }
 /**
+ * Which of the picker body's mutually exclusive states to render.
+ *
+ * - `loading` — the catalog has not settled; show a spinner.
+ * - `error` — the fetch failed; say so and offer a retry, which can genuinely re-drive it.
+ * - `filteredEmpty` — the user's own filters excluded everything; offer to clear them.
+ * - `downloadsUnavailable` — this installation cannot download resources; say so, offer nothing,
+ *   because nothing the user does here can change it.
+ * - `empty` — the catalog genuinely holds nothing for this picker.
+ * - `list` — there is something to show.
+ */
+export type ResourcePickerBodyState = "loading" | "error" | "filteredEmpty" | "downloadsUnavailable" | "empty" | "list";
+/**
+ * Decides which body state the picker is in.
+ *
+ * Derived once rather than re-spelled as a guard on each branch: the states are mutually exclusive
+ * by construction here, where five overlapping boolean expressions leave that exclusivity to be
+ * verified by eye — and a sixth state added later has to be threaded correctly through all of them.
+ * Mirrors `getResourcePanelReadiness` on the panels' side of this same handoff.
+ *
+ * @param input The independent signals the state is derived from.
+ * @returns The single state to render.
+ */
+export declare function getResourcePickerBodyState(input: {
+	isResourcesLoading: boolean;
+	hasResourcesError: boolean;
+	hasNoResults: boolean;
+	canClearFiltersHelp: boolean;
+	areDownloadsUnavailable: boolean;
+}): ResourcePickerBodyState;
+/**
  * Presentational dialog content for picking a DBL resource. Renders three sections — Already
  * Selected, Installed, and Available to Download — derived from `allResources` and
  * `selectedResourceIds`. Supports text search and language filtering.

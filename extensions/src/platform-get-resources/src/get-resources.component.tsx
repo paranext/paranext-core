@@ -14,11 +14,6 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
   Card,
   CardContent,
   CardDescription,
@@ -33,6 +28,7 @@ import {
   Filter,
   Label,
   MultiSelectComboBoxEntry,
+  RetryableErrorView,
   SearchBar,
   Spinner,
   Table,
@@ -42,6 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
+import { getResourcePickerBodyState } from 'platform-bible-react/experimental';
 import type { DblResourceData, LocalizedStringValue } from 'platform-bible-utils';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
@@ -186,6 +183,12 @@ const getActionContent = (
  *
  * A sentinel rather than a message: this component owns the localized strings, so a caller that
  * supplied its own text would put untranslated English in front of the user.
+ *
+ * Recognised as a SUBSTRING of the rejection message, not by equality — PAPI rewrites a rejection
+ * that crosses a process boundary as `JSON-RPC Request error (-32000): <original>`, so a caller
+ * raising this from the extension host or a data provider rather than from inside the web view's
+ * own React tree would otherwise fall through to the raw message and show the user a machine
+ * token.
  */
 export const RESOURCE_ACTION_PROVIDER_NOT_READY = 'platformGetResources.providerNotReady';
 
@@ -309,10 +312,9 @@ export function GetResources({
       // Callers signal "the backing provider has not resolved yet" with a sentinel rather than a
       // message, because the text the user reads has to be localized and this component is the half
       // that holds the localized strings. Any other rejection carries a message worth showing.
+      const message = getErrorMessage(e);
       setActionError(
-        getErrorMessage(e) === RESOURCE_ACTION_PROVIDER_NOT_READY
-          ? providerNotReadyText
-          : getErrorMessage(e),
+        message.includes(RESOURCE_ACTION_PROVIDER_NOT_READY) ? providerNotReadyText : message,
       );
     }
   };
@@ -411,6 +413,18 @@ export function GetResources({
     });
   }, [sortConfig.direction, sortConfig.key, textAndTypeAndLanguageFilteredResources]);
 
+  // The same discriminant the resource picker derives its body from, so the two surfaces showing the
+  // very same catalog cannot answer "why is this list empty?" differently. This list has no "Clear
+  // filters" affordance of its own — its filters sit in the header and are always reachable — so it
+  // never asks for that state.
+  const bodyState = getResourcePickerBodyState({
+    isResourcesLoading: isLoadingResources,
+    hasResourcesError: isResourcesError,
+    hasNoResults: sortedResources.length === 0,
+    canClearFiltersHelp: false,
+    areDownloadsUnavailable,
+  });
+
   const handleSort = (key: SortConfig['key']) => {
     const newSortConfig: SortConfig = { key, direction: 'ascending' };
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -487,120 +501,104 @@ export function GetResources({
           </div>
         )}
         <CardContent className="tw:grow tw:overflow-auto">
-          {isLoadingResources ? (
+          {bodyState === 'loading' && (
             <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
               <Spinner />
             </div>
-          ) : (
-            // Can't use if-else here because of how the return statement is structured
-            /* eslint-disable no-nested-ternary */
-            <div>
-              {isResourcesError ? (
-                <Empty role="alert">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <CloudOff />
-                    </EmptyMedia>
-                    <EmptyDescription>{noResultsErrorText}</EmptyDescription>
-                  </EmptyHeader>
-                  {onRetryResources && (
-                    <EmptyContent>
-                      <Button variant="outline" size="sm" onClick={handleRetryResources}>
-                        {retryText}
-                      </Button>
-                    </EmptyContent>
-                  )}
-                </Empty>
-              ) : sortedResources.length === 0 && areDownloadsUnavailable ? (
-                <Empty role="status">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <CloudOff />
-                    </EmptyMedia>
-                    <EmptyDescription>{downloadsUnavailableText}</EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              ) : sortedResources.length === 0 ? (
-                <div className="tw:m-4 tw:flex tw:justify-center">
-                  <Label>{noResultsText}</Label>
-                </div>
-              ) : (
-                <Table stickyHeader>
-                  <TableHeader className="tw:bg-none" stickyHeader>
-                    <TableRow>
-                      <TableHead />
-                      <TableHead />
-                      {buildTableHead('fullName', fullNameText)}
-                      {buildTableHead('bestLanguageName', languageText)}
-                      {buildTableHead('type', typeText)}
-                      {buildTableHead('size', sizeText)}
-                      {buildTableHead('action', actionText)}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedResources.map((resource) => (
-                      <TableRow
-                        onDoubleClick={() => {
-                          if (resource.installed) onOpenResource(resource.projectId);
-                        }}
-                        key={resource.displayName + resource.fullName}
-                      >
-                        <TableCell>
-                          <BookOpen className="tw:pr-0" size={18} />
-                        </TableCell>
-                        <TableCell>{resource.displayName}</TableCell>
-                        <TableCell className="tw:font-medium tw:whitespace-normal tw:wrap-anywhere">
-                          {resource.fullName}
-                        </TableCell>
-                        <TableCell>{resource.bestLanguageName}</TableCell>
-                        <TableCell>
-                          {typeOptions.find((type) => type.value === resource.type)?.label ??
-                            typeUnknownText}
-                        </TableCell>
-                        <TableCell>{resource.size}</TableCell>
-                        <TableCell>
-                          <div className="tw:flex tw:justify-between">
-                            {getActionContent(
-                              resource,
-                              idsBeingHandled,
-                              getText,
-                              updateText,
-                              installedText,
-                              handleInstallOrRemoveResource,
-                            )}
-                            {resource.installed && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost">
-                                    <Ellipsis className="tw:w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start">
-                                  <DropdownMenuItem
-                                    onClick={() => onOpenResource(resource.projectId)}
-                                  >
-                                    <span>{openText}</span>
-                                  </DropdownMenuItem>
-
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      handleInstallOrRemoveResource(resource.dblEntryUid, 'remove')
-                                    }
-                                  >
-                                    <span>{removeText}</span>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+          )}
+          {bodyState === 'error' && (
+            <RetryableErrorView
+              icon={<CloudOff />}
+              message={noResultsErrorText}
+              retryLabel={retryText}
+              onRetry={onRetryResources ? handleRetryResources : undefined}
+            />
+          )}
+          {bodyState === 'downloadsUnavailable' && (
+            <RetryableErrorView
+              role="status"
+              icon={<CloudOff />}
+              message={downloadsUnavailableText}
+            />
+          )}
+          {bodyState === 'empty' && (
+            <div className="tw:m-4 tw:flex tw:justify-center">
+              <Label>{noResultsText}</Label>
             </div>
+          )}
+          {bodyState === 'list' && (
+            <Table stickyHeader>
+              <TableHeader className="tw:bg-none" stickyHeader>
+                <TableRow>
+                  <TableHead />
+                  <TableHead />
+                  {buildTableHead('fullName', fullNameText)}
+                  {buildTableHead('bestLanguageName', languageText)}
+                  {buildTableHead('type', typeText)}
+                  {buildTableHead('size', sizeText)}
+                  {buildTableHead('action', actionText)}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedResources.map((resource) => (
+                  <TableRow
+                    onDoubleClick={() => {
+                      if (resource.installed) onOpenResource(resource.projectId);
+                    }}
+                    key={resource.displayName + resource.fullName}
+                  >
+                    <TableCell>
+                      <BookOpen className="tw:pr-0" size={18} />
+                    </TableCell>
+                    <TableCell>{resource.displayName}</TableCell>
+                    <TableCell className="tw:font-medium tw:whitespace-normal tw:wrap-anywhere">
+                      {resource.fullName}
+                    </TableCell>
+                    <TableCell>{resource.bestLanguageName}</TableCell>
+                    <TableCell>
+                      {typeOptions.find((type) => type.value === resource.type)?.label ??
+                        typeUnknownText}
+                    </TableCell>
+                    <TableCell>{resource.size}</TableCell>
+                    <TableCell>
+                      <div className="tw:flex tw:justify-between">
+                        {getActionContent(
+                          resource,
+                          idsBeingHandled,
+                          getText,
+                          updateText,
+                          installedText,
+                          handleInstallOrRemoveResource,
+                        )}
+                        {resource.installed && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost">
+                                <Ellipsis className="tw:w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem onClick={() => onOpenResource(resource.projectId)}>
+                                <span>{openText}</span>
+                              </DropdownMenuItem>
+
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleInstallOrRemoveResource(resource.dblEntryUid, 'remove')
+                                }
+                              >
+                                <span>{removeText}</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
         <CardFooter className="tw:shrink-0 tw:justify-center tw:border-t tw:p-4">

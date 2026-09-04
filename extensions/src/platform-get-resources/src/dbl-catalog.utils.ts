@@ -54,3 +54,30 @@ export async function resolveDblCatalog(
 export function shouldStopBackgroundFetch(catalog: DblResourceCatalog): boolean {
   return catalog.status === 'available' || catalog.reason === 'notConfigured';
 }
+
+/**
+ * Whether a catalog failure should REPLACE what is on screen with an error state.
+ *
+ * Only when there is nothing to replace it with. `useRetryablePromise` keeps the last resolved
+ * catalog through a rejection, and an install completion re-drives the fetch, so a refetch that
+ * fails would otherwise swap a populated resource table — the freshly-installed entry included —
+ * for an error card, where leaving the stale-but-correct list on screen serves the user better. The
+ * error state exists so a failure is not reported as "no resources found", not to discard a catalog
+ * still in hand.
+ *
+ * `notConfigured` is deliberately not a failure here: it is a delivered answer with its own message
+ * and no retry.
+ *
+ * @param catalog The last delivered catalog, or `undefined` if none has arrived.
+ * @param hasFetchError Whether the last fetch rejected.
+ * @param hasResourcesToShow Whether any resource is currently renderable.
+ * @returns True when the error state should be shown instead of the list.
+ */
+export function shouldReportCatalogFailure(
+  catalog: DblResourceCatalog | undefined,
+  hasFetchError: boolean,
+  hasResourcesToShow: boolean,
+): boolean {
+  if (hasResourcesToShow) return false;
+  return hasFetchError || (catalog?.status === 'unavailable' && catalog.reason === 'notReady');
+}
