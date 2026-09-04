@@ -10,9 +10,9 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Check, ChevronsUpDown, Star } from 'lucide-react';
-import { ReactNode, useCallback, useMemo, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type VariantProps } from 'class-variance-authority';
-import useHasContentBelow from '@/hooks/use-has-content-below.hook';
+import { useHasContentBelow } from '@/hooks/use-has-content-below.hook';
 
 /**
  * Wraps the option list and draws a fade at its bottom edge while more options remain below the
@@ -23,11 +23,11 @@ import useHasContentBelow from '@/hooks/use-has-content-below.hook';
  * portal, so an effect living up there measures a list that has not been attached yet and concludes
  * there is nothing to scroll.
  */
-function OptionListScrollCue({ children }: { children: ReactNode }) {
+function OptionListScrollCue({ children, isEnabled }: { children: ReactNode; isEnabled: boolean }) {
   // ref.current expects null not undefined for div ref
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
-  const hasContentBelow = useHasContentBelow(containerRef, '[data-slot="command-list"]');
+  const hasContentBelow = useHasContentBelow(containerRef, '[data-slot="command-list"]', isEnabled);
 
   return (
     <div className="tw:relative" ref={containerRef}>
@@ -88,8 +88,19 @@ export interface MultiSelectComboBoxProps {
   onOpenChange?: (open: boolean) => void;
   /** Flag to disable the component. */
   isDisabled?: boolean;
-  /** Flag to sort selected items. */
+  /**
+   * Flag to sort selected items. The order is snapshotted when the dropdown opens, so selecting an
+   * entry does not move rows out from under the pointer.
+   */
   sortSelected?: boolean;
+  /**
+   * Whether to fade the bottom edge of the option list while more entries remain below the fold.
+   *
+   * Off by default: the cue's gradient is drawn in the popover's own background colour, so a
+   * popover themed differently would show it as a band. Opt in on long lists where the scrollbar
+   * alone is too weak a signal.
+   */
+  showScrollCue?: boolean;
   /** Optional icon to display in the button. */
   icon?: ReactNode;
   /** Additional class names for styling. */
@@ -116,6 +127,7 @@ export function MultiSelectComboBox({
   onOpenChange = undefined,
   isDisabled = false,
   sortSelected = false,
+  showScrollCue = false,
   icon = undefined,
   className = undefined,
   variant = 'ghost',
@@ -139,6 +151,19 @@ export function MultiSelectComboBox({
     return placeholder;
   };
 
+  const actualIsOpen = isOpen ?? isOpenLocal;
+  const actualOnOpenChange = onOpenChange ?? setIsOpenLocal;
+
+  // `sortSelected` floats a just-selected entry above the unselected ones. Re-sorting on every
+  // toggle moves rows out from under the pointer mid-interaction, so the selection that drives the
+  // order is snapshotted when the list opens and held until it closes.
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const [sortSelection, setSortSelection] = useState(selected);
+  useEffect(() => {
+    if (actualIsOpen) setSortSelection(selectedRef.current);
+  }, [actualIsOpen]);
+
   const sortedOptions = useMemo(() => {
     if (!sortSelected) return entries;
 
@@ -148,15 +173,15 @@ export function MultiSelectComboBox({
     const nonStarredItems = entries
       .filter((opt) => !opt.starred)
       .sort((a, b) => {
-        const aSelected = selected.includes(a.value);
-        const bSelected = selected.includes(b.value);
+        const aSelected = sortSelection.includes(a.value);
+        const bSelected = sortSelection.includes(b.value);
         if (aSelected && !bSelected) return -1;
         if (!aSelected && bSelected) return 1;
         return a.label.localeCompare(b.label);
       });
 
     return [...starredItems, ...nonStarredItems];
-  }, [entries, selected, sortSelected]);
+  }, [entries, sortSelection, sortSelected]);
 
   const handleSelectAll = () => {
     onChange(entries.map((entry) => entry.value));
@@ -165,9 +190,6 @@ export function MultiSelectComboBox({
   const handleClearAll = () => {
     onChange([]);
   };
-
-  const actualIsOpen = isOpen ?? isOpenLocal;
-  const actualOnOpenChange = onOpenChange ?? setIsOpenLocal;
 
   return (
     <div id={id} className={className}>
@@ -217,7 +239,7 @@ export function MultiSelectComboBox({
                 </Button>
               </div>
             )}
-            <OptionListScrollCue>
+            <OptionListScrollCue isEnabled={showScrollCue}>
               <CommandList>
                 <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
                 <CommandGroup>
