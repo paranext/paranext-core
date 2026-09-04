@@ -145,7 +145,7 @@ const inFlightWindowCloseSyncs = new Set<Promise<void>>();
  *
  * @param closingWindowId Window that is closing
  */
-export async function performWindowCloseTasks(closingWindowId: number): Promise<void> {
+export async function performWindowCloseTasks(closingWindowId: string): Promise<void> {
   const windowCloseSync = (async () => {
     try {
       await performWindowCloseTasksInternal(closingWindowId);
@@ -161,7 +161,7 @@ export async function performWindowCloseTasks(closingWindowId: number): Promise<
   }
 }
 
-async function performWindowCloseTasksInternal(closingWindowId: number): Promise<void> {
+async function performWindowCloseTasksInternal(closingWindowId: string): Promise<void> {
   // An unreadable mode skips the sync rather than falling through to Simple mode's behavior, for the
   // same reason performShutdownTasksInternal does: Simple mode would S/R whichever writable editors
   // are open, which for a Power user may be projects they deliberately excluded from their schedule.
@@ -249,7 +249,7 @@ async function performSimpleModeShutdownSync(): Promise<void> {
   // If only read-only Resource Viewers are open (no local changes possible), skip S/R.
   let projectIds: string[] = [];
   /** Windows whose editors are missing from the selection below, so the sync cannot cover them */
-  let windowIdsMissingFromSync: number[] = [];
+  let windowIdsMissingFromSync: string[] = [];
   /** Whether the selection could not be made at all, so no window's editors are covered */
   let didSelectionFail = false;
   try {

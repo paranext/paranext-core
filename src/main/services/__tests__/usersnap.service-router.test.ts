@@ -61,7 +61,7 @@ function usersnapShard(isFormOpen = false) {
 }
 
 /** Wire windows, each serving its own Usersnap service shard */
-function withWindows(shardsByWindowId: Record<number, unknown>) {
+function withWindows(shardsByWindowId: Record<string, unknown>) {
   withWindowsServingShards(mocks, USERSNAP_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId);
 }
 
@@ -78,7 +78,7 @@ function registrations() {
 describe('Usersnap service router', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
@@ -146,7 +146,7 @@ describe('Usersnap service router', () => {
     const { handler } = registrations().get('command:platform.usersnapSubmitIdea') ?? {};
 
     await handler?.();
-    mocks.getTargetWindowId.mockReturnValue(3);
+    mocks.getTargetWindowId.mockReturnValue('3');
     await handler?.();
 
     expect(shards[2].submitIdea).toHaveBeenCalledTimes(1);

@@ -1,7 +1,8 @@
 /**
  * BookChapterControl service shard — opening a reference picker in THIS window. Registered as a
- * network object under a window-scoped name (e.g. "BookChapterControlService-1") so several windows
- * can coexist; the main process's `book-chapter-control.service-router.ts` publishes the
+ * network object under a window-scoped name (e.g.
+ * "BookChapterControlService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6") so several windows can coexist;
+ * the main process's `book-chapter-control.service-router.ts` publishes the
  * `platform.openBookChapterControl` command and forwards it to the window the user is working in.
  *
  * The preference chain below reads this window's focus and its tracked last-selected web view, so
@@ -81,7 +82,7 @@ const bookChapterControlServiceShard: IBookChapterControlServiceShard = {
 
 /** Register the network object that backs this window's BookChapterControl command */
 export async function startBookChapterControlServiceShard(): Promise<void> {
-  if (!globalThis.windowId)
+  if (globalThis.windowId === undefined)
     throw new Error('Cannot start BookChapterControlService: windowId is not set');
 
   await networkObjectService.set<IBookChapterControlServiceShard>(

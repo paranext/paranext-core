@@ -10,11 +10,11 @@ vi.mock('@shared/services/logger.service', () => ({
 
 describe('deciding what happens to a window that reports its dock empty', () => {
   let countWindows: ReturnType<typeof vi.fn<() => number>>;
-  let closeWindow: ReturnType<typeof vi.fn<(windowId: number) => void>>;
-  let markWindowClosing: ReturnType<typeof vi.fn<(windowId: number) => void>>;
+  let closeWindow: ReturnType<typeof vi.fn<(windowId: string) => void>>;
+  let markWindowClosing: ReturnType<typeof vi.fn<(windowId: string) => void>>;
   // Ids the handler has marked closing through `markWindowClosing`, so a scenario that needs
   // `countWindows` to honor a decision made earlier in the same test can read them back
-  let markedIds: Set<number>;
+  let markedIds: Set<string>;
   let handler: ReturnType<typeof createWindowEmptinessHandler>;
 
   beforeEach(() => {
@@ -23,7 +23,7 @@ describe('deciding what happens to a window that reports its dock empty', () => 
     countWindows = vi.fn();
     closeWindow = vi.fn();
     markedIds = new Set();
-    markWindowClosing = vi.fn((windowId: number) => markedIds.add(windowId));
+    markWindowClosing = vi.fn((windowId: string) => markedIds.add(windowId));
     handler = createWindowEmptinessHandler({
       countWindows,
       closeWindow,
@@ -35,14 +35,14 @@ describe('deciding what happens to a window that reports its dock empty', () => 
   test('a window born empty docks Home rather than closing, even as the only window', async () => {
     countWindows.mockReturnValue(1);
 
-    await expect(handler(1, 'born-empty')).resolves.toEqual({ action: 'open-home' });
+    await expect(handler('1', 'born-empty')).resolves.toEqual({ action: 'open-home' });
     expect(closeWindow).not.toHaveBeenCalled();
   });
 
   test('a window born empty docks Home even when other windows are open', async () => {
     countWindows.mockReturnValue(3);
 
-    await expect(handler(1, 'born-empty')).resolves.toEqual({ action: 'open-home' });
+    await expect(handler('1', 'born-empty')).resolves.toEqual({ action: 'open-home' });
     expect(closeWindow).not.toHaveBeenCalled();
   });
 
@@ -56,11 +56,11 @@ describe('deciding what happens to a window that reports its dock empty', () => 
       closeWindow,
       isWindowTracked: () => true,
       markWindowClosing,
-      isPrimaryWindow: (windowId) => windowId === 1,
+      isPrimaryWindow: (windowId) => windowId === '1',
     });
     countWindows.mockReturnValue(2);
 
-    await expect(primaryHandler(1, 'emptied-by-removal')).resolves.toEqual({
+    await expect(primaryHandler('1', 'emptied-by-removal')).resolves.toEqual({
       action: 'open-home',
     });
     expect(closeWindow).not.toHaveBeenCalled();
@@ -75,34 +75,34 @@ describe('deciding what happens to a window that reports its dock empty', () => 
       closeWindow,
       isWindowTracked: () => true,
       markWindowClosing,
-      isPrimaryWindow: (windowId) => windowId === 1,
+      isPrimaryWindow: (windowId) => windowId === '1',
     });
     countWindows.mockReturnValue(2);
 
-    await expect(primaryHandler(2, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
-    expect(markWindowClosing).toHaveBeenCalledWith(2);
+    await expect(primaryHandler('2', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    expect(markWindowClosing).toHaveBeenCalledWith('2');
     vi.runAllTimers();
-    expect(closeWindow).toHaveBeenCalledWith(2);
+    expect(closeWindow).toHaveBeenCalledWith('2');
   });
 
   test('a window emptied by removal is told closing, and its close is deferred until after the response goes out', async () => {
     vi.useFakeTimers();
     countWindows.mockReturnValue(2);
 
-    await expect(handler(7, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('7', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
     // Not yet: the response must reach the renderer before the window tears down
     expect(closeWindow).not.toHaveBeenCalled();
 
     vi.runAllTimers();
 
-    expect(closeWindow).toHaveBeenCalledWith(7);
+    expect(closeWindow).toHaveBeenCalledWith('7');
   });
 
   test('the last window emptied by removal docks Home instead of closing, since closing it would exit the app', async () => {
     vi.useFakeTimers();
     countWindows.mockReturnValue(1);
 
-    await expect(handler(7, 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
+    await expect(handler('7', 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
 
     vi.runAllTimers();
     expect(closeWindow).not.toHaveBeenCalled();
@@ -116,15 +116,15 @@ describe('deciding what happens to a window that reports its dock empty', () => 
     const total = 2;
     countWindows.mockImplementation(() => total - markedIds.size);
 
-    const firstResponse = handler(1, 'emptied-by-removal');
-    const secondResponse = handler(2, 'emptied-by-removal');
+    const firstResponse = handler('1', 'emptied-by-removal');
+    const secondResponse = handler('2', 'emptied-by-removal');
 
     await expect(firstResponse).resolves.toEqual({ action: 'closing' });
     await expect(secondResponse).resolves.toEqual({ action: 'open-home' });
 
     vi.runAllTimers();
-    expect(closeWindow).toHaveBeenCalledWith(1);
-    expect(closeWindow).not.toHaveBeenCalledWith(2);
+    expect(closeWindow).toHaveBeenCalledWith('1');
+    expect(closeWindow).not.toHaveBeenCalledWith('2');
     expect(closeWindow).toHaveBeenCalledTimes(1);
   });
 
@@ -136,22 +136,22 @@ describe('deciding what happens to a window that reports its dock empty', () => 
     const total = 2;
     countWindows.mockImplementation(() => total - markedIds.size);
 
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
     vi.runAllTimers();
-    expect(closeWindow).toHaveBeenCalledWith(1);
+    expect(closeWindow).toHaveBeenCalledWith('1');
 
-    await expect(handler(2, 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
+    await expect(handler('2', 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
 
     vi.runAllTimers();
-    expect(closeWindow).not.toHaveBeenCalledWith(2);
+    expect(closeWindow).not.toHaveBeenCalledWith('2');
   });
 
   test('a window reporting again while it closes is told closing without a second close', async () => {
     vi.useFakeTimers();
     countWindows.mockReturnValue(3);
 
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
 
     vi.runAllTimers();
     // A second close on a window already closing trips main's force-close escape hatch, abandoning
@@ -167,15 +167,15 @@ describe('deciding what happens to a window that reports its dock empty', () => 
     // that true, which is a window left standing empty forever.
     vi.useFakeTimers();
     countWindows.mockReturnValue(3);
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
     vi.runAllTimers();
     expect(closeWindow).toHaveBeenCalledTimes(1);
 
-    handler.handleWindowGone(1);
+    handler.handleWindowGone('1');
 
     // The repeat-answer guard is what the release lifts: this report is decided from scratch, close
     // and all, rather than handed the answer the previous one got
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
     vi.runAllTimers();
     expect(closeWindow).toHaveBeenCalledTimes(2);
   });
@@ -186,14 +186,14 @@ describe('deciding what happens to a window that reports its dock empty', () => 
     // neither docking anything nor going away — empty, with nothing coming to heal it.
     vi.useFakeTimers();
     countWindows.mockReturnValue(2);
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
     vi.runAllTimers();
     expect(closeWindow).toHaveBeenCalledTimes(1);
 
-    handler.handleWindowGone(1);
+    handler.handleWindowGone('1');
     countWindows.mockReturnValue(1);
 
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
     vi.runAllTimers();
     expect(closeWindow).toHaveBeenCalledTimes(1);
   });
@@ -205,16 +205,16 @@ describe('deciding what happens to a window that reports its dock empty', () => 
       throw new Error('the window was already destroyed');
     });
 
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
 
     expect(() => vi.runAllTimers()).not.toThrow();
     expect(mocks.loggerWarn).toHaveBeenCalled();
   });
 
-  test('a non-number window id answers open-home and logs a warning, never closing', async () => {
+  test('a non-string window id answers open-home and logs a warning, never closing', async () => {
     countWindows.mockReturnValue(2);
 
-    await expect(handler('not-a-number', 'emptied-by-removal')).resolves.toEqual({
+    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({
       action: 'open-home',
     });
     expect(closeWindow).not.toHaveBeenCalled();
@@ -224,7 +224,7 @@ describe('deciding what happens to a window that reports its dock empty', () => 
   test('an unrecognized reason answers open-home and logs a warning, never closing', async () => {
     countWindows.mockReturnValue(2);
 
-    await expect(handler(1, 'some-other-reason')).resolves.toEqual({ action: 'open-home' });
+    await expect(handler('1', 'some-other-reason')).resolves.toEqual({ action: 'open-home' });
     expect(closeWindow).not.toHaveBeenCalled();
     expect(mocks.loggerWarn).toHaveBeenCalled();
   });
@@ -232,11 +232,11 @@ describe('deciding what happens to a window that reports its dock empty', () => 
 
 describe('re-checking whether a window is still empty before closing it', () => {
   let countWindows: ReturnType<typeof vi.fn<() => number>>;
-  let closeWindow: ReturnType<typeof vi.fn<(windowId: number) => void>>;
-  let markWindowClosing: ReturnType<typeof vi.fn<(windowId: number) => void>>;
-  let markedIds: Set<number>;
+  let closeWindow: ReturnType<typeof vi.fn<(windowId: string) => void>>;
+  let markWindowClosing: ReturnType<typeof vi.fn<(windowId: string) => void>>;
+  let markedIds: Set<string>;
   let hasContentArrivedSinceEmptyReport: ReturnType<
-    typeof vi.fn<(windowId: number) => Promise<boolean>>
+    typeof vi.fn<(windowId: string) => Promise<boolean>>
   >;
 
   /** Build a handler over the mocks above, with the given number of windows open */
@@ -250,7 +250,7 @@ describe('re-checking whether a window is still empty before closing it', () => 
       // `markedIds` stands in for the shared registry in main: `markWindowClosing` writes it, the
       // count subtracts it, and the user's own close button writes it too — so a scenario that
       // adds to it mid-re-check is closing a window the way the close button would
-      isWindowClosing: (windowId: number) => markedIds.has(windowId),
+      isWindowClosing: (windowId: string) => markedIds.has(windowId),
       hasContentArrivedSinceEmptyReport,
     });
   }
@@ -261,7 +261,7 @@ describe('re-checking whether a window is still empty before closing it', () => 
     countWindows = vi.fn();
     closeWindow = vi.fn();
     markedIds = new Set();
-    markWindowClosing = vi.fn((windowId: number) => markedIds.add(windowId));
+    markWindowClosing = vi.fn((windowId: string) => markedIds.add(windowId));
     hasContentArrivedSinceEmptyReport = vi.fn(async () => false);
   });
 
@@ -272,7 +272,7 @@ describe('re-checking whether a window is still empty before closing it', () => 
     hasContentArrivedSinceEmptyReport.mockResolvedValue(true);
     const handler = handlerOverWindows(2);
 
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'stay' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'stay' });
 
     expect(markWindowClosing).not.toHaveBeenCalled();
     expect(closeWindow).not.toHaveBeenCalled();
@@ -281,10 +281,10 @@ describe('re-checking whether a window is still empty before closing it', () => 
   test('a window that is still empty is closed, and is marked only after the re-check', async () => {
     const handler = handlerOverWindows(2);
 
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
 
-    expect(hasContentArrivedSinceEmptyReport).toHaveBeenCalledWith(1);
-    expect(markWindowClosing).toHaveBeenCalledWith(1);
+    expect(hasContentArrivedSinceEmptyReport).toHaveBeenCalledWith('1');
+    expect(markWindowClosing).toHaveBeenCalledWith('1');
   });
 
   test('the mark is never written before the re-check answers, since nothing may unmark it', async () => {
@@ -297,7 +297,7 @@ describe('re-checking whether a window is still empty before closing it', () => 
     });
     const handler = handlerOverWindows(2);
 
-    await handler(1, 'emptied-by-removal');
+    await handler('1', 'emptied-by-removal');
 
     expect(markedBeforeRecheck).toBe(false);
   });
@@ -305,7 +305,7 @@ describe('re-checking whether a window is still empty before closing it', () => 
   test('the last window standing answers open-home without spending a re-check on it', async () => {
     const handler = handlerOverWindows(1);
 
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
 
     expect(hasContentArrivedSinceEmptyReport).not.toHaveBeenCalled();
   });
@@ -321,13 +321,13 @@ describe('re-checking whether a window is still empty before closing it', () => 
       isWindowTracked: () => true,
       markWindowClosing,
       hasContentArrivedSinceEmptyReport,
-      isPrimaryWindow: (windowId) => windowId === 1,
+      isPrimaryWindow: (windowId) => windowId === '1',
     });
     countWindows.mockReturnValue(2);
 
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
 
-    expect(hasContentArrivedSinceEmptyReport).toHaveBeenCalledWith(1);
+    expect(hasContentArrivedSinceEmptyReport).toHaveBeenCalledWith('1');
     expect(closeWindow).not.toHaveBeenCalled();
     expect(markWindowClosing).not.toHaveBeenCalled();
   });
@@ -340,11 +340,11 @@ describe('re-checking whether a window is still empty before closing it', () => 
       isWindowTracked: () => true,
       markWindowClosing,
       hasContentArrivedSinceEmptyReport,
-      isPrimaryWindow: (windowId) => windowId === 1,
+      isPrimaryWindow: (windowId) => windowId === '1',
     });
     countWindows.mockReturnValue(2);
 
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'stay' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'stay' });
     expect(closeWindow).not.toHaveBeenCalled();
     expect(markWindowClosing).not.toHaveBeenCalled();
   });
@@ -356,12 +356,12 @@ describe('re-checking whether a window is still empty before closing it', () => 
     // from before it closes the only window that would have been left — which takes the
     // application down, the very outcome the last-window branch exists to prevent.
     hasContentArrivedSinceEmptyReport.mockImplementation(async () => {
-      markedIds.add(2);
+      markedIds.add('2');
       return false;
     });
     const handler = handlerOverWindows(2);
 
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
 
     expect(closeWindow).not.toHaveBeenCalled();
     expect(markWindowClosing).not.toHaveBeenCalled();
@@ -378,12 +378,12 @@ describe('re-checking whether a window is still empty before closing it', () => 
     vi.useFakeTimers();
     try {
       hasContentArrivedSinceEmptyReport.mockImplementation(async () => {
-        markedIds.add(1);
+        markedIds.add('1');
         return false;
       });
       const handler = handlerOverWindows(3);
 
-      await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+      await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
 
       vi.runAllTimers();
       expect(closeWindow).not.toHaveBeenCalled();
@@ -401,7 +401,7 @@ describe('re-checking whether a window is still empty before closing it', () => 
     vi.useFakeTimers();
     try {
       hasContentArrivedSinceEmptyReport.mockImplementation(async () => {
-        markedIds.add(1);
+        markedIds.add('1');
         return false;
       });
       countWindows.mockImplementation(() => 3 - markedIds.size);
@@ -410,12 +410,12 @@ describe('re-checking whether a window is still empty before closing it', () => 
         closeWindow,
         isWindowTracked: () => true,
         markWindowClosing,
-        isWindowClosing: (windowId: number) => markedIds.has(windowId),
+        isWindowClosing: (windowId: string) => markedIds.has(windowId),
         hasContentArrivedSinceEmptyReport,
-        isPrimaryWindow: (windowId) => windowId === 1,
+        isPrimaryWindow: (windowId) => windowId === '1',
       });
 
-      await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+      await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
 
       vi.runAllTimers();
       expect(closeWindow).not.toHaveBeenCalled();
@@ -432,12 +432,12 @@ describe('re-checking whether a window is still empty before closing it', () => 
     vi.useFakeTimers();
     try {
       hasContentArrivedSinceEmptyReport.mockImplementation(async () => {
-        markedIds.add(1);
+        markedIds.add('1');
         return false;
       });
       const handler = handlerOverWindows(2);
 
-      await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+      await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
 
       vi.runAllTimers();
       expect(closeWindow).not.toHaveBeenCalled();
@@ -453,9 +453,9 @@ describe('re-checking whether a window is still empty before closing it', () => 
     hasContentArrivedSinceEmptyReport.mockRejectedValue(new Error('the window is unreachable'));
     const handler = handlerOverWindows(2);
 
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('1', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
 
-    expect(markWindowClosing).toHaveBeenCalledWith(1);
+    expect(markWindowClosing).toHaveBeenCalledWith('1');
   });
 
   test('a re-check that never answers proceeds with the close once its bound elapses', async () => {
@@ -469,11 +469,11 @@ describe('re-checking whether a window is still empty before closing it', () => 
       );
       const handler = handlerOverWindows(2);
 
-      const decision = handler(1, 'emptied-by-removal');
+      const decision = handler('1', 'emptied-by-removal');
       await vi.runAllTimersAsync();
 
       await expect(decision).resolves.toEqual({ action: 'closing' });
-      expect(closeWindow).toHaveBeenCalledWith(1);
+      expect(closeWindow).toHaveBeenCalledWith('1');
     } finally {
       vi.useRealTimers();
     }
@@ -485,25 +485,25 @@ describe('re-checking whether a window is still empty before closing it', () => 
     // what makes the second read the first one's mark.
     let releaseFirstRecheck: (hasContentArrived: boolean) => void = () => {};
     hasContentArrivedSinceEmptyReport.mockImplementation(
-      async (windowId: number) =>
+      async (windowId: string) =>
         new Promise<boolean>((resolve) => {
-          if (windowId === 1) releaseFirstRecheck = resolve;
+          if (windowId === '1') releaseFirstRecheck = resolve;
           else resolve(false);
         }),
     );
     const handler = handlerOverWindows(2);
 
-    const firstDecision = handler(1, 'emptied-by-removal');
-    const secondDecision = handler(2, 'emptied-by-removal');
-    await vi.waitFor(() => expect(hasContentArrivedSinceEmptyReport).toHaveBeenCalledWith(1));
+    const firstDecision = handler('1', 'emptied-by-removal');
+    const secondDecision = handler('2', 'emptied-by-removal');
+    await vi.waitFor(() => expect(hasContentArrivedSinceEmptyReport).toHaveBeenCalledWith('1'));
     // The second window's decision has not begun: it may not read the window count until the first
     // decision has finished writing its answer into it
-    expect(hasContentArrivedSinceEmptyReport).not.toHaveBeenCalledWith(2);
+    expect(hasContentArrivedSinceEmptyReport).not.toHaveBeenCalledWith('2');
     releaseFirstRecheck(false);
 
     await expect(firstDecision).resolves.toEqual({ action: 'closing' });
     await expect(secondDecision).resolves.toEqual({ action: 'open-home' });
-    expect(closeWindow).not.toHaveBeenCalledWith(2);
+    expect(closeWindow).not.toHaveBeenCalledWith('2');
   });
 
   test('a decision that fails leaves the next one able to run', async () => {
@@ -514,9 +514,9 @@ describe('re-checking whether a window is still empty before closing it', () => 
     });
     const handler = handlerOverWindows(2);
 
-    await expect(handler(1, 'emptied-by-removal')).rejects.toThrow('could not be read');
+    await expect(handler('1', 'emptied-by-removal')).rejects.toThrow('could not be read');
 
-    await expect(handler(2, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('2', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
   });
 });
 
@@ -529,19 +529,19 @@ describe('a close decided outside this handler', () => {
     // sync) the first close started.
     vi.useFakeTimers();
     try {
-      const closingIds = new Set<number>([7]);
+      const closingIds = new Set<string>(['7']);
       const countWindows = vi.fn(() => 2);
       const closeWindow = vi.fn();
-      const markWindowClosing = vi.fn((windowId: number) => closingIds.add(windowId));
+      const markWindowClosing = vi.fn((windowId: string) => closingIds.add(windowId));
       const handler = createWindowEmptinessHandler({
         countWindows,
         closeWindow,
         isWindowTracked: () => true,
         markWindowClosing,
-        isWindowClosing: (windowId: number) => closingIds.has(windowId),
+        isWindowClosing: (windowId: string) => closingIds.has(windowId),
       });
 
-      await expect(handler(7, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+      await expect(handler('7', 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
 
       vi.runAllTimers();
       expect(closeWindow).not.toHaveBeenCalled();
@@ -555,18 +555,18 @@ describe('a close decided outside this handler', () => {
     // A close in flight reloads nothing and docks nothing: telling a window mid-teardown to open
     // Home puts a tab — and a web view provider's side effects with it — into a window that is on
     // its way out. Which reason the report carries says nothing about that; the close does.
-    const closingIds = new Set<number>([7]);
+    const closingIds = new Set<string>(['7']);
     const closeWindow = vi.fn();
-    const markWindowClosing = vi.fn((windowId: number) => closingIds.add(windowId));
+    const markWindowClosing = vi.fn((windowId: string) => closingIds.add(windowId));
     const handler = createWindowEmptinessHandler({
       countWindows: () => 2,
       closeWindow,
       isWindowTracked: () => true,
       markWindowClosing,
-      isWindowClosing: (windowId: number) => closingIds.has(windowId),
+      isWindowClosing: (windowId: string) => closingIds.has(windowId),
     });
 
-    await expect(handler(7, 'born-empty')).resolves.toEqual({ action: 'closing' });
+    await expect(handler('7', 'born-empty')).resolves.toEqual({ action: 'closing' });
 
     expect(closeWindow).not.toHaveBeenCalled();
     expect(markWindowClosing).not.toHaveBeenCalled();
@@ -586,7 +586,7 @@ describe('a close decided outside this handler', () => {
         markWindowClosing,
       });
 
-      const response = await handler(999, 'emptied-by-removal');
+      const response = await handler('999', 'emptied-by-removal');
 
       expect(response).toEqual({ action: 'open-home' });
       expect(markWindowClosing).not.toHaveBeenCalled();
@@ -609,7 +609,7 @@ describe('a close decided outside this handler', () => {
         markWindowClosing,
       });
 
-      await handler(7, 'emptied-by-removal');
+      await handler('7', 'emptied-by-removal');
 
       // The refusal must decide nothing — checked before the second call so the assertion cannot
       // be satisfied by it
@@ -617,7 +617,7 @@ describe('a close decided outside this handler', () => {
 
       // Electron now hands out 7 for real
       isTracked = true;
-      const response = await handler(7, 'emptied-by-removal');
+      const response = await handler('7', 'emptied-by-removal');
 
       expect(response).toEqual({ action: 'closing' });
       expect(markWindowClosing).toHaveBeenCalledTimes(1);

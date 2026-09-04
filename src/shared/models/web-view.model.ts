@@ -582,12 +582,15 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    * Combining it with a 'replace-tab' layout is likewise an error — the tab being replaced already
    * names the window.
    *
-   * This is a runtime-only handle: window ids are reused across sessions, so never persist one. Get
-   * the current window's id via the `platform.getFocusedWindowId` command.
+   * Window ids are assigned by the platform and never reused within a profile, in this run of the
+   * app or any later one, so an id names one window and only ever that window. Get the id of the
+   * window this code is running in with `papi.window.getWindowId()` — not
+   * `platform.getFocusedWindowId`, which answers with a different window's id whenever this one is
+   * not the focused window.
    *
    * @experimental This option is unstable and may change or disappear without notice
    */
-  targetWindowId?: number;
+  targetWindowId?: string;
 };
 
 /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */

@@ -38,7 +38,7 @@ import { RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
-import { scrollToVerse } from './editor-dom.util';
+import { SCROLL_MAX_WAIT_MS, scrollToVerse } from './editor-dom.util';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { ResourceBlankChapter } from './resource-blank-chapter.component';
 import { ResourceTextUnavailable } from './resource-text-unavailable.component';
@@ -66,9 +66,6 @@ export const MODEL_TEXT_EDITOR_CONTAINER_TEST_ID = 'model-text-editor-container'
 // and the editor reloads (re-serialize + setEditorState) whenever the `view` object's identity
 // changes — so a refetch of identical content would force a pointless full reload.
 const VIEW_OPTIONS = getDefaultViewOptions();
-
-/** Max ms to retry scrolling via rAF before giving up (e.g. verse marker missing from USJ) */
-const SCROLL_MAX_WAIT_MS = 2000;
 
 export {
   MODEL_TEXT_PANEL_STRING_KEYS,

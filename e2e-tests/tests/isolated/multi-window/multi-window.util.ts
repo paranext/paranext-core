@@ -199,8 +199,8 @@ export async function pollUntil<T>(
 const ROUTED_CALL_TIMEOUT_MS = 15_000;
 
 /** Ask the main process which window id it currently routes to. */
-export async function getFocusedWindowId(): Promise<number | undefined> {
-  return sendPapiRequestOnce<number | undefined>(
+export async function getFocusedWindowId(): Promise<string | undefined> {
+  return sendPapiRequestOnce<string | undefined>(
     'command:platform.getFocusedWindowId',
     [],
     WEBSOCKET_PORT,
@@ -235,25 +235,26 @@ const OS_FOCUS_COOPERATION_BUDGET_MS = 10_000;
  */
 export async function focusWindowAndWaitForRouting(
   electronApp: ElectronApplication,
-  windowId: number,
+  windowId: string,
 ): Promise<void> {
   const startTime = Date.now();
   await pollUntil(
     async () => {
       const shouldSimulateFocusDelivery = Date.now() - startTime >= OS_FOCUS_COOPERATION_BUDGET_MS;
-      await electronApp.evaluate(
-        ({ BrowserWindow }, { id, simulateFocusDelivery }) => {
-          const win = BrowserWindow.fromId(id);
-          if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+      await withPlatformWindow(
+        electronApp,
+        windowId,
+        (win, { BrowserWindow }, simulateFocusDelivery) => {
+          // Every other window steps aside so the compositor has one candidate to activate
           BrowserWindow.getAllWindows().forEach((otherWindow) => {
-            if (otherWindow.id !== id && !otherWindow.isMinimized()) otherWindow.minimize();
+            if (otherWindow !== win && !otherWindow.isMinimized()) otherWindow.minimize();
           });
           if (win.isMinimized()) win.restore();
           win.show();
           win.focus();
           if (simulateFocusDelivery) win.emit('focus');
         },
-        { id: windowId, simulateFocusDelivery: shouldSimulateFocusDelivery },
+        shouldSimulateFocusDelivery,
       );
       return getFocusedWindowId();
     },
@@ -268,34 +269,106 @@ export async function focusWindowAndWaitForRouting(
 // #region window helpers
 
 /**
- * The window's Electron BrowserWindow id, read from the `windowId` query parameter the main process
- * puts in every renderer URL (`WINDOW_ID` in `src/shared/data/platform.data.ts`).
+ * What an action against a resolved window may use from the main process.
+ *
+ * Deliberately not the whole `electron` module: a body is serialised and re-instantiated in the
+ * main process, so what it can reach is exactly what is handed to it here.
  */
-export function getWindowIdOfPage(page: Page): number {
-  const rawId = new URL(page.url()).searchParams.get('windowId');
-  const id = Number(rawId);
-  if (!Number.isInteger(id) || id <= 0)
-    throw new Error(`Page URL ${page.url()} has no usable windowId query parameter`);
-  return id;
+export type PlatformWindowActionContext = {
+  BrowserWindow: typeof import('electron').BrowserWindow;
+  screen: typeof import('electron').screen;
+};
+
+/**
+ * Run `action` in the main process against the window carrying the given platform id.
+ *
+ * Every window is matched on the `windowId` query parameter the main process puts in its renderer
+ * URL — the id `getWindowIdOfPage` reads — rather than looked up with `BrowserWindow.fromId`.
+ * `fromId` takes Electron's ids, and the platform's id is a durable GUID with no relationship to
+ * Electron's numeric `BrowserWindow.id` at all — it does not merely diverge after a relaunch, so
+ * `fromId` would answer `undefined` or, worse, a different window. A window whose URL is not yet
+ * parseable (one still loading, with an empty URL) is skipped rather than aborting the lookup with
+ * an opaque `TypeError`.
+ *
+ * `action` is sent to the main process as source text, so it must be self-contained: it may use its
+ * parameters and nothing from the enclosing scope. Anything it needs from the test goes in `arg`.
+ *
+ * @param electronApp The app under test
+ * @param windowId Platform id of the window to act on
+ * @param action What to do with the resolved window. Receives the window, the main-process context,
+ *   and `arg`.
+ * @param arg A JSON-serialisable value forwarded to `action`
+ * @returns Whatever `action` returns
+ * @throws If no open window carries `windowId`
+ */
+export async function withPlatformWindow<TArg, TResult>(
+  electronApp: ElectronApplication,
+  windowId: string,
+  action: (
+    win: import('electron').BrowserWindow,
+    context: PlatformWindowActionContext,
+    arg: TArg,
+  ) => TResult,
+  arg?: TArg,
+): Promise<TResult> {
+  return electronApp.evaluate(
+    ({ BrowserWindow, screen }, { id, actionSource, actionArg }) => {
+      const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) => {
+        try {
+          return new URL(someWindow.webContents.getURL()).searchParams.get('windowId') ?? undefined;
+        } catch {
+          return undefined;
+        }
+      };
+      const win = BrowserWindow.getAllWindows().find(
+        (someWindow) => platformIdOf(someWindow) === id,
+      );
+      if (!win) throw new Error(`No window with platform id ${id}`);
+      // Re-instantiated from source here because a function cannot cross the evaluate boundary.
+      // The surrounding `new Function` gives the body a name to be called by.
+      // eslint-disable-next-line no-new-func
+      const runAction = new Function(`return (${actionSource});`)();
+      return runAction(win, { BrowserWindow, screen }, actionArg);
+    },
+    { id: windowId, actionSource: action.toString(), actionArg: arg },
+  );
 }
 
 /**
- * The app's renderer pages (windows), sorted by their BrowserWindow id. Filters out any non-app
- * page (e.g. a detached devtools window) by requiring the renderer URL's `windowId` query
- * parameter. BrowserWindow ids increase in creation order within one app session, so the sort puts
- * the earliest-created window first — at startup that is the main window, which the app creates
- * before any secondary window.
+ * The window's platform id, read from the `windowId` query parameter the main process puts in every
+ * renderer URL (`WINDOW_ID` in `src/shared/data/platform.data.ts`).
+ *
+ * Not Electron's `BrowserWindow.id`, which the platform stopped exporting — anything resolving a
+ * window from this value has to match on the same query parameter rather than call
+ * `BrowserWindow.fromId`.
+ */
+export function getWindowIdOfPage(page: Page): string {
+  const rawId = new URL(page.url()).searchParams.get('windowId');
+  if (!rawId) throw new Error(`Page URL ${page.url()} has no usable windowId query parameter`);
+  return rawId;
+}
+
+/**
+ * The app's renderer pages (windows), in creation order. Filters out any non-app page (e.g. a
+ * detached devtools window) by requiring the renderer URL's `windowId` query parameter.
+ *
+ * Creation order falls out of Playwright's own bookkeeping rather than anything sorted here:
+ * `ElectronApplication` keeps its windows in a `Set`, appending each as its `window` event fires,
+ * and `windows()` returns them spread from that `Set` — `[...this._windows]` — so the array comes
+ * back in insertion (i.e. creation) order already (see
+ * `node_modules/playwright-core/lib/client/electron.js`). That is also why `firstWindow()` can take
+ * `values().next()`. Platform window ids are durable GUIDs with no ordering relationship to
+ * creation, so there is nothing to sort by even if a sort were wanted.
  */
 export function getAppPages(electronApp: ElectronApplication): Page[] {
   return electronApp
     .windows()
-    .filter((page) => !page.isClosed() && page.url().includes('windowId='))
-    .sort((a, b) => getWindowIdOfPage(a) - getWindowIdOfPage(b));
+    .filter((page) => !page.isClosed() && page.url().includes('windowId='));
 }
 
 /**
- * Wait until the app has at least `count` open windows (renderer pages), then return them sorted by
- * BrowserWindow id (see {@link getAppPages}), each with its React root attached. For asserting
+ * Wait until the app has at least `count` open windows (renderer pages), then return them in
+ * creation order (see {@link getAppPages}), each with its React root attached. For asserting
  * "exactly N windows", follow this with a settle period and a {@link getAppPages} length check —
  * this only waits for the count to be reached.
  */
@@ -366,14 +439,7 @@ export async function closeWindowLikeAUser(
 ): Promise<void> {
   const windowId = getWindowIdOfPage(page);
   const pageClosed = page.waitForEvent('close', { timeout: 30_000 });
-  await electronApp.evaluate(
-    ({ BrowserWindow }, { id }) => {
-      const win = BrowserWindow.fromId(id);
-      if (!win) throw new Error(`No BrowserWindow with id ${id}`);
-      win.close();
-    },
-    { id: windowId },
-  );
+  await withPlatformWindow(electronApp, windowId, (win) => win.close());
   await pageClosed;
 }
 
@@ -393,18 +459,13 @@ export async function widenWindowForToolbarReference(
   page: Page,
 ): Promise<number> {
   const windowId = getWindowIdOfPage(page);
-  await electronApp.evaluate(
-    ({ BrowserWindow, screen }, { id }) => {
-      const win = BrowserWindow.fromId(id);
-      if (!win) throw new Error(`No BrowserWindow with id ${id}`);
-      // An unmapped window reports stale bounds and ignores the resize.
-      if (win.isMinimized()) win.restore();
-      const { height, y } = win.getBounds();
-      const { workArea } = screen.getDisplayMatching(win.getBounds());
-      win.setBounds({ x: workArea.x, y, width: workArea.width, height });
-    },
-    { id: windowId },
-  );
+  await withPlatformWindow(electronApp, windowId, (win, { screen }) => {
+    // An unmapped window reports stale bounds and ignores the resize.
+    if (win.isMinimized()) win.restore();
+    const { height, y } = win.getBounds();
+    const { workArea } = screen.getDisplayMatching(win.getBounds());
+    win.setBounds({ x: workArea.x, y, width: workArea.width, height });
+  });
   // The shrink step comes from a `ResizeObserver`, so the label re-renders after the resize lands
   // rather than with it.
   let rendererWidth = 0;
@@ -423,11 +484,11 @@ export async function widenWindowForToolbarReference(
  * command at this window right after the gate needs the shard behind THAT command to have arrived.
  */
 const SCOPED_SHARD_METHOD_PATTERNS = [
-  (windowId: number) => `^object:DialogService-${windowId}\\.showDialog$`,
-  (windowId: number) => `^object:UsersnapService-${windowId}\\.submitIdea$`,
-  (windowId: number) => `^object:BookChapterControlService-${windowId}\\.open$`,
-  (windowId: number) => `^object:WebViewService-${windowId}\\.openSettingsTab$`,
-  (windowId: number) => `^object:platform\\.windowServiceDataProvider-${windowId}-data\\.`,
+  (windowId: string) => `^object:DialogService-${windowId}\\.showDialog$`,
+  (windowId: string) => `^object:UsersnapService-${windowId}\\.submitIdea$`,
+  (windowId: string) => `^object:BookChapterControlService-${windowId}\\.open$`,
+  (windowId: string) => `^object:WebViewService-${windowId}\\.openSettingsTab$`,
+  (windowId: string) => `^object:platform\\.windowServiceDataProvider-${windowId}-data\\.`,
 ];
 
 /**
@@ -435,7 +496,7 @@ const SCOPED_SHARD_METHOD_PATTERNS = [
  * routers forward to. Only then can generic-name calls be routed to this window.
  */
 export async function waitForRendererRegistered(
-  windowId: number,
+  windowId: string,
   timeoutMs: number,
 ): Promise<void> {
   // Waited on together: the renderer starts them together too, so they arrive within a poll of one
@@ -454,7 +515,7 @@ export async function waitForRendererRegistered(
  * that scheme surfaces as one place to update instead of every call site's locator silently
  * building against the old id and timing out with nothing to name.
  */
-export function windowScopedWebViewId(webViewId: string, windowId: number): string {
+export function windowScopedWebViewId(webViewId: string, windowId: string): string {
   return `${webViewId}-w${windowId}`;
 }
 
@@ -465,7 +526,7 @@ export function windowScopedWebViewId(webViewId: string, windowId: number): stri
  * Home tab was docked on the fly (see {@link expectWindowDockHasOnlyHomeTab}) gets a freshly
  * generated web view id each time, so this is not that id.
  */
-export function homeTabWebViewId(windowId: number): string {
+export function homeTabWebViewId(windowId: string): string {
   return windowScopedWebViewId(HOME_TAB_UUID, windowId);
 }
 
@@ -475,7 +536,7 @@ export function homeTabWebViewId(windowId: number): string {
  * web view id each time, so this locator will not find it — look that one up with
  * {@link webViewTabTitle}, passing the id it minted.
  */
-export function homeTabTitle(page: Page, windowId: number) {
+export function homeTabTitle(page: Page, windowId: string) {
   return webViewTabTitle(page, homeTabWebViewId(windowId));
 }
 
