@@ -55,7 +55,8 @@ import {
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { getDockLayoutOuterInset } from '@renderer/components/docking/platform-dock-layout-positioning.util';
 import { updateWindowTitle } from '@renderer/components/docking/window-label.util';
-import { installMiddleClickDragGuard } from '@renderer/components/docking/platform-dock-layout-middle-click-guard.util';
+import { installMiddleClickTabBarHandlers } from '@renderer/components/docking/platform-dock-layout-middle-click-handlers.util';
+import { handleCloseTab } from '@renderer/components/docking/platform-tab-title.component';
 
 export function PlatformDockLayout() {
   // This ref will always be defined
@@ -173,7 +174,7 @@ export function PlatformDockLayout() {
   useEffect(() => {
     const rootElement = dockLayoutRef.current.getRootElement();
     if (!rootElement) return undefined;
-    return installMiddleClickDragGuard(rootElement);
+    return installMiddleClickTabBarHandlers(rootElement, { onTabMiddleClick: handleCloseTab });
   }, []);
 
   return (
