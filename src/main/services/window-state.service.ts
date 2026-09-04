@@ -611,6 +611,12 @@ export function addWindow(window: BrowserWindow, existingId?: string): string {
     closingWindowIds.delete(existingId);
     everReadyWindowIds.delete(existingId);
     abandonedWindowIds.delete(existingId);
+    // Focus state (`focusedWindowId`, `mostRecentlyFocusedWindowIds`) is deliberately left
+    // untouched here: the id below already names this live window, so a focus record still
+    // pointing at it is early rather than wrong — never a corpse, never a different window. The one
+    // place that turns it into a routing decision, the extension host's window API proxy resolving
+    // the window-scoped service by this id, either finds this window's own provider or throws the
+    // ordinary "still starting" error naming this same window, so it can never be misrouted.
   }
   trackedWindows.push({ windowId, window });
   announceRoutingTargetIfChanged();
