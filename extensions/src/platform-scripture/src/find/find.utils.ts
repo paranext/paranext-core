@@ -396,13 +396,12 @@ export function resolveSelectedProjectScrollGroup(
   currentScrollGroupId: ScrollGroupId | undefined,
   openTabs: readonly OpenScrollGroupTab[],
   preferredWebViewId: string | undefined,
-  scriptureEditorWebViewType?: string,
+  scriptureEditorWebViewType: string,
 ): SelectedProjectScrollGroup | undefined {
   const normalizedCurrentProjectId = normalizeProjectId(currentProjectId);
   const matchesCurrentProject = (tab: OpenScrollGroupTab) =>
     normalizeProjectId(tab.projectId) === normalizedCurrentProjectId;
-  const isEditor = (tab: OpenScrollGroupTab) =>
-    scriptureEditorWebViewType !== undefined && tab.webViewType === scriptureEditorWebViewType;
+  const isEditor = (tab: OpenScrollGroupTab) => tab.webViewType === scriptureEditorWebViewType;
   /** Editors first, original order preserved within each group. */
   const editorsFirst = (tabs: readonly OpenScrollGroupTab[]) => [
     ...tabs.filter(isEditor),
@@ -552,7 +551,7 @@ export function resolveScrollGroupForPickedProject(
   currentScrollGroupId: ScrollGroupId | undefined,
   openTabs: readonly OpenScrollGroupTab[],
   preferredWebViewId: string | undefined,
-  scriptureEditorWebViewType?: string,
+  scriptureEditorWebViewType: string,
 ): SelectedProjectScrollGroup | undefined {
   const resolved = resolveSelectedProjectScrollGroup(
     pickedProjectId,

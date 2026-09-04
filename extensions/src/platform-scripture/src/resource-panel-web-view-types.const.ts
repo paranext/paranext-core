@@ -29,6 +29,23 @@ export const REFERENCE_PANEL_WEB_VIEW_TYPES = new Set<string>([
 ]);
 
 /**
+ * The reference panels a "go to result" activation may bring to the front.
+ *
+ * The Model text panel is deliberately absent. It has no visibility-keyed scroll: its effect runs
+ * on the reference alone, and a reference arriving while its tab is hidden finds no layout in a
+ * `display: none` iframe, so the scroll silently no-ops and nothing re-runs on activation — the
+ * revealed panel would show a stale position, with no controller to retry through. Simple mode is
+ * unaffected either way, since Model text sits alone in Column 1 and is always visible, which is
+ * also why withholding the reveal costs nothing there: the panel is already on screen and the
+ * scroll group has already moved it. Model text remains fully searchable and listed in the picker;
+ * only the reveal is withheld. Add it here once that panel handles the hidden case.
+ */
+export const REVEALABLE_REFERENCE_PANEL_WEB_VIEW_TYPES = new Set<string>([
+  BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
+  COMMENTARIES_PANEL_WEBVIEW_TYPE,
+]);
+
+/**
  * Tab types whose scripture Find can search, and therefore the ones whose projects the Find project
  * picker lists.
  *

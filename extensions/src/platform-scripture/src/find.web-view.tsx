@@ -83,6 +83,7 @@ import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import {
   FIND_SEARCHABLE_WEB_VIEW_TYPES,
   REFERENCE_PANEL_WEB_VIEW_TYPES,
+  REVEALABLE_REFERENCE_PANEL_WEB_VIEW_TYPES,
 } from './resource-panel-web-view-types.const';
 import { useFindSearchTriggers } from './find/use-find-search-triggers.hook';
 import { useAutoSearchDebounce } from './find/use-auto-search-debounce.hook';
@@ -409,23 +410,35 @@ global.webViewComponent = function FindWebView({
     useMemo(() => ({}), []),
   );
 
-  // Filter to scripture editor tabs only — without this filter, every project-bound web view
-  // (e.g. this Find panel itself) would falsely mark a project as "open" in the picker's "Open
-  // Tabs" grouping.
+  // Filter to the tab types whose scripture Find can search — without this filter, every
+  // project-bound web view (e.g. this Find panel itself) would falsely mark a project as "open" in
+  // the picker's "Open Tabs" grouping.
   const searchableWebViewFilter = useCallback(
     (webView: { webViewType: string }) => FIND_SEARCHABLE_WEB_VIEW_TYPES.has(webView.webViewType),
     [],
   );
-  const allOpenProjectTabs = useOpenProjectTabs(
-    searchableWebViewFilter,
-    // The reference panels declare the resource they display; their container project is the
-    // editable project whose reference list they show, which is not what Find searches.
-    { includeNavigableProjectIds: true },
+  const openProjectTabs = useOpenProjectTabs(searchableWebViewFilter, {
+    includeNavigableProjectIds: true,
+  });
+  // A reference panel's container project is the editable project whose reference list it shows —
+  // the panel is not displaying that project's text, so Find must not offer it. The hook unions
+  // container and declared projects, per what the shared state key documents; narrowing that to
+  // "what this tab actually displays" is Find's rule, so it is applied here rather than there.
+  const allOpenProjectTabs = useMemo(
+    () =>
+      openProjectTabs.filter(
+        (tab) =>
+          !(
+            REFERENCE_PANEL_WEB_VIEW_TYPES.has(tab.webViewType) && tab.projectSource === 'container'
+          ),
+      ),
+    [openProjectTabs],
   );
   const noOpenProjects = allOpenProjectTabs.length === 0;
 
-  // Find's project picker only ever lists projects that are open in an editor tab (a project
-  // isn't a candidate to search until it's actually open): once a project's last tab closes, the
+  // Find's project picker only ever lists projects open in a searchable tab — an editor, or a
+  // reference panel displaying that project's text (a project isn't a candidate to search until it
+  // is actually open): once a project's last tab closes, the
   // reassignment effect below moves the selection to another open project before this list update
   // even renders. A transient "selected but not listed" gap IS possible while the metadata fetch
   // above is in flight or stale — the refetch effect below and the `isLoadingProjects` gate in the
@@ -521,7 +534,7 @@ global.webViewComponent = function FindWebView({
       resolveTargetReferencePanelWebViewId(
         projectId,
         allOpenProjectTabs,
-        REFERENCE_PANEL_WEB_VIEW_TYPES,
+        REVEALABLE_REFERENCE_PANEL_WEB_VIEW_TYPES,
       ),
     [projectId, allOpenProjectTabs],
   );
