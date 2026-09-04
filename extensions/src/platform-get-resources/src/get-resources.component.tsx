@@ -39,8 +39,13 @@ import {
   TableRow,
 } from 'platform-bible-react';
 import { getResourcePickerBodyState } from 'platform-bible-react/experimental';
-import type { DblResourceData, LocalizedStringValue } from 'platform-bible-utils';
-import { getErrorMessage } from 'platform-bible-utils';
+import type { DblResourceData, LocalizedStringValue, PlatformError } from 'platform-bible-utils';
+import {
+  FAILED_PRECONDITION,
+  getErrorMessage,
+  isPlatformError,
+  newPlatformError,
+} from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
 
 /**
@@ -184,13 +189,65 @@ const getActionContent = (
  * A sentinel rather than a message: this component owns the localized strings, so a caller that
  * supplied its own text would put untranslated English in front of the user.
  *
- * Recognised as a SUBSTRING of the rejection message, not by equality — PAPI rewrites a rejection
- * that crosses a process boundary as `JSON-RPC Request error (-32000): <original>`, so a caller
- * raising this from the extension host or a data provider rather than from inside the web view's
- * own React tree would otherwise fall through to the raw message and show the user a machine
- * token.
+ * Raise it with {@link newResourceActionProviderNotReadyError} and recognise it with
+ * {@link isResourceActionProviderNotReadyError} rather than comparing this string yourself.
  */
 export const RESOURCE_ACTION_PROVIDER_NOT_READY = 'platformGetResources.providerNotReady';
+
+/**
+ * Builds the rejection a caller of `onInstallOrRemoveResource` raises when the backing data
+ * provider has not resolved yet.
+ *
+ * A `PlatformError` carrying `FAILED_PRECONDITION` rather than a bare `Error`: the code is the
+ * machine-readable class of the failure — the system is not in a state where this action can run —
+ * and it is what anything other than this component (a log surface, a generic handler, a caller
+ * deciding whether to retry) should key off.
+ *
+ * @returns The rejection reason to reject with.
+ */
+export function newResourceActionProviderNotReadyError(): PlatformError {
+  return newPlatformError(RESOURCE_ACTION_PROVIDER_NOT_READY, FAILED_PRECONDITION);
+}
+
+/**
+ * Whether a rejection from `onInstallOrRemoveResource` is "the backing data provider has not
+ * resolved yet".
+ *
+ * Keyed on the sentinel in the message, and deliberately NOT on `FAILED_PRECONDITION` alone, for
+ * two independent reasons:
+ *
+ * - The code does not survive a TypeScript rejection crossing a process boundary. `doRequest` in
+ *   `network.service.ts` rebuilds such a rejection as a message-only `PlatformError`; its richer
+ *   `platformErrorCode` field is populated only for C# `PlatformErrorCodes.WithCode` throws. The
+ *   note on `isJsonRpcMethodNotFoundError` in `src/shared/data/rpc.model.ts` records the same
+ *   constraint, and reads its own code back out of the message for the same reason.
+ * - The code says only what CLASS of failure this is. A genuine install failure that is also a failed
+ *   precondition would then be relabelled "resources are not ready yet" — a different lie from the
+ *   one this sentinel exists to prevent, but a lie.
+ *
+ * Matched as a substring so it survives the prefix PAPI prepends at a process boundary. A caller
+ * raising this from the extension host or a data provider, rather than from inside the web view's
+ * own React tree, would otherwise fall through to the raw message and show the user a machine
+ * token.
+ *
+ * @param error The rejection reason.
+ * @returns Whether it is the provider-not-ready sentinel.
+ */
+export function isResourceActionProviderNotReadyError(error: unknown): boolean {
+  const message = isPlatformError(error) ? error.message : getErrorMessage(error);
+  return message.includes(RESOURCE_ACTION_PROVIDER_NOT_READY);
+}
+
+// PAPI prepends `JSON-RPC Request error (<code>): ` to any rejection that crosses a process
+// boundary, and every real install/uninstall failure crosses one. That prefix is diagnostic noise
+// to whoever reads the alert, so strip it before showing the message. Spelled out rather than
+// imported because `getJsonRpcRequestErrorMessagePrefix` lives in `src/shared`, which an extension
+// cannot import from; written with character classes so it stays readable without escapes.
+const JSON_RPC_ERROR_PREFIX_PATTERN = /^JSON-RPC Request error [(][^)]*[)]: */;
+
+function stripCrossProcessPrefix(message: string): string {
+  return message.replace(JSON_RPC_ERROR_PREFIX_PATTERN, '');
+}
 
 export type GetResourcesProps = {
   /**
@@ -311,10 +368,12 @@ export function GetResources({
     } catch (e) {
       // Callers signal "the backing provider has not resolved yet" with a sentinel rather than a
       // message, because the text the user reads has to be localized and this component is the half
-      // that holds the localized strings. Any other rejection carries a message worth showing.
-      const message = getErrorMessage(e);
+      // that holds the localized strings. Any other rejection carries a message worth showing —
+      // minus the cross-process prefix, which tells the user nothing.
       setActionError(
-        message.includes(RESOURCE_ACTION_PROVIDER_NOT_READY) ? providerNotReadyText : message,
+        isResourceActionProviderNotReadyError(e)
+          ? providerNotReadyText
+          : stripCrossProcessPrefix(getErrorMessage(e)),
       );
     }
   };

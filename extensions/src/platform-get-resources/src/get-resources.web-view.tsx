@@ -8,7 +8,7 @@ import { shouldReportCatalogFailure } from './dbl-catalog.utils';
 import {
   GetResources,
   GET_RESOURCES_STRING_KEYS,
-  RESOURCE_ACTION_PROVIDER_NOT_READY,
+  newResourceActionProviderNotReadyError,
   ResourceAction,
 } from './get-resources.component';
 
@@ -111,10 +111,10 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       // Reject rather than returning a bare `undefined`. The component awaits this inside a
       // try/catch and surfaces a rejection in its error alert; awaiting `undefined` resolves, so a
       // click landing before the data provider resolves would produce no spinner, no error and no
-      // log — the user cannot tell it from a click that did nothing at all. The sentinel carries no
-      // prose: the component holds the localized strings and maps this onto one of its own.
+      // log — the user cannot tell it from a click that did nothing at all. The rejection carries no
+      // prose: the component holds the localized strings and maps it onto one of its own.
       if (!installResource || !uninstallResource)
-        return Promise.reject(new Error(RESOURCE_ACTION_PROVIDER_NOT_READY));
+        return Promise.reject(newResourceActionProviderNotReadyError());
       const newInstallInfo: InstallInfo = {
         dblEntryUid,
         action: action === 'install' ? 'installing' : 'removing',

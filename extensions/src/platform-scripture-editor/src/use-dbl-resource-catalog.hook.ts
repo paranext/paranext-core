@@ -43,11 +43,11 @@ export type DblResourceCatalogState = {
  * catalog takes the same path for the same reason: it is a catalog still on its way, not an empty
  * one.
  *
- * TODO: Migrate onto `useRetryablePromise` from `platform-bible-react`, which now provides this
- * hook's whole mechanism generically — the supersession guard, the error flag cleared on refetch,
- * and the settled-vs-loading distinction this hook spells `isCatalogReady`. Only the PAPI call and
- * the `unavailable`-reason mapping below would remain here. Deliberately deferred rather than
- * missed; see `adr-picker-recovery-injected-fetch-hook` in
+ * TODO(PT-4518): Migrate onto `useRetryablePromise` from `platform-bible-react`, which now provides
+ * this hook's whole mechanism generically — the supersession guard, the error flag cleared on
+ * refetch, and the settled-vs-loading distinction this hook spells `isCatalogReady`. Only the PAPI
+ * call and the `unavailable`-reason mapping below would remain here. Deliberately deferred rather
+ * than missed; see `adr-picker-recovery-injected-fetch-hook` in
  * `.context/standards/Architecture-Decisions.md` for why, and note that migrating means keeping
  * this hook's own tests green.
  */

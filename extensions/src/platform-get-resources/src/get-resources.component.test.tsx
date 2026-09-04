@@ -3,7 +3,12 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { GetResources, RESOURCE_ACTION_PROVIDER_NOT_READY } from './get-resources.component';
+import { FAILED_PRECONDITION, isPlatformError } from 'platform-bible-utils';
+import {
+  GetResources,
+  newResourceActionProviderNotReadyError,
+  RESOURCE_ACTION_PROVIDER_NOT_READY,
+} from './get-resources.component';
 
 /*
  * A failed catalog fetch and a genuinely empty catalog are the same picture to the user unless the
@@ -73,9 +78,7 @@ describe('GetResources', () => {
         resources={[resource]}
         selectedTypes={['ScriptureResource']}
         selectedLanguages={['English']}
-        onInstallOrRemoveResource={() =>
-          Promise.reject(new Error(RESOURCE_ACTION_PROVIDER_NOT_READY))
-        }
+        onInstallOrRemoveResource={() => Promise.reject(newResourceActionProviderNotReadyError())}
       />,
     );
 
@@ -144,6 +147,19 @@ describe('GetResources', () => {
   // caller may well raise it from the extension host rather than from inside the web view's own
   // React tree — an equality check would fall through and put the raw machine token, JSON-RPC
   // prefix and all, in front of the user.
+  it('classifies the provider-not-ready rejection as a failed precondition', () => {
+    const error = newResourceActionProviderNotReadyError();
+
+    // The machine-readable class, for anything that is not this component: a log surface, a generic
+    // handler, a caller deciding whether the action is worth retrying.
+    expect(isPlatformError(error)).toBe(true);
+    expect(error.code).toBe(FAILED_PRECONDITION);
+    expect(error.message).toContain(RESOURCE_ACTION_PROVIDER_NOT_READY);
+  });
+
+  // The code cannot be the discriminant: `doRequest` rebuilds a TypeScript rejection that crosses a
+  // process boundary as a message-only PlatformError, so a caller raising this from the extension
+  // host arrives with the code stripped and the prefix added.
   it('recognises the provider-not-ready sentinel through a cross-process rejection prefix', async () => {
     const resource = {
       dblEntryUid: 'uid-1',
@@ -175,5 +191,39 @@ describe('GetResources', () => {
 
     expect(await screen.findByText('Resources are not ready yet, translated')).toBeInTheDocument();
     expect(screen.queryByText(/JSON-RPC/)).not.toBeInTheDocument();
+  });
+
+  // Every real install failure crosses a process boundary, so its message arrives carrying the
+  // prefix. The prefix is diagnostic noise to whoever is reading the alert.
+  it('strips the cross-process prefix from a real action failure before showing it', async () => {
+    const resource = {
+      dblEntryUid: 'uid-1',
+      displayName: 'NIV',
+      fullName: 'New International Version',
+      bestLanguageName: 'English',
+      type: 'ScriptureResource' as const,
+      size: 1000,
+      installed: false,
+      updateAvailable: false,
+      projectId: 'proj-1',
+    };
+
+    render(
+      <GetResources
+        localizedStringsWithLoadingState={[STRINGS, false]}
+        resources={[resource]}
+        selectedTypes={['ScriptureResource']}
+        selectedLanguages={['English']}
+        onInstallOrRemoveResource={() =>
+          Promise.reject(
+            new Error('JSON-RPC Request error (-32000): This resource is no longer available'),
+          )
+        }
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get' }));
+
+    expect(await screen.findByText('This resource is no longer available')).toBeInTheDocument();
   });
 });

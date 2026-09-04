@@ -2905,7 +2905,8 @@ step, no automation. Just a record.
   changed factory identity — because a generation derived from state lands a render late, leaving a
   window in which a superseded fetch can resurrect a cleared error.
   `useDblResourceCatalog` remains a near-duplicate of the shared hook and is still not migrated onto
-  it; that is a refactor, and this change was already large. Anyone touching it should migrate it.
+  it; that is a refactor, and this change was already large. Tracked as PT-4518, which records the
+  one subtlety: `isCatalogReady` maps onto `hasSettled && !hasError`, not onto `hasSettled` alone.
   **Revisit** when a consumer needs a fourth catalog state, or wants a value where `undefined` is a
   legitimate result — the hook stays deliberately generic about that, and the `status` branching
   lives in the hosts.
