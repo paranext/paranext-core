@@ -1,5 +1,7 @@
 import { FloatPosition } from 'rc-dock';
 import { vi } from 'vitest';
+import { render } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import { FloatLayout, TabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewDefinition } from '@shared/models/web-view.model';
 import {
@@ -11,6 +13,7 @@ import {
   TAB_GROUP,
   TAB_GROUP_RESOURCES,
 } from './platform-dock-layout-positioning.util';
+import { createContext, createPanel } from './tab-bar-drop-zone-test.util';
 
 /** Minimal WebView {@link TabInfo} fixture for `getTabGroup` tests. */
 function makeWebViewTabInfo(webViewType: string, isClosable?: boolean): TabInfo {
@@ -58,6 +61,23 @@ describe('Dock Layout Component', () => {
         expect(groups[groupKey].panelExtra).toBeUndefined();
         expect(groups[groupKey].maximizable).toBe(false);
         expect(groups[groupKey].floatable).toBe(false);
+      });
+    });
+
+    it('power mode: panelExtra renders both the new-tab button and the tab-bar drop zone', () => {
+      const { panelExtra } = getGroups(true)[TAB_GROUP];
+      if (!panelExtra) throw new Error('Expected power mode TAB_GROUP to define panelExtra');
+
+      const { container } = render(panelExtra(createPanel(), createContext()));
+
+      expect(container.querySelector('.new-tab-button')).toBeInTheDocument();
+      expect(container.querySelector('.platform-tab-bar-drop-zone')).toBeInTheDocument();
+    });
+
+    it('simple mode: no registered group defines panelExtra', () => {
+      const groups = getGroups(false);
+      Object.keys(groups).forEach((groupKey) => {
+        expect(groups[groupKey].panelExtra).toBeUndefined();
       });
     });
   });

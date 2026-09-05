@@ -1,0 +1,71 @@
+@use '../../styles/vars';
+
+// This class only sets sizing for the invisible drop zone itself; its position and its "grow to
+// fill leftover space" behavior come from the `.dock-nav > .dock-extra-content` flex rules in
+// `dock-layout-wrapper.component.scss`'s TAB-BAR region — kept there so all tab-bar flex layout
+// stays in one place.
+.platform-tab-bar-drop-zone {
+  // `flex-basis: 0` (the `0` in the shorthand) keeps this element out of the flex line's
+  // hypothetical main-size total, so it only ever claims space nothing else needs — it can't force
+  // `.dock-nav-wrap` (the tab list) to shrink and push a tab into the overflow dropdown.
+  flex: 1 0 0;
+  // The default flex-item `min-width: auto` would otherwise floor this at its content size; it has
+  // no content, but pin it to 0 so a change here can't reintroduce that floor.
+  min-width: 0;
+  // Fill the bar's full height (matching the "+" button) rather than just its own flex-centered
+  // content box, so the drop target isn't a thin sliver.
+  align-self: stretch;
+  // Positioned in every state, not only while dragging: this is the containing block that
+  // `.platform-tab-bar-drop-zone-indicator` below sizes its `position: absolute` box against. Left
+  // static, that box would size against the nearest positioned ancestor instead — the whole tab
+  // bar — and sit on top of every tab, out ahead of even the `pointer-events: none` on the
+  // indicator below.
+  position: relative;
+
+  // Set only while a drag is in progress (`tab-bar-drop-zone.component.tsx`'s
+  // `claimLastTabOverlap`/`clearLastTabOverlap`). rc-dock's own per-tab handler
+  // (`TabCache.onDragOver` in `node_modules/rc-dock/src/DockTabs.tsx`) is registered on the whole
+  // tab and already picks `after-tab` for that trailing half via a pointer-vs-midpoint test — only
+  // the indicator it draws there is a fixed 30px wide (`DockLayout.setDropRect`) — and rc-dock's
+  // hit-testing always defers to whichever registered element paints topmost under the pointer — so
+  // pulling this zone's own start edge back to cover that half, for the duration of a drag only, is
+  // the only way to present a single drop target there without extending the rc-dock patch
+  // (`patches/rc-dock+3.3.2.patch`).
+  &[data-dragging] {
+    // Flex items already paint in order-modified (not raw DOM) order, so `.dock-extra-content`
+    // (`order: 2` in `dock-layout-wrapper.component.scss`) already paints over `.dock-nav-wrap`
+    // (`order: 1`) without this — z-index makes that outcome explicit rather than relying on an
+    // implicit flex-painting rule.
+    z-index: 1;
+    margin-inline-start: calc(-1 * var(--tab-bar-drop-zone-overlap, 0px));
+
+    // The flex `gap` between this zone and the "+" button (`.dock-extra-content`'s `gap` rule in
+    // `dock-layout-wrapper.component.scss`) belongs to neither flex item, so a drop released over it
+    // hits `.dock-extra-content` itself, which registers no drop handler, and is silently ignored.
+    // Extend the zone's own hit area across that gap with a pseudo-element rather than growing its
+    // real box (padding, a negative margin, or removing the gap) — any of those would narrow
+    // `.dock-nav-wrap` mid-drag and could push a tab into the overflow dropdown while dragging.
+    &::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-end: (-1 * vars.$space--sm);
+      width: vars.$space--sm;
+    }
+  }
+}
+
+// A separate element from the zone above: `DockContext.setDropRect` reads its target's own
+// `getBoundingClientRect()` to position the global drop-indicator overlay, so the visible indicator
+// needs its own box — confined to the last tab's trailing edge through the "+" — distinct from the
+// zone's wider, tab-covering one that hit-testing uses during a drag.
+.platform-tab-bar-drop-zone-indicator {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  inset-inline-start: var(--tab-bar-drop-zone-indicator-inset, 0);
+  // This element exists only as a geometry reference for `setDropRect`, never as an interactive
+  // surface; it must never intercept pointer events itself, so hit-testing always reaches the zone
+  // (`.platform-tab-bar-drop-zone`, its containing block) and the tabs painted beneath it.
+  pointer-events: none;
+}

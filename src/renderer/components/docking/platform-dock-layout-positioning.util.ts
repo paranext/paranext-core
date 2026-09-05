@@ -1,4 +1,4 @@
-import { createElement } from 'react';
+import { createElement, Fragment } from 'react';
 import type { CSSProperties } from 'react';
 import { DIALOGS } from '@renderer/components/dialogs';
 import {
@@ -15,6 +15,7 @@ import { FloatPosition, FloatSize, LayoutSize, TabGroup } from 'rc-dock';
 import { ChevronsUpDown } from 'lucide-react';
 import { TabType } from './docking-framework-internal.model';
 import { PanelExtraContent } from './panel-extra-content.component';
+import { TabBarDropZone } from './tab-bar-drop-zone.component';
 import { HEADLESS_GROUP, TAB_GROUP, TAB_GROUP_RESOURCES } from './dock-tab-group.util';
 
 // Re-exported for existing consumers of these group-name constants from this module; the
@@ -64,7 +65,13 @@ export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
     return {
       [TAB_GROUP]: {
         ...baseConfig,
-        panelExtra: (panelData) => createElement(PanelExtraContent, { panelData }),
+        panelExtra: (panelData, context) =>
+          createElement(
+            Fragment,
+            undefined,
+            createElement(PanelExtraContent, { panelData }),
+            createElement(TabBarDropZone, { panelData, context }),
+          ),
       },
     };
   }
