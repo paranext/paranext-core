@@ -3,7 +3,7 @@ import { useEvent } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage } from 'platform-bible-utils';
-import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import {
   buildPickerResources,
   fetchDownloadedResources,
@@ -15,7 +15,12 @@ import {
  * Composes the picker's resource list: the effective (admin+user) referenced list, optionally
  * unioned with all locally-downloaded scripture projects, deduped and ordered.
  *
- * @param projectId The container project whose reference list is shown
+ * @param effectiveResourcesState The resolved referenced-resource list state, passed in rather than
+ *   derived here from a `projectId`. Without a project the list does not come from a project at all
+ *   — it comes from the app-scoped no-project setting (see `useResourceReferenceSource`) — and
+ *   `useEffectiveResourceReferenceList(undefined, …)` reports `loading` forever, which would pin
+ *   this hook's rows at `undefined` and its loading flag at `true` for the whole no-project
+ *   session. Taking the state also avoids a second subscription: every caller already holds it.
  * @param options.includeDownloaded Union in locally-downloaded projects that are not referenced yet
  * @param options.adminLockedFirst Sort admin-locked rows to the top
  * @param dblResources The resource catalog rows to resolve references against
@@ -29,17 +34,13 @@ import {
  *   loading
  */
 export function useResourcePickerResources(
-  projectId: string | undefined,
+  effectiveResourcesState: EffectiveResourceReferenceListState,
   options: { includeDownloaded?: boolean; adminLockedFirst?: boolean },
   dblResources: DblResourceData[],
   isCatalogSettled: boolean,
 ): [PickerResource[] | undefined, boolean] {
   const { includeDownloaded = false, adminLockedFirst = false } = options;
 
-  const effectiveResourcesState = useEffectiveResourceReferenceList(
-    projectId,
-    'platformScripture.referencedProjectsAndResources',
-  );
   const effectiveResources =
     effectiveResourcesState.status === 'ready' ? effectiveResourcesState.list : undefined;
 
