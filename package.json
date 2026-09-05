@@ -205,7 +205,7 @@
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@usersnap/browser": "^1.0.2",
-    "browserslist": "^4.28.2",
+    "browserslist": "^4.28.8",
     "browserslist-config-detect-electron": "file:./lib/browserslist-config-detect-electron",
     "concurrently": "^9.1.2",
     "core-js": "^3.40.0",
