@@ -45,7 +45,7 @@ const STRINGS = {
   '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%': '{name}: {value}',
   '%webView_platformScriptureEditor_characterMarkerControl_label_format%':
     '{marker} - {description}',
-  '%markerMenu_searchPlaceholder_character%': 'Search character markers',
+  '%markerMenu_searchPlaceholder_character%': 'Search to change character style.',
   '%webView_platformScriptureEditor_syncEditBlocked_banner%':
     'Editing paused — Send/Receive in progress',
   '%markerMenu_searchPlaceholder%': 'Type a style or search.',
@@ -268,7 +268,7 @@ describe('CharacterMarkerControl — menu', () => {
     await user.click(screen.getByRole('button'));
 
     expect(onOpen).toHaveBeenCalledTimes(1);
-    const search = screen.getByPlaceholderText('Search character markers');
+    const search = screen.getByPlaceholderText('Search to change character style.');
     expect(search).toHaveFocus();
   });
 
@@ -350,7 +350,7 @@ describe('CharacterMarkerControl — menu', () => {
     await user.tab();
     expect(screen.getByRole('button')).toHaveFocus();
     await user.keyboard('{Enter}');
-    expect(screen.getByPlaceholderText('Search character markers')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search to change character style.')).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);
