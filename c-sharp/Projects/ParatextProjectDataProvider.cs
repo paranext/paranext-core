@@ -1647,6 +1647,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
     }
 
+    /// <summary>
+    /// Gets a project setting value. Settings contributed by extensions store booleans in
+    /// Paratext's compact "T"/"F" form; a stored value that is not one of Paratext's boolean tokens
+    /// is returned as a raw string rather than throwing, so a setting whose type is a union of
+    /// boolean and something else keeps working.
+    /// </summary>
+    /// <param name="settingName">Setting name in Platform.Bible terminology</param>
+    /// <returns>The setting value, or its registered default if the project has no value</returns>
     public object? GetProjectSetting(string settingName)
     {
         var paratextSettingName =
@@ -1777,6 +1785,32 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     );
                 return boolValue;
             }
+
+            // Only extension settings use the compact T/F encoding, and only a value already in
+            // that form can convert. Both checks are local, so make them before paying for a
+            // GetDefault round trip. Extension settings have no Paratext mapping, so the names match.
+            if (
+                paratextSettingName == settingName
+                && ProjectSettingsNames.TryParseParatextBoolean(settingValue, out bool storedBool)
+            )
+            {
+                // Convert only when the setting is registered with a boolean default. GetDefault
+                // throws when there is no default, so any error falls back to the raw string.
+                try
+                {
+                    if (
+                        ProjectSettingsService.GetDefault(PapiClient, settingName)
+                            is JsonElement elem
+                        && elem.ValueKind is JsonValueKind.True or JsonValueKind.False
+                    )
+                        return storedBool;
+                }
+                catch
+                {
+                    // No registered default (or PAPI error); keep the raw string
+                }
+            }
+
             return settingValue;
         }
 
@@ -1958,6 +1992,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                             // Normalize to the canonical single-letter form Paratext stores
                             value = boolValue ? "T" : "F";
                         }
+                        // Only extension settings use the compact T/F encoding; mapped Paratext
+                        // settings are handled above. Extension settings have no Paratext mapping,
+                        // so the names match.
+                        else if (
+                            paratextSettingName == settingName
+                            && TryGetBoolean(value, out bool extensionBool)
+                        )
+                            value = extensionBool ? "T" : "F";
                         scrText.Settings.SetSetting(paratextSettingName, value!.ToString());
                         // We are notifying when we release our lock, so don't automatically
                         // notify in `Save`
@@ -2118,19 +2160,40 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return bool.TryParse(content.Value, out bool result) ? result : null;
     }
 
+    /// <summary>
+    /// Gets a boolean from a value that may be a native bool or a <see cref="JsonElement"/>. Values
+    /// crossing the JSON-RPC boundary arrive as JsonElement, not a native bool, so accept both
+    /// (matches the bool-handling pattern in Checks/InventoryOption.SerializeValue). Try-shaped so
+    /// each caller applies its own policy for a non-boolean value.
+    /// </summary>
+    /// <param name="value">Value to interpret as a boolean</param>
+    /// <param name="result">The boolean; false when <paramref name="value"/> was not one</param>
+    /// <returns>True if <paramref name="value"/> was a native bool or a boolean JsonElement</returns>
+    private static bool TryGetBoolean(object? value, out bool result)
+    {
+        switch (value)
+        {
+            case bool boolValue:
+                result = boolValue;
+                return true;
+            case JsonElement { ValueKind: JsonValueKind.True }:
+                result = true;
+                return true;
+            case JsonElement { ValueKind: JsonValueKind.False }:
+                result = false;
+                return true;
+            default:
+                result = false;
+                return false;
+        }
+    }
+
     public bool SetUserStructureProtected(object? value)
     {
-        // Values crossing the JSON-RPC boundary arrive as JsonElement, not a native bool, so accept
-        // both (matches the bool-handling pattern in Checks/InventoryOption.SerializeValue).
-        bool boolValue = value switch
-        {
-            bool b => b,
-            JsonElement { ValueKind: JsonValueKind.True } => true,
-            JsonElement { ValueKind: JsonValueKind.False } => false,
-            _ => throw new InvalidDataException(
+        if (!TryGetBoolean(value, out bool boolValue))
+            throw new InvalidDataException(
                 $"Expected boolean for UserStructureProtected, got: {value}"
-            ),
-        };
+            );
         var itemsElement = new XElement("Items", boolValue.ToString().ToLowerInvariant());
         // Version stored for consistency with other settings; ignored on read
         GetUserProjectSettings().SetSetting("StructureProtected", "1.0.0", itemsElement);
