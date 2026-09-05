@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import type { DblResourceCatalog } from 'platform-get-resources';
 import type { DblResourceData } from 'platform-bible-utils';
@@ -9,10 +9,15 @@ import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 
 vi.mock('@papi/frontend', () => ({
   default: { commands: { sendCommand: vi.fn() } },
-  logger: { warn: vi.fn() },
+  // `debug` as well as `warn`: the registration probe logs an unanswerable probe at debug, and a
+  // mock missing it turns that log line into a TypeError that escapes the probe's own catch.
+  logger: { warn: vi.fn(), debug: vi.fn() },
 }));
 
-const mockSendCommand = vi.mocked(papi.commands.sendCommand);
+// Typed as a bare `Mock` rather than through `vi.mocked`: the implementation routes by command name
+// and so returns a different shape per command, which cannot satisfy `sendCommand`'s generic
+// signature (its return type is derived from the command name) without a type assertion.
+const mockSendCommand: Mock = vi.mocked(papi.commands.sendCommand);
 
 const RESOURCE: DblResourceData = {
   dblEntryUid: 'uid-web',
@@ -44,16 +49,60 @@ describe('useDblResourceCatalog', () => {
   // order: a test that drives one of them must not depend on which lands first.
   let fetchDblCatalog: () => Promise<DblResourceCatalog>;
   let fetchLocalNonDbl: () => Promise<DblResourceData[]>;
+  // Probed only after the DBL half has failed, to tell a missing registration (which a retry can
+  // never fix) from a transient failure (which it can). Defaults to registered.
+  let isRegistrationValid: () => Promise<boolean>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     fetchDblCatalog = () => Promise.resolve({ status: 'available', resources: [] });
     fetchLocalNonDbl = () => Promise.resolve([]);
-    mockSendCommand.mockImplementation((command: string) =>
-      command === 'platformGetResources.getLocalNonDblResources'
-        ? fetchLocalNonDbl()
-        : fetchDblCatalog(),
-    );
+    isRegistrationValid = () => Promise.resolve(true);
+    mockSendCommand.mockImplementation((command: string) => {
+      if (command === 'platformGetResources.getLocalNonDblResources') return fetchLocalNonDbl();
+      if (command === 'paratextRegistration.doesUserHaveValidRegistration')
+        return isRegistrationValid();
+      return fetchDblCatalog();
+    });
+  });
+
+  it('reports a registration failure when the catalog is not configured and the user is not registered', async () => {
+    // The path a missing registration actually takes: the provider answers `notConfigured` rather
+    // than throwing, so the thrown-sentinel check never sees it. Without the probe the no-project
+    // panel offers a pick prompt whose picker can never be populated.
+    fetchDblCatalog = () => Promise.resolve({ status: 'unavailable', reason: 'notConfigured' });
+    isRegistrationValid = () => Promise.resolve(false);
+
+    const { result } = renderHook(() => useDblResourceCatalog());
+
+    await waitFor(() => expect(result.current.hasRegistrationError).toBe(true));
+    // Still not a retryable failure: no retry can change a missing registration.
+    expect(result.current.hasCatalogError).toBe(false);
+  });
+
+  it('does not report a registration failure for a provider that is only not ready yet', async () => {
+    // `notReady` is transient and a retry works, so it must keep its retry even for an unregistered
+    // user — the registration question only arises once the provider can answer at all.
+    fetchDblCatalog = () => Promise.resolve({ status: 'unavailable', reason: 'notReady' });
+    isRegistrationValid = () => Promise.resolve(false);
+
+    const { result } = renderHook(() => useDblResourceCatalog());
+
+    await waitFor(() => expect(result.current.hasCatalogError).toBe(true));
+    expect(result.current.hasRegistrationError).toBe(false);
+  });
+
+  it('treats an unanswerable probe as not-a-registration-problem', async () => {
+    // Telling a registered user to register is worse than offering nothing to do, so only a
+    // definitive `false` counts.
+    fetchDblCatalog = () => Promise.resolve({ status: 'unavailable', reason: 'notConfigured' });
+    isRegistrationValid = () => Promise.reject(new Error('provider not ready'));
+
+    const { result } = renderHook(() => useDblResourceCatalog());
+
+    await waitFor(() => expect(result.current.isCatalogReady).toBe(true));
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextRegistration.doesUserHaveValidRegistration');
+    expect(result.current.hasRegistrationError).toBe(false);
   });
 
   it('reports the catalog as ready once the fetch delivers', async () => {
