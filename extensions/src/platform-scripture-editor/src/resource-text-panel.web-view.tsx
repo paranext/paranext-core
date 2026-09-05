@@ -7,7 +7,6 @@ import {
   useDialogCallback,
   useLocalizedStrings,
   useProjectData,
-  useProjectDataProvider,
   useProjectSetting,
   useSetting,
 } from '@papi/frontend/react';
@@ -36,7 +35,6 @@ import {
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ResourceReferenceList } from 'platform-scripture';
 import {
   hasNewScrollTarget,
   isEchoOfPublishedScrRef,
@@ -44,7 +42,7 @@ import {
   scrollToVerse,
 } from './editor-dom.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
-import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import { useResourceReferenceSource } from './use-resource-reference-source.hook';
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
 import type { PickerResource } from './downloaded-resources.utils';
 import {
@@ -53,6 +51,9 @@ import {
   type ResourcePanelReadiness,
 } from './resource-panel-readiness.utils';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
+import { HAS_FREE_RESOURCES, freeResourcePickerOptions } from './free-resources.utils';
+import { openParatextRegistration } from './open-paratext-registration.util';
+import { ResourceMessageView } from './resource-message-view.component';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
@@ -75,6 +76,7 @@ import {
   resolveResourceContentState,
 } from './platform-scripture-editor.utils';
 import {
+  NO_PROJECT_RESOURCE_PANEL_STRING_KEYS,
   RESOURCE_PANEL_TYPED_STRING_KEYS,
   resolveResourcePanelStringKeys,
 } from './resource-panel-strings.utils';
@@ -83,6 +85,17 @@ import { selectTextConnection } from './select-dbl-resource';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
+
+// Declared in `resource-panel-strings.utils.ts` rather than here so they pick up the en/es parity
+// coverage that keys living in a web view get none of. See that module for why they are separate
+// from the per-resource-type key set.
+const {
+  emptyStatePromptKey: NO_PROJECT_EMPTY_PROMPT_KEY,
+  pickButtonKey: NO_PROJECT_PICK_KEY,
+  registrationRequiredKey: NO_PROJECT_REGISTRATION_REQUIRED_KEY,
+  registerKey: NO_PROJECT_REGISTER_KEY,
+  freeResourcesOnlyNoticeKey: FREE_RESOURCES_ONLY_NOTICE_KEY,
+} = NO_PROJECT_RESOURCE_PANEL_STRING_KEYS;
 
 // The per-resource-type keys come from `RESOURCE_PANEL_TYPED_STRING_KEYS` rather than being listed
 // again here. `useLocalizedStrings` seeds key-to-key defaults only for the keys in the array it is
@@ -122,9 +135,19 @@ const COMMENTARIES_ICON_URLS: TabIconUrls = {
   lightUnselected: 'papi-extension://platformScriptureEditor/assets/file-text-unselected.svg',
 };
 
-// This panel offers locally-downloaded resources alongside the ones already in the text
-// collection, so its rows are the union of both.
-const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
+// This panel offers locally-downloaded resources alongside the ones already in the text collection,
+// so its rows are normally the union of both.
+//
+// WITHOUT a project that union is wrong, and dangerously so. Downloaded rows are whatever happens
+// to be installed on the machine — licensed DBL resources from an earlier session, commentaries —
+// and nothing filters them: `allowedResourceIds` guards only the picker dialog and
+// `filterFreeReferences` only the stored setting, so a downloaded row reaches the panel through
+// neither. It would then be auto-selected by `resolveResourceSelection`'s `rows[0]` fallback and
+// rendered, and offered in the selector dropdown, bypassing the exclusion guarantee outright. With
+// no project the only rows that may appear are the user's stored picks, which ARE allowlist-filtered
+// on read.
+const WITH_PROJECT_PICKER_OPTIONS = { includeDownloaded: true } as const;
+const NO_PROJECT_PICKER_OPTIONS = { includeDownloaded: false } as const;
 
 type ResourceSelectorDropdownProps = {
   filteredResources: PickerResource[];
@@ -258,33 +281,30 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Data sources
 
-  const effectiveResourcesState = useEffectiveResourceReferenceList(
+  // Reads the project's referenced resources when a project is open, and the app-scoped
+  // free-resource choice when none is. Same state shape either way, so everything below is unchanged.
+  const resourceSource = useResourceReferenceSource(
     projectId,
     'platformScripture.referencedProjectsAndResources',
   );
-
-  const textConnectionsProvider = useProjectDataProvider(
-    'platformScripture.textConnectionSettings',
-    projectId,
-  );
+  const effectiveResourcesState = resourceSource.state;
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
+  const { dblResources, isCatalogReady, hasCatalogError, hasRegistrationError, refetchCatalog } =
+    useDblResourceCatalog();
   const [pickerResources, arePickerResourcesLoading] = useResourcePickerResources(
-    projectId,
-    RESOURCE_PICKER_OPTIONS,
+    effectiveResourcesState,
+    resourceSource.isNoProject ? NO_PROJECT_PICKER_OPTIONS : WITH_PROJECT_PICKER_OPTIONS,
     dblResources,
     isCatalogReady || hasCatalogError,
   );
-  const getUserResourceTexts = useCallback(
-    async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
-    [textConnectionsProvider],
-  );
-  const setUserResourceTexts = useCallback(
-    async (resources: ResourceReferenceList) =>
-      textConnectionsProvider?.setUserReferencedProjectsAndResources(resources),
-    [textConnectionsProvider],
-  );
+  const { getUserList: getUserResourceTexts, setUserList: setUserResourceTexts } = resourceSource;
+
+  // Bible-texts-only (see the key constants above), and only while something is actually
+  // allowlisted: an empty allowlist leaves nothing to offer, so the tab keeps its plain "no project"
+  // message rather than a picker that cannot be populated.
+  const isFreeResourceEntryPoint =
+    resourceSource.isNoProject && resourceType === 'ScriptureResource' && HAS_FREE_RESOURCES;
 
   // Re-resolve the cached resource list once an install completes so the resource flips to
   // installed and renders; the install itself lives in the shared hook. Returns a no-op until the
@@ -311,6 +331,12 @@ globalThis.webViewComponent = function ResourceTextPanel({
     listState: effectiveResourcesState,
     isCatalogReady,
     hasCatalogError,
+    // Scoped to the free-resource entry point: with a project open the panel may still have an
+    // installed resource to show, so the retryable catalog error stays the better answer there.
+    hasRegistrationError: isFreeResourceEntryPoint && hasRegistrationError,
+    // The free-resource prompt can only offer what the catalog supplies, so it must not appear
+    // before the catalog has settled.
+    needsCatalogBeforeEmpty: isFreeResourceEntryPoint,
     matchingCount: filteredResources.length,
   });
 
@@ -576,8 +602,16 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
     useMemo(
-      () => ({ resourceType, selectedResourceIds: currentFilteredDblIds, isModal: true }),
-      [resourceType, currentFilteredDblIds],
+      () => ({
+        resourceType,
+        selectedResourceIds: currentFilteredDblIds,
+        ...freeResourcePickerOptions(
+          isFreeResourceEntryPoint,
+          localizedStrings[FREE_RESOURCES_ONLY_NOTICE_KEY],
+        ),
+        isModal: true,
+      }),
+      [resourceType, currentFilteredDblIds, isFreeResourceEntryPoint, localizedStrings],
     ),
     useCallback(
       (resource: DblResourceData | undefined) => {
@@ -766,11 +800,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Render
 
-  if (!projectId) {
+  // No project, and not the free-resource entry point — i.e. the Commentaries tab. Nothing in the
+  // commentary catalogue is openly licensed, so there is nothing to offer here.
+  if (!projectId && !isFreeResourceEntryPoint) {
     return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <p>{localizedStrings['%webView_resourcePanel_noProject%']}</p>
-      </div>
+      <ResourceMessageView
+        message={localizedStrings['%webView_resourcePanel_noProject%']}
+        testId="resource-text-panel-no-project"
+      />
     );
   }
 
@@ -783,13 +820,20 @@ globalThis.webViewComponent = function ResourceTextPanel({
       <PanelReadinessView
         readiness={readiness}
         errorMessage={localizedStrings['%webView_resourcePanel_settingsUnavailable%']}
-        emptyPrompt={localizedStrings[emptyStatePromptKey]}
+        emptyPrompt={
+          localizedStrings[
+            isFreeResourceEntryPoint ? NO_PROJECT_EMPTY_PROMPT_KEY : emptyStatePromptKey
+          ]
+        }
         catalogErrorMessage={localizedStrings['%webView_resourcePanel_catalogUnavailable%']}
+        registrationRequiredMessage={localizedStrings[NO_PROJECT_REGISTRATION_REQUIRED_KEY]}
+        registerLabel={localizedStrings[NO_PROJECT_REGISTER_KEY]}
         loadingLabel={localizedStrings['%webView_resourcePanel_loading%']}
-        pickLabel={localizedStrings[pickButtonKey]}
+        pickLabel={localizedStrings[isFreeResourceEntryPoint ? NO_PROJECT_PICK_KEY : pickButtonKey]}
         retryLabel={localizedStrings['%webView_resourcePanel_retry%']}
         onPick={() => showResourcePicker()}
         onRetryCatalog={refetchCatalog}
+        onOpenRegistration={openParatextRegistration}
       />
     );
   }

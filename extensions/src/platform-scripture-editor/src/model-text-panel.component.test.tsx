@@ -16,10 +16,9 @@ import {
 /**
  * Records every `setUsj` the panel pushes into the editor, across editor instances.
  *
- * Shared rather than created per instance because the panel UNMOUNTS `Editorial` to show a message
- * and remounts it on the way back to content — a fresh editor holds nothing, so what the tests
- * below need to see is whether the panel re-fed it. A per-instance spy nobody captures makes "the
- * editor is on screen" the only observable fact, which a permanently blank editor also satisfies.
+ * Shared rather than created per instance so the tests can see whether the panel actually re-fed
+ * the editor. A per-instance spy nobody captures makes "the editor is on screen" the only
+ * observable fact, which a permanently blank editor also satisfies.
  */
 const setUsjSpy = vi.fn();
 
@@ -43,7 +42,6 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 const STRINGS = {
   '%webView_modelTextPanel_installing%': 'Installing resource…',
   '%webView_modelTextPanel_selecting%': 'Selecting resource…',
-  '%webView_modelTextPanel_noProject%': 'No project.',
   '%webView_modelTextPanel_pickModelText%': 'Pick model text…',
   '%webView_modelTextPanel_unknownResource%': 'The selected model text could not be found.',
   '%webView_modelTextPanel_installFailed%': "The model text couldn't be installed.",
@@ -59,6 +57,13 @@ const STRINGS = {
   '%webView_modelTextPanel_loading%': 'Loading…',
   '%webView_modelTextPanel_settingsUnavailable%':
     "Couldn't load your model text. It will appear once it's available.",
+  '%webView_modelTextPanel_noProject%': 'No project selected.',
+  '%webView_modelTextPanel_noProject_emptyState_prompt%': 'Choose a freely available text to read.',
+  '%webView_modelTextPanel_noProject_pick%': 'Choose a text',
+  '%webView_modelTextPanel_noProject_registrationRequired%':
+    'Register Paratext to browse freely available texts.',
+  '%webView_modelTextPanel_noProject_register%': 'Register Paratext',
+  '%webView_modelTextPanel_noProject_unknownResource%': 'The selected text could not be found.',
   '%webView_resourcePanel_textUnavailable%': 'This text could not be loaded.',
 };
 
@@ -127,6 +132,9 @@ function makeProps(overrides: Partial<ModelTextPanelProps> = {}): ModelTextPanel
   return {
     localizedStrings: STRINGS,
     hasProject: true,
+    isFreeResourceEntryPoint: false,
+    hasRegistrationError: false,
+    onOpenRegistration: vi.fn(),
     modelTextsState: readyState({ dataVersion: '1.0.0', items: [] }),
     isCatalogReady: true,
     hasCatalogError: false,
@@ -674,5 +682,113 @@ describe('ModelTextPanel', () => {
 
     expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pick model text…' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ModelTextPanel with no project open', () => {
+  it('offers freely available texts instead of the model-text wording', () => {
+    renderPanel({ hasProject: false, isFreeResourceEntryPoint: true });
+
+    expect(screen.getByText('Choose a freely available text to read.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose a text' })).toBeInTheDocument();
+    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+  });
+
+  it('says registration is required instead of offering an empty picker', () => {
+    // Readiness answers `empty` without consulting the catalog when nothing is chosen, so without
+    // this branch the user gets a pick prompt that opens a picker with no rows and no explanation.
+    renderPanel({
+      hasProject: false,
+      isFreeResourceEntryPoint: true,
+      hasCatalogError: true,
+      hasRegistrationError: true,
+    });
+
+    expect(
+      screen.getByText('Register Paratext to browse freely available texts.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Choose a text' })).not.toBeInTheDocument();
+  });
+
+  it('offers the registration action instead of a retry, which cannot fix it', () => {
+    // Home pairs this same failure with the registration command; telling the user to register
+    // without a way to do it is the gap this closes.
+    const onOpenRegistration = vi.fn();
+    renderPanel({
+      hasProject: false,
+      isFreeResourceEntryPoint: true,
+      hasCatalogError: true,
+      hasRegistrationError: true,
+      onOpenRegistration,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Register Paratext' }));
+    expect(onOpenRegistration).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses no-project wording for a resource that is missing from the catalog', () => {
+    // The project-scoped copy says "model text", a relationship that does not exist here.
+    renderPanel({
+      hasProject: false,
+      isFreeResourceEntryPoint: true,
+      modelTextsState: readyState({
+        dataVersion: '1.0.0',
+        items: [{ type: 'dblResource', id: 'missing-uid', name: 'Gone', source: 'user' }],
+      }),
+    });
+
+    expect(screen.getByText('The selected text could not be found.')).toBeInTheDocument();
+    expect(
+      screen.queryByText('The selected model text could not be found.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers no retry for a registration failure, which retrying cannot fix', () => {
+    renderPanel({
+      hasProject: false,
+      isFreeResourceEntryPoint: true,
+      hasCatalogError: true,
+      hasRegistrationError: true,
+    });
+
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the ordinary retryable catalog error when the failure is not about registration', () => {
+    // A transient catalog failure is still worth retrying; only the registration case is terminal.
+    renderPanel({
+      hasProject: false,
+      isFreeResourceEntryPoint: true,
+      hasCatalogError: true,
+      modelTextsState: readyState({
+        dataVersion: '1.0.0',
+        items: [{ type: 'dblResource', id: 'uid-web', name: 'WEB', source: 'user' }],
+      }),
+    });
+
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(
+      screen.queryByText('Register Paratext to browse freely available texts.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('leaves a project-scoped panel on its own wording and retry when registration fails', () => {
+    // The registration branch is scoped to the no-project entry point; with a project open the
+    // existing catalog-error view is unchanged whatever the cause.
+    renderPanel({
+      hasProject: true,
+      isFreeResourceEntryPoint: false,
+      hasCatalogError: true,
+      hasRegistrationError: true,
+      modelTextsState: readyState({
+        dataVersion: '1.0.0',
+        items: [{ type: 'dblResource', id: 'uid-web', name: 'WEB', source: 'user' }],
+      }),
+    });
+
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(
+      screen.queryByText('Register Paratext to browse freely available texts.'),
+    ).not.toBeInTheDocument();
   });
 });

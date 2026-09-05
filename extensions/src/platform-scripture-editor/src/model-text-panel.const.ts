@@ -15,7 +15,26 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_installing%',
   // Shown while a user-picked resource is being selected/installed.
   '%webView_modelTextPanel_selecting%',
+  // Shown with no project open and nothing free to offer, so there is no picker worth showing.
   '%webView_modelTextPanel_noProject%',
+  // The no-project entry point, where the panel offers free / openly-licensed resources instead of
+  // the project's configured model text. Separate wording because there is no model relationship to
+  // name — the user is choosing something to read, not a text to translate against.
+  '%webView_modelTextPanel_noProject_emptyState_prompt%',
+  '%webView_modelTextPanel_noProject_pick%',
+  // Shown when the DBL catalog is unreachable specifically because the registration is missing or
+  // invalid. Paired with the register action rather than a retry, which cannot succeed until the
+  // registration changes.
+  '%webView_modelTextPanel_noProject_registrationRequired%',
+  '%webView_modelTextPanel_noProject_register%',
+  // No-project variants of the panel's failure wording. The project-scoped originals all name a
+  // "model text", which is a relationship that does not exist here — the user is choosing something
+  // to read, not a text to translate against.
+  '%webView_modelTextPanel_noProject_bookNotAvailable%',
+  '%webView_modelTextPanel_noProject_installFailed%',
+  '%webView_modelTextPanel_noProject_installFailedOffline%',
+  '%webView_modelTextPanel_noProject_settingsUnavailable%',
+  '%webView_modelTextPanel_noProject_unknownResource%',
   '%webView_modelTextPanel_pickModelText%',
   '%webView_modelTextPanel_unknownResource%',
   '%webView_modelTextPanel_installFailed%',
@@ -35,6 +54,9 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   // Shared with the resource text panel's terminal-failure branch. The sentence names neither a
   // panel nor a resource type, because what failed is the read rather than the kind of text.
   '%webView_resourcePanel_textUnavailable%',
+  // Shared likewise: shown in the picker whenever it is restricted to free resources, explaining a
+  // list the dialog itself cannot account for.
+  '%webView_resourcePanel_freeResourcesOnly_notice%',
 ] as const);
 
 export type ModelTextPanelLocalizedStringKey = (typeof MODEL_TEXT_PANEL_STRING_KEYS)[number];

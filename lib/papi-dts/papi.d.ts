@@ -8222,6 +8222,22 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     /** IDs of resources already selected in the calling panel */
     selectedResourceIds?: string[];
     /**
+     * If provided, only resources whose `dblEntryUid` appears in this list may be shown or chosen.
+     *
+     * Distinct from {@link ResourcePickerDialogOptions.selectedResourceIds}, which marks what the
+     * caller already has: this narrows what the catalog is allowed to offer at all. It exists for
+     * entry points that may only hand out a subset of the catalog — currently the no-project reading
+     * panels, which are restricted to free / openly-licensed resources.
+     *
+     * Omit it to offer the whole catalog. An empty array offers nothing, which is the correct reading
+     * of "this caller may offer no resource", not a synonym for "no restriction".
+     *
+     * `readonly` because the dialog only reads it: callers restricting the catalog typically hold a
+     * frozen module-level allowlist, and copying it per render just to satisfy a mutable parameter
+     * would give the dialog callback a new identity on every render.
+     */
+    allowedResourceIds?: readonly string[];
+    /**
      * Already-localized sentence shown above the resource list explaining something the caller knows
      * that limits what picking a resource will do. Shown ahead of any explanation the dialog itself
      * has for an incomplete list.

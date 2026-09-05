@@ -251,6 +251,35 @@ step, no automation. Just a record.
 - **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
   author rather than decided in the review pass.
 
+## adr-bcv-falls-back-to-projectless-editor: BCV navigation falls back to a project-less editor, so a reader without a project is not pinned to one reference
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** The top toolbar disables its book/chapter control when navigation resolves no target
+  (`isBookChapterControlDisabled = !resolvedWebView`). Simple mode always pins resolution to the
+  main editor, and that lookup (`findFirstEditorWebViewDefinition`) requires a Scripture editor web
+  view **with a `projectId`**. With no project open there is none, so the control disabled — which
+  did not matter while the no-project state had nothing to read, and started mattering the moment
+  PT-4326 let those panels show a resource. Without a fix, a user could choose a resource, watch it
+  render, and be stuck at GEN 1:1. PT-4346 does not address this; it consults open resources only
+  *after* a target resolves.
+- **Decision:** Add a third resolution step: when no editor has a project, resolve to the first open
+  Scripture editor web view anyway. In Simple mode that editor is always present and it drives
+  scroll group 0, which both reading panels follow. Non-editor views that merely show a toolbar are
+  deliberately NOT eligible — in Simple mode the toolbar navigates through the editor and every
+  panel follows it.
+- **Alternatives considered:** **Resolve to the reading panel itself** — rejected: its definition
+  `projectId` is the container project, not the resource's, so it supplies the toolbar nothing
+  useful, and it would make the target swing with focus in a mode whose whole navigation model is a
+  single pinned target. **Relax `findFirstEditorWebViewDefinition`** — rejected: that helper is
+  shared with project-picker logic that genuinely means "an editor with a project"; a project-less
+  editor is a distinct case and is kept as one, ordered after it so an open project still wins.
+- **Consequences:** With no project, `platformScripture.booksPresent` stays at its default and the
+  control offers the whole canon. Navigating to a book the chosen resource lacks lands in the
+  panel's "book not available" message, which is a better answer than a disabled control. The
+  ordering is load-bearing and is pinned by a test that lists the project-less editor first.
+- **Source:** PT-4326.
+
 ## adr-blank-chapter-simple-mode-only: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
 
 - **Date:** 2026-08-25
@@ -1339,6 +1368,41 @@ step, no automation. Just a record.
   resolved before such flows can be wired end-to-end.
 - **Source:** project backup-and-restore port (restore-to-new-project scope cut, PT10 source grep
   2026-05-19).
+
+## adr-no-project-reading-choice-in-app-settings: A no-project reading choice lives in an app-scoped hidden setting, not the project text-connection PDP
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** PT-4326 lets a user with no project open pick and read freely-licensed resources in
+  the two reading panels that flank the editor. Everything those panels do downstream of "which
+  resources are chosen" is already project-independent — both render
+  `platformScripture.USJ_Chapter` for the **resource's own** project id, never the container
+  project. Only the chosen-reference list is project-scoped: it lives in the
+  `platformScripture.textConnectionSettings` project data provider, which does not exist when no
+  project is open.
+- **Decision:** Store the no-project choice in two hidden app settings —
+  `platformScriptureEditor.noProjectModelTexts` and
+  `platformScriptureEditor.noProjectReferencedResources` — carrying the same `ResourceReferenceList`
+  shape as their project-scoped counterparts, and select between the two sources in one hook
+  (`useResourceReferenceSource`) that returns the same `EffectiveResourceReferenceListState` either
+  way. The panels branch on *which source*, never on a second copy of the readiness/install/render
+  state machine. The lists never migrate into a project: opening one reloads both panels with a real
+  `projectId` and the project source takes over.
+- **Alternatives considered:** **`useWebViewState`** — rejected: Simple mode never persists its
+  layout (`saveLayout` no-ops), so a pick would be lost on every restart, for exactly the
+  just-finished-setup user the feature exists to help. **`UserStateContribution`** — it looks
+  purpose-built for this, but it is a type-only stub: its sole reference outside
+  `settings.model.ts` is a re-export in `platform-bible-utils/src/index.ts`, and nothing implements
+  it. **Migrating the choice into the project when one opens** — rejected: it would write a personal
+  scratch choice into a setting that is shared and admin-visible.
+- **Consequences:** Two settings that only one caller writes, which is why they are `isHidden` and
+  why their validator (`no-project-reference-list.validator.ts`) is stricter than the project-scoped
+  `resourceReferenceListValidator` — it accepts only DBL references. Because the settings are
+  declared in JSON while `CURRENT_DATA_VERSION` lives in TypeScript, and nothing typechecks a
+  contribution's `default` against `SettingTypes`, a test pins the two together. Free-resource
+  filtering is applied on read as well as on write, so a UID stored while the allowlist was wider
+  cannot keep rendering.
+- **Source:** PT-4326.
 
 ## adr-node-dom-globals-polyfill: Node processes install `@xmldom/xmldom` DOM globals; the extension host does it in a first-import side-effect module
 

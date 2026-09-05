@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import type { DblResourceData } from 'platform-bible-utils';
 import papi from '@papi/frontend';
@@ -8,10 +8,15 @@ import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 
 vi.mock('@papi/frontend', () => ({
   default: { commands: { sendCommand: vi.fn() } },
-  logger: { warn: vi.fn() },
+  // `debug` as well as `warn`: the registration probe logs an unanswerable probe at debug, and a
+  // mock missing it turns that log line into a TypeError that escapes the probe's own catch.
+  logger: { warn: vi.fn(), debug: vi.fn() },
 }));
 
-const mockSendCommand = vi.mocked(papi.commands.sendCommand);
+// Typed as a bare `Mock` rather than through `vi.mocked`: the implementation routes by command name
+// and so returns a different shape per command, which cannot satisfy `sendCommand`'s generic
+// signature (its return type is derived from the command name) without a type assertion.
+const mockSendCommand: Mock = vi.mocked(papi.commands.sendCommand);
 
 const RESOURCE: DblResourceData = {
   dblEntryUid: 'uid-web',
@@ -43,16 +48,55 @@ describe('useDblResourceCatalog', () => {
   // order: a test that drives one of them must not depend on which lands first.
   let fetchDblCatalog: () => Promise<DblResourceData[] | undefined>;
   let fetchLocalNonDbl: () => Promise<DblResourceData[]>;
+  // Probed only after the DBL half has failed, to tell a missing registration (which a retry can
+  // never fix) from a transient failure (which it can). Defaults to registered.
+  let isRegistrationValid: () => Promise<boolean>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     fetchDblCatalog = () => Promise.resolve([]);
     fetchLocalNonDbl = () => Promise.resolve([]);
-    mockSendCommand.mockImplementation((command: string) =>
-      command === 'platformGetResources.getLocalNonDblResources'
-        ? fetchLocalNonDbl()
-        : fetchDblCatalog(),
-    );
+    isRegistrationValid = () => Promise.resolve(true);
+    mockSendCommand.mockImplementation((command: string) => {
+      if (command === 'platformGetResources.getLocalNonDblResources') return fetchLocalNonDbl();
+      if (command === 'paratextRegistration.doesUserHaveValidRegistration')
+        return isRegistrationValid();
+      return fetchDblCatalog();
+    });
+  });
+
+  it('reports a registration failure when the catalog resolves undefined and the user is not registered', async () => {
+    // The path a missing registration actually takes: the provider returns early rather than
+    // throwing, so the thrown-sentinel check never sees it. Without the probe this state offers a
+    // Try again button that can never succeed.
+    fetchDblCatalog = () => Promise.resolve(undefined);
+    isRegistrationValid = () => Promise.resolve(false);
+
+    const { result } = renderHook(() => useDblResourceCatalog());
+
+    await waitFor(() => expect(result.current.hasRegistrationError).toBe(true));
+    expect(result.current.hasCatalogError).toBe(true);
+  });
+
+  it('keeps a retryable catalog error when the catalog fails but the user IS registered', async () => {
+    fetchDblCatalog = () => Promise.resolve(undefined);
+
+    const { result } = renderHook(() => useDblResourceCatalog());
+
+    await waitFor(() => expect(result.current.hasCatalogError).toBe(true));
+    expect(result.current.hasRegistrationError).toBe(false);
+  });
+
+  it('treats an unanswerable probe as not-a-registration-problem', async () => {
+    // Telling a registered user to register is worse than offering a retry that may work, so only a
+    // definitive `false` counts.
+    fetchDblCatalog = () => Promise.resolve(undefined);
+    isRegistrationValid = () => Promise.reject(new Error('provider not ready'));
+
+    const { result } = renderHook(() => useDblResourceCatalog());
+
+    await waitFor(() => expect(result.current.hasCatalogError).toBe(true));
+    expect(result.current.hasRegistrationError).toBe(false);
   });
 
   it('reports the catalog as ready once the fetch delivers', async () => {

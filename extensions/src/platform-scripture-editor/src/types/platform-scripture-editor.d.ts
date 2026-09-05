@@ -702,6 +702,7 @@ declare module 'papi-shared-types' {
     SelectionChangeEvent,
   } from 'platform-scripture-editor';
   import type { ResourceType } from 'platform-bible-utils';
+  import type { ResourceReferenceList } from 'platform-scripture';
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import type { NotificationClickCommandHandler } from '@papi/core';
 
@@ -746,6 +747,25 @@ declare module 'papi-shared-types' {
      * web view is not registered and cannot be opened or restored.
      */
     'platformScriptureEditor.enableScriptureTextGrid': boolean;
+    /**
+     * The model text a user has chosen to read while **no project is open**, in the same shape as
+     * the project-scoped `platformScripture.modelTexts` setting.
+     *
+     * Hidden: it is written only by the Model Text panel's no-project resource picker, never by the
+     * settings dialog. It exists because the project-scoped text-connection data provider — where
+     * the equivalent choice normally lives — does not exist without a project, and Simple mode
+     * never persists its layout, so per-web-view state would be lost on every restart. Restricted
+     * to free / openly-licensed resources on both read and write; see `free-resources.utils.ts`.
+     */
+    'platformScriptureEditor.noProjectModelTexts': ResourceReferenceList;
+    /**
+     * The Bible texts a user has chosen to read while **no project is open**, in the same shape as
+     * the project-scoped `platformScripture.referencedProjectsAndResources` setting.
+     *
+     * Hidden and free-resource-restricted for the same reasons as
+     * {@link SettingTypes.'platformScriptureEditor.noProjectModelTexts'}.
+     */
+    'platformScriptureEditor.noProjectReferencedResources': ResourceReferenceList;
     /**
      * Delay in milliseconds before the editor settles pending marker edits in place while the user
      * is idle, in editable marker modes. The default (`1000`) matches the editor's own built-in

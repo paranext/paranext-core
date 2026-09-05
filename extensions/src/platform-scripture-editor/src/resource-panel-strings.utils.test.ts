@@ -50,7 +50,8 @@ describe('resolveResourcePanelStringKeys', () => {
 
   it('exposes both resource types’ keys for the localization parity test', () => {
     // A key the panel renders but that this list omits would silently escape en/es parity coverage.
-    expect(RESOURCE_PANEL_TYPED_STRING_KEYS).toHaveLength(10);
-    expect(new Set(RESOURCE_PANEL_TYPED_STRING_KEYS).size).toBe(10);
+    // Five per resource type, plus the five no-project keys the Bible Texts panel adds.
+    expect(RESOURCE_PANEL_TYPED_STRING_KEYS).toHaveLength(15);
+    expect(new Set(RESOURCE_PANEL_TYPED_STRING_KEYS).size).toBe(15);
   });
 });
