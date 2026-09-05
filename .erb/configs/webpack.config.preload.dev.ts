@@ -29,6 +29,29 @@ const configuration: webpack.Configuration = {
     },
   },
 
+  // Persistent caching. This build is spawned concurrently with the renderer's first compile, so
+  // what it really costs is CPU contention during the window that is blank on screen.
+  cache: {
+    type: 'filesystem',
+    cacheDirectory: path.join(
+      webpackPaths.rootPath,
+      'node_modules',
+      '.cache',
+      'webpack-preload-dev',
+    ),
+    // Keyed to NODE_ENV because nothing else is: `mode` is the literal 'development' regardless of
+    // NODE_ENV, and webpack defaults `cache.name` to `${name}-${mode}` and `cache.version` to "".
+    // Without this, a run with a different NODE_ENV would share this cache and could reuse modules
+    // that already have the other run's value inlined by `EnvironmentPlugin`.
+    version: process.env.NODE_ENV ?? 'development',
+    buildDependencies: {
+      config: [__filename, path.resolve(__dirname, 'webpack.config.base.ts')],
+      tsconfig: [path.resolve(webpackPaths.rootPath, 'tsconfig.json')],
+    },
+    compression: 'gzip',
+    maxMemoryGenerations: 5,
+  },
+
   plugins: [
     new BundleAnalyzerPlugin({
       analyzerMode: process.env.ANALYZE === 'true' ? 'server' : 'disabled',
