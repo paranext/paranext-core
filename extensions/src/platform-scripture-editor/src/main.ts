@@ -52,6 +52,7 @@ import {
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 import { SharedLayoutReceiver } from './shared-layout-receiver.model';
+import { noProjectReferenceListValidator } from './no-project-reference-list.validator';
 
 logger.debug('Scripture Editor is importing!');
 
@@ -1429,6 +1430,18 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     'platformScriptureEditor.enableScriptureTextGrid',
   );
 
+  // The two app-scoped settings that hold a no-project reading choice. They are hidden and written
+  // only by the panels' resource picker, so a validator here is what stops a hand-edited settings
+  // file from putting a malformed or non-DBL reference in front of a user with no project.
+  const noProjectModelTextsValidatorPromise = papi.settings.registerValidator(
+    'platformScriptureEditor.noProjectModelTexts',
+    noProjectReferenceListValidator,
+  );
+  const noProjectReferencedResourcesValidatorPromise = papi.settings.registerValidator(
+    'platformScriptureEditor.noProjectReferencedResources',
+    noProjectReferenceListValidator,
+  );
+
   const openResourceTextPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openResourceText',
     openResourceText,
@@ -1593,6 +1606,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await commentariesPanelWebViewProviderPromise,
     ...(scriptureTextGridRegistration ? [scriptureTextGridRegistration] : []),
     await openResourceTextPromise,
+    await noProjectModelTextsValidatorPromise,
+    await noProjectReferencedResourcesValidatorPromise,
     selectionChangedEventEmitter,
     {
       dispose: async () => {

@@ -5,6 +5,7 @@ import {
 import {
   findFirstEditorWebViewDefinition,
   SavedWebViewDefinition,
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   WebViewId,
 } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
@@ -55,8 +56,15 @@ function resolveTrackedWebView(
  * web view with a project, same rule `useProjectPickerData` uses to find the current project. Used
  * when nothing is tracked yet (e.g. at fresh app start) but an editor is open, possibly restored on
  * a persisted scroll group other than 0.
+ *
+ * Failing that — and only when `allowProjectlessEditor` is set, i.e. Simple mode — the first open
+ * Scripture editor web view WITHOUT a project, so a user who has no project can still navigate what
+ * the reading panels are showing them. See the comment at that branch for why the distinction is
+ * worth keeping rather than collapsing the two lookups.
+ *
+ * @param allowProjectlessEditor Whether a project-less editor may be the target. Simple mode only.
  */
-function resolveMainEditorWebView(): ResolvedWebView | undefined {
+function resolveMainEditorWebView(allowProjectlessEditor: boolean): ResolvedWebView | undefined {
   let definitions: SavedWebViewDefinition[];
   try {
     definitions = getAllOpenWebViewDefinitionsSync();
@@ -68,8 +76,31 @@ function resolveMainEditorWebView(): ResolvedWebView | undefined {
   }
 
   const editorDefinition = findFirstEditorWebViewDefinition(definitions);
-  if (!editorDefinition) return undefined;
-  return { id: editorDefinition.id, definition: editorDefinition };
+  if (editorDefinition) return { id: editorDefinition.id, definition: editorDefinition };
+
+  // No editor has a project. Fall back to the first open Scripture editor web view regardless,
+  // because a user with no project open can still be READING something: the flanking reading panels
+  // offer freely available resources in that state, and they follow the scroll group the editor
+  // drives. Without this the toolbar's book/chapter control disables — `isBookChapterControlDisabled`
+  // is `!resolvedWebView` — and a resource a user just chose is readable at exactly one reference.
+  //
+  // The editor's own project is what supplies `platformScripture.booksPresent` to the control, so a
+  // project-less editor leaves that at its default and the control offers the whole canon. Books the
+  // chosen resource does not contain then land in the panel's "book not available" message, which is
+  // a better answer than a disabled control.
+  //
+  // Simple mode only. There the toolbar is the single navigation point and every scripture view
+  // follows scroll group 0, so driving a project-less editor moves exactly the views the user is
+  // reading. Power mode has no such guarantee: a project-less editor is not scripture-navigable, so
+  // it can never be the tracked view, and promoting it here would silently enable the
+  // book/chapter control and start writing scroll group 0 on behalf of a view showing nothing.
+  if (!allowProjectlessEditor) return undefined;
+
+  const projectlessEditorDefinition = definitions.find(
+    (definition) => definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  );
+  if (!projectlessEditorDefinition) return undefined;
+  return { id: projectlessEditorDefinition.id, definition: projectlessEditorDefinition };
 }
 
 /**
@@ -85,7 +116,9 @@ function resolveMainEditorWebView(): ResolvedWebView | undefined {
  *
  * 1. The tracked last-selected web view, if it still exists and is still navigable; else
  * 2. The first open Scripture editor web view with a project (the "main editor" fallback); else
- * 3. `undefined` (nothing to navigate — the toolbar/commands disable).
+ * 3. In Simple mode only, the first open Scripture editor web view without one, which is what a user
+ *    with no project open has — the reading panels beside it follow its scroll group; else
+ * 4. `undefined` (nothing to navigate — the toolbar/commands disable).
  *
  * @param trackedWebViewId The currently tracked last-selected web view id (callers supply it so
  *   reactive callers can pass their subscribed value)
@@ -100,6 +133,6 @@ export function resolveTargetWebView(
   trackedWebViewId: WebViewId | undefined,
   pinToMainEditor = false,
 ): ResolvedWebView | undefined {
-  if (pinToMainEditor) return resolveMainEditorWebView();
-  return resolveTrackedWebView(trackedWebViewId) ?? resolveMainEditorWebView();
+  if (pinToMainEditor) return resolveMainEditorWebView(true);
+  return resolveTrackedWebView(trackedWebViewId) ?? resolveMainEditorWebView(false);
 }

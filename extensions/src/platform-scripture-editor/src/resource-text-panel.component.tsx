@@ -37,6 +37,7 @@ import {
   LoadingView,
   PanelRetryableErrorView,
 } from './panel-state-views.component';
+import { ResourceMessageView } from './resource-message-view.component';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { ResourceBlankChapter } from './resource-blank-chapter.component';
 import { ResourceTextUnavailable } from './resource-text-unavailable.component';
@@ -139,6 +140,15 @@ export type ResourceTextPanelProps = {
   /** Whether the panel has a project context (opened with a project id). */
   hasProject: boolean;
   /**
+   * Whether the panel is running as the no-project free-resource entry point, where the Bible texts
+   * tab offers freely-licensed texts instead of a project's referenced resources.
+   *
+   * Distinct from `!hasProject`: on the Commentaries tab, or with nothing allowlisted, there is
+   * nothing to offer, so the panel keeps its plain no-project message rather than a picker that
+   * cannot be populated.
+   */
+  isFreeResourceEntryPoint: boolean;
+  /**
    * Which kind of resource this panel shows. `'ScriptureResource'` is the Bible texts tab; every
    * other type is the commentaries tab. Selects the whole matched set of strings — see
    * `resolveResourcePanelStringKeys`.
@@ -167,6 +177,11 @@ export type ResourceTextPanelProps = {
   dblResources: DblResourceData[];
   /** Re-runs the DBL resource catalog fetch. */
   onRetryCatalog: () => void;
+  /**
+   * Opens the Paratext registration UI. Shown only in the registration-required state, where a
+   * retry cannot succeed but registering can.
+   */
+  onOpenRegistration: () => void;
   /** The reference the panel is displaying. */
   scrRef: SerializedVerseRef;
   /** Called when the editor changes the Scripture reference. */
@@ -235,12 +250,14 @@ export type ResourceTextPanelProps = {
 export function ResourceTextPanel({
   localizedStrings,
   hasProject,
+  isFreeResourceEntryPoint,
   resourceType,
   filteredResources,
   selectedRef,
   readiness,
   dblResources,
   onRetryCatalog,
+  onOpenRegistration,
   scrRef,
   onScrRefChange,
   onSelectResource,
@@ -494,11 +511,14 @@ export function ResourceTextPanel({
   const { emptyStatePromptKey, bookNotAvailableKey, pickButtonKey } =
     resolveResourcePanelStringKeys(resourceType);
 
-  if (!hasProject) {
+  // No project, and not the free-resource entry point — the Commentaries tab, or nothing
+  // allowlisted. There is nothing to offer here.
+  if (!hasProject && !isFreeResourceEntryPoint) {
     return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <p>{localize(localizedStrings, '%webView_resourcePanel_noProject%')}</p>
-      </div>
+      <ResourceMessageView
+        message={localize(localizedStrings, '%webView_resourcePanel_noProject%')}
+        testId="resource-text-panel-no-project"
+      />
     );
   }
 
@@ -537,11 +557,17 @@ export function ResourceTextPanel({
       <PanelReadinessView
         readiness={readiness}
         errorMessage={localize(localizedStrings, '%webView_resourcePanel_settingsUnavailable%')}
-        emptyPrompt={localize(localizedStrings, emptyStatePromptKey)}
+        emptyPrompt={localize(
+          localizedStrings,
+          isFreeResourceEntryPoint
+            ? '%webView_resourcePanel_bibleTexts_noProject_emptyState_prompt%'
+            : emptyStatePromptKey,
+        )}
         moreInfo={
           // Only Bible Texts needs the disclosure; the Commentaries prompt says what it is asking
-          // for, so it renders the shorter empty state.
-          resourceType === 'ScriptureResource' ? (
+          // for, so it renders the shorter empty state. The disclosure describes a team's choices,
+          // which mean nothing when no project is open.
+          resourceType === 'ScriptureResource' && !isFreeResourceEntryPoint ? (
             <ExpandableInfo
               moreLabel={localize(
                 localizedStrings,
@@ -562,11 +588,23 @@ export function ResourceTextPanel({
           localizedStrings,
           '%webView_resourcePanel_catalogUnavailable%',
         )}
+        registrationRequiredMessage={localize(
+          localizedStrings,
+          '%webView_resourcePanel_bibleTexts_noProject_registrationRequired%',
+        )}
+        registerLabel={localize(
+          localizedStrings,
+          '%webView_resourcePanel_bibleTexts_noProject_register%',
+        )}
         loadingLabel={localize(localizedStrings, '%webView_resourcePanel_loading%')}
-        pickLabel={localize(localizedStrings, pickButtonKey)}
+        pickLabel={localize(
+          localizedStrings,
+          isFreeResourceEntryPoint ? '%webView_resourcePanel_bibleTexts_noProject_pick%' : pickButtonKey,
+        )}
         retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
         onPick={() => onShowResourcePicker()}
         onRetryCatalog={onRetryCatalog}
+        onOpenRegistration={onOpenRegistration}
       />
     );
   }
