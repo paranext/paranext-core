@@ -1137,6 +1137,78 @@ step, no automation. Just a record.
   branch edits it, which is a standing source of merge conflicts; see
   `adr-decision-log-sorted-insertion` for how entry placement addresses that.
 
+## adr-log-file-writes-queued: Main's log file writes are queued and coalesced, trading tail durability for an event loop that never blocks on log disk I/O
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `electron-log`'s file transport defaults to `sync: true`, which appends to the log
+  file with one `fs.writeFileSync` per line (`File.js` `writeLine`). Every log call therefore sits
+  on the calling process's critical path, and a web view's `console.*` calls are forwarded to the
+  main process by `spyRendererConsole`, so a hot logging path inside an iframe spends main-process
+  event-loop time on disk I/O. A marker-serialization path that logged once per marker occurrence
+  emitted ~10^5 messages for a single commentary book; the resulting serialized appends hung the
+  app for minutes and saturated the Windows disk queue badly enough that the desktop and Task
+  Manager stopped responding. The volume bug is worth fixing on its own, but any future hot log
+  path has the same reach, so the transport itself is the durable exposure.
+- **Decision:** Set `log.transports.file.sync = false` in `src/shared/services/logger.service.ts`,
+  **in main only**. `electron-log` then queues each line and, whenever a write is already in
+  flight, joins the whole accumulated queue into the next single `fs.writeFile` — so a burst costs
+  one write per disk round-trip instead of one per message, and no log call blocks main's disk
+  I/O. This is the library's own supported mode, not a patch. Main is the process that must never
+  stall: it owns the UI, and it is where every web view's forwarded console calls land. The
+  extension host is deliberately left synchronous — it ends its graceful shutdown with
+  `process.exit()` (`extension-host.ts`), which runs no pending I/O callback, so queuing there
+  would silently discard its shutdown diagnostics (including a `Failed to deactivate extensions`
+  error) on every run; and its own log level is `error` when packaged, so it does not need the
+  protection for the flood this decision responds to.
+- **Alternatives:** Keeping synchronous writes and rate-limiting or de-duplicating at the log
+  ingress — rejected as the primary defense; it preserves durability exactly but only guards the
+  paths the throttle anticipates, leaving the transport able to stall on the next unthrottled one.
+  (De-duplication is still worth doing at individual noisy sites, and was, for the marker
+  warnings — the two are complementary, not substitutes.) Async for most levels plus a second
+  synchronous transport for `error`, so the last error before a crash is always durable — rejected
+  for now as two transports to keep in step for a narrow gain, since errors are rare and do not
+  flood; revisit if crash reports turn up truncated at an error.
+- **Consequences:** Lines still queued are lost if the process dies without running the pending
+  write, so a hard kill can cost the most recent messages — precisely in the flood or slow-disk
+  case where the queue is deepest, which is a real loss of crash-diagnostic fidelity accepted in
+  exchange for the app not freezing. `electron-log` exposes no public flush, though the queue state
+  is reachable (`transports.file.getFile()` carries `asyncWriteQueue` and `hasActiveAsyncWriting`),
+  so a bounded drain is implementable if one of the costs below starts to bite.
+  Two main-process paths exit without draining and lose the line they just logged: `main.ts`'s
+  second-instance branch logs the handed-off `process.argv` and then calls `app.exit()`, which
+  skips before-quit/will-quit, making protocol-handoff bugs undiagnosable from the log; and any
+  future `process.exit()` in main would do the same. The obvious repair — flipping `sync` back to
+  `true` just before such a log — **does not work**, and fails silently: `FileRegistry.provide`
+  returns an already-created `File` before it reads `writeAsync`, and `File.writeAsync` is set only
+  in the constructor with no setter, so the flag is fixed once anything has written to the log.
+  Toggling it afterwards is a no-op, and whether it happens to take effect depends on nothing
+  having logged earlier in that process — an ordering dependency with no error and nothing to test
+  against. A durable fix has to drain the queue or avoid the transport for that line.
+  In-app reads of the log go stale, not just crash-time ones: `platform.getLogFileContent` reads
+  the file straight off disk, and Usersnap attaches its result to a user's bug report, so a report
+  filed during a flood can carry a log that stops short of the problem being reported.
+  Rotation also fires late: it compares `maxSize` — 3 MB, set in `src/node/utils/log-archiver.util.ts`,
+  which also replaces `archiveLogFn` with a 5-file rotating chain — against `initialSize +
+  bytesWritten`, and `bytesWritten` only advances once a write completes, so a burst can push the
+  file past `maxSize` before it rotates. Finally, main and the extension host share `main.log`
+  (`getDefaultFileName` returns it for every process type except renderer and worker), so the unit
+  of interleaving between them is now a coalesced batch rather than a single line; since Node's
+  `fs.writeFile` loops on partial writes, a very large batch could in principle be split and
+  interleaved mid-line. That is unlikely for regular files and costs only log legibility, never app
+  behavior, so it is accepted rather than designed around. The behavior is not unit-tested: what
+  matters is that a flood cannot block the loop, which is not observable at this seam, and
+  asserting the property was set would only mirror the implementation.
+  This closes the write path, not the whole per-message cost: the hook in `setUpLogger`
+  (`src/shared/utils/logger.utils.ts`) still calls `identifyCaller()` — `new Error()` plus a regex
+  per stack frame — synchronously for every message it does not early-return on, so a flood of
+  messages above the transport's level still spends main CPU proportional to its volume. Reducing
+  per-message volume at the source therefore remains worthwhile even with writes queued, which is
+  why the de-duplication in `UsjReaderWriter` is complementary to this decision rather than
+  redundant with it.
+- **Source:** PT-4514; `electron-log@5.4.1` `src/node/transports/file/File.js` (`writeLine`,
+  `nextAsyncWrite`) and `src/node/transports/file/index.js` (`sync`, `writeAsync`).
+
 ## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
 - **Date:** 2026-08-11

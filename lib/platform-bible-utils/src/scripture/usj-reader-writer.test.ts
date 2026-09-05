@@ -2028,6 +2028,219 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
   });
 });
 
+describe('Marker problems are reported once each, not once per occurrence', () => {
+  // These tests use a 3.0 markers map, so their documents declare 3.0 too — otherwise the
+  // constructor warns that the versions are incompatible, which is not what they are about.
+  // Usj can be any version, but the `Usj` type says only 3.1.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const usjVersion3_0 = '3.0' as typeof USJ_VERSION;
+
+  /**
+   * Builds a book whose content repeats one char marker. Handbook and commentary resources use
+   * markers the markers map does not carry (HBKENG uses `scr` and `ver`; TNNESP uses `li6`, `pi8`
+   * and `brk`), so serializing one of their books takes the unknown-marker path once for every
+   * occurrence.
+   */
+  function usjRepeatingMarker(marker: string, occurrences: number): Usj {
+    return {
+      type: USJ_TYPE,
+      version: usjVersion3_0,
+      content: [
+        { type: 'chapter', marker: 'c', number: '1' },
+        { type: 'verse', marker: 'v', number: '1' },
+        ...Array.from(
+          { length: occurrences },
+          (_unused, index): MarkerObject => ({
+            type: 'char',
+            marker,
+            content: [`text ${index}`],
+          }),
+        ),
+      ],
+    };
+  }
+
+  /** Runs `serialize` and returns what it sent to each console channel. */
+  function collectConsoleWhile(serialize: () => void): { debug: string[]; warn: string[] } {
+    const debug: string[] = [];
+    const warn: string[] = [];
+    const consoleDebugSpy = vi
+      .spyOn(console, 'debug')
+      .mockImplementation((message) => debug.push(String(message)));
+    const consoleWarnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation((message) => warn.push(String(message)));
+
+    try {
+      serialize();
+    } finally {
+      consoleDebugSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+    }
+
+    return { debug, warn };
+  }
+
+  /** Serializes `usj` with a fresh reader-writer and returns the marker problems it reported. */
+  function collectReportsFromToUsfm(usj: Usj): string[] {
+    return collectConsoleWhile(() => {
+      new UsjReaderWriter(usj, usjReaderWriterOptionsParatext3_0).toUsfm();
+    }).debug;
+  }
+
+  test('reports an unknown marker the same number of times whether it occurs 10 times or 500', () => {
+    const fewReports = collectReportsFromToUsfm(usjRepeatingMarker('scr', 10));
+    const manyReports = collectReportsFromToUsfm(usjRepeatingMarker('scr', 500));
+
+    // The marker is unknown, so it has to be reported — but reporting it is about the marker, not
+    // about each place it appears. 500 occurrences of one unknown marker is one problem.
+    expect(fewReports.length).toBeGreaterThan(0);
+    expect(manyReports).toHaveLength(fewReports.length);
+  });
+
+  test('never emits the same report twice', () => {
+    const reports = collectReportsFromToUsfm(usjRepeatingMarker('scr', 500));
+
+    // Without this control the de-duplication assertion below holds just as well for an empty
+    // array, so it would still pass with the reporting removed entirely.
+    expect(reports.length).toBeGreaterThan(0);
+    expect([...new Set(reports)]).toHaveLength(reports.length);
+  });
+
+  test('still names the unknown marker so the report stays diagnostic', () => {
+    const reports = collectReportsFromToUsfm(usjRepeatingMarker('scr', 500));
+
+    expect(reports.some((report) => report.includes('scr'))).toBe(true);
+  });
+
+  test('names the book when warning that the markers map version does not match', () => {
+    // Several reader-writers can be alive at once, so the versions alone would not say which
+    // document mismatched. `USJ_VERSION` is 3.1, which these 3.0 options deliberately disagree
+    // with.
+    const usjForMark: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        { type: 'book', marker: 'id', code: 'MRK' },
+        { type: 'chapter', marker: 'c', number: '1' },
+      ],
+    };
+
+    const { warn } = collectConsoleWhile(() => {
+      new UsjReaderWriter(usjForMark, usjReaderWriterOptionsParatext3_0).toUsfm();
+    });
+
+    expect(warn.some((message) => message.includes('USJ for book MRK'))).toBe(true);
+  });
+
+  test('reports marker problems at debug level, not as warnings', () => {
+    const usj = usjRepeatingMarker('scr', 500);
+    const { debug, warn } = collectConsoleWhile(() => {
+      new UsjReaderWriter(usj, usjReaderWriterOptionsParatext3_0).toUsfm();
+    });
+
+    // The positive control matters: asserting only that nothing was warned would pass just as
+    // happily if the marker were never reported at all.
+    expect(debug.some((report) => report.includes('Unknown marker scr'))).toBe(true);
+    expect(warn).toHaveLength(0);
+  });
+
+  test('reports a duplicate verse number once however many times it repeats', () => {
+    // This one is reported from the fragment walk rather than from marker serialization, so it is
+    // a separate reporting path that the same de-duplication has to cover.
+    const usjWithRepeatedVerse = (occurrences: number): Usj => ({
+      type: USJ_TYPE,
+      version: usjVersion3_0,
+      content: [
+        { type: 'chapter', marker: 'c', number: '1' },
+        ...Array.from(
+          { length: occurrences },
+          (): MarkerObject => ({ type: 'verse', marker: 'v', number: '1' }),
+        ),
+      ],
+    });
+
+    const fewReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(usjWithRepeatedVerse(10), usjReaderWriterOptionsParatext3_0).toUsfm();
+    }).warn;
+    const manyReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(usjWithRepeatedVerse(200), usjReaderWriterOptionsParatext3_0).toUsfm();
+    }).warn;
+
+    expect(fewReports.some((report) => report.includes('existing number'))).toBe(true);
+    expect(manyReports).toHaveLength(fewReports.length);
+  });
+
+  test('does not report a marker again after the document changes', () => {
+    const usj = usjRepeatingMarker('scr', 10);
+    const readerWriter = new UsjReaderWriter(usj, usjReaderWriterOptionsParatext3_0);
+    const firstPass = collectConsoleWhile(() => readerWriter.toUsfm()).debug;
+
+    // Add a second unknown marker so the next pass has something it has not reported before.
+    usj.content?.push({ type: 'char', marker: 'brk', content: ['added'] });
+    readerWriter.usjChanged();
+    const secondPass = collectConsoleWhile(() => readerWriter.toUsfm()).debug;
+
+    expect(firstPass.some((report) => report.includes('scr'))).toBe(true);
+    // `brk` proves the second pass really re-serialized the document rather than returning a
+    // cached string — without it, `scr`'s absence below would prove nothing.
+    expect(secondPass.some((report) => report.includes('brk'))).toBe(true);
+    // Reporting describes the marker, not where it appeared, so an edit is no reason to repeat it.
+    expect(secondPass.some((report) => report.includes('scr'))).toBe(false);
+  });
+
+  test('reports each distinct unknown marker', () => {
+    const usjWithTwoUnknownMarkers: Usj = {
+      type: USJ_TYPE,
+      version: usjVersion3_0,
+      content: [
+        ...(usjRepeatingMarker('scr', 50).content ?? []),
+        ...(usjRepeatingMarker('brk', 50).content ?? []),
+      ],
+    };
+
+    const reports = collectReportsFromToUsfm(usjWithTwoUnknownMarkers);
+
+    expect(reports.some((report) => report.includes('scr'))).toBe(true);
+    expect(reports.some((report) => report.includes('brk'))).toBe(true);
+  });
+
+  test('reports a mismatching marker type once however many times it occurs', () => {
+    // The markers map types `ca` as `char`, so typing it as `chapter` takes the
+    // mismatching-marker-type path.
+    const usjWithRepeatedMistypedCa = (occurrences: number): Usj => ({
+      type: USJ_TYPE,
+      version: usjVersion3_0,
+      content: Array.from(
+        { length: occurrences },
+        (_unused, index): MarkerObject => ({
+          type: 'chapter',
+          marker: 'ca',
+          content: [`${index}`],
+        }),
+      ),
+    });
+
+    const fewReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(
+        usjWithRepeatedMistypedCa(10),
+        usjReaderWriterOptionsParatext3_0,
+      ).toUsfm();
+    }).warn;
+    const manyReports = collectConsoleWhile(() => {
+      new UsjReaderWriter(
+        usjWithRepeatedMistypedCa(500),
+        usjReaderWriterOptionsParatext3_0,
+      ).toUsfm();
+    }).warn;
+
+    // Stays a warning, unlike an unknown marker: a type the markers map disagrees with means the
+    // document is malformed, and the writer silently emits the USJ's type instead.
+    expect(fewReports.some((report) => report.includes('Mismatching marker type'))).toBe(true);
+    expect(manyReports).toHaveLength(fewReports.length);
+  });
+});
+
 describe('toUsfm transform USJ 3.1 to spec USFM 3.1', () => {
   test('2SA 1 testUSFM', () => {
     const usjDoc = new UsjReaderWriter(testUSFM2SACh1UsjCanonical3_1, usjReaderWriterOptions3_1);

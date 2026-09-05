@@ -312,6 +312,25 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   private indicesInUsfmByVerseRefInternal: IndicesInUsfmByVerseRef | undefined;
   private usfmInternal: string | undefined;
 
+  /**
+   * Messages already reported by {@link reportProblemOnce}, so a problem is reported once per
+   * instance rather than once per occurrence. A caller that builds a new instance per user action
+   * reports each problem again per action.
+   *
+   * A commentary or UBS Handbook can repeat one marker this class's markers map does not carry tens
+   * of thousands of times per book, and a web view's console calls cross IPC to the main process's
+   * log file — so reporting per occurrence costs work proportional to the document rather than to
+   * the number of distinct problems in it. Deliberately not reset by {@link usjChanged}: these
+   * describe the marker, not where it appeared.
+   *
+   * Messages are keyed by their full text, so how much this saves depends on what the message
+   * names. The marker reports name only the marker, so they collapse to one line per distinct
+   * marker however large the document. The chapter and verse reports also name the position they
+   * were found at, so they collapse only where that position repeats — a document with many
+   * distinct malformed verse numbers still reports each one, and holds each in this set.
+   */
+  private readonly reportedProblems = new Set<string>();
+
   constructor(usj: Usj, options?: UsjReaderWriterOptions) {
     this.usj = usj;
 
@@ -321,16 +340,17 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     if (providedMarkersMap) {
       this.markersMap = providedMarkersMap;
 
-      // Warn if the passed in markers map is not compatible
+      // Warn if the passed in markers map is not compatible. Names the book rather than serializing
+      // the document: callers pair a whole resource with one markers map, and a chapter of a
+      // commentary is megabytes of USX, but with several reader-writers alive the versions alone
+      // do not say which document mismatched.
       if (!UsjReaderWriter.areUsjVersionsCompatible(this.usj.version, this.markersMap.version))
         console.warn(
-          `Warning: USJ provided has version ${
+          `Warning: USJ for book ${this.getBookIdForLogging()} has version ${
             this.usj.version
           }, but provided markers map has version ${
             this.markersMap.version
-          }. This may cause unexpected issues when transforming between formats.\nUSJ: ${JSON.stringify(
-            this.usj,
-          )}`,
+          }. This may cause unexpected issues when transforming between formats.`,
         );
     }
     // They didn't pass in a markers map, so try to use a built-in markers map matching the USJ version
@@ -367,6 +387,44 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       return versionB === '3.0' || versionB.startsWith('3.0.');
     return versionA === versionB;
   }
+
+  // #region Reporting problems with the document
+
+  /**
+   * The book this document is for, for naming it in a log message.
+   *
+   * Reads the book marker straight off the top level of the content already in memory and stops at
+   * the first one, so it costs nothing beyond that scan and does not walk into nested content. Only
+   * call it on a path that is about to log — there is no reason to look for the book otherwise.
+   *
+   * @returns The book code, or {@link NO_BOOK_ID} if the document does not carry one
+   */
+  private getBookIdForLogging(): string {
+    const bookMarker = this.usj.content?.find(
+      (node): node is MarkerObject =>
+        typeof node !== 'string' && node.type === BOOK_TYPE && !!node.code,
+    );
+    return bookMarker?.code ?? NO_BOOK_ID;
+  }
+
+  /**
+   * Reports `message`, unless an identical message has already been reported by this instance. See
+   * {@link reportedProblems} for why repeats are dropped.
+   *
+   * Defaults to `warn` because these describe a document that is malformed or that this class had
+   * to reinterpret. Pass `debug` for problems that are normal in a well-formed document.
+   *
+   * @param message Message to report
+   * @param level Console level to report at. Defaults to `warn`
+   */
+  private reportProblemOnce(message: string, level: 'warn' | 'debug' = 'warn'): void {
+    if (this.reportedProblems.has(message)) return;
+    this.reportedProblems.add(message);
+    if (level === 'debug') console.debug(message);
+    else console.warn(message);
+  }
+
+  // #endregion Reporting problems with the document
 
   // #region Directly using the JSONPath package to perform JSONPath query -> USJ node
 
@@ -2010,8 +2068,12 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       markerInfo = { type: marker.type };
       markerIsUnknown = true;
 
-      console.warn(
+      // `debug`: a marker this class's markers map does not carry is normal in a third-party
+      // resource — commentaries and UBS Handbooks are full of them — and says nothing about the
+      // document being malformed.
+      this.reportProblemOnce(
         `Unknown marker ${markerNameOriginal}. Creating MarkerInfo to use: ${JSON.stringify(markerInfo)}`,
+        'debug',
       );
     }
 
@@ -2036,7 +2098,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           marker.type !== markerTypeInfo.markerTypeUsx &&
           marker.type !== markerTypeInfo.markerTypeUsj))
     ) {
-      console.warn(
+      this.reportProblemOnce(
         `Warning: Mismatching marker type in the USJ content ${marker.type} vs marker type in the marker info ${markerInfo.type} for marker ${markerNameOriginal}. Using the type from the USJ content.`,
       );
       markerType = marker.type;
@@ -3076,7 +3138,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
    *   potential adjustments to handle verse ranges differently when we know better what we ought to
    *   do.
    */
-  private static transferFragmentsInfoArrayToMaps(
+  private transferFragmentsInfoArrayToMaps(
     fragmentsInfo: UsjFragmentInfoMinimal[],
     workingStack: WorkingStack,
     position: {
@@ -3111,7 +3173,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           const nextChapterNum = parseInt(marker.number, 10);
 
           if (Number.isNaN(nextChapterNum)) {
-            console.warn(
+            this.reportProblemOnce(
               `Found ${CHAPTER_TYPE} type marker with number ${
                 marker.number
               }, but could not parse chapter number from it. Continuing using previous chapter number ${
@@ -3138,7 +3200,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
           const nextVerseNumString = VERSE_MARKER_NUMBER_SPAN_REGEXP.exec(marker.number)?.[1];
 
           if (!nextVerseNumString) {
-            console.warn(
+            this.reportProblemOnce(
               `Found ${VERSE_TYPE} type marker with number ${
                 marker.number
               }, but could not find starting verse number in it. Continuing using previous verse number ${
@@ -3149,7 +3211,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             const nextVerseNum = parseInt(nextVerseNumString, 10);
 
             if (Number.isNaN(nextVerseNum)) {
-              console.warn(
+              this.reportProblemOnce(
                 `Found ${VERSE_TYPE} type marker with number ${
                   marker.number
                 }, but could not parse starting verse number from ${nextVerseNumString}. Continuing using previous verse number ${
@@ -3159,13 +3221,19 @@ export class UsjReaderWriter implements IUsjReaderWriter {
             } else if (
               indicesInUsfmByVerseRef[position.bookId]?.[position.chapterNum]?.[nextVerseNum]
             ) {
-              console.warn(`Found ${VERSE_TYPE} marker with existing number ${nextVerseNum} after
-                  current ${VERSE_TYPE} number ${
-                    position.verseNum
-                  }! Not updating verse start index. All positions in this duplicate verse will be based on the current ${
-                    VERSE_TYPE
-                  } marker, not the new duplicate marker.`);
+              const duplicateVerseMessage =
+                `Found ${VERSE_TYPE} marker with existing number ${nextVerseNum} after current ` +
+                `${VERSE_TYPE} number ${position.verseNum}! Not updating verse start index. All ` +
+                `positions in this duplicate verse will be based on the current ${VERSE_TYPE} ` +
+                `marker, not the new duplicate marker.`;
+              this.reportProblemOnce(duplicateVerseMessage);
             } else {
+              // Reported per occurrence, unlike its siblings above: this message names both verse
+              // numbers, so every occurrence is already a distinct message and reporting it once
+              // per document would cost a set entry each without dropping a single line. It also
+              // stays quiet on the documents that motivated de-duplicating the others — a
+              // commentary referring back to an earlier verse takes the duplicate branch above,
+              // since that verse has been seen; this branch needs a descent into unseen verses.
               if (nextVerseNum < position.verseNum)
                 console.debug(
                   `Found ${VERSE_TYPE} marker with number ${nextVerseNum} lower than current ${
@@ -3259,8 +3327,8 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       verseNum: 0,
     };
     /** Move the fragments info that are in `fragmentsInfo` into the final fragments map */
-    function transferFragmentsInfo(workingStack: WorkingStack) {
-      UsjReaderWriter.transferFragmentsInfoArrayToMaps(
+    const transferFragmentsInfo = (workingStack: WorkingStack) => {
+      this.transferFragmentsInfoArrayToMaps(
         fragmentsInfo,
         workingStack,
         currentPosition,
@@ -3268,7 +3336,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         fragmentsByJsonPath,
         indicesInUsfmByVerseRef,
       );
-    }
+    };
 
     // According to `USJ`'s `outputToUsfmInstructions`, need to move the top-level `USJ` marker after
     // `id` closes in USFM even though it is before it in USJ
