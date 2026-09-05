@@ -21,6 +21,7 @@ import {
   getErrorMessage,
   isPlatformError,
 } from 'platform-bible-utils';
+import { BOOKS_PRESENT_DEFAULT } from 'platform-bible-utils/experimental';
 import { Canon, type SerializedVerseRef } from '@sillsdev/scripture';
 import type {
   ChecklistComparativeTextRef,
@@ -260,9 +261,7 @@ global.webViewComponent = function ChecklistWebView({
   }, [projectId]);
 
   // ─── Books-present for ScopeSelector ──────────────────────────────────────
-  const [booksPresent, setBooksPresent] = useState<string>(
-    '0'.repeat(124), // 124 books per BookSet — empty default until project setting resolves
-  );
+  const [booksPresent, setBooksPresent] = useState<string>(BOOKS_PRESENT_DEFAULT);
   useEffect(() => {
     if (!projectId) return () => {};
     let cancelled = false;

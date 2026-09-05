@@ -540,7 +540,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
               <TooltipContent>{localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <PopoverContent className="tw:max-h-[70vh] tw:overflow-y-auto">
+          <PopoverContent>
             <ResourceCollectionOptions
               viewMode={viewMode}
               onViewModeChange={setViewMode}
