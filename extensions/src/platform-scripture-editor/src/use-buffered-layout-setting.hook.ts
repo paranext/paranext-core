@@ -20,11 +20,18 @@ import type { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types
  *
  * It is NOT safe for consumers that change `projectId` IN PLACE via `updateWebViewDefinition({
  * projectId })` (as e.g. `checklist.web-view.tsx` / `checks-side-panel.web-view.tsx` do). Without a
- * remount the held copy would show the previous project's value; such a consumer would need a
+ * remount the held copy would show the previous project's value — and the error channel would stay
+ * silent about the new one, since `hasAppliedRealValue` never resets; such a consumer would need a
  * PDP-subscription reset pattern instead (reset the held value to a not-yet-loaded sentinel when
  * the PDP identity changes, like `use-structure-protection-state.hook.ts`). A runtime tripwire
  * below `logger.warn`s if it ever detects an in-place `projectId` change so this assumption fails
  * loudly rather than silently returning stale data.
+ *
+ * TODO(PT-4238): the Scripture Text Grid is such a consumer today — it reaches this hook through
+ * `useTextCollectionSources`, and `resolveTextCollectionProjectId` can move its project without a
+ * remount. Once this hook has disarmed, the grid's admin-shared list then strands on the outgoing
+ * project while its unbuffered per-user list follows the incoming one. The fix is to stop inferring
+ * that project rather than to add a reset here.
  *
  * The mount arm intentionally waits for `isLoading` to be `false` before applying/disarming.
  * `useProjectSetting` returns the `defaultValue` placeholder with `isLoading === true` until the
