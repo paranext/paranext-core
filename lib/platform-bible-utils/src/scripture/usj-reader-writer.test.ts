@@ -2113,6 +2113,26 @@ describe('Marker problems are reported once each, not once per occurrence', () =
     expect(reports.some((report) => report.includes('scr'))).toBe(true);
   });
 
+  test('names the book when warning that the markers map version does not match', () => {
+    // Several reader-writers can be alive at once, so the versions alone would not say which
+    // document mismatched. `USJ_VERSION` is 3.1, which these 3.0 options deliberately disagree
+    // with.
+    const usjForMark: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        { type: 'book', marker: 'id', code: 'MRK' },
+        { type: 'chapter', marker: 'c', number: '1' },
+      ],
+    };
+
+    const { warn } = collectConsoleWhile(() => {
+      new UsjReaderWriter(usjForMark, usjReaderWriterOptionsParatext3_0).toUsfm();
+    });
+
+    expect(warn.some((message) => message.includes('USJ for book MRK'))).toBe(true);
+  });
+
   test('reports marker problems at debug level, not as warnings', () => {
     const usj = usjRepeatingMarker('scr', 500);
     const { debug, warn } = collectConsoleWhile(() => {
