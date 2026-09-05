@@ -32,10 +32,15 @@ const EMPTY_IDS: string[] = [];
  * open anywhere in the window is one they are working with, and the books it reports are the same
  * books either way.
  *
- * `activeProjectId` is excluded — its books are already the control's baseline, so subscribing
- * again would be pure cost.
+ * The navigation target's own project is NOT excluded here, and must not be. Subtracting it would
+ * make this set — and the subscription fingerprint derived from it — change every time the resolved
+ * navigation target changes, including the brief `undefined` a dock rebuild produces while the
+ * editor slot has no project yet. In Simple mode every open panel carries the same project id, so
+ * such a set swings between "one project" and "none" on each navigation, and every subscription is
+ * torn down and rebuilt at that cadence. The active project is filtered out at READ time instead,
+ * where changing its mind costs nothing.
  */
-function getOpenProjectIds(activeProjectId: string | undefined): string[] {
+function getOpenProjectIds(): string[] {
   let definitions;
   try {
     definitions = getAllOpenWebViewDefinitionsSync();
@@ -55,7 +60,6 @@ function getOpenProjectIds(activeProjectId: string | undefined): string[] {
         if (projectId) projectIds.add(projectId);
       });
   });
-  if (activeProjectId) projectIds.delete(activeProjectId);
   return [...projectIds];
 }
 
@@ -72,7 +76,8 @@ function getOpenProjectIds(activeProjectId: string | undefined): string[] {
  * the full canon the way navigation-command book lookup does — there, the fallback keeps navigation
  * permissive; here, it would advertise every book in the canon as reachable.
  *
- * @param activeProjectId The project whose books are already offered, excluded from the result
+ * @param activeProjectId The project whose books are already offered, excluded from the result. It
+ *   may still be subscribed to — only the result excludes it (see {@link getOpenProjectIds}).
  * @param isEnabled Whether to do the work at all. When false the hook subscribes to nothing and
  *   returns an empty list, so a caller that discards the result pays none of its cost. Defaults to
  *   true.
@@ -92,11 +97,11 @@ export function useOpenProjectBookIds(
   useEvent(isEnabled ? onDidCloseWebView : undefined, refreshOpenWebViews);
 
   const openProjectIds = useMemo(
-    () => (isEnabled ? getOpenProjectIds(activeProjectId) : EMPTY_IDS),
+    () => (isEnabled ? getOpenProjectIds() : EMPTY_IDS),
     // webViewRefreshCounter is a refresh trigger: its value is unused, but each bump re-enumerates
     // this window's open web views.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isEnabled, activeProjectId, webViewRefreshCounter],
+    [isEnabled, webViewRefreshCounter],
   );
 
   // A membership fingerprint, so an unchanged set of ids is a stable dependency and an unrelated web
@@ -173,11 +178,21 @@ export function useOpenProjectBookIds(
     Object.entries(bookIdsByProjectId).forEach(([projectId, bookIds]) => {
       // A project that has since closed may still have an entry from a settled subscription.
       if (!openIds.has(projectId)) return;
+      // The navigation target's books are the control's baseline, so this hook never offers them.
+      // Filtered here rather than out of the subscribed set — see `getOpenProjectIds` for why.
+      //
+      // While `activeProjectId` is `undefined` nothing matches, so through the brief gap a dock
+      // rebuild produces this deliberately offers the navigation target's own books, and a caller's
+      // "show more books" affordance may appear for that gap. Tolerated rather than guarded: holding
+      // the last non-`undefined` target in a ref would also suppress those books when `undefined` is
+      // the settled answer — no editor open, so the project really is just another open project —
+      // and that failure is silent and persistent, where this one is visible and sub-frame.
+      if (projectId === activeProjectId) return;
       bookIds.forEach((bookId) => books.add(bookId));
     });
     if (books.size === 0) return EMPTY_IDS;
     return CANON_BOOK_IDS.filter((bookId) => books.has(bookId));
-  }, [bookIdsByProjectId, openProjectIds]);
+  }, [bookIdsByProjectId, openProjectIds, activeProjectId]);
 }
 
 export default useOpenProjectBookIds;
