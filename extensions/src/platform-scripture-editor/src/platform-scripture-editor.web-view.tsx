@@ -1918,7 +1918,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         notifyStructureProtected,
         restoreEditorSelection,
         contextMarker,
-        styleInfo,
       ),
     [
       contextMarker,
@@ -1926,7 +1925,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       isStructureProtected,
       notifyStructureProtected,
       restoreEditorSelection,
-      styleInfo,
     ],
   );
 
