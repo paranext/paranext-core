@@ -69,9 +69,12 @@ declare module 'platform-scripture-editor' {
     method: 'changeFootnotesPaneLocation';
   };
 
-  /** Tell the editor to insert a textual note (footnote or cross-reference) */
+  /** Tell the editor to insert a textual note (footnote, endnote, or cross-reference) */
   export type EditorMessageInsertTextualNoteAtSelection = {
-    method: 'insertFootnoteAtSelection' | 'insertCrossReferenceAtSelection';
+    method:
+      | 'insertFootnoteAtSelection'
+      | 'insertCrossReferenceAtSelection'
+      | 'insertEndnoteAtSelection';
   };
 
   /** Tell the editor to open the comment editor for inserting a new comment at the current verse */
@@ -387,6 +390,8 @@ declare module 'platform-scripture-editor' {
     insertFootnoteAtSelection(): Promise<void>;
     /** Function to insert a cross-reference in the editor at the current selection */
     insertCrossReferenceAtSelection(): Promise<void>;
+    /** Function to insert an endnote in the editor at the current selection */
+    insertEndnoteAtSelection(): Promise<void>;
     /**
      * Function to open the comment editor for inserting a new project comment at the current verse.
      * Checks permissions and fetches assignable users before opening the editor.
@@ -853,6 +858,15 @@ declare module 'papi-shared-types' {
      * @param editorWebViewId The ID of the web view to insert the footnote for
      */
     'platformScriptureEditor.insertCrossReferenceAtSelection': (
+      editorWebViewId?: string | undefined,
+    ) => Promise<void>;
+
+    /**
+     * Command to insert an endnote into a given editor web view.
+     *
+     * @param editorWebViewId The ID of the web view to insert the endnote for
+     */
+    'platformScriptureEditor.insertEndnoteAtSelection': (
       editorWebViewId?: string | undefined,
     ) => Promise<void>;
 
