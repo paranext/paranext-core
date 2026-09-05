@@ -562,4 +562,3 @@ git push origin ai/investigate-prd-command
 ```
 
 Expected: fast-forward push of Tasks 1–6 commits.
-```

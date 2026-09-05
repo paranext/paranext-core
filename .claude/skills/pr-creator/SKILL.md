@@ -16,7 +16,7 @@ Create pull requests for Platform.Bible following team standards.
 |--------|---------|
 | Check branch | `git rev-parse --abbrev-ref HEAD` |
 | Extract JIRA ID | `git rev-parse --abbrev-ref HEAD \| grep -oE '^[a-z]+-[0-9]+' \| tr 'a-z' 'A-Z'` |
-| Check for template changes | `git log main..HEAD --oneline \| grep -i template` |
+| Check for template changes | `git log origin/main..HEAD --oneline \| grep -i template` |
 | Push branch | `git push -u origin $(git rev-parse --abbrev-ref HEAD)` |
 | Create PR | `gh pr create --title "..." --body "..."` |
 | View PR | `gh pr view --web` |
@@ -67,14 +67,18 @@ fi
 Template updates must NOT be squash-merged. Check before creating PR:
 
 ```bash
+# A worktree's local main ref goes stale; fetch and diff against origin/main instead.
+git fetch origin main --quiet \
+  || echo "WARN: fetch failed — comparing against the last-fetched origin/main from $(git log -1 --format=%cs origin/main 2>/dev/null || echo 'unknown date'); results may be stale"
+
 # Check git log for template merges
-if git log main..HEAD --oneline | grep -qiE 'template|allow-unrelated-histories'; then
+if git log origin/main..HEAD --oneline | grep -qiE 'template|allow-unrelated-histories'; then
   echo "WARNING: Template changes detected!"
   echo "Use 'Create a merge commit' - NOT 'Squash and merge'"
 fi
 
 # Check for template-related files
-if git diff main...HEAD --name-only | grep -qiE 'template'; then
+if git diff origin/main...HEAD --name-only | grep -qiE 'template'; then
   echo "WARNING: Template files changed!"
 fi
 ```
@@ -83,7 +87,7 @@ fi
 
 ```bash
 # Get changed files and match against CODEOWNERS
-CHANGED=$(git diff main...HEAD --name-only)
+CHANGED=$(git diff origin/main...HEAD --name-only)
 
 echo "Changed files:"
 echo "$CHANGED"
