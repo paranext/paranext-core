@@ -1,4 +1,5 @@
 {
+  "name": "paranext-core",
   "description": "Extensible Bible translation software",
   "keywords": [
     "electron",
