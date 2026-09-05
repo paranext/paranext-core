@@ -27,6 +27,30 @@ const DEPENDENCIES_BRANCH = 'main';
 /** Subdirectory within {@link DEPENDENCIES_REPO} that holds the DB and checksum files. */
 const DEPENDENCIES_SUBDIR = 'lexical-db';
 
+/**
+ * Notice files fetched alongside the DB and written beside it.
+ *
+ * The database is not our data. Portions of it are UBS material licensed under CC BY-SA 4.0, whose
+ * section 3(a)(1) requires the identification of the creator, the copyright notice, the license
+ * notice and a link to the license to travel with the work; the remaining portions are © United
+ * Bible Societies under no open license at all, distributable only under the permission UBS granted
+ * Paratext. `SOURCE.md` carries both statements and `LICENSE.md` carries the CC BY-SA 4.0 text.
+ * Fetching them here is what puts them inside the packaged application: the extension's `assets`
+ * directory is copied wholesale into `extensions/dist` and from there into every installer, so a
+ * notice left behind in the dependencies repo never reaches a user.
+ */
+const NOTICE_FILENAMES = ['LICENSE.md', 'SOURCE.md'];
+
+/**
+ * How many HTTP redirects a single fetch will follow before giving up.
+ *
+ * GitHub raw and LFS redirect at least once on every real download, so following them is required
+ * rather than optional - but an unbounded chain recurses forever and leaks a socket per hop, which
+ * hangs `npm install` silently instead of failing it. Five is well clear of the two hops the real
+ * hosts use.
+ */
+const MAX_REDIRECTS = 5;
+
 /** Result of attempting to detect the GitHub organization. */
 export type OrgDetectionResult = { org: string } | { org: undefined; reason: string };
 
@@ -151,37 +175,117 @@ function calculateChecksum(filePath: string): Promise<string> {
  * @param destination Local path to save the file
  * @returns Promise that resolves when download is complete
  */
-function downloadFile(url: string, destination: string): Promise<void> {
+export function downloadFile(url: string, destination: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(destination);
+    // The body is written to a staging file beside the destination and renamed into place only
+    // once it is complete, so nothing this call did not itself create is ever removed and a
+    // half-written body never becomes the destination. Writing straight to `destination` makes
+    // every failure path destructive: the notice files are re-fetched on EVERY install (see
+    // `runDownload`), so `destination` is normally a correct file, and a 404 from a renamed
+    // upstream path - or a connection dropped mid-body - would delete the CC BY-SA 4.0 text and
+    // leave the packaged extension carrying the database with no attribution. On Windows it is
+    // worse still: the unlink races an asynchronous `close()`, and losing that race leaves the
+    // truncated body in place under the real name.
+    const staged = `${destination}.part`;
+
+    // Created only once a 200 response is in hand, not up front, so the redirect path can re-enter
+    // this handler without piping into a stream it has already closed.
+    let file: fs.WriteStream | undefined;
+    let settled = false;
+
+    /**
+     * Removes the staging file, then hands control back. The removal's own error is not discarded
+     * onto the floor: it is reported alongside whatever failure caused the removal, because a
+     * staging file left behind is the next run's problem.
+     */
+    const discardStaged = (onDone: () => void) =>
+      fs.rm(staged, { force: true }, (removeError) => {
+        if (removeError)
+          console.warn(
+            `Could not remove the partial download at ${staged}: ${removeError.message}`,
+          );
+        onDone();
+      });
+
+    /** Abandons the download: closes the stream if one was opened, and leaves no staging file. */
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      const discard = () => discardStaged(() => reject(error));
+      // The staging file is removed only after the stream is closed, so the removal cannot race an
+      // asynchronous `close()` and lose.
+      if (file) file.close(discard);
+      else discard();
+    };
 
     // Don't spoil the AI's vibes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleResponse = (response: any) => {
+    const handleResponse = (response: any, hops = 0, requestUrl = url) => {
+      // EVERY response needs its own error listener, and it has to be attached before any branch
+      // below can return. `pipe` does not forward a readable's error to the writable, so a
+      // connection dropped on a response nothing is listening to is raised by Node as an unhandled
+      // error, taking the whole `postinstall` down mid-way through the sibling fetches
+      // `Promise.allSettled` is still awaiting. The redirect branch makes this reachable on the
+      // happy path rather than only on an error one: GitHub raw and LFS 302-redirect on every real
+      // download, so the first response of every fetch is one this function abandons.
+      response.on('error', fail);
+
+      // A hop already in flight when the download failed has nothing left to deliver, and following
+      // it would open yet another socket for a promise that is already settled.
+      if (settled) {
+        response.destroy();
+        return;
+      }
+
       // Handle redirects (301, 302, 303, 307, 308)
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        if (hops >= MAX_REDIRECTS) {
+          response.destroy();
+          fail(new Error(`Failed to download ${url}: more than ${MAX_REDIRECTS} redirects`));
+          return;
+        }
         console.log(`Redirecting to ${response.headers.location}`);
-        file.close();
 
-        // Follow the redirect
-        https.get(response.headers.location, handleResponse).on('error', (err: Error) => {
-          fs.unlink(destination, () => {}); // Delete the file on error
-          reject(err);
-        });
+        // Drained rather than destroyed, so the socket stays reusable for the hop that follows.
+        response.resume();
+        // Resolved against `requestUrl` - the URL of the request this response answered, which is
+        // the ORIGINAL url on the first hop and the previous hop's target after that. RFC 7231
+        // section 7.1.2 resolves a relative `Location` against the effective request URI, so
+        // resolving every hop against the original would send the second relative hop of a chain to
+        // the wrong host or path.
+        //
+        // Inside a try/catch because `https.get` THROWS synchronously on a Location it cannot use -
+        // `ERR_INVALID_URL` for a relative form nothing resolves, `ERR_INVALID_PROTOCOL` for the
+        // `http:` a captive portal answers with. The throw happens before `.get()` returns, so the
+        // chained `.on('error')` is never attached, and this runs inside a `'response'` listener -
+        // after the Promise executor returned - so nothing else would catch it either: the promise
+        // would never settle and `postinstall` would die on an uncaught exception.
+        try {
+          const target = new URL(response.headers.location, requestUrl).href;
+          https
+            .get(target, (redirected: unknown) => handleResponse(redirected, hops + 1, target))
+            .on('error', fail);
+        } catch (error: unknown) {
+          fail(error instanceof Error ? error : new Error(String(error)));
+        }
         return;
       }
 
       if (response.statusCode === 404) {
-        file.close();
-        fs.unlink(destination, () => {});
-        reject(new FileNotFoundError(url));
+        // Nothing follows this response, so release the socket rather than draining it.
+        response.destroy();
+        fail(new FileNotFoundError(url));
         return;
       }
 
       if (response.statusCode !== 200) {
-        reject(new Error(`Failed to download ${url}, status code: ${response.statusCode}`));
+        response.destroy();
+        fail(new Error(`Failed to download ${url}, status code: ${response.statusCode}`));
         return;
       }
+
+      const stream = fs.createWriteStream(staged);
+      file = stream;
 
       // Add download progress reporting
       const totalSize = parseInt(response.headers['content-length'] || '0', 10);
@@ -206,24 +310,64 @@ function downloadFile(url: string, destination: string): Promise<void> {
         }
       });
 
-      response.pipe(file);
+      response.pipe(stream);
 
-      file.on('finish', () => {
-        console.log('Download complete.');
-        file.close();
-        resolve();
+      stream.on('finish', () => {
+        // `fail` closes the stream to release the handle before removing the staging file, and
+        // `close()` ends the stream, which emits `finish`. Without this guard that teardown path
+        // runs the success path: the truncated staging file is renamed over a destination that
+        // held a complete file, and the promise resolves reporting a download that failed.
+        if (settled) return;
+        // Claimed here rather than after the rename, so that `fail` - which assumes an INCOMPLETE
+        // download - can no longer run once a complete body is on disk. Everything below therefore
+        // settles the promise itself.
+        settled = true;
+
+        /**
+         * Settles the promise for a failure raised AFTER the body reached the staging file.
+         *
+         * `fail` cannot serve this window: it returns without rejecting once `settled` is true, so
+         * routing a close, flush or rename failure through it would leave the promise pending
+         * forever and hang the install rather than fail it.
+         */
+        let reported = false;
+        const failAfterBody = (error: Error) => {
+          if (reported) return;
+          reported = true;
+          discardStaged(() => reject(error));
+        };
+        // The stream's error listener moves with `settled`. A flush or close failure - EIO, ENOSPC,
+        // a full disk discovered only when the last buffered write lands - is emitted as `'error'`
+        // on the stream, and with `fail` still attached it would be swallowed by that function's
+        // `settled` guard while the rename below went ahead: a truncated body renamed over a
+        // complete destination, and `resolve()` reporting the download succeeded.
+        stream.off('error', fail);
+        stream.on('error', failAfterBody);
+
+        // Closed before the rename, and the rename before `resolve`, so a caller that sees this
+        // promise settle sees a complete file under the real name - never a staging file, and
+        // never a handle still open on Windows.
+        //
+        // The callback takes no error: `close(cb)` registers `cb` as a `'close'` listener and
+        // `'close'` is emitted with no arguments, so a close-time failure arrives on `'error'`
+        // first and `failAfterBody` has already run by the time this fires.
+        stream.close(() => {
+          if (reported) return;
+          fs.rename(staged, destination, (renameError) => {
+            if (renameError) {
+              failAfterBody(renameError);
+              return;
+            }
+            console.log('Download complete.');
+            resolve();
+          });
+        });
       });
 
-      file.on('error', (err: Error) => {
-        fs.unlink(destination, () => {}); // Delete the file on error
-        reject(err);
-      });
+      stream.on('error', fail);
     };
 
-    https.get(url, handleResponse).on('error', (err: Error) => {
-      fs.unlink(destination, () => {}); // Delete the file on error
-      reject(err);
-    });
+    https.get(url, handleResponse).on('error', fail);
   });
 }
 
@@ -287,24 +431,49 @@ async function fetchRemoteChecksum(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     // Don't spoil the AI's vibes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleResponse = (response: any) => {
+    const handleResponse = (response: any, hops = 0, requestUrl = url) => {
+      // Attached before any branch below can return, for the reason `downloadFile`'s copy of this
+      // handler documents: an abandoned response with no error listener is an unhandled error that
+      // takes the whole `postinstall` down rather than failing this one fetch.
+      response.on('error', reject);
+
       // Handle redirects (301, 302, 303, 307, 308)
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        if (hops >= MAX_REDIRECTS) {
+          response.destroy();
+          reject(
+            new Error(`Failed to fetch checksum from ${url}: more than ${MAX_REDIRECTS} redirects`),
+          );
+          return;
+        }
         console.log(`Redirecting to ${response.headers.location}`);
 
-        // Follow the redirect
-        https.get(response.headers.location, handleResponse).on('error', (err: Error) => {
-          reject(err);
-        });
+        // Drained rather than destroyed, so the socket stays reusable for the hop that follows.
+        response.resume();
+        // Resolved against the request this response answered, and guarded, for the reasons
+        // `downloadFile`'s copy of this branch documents.
+        try {
+          const target = new URL(response.headers.location, requestUrl).href;
+          https
+            .get(target, (redirected: unknown) => handleResponse(redirected, hops + 1, target))
+            .on('error', (err: Error) => {
+              reject(err);
+            });
+        } catch (error: unknown) {
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
         return;
       }
 
       if (response.statusCode === 404) {
+        // Nothing follows this response, so release the socket rather than draining it.
+        response.destroy();
         reject(new FileNotFoundError(url));
         return;
       }
 
       if (response.statusCode !== 200) {
+        response.destroy();
         reject(new Error(`Failed to fetch checksum, status code: ${response.statusCode}`));
         return;
       }
@@ -320,10 +489,6 @@ async function fetchRemoteChecksum(url: string): Promise<string> {
         const data = Buffer.concat(chunks).toString('utf-8');
         const checksum = data.trim().split(/\s+/)[0];
         resolve(checksum);
-      });
-
-      response.on('error', (err: Error) => {
-        reject(err);
       });
     };
 
@@ -354,19 +519,22 @@ export interface RunDownloadOptions {
   localDbPath: string;
   dbFilename: string;
   checksumFilename: string;
+  noticeFilenames: string[];
 }
 
 /**
  * Orchestrates lexical DB download: discover org → compute URLs → fetch checksum → skip/download →
- * verify → extract. Applies strict-vs-lenient policy: when the detected org is exactly
- * {@link STRICT_ORG}, missing files (HTTP 404) hard-fail; for any other detected org they are logged
- * and skipped so forks don't break `npm install`. Failure to detect the org at all (no git repo,
- * unparseable origin, etc.) is treated as an unexpected configuration error and throws rather than
- * running leniently — a silent download skip from a weird git error would be worse than a loud
- * failure. See the README section "Lexical database downloads (forks)" for the contract.
+ * verify → extract → fetch the notice files that travel with the data. Applies strict-vs-lenient
+ * policy: when the detected org is exactly {@link STRICT_ORG}, missing files (HTTP 404) hard-fail;
+ * for any other detected org they are logged and skipped so forks don't break `npm install`.
+ * Failure to detect the org at all (no git repo, unparseable origin, etc.) is treated as an
+ * unexpected configuration error and throws rather than running leniently — a silent download skip
+ * from a weird git error would be worse than a loud failure. See the README section "Lexical
+ * database downloads (forks)" for the contract.
  */
 export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps): Promise<void> {
-  const { detection, localDbDir, localDbPath, dbFilename, checksumFilename } = opts;
+  const { detection, localDbDir, localDbPath, dbFilename, checksumFilename, noticeFilenames } =
+    opts;
 
   if (detection.org === undefined) {
     throw new Error(
@@ -440,6 +608,66 @@ export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps):
       }
     }
 
+    // Fetched after the DB rather than with it because they describe data that is now on disk, and
+    // fetched EVERY time rather than only when one is missing. The DB is skipped when a checksum
+    // says the local copy is already the right one; a notice file has no checksum to compare, so
+    // the only gate available is existence - and existence is not evidence of CONTENT. A truncated
+    // write, or a captive-portal interstitial answered with HTTP 200, lands a file that exists and
+    // is wrong, which a skip-if-present rule would then keep forever and copy into every installer
+    // where the CC BY-SA 4.0 text belongs. They are a few kilobytes; re-fetching is cheaper than
+    // the gate that would make skipping safe.
+    if (noticeFilenames.length > 0) {
+      // `allSettled`, not `all`: `all` rejects on the FIRST failure and abandons the other fetch
+      // still in flight, so a run where BOTH notices are missing would report only whichever URL
+      // happened to fail first, while telling the maintainer to publish both. Every fetch finishes
+      // and every failure is reported.
+      const results = await Promise.allSettled(
+        noticeFilenames.map(async (noticeFilename) => {
+          deps.log(`Downloading ${noticeFilename}...`);
+          await deps.downloadFile(
+            `${rawBaseUrl}/${noticeFilename}`,
+            path.join(localDbDir, noticeFilename),
+          );
+        }),
+      );
+      const failures = results
+        .filter((result) => result.status === 'rejected')
+        .map((result) => result.reason);
+      // Handled here rather than by the outer handler, whose message reports a missing DB — the DB
+      // is on disk by this point, and saying otherwise would send a reader looking for the wrong
+      // problem. Strict mode fails: packaging the data without the attribution its license
+      // requires is the defect this fetch exists to prevent. A fork is warned instead, because
+      // hard-failing its `npm install` over a file it never published is what lenient mode is
+      // for — but silence would let it ship the data bare, so the warning names the obligation.
+      // A failure that is NOT a 404 is fatal in both modes, which is the contract the extension's
+      // README states: "expected missing" is the only condition treated leniently.
+      if (failures.length > 0) {
+        // EVERY failure is named, on both paths. Reporting `failures[0]` alone throws away what
+        // the `allSettled` above collects: with both notices missing, a maintainer publishes the
+        // one file the message names, re-runs, and only then learns about the other — the
+        // two-round loop this whole block exists to remove.
+        const described = failures
+          .map((failure) =>
+            failure instanceof FileNotFoundError
+              ? `${failure.url} (not found)`
+              : `${String(failure?.url ?? 'unknown URL')}: ${failure?.message ?? String(failure)}`,
+          )
+          .join('\n  ');
+        const unexpected = failures.some((failure) => !(failure instanceof FileNotFoundError));
+        if (isStrict || unexpected)
+          throw new Error(
+            `Could not fetch the lexical DB notice files:\n  ${described}\n` +
+              'The database carries UBS material under CC BY-SA 4.0, whose section 3(a)(1) requires ' +
+              'its attribution and license notice to travel with it, so it is not packaged without ' +
+              `them. Publish ${noticeFilenames.join(' and ')} alongside the DB in the ` +
+              `\`${DEPENDENCIES_REPO}\` repo, or fix the cause above.`,
+          );
+        deps.warn(
+          `Lexical DB notice files not found:\n  ${described}\n— the DB will be packaged without the attribution and license text its terms require. Publish ${noticeFilenames.join(' and ')} alongside the DB in your \`${DEPENDENCIES_REPO}\` repo.`,
+        );
+      }
+    }
+
     deps.log('DB file preparation complete.');
   } catch (error) {
     if (error instanceof FileNotFoundError) {
@@ -466,6 +694,7 @@ async function main(): Promise<void> {
         localDbPath: LOCAL_DB_PATH,
         dbFilename: DB_FILENAME,
         checksumFilename: CHECKSUM_FILENAME,
+        noticeFilenames: NOTICE_FILENAMES,
       },
       {
         fetchRemoteChecksum,

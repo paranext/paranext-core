@@ -362,6 +362,32 @@ step, no automation. Just a record.
   `SectionButton`'s `isDisabled`.
 - **Source:** PT-4092, review of #2699.
 
+## adr-build-stays-mixed-mode: `npm run build` keeps building extensions in development mode
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `build:main`, `build:extension-host` and `build:renderer` each set
+  `NODE_ENV=production`; `build:extensions` does not, so `npm run build` produces a mixed-mode tree.
+  A large part of the notices pipeline exists to cope with that: the `mode` field on every emitted
+  manifest and `assertOneBuildGraph`'s mixed-mode refusal, the per-bundle AND per-mode
+  `extensionCacheDirectory` split, an extra `build:extensions:production` step in three workflow
+  jobs and in the `package` script, and the source-text tests that pin those steps. Pointing `build`
+  at `build:extensions:production` would collapse the mode dimension out of all of it.
+- **Decision:** Leave `npm run build`'s semantics alone. Changing what the documented build command
+  produces is a change to every consumer of a development extension build, including
+  `paratext-10-studio`, whose `package-core` step runs `npm run build` inside a patched clone — so
+  it is a cross-repository behaviour change rather than a notices one, and it does not belong in a
+  relicensing change.
+- **Alternatives:** Set `NODE_ENV=production` in `build:extensions` and add a separate dev script —
+  the simplification is real and remains the likely eventual answer; rejected here on scope. Leave
+  it undocumented — rejected: the compensating apparatus reads as an oversight rather than as
+  support for a decision, which is what prompted the question.
+- **Consequences:** the mode dimension stays in the manifests, the cache split, the workflows and
+  the tests that pin them, and a plain `npm run build` still leaves a tree where
+  `npm run verify:third-party-notices` hard-fails until the production extension build runs.
+  **Revisit** as its own change, with `paratext-10-studio` in scope.
+- **Source:** the multi-agent review of #2654, finding 25.
+
 ## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
 
 - **Formerly:** ADR-0011
@@ -400,6 +426,48 @@ step, no automation. Just a record.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
+## adr-core-does-not-distribute-a-binary: `paranext-core` builds installers but publishes none
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `THIRD-PARTY-NOTICES.md` states that UBS permits distribution of the lexical database
+  "in Paratext" and that the permission "does not extend to Platform.Bible", while the Publish
+  workflow uploaded a `.snap` to the public snap store unconditionally and attached Windows, macOS
+  and Linux installers to a GitHub release — every one of them built as `productName:
+  'Platform.Bible'` and every one carrying the database, which `download-db.ts` puts in strict mode
+  so a missing copy hard-fails the install. Both statements are about the same artifact. Separately,
+  `release/app/package.json` declares `SEE LICENSE IN TERMS-OF-SERVICE.md` for a product built under
+  the Platform.Bible name, while the Terms of Service name only Paratext.
+
+  There is no practical path to releasing a separate Platform.Bible build, and only Paratext 10 is
+  released from this source — from `paranext/paratext-10-studio`, which clones this repository,
+  patches it, adds private extensions, and packages the result.
+- **Decision:** This repository does not distribute a built application. The snap-store upload is
+  removed and the GitHub release carries no binaries; it creates the version tag, the draft and the
+  generated notes, which are the fixed points a downstream build constructs its own release from.
+  Installers are still built on every leg — that is how the packaging path is exercised — and the
+  optional S3 upload of the Windows and macOS artifacts stays, for internal sharing. Nothing is
+  identified as Platform.Bible to a public audience, so the Platform.Bible/Paratext 10
+  identification the notices and the Terms would otherwise need is not needed at all.
+- **Alternatives:** Identify Platform.Bible builds as Paratext 10 builds in both documents —
+  rejected: the two are not the same release, and writing that they are would make a legal
+  document assert something the project does not do. Keep distributing and ask UBS to extend the
+  permission — rejected as unnecessary once nothing is distributed. Exclude the database from
+  public artifacts — rejected: it is not optional in this build, and the identification problem
+  would remain for the Terms of Service.
+- **Consequences:** `publish.yml` no longer needs `SNAPCRAFT_STORE_CREDENTIALS` (the repository
+  secret wants revoking separately), and the Linux `release/staged` staging is gone since the S3
+  step excludes Linux. `README.md`'s Users section points at Paratext 10 rather than at GitHub
+  releases and the snap store. Nothing consumes the release assets programmatically: every
+  `autoUpdater` use in `main.ts` is commented out, so there is no update feed to break. What is
+  already published — the `latest/stable` snap and fourteen GitHub releases going back to 2023 —
+  stays published until someone unpublishes it; this decision is about the future.
+  `paratext-10-studio` becomes the sole distributor, which makes the notices document it packs
+  (this repository's, describing this repository's shipping set rather than the patched clone's)
+  the only copy a user receives. **Revisit** if this repository ever needs to publish a build to a
+  public audience.
+- **Source:** the multi-agent review of #2654, finding 1.
+
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended
 
 - **Date:** 2026-09-03
@@ -436,6 +504,58 @@ step, no automation. Just a record.
   hand-added entry can silently break it — no such check existed as of 2026-09-03, and adding one is
   open follow-up work.
 - **Source:** PR #2770.
+
+## adr-disclosure-outside-package-graphs: What ships outside the npm and NuGet graphs is disclosed in prose, not by silence
+
+- **Date:** 2026-08-21
+- **Status:** Accepted
+- **Context:** `adr-notices-derived-from-what-ships`'s pipeline derives what ships from webpack's
+  module manifests and the NuGet restore closure. Two things this repository distributes are in
+  neither, so no scan it performs can reach them: the UBS lexical database `platform-lexical-tools`
+  downloads at install time (~35 MiB, copied into every installer with that extension's assets), and
+  the Ubuntu shared libraries snapcraft stages inside the Linux `.snap`. A document that simply
+  omits them is not neutral — an omission and an oversight are indistinguishable to a reader.
+- **Decision:** Disclose both in prose sections written by `render.ts`, rather than teaching the
+  shipping set to carry them. Three constraints shape how:
+  1. **The lists are read, not restated.** `main.ts` parses `electron-builder.json5` for the staged
+     package list, so editing the packaging config changes the generated document and
+     `adr-notices-derived-from-what-ships`'s drift gate fails an un-regenerated one. The list has a
+     floor, like every other collector: an empty read would otherwise render as "the snap stages
+     nothing".
+  2. **The classification is data, not prose.** Every staged library must carry a
+     `classification` in `notices-policy.json` (`copyleft`, `permissive` or `not-established`) or the
+     build refuses. Hand-written prose named ten of twelve staged libraries and silently omitted
+     `libgtk-3-0` and `libsecret-1-0`; generating the sentence from a required table is what makes
+     that impossible to repeat.
+  3. **Not-established is a recorded state, not a gap.** A library whose terms nobody has settled is
+     named as such in the document. Guessing an identifier would put a specific, possibly wrong
+     license into a legal artifact, which is worse than the admitted gap. The way OUT of such a gap
+     is to read the terms and record what they say: `Icu4c.Win.Min` was free text until its ICU 59
+     LICENSE was read at the tag it builds from, and it is now `Unicode-DFS-2016` with that file
+     checked in and hash-pinned so the third-party notices it carries travel too.
+
+  The lexical database gets the same treatment from the other direction: the notice files that must
+  travel with it are FETCHED into the extension's assets at install time, so they are inside the
+  packaged application rather than described from outside it.
+- **Alternatives:** Extend the shipping set to cover them — rejected:
+  `adr-notices-derived-from-what-ships`'s verdicts come from reconciling a declared expression
+  against an identified license text, and neither a `.deb` staged by snapcraft nor a database
+  downloaded at install time has either. Say nothing, on the grounds that neither is an npm or NuGet
+  package — rejected: both are redistributed inside the artifact, which is the only test that
+  matters. Hand-maintain the prose — rejected on `adr-notices-derived-from-what-ships`'s lesson that
+  a legal artifact must not depend on a hand-maintained table that nothing checks.
+- **Consequences:** the "Linux snap" and lexical-database sections are generated, so they cannot
+  drift from the packaging config. Every staged library is now classified from its own Ubuntu
+  `copyright` file, so `not-established` is currently unused — it stays in the schema because the
+  next library added starts there. Their license texts DO travel inside the `.snap`, by a different
+  route than the one electron-builder would have taken: its snapcraft template excludes `usr/share`
+  from the `app` part's stage list (`parts.app.stage`), which is where
+  `usr/share/doc/<package>/copyright` lives, and that list is only overridable wholesale via the
+  `appPartStage` option — so each library's own copyright file is checked into this repository,
+  hash-pinned, and reproduced verbatim in `THIRD-PARTY-NOTICES.md`, which `electron-builder.json5`
+  packs through `extraResources`. **Revisit** when the staged set changes, or if a future
+  electron-builder makes staging the upstream files directly practical.
+- **Source:** the AGPL relicense branch; the multi-agent review of #2654.
 
 ## adr-durable-window-ids: Window ids are durable across a restart; the separate persisted-layout "slot" indirection is removed
 
@@ -1114,6 +1234,92 @@ step, no automation. Just a record.
   now-redundant test in one deliberate commit.
 - **Source:** PR #2425
 
+## adr-licensing-boundary: Platform.Bible is AGPL-3.0-or-later, with an MIT carve-out drawn by runtime linking
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** The repository relicensed from MIT to AGPL-3.0-or-later. A blanket relicense was not
+  viable: Platform.Bible's extension model expects third parties to build and distribute their own
+  extensions, and those extensions import Platform.Bible's developer libraries. Relicensing those
+  libraries to AGPL would put AGPL-licensed code into the output of every third-party extension
+  simply by their being built against it. So some packages under `lib/` had to stay MIT. The initial split was justified package by package, with no single stated
+  principle, and it did not survive scrutiny: `eslint-plugin-paranext` and
+  `browserslist-config-detect-electron` were kept MIT despite contributing nothing to any extension,
+  so the carve-out was protecting packages that needed no protection.
+- **Decision:** Draw the boundary with one rule, recorded in
+  [`LICENSING.md`](../../LICENSING.md#the-rule-that-draws-the-line):
+
+  > **MIT if a third-party extension links against the package at runtime — whether webpack bundles
+  > it in or Platform.Bible supplies it as an external. AGPL-3.0-or-later if the package exists only
+  > while the extension is being built and the extension never links against it.**
+
+  Applied to the five packages under `lib/`:
+
+  | Package                               | License           | Why                                                             |
+  | ------------------------------------- | ----------------- | --------------------------------------------------------------- |
+  | `platform-bible-react`                | MIT               | Linked at runtime; webpack bundles it into extension output      |
+  | `platform-bible-utils`                | MIT               | Linked at runtime; not bundled — supplied as a webpack external  |
+  | `papi-dts`                            | AGPL-3.0-or-later | Types only; declarations erased at compile time                  |
+  | `browserslist-config-detect-electron` | AGPL-3.0-or-later | Build-time browserslist config; emits nothing                    |
+  | `eslint-plugin-paranext`              | AGPL-3.0-or-later | Lint-time only; emits nothing                                    |
+
+  The rule keys on **runtime linking**, deliberately and explicitly not on which `package.json`
+  section declares the package, and not on bundling either — `platform-bible-utils` is an external
+  and reaches a third-party extension without being bundled into it, yet the extension is combined
+  with it just the same.
+
+  The distributed BINARY is a separate question from the source. It is licensed to the user under
+  the Paratext Terms of Service, whose section 3.B.1 states that the built application is licensed
+  solely under those Terms and not under the AGPL, and whose 3.B.2 adds that network interaction with
+  it triggers no AGPL obligation. `release/app/package.json` therefore declares
+  `SEE LICENSE IN TERMS-OF-SERVICE.md` rather than an SPDX identifier. That split is lawful because
+  SIL Global and United Bible Societies control the copyright in the source, and it retracts nothing:
+  the AGPL grant on this repository is irrevocable and anyone may build and redistribute their own
+  binary under it. The installer carries `LICENSE` (the AGPL text), `TERMS-OF-SERVICE.md`,
+  `THIRD-PARTY-NOTICES.md`, and `LICENSING.md` — the last because the others otherwise state
+  several things about the user's rights with nothing reconciling them, and because LICENSING.md is
+  what 3.B.1 means by "the AGPL Components identified by Paratext".
+- **Alternatives:** relicense everything, including the `lib/` packages — rejected: it makes the AGPL
+  viral for third-party extensions and defeats the extension model. Key the rule on the
+  `dependencies`/`devDependencies` section — rejected because that field was already wrong:
+  `platform-bible-react` was declared a `devDependency` by every extension in this repository while
+  extension source across all of them imported it at runtime, so a mechanical "devDependency means
+  AGPL" reading would have relicensed exactly the package the carve-out exists to protect. Keep all
+  four originally-MIT `lib/` packages MIT — rejected: two of them contribute nothing to extension
+  output, so the carve-out bought no protection there and the boundary no longer tracked a single
+  principle. Ship an installer EULA (`nsis.license` / `dmg` license) — rejected: the Terms of
+  Service are accepted at account creation rather than through a click-through during install.
+  Leave the PAPI boundary unaddressed and let each extension author reason about it — rejected once
+  the intent was settled as being flexible with extension authors: leaving it open puts the burden
+  of an unanswerable question on every author, while an additional permission removes it without
+  anyone having to answer it.
+- **Consequences:** a directory's own `LICENSE` file governs that directory, and the MIT side is now
+  exactly `lib/platform-bible-react/` and `lib/platform-bible-utils/` — not `lib/` as a whole.
+  Moving code across that boundary in either direction is a relicensing act requiring the copyright
+  holders' agreement, not a refactor. `papi-dts` is AGPL yet imposes nothing on extension authors,
+  because TypeScript erases its declarations at compile time. The sharpest ongoing constraint:
+  **adding a runtime import of a currently-AGPL build-time package from extension source is a
+  licensing change, not just a build change.** Check `extensions/webpack/webpack.config.base.ts`
+  `externals` to determine what a given import actually bundles.
+- **The PAPI runtime is covered by a license exception, not by the `lib/` table.** That `externals`
+  list also names `@papi/backend`, `@papi/core`, `@papi/frontend` and `@papi/frontend/react`, which
+  `src/extension-host/` supplies at runtime by shimming `Module.prototype.require` so an extension is
+  loaded INTO the host's process and calls the host's own objects directly. `src/extension-host/` is
+  AGPL. So the largest runtime linkage a third-party extension makes is against AGPL code, by a
+  closer coupling than the `lib/` carve-out was drawn to address — and the `lib/` MIT carve-out
+  cannot reach it, because these are not `lib/` packages and relicensing `src/extension-host/` was
+  never on the table. The instrument for that boundary is an **additional permission** under AGPL
+  section 7, the same shape as the GCC Runtime Library Exception and OpenJDK's Classpath Exception:
+  [`LICENSE-EXCEPTION.md`](../../LICENSE-EXCEPTION.md) frees a work that talks to Platform.Bible only
+  through the published Extension Interface from sections 4, 5, 6 and 13, and says in as many words
+  that being loaded into the host's process does not disqualify it. It is scoped by INTERFACE rather
+  than by file, so a work reaching past that interface into Platform.Bible's internals is outside
+  it. It deliberately **recommends nothing**: it removes an obligation an extension author would
+  otherwise have to reason about, and takes no position on what license they then choose. See
+  LICENSING.md, "What a third-party extension links against".
+- **Source:** the AGPL relicense (`LICENSING.md`, per-directory `LICENSE` files); rule settled during
+  the relicense code review; PAPI question raised in the review of #2654.
+
 ## adr-lightweight-decision-log: Keep a lightweight, gate-free architecture-decisions log
 
 - **Formerly:** ADR-0001
@@ -1306,6 +1512,39 @@ step, no automation. Just a record.
   for a typed surface rather than a state key.
 - **Source:** PT-4346, global BCV control showing books from open resources.
 
+## adr-no-agpl-notice-in-the-application-ui: the application UI names the Terms of Service and no license
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `LICENSE` (the full AGPL text), `LICENSING.md`, `LICENSE-EXCEPTION.md` and
+  `THIRD-PARTY-NOTICES.md` all ship in the installed `resources/` directory, but only
+  `TERMS-OF-SERVICE.md` has a code path that opens it. The About dialog reads "License: Paratext
+  Terms of Service" and names no license, disclaims no warranty, and offers no way to view the
+  AGPL. AGPL section 5(d) expects an interactive program that normally displays "appropriate legal
+  notices" to keep displaying a copyright notice, a warranty disclaimer, and a statement of how to
+  view the License.
+- **Decision:** The application UI deliberately displays no AGPL notice. Section 5(d) attaches to
+  conveyance "under the terms of section 4"; SIL Global and the United Bible Societies hold the
+  copyright in this code and convey the binary under the Terms of Service instead (section 3.B.1),
+  which they may do with their own work. Contributors are covered by the Paratext Contributor
+  License Agreement, and the third-party code in the binary is permissive apart from the
+  snap-staged LGPL/MPL libraries, which are unmodified, dynamically linked, and whose notices
+  already ship. No section 5(d) obligation attaches to this conveyance, and it is imperative that
+  nothing in the product declares the released package to be AGPL.
+- **Alternatives:** Add a second line to the About dialog naming `AGPL-3.0-or-later` with a link
+  that opens `resources/LICENSE` — rejected: the released binary is not conveyed under the AGPL, and
+  a UI line saying otherwise is exactly the confusion to avoid. Stop shipping `resources/LICENSE` —
+  rejected: the AGPL text has to travel with the source it governs, and `LICENSE-EXCEPTION.md`
+  refers to it.
+- **Consequences:** the residual risk runs the other way — `resources/LICENSE` ships beside the
+  binary with no code path to open it and nothing in the UI explaining it, so a user who finds it
+  is likelier to conclude the binary is AGPL than a user who finds nothing. `LICENSING.md` ships
+  alongside and reconciles the two, which is why `electron-builder.json5` packs it. A **third
+  party** who builds and conveys a binary from this source IS conveying under the AGPL, and 5(d)
+  does attach to them — they, not this project, would need a notice surface; `LICENSING.md` says
+  so. **Revisit** if the conveyance terms change.
+- **Source:** the multi-agent review of #2654, finding 30a.
+
 ## adr-no-production-create-project: PT10 has no production create-project primitive
 
 - **Formerly:** ADR-0005
@@ -1393,6 +1632,106 @@ step, no automation. Just a record.
   fallback.
 - **Source:** PT-4412, review of #2714.
 
+## adr-notices-derived-from-what-ships: Third-party notices are derived from what ships, and every admission path fails closed
+
+- **Date:** 2026-08-20 (consolidated 2026-08-25)
+- **Status:** Accepted
+- **Context:** A notices document is a legal claim about what a distributed artifact contains, so the
+  two questions it rests on are *what actually ships* and *what each of those things is licensed
+  under*. The generator this replaces answered both by inference. It carried its own license
+  classifier, its own regex import scan, its own SPDX text store and five hand-maintained tables in
+  about 960 lines. Three of its mechanisms were unsound rather than merely large: its npm set
+  unioned a repo-root `npm ls --omit=dev` closure with **no packaging basis** (electron-builder packs
+  from `release/app`, never the root closure), over-reporting by 46 packages; its license
+  identification was a regex signature matcher over license text; and an unrecognized license warned
+  and exited 0, so the artifact could ship with a package nobody had ruled on.
+- **Decision:** Replace it with small modules under `.erb/scripts/third-party-notices/`, wired by
+  `main.ts`. Five rules, which are the whole of the approach:
+
+  1. **What ships is derived from the build, not from manifests.** The npm set comes from webpack's
+     own module manifests (`.notices/modules/*.json`, emitted by a compiler plugin), unioned with
+     `release/app`'s unbundled closure and two compensating scans for what a module graph cannot see
+     through: stylesheets, because Tailwind's own bundler inlines `@import` targets before webpack
+     starts; and the MIT `lib/` packages, because they are consumed as their own prebuilt bundles so
+     anything vite inlined is one opaque module by the time webpack sees it. A `package.json`
+     section is never evidence — the bundled dependencies live in `devDependencies` by convention.
+     The NuGet set is the union of the restore closure for all four published runtime identifiers,
+     not one platform's.
+  2. **What a package is licensed under comes from two independent signals**, reconciled by
+     `policy.ts`: the manifest's declared expression, parsed with `spdx-expression-parse`, and the
+     license text on disk, identified by `licensee`. Because neither derives from the other, a
+     disagreement is real information — `quill-delta@5.1.0` declares MIT and ships a BSD-3-Clause
+     LICENSE. The reconciliation is ecosystem-independent and turns on three cases, not two: text
+     that identifies must agree with the declaration; text that does NOT identify blocks for review
+     (`jszip` concatenates the full MIT and GPLv3 texts); and **no license file at all is normal**,
+     resolving on the declaration with the canonical SPDX text reproduced on the package's behalf,
+     because monorepo families like `@radix-ui/*` publish dozens of packages against one root
+     license and every NuGet package is metadata-only.
+  3. **Every admission path is an allowlist, and an unparseable determination must say so.** A
+     license is admitted because it is on `allowed` and absent from `copyleft`, never because it
+     failed to appear on a denylist — an id nobody enumerated must not default to permitted. This
+     governs the declared path, the text-derived path, bundled extra files, and files identified
+     BELOW the confidence threshold, which may raise an objection even though they may not resolve a
+     verdict. Where a value cannot be checked at all — a curated override's free text — the entry
+     must record that (`nonSpdx`), so the bypass is a visible line in the policy rather than a silent
+     short-circuit.
+  4. **The two escape instruments are bounded and pinned.** A reviewed `exception` clears one blocked
+     package: it must name a reviewer and a date, record an SPDX expression whose every identifier is
+     on `allowed` and absent from `copyleft`, carry no `WITH` operand (whose text the corpus cannot
+     reproduce), and be pinned to one version AND one text hash. It records which license an
+     *unidentifiable* text actually is, so it may not override a positive copyleft identification. A
+     curated `override` answers a package whose own metadata establishes nothing, so it applies only
+     where nothing parseable is declared and no text identified; it may record the version it was
+     made against, and an `openQuestion` it does NOT settle, which is reported on every run without
+     blocking. Both bounds live in the mechanism rather than in a test over the committed policy,
+     because such a test cannot cover an entry added in the same pull request as the change it
+     accompanies.
+  5. **The gate fails closed, and drift is a gate of its own.** A package that cannot be cleared
+     stops the run and nothing is written; the message carries both signals and the exact JSON to
+     paste — checked against the policy first, so it never proposes a route the gate would reject. A
+     committed lock sidecar (`THIRD-PARTY-NOTICES.lock.json`) records each package's SPDX id, matched
+     file and text hash plus the licensee and corpus versions, so a license text changing under an
+     unchanged version is detectable. CI only ever runs `--verify`; regeneration is a deliberate
+     local step. Within that local step the ordering is load-bearing - verify **before** regenerate,
+     since regeneration overwrites the lock and a check after it compares a file against itself.
+
+  Two mechanical consequences of "derived from the build" round this out. The artifact is generated
+  on **Linux**, because the NuGet closure is RID-dependent and one platform has to be canonical;
+  Windows and macOS verify their own npm closure against the lock instead, which needs no Ruby and no
+  dotnet. And a package the local tree cannot describe truthfully is described **from
+  `package-lock.json`** rather than from disk — a `yalc` dev link points at a moving branch of
+  another repository, and a platform-only optional dependency was never installed here at all; both
+  are marked so the document says what was read and what was not.
+
+- **Alternatives:** Keep extending the single script — rejected: its own tables were the failure
+  mode. Keep the regex import scan — rejected: for JS/TS it inferred from source text what the
+  compiler reports exactly. Keep warning on unknown licenses — rejected: a legal artifact that ships
+  with an unruled package is the failure this exists to prevent, and a warning in CI output is not a
+  decision. Check the canonical SPDX texts into the repository — rejected once they could be read
+  from a pinned `spdx-license-list` and verified against a committed checksum index. Recognize
+  copyleft by denylist — rejected as the same class of error as the manifest inference: it sees only
+  the licenses someone thought of. Require identified text for every npm verdict — rejected: 14
+  shipped packages declare plain MIT and ship no file, and no instrument could clear them. Bound the
+  exception instrument by a data-level test over the committed policy alone — rejected for the
+  same-pull-request hole above. Run the drift check after regeneration — rejected: it can only
+  compare a file against itself.
+- **Consequences:** the generator requires a completed `npm run build` and four `dotnet restore`
+  runs, so it is no longer a fast standalone script — that cost buys a shipping set derived from the
+  build rather than inferred from it. **A NuGet package's LICENSE is CLASSIFIED from nuspec metadata
+  but REPRODUCED from the file it bundles** — two questions that look like one. Reproducing canonical
+  text in place of a bundled file would substitute SPDX's `<copyright holders>` placeholder for a
+  real notice: 58 packages here bundle the shared Microsoft `LICENSE.TXT` naming ".NET Foundation and
+  Contributors" while their nuspecs name "© Microsoft Corporation" — a different entity. Where a
+  package ships no readable license file at all, its copyright notice is recorded in the policy's
+  `copyrightNotices`, read from that package's own license file by whatever route it publishes one.
+  **Revisit** if the build cost becomes a problem for pull-request CI.
+- **Source:** the third-party-notices tooling replacement; `LICENSING.md`; the multi-agent review
+  of #2654. (The design note for that work lives under a gitignored path, so it is not a citable
+  reference — the reasoning is reproduced here precisely because that path is not readable from the
+  repo.) Supersedes and absorbs the intermediate designs recorded during that work
+  (checked-in canonical texts; a regex import scan; a copyleft denylist), none of which reached
+  `main`.
+
 ## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
 - **Formerly:** ADR-0017
@@ -1455,6 +1794,33 @@ step, no automation. Just a record.
   on persisted slots.
 - **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
   transient-state scrubs.
+
+## adr-package-verifies-the-document-not-the-shipping-set: `npm run package` runs the check a patched clone can answer
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** `npm run package` runs `npm run verify:third-party-notices:document` rather than the
+  stronger `--verify-shipping-set`. The reason recorded in `packaging.test.ts` was that the
+  shipping-set half cannot run over warm webpack caches — which stopped being true once `clean.ts`
+  became the first step of `package` and its glob started removing every
+  `node_modules/.cache/webpack-*` directory, including each extension bundle's per-mode one. Since
+  `package` is the route that produces the installers, the stronger check looked available.
+- **Decision:** Keep `--verify-document`, for a different reason: `package` is not run only from
+  this repository. `paratext-10-studio` clones this repo, patches it, copies private extensions in,
+  yalc-links a local `scripture-editors`, and runs `npm run package` inside the patched clone.
+  `verifyNpmShippingSet` ends in `diffShippingSet`, which refuses any drift in either direction, so
+  it would fail there on every build. `--verify-document` compares the committed document against
+  the sha256 in the committed lock — two committed files, no build inputs — so it answers the same
+  way in a patched clone as it does here.
+- **Alternatives:** Switch `package` to `--verify-shipping-set` — rejected: it breaks the downstream
+  packaging build. Make the shipping-set check tolerate a superset — rejected: "any drift in either
+  direction" is the property that makes it worth running at all.
+- **Consequences:** the artifact users receive is verified as a DOCUMENT (the committed notices match
+  the committed lock) rather than as a derivation from that build's own graph; the derivation is
+  checked on the Linux leg of `test.yml` and at release time in `publish.yml` and
+  `package-main.yml`. **Revisit** if notices generation ever moves into `paratext-10-studio`, which
+  would give the patched build a shipping set of its own to verify against.
+- **Source:** the multi-agent review of #2654, finding 22.
 
 ## adr-packaged-extensions-are-discovered: `InstalledExtensions.packaged` reports discovered extensions, not activated ones
 
@@ -3165,6 +3531,43 @@ step, no automation. Just a record.
      action. This decision establishes the contradiction rather than causing it. Owner: core.
 - **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
+
+## adr-unresolvable-spdx-operators-drop-the-dependency: A declaration carrying an SPDX operator this pipeline cannot resolve drops the dependency
+
+- **Date:** 2026-08-27
+- **Status:** Accepted
+- **Context:** Three declared shapes reach `resolveDeclaredPrefix` in `policy.ts` and block before
+  any policy list is consulted: a `WITH` exception (`Apache-2.0 WITH LLVM-exception`), an
+  unrepresentable `+` (`Apache-2.0+`, for which SPDX publishes no "or later" identifier), and a
+  disjunct that is not a grant we can verify (`LicenseRef-Commercial`). The first two are usually
+  AGPL-COMPATIBLE — they block on an expressibility problem, not an incompatibility. SPDX names no
+  identifier for "Apache-2.0 or later", and the corpus this pipeline reproduces texts from holds no
+  exception texts, so resolving on the base identifier would put a text into the artifact that
+  describes a license the package is not under, or state terms narrower than it grants.
+
+  No instrument in `notices-policy.json` can clear any of the three, and this was not obvious from
+  the code: `applyException` refuses a `WITH` and an unrepresentable `+` by name, and
+  `applyOverride` is reachable only where `declared.ok` is false — which is false for all three,
+  because each parses. Both block messages nonetheless told the reader "a reviewed exception or a
+  curated override records what applies."
+- **Decision:** Accept dropping the dependency. These are not routed to a new instrument; the block
+  message and `report.ts`'s `policyRemedy` now say plainly which instruments cannot clear the shape
+  and why, and end at "the dependency has to change." A package whose declaration this pipeline
+  cannot resolve into an identifier it can reproduce a text for does not ship.
+- **Alternatives:** Add an instrument that records a human's determination for `+` and `WITH` —
+  rejected for now: it would admit a package on a reviewer's word where the artifact still cannot
+  reproduce a text matching the grant, which is the half-answer
+  `adr-notices-derived-from-what-ships` rules out. Resolve on the base identifier — rejected: it
+  states terms narrower than the package grants, and for `WITH` it names a license the package is
+  not under. Leave the messages naming instruments that cannot clear the block — rejected: advice
+  the gate then refuses is the failure `policyRemedy` exists to prevent.
+- **Consequences:** nothing in the current closure declares any of the three, so this costs nothing
+  today; the decision is recorded because it would otherwise be re-litigated the first time a real
+  dependency hits it. **Revisit** if a dependency this project genuinely needs declares
+  `<id>+` or `<id> WITH <exception>` — the answer then is an instrument that records the
+  determination AND the text to reproduce, not a relaxation of the gate.
+- **Source:** the multi-agent review of #2654 and the follow-up decision on its finding about
+  `policyRemedy`.
 
 ## adr-web-view-error-boundary-placement: Web views get one error boundary at the shared mount point, not one per extension
 

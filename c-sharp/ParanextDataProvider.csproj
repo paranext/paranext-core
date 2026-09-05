@@ -10,7 +10,7 @@
     <RootNamespace>Paranext.DataProvider</RootNamespace>
     <SelfContained>true</SelfContained>
     <Company>SIL Global and United Bible Societies</Company>
-    <Copyright>Copyright © 2017-2025 SIL Global and United Bible Societies</Copyright>
+    <Copyright>Copyright © 2017-2026 SIL Global and United Bible Societies</Copyright>
     <Authors>sillsdev</Authors>
     <Product>Paratext Data Provider for Platform.Bible</Product>
     <Title>Paratext Data Provider for Platform.Bible</Title>
@@ -20,7 +20,7 @@
     <PackageIcon>icon.png</PackageIcon>
     <PackageProjectUrl>https://github.com/paranext</PackageProjectUrl>
     <RepositoryUrl>https://github.com/paranext/paranext-core</RepositoryUrl>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <!-- To support macOS universal binaries, we need to build both architectures -->
     <RuntimeIdentifiers Condition="$([MSBuild]::IsOsPlatform('OSX'))">osx-x64;osx-arm64</RuntimeIdentifiers>
     <UserSecretsId>1860f020-31dd-4eb4-81c4-323eb0cb3e48</UserSecretsId>
@@ -51,7 +51,24 @@
     <PackageReference Include="ParatextChecks" Version="$(ParatextPackageVersion)" />
     <PackageReference Include="ParatextData" Version="$(ParatextPackageVersion)" />
     <PackageReference Include="StreamJsonRpc" Version="2.22.11" />
-    <PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
+    <!--
+      Suppressed, not consumed, and the suppression is about the LEGAL ARTIFACT rather than the
+      binary. SIL.Core targets netstandard2.0 and declares System.Net.Http 4.3.4 transitively, which
+      is past the 4.3.0 the .NET 8 shared framework supersedes. The published assembly is the
+      framework's either way - this project publishes SelfContained, so conflict resolution picks by
+      assembly version and 8.0.0.0 beats 4.x - but project.assets.json still resolves the package's
+      own runtimes/unix/lib/netstandard1.6 asset, and that assets file is what
+      .erb/scripts/third-party-notices derives the .NET closure from. Without ExcludeAssets="all" the
+      package gets a row in THIRD-PARTY-NOTICES.md; with it, the assets file records `_._`
+      placeholders and the closure does not see it.
+
+      That distinction is the whole point. The package carries the pre-MIT "MICROSOFT .NET LIBRARY"
+      terms rather than an SPDX expression, and those terms include an "Excluded License" clause
+      whose effect on an AGPL binary nobody has determined. Disclosing a package whose assembly does
+      not ship would raise that question over nothing. System.Net.WebSockets 4.3.0 is the same shape
+      and must not be referenced for its assets either, for the same reason (see LICENSING.md).
+    -->
+    <PackageReference Include="System.Net.Http" Version="4.3.4" ExcludeAssets="all" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.9" />
   </ItemGroup>
 

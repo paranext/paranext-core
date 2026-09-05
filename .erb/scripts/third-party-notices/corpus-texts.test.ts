@@ -1,0 +1,159 @@
+import { spawnSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { describe, expect, it } from 'vitest';
+import { main as buildCorpusIndex, reachableIds } from './build-corpus-index';
+import { canonicalText, corpusVersion, verifyCorpus } from './corpus';
+import { loadPolicy } from './policy';
+import { readJsonFile } from './read-json';
+
+/**
+ * Registers tsx in the child, so it can `require` this pipeline's `.ts` modules.
+ *
+ * The same loader `npm run build:third-party-notices` runs the generator with, so what these cases
+ * drive is the shipped entry point rather than a separately compiled copy of it.
+ */
+const TSX = ['--import', 'tsx'];
+
+const POLICY = loadPolicy(path.join(__dirname, 'notices-policy.json'));
+
+describe('corpus', () => {
+  it.each(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'Zlib', 'Unicode-DFS-2016'])(
+    'has canonical text for %s',
+    (id) => {
+      const text = canonicalText(id);
+      expect(text).toBeTruthy();
+      // `text?.length ?? 0` rather than `text!.length`: the non-null assertion operator is banned
+      // by `no-type-assertion/no-type-assertion`, which flags it alongside `as`.
+      expect(text?.length ?? 0).toBeGreaterThan(200);
+    },
+  );
+
+  it('returns undefined for an unknown id rather than empty text', () => {
+    // Returning '' would let a package with an unrecognised id render an empty license block,
+    // which reads as a discharged obligation while discharging nothing.
+    expect(canonicalText('Not-A-Real-License-1.0')).toBeUndefined();
+  });
+
+  it('every indexed text matches its recorded checksum', () => {
+    // This is what makes the index worth committing: it detects drift or substitution in the
+    // spdx-license-list dependency instead of silently reproducing whatever it now contains.
+    expect(verifyCorpus()).toEqual([]);
+  });
+
+  it('covers every license the shipped policy can reach a verdict on', () => {
+    // A policy id with no canonical text would render an empty license block - an obligation that
+    // looks discharged and is not. Checking the policy against the index closes that gap here
+    // rather than at generation time.
+    const missing = reachableIds(POLICY).filter((id) => !canonicalText(id));
+    expect(missing).toEqual([]);
+  });
+
+  it('indexes those licenses and no others', () => {
+    // The other direction, which nothing else checks. Every checksum here is a text this repository
+    // may have to reproduce; one for an identifier no verdict path can produce is never read and is
+    // re-hashed by `verifyCorpus` on every run. It also keeps SPDX ids that merely LOOK like
+    // credentials - SPDX names licenses after the tools they cover, so `TermReadKey`, `HIDAPI` and
+    // `ssh-keyscan` sit beside 64-char hex - out of a committed file, rather than allowlisting them
+    // in the secret scanner. `npm run build:third-party-notices:corpus` is what repairs a failure.
+    const index = readJsonFile<{ checksums: Record<string, string> }>(
+      path.join(__dirname, 'spdx-corpus', 'index.json'),
+      'the vendored SPDX corpus index',
+    );
+    expect(Object.keys(index.checksums).sort()).toEqual(reachableIds(POLICY));
+  });
+
+  it('records the corpus version so the artifact is traceable', () => {
+    expect(corpusVersion()).toMatch(/^\d+\.\d+\.\d+/);
+  });
+});
+
+describe('a drifted corpus is detected', () => {
+  // `verifyCorpus()` gates every run in `buildReport`, and a committed tree can never make it
+  // return non-empty - so without these cases the one guard protecting the license texts themselves
+  // is the one guard nothing falsifies. What it exists to catch is the `spdx-license-list`
+  // dependency changing or being substituted under a pinned version, after which the generator
+  // would reproduce whatever it now contains as if it were the license. Simulated by mutating the
+  // dependency's own export in a child process, which is exactly the shape of that failure.
+  function withMutatedCorpus(expression: string) {
+    const script = `
+      const target = require.resolve('spdx-license-list/full');
+      const real = require(target);
+      // One byte, in one license, leaving every other text untouched: the gate has to catch a
+      // silent edit, not just a wholesale replacement.
+      const mutated = { ...real, MIT: { ...real.MIT, licenseText: real.MIT.licenseText + '.' } };
+      require.cache[target] = {
+        id: target,
+        filename: target,
+        path: require('path').dirname(target),
+        loaded: true,
+        children: [],
+        paths: [],
+        exports: mutated,
+      };
+      const corpus = require(${JSON.stringify(path.join(__dirname, 'corpus.ts'))});
+      process.stdout.write(JSON.stringify(${expression}));
+    `;
+    const run = spawnSync(process.execPath, [...TSX, '-e', script], { encoding: 'utf8' });
+    if (run.status !== 0) throw new Error(`child failed: ${run.stderr}`);
+    return JSON.parse(run.stdout);
+  }
+
+  it('reports the drifted identifier rather than reproducing the changed text', () => {
+    expect(withMutatedCorpus('corpus.verifyCorpus()')).toEqual(['MIT']);
+  });
+
+  it('throws from canonicalText, naming the identifier and both checksums', () => {
+    const thrown = withMutatedCorpus(
+      "(() => { try { corpus.canonicalText('MIT'); return 'no error'; } catch (err) { return err.message; } })()",
+    );
+    expect(thrown).toMatch(/canonical text for MIT does not match the committed checksum/);
+    // Naming the drift is half an answer; the message has to carry the command that repairs it.
+    expect(thrown).toContain('npm run build:third-party-notices:corpus');
+  });
+
+  it('leaves every other identifier alone, so the report names only what drifted', () => {
+    expect(withMutatedCorpus("corpus.canonicalText('Apache-2.0').length > 200")).toBe(true);
+  });
+});
+
+describe('the committed corpus index is what its generator writes', () => {
+  const INDEX = path.join(__dirname, 'spdx-corpus', 'index.json');
+
+  /**
+   * Everything else about the corpus is checked as content (`covers every license the shipped
+   * policy can reach`, `every indexed text matches its recorded checksum`); what has no other cover
+   * is that the committed bytes are the bytes the generator produces, from this policy and this
+   * `spdx-license-list` version.
+   *
+   * That is the drift this catches: an identifier added to the policy, or the matcher dependency
+   * bumped, without the index regenerated. `corpus.ts` re-verifies every text against the committed
+   * checksum at READ time, so a stale index cannot put wrong text into the document - but it can
+   * leave a reachable identifier with no entry at all, and this is what says so.
+   *
+   * Generated into a TEMP directory and compared, rather than over the committed file and restored.
+   * `spdx-corpus/index.json` is tracked and `corpus.ts` reads it lazily for `render`, `identify`,
+   * `lock` and `verify-shipping-set` - plus `degradation`'s spawned child processes, which vitest's
+   * scheduling does not reach at all - so a write-then-restore window in a parallel run is a race
+   * whose failure reads as corpus corruption in whichever suite lost it.
+   */
+  it('rewrites it byte-for-byte', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-corpus-'));
+    try {
+      buildCorpusIndex(dir);
+      expect(fs.readFileSync(path.join(dir, 'index.json'), 'utf8')).toBe(
+        fs.readFileSync(INDEX, 'utf8'),
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reaches every identifier the index records, and no others', () => {
+    const committed = JSON.parse(fs.readFileSync(INDEX, 'utf8'));
+    expect(reachableIds(loadPolicy(path.join(__dirname, 'notices-policy.json'))).sort()).toEqual(
+      Object.keys(committed.checksums).sort(),
+    );
+  });
+});
