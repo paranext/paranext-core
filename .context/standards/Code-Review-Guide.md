@@ -1,10 +1,10 @@
 ---
 title: Code Review Guide
 description: Code review process, Reviewable workflow, code stewards, and PR approval best practices.
-version: 1.1.0
+version: 1.4.0
 status: active
 created: 2026-03-04
-last_updated: 2026-06-15
+last_updated: 2026-09-02
 ---
 
 # Code Review Guide
@@ -18,6 +18,134 @@ This document outlines the code review process and best practices for Platform.B
 The team recommends using **Reviewable** rather than GitHub's native review tools when available. Reviewable enforces completion requirements: all conversations must be resolved and every changed file must be reviewed before merging is allowed.
 
 For detailed guidelines, see the [Code Review Guide wiki](https://github.com/paranext/paranext/wiki/Code-Review-Guide).
+
+---
+
+## Automated Per-Commit Review (roborev, optional)
+
+[roborev](https://roborev.io) reviews each commit in the background with an AI agent and
+collects the findings in a local queue, so problems surface while the change is still fresh
+rather than at PR time. It complements human review and Reviewable; it does not replace either.
+
+**This is opt-in and entirely local.** The repository ships a `.husky/post-commit` hook that
+exits immediately when the `roborev` binary is not on `PATH`, so developers who have not
+installed it are unaffected — no hook output, no delay, no failed commits.
+
+### Per-machine setup
+
+Everything below is per-developer and per-machine; none of it can be committed.
+
+**1. Install the binary.** Prefer a versioned, checksum-verified release over piping a remote
+script into a shell — this machine holds repository credentials and AI-agent tokens. Download
+the archive for your platform plus `SHA256SUMS` from
+[roborev releases](https://github.com/kenn-io/roborev/releases), verify it, then put `roborev`
+on your `PATH`:
+
+```bash
+ARCHIVE="roborev_<version>_<platform>.tar.gz"   # fill in your version and platform
+grep -F "$ARCHIVE" SHA256SUMS | sha256sum -c -  # macOS: shasum -a 256 -c -
+```
+
+Use the checking form (`-c`), not the digest-printing form — printing a hash you never compare
+is not verification. Checking the named archive specifically also fails loudly when that name
+is absent from the manifest; `sha256sum -c SHA256SUMS --ignore-missing` would instead pass on
+some *other* listed file that happens to be in the directory.
+
+Linux users can install the published `.deb` or `.rpm` instead. The upstream
+`curl -fsSL https://roborev.io/install.sh | bash` one-liner also works, but read the script
+first if you use it.
+
+**2. Configure and verify your agent, then add the agent hook.** The hook is what makes roborev
+speak up; the skills install is genuinely optional.
+
+```bash
+roborev config set --global default_agent claude-code   # pick your review agent
+roborev config set --global review_model sonnet         # per-commit reviews on a cheaper model
+roborev daemon restart
+roborev check-agents                                    # confirm the agent is reachable
+roborev skills install                                  # optional: /roborev-fix, /roborev-refine, /roborev-snooze
+roborev agent-hook install --agent claude               # drives the reminders; roborev is inert without it
+```
+
+`agent-hook install` writes to your **global** Claude Code configuration, not to anything in this
+repository — nothing here is or can be committed. So opting in is a per-machine decision, not a
+per-project one: once installed, the reminder fires in every project you open in Claude Code, not
+only in paranext-core. Uninstalling is the same command with `uninstall`.
+
+Per-commit review volume is high, so pin the review model to Sonnet; the interactive
+`/code-review` command is unaffected and keeps whatever model the current session already runs on.
+A rebase re-mints commit SHAs but enqueues no reviews (a 130-commit restack queued zero jobs; only
+the real commit made afterwards was reviewed), so there is no reason to pause roborev while
+rebasing — fix-round commits made during a rebase are exactly the ones a review should catch.
+
+Do not skip `roborev check-agents`. A configured-but-unreachable agent makes every review fail,
+and that failure is genuinely invisible from the outside: the daemon rejects the enqueue with a
+503, the post-commit hook still exits 0, and commits look completely normal while nothing is
+ever reviewed. Reviews run on **your own** agent subscription and consume your quota.
+
+**Confirm it is actually working.** After your first commit, run `roborev list` — you should
+see a job for that commit. An empty list means reviews are not being enqueued; check
+`~/.roborev/post-commit.log`, which records the real reason.
+
+If you install the agent hook, keep roborev's default thresholds — they are tuned so the stack of
+unfixed findings stays small between reminders. One override is required, though: the shipped
+default instruction names Codex's `$roborev-fix`, which does nothing in Claude Code. It goes in your
+per-machine `~/.roborev/config.toml`, never in the repository's committed `.roborev.toml`.
+
+```toml
+[agent_hook]
+instruction = "Invoke the /roborev-fix skill now."
+```
+
+The hook reminds you every five turns once failed reviews have accumulated. When a long stretch of
+work genuinely should not be interrupted, use `/roborev-snooze on 2h` rather than raising
+`turn_threshold`: snoozing is temporary and scoped to the current worktree and branch, and reviews
+keep enqueueing while it is active.
+
+Then browse findings with `roborev tui`, or pull them into an agent session with `/roborev-fix`.
+
+#### When the reminder fires mid-task
+
+The reminder arrives on a turn counter, not because this moment is a good one to stop. It is a
+prompt, not an order: finish the unit of work you are in, then run `/roborev-fix`. Decline it for
+now when any of these hold, and say why rather than silently ignoring it:
+
+- **You are mid-operation** — a rebase in progress, a dirty tree, a half-applied fix. `/roborev-fix`
+  edits files; running it over unfinished work mixes two changes and leaves neither reviewable.
+- **You are an agent roborev spawned.** A review job exists to produce a verdict. Its agent must not
+  edit a working tree or start processes — on 2026-08-28 one did, and it launched an e2e run that
+  killed another session's.
+- **The findings are not on your branch.** Tell the session that owns it; do not fix someone else's
+  branch under them.
+- **Another session holds a shared resource** the fix would need (the e2e port, a dev server). Ask
+  first, the same as for any other run.
+
+For a long stretch that genuinely must not be interrupted, `/roborev-snooze on 2h` is the supported
+answer — it is temporary, scoped to this worktree and branch, and reviews keep enqueueing while it
+is active. Raising `turn_threshold` is not: it hides the backlog everywhere, permanently.
+
+Close findings with `roborev close` once handled. `roborev comment` records a note but leaves the
+finding OPEN, and the open count is exactly what the reminder counts — comment-only closure is how a
+branch accumulates fourteen "open" findings that were all dealt with days ago.
+
+### What the repository already provides
+
+- `REVIEW.md` — review guidelines shared by roborev and Claude Code's `/code-review`, which
+  both auto-discover this file. Keep project-wide review rules here.
+- `.roborev.toml` — exclusions for generated output, skip patterns for WIP commits, and commit
+  attribution. It deliberately does not pin a review agent; that is a per-developer choice.
+- `.husky/post-commit` — the guarded hook described above.
+
+Running `roborev init` is not required, and installs a second hook in `.husky/_/post-commit`.
+That is harmless: the daemon coalesces duplicate requests for the same repository, git
+reference, and review target into a single review.
+
+**Always pass `--global` to `roborev config set`.** It defaults to `--local`, and a local write
+does not patch the committed `.roborev.toml` — it regenerates the whole file from roborev's
+template. The values survive, but every explanatory comment is replaced by generated ones and the
+file balloons to roughly 225 lines, which `git commit -a` will happily carry into your branch.
+Machine-level settings belong in `~/.roborev/config.toml` anyway; edit `.roborev.toml` by hand
+when the repository genuinely needs a change.
 
 ---
 
@@ -47,6 +175,39 @@ For current code steward assignments, see the [Code Stewards wiki](https://githu
    - `:code_review:` for partial reviews
    - `:white_check_mark:` for complete reviews
 4. Process completes when all sections receive required approval
+
+---
+
+## Before the verdict
+
+Four checks that come before a review is reported. Each of them exists because a review that
+skipped it passed a defect the next stage caught.
+
+- **A checklist from the requester is a floor, not the review.** Run the full review pass alongside
+  it and hold the verdict until that pass finishes; then ask which branch of every two-way switch
+  the diff's tests never exercise — default versus non-default mode, tracked versus untracked,
+  first-load versus fallback. Rigour inside the places someone listed says nothing about the places
+  nobody listed, and the most-travelled path is often one of the latter.
+
+- **Run the control before attributing.** Before a symptom is blamed on a change, check the same
+  signal on the base and on unrelated branches. Two occurrences inside one population are not a
+  pattern until the population without that change has been looked at, and a wrong attribution
+  sends someone after a defect they did not write. A control only controls if it reproduces the
+  conditions of the run it is controlling: state what differs between the control and the failing
+  run, and let a matched pair vary the commit or the invocation, never both at once.
+
+- **Verify a premise in code, citing the file and symbol, before it reaches a rationale, an ADR or a report.**
+  Grep the type definitions before accepting "cannot be done" as the reason for a workaround. A
+  false premise costs far more to remove once it has been repeated across a design note, a decision
+  log and a commit message than it costs to check once.
+
+- **A change to a shutdown, close or persistence path keeps its end-to-end scenarios in the gate.**
+  Unit tests, mutation checks and review have each passed defects on those paths that only an
+  end-to-end run caught: what fails there is ordering and lifetime, which a mocked test reproduces
+  by construction rather than exercises.
+
+When a finding is a rule rather than a single site, state the rule and name every site it governs —
+a reviewer's scope becomes the fixer's scope.
 
 ---
 
@@ -90,3 +251,6 @@ Request code reviews in the `#reviews` channel on the [Platform.Bible Discord se
 | ------- | ---------- | ------------------------------------------------------------------- |
 | 1.0.0   | 2026-03-04 | Initial version                                                     |
 | 1.1.0   | 2026-06-15 | De-ported the AI-Assisted-Review (porting) section for the general profile |
+| 1.2.0   | 2026-08-13 | Added optional roborev per-commit review section with per-machine setup |
+| 1.3.0   | 2026-08-28 | Pinned roborev's review model to Sonnet per machine; noted that a rebase enqueues no reviews; documented the agent hook's machine-wide scope and when to decline its reminder |
+| 1.4.0   | 2026-09-02 | Added "Before the verdict": checks a review completes before it is reported |
