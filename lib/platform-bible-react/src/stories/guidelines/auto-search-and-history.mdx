@@ -1,0 +1,111 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guidelines/Auto-Search and History" />
+
+# Auto-Search and History
+
+Many features in Platform.Bible allow users to type into an input and see results update automatically, without pressing Enter or clicking a button. This pattern is called **auto-search**. Some of these features also save recent inputs to a **history** so users can quickly re-run a previous search.
+
+This guideline covers two related questions:
+
+1. When should results refresh as the user types?
+2. When should an input value be saved to history?
+
+Find and Replace is used as the primary example throughout, but these rules apply to any feature that fits this pattern (settings search, project list filtering, reference lookup, etc.).
+
+---
+
+## When to refresh results
+
+The goal is to feel responsive without flooding the user with intermediate results for every partial word they type.
+
+### Debounce keystrokes
+
+Do not trigger a search on every keystroke. Instead, wait until the user pauses before running the search. A debounce delay of **300–500 ms** is the recommended range.
+
+- **300 ms** feels more immediate and suits simple, fast in-memory searches (e.g. filtering a short list).
+- **500 ms** is safer for heavier searches (e.g. full-text search across a large project).
+
+In Find and Replace, a 300–500 ms debounce on the Find input means the user can type a whole word before results appear.
+
+Implementations may optionally skip debounce-triggered searches when the input is a single character. This avoids flooding results for very common letters, but applies only to keystroke debounce — not to other triggers like Enter or UI interactions, which should always fire regardless of input length.
+
+### Trigger immediately on certain actions
+
+Some actions signal clear intent and should bypass the debounce:
+
+| Action | Reason to search immediately |
+| --- | --- |
+| Pressing Enter | The user has signaled they are done typing |
+| Pasting text | A complete value is entered all at once |
+| Changing a search option | The user changed a parameter that affects results (e.g. case-sensitive, whole word) |
+| Clearing the input | The empty state should resolve immediately |
+
+In Find and Replace, toggling "Match case" or "Whole word" should immediately re-run the current search, not wait for a new keystroke.
+
+### Do not search on an empty input
+
+When the input is empty, clear the results rather than searching for everything. Showing all content when nothing is typed is usually not what the user wants and can be expensive to compute.
+
+---
+
+## When to save to history
+
+The goal is to record terms the user genuinely intended to search for, without cluttering history with half-typed words or typos.
+
+### Save on all of the following triggers
+
+History should be saved when any of these occur, whichever comes first:
+
+| Trigger | Notes |
+| --- | --- |
+| **5 seconds of no typing** | Captures terms the user paused on, even if they did not interact with results |
+| **Enter key pressed** | The user explicitly submitted the search |
+| **Clicking a result** | The user confirmed the term was useful by acting on it |
+| **Clicking navigation controls** (next/previous result arrows, etc.) | Same intent as clicking a result |
+| **Changing a search option** (e.g. case-sensitive toggle) | The user refined a term they intend to keep |
+| **Clearing the input** | Save the previous value before it is lost |
+| **Completing an action** (Replace All, applying a check fix, etc.) | The search term was used to complete an action |
+| **Closing the tab or the application** | Flush any pending history entry |
+| **Input losing focus (blur)** | The user moved on; treat the current value as final |
+
+In Find and Replace, if the user types "temple" and then clicks the next-result arrow, "temple" should be saved to Find history immediately — no waiting for the 5-second timer.
+
+### Debounce backspace and selection changes
+
+Rapid backspacing is usually editing, not a new search intent. Do not save a history entry on every backspace. Apply the same 5-second timer to backspace sequences. If backspacing empties the field, the **Clearing the input** trigger takes over — see above.
+
+Selecting all text with Ctrl+A or mouse is ambiguous — the user may be about to replace the value. Do not save on selection alone; wait for one of the triggers above.
+
+### Paste is worth saving
+
+Pasting usually means the user brought in a complete value from elsewhere. It triggers an immediate search (see above) and should also reset the 5-second history timer, so the pasted value will be saved if the user does not continue typing.
+
+### Track fields independently
+
+When there are multiple related inputs — like Find and Replace — maintain a separate history for each field. Do not record Find-Replace pairs.
+
+In Find and Replace, the Find input and Replace input each have their own history list and their own history icon. A user browsing Replace history should see only previous replacement strings, not search terms.
+
+### Deduplicate history entries
+
+If a value is already in history, do not add it again. Move it to the top of the list instead. This keeps history clean and puts recently used terms first.
+
+### Persist history across sessions
+
+History should survive a session restart. Store it in a way that persists between application launches so users can return to previous searches the next time they open the same feature.
+
+---
+
+## Summary
+
+| Decision | Recommendation |
+| --- | --- |
+| Debounce delay for keystroke search | 300–500 ms |
+| Search on paste | Immediately |
+| Search when option changes | Immediately |
+| Search on empty input | No — clear results |
+| Debounce delay for history save | 5 seconds of no typing |
+| Also save history on | Enter, blur, result click, navigation click, option change, clear, completing an action, close |
+| Track Find and Replace history | Separately |
+| Deduplicate history | Yes — move duplicates to top |
