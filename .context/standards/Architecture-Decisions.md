@@ -1178,7 +1178,13 @@ step, no automation. Just a record.
   Two main-process paths exit without draining and lose the line they just logged: `main.ts`'s
   second-instance branch logs the handed-off `process.argv` and then calls `app.exit()`, which
   skips before-quit/will-quit, making protocol-handoff bugs undiagnosable from the log; and any
-  future `process.exit()` in main would do the same.
+  future `process.exit()` in main would do the same. The obvious repair — flipping `sync` back to
+  `true` just before such a log — **does not work**, and fails silently: `FileRegistry.provide`
+  returns an already-created `File` before it reads `writeAsync`, and `File.writeAsync` is set only
+  in the constructor with no setter, so the flag is fixed once anything has written to the log.
+  Toggling it afterwards is a no-op, and whether it happens to take effect depends on nothing
+  having logged earlier in that process — an ordering dependency with no error and nothing to test
+  against. A durable fix has to drain the queue or avoid the transport for that line.
   In-app reads of the log go stale, not just crash-time ones: `platform.getLogFileContent` reads
   the file straight off disk, and Usersnap attaches its result to a user's bug report, so a report
   filed during a flood can carry a log that stops short of the problem being reported.
