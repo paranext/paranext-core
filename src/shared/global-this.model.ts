@@ -88,6 +88,24 @@ declare global {
    * @experimental
    */
   var windowId: string | undefined;
+  /**
+   * Whether this renderer is the main window — the one that draws the top-level menu. On Windows
+   * and Linux, secondary windows get identical chrome minus that menu; on macOS the top-level menu
+   * lives in the OS-level menu bar rather than in-window, so this flag does not remove it there —
+   * every window can still reach it through the system menu bar, which is process-global and cannot
+   * differ per window.
+   *
+   * Set from the URL search params in the renderer process, and `undefined` everywhere else: the
+   * main process and the extension host never assign it, and neither does the web view prelude, so
+   * code outside a renderer must not read this as a reliable `false`.
+   *
+   * Fixed at window creation and never updated, so it cannot describe a window becoming the main
+   * one later (for instance after the main window closes). PT-4278's window-manager service is the
+   * durable answer; replace this when it lands.
+   *
+   * @experimental
+   */
+  var isMainWindow: boolean | undefined;
 }
 /* eslint-enable */
 

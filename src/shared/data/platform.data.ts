@@ -24,6 +24,21 @@ export const WINDOW_ID = 'windowId';
 export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
 
 /**
+ * Query parameter passed to the renderer. Present only on the main window, absent on every
+ * secondary window, so the renderer can tell which chrome to draw — on Windows and Linux the main
+ * window keeps the top-level menu and secondary windows do not. On macOS the top-level menu lives
+ * in the OS-level menu bar, which is process-global and reachable from every window regardless of
+ * this flag.
+ *
+ * Fixed at window creation, which is a deliberate limitation: it cannot describe a window becoming
+ * the main one later. PT-4278's window-manager service is the durable answer; replace this when it
+ * lands.
+ *
+ * @experimental
+ */
+export const IS_MAIN_WINDOW_QUERY_PARAMETER = 'isMainWindow';
+
+/**
  * Query parameter key used to pass the serialized scroll group state main holds at the moment a
  * window is created, so that window's synchronous readers are right on its first render instead of
  * showing the default reference until a round trip returns.
@@ -85,6 +100,7 @@ export const URL_PARAMETERS: Readonly<Record<string, UrlParameterSpec>> = {
   [STARTUP_MARKS_QUERY_PARAMETER]: { kind: 'flag' },
   [SCROLL_GROUP_STATE_QUERY_PARAMETER]: { kind: 'serialized' },
   [THEME_STATE_QUERY_PARAMETER]: { kind: 'serialized' },
+  [IS_MAIN_WINDOW_QUERY_PARAMETER]: { kind: 'flag' },
 };
 
 /**
