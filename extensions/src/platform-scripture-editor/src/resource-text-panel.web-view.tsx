@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
   useExtraValidMarkers,
   useTabIconSelection,
+  useViewVisibility,
   type TabIconUrls,
   Spinner,
 } from 'platform-bible-react';
@@ -32,17 +33,25 @@ import {
   LocalizeKey,
   ResourceType,
 } from 'platform-bible-utils';
-import { Canon } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  DblResourceReference,
-  EffectiveResourceReference,
-  ResourceReferenceList,
-} from 'platform-scripture';
+import type { ResourceReferenceList } from 'platform-scripture';
+import {
+  hasNewScrollTarget,
+  isEchoOfPublishedScrRef,
+  SCROLL_MAX_WAIT_MS,
+  scrollToVerse,
+} from './editor-dom.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
-import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
+import { useResourcePickerResources } from './use-resource-picker-resources.hook';
+import type { PickerResource } from './downloaded-resources.utils';
+import {
+  canPublishResourcePanelProjectIds,
+  getResourcePanelReadiness,
+  type ResourcePanelReadiness,
+} from './resource-panel-readiness.utils';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
@@ -53,7 +62,9 @@ import {
   isDblResourceReference,
   isProjectReference,
   getRefLabel,
+  getResourceReferenceRowId,
 } from './resource-reference.utils';
+import { resolveResourceSelection } from './resource-selection.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { ResourceBlankChapter } from './resource-blank-chapter.component';
@@ -69,6 +80,7 @@ import {
 } from './resource-panel-strings.utils';
 import { RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
+import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -110,17 +122,13 @@ const COMMENTARIES_ICON_URLS: TabIconUrls = {
   lightUnselected: 'papi-extension://platformScriptureEditor/assets/file-text-unselected.svg',
 };
 
-/** Returns the `id` field for reference types that have one, or `undefined` for others. */
-function getRefId(ref: EffectiveResourceReference): string | undefined {
-  if (isDblResourceReference(ref) || isProjectReference(ref)) {
-    return ref.id;
-  }
-  return undefined;
-}
+// This panel offers locally-downloaded resources alongside the ones already in the text
+// collection, so its rows are the union of both.
+const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
 
 type ResourceSelectorDropdownProps = {
-  filteredResources: EffectiveResourceReference[];
-  selectedRef: EffectiveResourceReference | undefined;
+  filteredResources: PickerResource[];
+  selectedRef: PickerResource | undefined;
   dblResources: DblResourceData[];
   onSelectResource: (id: string) => void;
   onShowResourcePicker: () => void;
@@ -144,23 +152,26 @@ function ResourceSelectorDropdown({
             className="tw:h-8 tw:w-full tw:justify-between tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap"
           >
             <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
-              {selectedRef ? getRefLabel(selectedRef, dblResources) : ''}
+              {selectedRef ? getRefLabel(selectedRef.reference, dblResources) : ''}
             </span>
             <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="tw:w-72">
           {filteredResources.map((ref) => {
-            const refId = getRefId(ref);
+            const refId = getResourceReferenceRowId(ref.reference);
             return (
               <DropdownMenuCheckboxItem
                 key={refId}
-                checked={refId === (selectedRef ? getRefId(selectedRef) : undefined)}
+                checked={
+                  refId ===
+                  (selectedRef ? getResourceReferenceRowId(selectedRef.reference) : undefined)
+                }
                 onCheckedChange={() => {
-                  if (refId) onSelectResource(refId);
+                  onSelectResource(refId);
                 }}
               >
-                {getRefLabel(ref, dblResources)}
+                {getRefLabel(ref.reference, dblResources)}
               </DropdownMenuCheckboxItem>
             );
           })}
@@ -251,8 +262,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
     projectId,
     'platformScripture.referencedProjectsAndResources',
   );
-  const effectiveResources =
-    effectiveResourcesState.status === 'ready' ? effectiveResourcesState.list : undefined;
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
@@ -261,6 +270,12 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
   const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
+  const [pickerResources, arePickerResourcesLoading] = useResourcePickerResources(
+    projectId,
+    RESOURCE_PICKER_OPTIONS,
+    dblResources,
+    isCatalogReady || hasCatalogError,
+  );
   const getUserResourceTexts = useCallback(
     async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
     [textConnectionsProvider],
@@ -285,74 +300,66 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Filter list based on resourceType
 
-  const filteredResources = useMemo((): EffectiveResourceReference[] => {
-    if (!effectiveResources) return [];
-    return effectiveResources.items.filter((ref) => {
-      if (isDblResourceReference(ref)) {
-        return dblResources.find((r) => r.dblEntryUid === ref.id)?.type === resourceType;
-      }
-      if (isProjectReference(ref)) {
-        // ProjectReferences only appear in the Bible Texts tab
-        return resourceType === 'ScriptureResource';
-      }
-      return false;
-    });
-  }, [effectiveResources, dblResources, resourceType]);
+  const filteredResources = useMemo<PickerResource[]>(
+    () => (pickerResources ?? []).filter((row) => row.type === resourceType),
+    [pickerResources, resourceType],
+  );
 
   // Readiness is decided from whether the sources have ARRIVED, never from whether the filtered
   // result came out empty — see `getResourcePanelReadiness`.
-  const readiness = getResourcePanelReadiness({
+  const listReadiness = getResourcePanelReadiness({
     listState: effectiveResourcesState,
     isCatalogReady,
     hasCatalogError,
     matchingCount: filteredResources.length,
   });
 
+  // `getResourcePanelReadiness` answers "is anything configured?" from the referenced list alone.
+  // This panel also offers locally-downloaded resources that are not referenced yet, so an empty
+  // referenced list is only genuinely empty once those rows have arrived and none of them matched.
+  let readiness: ResourcePanelReadiness = listReadiness;
+  if (listReadiness === 'empty') {
+    if (arePickerResourcesLoading) readiness = 'loading';
+    else if (filteredResources.length > 0) readiness = 'configured';
+  }
+
   // #endregion
 
   // #region Selection management
 
-  // Holds the ID of a resource just selected from the picker while it propagates through the
-  // reactive settings chain and into filteredResources. Prevents the auto-correct below from
-  // resetting the selection before the new resource has arrived in the list.
+  // Holds the row id of a resource just selected from the picker while it propagates through the
+  // reactive settings chain and into filteredResources. Written from the reference
+  // `selectTextConnection` actually stored, so it is comparable to the row ids of the list.
   const [pendingResourceId, setPendingResourceId] = useState<string | undefined>(undefined);
 
-  // Once the pending resource appears in filteredResources, commit it as the active selection.
-  useEffect(() => {
-    if (!pendingResourceId) return;
-    const found = filteredResources.find((r) => getRefId(r) === pendingResourceId);
-    if (found) {
-      setSelectedResourceId(pendingResourceId);
-      setPendingResourceId(undefined);
-    }
-  }, [filteredResources, pendingResourceId, setSelectedResourceId]);
+  // Committing a pick, holding still while one is in flight, migrating a legacy bare id and
+  // falling back when the selection leaves the list are one decision, not four effects that can
+  // disagree across renders. `resolveResourceSelection` makes it, and is tested directly.
+  const selection = resolveResourceSelection(
+    filteredResources,
+    selectedResourceId,
+    pendingResourceId,
+  );
+  const selectedRef = selection.selectedRow;
 
-  // Auto-correct selectedResourceId when the selected item leaves the filtered list.
-  // Skipped while a pending selection is in-flight to avoid overriding it prematurely.
   useEffect(() => {
-    if (filteredResources.length === 0) return;
-    if (pendingResourceId) return;
-    const currentId = filteredResources.find((r) => getRefId(r) === selectedResourceId);
-    if (!currentId) setSelectedResourceId(getRefId(filteredResources[0]));
-  }, [filteredResources, selectedResourceId, setSelectedResourceId, pendingResourceId]);
-
-  const selectedRef =
-    filteredResources.find((r) => getRefId(r) === selectedResourceId) ?? filteredResources[0];
+    if (selection.nextSelectedResourceId !== undefined)
+      setSelectedResourceId(selection.nextSelectedResourceId);
+    if (selection.shouldClearPending) setPendingResourceId(undefined);
+  }, [selection.nextSelectedResourceId, selection.shouldClearPending, setSelectedResourceId]);
 
   const [isSelecting, setIsSelecting] = useState(false);
 
   // resourceProjectId is the search source passed to Find: the project of the resource this panel
   // is displaying, NOT the panel's own `projectId` prop (that is the container project whose
-  // reference list is shown).
-  let resourceProjectId: string | undefined;
-  let dblMatch: (typeof dblResources)[number] | undefined;
+  // reference list is shown). `PickerResource` resolves it for every reference kind.
+  const resourceProjectId = selectedRef?.projectId;
 
-  if (isDblResourceReference(selectedRef)) {
-    dblMatch = findCachedDblResource(selectedRef, dblResources);
-    resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
-  } else if (isProjectReference(selectedRef)) {
-    resourceProjectId = selectedRef.id;
-  }
+  // The catalog entry behind the selection, for the dynamic title's display name.
+  const dblMatch =
+    selectedRef && isDblResourceReference(selectedRef.reference)
+      ? findCachedDblResource(selectedRef.reference, dblResources)
+      : undefined;
 
   // Auto-install a selected DBL resource matched in the catalog but not installed locally yet
   // (shared with the model-text panel); without it the panel spins forever. Skipped while a manual
@@ -372,15 +379,30 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // Ctrl+F opens Find for the displayed resource.
   useOpenFindShortcut(webViewId, resourceProjectId);
 
+  // This web view's definition `projectId` is the container project whose reference list is shown,
+  // so the displayed resource is invisible to global navigation UI unless declared here.
+  usePublishNavigableProjectIds(
+    useWebViewState,
+    resourceProjectId ? [resourceProjectId] : [],
+    canPublishResourcePanelProjectIds(
+      effectiveResourcesState,
+      isCatalogReady,
+      pickerResources !== undefined,
+    ),
+  );
+
   // #endregion
 
   // #region Dynamic title
 
   let resourceShortName: string | undefined;
-  if (isDblResourceReference(selectedRef) && dblMatch?.installed) {
-    resourceShortName = dblMatch.displayName;
-  } else if (isProjectReference(selectedRef)) {
-    resourceShortName = selectedRef?.name;
+  if (selectedRef) {
+    const { reference } = selectedRef;
+    if (isDblResourceReference(reference) && dblMatch?.installed) {
+      resourceShortName = dblMatch.displayName;
+    } else if (isProjectReference(reference)) {
+      resourceShortName = reference.name;
+    }
   }
 
   // One resource type, one matched set of strings. See `resolveResourcePanelStringKeys`.
@@ -507,14 +529,19 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Resource picker dialog
 
-  // Only DblResourceReference IDs are passed to the Resource Picker as pre-selected
+  // The IDs the Resource Picker shows as already INCLUDED. Rows sourced from `downloaded` are
+  // installed locally but not in the text collection, so they belong in the picker's INSTALLED
+  // section instead. Drawn from every picker row rather than the type-filtered ones so a resource
+  // of another type that is in the text collection (a commentary alongside Bible texts) is not
+  // re-offered as INSTALLED.
   const currentFilteredDblIds = useMemo(() => {
-    return filteredResources
-      .filter(
-        (r): r is EffectiveResourceReference & DblResourceReference => r.type === 'dblResource',
-      )
-      .map((r) => r.id);
-  }, [filteredResources]);
+    return (pickerResources ?? []).flatMap((r) => {
+      if (r.source === 'downloaded') return [];
+      const { reference } = r;
+      if (isDblResourceReference(reference) || isProjectReference(reference)) return [reference.id];
+      return [];
+    });
+  }, [pickerResources]);
 
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
@@ -537,7 +564,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
               throw e;
             }
           },
-          (dblEntryUid: string) => setPendingResourceId(dblEntryUid),
+          (writtenReference) => setPendingResourceId(getResourceReferenceRowId(writtenReference)),
         );
       } finally {
         setIsSelecting(false);
@@ -570,6 +597,23 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // EditorRef requires null initial value per React ref convention
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+
+  // What this panel last published to its scroll group, and what it last successfully scrolled to.
+  // Both feed the guards on the reveal-scroll effect below.
+  const lastPublishedScrRefRef = useRef<SerializedVerseRef | undefined>(undefined);
+  const lastScrolledForRef = useRef<{ scrRef: SerializedVerseRef; usj: unknown } | undefined>(
+    undefined,
+  );
+  const isViewVisible = useViewVisibility();
+
+  // Record what we publish before forwarding it, so the bounce-back can be recognised as our own.
+  const handleScrRefChange = useCallback(
+    (newScrRef: SerializedVerseRef) => {
+      lastPublishedScrRefRef.current = newScrRef;
+      setScrRef(newScrRef);
+    },
+    [setScrRef],
+  );
   // Markers this resource's content actually uses. Passed to the editor as extraValidMarkers so it
   // doesn't warn "Unexpected <kind> marker" for handbook/commentary markers (e.g. \pn, \jmp) — scoped
   // per-resource from the USJ being displayed, never a global list. Empty for content that needs
@@ -595,6 +639,128 @@ globalThis.webViewComponent = function ResourceTextPanel({
   useEffect(() => {
     if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
   }, [usjFromPdp, contentState, isBlankChapter]);
+
+  // Scroll to the current verse when this tab is shown, and again once a chapter's content lands.
+  //
+  // `Editorial` renders the reference it is given but does not scroll to the verse — every consumer
+  // that scrolls does it by calling `scrollToVerse`, as the Scripture editor and the model text
+  // panel both do.
+  //
+  // Keyed on visibility AND on the reference: visibility covers the reveal (a tab activation carries
+  // no reference change of its own), and the reference covers "go to result" landing on a panel that
+  // is already visible.
+  useEffect(() => {
+    // The echo is consumed FIRST, and whether or not this panel is visible. A verse click inside
+    // `Editorial` publishes to scroll group 0 and bounces straight back as a prop update; scrolling
+    // on that would yank the user's own click target to the top. Leaving the latch armed because
+    // the panel happened to be hidden would be worse: a later, genuine "go to result" onto that
+    // same verse would look like an echo and be swallowed, and a panel registers no web view
+    // controller, so nothing would retry it.
+    if (isEchoOfPublishedScrRef(lastPublishedScrRefRef.current, scrRef)) {
+      lastPublishedScrRefRef.current = undefined;
+      // The clicked verse IS this panel's position now. Recording it keeps a later bare reveal from
+      // treating it as a new target and snapping away from wherever the user has since scrolled.
+      lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
+      return undefined;
+    }
+    // The latch is only ever valid for the very NEXT reference, so any other reference discards it.
+    // Otherwise a publish whose echo never arrives as its own update — a Find result writing to the
+    // group before the round-trip lands — leaves the latch armed forever, and a later genuine "go to
+    // result" onto that verse would match it and be swallowed.
+    lastPublishedScrRefRef.current = undefined;
+
+    // `isUsjLoading` is the guard that keeps a scroll off the PREVIOUS chapter: `useProjectData`
+    // holds the old USJ across a selector change, and that content is fully laid out, so the settle
+    // loop below would happily accept it. `scrollToVerse` matches on verse number alone, with no
+    // book or chapter qualifier, so scrolling then lands on — and pulses — the same verse number in
+    // the wrong chapter.
+    if (!isViewVisible || !usjFromPdp || isUsjLoading) return undefined;
+
+    // Nothing new since the last scroll — this is a bare reveal, so leave the user's scroll alone.
+    if (!hasNewScrollTarget(lastScrolledForRef.current, scrRef, usjFromPdp)) return undefined;
+
+    // Wait for the revealed pane's layout to SETTLE, then scroll exactly once.
+    //
+    // Two traps here. First, the verse marker enters the DOM before the chapter has finished laying
+    // out, so an offset computed at that moment is measured against a much shorter content box and
+    // scrolls to a fraction of the real target. Second — and why a naive rAF retry does not rescue
+    // it — `scrollToVerse` scrolls with `behavior: 'smooth'`, so re-calling it every frame restarts
+    // the animation from wherever it had crept to and it never converges.
+    //
+    // Sampling the scroll container's height until it stops changing avoids both: the geometry is
+    // trustworthy by then, and the single call that follows animates uninterrupted.
+    let cancelled = false;
+    const start = Date.now();
+    let lastScrollHeight = -1;
+    // Pulses the verse we land on, so the match is identifiable when several share a verse or a
+    // commentary entry is long. Same treatment the Scripture editor gives an arrived verse.
+    let highlightedVerseElement: HTMLElement | undefined;
+    const scrollWhenSettled = () => {
+      if (cancelled) return;
+      const timedOut = Date.now() - start > SCROLL_MAX_WAIT_MS;
+
+      // Below verse 1 means the chapter top, which `scrollToVerse` reaches without a verse marker
+      // and so without settled geometry — but it still needs the container in the DOM, and it
+      // cannot report that, since it returns an element only when it matched a marker. So the
+      // container is checked here before recording; otherwise a reveal that beat the container into
+      // the DOM would scroll nothing and still be recorded as done. Verse 1 is NOT in this case: it
+      // has a real marker and real geometry, so it goes through the settle loop like any other.
+      if (scrRef.verseNum < 1) {
+        if (document.querySelector('.editor-container')) {
+          scrollToVerse(scrRef);
+          lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
+          return;
+        }
+        if (timedOut) return;
+        requestAnimationFrame(scrollWhenSettled);
+        return;
+      }
+
+      // `.editor-container` is sampled as a CONTENT-GROWTH PROXY, not as the scroll container.
+      // Which element actually scrolls differs by host — `_editor-overrides.scss` warns that this
+      // one is auto-height in the Scripture editor and its wrapper scrolls instead — so the scroll
+      // itself is left to `scrollToVerse`, which discovers the container via `findScrollContainer`.
+      // Only the height is read here, and that tracks the chapter laying out either way.
+      const contentElement = document.querySelector<HTMLElement>('.editor-container');
+      // `querySelector` yields null, not undefined, so compare truthily — treating a missing
+      // element as "settled" would scroll against geometry that does not exist yet.
+      const scrollHeight = contentElement ? contentElement.scrollHeight : -1;
+      const isSettled = !!contentElement && scrollHeight === lastScrollHeight;
+      lastScrollHeight = scrollHeight;
+
+      if (isSettled) {
+        highlightedVerseElement = scrollToVerse(scrRef);
+        // Only a scroll that actually landed is recorded. The verse marker can be genuinely absent
+        // — a `\v 16-17` range publishes no `[data-number="17"]` — so recording regardless would
+        // make `hasNewScrollTarget` answer "same target" forever and the panel would never catch up
+        // on a later reveal.
+        if (highlightedVerseElement) {
+          lastScrolledForRef.current = { scrRef, usj: usjFromPdp };
+          highlightedVerseElement.classList.add('highlighted');
+          return;
+        }
+        // Settled but no marker yet. Two consecutive equal heights are cheap to reach — an empty,
+        // flex-sized container reports the same height every frame before Lexical has reconciled
+        // the chapter — so "settled" is not "rendered". Keep waiting rather than treating one
+        // agreeing pair as the answer; `scrollToVerse` does not scroll without a marker, so
+        // re-calling it cannot restart an animation.
+      }
+      // Out of time: give up WITHOUT recording, so a later reveal tries again instead of being
+      // told the target is unchanged.
+      if (timedOut) return;
+      requestAnimationFrame(scrollWhenSettled);
+    };
+    scrollWhenSettled();
+    return () => {
+      cancelled = true;
+      highlightedVerseElement?.classList.remove('highlighted');
+    };
+    // The rule wants `scrRef` itself, but this effect is keyed on the three fields that decide where
+    // to scroll. `useWebViewScrollGroupScrRef` hands back a fresh object whenever the scroll group
+    // publishes, including for a reference that did not change, so depending on the object would
+    // restart the settle loop on updates that cannot move the target.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isViewVisible, usjFromPdp, isUsjLoading, scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
 
   // #endregion
 
@@ -737,7 +903,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
         <Editorial
           ref={editorRef}
           scrRef={scrRef}
-          onScrRefChange={setScrRef}
+          onScrRefChange={handleScrRefChange}
           options={options}
           logger={logger}
         />

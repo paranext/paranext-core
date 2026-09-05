@@ -1,4 +1,15 @@
 /**
+ * ⚠ DESTRUCTIVE — this spec writes to REAL project data, and has never run.
+ *
+ * It drives book-mutating actions against whatever projects the running app has, with no restore.
+ * `playwright-cdp.config.ts` testIgnores this whole directory for that reason, and it is not a
+ * project in `playwright.config.ts` either, so nothing collects it. Do not remove either exclusion
+ * until these specs have a disposable project fixture of their own.
+ *
+ * Nothing reports on this file, so read it as a record of intent rather than as coverage. See
+ * `e2e-tests/tests/manage-books/README.md`.
+ */
+/**
  * === NEW IN PT10 ===
  *
  * Runtime verification tests for the manage-books feature. These tests exercise every PAPI

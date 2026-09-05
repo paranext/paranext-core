@@ -57,8 +57,15 @@ globalThis.isNoisyDevModeEnabled = searchParams.get(DEV_MODE_QUERY_PARAMETER) !=
 // eslint-disable-next-line no-null/no-null
 globalThis.startupMarks = searchParams.get(STARTUP_MARKS_QUERY_PARAMETER) !== null;
 
-// Window id of the Electron browser window
-globalThis.windowId = searchParams.get(WINDOW_ID) ?? undefined;
+// Id of the window this renderer is running in. Read here, once, so that everything downstream
+// holds the same id main routes by — and left `undefined` when the parameter is absent or empty,
+// since a window that cannot say which one it is must not claim to be some other one. This id is
+// durable (see `WindowLayoutEntry.windowId`), so it is also what per-window storage
+// (`local-storage.service.ts`) keys by — a restored window is given the same id its entry already
+// carries, and storage works from this render, in every interface mode, before any request to main
+// has been answered.
+const requestedWindowId = searchParams.get(WINDOW_ID);
+globalThis.windowId = requestedWindowId || undefined;
 
 // Whether this renderer is the main window. Presence-only parameter, like the two above:
 // null is used in this API meaning the param is not present

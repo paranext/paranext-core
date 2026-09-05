@@ -11,7 +11,7 @@
  * on any module the host's `require` shim does not supply.
  */
 
-import { LocalizationSelectors, SavedWebViewDefinition } from '@papi/core';
+import { LocalizationSelectors, OpenWebViewOptions, SavedWebViewDefinition } from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
 // Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
@@ -22,7 +22,6 @@ import {
   aggregateUnsubscribers,
   formatReplacementString,
   getErrorMessage,
-  isBlockMarker,
   isLocalizeKey,
   isPlatformError,
   LanguageStrings,
@@ -36,14 +35,71 @@ import {
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import type { ScriptureRange } from 'platform-scripture-editor';
+import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import type { MutableRefObject } from 'react';
+// import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
+// import from the editor package drags its React-bundling dist into the main bundle, breaking
+// extension activation. See platform-scripture-editor.web-view.utils.ts's header.
 import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+
+/**
+ * Web view type of the Text Collection panel (the Scripture Text Grid) in Column 3.
+ *
+ * Note: the renderer has copies of this value it cannot import —
+ * `src/renderer/components/docking/default-layout-supplement.json` and
+ * `platform-dock-layout-positioning.util.ts` — keep them in sync.
+ */
+export const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
+
+/**
+ * Resolves the view type the editor is allowed to show under the current `platform.interfaceMode`.
+ * Standard view is a power-mode-only surface: its PT9-parity editing affordances (the `\`/Enter
+ * marker palettes, paragraph-marker editing) assume paragraph markers can be edited, but simple
+ * mode pairs with structure protection, which intentionally blocks paragraph-marker edits — so a
+ * simple-mode user must never land in standard view (e.g. via a `viewType` persisted during a
+ * power-mode session). Coerces 'standard' to 'formatted' (the simple-mode default view) when not in
+ * power mode; every other combination passes through unchanged.
+ *
+ * @param viewType The current (requested or persisted) view type
+ * @param isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @returns The view type that should actually be shown
+ */
+export function resolveViewTypeForInterfaceMode(
+  viewType: ScriptureEditorViewType,
+  isPowerMode: boolean,
+): ScriptureEditorViewType {
+  if (viewType === 'standard' && !isPowerMode) return 'formatted';
+  return viewType;
+}
+
+/**
+ * Computes the next view type for the view-cycling affordance (the `changeScriptureView` command).
+ * Power mode cycles formatted -> standard -> markers -> formatted; simple mode skips 'standard'
+ * entirely (see {@link resolveViewTypeForInterfaceMode}), cycling formatted <-> markers.
+ *
+ * Cycles on the view type rather than `ViewOptions.markerMode`: in non-power mode both 'formatted'
+ * and 'markers' resolve to markerMode 'hidden' (the non-power markers view overrides only
+ * noteMode), so a markerMode-based cycle would orphan 'formatted'.
+ *
+ * @param viewType The current view type (resolved for mode first, so a lingering 'standard' in
+ *   simple mode advances as if it were already coerced)
+ * @param isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @returns The next view type in the mode-appropriate cycle
+ */
+export function getNextViewTypeInCycle(
+  viewType: ScriptureEditorViewType,
+  isPowerMode: boolean,
+): ScriptureEditorViewType {
+  const current = resolveViewTypeForInterfaceMode(viewType, isPowerMode);
+  if (current === 'formatted') return isPowerMode ? 'standard' : 'markers';
+  if (current === 'standard') return 'markers';
+  return 'formatted';
+}
 
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
@@ -83,6 +139,92 @@ export function correctEditorUsjVersion(editorUsj: Usj): Usj {
   // well right now
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
+}
+
+/** Snapshot of the state a collapsed-note caller click decides against. */
+export interface NoteCallerClickState {
+  /**
+   * Whether the clicked note is collapsed (expanded notes are edited in place, not via click).
+   * `undefined` (the adaptor could not tell) is treated as not collapsed, matching the original
+   * `noteCallerOnClick` guard.
+   */
+  isCollapsed: boolean | undefined;
+  /** The note key of an in-progress footnote-editor session, if any. */
+  editingNoteKey: string | undefined;
+  /** Whether the footnote-editor popover is actually shown right now. */
+  popoverShown: boolean;
+  /** Whether the footnotes pane's visibility TOGGLE is on (it may still lack data to render). */
+  paneVisible: boolean;
+  /** Whether the footnotes pane is actually rendered (visible toggle AND data loaded). */
+  paneRendered: boolean;
+  /** Whether the footnotes pane's auto-show behavior is enabled. */
+  isAutoShowEnabled: boolean;
+}
+
+/** What a collapsed-note caller click should do — see {@link decideNoteCallerClickAction}. */
+export interface NoteCallerClickDecision {
+  /**
+   * True when `editingNoteKey` belongs to a session whose popover is no longer shown — orphaned
+   * bookkeeping that would otherwise dead-end every future caller click; clearing it keeps the
+   * failure benign. The caller must clear the editing-session refs before acting.
+   */
+  clearStaleEditingSession: boolean;
+  /**
+   * What the caller click resolves to:
+   *
+   * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
+   * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored.
+   * - `open-popover` — open the footnote-editor popover for the clicked note. The popover always
+   *   opens on a routed click, because it is the only surface that can EDIT a note today; the pane
+   *   flags below are navigation alongside it, never a substitute for it.
+   */
+  action: 'ignore-expanded' | 'ignore-popover-open' | 'open-popover';
+  /**
+   * Also select/highlight/scroll to the clicked note in the footnotes pane (PT9 navigate-to-note).
+   * True when the pane is rendered — or is being shown by this very click ({@link showPane}); the
+   * pane's focus-request machinery retries a request that arrives before its data mounts.
+   */
+  sendPaneFocusRequest: boolean;
+  /** Also show the footnotes pane: it is currently toggled off and auto-show is enabled. */
+  showPane: boolean;
+}
+
+/**
+ * Decides what a click on a note caller does. Pure decision logic extracted from
+ * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests:
+ *
+ * - An expanded note's caller does nothing (the note is edited in place).
+ * - While a footnote-editor popover is really shown, clicks are ignored (one session at a time).
+ * - An editing-session key without a shown popover is STALE — it must not block the click.
+ * - Otherwise the popover OPENS — always, in every view, because it is the only surface that can edit
+ *   a note today. Alongside it, the pane highlights the clicked note when it is rendered, and a
+ *   click also SHOWS the pane when it is toggled off and auto-show is enabled.
+ */
+export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
+  if (!state.isCollapsed)
+    return {
+      clearStaleEditingSession: false,
+      action: 'ignore-expanded',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    };
+  // A truthy editingNoteKey marks an editing session (matches the original inline guard's
+  // truthiness check; an empty-string key is never a live session).
+  if (state.editingNoteKey && state.popoverShown)
+    return {
+      clearStaleEditingSession: false,
+      action: 'ignore-popover-open',
+      sendPaneFocusRequest: false,
+      showPane: false,
+    };
+  const clearStaleEditingSession = !!state.editingNoteKey;
+  const showPane = state.isAutoShowEnabled && !state.paneVisible;
+  return {
+    clearStaleEditingSession,
+    action: 'open-popover',
+    sendPaneFocusRequest: state.paneRendered || showPane,
+    showPane,
+  };
 }
 
 // #region Editor Title Formatting
@@ -399,6 +541,15 @@ export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
  *   paragraph
  * @param notifyStructureProtected Callback to invoke when the user attempts a paragraph format
  *   while structure is protected
+ * @param restoreSelection Callback invoked immediately before `formatPara` to put the caret back
+ *   where the user last had it. Opening the dropdown's popover moves focus off the editor input,
+ *   and Lexical's blur processing can null the live selection outright — `formatPara` then has no
+ *   paragraph to retag and the pick silently does nothing. The caller supplies this rather than
+ *   this module doing the restore itself: the restore needs `restoreSelectionIfLost` and the
+ *   focus-out selection capture, both of which live in web-view-only code this
+ *   extension-host-reachable module may not import (see the note at the bottom of this file).
+ *   Omitting it leaves the retag exposed to the lost-caret failure, so callers that can lose focus
+ *   to the menu should always pass it.
  * @returns List of marker menu items to be used for the paragraph menu
  */
 export function generateParagraphMenuListItems(
@@ -406,6 +557,7 @@ export function generateParagraphMenuListItems(
   localizedStrings: LanguageStrings,
   isStructureProtected: boolean,
   notifyStructureProtected: () => void,
+  restoreSelection?: () => void,
 ): MarkerMenuItem[] {
   return Object.entries(blockMarkerToBlockNames).map(([marker, title]) => {
     // The trailing detail column would otherwise sit empty for exactly the menu this feature is
@@ -426,6 +578,11 @@ export function generateParagraphMenuListItems(
           notifyStructureProtected();
           return;
         }
+        // Restore the caret BEFORE applying, exactly as the `\` and Enter marker palettes do
+        // before their applies: this menu opens in a popover that takes focus off the editor
+        // input, so by the time an item is picked the live selection may already be gone, and
+        // `formatPara` refuses when there is no selection.
+        restoreSelection?.();
         editorRef.current?.formatPara(marker);
       },
     };
@@ -433,63 +590,11 @@ export function generateParagraphMenuListItems(
   });
 }
 
-/**
- * Function that generates the inline marker menu items that will update as the cursor location
- * changes. In the future this function will take data from an `.sty` file so that users can define
- * their own markers.
- *
- * @param editorRef The ref for the editor component to be able to insert markers
- * @param closeMarkersMenu Callback to close the markers menu after an action
- * @param localizedStrings The localized strings to use to localize the marker titles
- * @param isStructureProtected Whether the project's paragraph structure is currently protected;
- *   when `true`, block-level markers will be disallowed and their action will call
- *   `notifyStructureProtected` instead of inserting
- * @param notifyStructureProtected Callback to invoke when the user attempts to insert a block-level
- *   marker while structure is protected
- * @param parentMarker The current parent marker which is used to determine which markers to include
- * @returns The list of inline marker menu items
- */
-export function generateInlineMarkerMenuListItems(
-  editorRef: MutableRefObject<EditorRef | null>,
-  closeMarkersMenu: () => void,
-  localizedStrings: LanguageStrings,
-  isStructureProtected: boolean,
-  notifyStructureProtected: () => void,
-  parentMarker?: string,
-): MarkerMenuItem[] {
-  if (!parentMarker) return [];
-
-  const markerDetails = usfmMarkers[parentMarker];
-  if (!markerDetails?.children) return [];
-
-  const markerMenuItems: MarkerMenuItem[] = [];
-  Object.entries(markerDetails.children).forEach(([, markers]) => {
-    markerMenuItems.push(
-      ...markers.map((marker): MarkerMenuItem => {
-        const isDisallowed = isStructureProtected && isBlockMarker(marker);
-        return {
-          marker,
-          title:
-            localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
-          isDisallowed,
-          action: () => {
-            // Defense-in-depth: unreachable while the menu renders `isDisallowed` items as disabled
-            // `CommandItem`s (a disabled cmdk item never fires `onSelect`). Kept as a second layer of
-            // protection in case that disabled rendering is ever loosened or the menu wiring changes.
-            if (isDisallowed) {
-              notifyStructureProtected();
-              closeMarkersMenu();
-              return;
-            }
-            editorRef.current?.insertMarker(marker);
-            closeMarkersMenu();
-          },
-        };
-      }),
-    );
-  });
-  return markerMenuItems.sort((a, b) => (a.marker ?? a.title).localeCompare(b.marker ?? b.title));
-}
+// NOTE: the stylesheet-driven inline marker menu generator and the command-palette helpers live in
+// `platform-scripture-editor.web-view.utils.ts`, NOT here — they import runtime values from
+// `@eten-tech-foundation/platform-editor`, whose React-bundling dist must never reach the
+// extension-host (`main.ts`) bundle this module is part of. This module is restricted to
+// `import type` from that package. See that file's header for the full activation-failure story.
 
 // #region Open Editor Dispatch
 
@@ -1096,10 +1201,14 @@ export async function finalizeProjectSwitch(
  *
  * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for
+ * @param isProjectEditable Whether `projectId` names an editable translation project rather than a
+ *   read-only resource opened in the editor column. Only the Scripture Text Grid honors it; the
+ *   other Column 3 panels follow the editor either way.
  */
 export async function openOrUpdateRelatedPanels(
   papi: typeof PapiBackend,
   projectId: string,
+  isProjectEditable: boolean,
 ): Promise<void> {
   try {
     await papi.commands.sendCommand('platformScriptureEditor.openModelText', projectId);
@@ -1128,6 +1237,77 @@ export async function openOrUpdateRelatedPanels(
     await papi.commands.sendCommand('legacyCommentManager.openCommentListPanel', projectId);
   } catch (e) {
     papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
+  }
+  // A text collection is built from an editable project's settings, so a read-only resource opened
+  // in the editor column must not re-point it. Not wrapped like the four above: this one swallows
+  // its own failures (see its TSDoc).
+  if (isProjectEditable) await updateRelatedTextCollectionPanel(papi, projectId);
+}
+
+/**
+ * Options the Text Collection panel's provider reads out of its `openWebViewOptions`.
+ *
+ * `reloadWebView` types its options as `ReloadWebViewOptions`, which carries only `bringToFront` —
+ * but both `openWebView` and `reloadWebView` hand their options straight to
+ * `IWebViewProvider.getWebView`, so a wider type that structurally satisfies it is how a project
+ * change reaches the provider. Declared as a named type rather than passed as an object literal
+ * because an inline literal would trip TypeScript's excess-property check.
+ *
+ * Exported so `scriptureTextGridWebViewProvider` in `main.ts` types its `openWebViewOptions` with
+ * this same type: the writer here and the reader there are otherwise linked only by the field name,
+ * so renaming or dropping `projectId` on one side would leave `typecheck` green and silently stop
+ * the panel following project switches. (Mirrors `FindWebViewOptions`, which Find exports once and
+ * uses on both sides.)
+ */
+export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
+
+/**
+ * Re-points the Text Collection panel at `projectId`, the way {@link openOrUpdateRelatedPanels}
+ * re-points the rest of Column 3.
+ *
+ * Re-pointing is a reload, not an in-place `projectId` update: `papi.webViews` exposes no
+ * definition-updating call from the service side, and the grid _requires_ a remount anyway because
+ * it reads admin layout settings through `useBufferedLayoutSetting`, which documents itself as
+ * built for consumers that switch projects via `reloadWebView` and NOT safe for ones that change
+ * `projectId` in place.
+ *
+ * Three deliberate constraints:
+ *
+ * - Never creates a panel when none is open. The Text Collection's only open path is the
+ *   default-layout supplement, so "not open" means the tab was closed in Power mode or the
+ *   `platformScriptureEditor.enableScriptureTextGrid` setting is off — neither a state a project
+ *   switch should reverse.
+ * - Skips the reload when the panel already shows `projectId`, because rebuilding the iframe drops
+ *   the grid's in-memory React state (an open chapter-context split, in-flight "Installing…" rows)
+ *   for no gain.
+ * - Never brings the panel to front. This re-points the whole column rather than answering a request
+ *   for the Text Collection, and the admin's shared layout chooses the front tab next.
+ *
+ * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
+ * swallowed, because the project switch itself has already succeeded by this point.
+ *
+ * @param papi The instance of papi to read web view definitions with and request the reload from
+ * @param projectId The id of the project whose text collection the panel should show
+ */
+export async function updateRelatedTextCollectionPanel(
+  papi: typeof PapiBackend,
+  projectId: string,
+): Promise<void> {
+  try {
+    const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+    const existingPanel = allOpenDefs.find(
+      (def) => def.webViewType === SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+    );
+    if (!existingPanel || existingPanel.projectId === projectId) return;
+
+    // Hidden case: Simple mode shows one Column 3 tab at a time, so this usually lands on an
+    // inactive tab. That is fine and needs no catch-up — the reload remounts the panel and its
+    // render is entirely data-driven (no geometry reads, no scrollIntoView), so it produces the
+    // right content while hidden and is simply revealed when the tab is next activated.
+    const options: TextCollectionPanelOptions = { projectId, bringToFront: false };
+    await papi.webViews.reloadWebView(SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, existingPanel.id, options);
+  } catch (e) {
+    papi.logger.warn(`Error updating text collection panel project: ${getErrorMessage(e)}`);
   }
 }
 

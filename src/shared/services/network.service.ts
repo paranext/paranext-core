@@ -16,7 +16,6 @@ import {
 import {
   AsyncVariable,
   getErrorMessage,
-  indexOf,
   isPlatformError,
   Mutex,
   newPlatformError,
@@ -24,7 +23,6 @@ import {
   PlatformErrorCode,
   PlatformEvent,
   PlatformEventEmitter,
-  stringLength,
   Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
@@ -271,14 +269,14 @@ function isJsonRpcResponse(response: unknown): response is JSONRPCResponse {
 function validateCommandFormatting(commandName: string) {
   if (!commandName)
     throw new Error(`Invalid command name ${commandName}: must be a non-empty string`);
-  const periodIndex = indexOf(commandName, '.');
+  const periodIndex = commandName.indexOf('.');
   if (periodIndex < 0)
     throw new Error(`Invalid command name ${commandName}: must have at least one period`);
   if (periodIndex === 0)
     throw new Error(
       `Invalid command name ${commandName}: must have non-empty string before a period`,
     );
-  if (periodIndex >= stringLength(commandName) - 1)
+  if (periodIndex >= commandName.length - 1)
     throw new Error(
       `Invalid command name ${commandName}: must have a non-empty string after a period`,
     );
@@ -380,9 +378,10 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
  * WARNING: the no-retry flag only holds in the main process (whose `RpcServer` /
  * `RpcWebSocketListener` honor it). From any other process the flag does not cross the wire:
  * `RpcClient.request` drops it, and main re-dispatches the incoming request through its
- * registration-race retry loop (up to 10 attempts, 1 s apart) before failing. So a renderer-side
- * `requestNoRetry` to an unregistered handler still costs ~9 s and 10 warning logs in main before
- * it rejects.
+ * registration-race retry loop (`requestWithRetry` in `shared/data/rpc.model.ts` —
+ * `MAX_REQUEST_ATTEMPTS` attempts, `REQUEST_ATTEMPT_WAIT_TIME_MS` apart) before failing. So a
+ * renderer-side `requestNoRetry` to an unregistered handler still costs ~9 s and one `debug` log
+ * per attempt in main before it rejects.
  *
  * @param requestType The type of request
  * @param args Arguments to send in the request (put in request.contents)

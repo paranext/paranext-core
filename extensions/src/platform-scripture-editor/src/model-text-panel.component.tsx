@@ -20,11 +20,17 @@ import { getErrorMessage, type DblResourceData } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
+  ProjectReference,
   ResourceReferenceList,
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
-import { isDblResourceReference, getRefLabel } from './resource-reference.utils';
+import {
+  getRefLabel,
+  isDblResourceReference,
+  isNonDblResource,
+  isProjectReference,
+} from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
@@ -32,7 +38,7 @@ import { RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
-import { scrollToVerse } from './editor-dom.util';
+import { SCROLL_MAX_WAIT_MS, scrollToVerse } from './editor-dom.util';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { ResourceBlankChapter } from './resource-blank-chapter.component';
 import { ResourceTextUnavailable } from './resource-text-unavailable.component';
@@ -60,9 +66,6 @@ export const MODEL_TEXT_EDITOR_CONTAINER_TEST_ID = 'model-text-editor-container'
 // and the editor reloads (re-serialize + setEditorState) whenever the `view` object's identity
 // changes — so a refetch of identical content would force a pointless full reload.
 const VIEW_OPTIONS = getDefaultViewOptions();
-
-/** Max ms to retry scrolling via rAF before giving up (e.g. verse marker missing from USJ) */
-const SCROLL_MAX_WAIT_MS = 2000;
 
 export {
   MODEL_TEXT_PANEL_STRING_KEYS,
@@ -173,7 +176,14 @@ export function ModelTextPanel({
   let dblRef: (EffectiveResourceReference & DblResourceReference) | undefined;
   if (isDblResourceReference(effectiveModelText)) dblRef = effectiveModelText;
   const match = dblRef ? findCachedDblResource(dblRef, dblResources) : undefined;
-  const resourceProjectId = match?.installed ? match.projectId : undefined;
+  // ProjectReferences are locally-installed non-DBL resources. Only treat the reference as
+  // resolvable if the project is confirmed present in dblResources — an admin-shared reference
+  // pointing at a project the user hasn't installed must fall through to the not-found guard.
+  const localProjectId = isProjectReference(effectiveModelText)
+    ? dblResources.find((r) => isNonDblResource(r) && r.projectId === effectiveModelText.id)
+        ?.projectId
+    : undefined;
+  const resourceProjectId = match?.installed ? match.projectId : localProjectId;
   const modelTextLabel = effectiveModelText
     ? getRefLabel(effectiveModelText, dblResources)
     : undefined;
@@ -403,9 +413,21 @@ export function ModelTextPanel({
       (r): r is EffectiveResourceReference & DblResourceReference => r.type === 'dblResource',
     );
     const adminDblItems = dblItems.filter((r) => r.source === 'admin');
-    const relevantItems =
+    const relevantDblItems =
       adminDblItems.length > 0 ? adminDblItems : dblItems.filter((r) => r.source === 'user');
-    return relevantItems.map((r) => r.id);
+    // Also include project reference IDs so locally-installed non-DBL resources (added as
+    // ProjectReferences) appear in the INCLUDED section when the picker reopens.
+    // Apply the same admin-precedence logic as DBL items.
+    const allProjectItems = items.filter((r): r is EffectiveResourceReference & ProjectReference =>
+      isProjectReference(r),
+    );
+    const adminProjectItems = allProjectItems.filter((r) => r.source === 'admin');
+    const relevantProjectItems =
+      adminProjectItems.length > 0
+        ? adminProjectItems
+        : allProjectItems.filter((r) => r.source === 'user');
+    const projectIds = relevantProjectItems.map((r) => r.id);
+    return [...relevantDblItems.map((r) => r.id), ...projectIds];
   }, [effectiveModelTexts]);
 
   const handleResourceSelect = useCallback(

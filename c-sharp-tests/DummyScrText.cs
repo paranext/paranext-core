@@ -97,6 +97,17 @@ namespace TestParanextDataProvider
         private static string EnsureNonEmptyHomeDirectory(string homeDirectory, string id) =>
             string.IsNullOrEmpty(homeDirectory) ? "testDirectory_" + id : homeDirectory;
 
+        /// <summary>
+        /// Replaces the stylesheet served for non-canonical (front/back matter) books.
+        /// The constructor points the front/back cache at the same
+        /// <see cref="DummyScrStylesheet"/> as the default cache, so per-book stylesheet
+        /// resolution in <c>ScrText.ScrStylesheet(bookNum)</c> is invisible until a test
+        /// installs a distinct stylesheet here. Canonical books keep resolving to
+        /// <see cref="ScrText.DefaultStylesheet"/>.
+        /// </summary>
+        public void SetFrontBackStylesheet(ScrStylesheet stylesheet) =>
+            cachedFrontBackStylesheet.Set(stylesheet);
+
         protected override void Load(bool ignoreLoadErrors = false)
         {
             // Nothing to do

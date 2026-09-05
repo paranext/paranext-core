@@ -149,12 +149,59 @@
     }
   },
   "%tab_contextMenu_floatTab%": {
-    "fallbackKey": "%ParatextDockingTheme_2%"
+    "fallbackKey": "%tab_contextMenu_floatPanel%",
+    "deprecationInfo": {
+      "date": "2026-08-25",
+      "message": "Reworded because the Spanish read \"Abrir como ventana flotante\" for an action that floats a panel inside the window rather than opening an operating system window. Use %tab_contextMenu_floatPanel% instead."
+    }
+  },
+  "%tab_contextMenu_moveTabToNewWindow_failed%": {
+    "fallbackKey": "%tab_contextMenu_moveTab_failed%",
+    "deprecationInfo": {
+      "date": "2026-08-28",
+      "message": "Renamed because moving a tab to an existing window can fail the same way as moving it to a new one, and this message now covers both. Use %tab_contextMenu_moveTab_failed% instead."
+    }
+  },
+  "%tab_contextMenu_moveTabToNewWindow_failedMayHaveClosed%": {
+    "fallbackKey": "%tab_contextMenu_moveTab_failedMayHaveClosed%",
+    "deprecationInfo": {
+      "date": "2026-08-28",
+      "message": "Renamed because moving a tab to an existing window can fail the same way as moving it to a new one, and this message now covers both. Use %tab_contextMenu_moveTab_failedMayHaveClosed% instead."
+    }
+  },
+  "%tab_contextMenu_moveTabToNewWindow_failedNotReopened%": {
+    "fallbackKey": "%tab_contextMenu_moveTab_failedNotReopened%",
+    "deprecationInfo": {
+      "date": "2026-08-28",
+      "message": "Renamed because moving a tab to an existing window can fail the same way as moving it to a new one, and this message now covers both. Use %tab_contextMenu_moveTab_failedNotReopened% instead."
+    }
+  },
+  "%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%": {
+    "fallbackKey": "%tab_contextMenu_moveTab_failedReopenedElsewhere%",
+    "deprecationInfo": {
+      "date": "2026-08-28",
+      "message": "Renamed because moving a tab to an existing window can fail the same way as moving it to a new one, and this message now covers both. Use %tab_contextMenu_moveTab_failedReopenedElsewhere% instead."
+    }
   },
   "%test_deprecated_string%": {
     "deprecationInfo": {
       "date": "2025-04-21",
       "message": "This exists to test deprecating localized strings. Do not remove or use."
+    }
+  },
+  "%toolbar_sync_popover_failed%": {
+    "deprecationInfo": {
+      "date": "2026-09-01",
+      "message": "The failed-sync popover no longer instructs the reader to open the sync status: a \"View sync details\" button sits directly beneath the message and names that destination itself, so the sentence carried a second, redundant instruction. Use %toolbar_sync_popover_last_sync_unfinished%, which states the outcome only."
+    }
+  },
+  "%toolbar_sync_popover_last_sync_unfinished%": {
+    "fallbackKey": "%toolbar_sync_popover_failed%"
+  },
+  "%toolbar_sync_unavailable%": {
+    "deprecationInfo": {
+      "date": "2026-08-19",
+      "message": "The toolbar sync button now opens a status popover instead of the sync status web view, so this one message no longer covers every way that button can fail. A \"View sync details\" click that can't open the web view uses %toolbar_sync_view_details_unavailable%, a cancel that can't be delivered uses %toolbar_sync_cancel_unavailable%, and an unreadable status is shown in the popover with %toolbar_sync_popover_unknown%."
     }
   },
   "%toolbar_theme_change_to_dark%": {

@@ -5,8 +5,11 @@ import { MarkerMenuItem } from '../marker-menu.component';
 
 /**
  * Function that generates the inline marker menu items that will update as the cursor location
- * changes. In the future this function will take data from an `.sty` file so that users can define
- * their own markers.
+ * changes.
+ *
+ * TODO(PT-4199): The menu is built from the static `usfmMarkers` table, so a project's custom.sty
+ * markers are missing from it and a marker the project redefined is described by the stock entry.
+ * Take the marker set from the project's stylesheet instead.
  *
  * @param editorRef The ref for the editor component to be able to insert markers
  * @param parentMarker The current parent marker which is used to determine which markers to include

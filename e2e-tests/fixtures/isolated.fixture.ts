@@ -5,7 +5,17 @@ import {
   TestInfo,
   ConsoleMessage,
 } from '@playwright/test';
-import { launchElectronApp, LaunchElectronAppOptions, teardownElectronApp } from './helpers';
+import {
+  applyDeclaredWindowSize,
+  assertInterfaceMode,
+  DEFAULT_WINDOW_SIZE,
+  isolatedFixtureBaseSettings,
+  launchElectronApp,
+  LaunchElectronAppOptions,
+  preConfigureSettings,
+  teardownElectronApp,
+  WindowSize,
+} from './helpers';
 
 export { expect } from '@playwright/test';
 
@@ -37,6 +47,40 @@ export interface IsolatedFixtures {
    * name throws "Fixture ... has already been registered as a { scope: 'worker' } fixture".
    */
   electronLaunchOptions: LaunchElectronAppOptions;
+  /**
+   * The `platform.interfaceMode` value seeded into the shared dev-appdata settings file before the
+   * app launches (restored after teardown); set with `test.use({ interfaceMode: 'simple' })`.
+   *
+   * Defaults to `'power'`: the isolated suite's specs are written against the power-mode layout —
+   * simple mode always loads the static `simpleLayout` (simple-layout.data.ts), which has NO Home
+   * tab, so power-layout patterns like `waitForHomeTab` and "close all non-Home tabs" sweeps can
+   * never succeed there. Seeding the value is what makes that requirement explicit: without it a
+   * run inherits whatever mode the developer's dev-appdata happens to hold, and the app's own
+   * no-settings default is 'simple', under which these specs cannot pass.
+   *
+   * The mode also changes editor DOM that specs assert on: in power mode the scripture editor
+   * defaults to Standard view (inline, editable markers), while simple mode keeps the 'formatted'
+   * view.
+   */
+  interfaceMode: 'simple' | 'power';
+  /**
+   * Extra dev-appdata settings seeded alongside `interfaceMode` and the interface language, in the
+   * SAME `preConfigureSettings` call; set with `test.use({ seedSettings: {...} })`.
+   *
+   * Specs must seed through this option, never with their own `preConfigureSettings` in
+   * `beforeAll`/`beforeEach`: hooks run BEFORE test-scoped fixture setup, so a spec's own seed was
+   * (a) overridden by this fixture's seed for any shared key (the wizard spec's deliberately-seeded
+   * `'simple'` lost to the `'power'` default), and (b) captured by the fixture as the "original"
+   * contents — the fixture's restore, which runs AFTER the spec's own `afterEach`/`afterAll`
+   * restore, then wrote the spec's test-only values back into the shared dev-appdata file, the very
+   * leak both restores exist to prevent.
+   */
+  seedSettings: Record<string, unknown>;
+  /**
+   * Window size this suite's layout is written against; set with `test.use({ windowSize: { width,
+   * height } })`. Defaults to {@link DEFAULT_WINDOW_SIZE}.
+   */
+  windowSize: WindowSize;
   electronApp: ElectronApplication;
   mainPage: Page;
 }
@@ -44,31 +88,64 @@ export interface IsolatedFixtures {
 export const test = base.extend<IsolatedFixtures>({
   // Option fixture: suites override via test.use(); default launches with no special options.
   electronLaunchOptions: [{}, { option: true }],
+  windowSize: [DEFAULT_WINDOW_SIZE, { option: true }],
+
+  // Option fixture: see the IsolatedFixtures doc for why the default is 'power'.
+  interfaceMode: ['power', { option: true }],
+
+  // Option fixture: extra settings seeded in the same pre-launch write (see IsolatedFixtures doc
+  // for why specs must not run their own preConfigureSettings).
+  seedSettings: [{}, { option: true }],
 
   // Test-scoped fixture: Playwright launches one Electron instance per test() block.
-  electronApp: async ({ electronLaunchOptions }, use) => {
-    const ctx = await launchElectronApp(electronLaunchOptions);
-
-    await use(ctx.electronApp);
-
-    console.log('[teardown] Test-scoped app teardown starting...');
-    await teardownElectronApp(ctx);
-    console.log('[teardown] Test-scoped app teardown complete');
+  electronApp: async ({ electronLaunchOptions, interfaceMode, seedSettings }, use) => {
+    // Seed settings BEFORE launch (the app reads dev-appdata settings at startup). Pin the
+    // interface mode (see the IsolatedFixtures doc) AND the interface language to English so specs
+    // that match English UI text — `waitForHomeTab`'s 'Home' tab (localized via %home_dialog_title%)
+    // and `navigateToolbarBcv`'s English book names (no app code passes `localizedBookNames`, so
+    // `BookChapterControl` renders `formatScrRef`'s explicit 'English' fallback) — are
+    // deterministic regardless of the developer's saved locale. Same both-settings seeding as
+    // comment.fixture.ts. workers=1 (playwright.config.ts) means no other test can race this shared
+    // file. `isolatedFixtureBaseSettings` also suppresses the background registration reminder (see
+    // its doc in helpers.ts), so a spec that seeds `firstRunComplete: true` through `seedSettings`
+    // cannot be pulled onto the first-run wizard mid-test.
+    const restoreSettings = preConfigureSettings({
+      ...isolatedFixtureBaseSettings(interfaceMode),
+      ...seedSettings,
+    });
+    try {
+      const ctx = await launchElectronApp(electronLaunchOptions);
+      try {
+        await use(ctx.electronApp);
+      } finally {
+        console.log('[teardown] Test-scoped app teardown starting...');
+        await teardownElectronApp(ctx);
+        console.log('[teardown] Test-scoped app teardown complete');
+      }
+    } finally {
+      // Restore the developer's settings file only after the app has fully closed so the app's own
+      // shutdown writes cannot clobber the restored contents (same ordering as comment.fixture.ts).
+      // In a `finally` so a launch/teardown failure cannot leak the seeded test settings into the
+      // developer's real dev-appdata — a stuck value would otherwise be captured as the "original"
+      // by the next test's preConfigureSettings and corrupt every later run.
+      restoreSettings();
+    }
   },
 
-  mainPage: async ({ electronApp }, use, testInfo: TestInfo) => {
+  mainPage: async ({ electronApp, windowSize, interfaceMode }, use, testInfo: TestInfo) => {
     const page = await electronApp.firstWindow({ timeout: 90_000 });
 
     // Ensure the window is large enough for WebView content to be visible.
     // On headless Linux (xvfb) or WSL2 the default window can be very small,
-    // causing elements inside WebView iframes to be clipped or hidden.
-    await electronApp.evaluate(({ BrowserWindow }) => {
-      const win = BrowserWindow.getAllWindows()[0];
-      if (win) {
-        if (win.isMaximized()) win.unmaximize();
-        win.setSize(1280, 800);
-      }
-    });
+    // causing elements inside WebView iframes to be clipped or hidden. Retried: `setSize` returns
+    // before the renderer's `outerWidth`/`outerHeight` reflect the new size, so a single read can
+    // race the resize.
+    await applyDeclaredWindowSize(
+      electronApp,
+      page,
+      windowSize,
+      'This fixture sets this size at launch; check that the window manager is not overriding it.',
+    );
 
     console.log(`Window URL: ${page.url()}`);
     const onPageError = (err: Error) => console.error(`Page error: ${err.message}`);
@@ -82,6 +159,20 @@ export const test = base.extend<IsolatedFixtures>({
 
     // Wait for React to mount
     await page.waitForSelector('#root', { state: 'attached', timeout: 30_000 });
+
+    // Verify the mode this fixture just seeded actually took effect, before any test runs against a
+    // layout it was not written for. Always checked, not opt-in: the fixture knows what it seeded,
+    // so there is nothing for a suite to declare and nothing for one to forget. The seed merges
+    // into a shared settings file and can fail quietly; when it does, the suite runs in the other
+    // mode's layout and fails much later on an element that mode never renders, which reads as a
+    // timeout rather than a setup problem.
+    await assertInterfaceMode(
+      interfaceMode,
+      `This fixture seeded '${interfaceMode}' before launch and the app did not come up in it. ` +
+        `A suite selects its mode with test.use({ interfaceMode }), never with its own ` +
+        `preConfigureSettings call — see the IsolatedFixtures doc for why a spec-level seed is ` +
+        `both overridden and leaked back into the developer's settings.`,
+    );
 
     await use(page);
 

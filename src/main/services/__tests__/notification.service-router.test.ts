@@ -38,8 +38,8 @@ const mocks = vi.hoisted(() => {
 
 /** Wire windows whose notification service shards are the given objects */
 function withWindows(
-  shardsByWindowId: Record<number, unknown>,
-  options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
+  shardsByWindowId: Record<string, unknown>,
+  options?: { startingWindowIds?: string[]; unreachableWindowIds?: string[] },
 ) {
   withWindowsServingShards(
     mocks,
@@ -90,7 +90,7 @@ function windowShard(showingNotificationIds: (string | number)[]) {
 describe('notification service router', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getTargetWindowId.mockReturnValue(1);
+    mocks.getTargetWindowId.mockReturnValue('1');
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
@@ -103,7 +103,7 @@ describe('notification service router', () => {
     const router = await getRouter();
     const second = windowShard([]);
     withWindows({ 1: windowShard([]), 2: second });
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
 
     await router.send({ message: 'hi', severity: 'info' });
 
@@ -117,7 +117,7 @@ describe('notification service router', () => {
     withWindows({ 1: survivor, 2: closing });
     const router = await getRouter();
 
-    withoutWindowShard(mocks, 2);
+    withoutWindowShard(mocks, '2');
     await router.dismiss('notification-1');
 
     expect(closing.dismiss).not.toHaveBeenCalled();
@@ -165,7 +165,7 @@ describe('notification service router', () => {
     // background task's fire-and-forget dismissal for the network service's registration retry
     const showing = windowShard(['notification-1']);
     const starting = windowShard([]);
-    withWindows({ 1: showing, 2: starting }, { startingWindowIds: [2] });
+    withWindows({ 1: showing, 2: starting }, { startingWindowIds: ['2'] });
     const router = await getRouter();
 
     await router.dismiss('notification-1');

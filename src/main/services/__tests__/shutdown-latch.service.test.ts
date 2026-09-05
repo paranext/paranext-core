@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
 import {
+  canStartupSyncFireNow,
   isAppQuitRequested,
   isAppShuttingDown,
   markQuitRequested,
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
+  shouldWindowCloseAbortReadinessWait,
+  whenQuitRequested,
 } from '@main/services/shutdown-latch.service';
 import {
   addWindow,
@@ -33,12 +36,152 @@ describe('shutdown latches', () => {
     resetWindowStateForTesting();
   });
 
+  test('a quit settles a wait that began before it', async () => {
+    // What the close path does while the close-all question is open: it holds the signal from
+    // before the question and needs the quit to settle THAT one.
+    const waiting = whenQuitRequested();
+
+    markQuitRequested();
+
+    await expect(waiting).resolves.toBeUndefined();
+  });
+
+  test('a new session leaves nothing waiting on the last session’s quit', async () => {
+    // The signal has to be REPLACED, not merely re-armed: a settled one carried into the next
+    // session would resolve a fresh wait instantly, and the close path reads that as "the user
+    // is quitting" — it would close every window without asking. The cost of replacing it is that
+    // a wait begun before a reset never settles, which is why only a window created where there
+    // were NONE resets at all (see `createWindow`): with no windows there is no close-all question
+    // in flight to strand.
+    markQuitRequested();
+
+    resetShutdownLatchesForNewSession();
+
+    const settled = await Promise.race([
+      whenQuitRequested().then(() => 'settled'),
+      Promise.resolve().then(() => 'still waiting'),
+    ]);
+    expect(settled).toBe('still waiting');
+    expect(isAppQuitRequested()).toBe(false);
+  });
+
+  test('a wait begun before a reset is not settled by a quit requested after it', async () => {
+    // The mirror of "a new session leaves nothing waiting on the last session's quit": there the
+    // capture happens after the reset; here it happens before. A primary holding open the
+    // close-all question captures its wait this way, ahead of
+    // any reset a later window creation might trigger, and the signal it is holding must stay its
+    // own — a quit requested afterward has to settle only the session's new signal, not reach back
+    // and settle the one this wait is still holding.
+    const waitingBeforeReset = whenQuitRequested();
+
+    resetShutdownLatchesForNewSession();
+    markQuitRequested();
+
+    const settled = await Promise.race([
+      waitingBeforeReset.then(() => 'settled'),
+      Promise.resolve().then(() => 'still waiting'),
+    ]);
+    expect(settled).toBe('still waiting');
+
+    // The new session's own wait is unaffected — it settles normally from the same quit.
+    await expect(whenQuitRequested()).resolves.toBeUndefined();
+  });
+
+  test('a session that runs on without quitting still has a usable quit signal', async () => {
+    // The signal is an `AsyncVariable`, which by default rejects anything waiting on it once ten
+    // seconds pass without it settling. A session that simply has not quit yet is the normal case,
+    // and that rejection would reach the close-all decision — which races this signal — and turn
+    // "ask the user" into "could not decide", so the primary's ✕ would quietly stop asking. The
+    // timeout is disabled for exactly that reason; this pins it.
+    vi.useFakeTimers();
+    try {
+      // Built while the fake clock is installed, so the variable's own timer is a fake one. A
+      // signal constructed at module load carries a real timer that advancing fake time never
+      // fires, and this test would then pass whatever the timeout is set to.
+      resetShutdownLatchesForNewSession();
+      const waiting = whenQuitRequested();
+      let rejectedWith: unknown;
+      waiting.catch((e: unknown) => {
+        rejectedWith = e;
+      });
+
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(rejectedWith).toBeUndefined();
+
+      // The positive control: the signal is not merely inert — it still settles when a quit comes
+      markQuitRequested();
+      await expect(waiting).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('does not report a quit until one is requested', () => {
     expect(isAppQuitRequested()).toBe(false);
 
     markQuitRequested();
 
     expect(isAppQuitRequested()).toBe(true);
+  });
+
+  test('leaves the readiness wait running when macOS closes its last window without quitting', () => {
+    // The app stays resident and a dock reactivation starts a fresh session, but the startup tasks
+    // run once per process — so aborting here would drop that session's startup sync permanently.
+    expect(shouldWindowCloseAbortReadinessWait('darwin')).toBe(false);
+
+    markQuitRequested();
+
+    // A real quit on macOS still has to stop it.
+    expect(shouldWindowCloseAbortReadinessWait('darwin')).toBe(true);
+  });
+
+  test('stops the readiness wait off macOS even before a quit is flagged', () => {
+    // Off macOS the last window closing always ends in a quit, but `window-all-closed` calls
+    // `app.quit()` only after the close handlers have run — so the quit flag is still false while
+    // the shutdown tasks this guard protects are already running. The platform has to decide.
+    expect(isAppQuitRequested()).toBe(false);
+
+    expect(shouldWindowCloseAbortReadinessWait('win32')).toBe(true);
+    expect(shouldWindowCloseAbortReadinessWait('linux')).toBe(true);
+  });
+
+  describe('whether the startup sync may still fire', () => {
+    test('allows firing while the app is up with a window', () => {
+      addWindow(fakeWindow(1));
+
+      expect(canStartupSyncFireNow(1, true)).toBe(true);
+    });
+
+    test('blocks firing once the app has had a window and no longer has one', () => {
+      // The macOS last-window-close state the readiness wait deliberately survives: resident, not
+      // quitting, windowless. The shutdown sync has already run and there is no UI to report into.
+      expect(canStartupSyncFireNow(0, true)).toBe(false);
+    });
+
+    test('allows firing before this process has created its first window', () => {
+      // No window YET is the app coming UP, not going down — the same distinction
+      // `areAllWindowsClosing` draws. Reading it as "went windowless" would silently drop the
+      // startup sync of any boot whose readiness landed before the first window did, which is the
+      // invisible failure the readiness gate exists to avoid.
+      expect(canStartupSyncFireNow(0, false)).toBe(true);
+    });
+
+    test('blocks firing once a quit has been requested, window or not', () => {
+      markQuitRequested();
+
+      expect(canStartupSyncFireNow(1, true)).toBe(false);
+      expect(canStartupSyncFireNow(0, false)).toBe(false);
+    });
+
+    test('blocks firing while every tracked window is closing', () => {
+      // Off macOS this is how the app goes down, and the quit flag is still false throughout it.
+      const windowId = addWindow(fakeWindow(1));
+      markWindowClosing(windowId);
+
+      expect(isAppQuitRequested()).toBe(false);
+      expect(canStartupSyncFireNow(1, true)).toBe(false);
+    });
   });
 
   test('shares one run across every window closing as part of the same quit', async () => {
@@ -90,19 +233,19 @@ describe('shutdown latches', () => {
       // Closing the last window with the X button emits no `before-quit`, so the quit flag stays
       // false for the whole shutdown. Anything that refuses to start new work during a shutdown has
       // to catch this case too, or it only guards half of the ways the app goes down.
-      addWindow(fakeWindow(1));
+      const windowId = addWindow(fakeWindow(1));
 
-      markWindowClosing(1);
+      markWindowClosing(windowId);
 
       expect(isAppQuitRequested()).toBe(false);
       expect(isAppShuttingDown()).toBe(true);
     });
 
     test('does not report the app shutting down while a window is staying open', () => {
-      addWindow(fakeWindow(1));
+      const firstWindowId = addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
 
-      markWindowClosing(1);
+      markWindowClosing(firstWindowId);
 
       expect(isAppShuttingDown()).toBe(false);
     });

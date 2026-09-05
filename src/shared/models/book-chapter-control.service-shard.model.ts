@@ -12,7 +12,8 @@
 
 /**
  * Base name a window's BookChapterControl service shard registers its network object under,
- * suffixed with the window id (e.g. `BookChapterControlService-1`).
+ * suffixed with the window id (e.g.
+ * `BookChapterControlService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6`).
  *
  * Nothing claims this name unsuffixed: the router publishes the `platform.openBookChapterControl`
  * command consumers call, not a network object.

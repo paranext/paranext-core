@@ -12,7 +12,8 @@
  * `createCommentTestProject` copies the bundled WEB project into a temp directory under the
  * Platform.Bible projects folder, gives it a unique random hex "Guid", and adds synthetic test
  * users so the "Assign to" dropdown is populated. Call `cleanupCommentTestProject` in `afterAll` to
- * remove the copy.
+ * remove the copy. `removeRevelationFromProject` shapes a copy's book list, for tests that need one
+ * project to be missing a book another project has.
  *
  * ## Seeding comment threads
  *
@@ -32,7 +33,12 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { expect, type FrameLocator, type Page } from '@playwright/test';
-import { addUsersToProject, sendPapiRequestOnce, waitForPapiMethodRegistered } from './helpers';
+import {
+  addUsersToProject,
+  PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  sendPapiRequestOnce,
+  waitForPapiMethodRegistered,
+} from './helpers';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -60,6 +66,14 @@ const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProvid
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
 
+/**
+ * Paratext app-data directories are named `Paratext<major><minor>` — `Paratext80` is 8.0,
+ * `Paratext94` is 9.4, `Paratext100` is 10.0 — so the suffix read as a number orders the versions
+ * (minors are single-digit). Anything below 8.0 stored registration information in a different
+ * shape and ParatextData ignores it; see `UpgradeAppDataFiles` in ParatextData's ParatextInfo.
+ */
+const OLDEST_SUPPORTED_PARATEXT_APP_DATA_VERSION = 80;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,6 +90,66 @@ export interface CommentTestProject {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Current Paratext user
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Root the platform's local application data lives under, matching what .NET's
+ * `Environment.SpecialFolder.LocalApplicationData` resolves to for the C# data provider:
+ * `%LOCALAPPDATA%` on Windows, `$XDG_DATA_HOME` (default `~/.local/share`) everywhere else.
+ */
+function localApplicationDataRoot(): string | undefined {
+  if (process.platform === 'win32') return process.env.LOCALAPPDATA;
+  return process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
+}
+
+/**
+ * The name ParatextData reports as the current user (`RegistrationInfo.DefaultUser.Name`), read
+ * from the machine's registration file: the highest-named `Paratext*` app-data directory holding a
+ * `RegistrationInfo.xml`, which is how ParatextData picks one (`ParatextInfo`).
+ *
+ * Read from disk rather than asked of the running app on purpose. A project's
+ * `ProjectUserAccess.xml` is loaded when ParatextData first opens the project, during the app's
+ * startup scan, and the loaded copy is kept for the session — so the current user has to be in the
+ * file BEFORE the app launches. Writing it afterwards has no effect on that session.
+ *
+ * @returns The registered user name, or undefined when this machine has no Paratext registration
+ */
+export function readCurrentParatextUserName(): string | undefined {
+  const root = localApplicationDataRoot();
+  if (!root || !fs.existsSync(root)) return undefined;
+
+  const newest = fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({
+      name: entry.name,
+      version: Number(/^Paratext(\d+)$/.exec(entry.name)?.[1]),
+    }))
+    .filter((dir) => dir.version >= OLDEST_SUPPORTED_PARATEXT_APP_DATA_VERSION)
+    .filter((dir) => fs.existsSync(path.join(root, dir.name, 'RegistrationInfo.xml')))
+    .sort((a, b) => a.version - b.version)
+    .pop();
+  if (!newest) return undefined;
+  const registrationFile = path.join(root, newest.name, 'RegistrationInfo.xml');
+
+  const name = /<Name>([^<]*)<\/Name>/.exec(fs.readFileSync(registrationFile, 'utf8'))?.[1];
+  // Decoded here because the value is scraped straight out of XML and handed to a writer that
+  // escapes it again. Without this, a registered name containing `&` arrives as `&amp;`, is
+  // re-escaped to `&amp;amp;`, and comes back out of the parser as the literal text `&amp;` — which
+  // no longer matches the name ParatextData is looking for.
+  return (
+    name
+      ?.replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, '&')
+      .trim() || undefined
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Project setup / teardown
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -87,10 +161,16 @@ export interface CommentTestProject {
  * via `HexId.FromStr`. This avoids collisions with the real WEB project (or other test copies).
  *
  * @param users Usernames to add as project team members (e.g. ['Alice', 'Bob', 'Charlie'])
+ * @param shortNameSuffix Appended to the generated short name. Pass distinct values when one test
+ *   creates several projects, so their short names (and therefore their folders and dock tab
+ *   titles) stay distinct even when the copies are created within the same millisecond.
  * @returns Metadata about the created project
  */
-export async function createCommentTestProject(users: string[]): Promise<CommentTestProject> {
-  const shortName = `testComment_${Date.now()}`;
+export async function createCommentTestProject(
+  users: string[],
+  shortNameSuffix = '',
+): Promise<CommentTestProject> {
+  const shortName = `testComment_${Date.now()}${shortNameSuffix}`;
   const projectDir = path.join(PARATEXT_PROJECTS_ROOT, shortName);
 
   // 1. Copy the WEB project directory
@@ -101,11 +181,20 @@ export async function createCommentTestProject(users: string[]): Promise<Comment
   //    format that Paratext projects use (e.g. "32664dc3288a28df2e2bb75ded887fc8f17a15fb").
   const projectId = crypto.randomBytes(20).toString('hex');
 
-  // 3. Give the copy a unique short name and new "Guid" so it does not collide with existing projects
+  // 3. Give the copy a unique short name and new "Guid" so it does not collide with existing
+  //    projects, and mark it editable.
+  //
+  //    The bundled WEB assets ship `<Editable>F</Editable>`, which `platform.isEditable` reports
+  //    verbatim (see GetIsEditable in c-sharp/Projects/ScrTextExtensions.cs). A non-editable
+  //    project is a published resource as far as the app is concerned, and the Simple-mode Column 3
+  //    panels — the comment list among them — deliberately do NOT follow the editor onto one
+  //    (`openOrUpdateRelatedPanels` is gated on isEditable in platform-scripture-editor/src/main.ts).
+  //    Comments belong to a translation project the user works in, so these copies model one.
   const settingsXml = fs.readFileSync(path.join(projectDir, 'Settings.xml'), 'utf8');
   const updatedSettings = settingsXml
     .replace(/<Name>[^<]*<\/Name>/, `<Name>${shortName}</Name>`)
-    .replace(/<Guid>[^<]*<\/Guid>/, `<Guid>${projectId}</Guid>`);
+    .replace(/<Guid>[^<]*<\/Guid>/, `<Guid>${projectId}</Guid>`)
+    .replace(/<Editable>[^<]*<\/Editable>/, '<Editable>T</Editable>');
   fs.writeFileSync(path.join(projectDir, 'Settings.xml'), updatedSettings);
 
   // 4. Add test users by writing ProjectUserAccess.xml before the data provider opens the project.
@@ -122,12 +211,38 @@ export async function createCommentTestProject(users: string[]): Promise<Comment
         .filter(Boolean)
     : [];
 
-  const allUsers = [...new Set([...users, ...localUserNames])];
-  if (allUsers.length > 0) {
-    addUsersToProject(projectDir, allUsers);
-  }
+  // The current user matters as much as the synthetic ones: ParatextData grants full access when a
+  // project has NO ProjectUserAccess.xml ("If no project users file, always administrator" —
+  // PermissionManager.HaveRoleNotObserver), but once the file exists a user missing from it has no
+  // role and every comment write is refused. localUsers.txt only exists where Paratext 9 has run,
+  // so the machine's registered name is read directly as well.
+  const allUsers = projectUsersToWrite(users, localUserNames, readCurrentParatextUserName());
+  if (allUsers) addUsersToProject(projectDir, allUsers);
 
   return { shortName, projectDir, projectId, users };
+}
+
+/**
+ * The users to write into a project's `ProjectUserAccess.xml`, or `undefined` when none should be
+ * written at all.
+ *
+ * A caller asking for no users is asking for no file. ParatextData grants full access when a
+ * project has NO users file ("If no project users file, always administrator" —
+ * `PermissionManager.HaveRoleNotObserver`), so writing one anyway — merely because the machine
+ * happens to have a registered Paratext user — silently downgrades the project to a TeamMember with
+ * permissions explicitly denied, and does it only on machines that have a registration.
+ *
+ * Once the file does exist, a user missing from it has no role and every comment write is refused.
+ * So a caller that DID ask for users still gets the machine's own name and the local users added,
+ * or its own writes would be refused.
+ */
+export function projectUsersToWrite(
+  requested: string[],
+  localUserNames: string[],
+  currentUser: string | undefined,
+): string[] | undefined {
+  if (requested.length === 0) return undefined;
+  return [...new Set([...requested, ...localUserNames, ...(currentUser ? [currentUser] : [])])];
 }
 
 /**
@@ -144,6 +259,54 @@ export function cleanupCommentTestProject(project: CommentTestProject | undefine
   if (fs.existsSync(project.projectDir)) {
     fs.rmSync(project.projectDir, { recursive: true, force: true });
   }
+}
+
+/**
+ * Revelation's USFM file in the bundled WEB project. The `67` prefix is the USFM file-naming
+ * number, which is one higher than the canon book number for every New Testament book.
+ */
+const REVELATION_SFM_FILE_NAME = '67REVengWEBUS.SFM';
+
+/**
+ * Index of Revelation in `Settings.xml`'s `BooksPresent` bit string. The string is indexed by canon
+ * book number minus one, and Revelation is canon book 66.
+ */
+const REVELATION_BOOKS_PRESENT_INDEX = 65;
+
+/**
+ * Removes Revelation from a project copy: both the book file and the `BooksPresent` bit, because
+ * `platformScripture.booksPresent` is served from `ScrText.BooksPresentSet`, which reconciles the
+ * two. Use it to make a project copy that lacks a book some other project has, so a test can prove
+ * a book is reachable only through the other project.
+ *
+ * Throws if either input does not look the way this expects, so a changed WEB asset surfaces as a
+ * setup failure instead of a test that quietly stops discriminating.
+ *
+ * @param project The test project copy to strip Revelation from
+ */
+export function removeRevelationFromProject(project: CommentTestProject): void {
+  const sfmPath = path.join(project.projectDir, REVELATION_SFM_FILE_NAME);
+  if (!fs.existsSync(sfmPath))
+    throw new Error(`Expected ${REVELATION_SFM_FILE_NAME} in the WEB project copy at ${sfmPath}`);
+  fs.rmSync(sfmPath);
+
+  const settingsPath = path.join(project.projectDir, 'Settings.xml');
+  const settingsXml = fs.readFileSync(settingsPath, 'utf8');
+  const booksPresentMatch = settingsXml.match(/<BooksPresent>([01]+)<\/BooksPresent>/);
+  const booksPresent = booksPresentMatch?.[1];
+  if (!booksPresentMatch || !booksPresent)
+    throw new Error(`No <BooksPresent> bit string found in ${settingsPath}`);
+  if (booksPresent[REVELATION_BOOKS_PRESENT_INDEX] !== '1')
+    throw new Error(
+      `Expected Revelation to be present at index ${REVELATION_BOOKS_PRESENT_INDEX} of BooksPresent, got "${booksPresent}"`,
+    );
+
+  const withoutRevelation = `${booksPresent.slice(0, REVELATION_BOOKS_PRESENT_INDEX)}0${booksPresent.slice(REVELATION_BOOKS_PRESENT_INDEX + 1)}`;
+  fs.writeFileSync(
+    settingsPath,
+    settingsXml.replace(booksPresentMatch[0], `<BooksPresent>${withoutRevelation}</BooksPresent>`),
+    'utf8',
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -181,7 +344,11 @@ export async function createCommentThreads(
   const resolvedPort = port ?? DEFAULT_WEBSOCKET_PORT;
 
   // 1. Wait for the Paratext PDPF to register getProjectDataProviderId
-  await waitForPapiMethodRegistered(PARATEXT_PDPF_METHOD, resolvedPort, 60_000);
+  await waitForPapiMethodRegistered(
+    PARATEXT_PDPF_METHOD,
+    resolvedPort,
+    PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  );
 
   // 2. Get (or lazily create) the PDP for this project.
   //    The C# factory calls projectID.ToUpperInvariant() internally, so case doesn't matter.
@@ -194,7 +361,11 @@ export async function createCommentThreads(
   );
 
   // 3. Wait for the PDP's createComment method to appear in rpc.discover
-  await waitForPapiMethodRegistered(`object:${pdpId}.createComment`, resolvedPort, 60_000);
+  await waitForPapiMethodRegistered(
+    `object:${pdpId}.createComment`,
+    resolvedPort,
+    PAPI_METHOD_REGISTRATION_TIMEOUT_MS,
+  );
 
   // 4. Create each thread sequentially (the PDP is not safe to hammer in parallel)
   const threadIds: string[] = [];

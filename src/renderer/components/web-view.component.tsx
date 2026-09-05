@@ -13,6 +13,7 @@ import {
   isWebViewNonceCorrect,
   reloadWebView,
   updateTabPartialSync,
+  getSavedWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-shard';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -20,12 +21,14 @@ import {
   UnsubscriberAsync,
   formatReplacementString,
   isLocalizeKey,
+  type LocalizeKey,
   serialize,
   getLocalizeKeysForScrollGroupIds,
   isPlatformError,
   getErrorMessage,
 } from 'platform-bible-utils';
 import {
+  BOOK_CHAPTER_CONTROL_STRING_KEYS,
   BookChapterControl,
   BookChapterControlHandle,
   SelectMenuItemHandler,
@@ -52,6 +55,7 @@ import {
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { windowService } from '@shared/services/window.service';
+import { WindowClosingError } from '@renderer/services/window-closing-error.model';
 import {
   BOOKS_PRESENT_DEFAULT,
   getBookIdsFromBooksPresent,
@@ -64,6 +68,8 @@ const WEB_VIEW_MENU_DEFAULT = {
 };
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
+
+const bookChapterControlLocalizedStringKeys: LocalizeKey[] = [...BOOK_CHAPTER_CONTROL_STRING_KEYS];
 
 const registrationPromises = new PromiseChainingMap<string>(logger);
 
@@ -81,10 +87,24 @@ async function retrieveWebViewContent(webViewType: string, id: string): Promise<
     bringToFront: false,
   });
 
-  if (!loadedId)
+  if (!loadedId) {
+    // Two very different answers arrive as the same `undefined`, and the dock tells them apart. A
+    // web view that is no longer in it left while the reload was in flight — a layout load took the
+    // dock wholesale, which is what an interface mode switch does to a tab still fetching its
+    // content, or the tab was dragged into another window. Whatever took it disposed what backed
+    // it, so there is nothing here to report. A web view still in the dock is one whose provider
+    // declined to supply content, leaving that tab waiting on content that is never coming, which
+    // nothing else will mention.
+    if (!getSavedWebViewDefinitionSync(id)) {
+      logger.debug(
+        `WebView with type ${webViewType} and id ${id} is no longer in this window's dock; nothing to reload`,
+      );
+      return;
+    }
     throw new Error(
       `WebView with type ${webViewType} and id ${id} returned undefined when reloading!`,
     );
+  }
 
   if (loadedId !== id)
     logger.error(`WebView with type ${webViewType} and id ${id} loaded into id ${loadedId}!`);
@@ -465,6 +485,10 @@ export function WebView({
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
+  const [bookChapterControlLocalizedStrings] = useLocalizedStrings(
+    bookChapterControlLocalizedStringKeys,
+  );
+
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
   const [booksPresentPossiblyError] = useProjectSetting(
@@ -544,6 +568,7 @@ export function WebView({
                 getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
                 recentSearches={recentScriptureRefs}
                 onAddRecentSearch={addRecentScriptureRef}
+                localizedStrings={bookChapterControlLocalizedStrings}
               />
             ) : undefined
           }
@@ -624,6 +649,16 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
         try {
           await retrieveWebViewContent(data.webViewType, data.id);
         } catch (e) {
+          // A window that has been told it is closing refuses in-flight reloads; that refusal is
+          // an ordinary part of closing, not a failure worth surfacing at error level.
+          if (e instanceof WindowClosingError) {
+            logger.debug(
+              `web-view.component did not retrieve web view content for ${serialize(
+                savedTabInfo,
+              )}: ${getErrorMessage(e)}`,
+            );
+            return;
+          }
           logger.error(
             `web-view.component failed to retrieve web view content for ${serialize(
               savedTabInfo,

@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 import DockLayout, { LayoutBase, LayoutData, TabData } from 'rc-dock';
+import { Filter } from 'rc-dock/lib/Algorithm';
 import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import {
   FloatLayout,
@@ -15,6 +16,7 @@ import {
   addWebViewToDock,
   findFirstWebViewDefinitionByType,
   getAllWebViewDefinitions,
+  getOpenTabCount,
   loadLayout,
   loadTab,
 } from './platform-dock-layout-storage.util';
@@ -49,6 +51,16 @@ describe('Dock Layout Component', () => {
         addTabToDock('this is wrong' as unknown as SavedTabInfo, layout, false, dockLayout),
       ).toThrow();
     });
+
+    it('should throw when receiving a window layout', () => {
+      const localMockDockLayout = mock(DockLayout);
+      const dockLayout = instance(localMockDockLayout);
+      const tab: SavedTabInfo = { id: 'myId', tabType: 'webView' };
+      const layout: Layout = { type: 'window' };
+
+      expect(() => addTabToDock(tab, layout, false, dockLayout)).toThrow(/window.*layout/i);
+    });
+
     // TODO: verify it adds an error tab if no/bad tab type provided
   });
 
@@ -109,6 +121,66 @@ describe('Dock Layout Component', () => {
         },
       );
       expect(getAllWebViewDefinitions(instance(localMockDockLayout))).toEqual([docked, floated]);
+    });
+  });
+
+  describe('getOpenTabCount()', () => {
+    let localMockDockLayout: DockLayout;
+
+    beforeEach(() => {
+      localMockDockLayout = mock(DockLayout);
+    });
+
+    /**
+     * Stands in for rc-dock's own `find`, faithfully enough that the two things making
+     * `getOpenTabCount` correct are actually exercised.
+     *
+     * `Algorithm.find` gates entry to each box on the Docked/Floated/Windowed/Max bits, so a
+     * narrower filter than `Filter.AnyTab` visits nothing; and it stops walking the moment the
+     * callback returns truthy, so a callback that returns `true` counts one item and halts. A stub
+     * that ignores the filter and discards the callback's answer reports the same number either
+     * way.
+     *
+     * The top-level box is offered first, the way `findInBox` does because of rc-dock #253 — that
+     * is the whole reason the implementation's `isTab` guard exists.
+     */
+    function whenFindWalks(topLevelBox: unknown, tabs: unknown[]) {
+      when(localMockDockLayout.find(anything(), anything())).thenCall(
+        (callback: (item: unknown) => boolean, filter: number) => {
+          if (filter !== Filter.AnyTab) return undefined;
+          return [topLevelBox, ...tabs].find((item) => callback(item));
+        },
+      );
+    }
+
+    const TABS = [
+      { id: 'wv1', title: 'WebView 1', tabType: 'webView', data: {} },
+      { id: 'dialog1', title: 'A Dialog', tabType: 'dialog' },
+      { id: 'error1', title: 'An Error Tab', tabType: 'error' },
+    ];
+
+    it('counts every tab regardless of type, not only web views', () => {
+      whenFindWalks({ id: 'root', children: [] }, TABS);
+
+      // Also what pins the walk running to the end: returning true from the callback would halt
+      // rc-dock at the first item, and the stub honours that, so a callback that stops early
+      // reports fewer tabs than the layout holds
+      expect(getOpenTabCount(instance(localMockDockLayout))).toBe(3);
+    });
+
+    it('asks for a filter that reaches windowed and maximized tabs, not only docked ones', () => {
+      whenFindWalks({ id: 'root', children: [] }, TABS);
+      getOpenTabCount(instance(localMockDockLayout));
+
+      // Filter.Tab alone enters no box at all, so the count would silently be 0 everywhere
+      const [, filter] = capture(localMockDockLayout.find).last();
+      expect(filter).toBe(Filter.AnyTab);
+    });
+
+    it('returns zero when the layout holds no tabs', () => {
+      // A box, not a tab — isTab rejects anything without a title
+      whenFindWalks({ id: 'box1', children: [] }, []);
+      expect(getOpenTabCount(instance(localMockDockLayout))).toBe(0);
     });
   });
 

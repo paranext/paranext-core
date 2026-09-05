@@ -4,31 +4,60 @@
  * to the correct renderer window.
  */
 
+import { createUuid } from '@node/utils/crypto-util';
 import { BrowserWindow } from 'electron';
 import { getErrorMessage, PlatformEventEmitter } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 
-/** A tracked window, paired with the id it was created with */
+/** A tracked window, paired with the platform id minted for it */
 type TrackedWindow = {
   /**
-   * The window's id, captured while the window was still alive.
+   * The window's platform id: minted by {@link mintWindowId} for a brand-new window, or supplied to
+   * {@link addWindow} for a window restoring a persisted entry, whose durable id this must match so
+   * per-window state survives the restart.
    *
-   * Every reader below answers from this rather than from `window.id`. Electron destroys a window
+   * This is the platform's own id, not Electron's `BrowserWindow.id` — nothing outside this module
+   * has ever seen Electron's, and this list is the only mapping from one to the other. Reading it
+   * from here rather than from the window also keeps every lookup safe: Electron destroys a window
    * before the `closed` handler removes it from this list, and a property read on a destroyed
    * BrowserWindow throws — inside the routing lookup that runs on every routed call, and inside the
    * mutations a closing window's own teardown is waiting on, where a throw abandons the rest of the
-   * close. See {@link removeWindow}, which has always taken the id for the same reason.
+   * close. See {@link removeWindow}, which takes the id for the same reason.
    */
-  windowId: number;
+  windowId: string;
   window: BrowserWindow;
 };
+
+/**
+ * Mint a window id that has never been used before — not earlier in this launch, and not in any
+ * previous one, and not by any other process that has ever run on this machine.
+ *
+ * A random GUID rather than a counter: the id is now a window's durable, persisted identity (see
+ * {@link addWindow}), so two windows minted in different launches must never collide the way two
+ * counters seeded from the same stored value could. This is the only process that mints a window id
+ * from nothing — a restored window is instead handed the id its persisted entry already carries.
+ */
+function mintWindowId(): string {
+  return createUuid();
+}
 
 // Keep a global reference of the window objects. If you don't, the windows will
 // be closed automatically when the JavaScript objects are garbage collected.
 const trackedWindows: TrackedWindow[] = [];
 
-/** ID of the Electron BrowserWindow that Electron most recently reported as focused, if any */
-let focusedWindowId: number | undefined;
+/** Platform id of the window Electron most recently reported as focused, if any */
+let focusedWindowId: string | undefined;
+
+/**
+ * Whether the window named by {@link focusedWindowId} still holds OS focus. Cleared by that window's
+ * blur instead of clearing `focusedWindowId` itself, because the two answer different questions:
+ * everything reading the focused window id wants "the window the user was last working in" —
+ * routing fallbacks, the focused-window command that resolves which window `papi.window` means from
+ * the extension host — and that answer has to survive the whole application going to the
+ * background. What must NOT survive it is {@link isApplicationFocused}, the guard for operations
+ * that would take OS focus from whatever the user is doing.
+ */
+let doesFocusedWindowHoldOsFocus = false;
 
 /**
  * IDs of the windows that have held focus, most recently focused first.
@@ -38,7 +67,7 @@ let focusedWindowId: number | undefined;
  * it is shown but cannot serve a call for seconds, and falling back to the tracked list would pick
  * whichever window happens to have been created first instead.
  */
-const mostRecentlyFocusedWindowIds: number[] = [];
+const mostRecentlyFocusedWindowIds: string[] = [];
 
 /**
  * Windows whose renderer has registered its window service, so routing to them can succeed.
@@ -53,7 +82,7 @@ const mostRecentlyFocusedWindowIds: number[] = [];
  * which is what makes it good enough to route on. Callers still have to tolerate a scoped service
  * being momentarily absent.
  */
-const readyWindowIds = new Set<number>();
+const readyWindowIds = new Set<string>();
 
 /**
  * IDs of the windows whose renderer has registered its window service at least once since the
@@ -66,7 +95,7 @@ const readyWindowIds = new Set<number>();
  * everything the user does for the whole of a startup; the second is a window that may be holding
  * the very web view a call just named. Nothing else in this module separates them.
  */
-const everReadyWindowIds = new Set<number>();
+const everReadyWindowIds = new Set<string>();
 
 /**
  * IDs of the windows nothing will ever run in again: their renderer died and the reload path that
@@ -91,7 +120,7 @@ const everReadyWindowIds = new Set<number>();
  * the same fact about the same window, and one flag recorded unconditionally is what keeps the
  * give-up path from needing a second mechanism for the never-ready case.
  */
-const abandonedWindowIds = new Set<number>();
+const abandonedWindowIds = new Set<string>();
 
 /**
  * IDs of the windows whose close has begun but which are still tracked.
@@ -102,7 +131,7 @@ const abandonedWindowIds = new Set<number>();
  * sees the other window still there, decides the app is staying up, and leaves the shutdown work to
  * the other one — so neither does it.
  */
-const closingWindowIds = new Set<number>();
+const closingWindowIds = new Set<string>();
 
 /**
  * Where routed calls currently go: the window ID, plus whether that window is actually serving
@@ -110,12 +139,43 @@ const closingWindowIds = new Set<number>();
  * its calls from a brand new set of scoped services — consumers holding a resolved service have to
  * re-resolve even though the window ID did not change.
  */
-type RoutingTarget = { windowId: number | undefined; isReady: boolean };
+type RoutingTarget = { windowId: string | undefined; isReady: boolean };
 
 /** The routing target as last announced, so an emit happens exactly when the target changes */
 let announcedRoutingTarget: RoutingTarget = { windowId: undefined, isReady: false };
 
-const onDidChangeRoutingTargetEmitter = new PlatformEventEmitter<number | undefined>();
+/**
+ * Whether a window is still waiting for the content it was created to receive. Such a window is
+ * shown — and takes OS focus — before that content arrives, and the operation that created it can
+ * still fail and close it again, so anything focus-routed into it in that gap is destroyed with it.
+ * The pending-content mark itself lives with window-layout persistence, which owns the rest of a
+ * window's persisted identity; it reaches this tracker as an injected predicate (see
+ * {@link setWindowPendingContentPredicate}) so this module, which sits under every main-process
+ * service, does not import one of them. Until the predicate is wired, no window counts as pending.
+ */
+let isWindowPendingContent: (windowId: string) => boolean = () => false;
+
+/**
+ * Wire the pending-content predicate the routing target consults — see the declaration above.
+ * Called by `main.ts` during startup, before any window exists.
+ */
+export function setWindowPendingContentPredicate(predicate: (windowId: string) => boolean): void {
+  isWindowPendingContent = predicate;
+}
+
+/**
+ * Announce a routing-target change that came from state this module does not own.
+ *
+ * The pending-content mark is one of the target's inputs and lives with window-layout persistence
+ * (see {@link setWindowPendingContentPredicate}), so a window gaining or losing it moves the target
+ * with no mutation here to notice. Whoever owns the mark calls this after changing it. Like every
+ * announcement here, it stays quiet when the target did not actually move.
+ */
+export function announceRoutingTargetChange(): void {
+  announceRoutingTargetIfChanged();
+}
+
+const onDidChangeRoutingTargetEmitter = new PlatformEventEmitter<string | undefined>();
 
 /**
  * Event that fires when the window routed calls go to changes — a different window, or the same
@@ -142,11 +202,77 @@ export const onDidChangeRoutingTarget = onDidChangeRoutingTargetEmitter.event;
  * Answers the tracked set at the moment it is called; it is not a live array.
  */
 export function getWindows(): BrowserWindow[] {
-  return trackedWindows.filter(({ window }) => !window.isDestroyed()).map(({ window }) => window);
+  return getTrackedWindows().map(({ window }) => window);
+}
+
+/**
+ * How many windows could still be the one the user is left with — the arithmetic behind the answer
+ * a window gets when it reports its dock empty.
+ *
+ * Such a window closes unless something exempts it — being the last one standing, or being the
+ * window that answers for the application, either of which docks Home instead. Those exemptions are
+ * decided elsewhere; what follows is the complete rule for which windows may stand in as another
+ * window's reason to close:
+ *
+ * - A window whose close has begun is on its way out — see {@link markWindowClosing}. Two windows
+ *   emptying at the same moment would otherwise each count the other as a reason to close and both
+ *   go, leaving the app with no window at all.
+ * - A window still waiting for the content it was created to receive has nothing in it yet, and the
+ *   operation filling it can still fail and close it again — see
+ *   {@link setWindowPendingContentPredicate}.
+ * - A window nothing will ever run in again is still on screen and still tracked, deliberately —
+ *   closing it would rewrite the persisted window layout without it, taking away the user's one
+ *   remaining recovery — but its renderer is dead and no reload is coming, so counting it would let
+ *   the last window the user can actually work in be closed out from under them. See
+ *   {@link markWindowAbandoned}.
+ *
+ * The whole rule lives here rather than being composed by the caller: every input is this module's,
+ * and a composed copy is a rule that can drift from the one under test.
+ *
+ * Destroyed windows are left out for the same reason {@link getWindows} filters them — a window
+ * stays tracked until its `closed` handler runs.
+ */
+export function countWindowsThatCouldBeTheLastOne(): number {
+  return trackedWindows.filter(
+    ({ windowId, window }) =>
+      !window.isDestroyed() &&
+      !closingWindowIds.has(windowId) &&
+      !isWindowPendingContent(windowId) &&
+      !abandonedWindowIds.has(windowId),
+  ).length;
+}
+
+/**
+ * How many windows would still be open after a given window closed.
+ *
+ * Deliberately NOT {@link countWindowsThatCouldBeTheLastOne}: that answers "which windows are
+ * candidates to be the last one standing", and leaves out a window still waiting for its content —
+ * a move-to-new-window target that has not finished loading. Such a window cannot be the last one,
+ * but it is very much one the user would lose if the primary went down around it. The question here
+ * is what survives, so only windows already gone or already going are left out.
+ *
+ * @param closingWindowId The window whose close is being considered
+ */
+export function countWindowsThatWouldStayOpen(closingWindowId: string): number {
+  return trackedWindows.filter(
+    ({ windowId, window }) =>
+      windowId !== closingWindowId && !window.isDestroyed() && !closingWindowIds.has(windowId),
+  ).length;
+}
+
+/**
+ * Whether this id names a window the tracker is holding.
+ *
+ * Distinct from every other predicate here, which answer questions ABOUT a tracked window and say
+ * nothing about ids that were never tracked: this one answers whether the subject exists at all,
+ * which is what a caller handed an id from off-process needs to establish first.
+ */
+export function isWindowTracked(windowId: string): boolean {
+  return trackedWindows.some((tracked) => tracked.windowId === windowId);
 }
 
 /** Whether a window's renderer has registered its window service, so routing to it can succeed */
-export function isWindowReady(windowId: number): boolean {
+export function isWindowReady(windowId: string): boolean {
   return readyWindowIds.has(windowId);
 }
 
@@ -165,7 +291,7 @@ export function isWindowReady(windowId: number): boolean {
  *
  * @param windowId Window to ask about
  */
-export function wasWindowEverReady(windowId: number): boolean {
+export function wasWindowEverReady(windowId: string): boolean {
   return everReadyWindowIds.has(windowId);
 }
 
@@ -202,7 +328,7 @@ export function doesNavigationReplaceRendererRegistrations(navigation: {
  * the projects it sends this way, and by the time it runs every window is marked closing — so
  * dropping them here would make a quit select nothing and send nothing.
  */
-export function getReadyWindowIds(): number[] {
+export function getReadyWindowIds(): string[] {
   return trackedWindows
     .map(({ windowId }) => windowId)
     .filter((windowId) => readyWindowIds.has(windowId));
@@ -232,7 +358,7 @@ export function getReadyWindowIds(): number[] {
  *   were created, and have not been given up on — see {@link everReadyWindowIds},
  *   {@link markWindowNotReady} and {@link markWindowAbandoned}
  */
-export function getUnreachableWindowIds(): number[] {
+export function getUnreachableWindowIds(): string[] {
   return trackedWindows
     .map(({ windowId }) => windowId)
     .filter(
@@ -259,7 +385,7 @@ export function getUnreachableWindowIds(): number[] {
  * @returns Tracked windows whose renderer died and will not be reloaded again — see
  *   {@link markWindowAbandoned}
  */
-export function getAbandonedWindowIds(): number[] {
+export function getAbandonedWindowIds(): string[] {
   return trackedWindows
     .map(({ windowId }) => windowId)
     .filter((windowId) => abandonedWindowIds.has(windowId));
@@ -268,9 +394,14 @@ export function getAbandonedWindowIds(): number[] {
 /**
  * Whether a window has been given up on, so nothing will ever run in it again.
  *
+ * Exported for callers outside this module that hold one window's id and need only that window's
+ * answer; the counting rules inside this module read `abandonedWindowIds` directly, so a reader
+ * looking for how the last-window arithmetic uses this state wants
+ * {@link countWindowsThatCouldBeTheLastOne} instead.
+ *
  * @param windowId Window to ask about
  */
-export function isWindowAbandoned(windowId: number): boolean {
+export function isWindowAbandoned(windowId: string): boolean {
   return abandonedWindowIds.has(windowId);
 }
 
@@ -281,7 +412,7 @@ export function isWindowAbandoned(windowId: number): boolean {
  * {@link getTargetWindowId} for that. Consumers that mean "the window the user is looking at" (such
  * as the `platform.getFocusedWindowId` command) want this one.
  */
-export function getFocusedWindowId(): number | undefined {
+export function getFocusedWindowId(): string | undefined {
   return focusedWindowId;
 }
 
@@ -301,6 +432,11 @@ export function getFocusedWindowId(): number | undefined {
  * every notification, dialog, and newly opened web view for the whole of that wait lands in the
  * window the user is watching disappear.
  *
+ * A window still waiting for the content it was created to receive is passed over for the same
+ * reason from the other direction: it takes OS focus the moment it is shown, and the operation
+ * filling it can still fail and close it — so new work routed there in that gap is destroyed with
+ * it. See {@link setWindowPendingContentPredicate}.
+ *
  * Once every window is closing there is no window that is not closing left to prefer, so the
  * readiness preference comes back: a closing window still serves calls until its own teardown
  * finishes, and a quit reports its progress and asks its questions through this target. The one
@@ -312,8 +448,10 @@ export function getFocusedWindowId(): number | undefined {
  * error rather than silence.
  */
 function getRoutingTarget(): RoutingTarget {
-  const canTakeNewWork = (windowId: number) =>
-    readyWindowIds.has(windowId) && !closingWindowIds.has(windowId);
+  const canTakeNewWork = (windowId: string) =>
+    readyWindowIds.has(windowId) &&
+    !closingWindowIds.has(windowId) &&
+    !isWindowPendingContent(windowId);
 
   if (focusedWindowId !== undefined && canTakeNewWork(focusedWindowId))
     return { windowId: focusedWindowId, isReady: true };
@@ -343,7 +481,7 @@ function getRoutingTarget(): RoutingTarget {
 }
 
 /** Get the window ID to target for command/service routing. See {@link getRoutingTarget}. */
-export function getTargetWindowId(): number | undefined {
+export function getTargetWindowId(): string | undefined {
   return getRoutingTarget().windowId;
 }
 
@@ -361,7 +499,7 @@ export function getTargetWindowId(): number | undefined {
  *
  * @param windowId Window to raise. Doing nothing is the right answer for a window that has closed.
  */
-export function focusWindow(windowId: number): void {
+export function focusWindow(windowId: string): void {
   const trackedWindow = trackedWindows.find((tracked) => tracked.windowId === windowId);
   if (!trackedWindow || trackedWindow.window.isDestroyed()) return;
 
@@ -416,14 +554,128 @@ function announceRoutingTargetIfChanged(): void {
 }
 
 /**
- * Add a window to the tracked list.
+ * Add a window to the tracked list and give it its platform id.
  *
- * Its id is read once, here, while the window is certain to be alive, and every reader answers from
- * that copy afterwards — see {@link TrackedWindow}.
+ * A brand-new window gets a freshly minted id — this is the only place one is minted, and the
+ * returned id is the only one the rest of the platform ever sees (see {@link TrackedWindow}). A
+ * window restoring a persisted entry is instead given that entry's own durable id, so the id this
+ * returns matches what the caller already holds and per-window state keyed by it survives the
+ * restart.
+ *
+ * @param existingId The durable id to use instead of minting one, for a window restoring a
+ *   persisted entry
+ * @returns The window's platform id
  */
-export function addWindow(window: BrowserWindow): void {
-  trackedWindows.push({ windowId: window.id, window });
+export function addWindow(window: BrowserWindow, existingId?: string): string {
+  let windowId = existingId ?? mintWindowId();
+  // An id a LIVE window already holds cannot be handed to a second one: the two would share a
+  // service registration, a storage namespace, and each other's ready, focus and closing state,
+  // and the id would name whichever of them the tracker reached first. Minting instead keeps one
+  // window per id true by construction — this window opens and works, and loses only the
+  // per-window state the entry it came from was keeping.
+  //
+  // Liveness rather than {@link isWindowTracked}, which answers whether the tracker holds the id
+  // at all and so still says yes for a window Electron has destroyed whose `closed` handler has
+  // not yet reached {@link removeWindow}. A window restoring that entry inside that gap is
+  // entitled to its own id: refusing it there would detach it from its persisted state over a
+  // conflict with a window that no longer exists.
+  if (
+    existingId !== undefined &&
+    trackedWindows.some(
+      (tracked) => tracked.windowId === existingId && !tracked.window.isDestroyed(),
+    )
+  ) {
+    windowId = mintWindowId();
+    logger.warn(
+      `Window id ${existingId} is already tracked, so this window is tracked as ${windowId} instead. Per-window state saved under ${existingId} stays with the window already holding it.`,
+    );
+  } else if (existingId !== undefined) {
+    // Reclaiming the id means the window that held it is destroyed and its `closed` handler has
+    // not swept it yet. Sweep it here instead of leaving both: one id names one entry, and every
+    // lookup in this module answers from the FIRST entry with a matching id — so the corpse,
+    // pushed earlier, would answer for the window actually on screen. `focusWindow` would find it,
+    // see a destroyed window and return without raising anything, and `getWindowCreationRank`
+    // would report the dead window's place in the list to the router's tie-break.
+    //
+    // Nothing here can be live: the branch above already established that no live window holds
+    // this id.
+    for (let index = trackedWindows.length - 1; index >= 0; index -= 1) {
+      if (trackedWindows[index].windowId === existingId) trackedWindows.splice(index, 1);
+    }
+    // The corpse's own `closed` handler still runs after this, but by then the id below already
+    // names the window pushed here — {@link removeWindow} finds a tracked entry under the id and
+    // returns before reaching its clears. Clear its closing, ever-ready, and abandoned marks here
+    // instead, while the corpse is the one still known to be dead: left set, they would go on
+    // answering for the window that just took the id, which is neither closing, nor yet ready,
+    // nor a window nothing will ever run in again.
+    closingWindowIds.delete(existingId);
+    everReadyWindowIds.delete(existingId);
+    abandonedWindowIds.delete(existingId);
+    // Focus state (`focusedWindowId`, `mostRecentlyFocusedWindowIds`) is deliberately left
+    // untouched here. The id below already names this live window, so the value is never wrong for
+    // any reader — including an extension that calls the experimental `platform.getFocusedWindowId`
+    // command directly — only early: it names the window that is about to take focus, never a
+    // corpse and never a different window. `getRoutingTarget`'s ready branches only return
+    // `focusedWindowId` once `readyWindowIds` holds it too; its final not-ready fallback can still
+    // return the same id early, but that fallback returns an equally not-yet-ready window's own id
+    // for an ordinary starting window with no reclaim involved, so a reclaim adds no new case there.
+  }
+  trackedWindows.push({ windowId, window });
   announceRoutingTargetIfChanged();
+  return windowId;
+}
+
+/**
+ * Every tracked window paired with its platform id, in creation order, excluding any window
+ * Electron has already destroyed — see {@link getWindows} for why those must not be handed out.
+ *
+ * For callers that need to name the windows they are looking at. A `BrowserWindow` cannot answer
+ * what the platform calls it, so anything reporting on windows has to come through here rather than
+ * through {@link getWindows}.
+ */
+export function getTrackedWindows(): { windowId: string; window: BrowserWindow }[] {
+  return trackedWindows
+    .filter(({ window }) => !window.isDestroyed())
+    .map(({ windowId, window }) => ({ windowId, window }));
+}
+
+/**
+ * Where a window falls in creation order, for tie-breaking a search that has to pick among several
+ * equally good matches. A window id no longer sorts meaningfully — it is a minted string, not a
+ * number — so a caller that needs "the one created first" reads it from here instead.
+ *
+ * @param windowId Window to look up
+ * @returns The window's position among tracked windows (lower is older), or `undefined` if the id
+ *   is not tracked
+ */
+export function getWindowCreationRank(windowId: string): number | undefined {
+  const rank = trackedWindows.findIndex((tracked) => tracked.windowId === windowId);
+  return rank >= 0 ? rank : undefined;
+}
+
+/**
+ * Get the platform id of a window, if it is still tracked.
+ *
+ * The inverse of {@link getWindowById}, for the few places holding a `BrowserWindow` that Electron
+ * handed them — `getFocusedWindow()` and the like — which need to name it to anything else here. A
+ * `BrowserWindow` does not carry its platform id, so this list is the only way to ask.
+ */
+export function getWindowIdOf(window: BrowserWindow): string | undefined {
+  return trackedWindows.find((tracked) => tracked.window === window)?.windowId;
+}
+
+/**
+ * Get the window a platform id names, if it is still tracked.
+ *
+ * `BrowserWindow.fromId` takes Electron's own id, which nothing outside this module holds; this is
+ * the lookup by the id the platform hands out. Answering `undefined` for a window that has closed
+ * is correct rather than exceptional — a caller holding an id has no way to know the window went
+ * away between one call and the next.
+ */
+export function getWindowById(windowId: string): BrowserWindow | undefined {
+  return trackedWindows.find(
+    (tracked) => tracked.windowId === windowId && !tracked.window.isDestroyed(),
+  )?.window;
 }
 
 /**
@@ -439,33 +691,73 @@ export function addWindow(window: BrowserWindow): void {
  *   chance to throw — which here would abandon the rest of the closing window's teardown.
  * @param windowId The window's ID, captured while it was still alive.
  */
-export function removeWindow(window: BrowserWindow, windowId: number): void {
+export function removeWindow(window: BrowserWindow, windowId: string): void {
   const trackedIndex = trackedWindows.findIndex((tracked) => tracked.window === window);
   if (trackedIndex >= 0) trackedWindows.splice(trackedIndex, 1);
+
+  // This window is matched by identity, but everything below is keyed by the id alone — and the id
+  // may no longer be this window's. A restore reclaims a durable id from a window Electron has
+  // destroyed (see `addWindow`), which sweeps it from the list; this call is that window's `closed`
+  // handler arriving afterwards. Clearing then would tell the app the LIVE window holding the id is
+  // not ready, was never ready, and holds no focus, while it is on screen. Whoever is tracked under
+  // the id now owns the state under it.
+  if (trackedWindows.some((tracked) => tracked.windowId === windowId)) {
+    announceRoutingTargetIfChanged();
+    return;
+  }
+
   readyWindowIds.delete(windowId);
-  // Electron reuses window IDs, so leaving any of these behind would speak for a window that no
-  // longer exists: the closing flag would tell a future window's close it is already on its way out,
-  // the ever-ready flag would make the next window to take this ID look, for the whole of its
-  // startup, like one that had been serving requests and died, and the abandoned flag would write
-  // that window off before it had loaded anything.
+  // These marks are this window's state, keyed by its id. Left behind they keep answering for a
+  // window that no longer exists — anything that still holds the id would be told it is closing,
+  // that it had been serving requests and died, or that it had been written off — and they would
+  // accumulate for the life of the process.
   closingWindowIds.delete(windowId);
   everReadyWindowIds.delete(windowId);
   abandonedWindowIds.delete(windowId);
   const focusOrderIndex = mostRecentlyFocusedWindowIds.indexOf(windowId);
   if (focusOrderIndex >= 0) mostRecentlyFocusedWindowIds.splice(focusOrderIndex, 1);
-  if (focusedWindowId === windowId) focusedWindowId = undefined;
+  if (focusedWindowId === windowId) {
+    focusedWindowId = undefined;
+    doesFocusedWindowHoldOsFocus = false;
+  }
   announceRoutingTargetIfChanged();
 }
 
 /** Set the focused window ID (called from BrowserWindow focus events) */
-export function setFocusedWindowId(windowId: number | undefined): void {
+export function setFocusedWindowId(windowId: string | undefined): void {
   focusedWindowId = windowId;
+  doesFocusedWindowHoldOsFocus = windowId !== undefined;
   if (windowId !== undefined) {
     const focusOrderIndex = mostRecentlyFocusedWindowIds.indexOf(windowId);
     if (focusOrderIndex >= 0) mostRecentlyFocusedWindowIds.splice(focusOrderIndex, 1);
     mostRecentlyFocusedWindowIds.unshift(windowId);
   }
   announceRoutingTargetIfChanged();
+}
+
+/**
+ * Record that a window lost OS focus (called from BrowserWindow blur events).
+ *
+ * Only a blur from the window currently recorded as focused counts: when focus moves between two of
+ * this app's windows, Electron delivers the loser's blur and the winner's focus as separate events,
+ * and the pair can arrive with the focus first — a blur naming any other window is news about a
+ * handover that has already been recorded, not about the application losing focus.
+ */
+export function handleWindowBlurred(windowId: string): void {
+  if (windowId === focusedWindowId) doesFocusedWindowHoldOsFocus = false;
+}
+
+/**
+ * Whether any window of this application currently holds OS focus.
+ *
+ * This answers "may this operation take focus from what the user is doing?" — raising a window is
+ * fine while the user is already in this app and wrong while they are working in another
+ * application. {@link getFocusedWindowId} deliberately answers a different question ("the window the
+ * user was last working in") and stays set while the app is in the background, so it cannot guard
+ * against cross-application focus stealing.
+ */
+export function isApplicationFocused(): boolean {
+  return focusedWindowId !== undefined && doesFocusedWindowHoldOsFocus;
 }
 
 /**
@@ -477,7 +769,7 @@ export function setFocusedWindowId(windowId: number | undefined): void {
  *
  * @param windowId Window whose renderer is now serving requests
  */
-export function markWindowReady(windowId: number): void {
+export function markWindowReady(windowId: string): void {
   readyWindowIds.add(windowId);
   everReadyWindowIds.add(windowId);
   // A page registering is proof that "nothing will ever run in this window again" was wrong,
@@ -496,9 +788,20 @@ export function markWindowReady(windowId: number): void {
  * mutation here — routing proxies hold a resolved service for the target window and have nothing
  * else to tell them it moved.
  *
+ * An id that is not tracked is ignored. A window's own close handler always runs while the window
+ * is still tracked, so nothing legitimate arrives here for one that has gone — but a window that
+ * has gone can still have a report in flight (its dock empties during teardown, and the answer to
+ * that is a close). Recording such a mark would add one nothing ever takes off again: the removal
+ * that would have cleared it has already run, so it would sit there for the life of the process,
+ * answering 'closing' for a window that is not there and never had a close scheduled for it.
+ *
  * @param windowId Window that is on its way out
  */
-export function markWindowClosing(windowId: number): void {
+export function markWindowClosing(windowId: string): void {
+  if (!isWindowTracked(windowId)) {
+    logger.warn(`Ignoring a closing mark for window ${windowId}, which is not tracked`);
+    return;
+  }
   closingWindowIds.add(windowId);
   announceRoutingTargetIfChanged();
 }
@@ -511,7 +814,7 @@ export function markWindowClosing(windowId: number): void {
  *
  * @param windowId Window to ask about
  */
-export function isWindowClosing(windowId: number): boolean {
+export function isWindowClosing(windowId: string): boolean {
   return closingWindowIds.has(windowId);
 }
 
@@ -547,7 +850,7 @@ export function areAllWindowsClosing(): boolean {
  *
  * @param windowId Window whose renderer stopped serving requests
  */
-export function markWindowNotReady(windowId: number): void {
+export function markWindowNotReady(windowId: string): void {
   readyWindowIds.delete(windowId);
   announceRoutingTargetIfChanged();
 }
@@ -574,7 +877,7 @@ export function markWindowNotReady(windowId: number): void {
  *
  * @param windowId Window nothing will ever run in again
  */
-export function markWindowAbandoned(windowId: number): void {
+export function markWindowAbandoned(windowId: string): void {
   abandonedWindowIds.add(windowId);
   // Cannot move the routing target — the target only ever considers windows that can serve a call,
   // and this window stopped being one when its renderer died. Announced anyway, like every other
@@ -595,5 +898,7 @@ export function resetForTesting(): void {
   closingWindowIds.clear();
   mostRecentlyFocusedWindowIds.length = 0;
   focusedWindowId = undefined;
+  doesFocusedWindowHoldOsFocus = false;
   announcedRoutingTarget = { windowId: undefined, isReady: false };
+  isWindowPendingContent = () => false;
 }

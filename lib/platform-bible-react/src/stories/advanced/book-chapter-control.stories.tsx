@@ -12,6 +12,7 @@ type BookChapterControlWrapperProps = {
   handleSubmit: (scrRef: SerializedVerseRef) => void;
   className?: string;
   getActiveBookIds?: () => string[];
+  getAdditionalBookIds?: () => string[];
   getEndVerse?: (bookId: string, chapterNum: number) => number;
   onOpenChange?: (open: boolean) => void;
   disabled?: boolean;
@@ -175,6 +176,56 @@ export const WithLimitedBooks: Story = {
   },
 };
 
+export const WithBooksFromOpenResources: Story = {
+  args: {
+    scrRef: defaultScrRef,
+    getActiveBookIds: () => ['GEN', 'EXO', 'MAT', 'JHN'],
+    // Books the active project lacks but an open resource has. They stay hidden until the user asks
+    // for them, then render greyed and selectable rather than disabled.
+    getAdditionalBookIds: () => ['PSA', 'ROM', 'REV', 'TOB'],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The active project has four books; four more are reachable through open resources. ' +
+          'The list shows only the project\'s books until "Show more books" is pressed, after ' +
+          'which the reachable books appear greyed — still selectable, with a tooltip and an ' +
+          'accessible name explaining why they are greyed.',
+      },
+    },
+  },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Open the control', async () => {
+      await userEvent.click(canvas.getByRole(TRIGGER_ROLE));
+      await expectPopoverToBeOpenAndVisible();
+    });
+
+    await step("Only the project's books are listed", async () => {
+      const dropdown = within(getDropdown());
+      await expect(dropdown.queryByRole('option', { name: /Romans/ })).not.toBeInTheDocument();
+    });
+
+    await step('Reveal the books from open resources', async () => {
+      const dropdown = within(getDropdown());
+      await userEvent.click(dropdown.getByRole('button', { name: 'Show more books' }));
+
+      const romans = await dropdown.findByRole('option', { name: /Romans/ });
+      await expect(romans).toHaveAccessibleName(/not in this project/);
+      // Greyed, but never marked unavailable — the user can still navigate there
+      await expect(romans).not.toHaveAttribute('aria-disabled', 'true');
+    });
+
+    await step("Return to the project's own books", async () => {
+      const dropdown = within(getDropdown());
+      await userEvent.click(dropdown.getByRole('button', { name: 'Show project books only' }));
+      await waitFor(() =>
+        expect(dropdown.queryByRole('option', { name: /Romans/ })).not.toBeInTheDocument(),
+      );
+    });
+  },
+};
+
 export const WithCustomTrigger: Story = {
   args: {
     scrRef: defaultScrRef,
@@ -307,7 +358,7 @@ export const SmartParsingDemo: Story = {
       await userEvent.type(searchInput, 'John 3:16');
 
       // Look for the top match suggestion in the dropdown
-      const topMatch = await within(dropdownContent).findByText('JHN 3:16');
+      const topMatch = await within(dropdownContent).findByText('John 3:16');
       await expect(topMatch).toBeInTheDocument();
 
       // Click the top match
@@ -332,7 +383,7 @@ export const SmartParsingDemo: Story = {
       await userEvent.type(searchInput, 'Roma 8');
 
       // Look for the top match in dropdown
-      const topMatch = await within(dropdownContent).findByText('ROM 8:1');
+      const topMatch = await within(dropdownContent).findByText('Romans 8:1');
       await expect(topMatch).toBeInTheDocument();
 
       // Click the top match
@@ -357,7 +408,7 @@ export const SmartParsingDemo: Story = {
       await userEvent.type(searchInput, '1 co 13:4');
 
       // Look for the top match in dropdown
-      const topMatch = await within(dropdownContent).findByText('1CO 13:4');
+      const topMatch = await within(dropdownContent).findByText('1 Corinthians 13:4');
       await expect(topMatch).toBeInTheDocument();
 
       // Click the top match
@@ -379,7 +430,7 @@ export const SmartParsingDemo: Story = {
 
 This test verifies:
 1. Opens the component and activates the search input
-2. Tests complete reference parsing by typing "John 3:16" and verifying "JHN 3:16" appears as top match
+2. Tests complete reference parsing by typing "John 3:16" and verifying "John 3:16" appears as top match
 3. Confirms selection submits correct reference (JHN 3:16)
 4. Tests partial book name parsing by typing "Roma 8" and verifying "ROM 8:1" appears as top match
 5. Confirms selection submits correct reference (ROM 8:1)
@@ -545,13 +596,13 @@ export const SingleChapterBookDemo: Story = {
 
     await step('Verify Odes smart parsing result appears', async () => {
       const dropdownContent = getDropdown();
-      const odesItem = await within(dropdownContent).findByText('ODA 1:1');
+      const odesItem = await within(dropdownContent).findByText('Odes 1:1');
       await expect(odesItem).toBeInTheDocument();
     });
 
     await step('Click Odes result to submit', async () => {
       const dropdownContent = getDropdown();
-      const odesItem = within(dropdownContent).getByText('ODA 1:1');
+      const odesItem = within(dropdownContent).getByText('Odes 1:1');
       await userEvent.click(odesItem);
     });
 
@@ -745,7 +796,7 @@ export const ComprehensiveInteractionTest: Story = {
 
     await step('Click Obadiah smart parsing result', async () => {
       const dropdownContent = getDropdown();
-      const obadiahItem = await within(dropdownContent).findByText('OBA 1:1');
+      const obadiahItem = await within(dropdownContent).findByText('Obadiah 1:1');
       await userEvent.click(obadiahItem);
     });
 
@@ -773,7 +824,7 @@ export const ComprehensiveInteractionTest: Story = {
 
     await step('Click Revelation smart parsing result', async () => {
       const dropdownContent = getDropdown();
-      const revMatch = await within(dropdownContent).findByText('REV 22:21');
+      const revMatch = await within(dropdownContent).findByText('Revelation 22:21');
       await userEvent.click(revMatch);
     });
 

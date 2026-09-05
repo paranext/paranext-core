@@ -2,7 +2,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef } from 'react';
-import { beforeAll, describe, expect, test } from 'vitest';
+import { beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import { BookChapterControl } from './book-chapter-control.component';
 import { BookChapterControlHandle } from './book-chapter-control.types';
@@ -206,6 +206,113 @@ describe('BookChapterControl imperative handle', () => {
   });
 });
 
+/**
+ * Space on the EMPTY book-search input picks the highlighted book — the Enter UX for a picker whose
+ * list is the whole point. `CommandInput` supplies it, and this control opts in.
+ *
+ * The control's own `handleInputKeyDown` cannot supply it: that handler claims a key only when
+ * `submitKeys` is provided AND contains the key AND the typed text resolves to a FULLY-qualified
+ * reference (book and chapter and verse). An empty input has no top match at all, so it declines —
+ * and `submitKeys` is undefined for every embedding except the range picker's start field anyway.
+ * Its other Space handler, the `[cmdk-item][data-selected]` grid pick, is gated on the chapters and
+ * verses views, and the search input only exists in the BOOKS view, so it never sees this key
+ * either. Both of the control's own mechanisms are therefore inert exactly here.
+ *
+ * No test asserted the behavior while it was an unconditional patch on every `CommandInput`, which
+ * is how it was lost when the patch became opt-in and this control was left out.
+ */
+describe('BookChapterControl — Space on the empty search input', () => {
+  /** Open the picker via its trigger and hand back the books-view search input. */
+  async function openBooksView(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
+    await user.click(screen.getByRole('combobox', { name: 'book-chapter-trigger' }));
+    let input: HTMLElement | undefined;
+    await waitFor(() => {
+      input = document.querySelector<HTMLElement>('[cmdk-input]') ?? undefined;
+      expect(input).toBeDefined();
+    });
+    if (!input) throw new Error('books-view search input never rendered');
+    return input;
+  }
+
+  test('picks the highlighted book instead of typing a space', async () => {
+    // Radix popovers rely on PointerEvent sequences that jsdom lays out poorly;
+    // `pointerEventsCheck: 0` is the established workaround (see scope-selector tests).
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    const input = await openBooksView(user);
+    expect(input).toHaveValue('');
+    // Genesis is the highlighted entry for this reference, and it has chapters to drill into.
+    // Scoped to the cmdk list: the trigger ALSO renders "Genesis" (the shrink ladder's widest
+    // step), so a bare text query matches twice.
+    await waitFor(() => {
+      expect(document.querySelector('[cmdk-item][data-selected="true"]')).toHaveTextContent(
+        'Genesis',
+      );
+    });
+
+    await user.keyboard(' ');
+
+    // The book was picked, exactly as clicking it does: chapters view replaces books view. The
+    // search input renders only in books view, so its absence is the view change.
+    await waitFor(() => {
+      expect(document.querySelector('[cmdk-input]')).toBeNull();
+    });
+    // And the chapters really are on screen — not merely mounted inside a hidden ancestor.
+    expect(await screen.findByText('1')).toBeVisible();
+  });
+
+  test('leaves Space alone once a query is typed, so book names with spaces are searchable', async () => {
+    // The opt-in only claims Space on an EMPTY input. Multi-word book names ("1 Samuel") would be
+    // unreachable otherwise, which is the risk of turning this on for a control with a real search.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    const input = await openBooksView(user);
+    await user.keyboard('1 sam');
+
+    expect(input).toHaveValue('1 sam');
+    // Still in books view, with the search resolving.
+    expect(document.querySelector('[cmdk-input]')).not.toBeNull();
+    expect(await screen.findByText('1 Samuel')).toBeVisible();
+  });
+
+  test("the control's own submitKeys still win over the patch", async () => {
+    // `CommandInput` runs the caller's `onKeyDown` first and bails on `defaultPrevented`, so the
+    // range picker's `submitKeys` contract keeps Space when the typed text resolves fully. Opting
+    // in must not double-handle the key: one submit, with the typed reference, not the highlighted
+    // item's.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const handleSubmit = vi.fn();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        submitKeys={[' ', '-']}
+      />,
+    );
+
+    await openBooksView(user);
+    await user.keyboard('MAT 5:3');
+    await user.keyboard(' ');
+
+    await waitFor(() => {
+      expect(handleSubmit).toHaveBeenCalledTimes(1);
+    });
+    expect(handleSubmit).toHaveBeenCalledWith({ book: 'MAT', chapterNum: 5, verseNum: 3 });
+  });
+});
+
 describe('BookChapterControl trigger shrink ladder', () => {
   const scrRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
 
@@ -261,5 +368,508 @@ describe('BookChapterControl trigger shrink ladder', () => {
     );
 
     expect(screen.getByRole('combobox')).toHaveTextContent('GN');
+  });
+});
+
+describe('BookChapterControl additional books', () => {
+  const PROJECT_BOOKS = ['GEN', 'MAT'];
+  const getProjectBooks = () => PROJECT_BOOKS;
+  const getExtraBooks = () => ['REV'];
+
+  /** The trigger button and the search input are both comboboxes; only the trigger is named. */
+  const getTrigger = () => screen.getByRole('combobox', { name: 'book-chapter-trigger' });
+  const getSearchInput = () => screen.getByRole('combobox', { name: '' });
+
+  test('an additional book is absent from the collapsed list', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+
+    expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+  });
+
+  test('typing finds an additional book while the list is collapsed', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+    await userEvent.type(getSearchInput(), 'Revelation');
+
+    // Queried as the option rather than by bare text: the top-match row and the book list entry
+    // both name the book, so only the role narrows it to one element.
+    expect(await screen.findByRole('option', { name: /Revelation 1:1/ })).toBeInTheDocument();
+  });
+
+  test('a typed reference to an additional book submits', async () => {
+    const handleSubmit = vi.fn();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+    await userEvent.type(getSearchInput(), 'rev 3:4{Enter}');
+
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith({ book: 'REV', chapterNum: 3, verseNum: 4 }),
+    );
+  });
+
+  test('a book outside the project renders dimmed with a spoken reason', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+    // A query several books match keeps the list rendered; a single match collapses to a top match.
+    await userEvent.type(getSearchInput(), 'e');
+
+    const revelation = await screen.findByRole('option', {
+      name: /Revelation \(REV\) is not in this project/,
+    });
+    expect(revelation).toHaveClass('tw:bg-muted/50');
+    // The label stays readable while the row is highlighted, unlike a hover-only tooltip
+    expect(revelation).toHaveTextContent('Not in project');
+  });
+
+  test('additional ids already in the project are not dimmed', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={() => ['GEN']}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+
+    const genesis = await screen.findByRole('option', { name: /Genesis/ });
+    expect(genesis).not.toHaveClass('tw:bg-muted/50');
+  });
+
+  test('the toggle is absent when there are no books outside the project', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={() => []}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+
+    expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show more books' })).not.toBeInTheDocument();
+  });
+
+  test('the toggle is absent when getActiveBookIds is not supplied', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+
+    expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show more books' })).not.toBeInTheDocument();
+  });
+
+  test('the toggle starts unpressed and reveals the extra book when pressed', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    const toggle = await screen.findByRole('button', { name: 'Show more books' });
+    // The flipping label carries the state; aria-expanded would encode it a second time,
+    // in the opposite direction ("Show project books only" + expanded=true reads as a
+    // contradiction), so the toggle deliberately has none.
+    expect(toggle).not.toHaveAttribute('aria-expanded');
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+
+    await user.click(toggle);
+
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
+    await waitFor(() => expect(toggle).toHaveAccessibleName('Show project books only'));
+  });
+
+  test('a revealed book outside the project is dimmed', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await user.click(await screen.findByRole('button', { name: 'Show more books' }));
+
+    const revelation = await screen.findByRole('option', { name: /Revelation/ });
+    expect(revelation).toHaveClass('tw:bg-muted/50');
+  });
+
+  // Search deliberately spans every reachable book whatever the toggle says, so a book in an open
+  // resource is findable by name without expanding first. Matches stay labelled, so nothing the
+  // search surfaces is presented as a project book.
+  test('search reaches a book outside the project while the list is collapsed', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+    // Collapsed: the toggle still offers to expand, so nothing has been revealed yet
+    expect(await screen.findByRole('button', { name: 'Show more books' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+
+    await user.type(getSearchInput(), 'e');
+
+    const revelation = await screen.findByRole('option', {
+      name: /Revelation \(REV\) is not in this project/,
+    });
+    expect(revelation).toHaveClass('tw:bg-muted/50');
+  });
+
+  // The toggle governs the book list, so it has nothing to act on once quick navigation hides it
+  test('the toggle is not offered while the book list is hidden', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+        getEndVerse={() => 31}
+      />,
+    );
+
+    await user.click(getTrigger());
+    expect(await screen.findByRole('button', { name: 'Show more books' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Next chapter' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Show more books' })).not.toBeInTheDocument(),
+    );
+  });
+
+  test('selecting a revealed book navigates to it', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const handleSubmit = vi.fn();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await user.click(await screen.findByRole('button', { name: 'Show more books' }));
+    await user.click(await screen.findByRole('option', { name: /Revelation/ }));
+    // Revelation has chapters, so the control advances to the chapter grid before submitting.
+    await user.click(await screen.findByRole('option', { name: '1' }));
+
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith({ book: 'REV', chapterNum: 1, verseNum: 1 }),
+    );
+  });
+
+  test('the toggle is hidden while a search is active', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+    expect(await screen.findByRole('button', { name: 'Show more books' })).toBeInTheDocument();
+
+    // Searching already spans every reachable book, so the control has nothing left to do.
+    await userEvent.type(getSearchInput(), 'rev');
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Show more books' })).not.toBeInTheDocument(),
+    );
+  });
+
+  test('pressing the toggle a second time collapses the list', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    const toggle = await screen.findByRole('button', { name: 'Show more books' });
+    await user.click(toggle);
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
+
+    await user.click(toggle);
+
+    await waitFor(() =>
+      expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument(),
+    );
+  });
+
+  test('clearing a search restores the expanded list and the toggle', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+    await userEvent.click(await screen.findByRole('button', { name: 'Show more books' }));
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
+
+    await userEvent.type(getSearchInput(), 'rev');
+    // Neither label may be on screen: which one would render depends on the expansion state.
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: /Show more books|Show project books only/ }),
+      ).not.toBeInTheDocument(),
+    );
+
+    await userEvent.clear(getSearchInput());
+
+    // Typing never touches the expansion state, so clearing returns to exactly the prior view.
+    await screen.findByRole('button', { name: 'Show project books only' });
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
+  });
+
+  test('opens expanded when the current book is outside the project', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'REV', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    await screen.findByRole('button', { name: 'Show project books only' });
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
+  });
+
+  test('the seeded expansion can still be collapsed', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'REV', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    const toggle = await screen.findByRole('button', { name: 'Show project books only' });
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
+
+    await user.click(toggle);
+
+    await waitFor(() =>
+      expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument(),
+    );
+  });
+
+  test('opens collapsed when the current book is in the project', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    await screen.findByRole('button', { name: 'Show more books' });
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+  });
+
+  // Regression guard for consumers that never opt into books outside the project: the control must
+  // render exactly what the caller offers, adding nothing of its own.
+  test('with no additional books the whole control is limited to the project', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'REV', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    // The browsable list is the project's books, with nothing to reveal.
+    expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Matthew/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show more books' })).not.toBeInTheDocument();
+
+    // Quick navigation spans the project's books only, so the current book offers no next chapter.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Next chapter' })).toBeDisabled(),
+    );
+
+    // Searching spans the same books. A fragment several books match keeps the list rendered.
+    await user.type(getSearchInput(), 'e');
+
+    expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+  });
+
+  test('reopening resets the expansion to the seed', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await user.click(await screen.findByRole('button', { name: 'Show more books' }));
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(getTrigger()).toHaveAttribute('aria-expanded', 'false'));
+
+    await user.click(getTrigger());
+
+    await screen.findByRole('button', { name: 'Show more books' });
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+  });
+
+  test('the toggle label names the state it switches to', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    const toggle = await screen.findByRole('button', { name: 'Show more books' });
+
+    await user.click(toggle);
+    await waitFor(() => expect(toggle).toHaveAccessibleName('Show project books only'));
+
+    await user.click(toggle);
+    await waitFor(() => expect(toggle).toHaveAccessibleName('Show more books'));
+  });
+
+  test('quick navigation stops at the project while the list is collapsed', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 28, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    // MAT 28 is the last chapter of the project's last book, so stepping forward from here would
+    // have to leave the project — which the collapsed list does not offer.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Next chapter' })).toBeDisabled(),
+    );
+  });
+
+  test('quick navigation reaches a book outside the project once the list is expanded', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const handleSubmit = vi.fn();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 28, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await user.click(await screen.findByRole('button', { name: 'Show more books' }));
+
+    const nextChapter = await screen.findByRole('button', { name: 'Next chapter' });
+    await waitFor(() => expect(nextChapter).toBeEnabled());
+
+    await user.click(nextChapter);
+
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith({ book: 'REV', chapterNum: 1, verseNum: 1 }),
+    );
   });
 });

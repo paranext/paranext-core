@@ -73,6 +73,25 @@ namespace TestParanextDataProvider.Projects
                 Is.True,
                 "Published PDP must still register scripture read methods"
             );
+
+            // platformScripture.StyleInfo is on the published interface list — getStyleInfo must
+            // be registered even for a published (read-only) project.
+            Assert.That(
+                Client.RegisteredRequestTypes.Any(k => k.EndsWith(".getStyleInfo")),
+                Is.True,
+                "Published PDP must still register getStyleInfo"
+            );
+
+            // The wire check above cannot falsify the INTERFACE claim on its own: getStyleInfo is
+            // registered unconditionally (ParatextProjectDataProvider.GetFunctions), so removing
+            // STYLE_INFO from the published interface list would keep it green while consumers —
+            // which discover capability by advertised interfaces — stop finding the provider.
+            // Assert the advertisement itself.
+            Assert.That(
+                LocalParatextProjects.GetParatextProjectInterfaces(isPublished: true),
+                Does.Contain(ProjectInterfaces.STYLE_INFO),
+                "The published interface list must advertise platformScripture.StyleInfo"
+            );
         }
     }
 }

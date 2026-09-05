@@ -77,10 +77,22 @@ export type AlertDialogOptions = DialogOptions & {
  *   It is not yet a stable contract.
  */
 export type ResourcePickerDialogOptions = DialogOptions & {
-  /** If provided, only resources of this type are shown */
-  resourceType?: ResourceType;
+  /** If provided, only resources of this type (or any of the listed types) are shown */
+  resourceType?: ResourceType | ResourceType[];
   /** IDs of resources already selected in the calling panel */
   selectedResourceIds?: string[];
+  /**
+   * Already-localized sentence shown above the resource list explaining something the caller knows
+   * that limits what picking a resource will do. Shown ahead of any explanation the dialog itself
+   * has for an incomplete list.
+   */
+  notice?: string;
+  /**
+   * When false, resources already installed on this computer are shown but cannot be picked. Use it
+   * when the caller can act on a resource that still needs installing but has nothing to do with
+   * one that is already on disk. Defaults to true.
+   */
+  allowSelectingInstalled?: boolean;
 };
 
 /**

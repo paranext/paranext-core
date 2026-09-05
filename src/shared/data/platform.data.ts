@@ -11,7 +11,10 @@ export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
 export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
 
 /**
- * Query parameter key used to pass the Electron BrowserWindow ID to the renderer process
+ * Query parameter key used to pass a window's platform id to its renderer process. Durable: on a
+ * restored window this is the id its persisted layout entry already carries (see
+ * `WindowLayoutEntry.windowId`), so the renderer's per-window storage keyed by it survives a
+ * restart under the same id.
  *
  * @experimental
  */
@@ -62,7 +65,7 @@ export const SCROLL_GROUP_STATE_QUERY_PARAMETER = 'scrollGroupState';
 export const THEME_STATE_QUERY_PARAMETER = 'themeState';
 
 /** How a query parameter's text maps to the value the app uses. */
-type UrlParameterKind = 'flag' | 'integer' | 'enum' | 'serialized';
+type UrlParameterKind = 'flag' | 'integer' | 'enum' | 'string' | 'serialized';
 
 /** What a reader needs to turn one query parameter's text into a value it can trust. */
 type UrlParameterSpec = {
@@ -74,8 +77,8 @@ type UrlParameterSpec = {
 /**
  * Every query parameter passed to a renderer, keyed by its parameter name, and what its text means:
  * a `flag` is present-or-absent (any value, including none, means true), an `integer` or `enum` is
- * a single value read at face value, and `serialized` is the output of platform-bible-utils'
- * `serialize`, opaque to this table.
+ * a single value read at face value, a `string` is a single opaque value used as-is, and
+ * `serialized` is the output of platform-bible-utils' `serialize`, opaque to this table.
  *
  * Declarative on purpose, not a table of encode/decode functions: this module is import-free so the
  * `ts-node` startup-waterfall CLI can read it without pulling in the logger, and codec functions
@@ -93,7 +96,7 @@ export const URL_PARAMETERS: Readonly<Record<string, UrlParameterSpec>> = {
     allowed: ['error', 'warn', 'info', 'verbose', 'debug', 'silly'],
   },
   [DEV_MODE_QUERY_PARAMETER]: { kind: 'flag' },
-  [WINDOW_ID]: { kind: 'integer' },
+  [WINDOW_ID]: { kind: 'string' },
   [STARTUP_MARKS_QUERY_PARAMETER]: { kind: 'flag' },
   [SCROLL_GROUP_STATE_QUERY_PARAMETER]: { kind: 'serialized' },
   [THEME_STATE_QUERY_PARAMETER]: { kind: 'serialized' },

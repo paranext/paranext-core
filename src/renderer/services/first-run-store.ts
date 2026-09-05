@@ -5,7 +5,10 @@ import { getCurrentLocale, getErrorMessage, isPlatformError } from 'platform-bib
 import { readCachedInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { decideFirstRun } from './first-run.reducer';
 import { FirstRunStep } from './first-run.model';
-import { resolveRegistrationValidity } from './resolve-registration-validity';
+import {
+  publishRegistrationValidity,
+  refreshRegistrationValidity,
+} from './registration-validity-store';
 import { pickBestSetupLanguage } from './pick-best-setup-language';
 
 /** What the app should currently render for first-run gating. */
@@ -36,6 +39,12 @@ const JUST_REGISTERED_KEY = 'platform-bible.firstRunJustRegistered';
 // Guards startBackgroundRegistrationRecheck so the completed-user re-check runs at most once per
 // startup even if resolveInternal is re-entered (e.g. via retryFirstRunResolution).
 let backgroundRecheckStarted = false;
+
+// Remembers that JUST_REGISTERED_KEY was set when this startup began. The durable flag is a
+// one-shot spent on the first read, but a startup can ask about registration more than once (the
+// Retry button re-enters resolveInternal), and the transient 'invalid' the flag exists to absorb
+// can just as easily land on the retry as on the first probe. See consumeJustRegisteredFlag.
+let justRegisteredThisStartup = false;
 
 function readBooleanFlag(key: string): boolean {
   try {
@@ -241,9 +250,20 @@ async function resolveInternal(generation: number): Promise<void> {
     // Consume the just-registered flag before resolving validity: the user set it just before
     // calling platform.restart(), so 'invalid' here is almost certainly a transient backend fluke.
     const justRegistered = consumeJustRegisteredFlag();
-    const registrationValidity = await resolveRegistrationValidity();
+    const registrationValidity = await refreshRegistrationValidity();
     const effectiveValidity =
       justRegistered && registrationValidity === 'invalid' ? 'valid' : registrationValidity;
+    // Record the answer the gate acted on, not the raw probe, so the reminder dot starts the session
+    // agreeing with the just-registered suppression decided here. A later forced re-check (opening
+    // the profile popover) can still re-probe past it.
+    // See `adr-registration-validity-once-per-session`.
+    //
+    // Deliberately ahead of the supersession check below, unlike every other side effect here. That
+    // guard exists to keep a superseded run from making *durable* writes; this is in-memory session
+    // state. The flag was already consumed above, so a run that bails out after consuming it and
+    // before publishing would spend the suppression without anyone acting on it, and the dot would
+    // then contradict a registration the user really did just complete.
+    if (effectiveValidity !== registrationValidity) publishRegistrationValidity(effectiveValidity);
     const decision = decideFirstRun({
       firstRunComplete: false,
       wizardActive,
@@ -317,14 +337,24 @@ export async function resolveFirstRunState(): Promise<void> {
 }
 
 /**
- * Reads and clears the just-registered flag, returning whether it was set. The fresh-user startup
- * path and the completed-user background re-check each consume it once per startup — a transient
- * 'invalid' on the launch right after a re-register is treated as a backend fluke, not a re-nag.
+ * Reads and clears the just-registered flag, returning whether it was set at any point during this
+ * startup. The fresh-user startup path and the completed-user background re-check each consume it —
+ * a transient 'invalid' on the launch right after a re-register is treated as a backend fluke, not
+ * a re-nag.
+ *
+ * Clearing the durable flag and remembering the answer are deliberately separate. The flag grants
+ * exactly one launch of trust and must not survive into the next one, so it is cleared on the first
+ * read. But within that launch the answer has to outlive the read: an `'unknown'` probe routes the
+ * user to the "couldn't verify" screen without ever using the flag, and the transient `'invalid'`
+ * it was meant to absorb then arrives on the Retry — which, unguarded, mis-routes a user who just
+ * registered successfully back to the language step instead of resuming at sync consent.
  */
 function consumeJustRegisteredFlag(): boolean {
-  const justRegistered = readBooleanFlag(JUST_REGISTERED_KEY);
-  if (justRegistered) writeBooleanFlag(JUST_REGISTERED_KEY, false);
-  return justRegistered;
+  if (readBooleanFlag(JUST_REGISTERED_KEY)) {
+    writeBooleanFlag(JUST_REGISTERED_KEY, false);
+    justRegisteredThisStartup = true;
+  }
+  return justRegisteredThisStartup;
 }
 
 /**
@@ -353,12 +383,25 @@ async function startBackgroundRegistrationRecheck(): Promise<void> {
         `Could not read platform.showRegistrationReminderOnStartup: ${getErrorMessage(e)}`,
       );
     }
-    if (reminderSuppressed) return;
-    const validity = await resolveRegistrationValidity();
+    if (reminderSuppressed) {
+      // This path consumed the one-shot just-registered flag above but returns before probing, so
+      // without this the flag is spent for nothing: the toolbar's own probe would publish the
+      // transient 'invalid' and nag all session about a registration the user just fixed. Matches
+      // what resolveInternal and IdentifyStep already do.
+      // See `adr-registration-validity-once-per-session`.
+      if (justRegistered) publishRegistrationValidity('valid');
+      return;
+    }
+    const validity = await refreshRegistrationValidity();
     // Only a definitive 'invalid' raises the wizard; 'valid'/'unknown' leave the user in the app.
     if (validity !== 'invalid') return;
     // Suppress a single post-re-register transient 'invalid'; a still-invalid next launch re-raises.
-    if (justRegistered) return;
+    if (justRegistered) {
+      // Match the suppression above so the reminder dot doesn't nag on the one launch right after
+      // re-registering. See `adr-registration-validity-once-per-session`.
+      publishRegistrationValidity('valid');
+      return;
+    }
     setStatus({ kind: 'wizard', step: 'identify', allowContinueWithoutRegistration: true });
   } catch (e) {
     logger.warn(`Background registration re-check failed: ${getErrorMessage(e)}`);
@@ -433,5 +476,6 @@ export function resetFirstRunStore(): void {
   resolvePromise = undefined;
   resolving = false;
   backgroundRecheckStarted = false;
+  justRegisteredThisStartup = false;
   listeners.clear();
 }

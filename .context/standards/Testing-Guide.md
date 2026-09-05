@@ -67,6 +67,32 @@ git stash pop
 
 **If a test passes without the implementation, it proves nothing and must be rewritten.**
 
+#### Exception: `test.fails` tripwires for a KNOWN, deliberately unfixed defect
+
+A `test.fails` case inverts Vitest's verdict: the case passes while the body throws and turns **red
+the moment the defect it names is fixed**. That makes it a tripwire, not a broken test — the way to
+record a defect you have deliberately chosen not to fix yet so that fixing it cannot pass unnoticed.
+It is the one place where "a case that goes green without an implementation change" is the intended
+alarm rather than a bug in the test.
+
+Use it only for a defect that is **known, reproduced, and deferred to a named ticket**, and only with
+all three of:
+
+- A `TODO(PT-XXXX)` on the case itself naming the specific defect it pins — not only on the
+  `describe` block, and not only in the production file. Whoever fixes the ticket must meet the
+  reference in the case they are about to turn red.
+- An instruction in that comment to **drop the `.fails`, not delete the case**, once the defect is
+  fixed. Deleting it throws away the coverage the tripwire was standing in for.
+- An assertion specific enough that the documented failure is the one being pinned. `test.fails`
+  passes when the body throws for **any** reason, so a case can stay green while no longer pinning
+  the bug it names — prefer asserting on the specific failure over letting an arbitrary throw count.
+
+Do NOT reach for it to park a test that is merely inconvenient, flaky, or unfinished. A test with no
+named defect and no ticket is a skipped test wearing a disguise; skip it explicitly instead.
+
+Live example: the three reconnect blockers in
+`src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts`, all pinned to PT-4435.
+
 ### Continuous Testing Frequency
 
 | Trigger               | Scope                   | Time Budget |
@@ -431,6 +457,16 @@ npm run test --workspace=lib/platform-bible-react
 # Run tests with coverage
 npm run test:core -- --coverage
 ```
+
+**`npm test` needs Playwright's browsers installed.** `lib/platform-bible-react`'s vitest config
+includes a `storybook (chromium)` project that runs stories in a real browser, so a checkout that
+has never run `npx playwright install` fails there rather than in any `.test.ts` file. CI installs
+them before running tests; locally, run it once.
+
+That project is also the repo's main source of flaky test runs: its story files are timing-sensitive
+under parallel load, and a full `npm test` can fail a different handful of them each time while every
+one passes in isolation. Before chasing a story failure, re-run that project on its own with
+`--no-file-parallelism` — if it goes green, the failure was contention, not a regression.
 
 ---
 
@@ -1140,13 +1176,21 @@ End-to-end testing verifies complete user workflows across all processes (Electr
 
 E2E tests that verify user flows MUST interact through visible UI only:
 
-- Use `cdp.fixture` for all per-feature E2E tests (connects to the running app via CDP).
+- Pick the fixture from how the test gets its app: `isolated.fixture` for a spec under
+  `tests/isolated/` (a fresh Electron per test), `cdp.fixture` for one under `tests/attached/`
+  (attaches to an app you started yourself).
 - Click menu items, buttons, and fill forms through the UI.
 - NEVER use `papi.fixture` or `app.fixture` for per-feature tests.
 - NEVER send JSON-RPC commands to set up UI state.
 - NEVER import `sendPapiCommand` from helpers in per-feature tests.
 
 Note: `app.fixture` is retained for CI smoke tests only (launches standalone Electron).
+
+**Isolated-suite setup exception:** specs under `e2e-tests/tests/isolated/` run against a fresh
+temp profile with no projects and no project-open UI, so their *setup* necessarily goes through
+PAPI (`sendPapiCommandWhenRegistered` to open an editor, flip `platform.isEditable`, etc.). The
+rule still governs the behavior under test: once setup completes, the asserted user flow itself
+must be driven and observed through visible UI only.
 
 ### Opening a Project and Its Tool Menus (PT10 Navigation Pattern)
 
@@ -1208,34 +1252,51 @@ async function clickEditorMenuItem(page: Page, projectName: string, itemLabel: R
 
 ### Test Location
 
-Create E2E tests in: `e2e-tests/tests/{feature}/`
+Where a spec lives is decided by how it gets its app, and that choice also picks its config:
+
+- `tests/isolated/{feature}/` — the default. Each test launches its own Electron, so specs are
+  self-contained and can run in CI. Uses `isolated.fixture` and `playwright.config.ts`.
+- `tests/attached/` — for specs that must attach to an app you started yourself (`refresh.sh`),
+  because they cannot own its lifecycle. Uses `cdp.fixture` and `playwright-cdp.config.ts`.
+  Deliberately not a project in `playwright.config.ts`: its `globalSetup` refuses to run while
+  port 8876 is bound, which is exactly the state these specs need.
+- `tests/enhanced-resources/`, `tests/manage-books/`, `tests/markers-checklist/` — older
+  local-only suites that also use `cdp.fixture` and the CDP config. They are not part of any
+  standard run (see their READMEs for what collects each and why), so put new work in one of the
+  three directories above rather than extending them.
+- `tests/smoke/` — what CI runs. Launch-based, `app.fixture`/`papi.fixture`; not for per-feature
+  tests.
 
 ```
 e2e-tests/
 ├── fixtures/
-│   ├── cdp.fixture.ts           # Connects to running app via CDP (DEFAULT for features)
+│   ├── cdp.fixture.ts           # Connects to running app via CDP (for tests/attached/)
 │   ├── app.fixture.ts           # Launches fresh Electron (CI smoke tests only)
 │   ├── papi.fixture.ts          # @deprecated — CI smoke tests only
 │   ├── papi-live.fixture.ts     # Connects to already-running app's WebSocket (command-surface verification)
-│   ├── isolated.fixture.ts      # Per-test isolated Electron instance (state-mutating tests)
+│   ├── isolated.fixture.ts      # Per-test isolated Electron instance (DEFAULT for features)
 │   ├── comment.fixture.ts       # Comment-testing fixture (+ comment-test-helpers.ts)
 │   └── helpers.ts               # waitForAppReady(), sendPapiCommand()  (tree non-exhaustive)
 ├── playwright-cdp.config.ts     # Config for CDP mode (no setup/teardown)
 ├── playwright.config.ts         # Config for standalone mode (with setup/teardown)
 └── tests/
-    └── {feature}/
-        └── {feature}.spec.ts
+    ├── isolated/                 # Default: one Electron per test (playwright.config.ts)
+    │   └── {feature}/
+    │       └── {feature}.spec.ts
+    ├── attached/                 # Attaches to an app you started (playwright-cdp.config.ts)
+    ├── smoke/                    # What CI runs
+    └── _example/                 # Templates
 ```
 
 ### Fixture Selection
 
 | Fixture       | Mode                               | When to Use                               | Provides                  |
 | ------------- | ---------------------------------- | ----------------------------------------- | ------------------------- |
-| `cdp.fixture`      | Connects to running app (CDP 9223)        | **Default for all per-feature E2E tests** | `mainPage`                |
+| `cdp.fixture`      | Connects to running app (CDP 9223)        | Specs that attach to an app you started   | `mainPage`                |
 | `app.fixture`      | Launches fresh Electron                   | CI smoke tests, standalone testing        | `electronApp`, `mainPage` |
 | `papi.fixture`     | Extends app.fixture + WebSocket           | **Deprecated** — CI smoke tests only      | `papiClient` + app.fixture |
 | `papi-live.fixture`| Connects to already-running app (WS 8876) | Command-surface verification only (see below) | `papiLive`                |
-| `isolated.fixture` | Launches an isolated Electron per test    | Tests that mutate application state       | fresh app per test        |
+| `isolated.fixture` | Launches an isolated Electron per test    | **Default for all per-feature E2E tests** | fresh app per test        |
 
 ### Command-Surface Verification (papi-live.fixture)
 
@@ -1280,7 +1341,7 @@ if (res.error) expect(RESERVED, res.error.message).not.toContain(res.error.code)
 
 ### E2E Test Templates
 
-**UI Interaction Tests (cdp.fixture — default for per-feature tests):**
+**UI Interaction Tests (cdp.fixture — for specs under `tests/attached/`):**
 
 ```typescript
 import { test, expect } from '../../fixtures/cdp.fixture';
@@ -1300,7 +1361,7 @@ test.describe('{Feature} E2E Tests', () => {
 });
 ```
 
-**Render Smoke Test (cdp.fixture):**
+**Render Smoke Test (cdp.fixture — for specs under `tests/attached/`):**
 
 ```typescript
 import { test, expect } from '../../fixtures/cdp.fixture';
@@ -1355,11 +1416,13 @@ A cross-screen journey test that only checks `toBeVisible()` proves the page ren
 **IMPORTANT**: Always use the `--config` flag when running Playwright from the repo root. Without `--config`, Playwright uses defaults — the `--project` flag won't work, no dev server is started, and bare `npx playwright test` (without a test path) will discover vitest `.test.ts` files and fail.
 
 ```bash
-# CDP mode (default — app already running via ./.erb/scripts/refresh.sh)
-npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright-cdp.config.ts --reporter=list
+# CDP mode (app already running via ./.erb/scripts/refresh.sh)
+# Swap tests/attached/ for tests/enhanced-resources/, tests/manage-books/ or
+# tests/markers-checklist/ to run one of the local-only suites.
+npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=list
 
 # CDP mode with HTML report
-npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright-cdp.config.ts --reporter=html
+npx playwright test e2e-tests/tests/attached/ --config=e2e-tests/playwright-cdp.config.ts --reporter=html
 npx playwright show-report e2e-tests/playwright-report
 
 # Standalone mode (launches its own Electron, port 8876 must be free). Each project in

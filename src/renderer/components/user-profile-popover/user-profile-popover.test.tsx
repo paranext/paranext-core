@@ -1,7 +1,13 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { logger } from '@shared/services/logger.service';
 import { sendCommand } from '@shared/services/command.service';
+import {
+  publishRegistrationValidity,
+  refreshRegistrationValidity,
+  resetRegistrationValidityStore,
+} from '@renderer/services/registration-validity-store';
 import { UserProfilePopover } from './user-profile-popover.component';
 
 // Radix Popover/Tooltip use ResizeObserver internally; jsdom doesn't provide it, so we stub a
@@ -26,15 +32,24 @@ beforeAll(() => {
 // behavior between cases without any `as` assertions.
 type MockState = {
   interfaceMode: 'simple' | 'power';
-  setInterfaceMode: ReturnType<typeof vi.fn>;
+  setInterfaceMode: ReturnType<typeof vi.fn> | undefined;
   interfaceLanguage: string[];
-  setInterfaceLanguage: ReturnType<typeof vi.fn>;
+  setInterfaceLanguage: ReturnType<typeof vi.fn> | undefined;
   availableLanguages: Record<string, { autonym: string }>;
   themeType: 'light' | 'dark';
-  setTheme: ReturnType<typeof vi.fn>;
+  setTheme: ReturnType<typeof vi.fn> | undefined;
   shouldMatchSystem: boolean;
   setShouldMatchSystem: ReturnType<typeof vi.fn>;
 };
+
+/**
+ * Stands in for a setting/data setter. These MUST return a promise: the real `useSetting` and
+ * `useData` setters are asynchronous, and the component attaches `.catch` to what they return, so a
+ * bare `vi.fn()` returning `undefined` makes every handler throw `Cannot read properties of
+ * undefined` — an unhandled error vitest reports separately from test results, which is easy to
+ * miss.
+ */
+const mockSetter = () => vi.fn(async () => true);
 
 const DEFAULT_AVAILABLE_LANGUAGES: Record<string, { autonym: string }> = {
   en: { autonym: 'English' },
@@ -44,14 +59,14 @@ const DEFAULT_AVAILABLE_LANGUAGES: Record<string, { autonym: string }> = {
 
 const mockState: MockState = {
   interfaceMode: 'simple',
-  setInterfaceMode: vi.fn(),
+  setInterfaceMode: mockSetter(),
   interfaceLanguage: ['en'],
-  setInterfaceLanguage: vi.fn(),
+  setInterfaceLanguage: mockSetter(),
   availableLanguages: DEFAULT_AVAILABLE_LANGUAGES,
   themeType: 'light',
-  setTheme: vi.fn(),
+  setTheme: mockSetter(),
   shouldMatchSystem: false,
-  setShouldMatchSystem: vi.fn(),
+  setShouldMatchSystem: mockSetter(),
 };
 
 const setMockSetting = <K extends keyof MockState>(key: K, value: MockState[K]) => {
@@ -65,6 +80,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%toolbar_userProfile_label%': 'User profile button label',
+      '%toolbar_userProfile_label_registrationNeeded%':
+        'User profile button label needing registration',
+      '%userProfile_registrationNeeded%': 'Registration reminder row text',
       '%userProfile_header_defaultName%': 'Default display name',
       '%userProfile_header_notRegistered%': 'Registration needed',
       '%userProfile_interfaceMode_simple_label%': 'Simplified UI',
@@ -85,7 +103,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       return [mockState.interfaceMode, mockState.setInterfaceMode, vi.fn(), false];
     if (key === 'platform.interfaceLanguage')
       return [mockState.interfaceLanguage, mockState.setInterfaceLanguage, vi.fn(), false];
-    return [undefined, vi.fn(), vi.fn(), false];
+    return [undefined, mockSetter(), vi.fn(), false];
   }),
   useData: vi.fn(() => ({
     CurrentTheme: vi.fn(() => [
@@ -108,6 +126,35 @@ vi.mock('@shared/services/command.service', () => ({
   sendCommand: vi.fn(async () => ({ name: '', code: '', email: '', supporterName: '' })),
 }));
 
+// A working fake of the registration-validity store rather than bare vi.fn()s, so the component's
+// real useSyncExternalStore wiring is exercised. Mocking the store (not the command service) is also
+// what keeps the resolver's 3x15s retry machinery out of this suite. The state lives inside the
+// factory because vi.mock is hoisted above any module-scope variable it could otherwise close over.
+vi.mock('@renderer/services/registration-validity-store', () => {
+  let validity: 'valid' | 'invalid' | 'unknown' = 'unknown';
+  const listeners = new Set<() => void>();
+  return {
+    getRegistrationValidity: () => validity,
+    subscribeToRegistrationValidity: (listener: () => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    publishRegistrationValidity: (next: 'valid' | 'invalid' | 'unknown') => {
+      validity = next;
+      listeners.forEach((listener) => listener());
+    },
+    refreshRegistrationValidity: vi.fn(async () => validity),
+    // Mirrors the real reset: keeps subscribers and notifies them. Clearing here would let this
+    // fake keep passing even if the real store regressed on that invariant.
+    resetRegistrationValidityStore: () => {
+      validity = 'unknown';
+      listeners.forEach((listener) => listener());
+    },
+  };
+});
+
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn() },
 }));
@@ -115,15 +162,18 @@ vi.mock('@shared/services/logger.service', () => ({
 // Reset mock state and call history between tests so each test starts from a known baseline.
 beforeEach(() => {
   setMockSetting('interfaceMode', 'simple');
-  setMockSetting('setInterfaceMode', vi.fn());
+  setMockSetting('setInterfaceMode', mockSetter());
   setMockSetting('interfaceLanguage', ['en']);
-  setMockSetting('setInterfaceLanguage', vi.fn());
+  setMockSetting('setInterfaceLanguage', mockSetter());
   setMockSetting('availableLanguages', DEFAULT_AVAILABLE_LANGUAGES);
   setMockSetting('themeType', 'light');
-  setMockSetting('setTheme', vi.fn());
+  setMockSetting('setTheme', mockSetter());
   setMockSetting('shouldMatchSystem', false);
-  setMockSetting('setShouldMatchSystem', vi.fn());
+  setMockSetting('setShouldMatchSystem', mockSetter());
   vi.mocked(sendCommand).mockClear();
+  vi.mocked(logger.warn).mockClear();
+  resetRegistrationValidityStore();
+  vi.mocked(refreshRegistrationValidity).mockClear();
 });
 
 describe('UserProfilePopover', () => {
@@ -217,6 +267,17 @@ describe('UserProfilePopover interface mode', () => {
     fireEvent.click(screen.getByTestId('user-profile-interface-mode-simple'));
     expect(mockState.setInterfaceMode).not.toHaveBeenCalled();
   });
+
+  test('clicking a mode while the setting setter is dropped warns instead of doing nothing', () => {
+    // `useSetting` has no setter while its runaway guard is throttled. The click cannot be honored,
+    // but it must not look honored either — a silent no-op leaves the user clicking a dead control
+    // with nothing in the log to explain it.
+    setMockSetting('setInterfaceMode', undefined);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(screen.getByTestId('user-profile-interface-mode-power'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
+  });
 });
 
 describe('UserProfilePopover action rows', () => {
@@ -259,6 +320,15 @@ describe('UserProfilePopover language picker', () => {
     // 'en' is selectable but already primary - select 'es' instead
     fireEvent.click(await screen.findByTestId('user-profile-language-es'));
     expect(mockState.setInterfaceLanguage).toHaveBeenCalledWith(['es', 'en']);
+  });
+
+  test('clicking a language while the setting setter is dropped warns instead of doing nothing', async () => {
+    setMockSetting('interfaceLanguage', ['en', 'es']);
+    setMockSetting('setInterfaceLanguage', undefined);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-language-es'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
   });
 
   test('clicking the already-primary language is a no-op (deselect attempt ignored)', async () => {
@@ -333,6 +403,19 @@ describe('UserProfilePopover appearance', () => {
     expect(mockState.setTheme).toHaveBeenCalledWith({ type: 'dark' });
   });
 
+  test('clicking a theme while the theme setter is dropped warns instead of doing nothing', async () => {
+    // `useData` returns `undefined` for its setter while its runaway guard is throttled. The click
+    // cannot be honored, but it must not look honored either — a silent no-op leaves the user
+    // clicking a dead control with nothing in the log to explain it.
+    setMockSetting('themeType', 'light');
+    setMockSetting('shouldMatchSystem', false);
+    setMockSetting('setTheme', undefined);
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+    fireEvent.click(await screen.findByTestId('user-profile-appearance-dark'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
+  });
+
   test('clicking System calls setShouldMatchSystem(true)', async () => {
     setMockSetting('themeType', 'light');
     setMockSetting('shouldMatchSystem', false);
@@ -341,5 +424,158 @@ describe('UserProfilePopover appearance', () => {
     fireEvent.click(await screen.findByTestId('user-profile-appearance-system'));
     expect(mockState.setShouldMatchSystem).toHaveBeenCalledWith(true);
     expect(mockState.setTheme).not.toHaveBeenCalled();
+  });
+});
+
+describe('UserProfilePopover registration reminder', () => {
+  test('shows no dot and the plain label while validity is unknown', () => {
+    render(<UserProfilePopover />);
+    expect(screen.queryByTestId('user-profile-registration-dot')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('User profile button label')).toBeInTheDocument();
+  });
+
+  test('shows no dot when the registration is valid', () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('valid'));
+    expect(screen.queryByTestId('user-profile-registration-dot')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('User profile button label')).toBeInTheDocument();
+  });
+
+  test('shows the dot and swaps the accessible label when the registration is invalid', () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    expect(screen.getByTestId('user-profile-registration-dot')).toBeInTheDocument();
+    // The dot must not be the only signal — the accessible name carries the state too.
+    expect(
+      screen.getByLabelText('User profile button label needing registration'),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('User profile button label')).not.toBeInTheDocument();
+  });
+
+  test('the dot is decorative, so it is hidden from assistive technology', () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    expect(screen.getByTestId('user-profile-registration-dot')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+  });
+
+  test('clears the dot once the registration becomes valid', () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    expect(screen.getByTestId('user-profile-registration-dot')).toBeInTheDocument();
+
+    act(() => publishRegistrationValidity('valid'));
+
+    expect(screen.queryByTestId('user-profile-registration-dot')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('User profile button label')).toBeInTheDocument();
+  });
+
+  test('marks the Profile & registration row with a dot and screen-reader text', async () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    expect(await screen.findByTestId('user-profile-action-registration-dot')).toBeInTheDocument();
+    expect(screen.getByTestId('user-profile-action-registration')).toHaveTextContent(
+      'Registration reminder row text',
+    );
+  });
+
+  test('leaves the Profile & registration row unmarked when the registration is valid', async () => {
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('valid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    await screen.findByTestId('user-profile-action-registration');
+    expect(screen.queryByTestId('user-profile-action-registration-dot')).not.toBeInTheDocument();
+  });
+
+  test('forces a registration re-check when the popover opens, so the dot can clear without a restart', async () => {
+    render(<UserProfilePopover />);
+    // The mount probe is unforced; opening must additionally force one past the cache.
+    vi.mocked(refreshRegistrationValidity).mockClear();
+
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    await waitFor(() => expect(refreshRegistrationValidity).toHaveBeenCalledWith({ force: true }));
+  });
+
+  test('resolves validity on mount so the dot works with the popover closed', async () => {
+    render(<UserProfilePopover />);
+    await waitFor(() => expect(refreshRegistrationValidity).toHaveBeenCalled());
+  });
+});
+
+describe('UserProfilePopover header agrees with the reminder dot', () => {
+  test('shows a visible warning line when the registration is invalid but the profile is populated', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: 'Alice Translator',
+      code: '******-******-******-******-******',
+      email: 'alice@example.com',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    // Identity is preserved...
+    await waitFor(() => expect(screen.getByText('Alice Translator')).toBeInTheDocument());
+    expect(screen.getByText('alice@example.com')).toBeInTheDocument();
+    // ...and the header no longer implies all is well while the dots say otherwise.
+    expect(screen.getByTestId('user-profile-registration-warning')).toHaveTextContent(
+      'Registration reminder row text',
+    );
+  });
+
+  test('shows no warning line when the registration is valid', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: 'Alice Translator',
+      code: '******-******-******-******-******',
+      email: 'alice@example.com',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('valid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    await waitFor(() => expect(screen.getByText('Alice Translator')).toBeInTheDocument());
+    expect(screen.queryByTestId('user-profile-registration-warning')).not.toBeInTheDocument();
+  });
+
+  test('replaces "Not registered" with the warning line rather than showing both', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: '',
+      code: '',
+      email: '',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    act(() => publishRegistrationValidity('invalid'));
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    // Two near-identical messages would read as two separate problems.
+    await waitFor(() =>
+      expect(screen.getByTestId('user-profile-registration-warning')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('user-profile-email')).not.toBeInTheDocument();
+  });
+
+  test('keeps "Not registered" when the profile is empty and validity is unknown', async () => {
+    vi.mocked(sendCommand).mockResolvedValueOnce({
+      name: '',
+      code: '',
+      email: '',
+      supporterName: '',
+    });
+    render(<UserProfilePopover />);
+    fireEvent.click(screen.getByTestId('user-profile-popover-trigger'));
+
+    // An unverifiable registration must not silently drop the existing empty-profile message.
+    await waitFor(() =>
+      expect(screen.getByTestId('user-profile-email')).toHaveTextContent('Registration needed'),
+    );
+    expect(screen.queryByTestId('user-profile-registration-warning')).not.toBeInTheDocument();
   });
 });

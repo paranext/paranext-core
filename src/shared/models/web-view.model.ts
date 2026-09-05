@@ -540,6 +540,18 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    */
   existingId?: string | '?';
   /**
+   * Limit an `existingId: '?'` search to web views showing this project.
+   *
+   * Only meaningful with `existingId: '?'` — a concrete `existingId` already names one exact web
+   * view, so combining it with a project filter is contradictory and is rejected as an error.
+   * Without this, `'?'` matches any web view of the type regardless of project. Providing this
+   * without any `existingId` at all is the same contradiction — there is no `'?'` search for it to
+   * limit — and is rejected the same way.
+   *
+   * @experimental
+   */
+  existingProjectId?: string;
+  /**
    * Whether to create a WebView with a new ID if a WebView with ID `existingId` was not found. Only
    * relevant if `existingId` is provided. If `existingId` is not provided, this property is
    * ignored.
@@ -561,6 +573,24 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    * looking at.
    */
   bringToFront?: boolean;
+  /**
+   * Id of the application window to open the web view in, instead of the window the user is working
+   * in. Applies to `tab`, `panel`, and `float` layouts; combining it with a `'window'` layout
+   * (which asks for a NEW window) is an error. The open fails if no such window is serving web
+   * views — a caller that names a window wants that window, not a guess.
+   *
+   * Combining it with a 'replace-tab' layout is likewise an error — the tab being replaced already
+   * names the window.
+   *
+   * Window ids are assigned by the platform and never reused within a profile, in this run of the
+   * app or any later one, so an id names one window and only ever that window. Get the id of the
+   * window this code is running in with `papi.window.getWindowId()` — not
+   * `platform.getFocusedWindowId`, which answers with a different window's id whenever this one is
+   * not the focused window.
+   *
+   * @experimental This option is unstable and may change or disappear without notice
+   */
+  targetWindowId?: string;
 };
 
 /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */

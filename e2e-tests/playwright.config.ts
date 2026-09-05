@@ -6,9 +6,8 @@ import { defineConfig } from '@playwright/test';
  * - `smoke` (default): tests share a single Electron instance per worker — fast, for CI.
  * - `isolated`: each suite gets its own Electron, but how varies by fixture —
  *   `fixtures/isolated.fixture.ts` launches one per test, `comment.fixture`/`find.fixture` one per
- *   worker, and the `title-bar/` and `navigation-history/` subsets launch nothing at all: they use
- *   `fixtures/cdp.fixture.ts` and attach to an app started separately. See the note on that project
- *   below.
+ *   worker. Every spec in this project launches its own app; specs that attach to one you started
+ *   live in `tests/attached/` instead.
  */
 const config = defineConfig({
   testDir: './tests',
@@ -17,7 +16,15 @@ const config = defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 1, // Retry once locally to handle flaky DataProvider timeouts
   workers: 1, // Single worker for Electron to avoid port conflicts
-  reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
+  reporter: [
+    // FIRST on purpose. Fails the run when a test is reported skipped that nobody asked to skip —
+    // i.e. it never ran. The multiplexer applies a reporter's status override only after its
+    // `onEnd` returns, so listing this after `html`/`list` would let them write a green report for
+    // a run this one then fails. See the reporter for why that distinction matters.
+    ['./reporters/no-silent-skips.reporter.ts'],
+    ['html', { outputFolder: 'playwright-report' }],
+    ['list'],
+  ],
   timeout: 120_000, // 2 minutes per test (app initialization can be slow)
   expect: {
     timeout: 10_000,
@@ -41,6 +48,8 @@ const config = defineConfig({
   // `_example/` — reference template for new tests, not a runnable test suite.
   // Experimental tests that should not be wired into any standard test run. (e.g.,
   // `manage-books/` and `markers-checklist/`)
+  // Nothing else is excluded here: `navigation-history/` is an isolated subset like any other,
+  // and `playwright-cdp.config.ts` cannot collect it at all (`testIgnore: ['**/isolated/**']`).
   projects: [
     {
       name: 'smoke',
@@ -51,12 +60,15 @@ const config = defineConfig({
       // `npm run test:e2e:isolated` (via e2e-tests/run-isolated.mjs) lists the subsets;
       // `npm run test:e2e:isolated <subset>` runs one; `... all` runs every subset.
       //
-      // `... all` cannot currently pass. The `title-bar/` and `navigation-history/` subsets use
-      // fixtures/cdp.fixture.ts, which attaches to an already-running app, but this config's
-      // globalSetup aborts when port 8876 is bound — so there is no state in which both they and
-      // their launch-based neighbours run. playwright-cdp.config.ts cannot run them either; it
-      // testIgnores **/isolated/**. Run the other subsets individually until those two move out
-      // of this project or globalSetup grows an opt-out.
+      // Every spec here launches its own Electron, which is what lets `... all` run as one
+      // command. Attach-based specs are deliberately NOT in this tree: this config's globalSetup
+      // aborts when port 8876 is bound, which is exactly the state an attach spec needs, so one
+      // living here could never run alongside its neighbours. They live in `tests/attached/`.
+      //
+      // `tests/attached/` is deliberately NOT a project in this config for that same reason: its
+      // globalSetup would refuse the running app those specs exist to attach to. They are collected
+      // by `playwright-cdp.config.ts`, which has no globalSetup, and run with
+      // `npm run test:e2e:attached` against an app started by ./.erb/scripts/refresh.sh.
       name: 'isolated',
       testDir: './tests/isolated',
     },
