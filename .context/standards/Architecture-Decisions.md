@@ -1974,6 +1974,50 @@ step, no automation. Just a record.
 - **Source:** PT-4325 (registration reminder dot), sub-task of PT-4323; retry-cost evidence from
   `requestWithRetry` and `MAX_REQUEST_ATTEMPTS` in `src/shared/data/rpc.model.ts`.
 
+## adr-renderer-crash-reload-is-user-driven-and-uncapped: React-level crash recovery is one user-driven reload with no budget, unlike the process-level path
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** Two crash-recovery paths now exist for a window, and they look inconsistent side by
+  side. At the process level, `main.ts`'s `render-process-gone` handler reloads the window
+  automatically and spends a per-window budget doing it — `decideRendererCrashReload`,
+  `MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS`, then `markWindowAbandoned`, which stops reloading and
+  tells the user to close the window. At the React level, `RendererErrorBoundary` shows
+  `WindowCrashedView` with a Reload button that calls `location.reload()` and participates in none
+  of that. A deterministic render crash therefore gives an unbounded Reload → crash screen → Reload
+  cycle, under copy promising "Reloading should bring it back".
+- **Decision:** Leave the React-level path uncapped, and let the difference stand. The budget in main
+  exists because *nothing else is in the loop*: a renderer process that dies on load is reloaded by
+  code, immediately, with no human deciding whether to try again, so without a cap it spins forever
+  and the window never comes back to say so. The React-level path has the opposite shape — the
+  window is alive and interactive, the crash screen is on screen with its explanation, and each
+  reload is a deliberate click by someone who can see that the last one did not work and can close
+  the window instead. A cap there would remove the user's only recovery affordance on the reading of
+  the failure the app is least sure about: the guard trips on transient conditions too, and a reload
+  that does work after several attempts is a better outcome than a screen that stops offering one.
+- **Alternatives:** **Spend the main-process budget from the renderer**, over IPC — rejected: it
+  couples the crash screen (which must reach as few services as possible, since it renders precisely
+  because the tree failed) to a main-process round trip, in order to take an affordance away.
+  **A renderer-side budget in `sessionStorage`**, hiding the Reload button after N attempts and
+  showing "close this window" copy — rejected for now as more mechanism, more copy and more
+  localization keys than the failure mode justifies; reconsider if crash-loop reports appear.
+  **Route the reload through main so it is logged as recovery** — the crash itself is already logged
+  per attempt by `componentDidCatch`, so a loop is visible in the log without it.
+- **Consequences:** A user facing a deterministic render crash can click Reload indefinitely. Each
+  click costs a fresh window load and one logged crash, and leaves the app no worse off — which is
+  true only because the reload no longer destroys anything: `index.tsx`'s `beforeunload` teardown
+  consults `hasRendererCrashed()` and skips `cleanupOldWebViewState()`, whose documented
+  precondition is that every web view has loaded. Without that guard a reload during startup tab
+  restoration would purge the saved state of every tab that had not been restored yet, making
+  repeated reloads actively destructive. If a renderer-side budget is added later, it belongs with
+  that guard rather than in the main process's per-window counter, which counts a different event.
+- **Source:** PT-4501 review (PR #2765) — the finding that the Reload button spends none of
+  main's crash-reload budget, and the finding that a reload during startup restoration purged
+  unrestored tabs' saved state. Both paths read end-to-end. The
+  two budgets cannot share a counter as things stand: `render-process-gone` reports a renderer
+  process that unexpectedly disappeared, which a deliberate `location.reload()` navigation is not,
+  so the main-process handler that spends the budget never runs on this path.
+
 ## adr-renderer-registers-no-names: Renderer platform code registers no command or request names; routers call shard methods
 
 - **Date:** 2026-08-07

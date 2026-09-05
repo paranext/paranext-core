@@ -9176,6 +9176,8 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
       ...args: TUseDataProviderParams
     ): UseDataProxy<TDataProvider>;
   };
+  /** Longest selector description included in the runaway-render warning. Exported for tests. */
+  export const MAX_SELECTOR_DESCRIPTION_LENGTH = 80;
   /**
    * Create a `useData(...).DataType(selector, defaultValue, options)` hook for a specific subset of
    * data providers as supported by `useDataProviderHook`

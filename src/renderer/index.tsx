@@ -4,6 +4,10 @@ import '@renderer/global-this-web-view.model';
 import '@renderer/global-this.model';
 
 import { App } from '@renderer/app.component';
+import {
+  hasRendererCrashed,
+  RendererErrorBoundary,
+} from '@renderer/components/renderer-error-boundary.component';
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
 import { initSyncActivityService } from '@renderer/services/sync-activity-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
@@ -151,7 +155,11 @@ if (!container) {
 }
 
 const root = createRoot(container);
-root.render(<App />);
+root.render(
+  <RendererErrorBoundary>
+    <App />
+  </RendererErrorBoundary>,
+);
 markStartup('root-render');
 
 // #endregion
@@ -181,6 +189,10 @@ applyThemeSafe(getCurrentThemeSync(), 'first load');
 
 // This doesn't run if the renderer has an uncaught exception (which is a good thing)
 window.addEventListener('beforeunload', () => {
+  // `cleanupOldWebViewState` deletes the saved state of every web view it did not see load, so it
+  // is only correct once they all have — which a crashed tree never reached. See
+  // `hasRendererCrashed` for why the crash screen's reload button makes this path reachable.
+  if (hasRendererCrashed()) return;
   cleanupOldWebViewState();
 });
 

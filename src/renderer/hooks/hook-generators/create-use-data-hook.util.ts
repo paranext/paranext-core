@@ -21,6 +21,8 @@ import {
   PlatformEventAsync,
   PlatformEventHandler,
   RESOURCE_EXHAUSTED,
+  slice,
+  stringLength,
 } from 'platform-bible-utils';
 import { ExtractDataProviderDataTypes } from '@shared/models/extract-data-provider-data-types.model';
 import { logger } from '@shared/services/logger.service';
@@ -72,10 +74,16 @@ type RunawayCounters = {
  * error by its `RESOURCE_EXHAUSTED` code and supply its own localized text.
  *
  * @param dataType Data type name, used to name the offending hook in the warning
+ * @param describeDataTypeForWarning Optional. Called only when the guard trips, to name the
+ *   offending hook more precisely than `dataType` can on its own - some data providers expose
+ *   unnamed data types, so the name alone identifies nothing. Defaults to `dataType`.
  * @returns `recordDelivery` and `recordSubscribe`, each called once per event of that kind and
  *   returning whether the caller may proceed; and `runawayError`, set while the guard is tripped
  */
-function useRunawayLoopGuard(dataType: string): {
+function useRunawayLoopGuard(
+  dataType: string,
+  describeDataTypeForWarning?: () => string,
+): {
   recordDelivery: () => boolean;
   recordSubscribe: () => boolean;
   runawayError: PlatformError | undefined;
@@ -107,6 +115,15 @@ function useRunawayLoopGuard(dataType: string): {
   const reArmTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(reArmTimeoutRef.current), []);
 
+  // Read through a ref so a caller passing an inline arrow does not change the identity of the
+  // record callbacks below every render
+  const describeRef = useRef(describeDataTypeForWarning);
+  describeRef.current = describeDataTypeForWarning;
+  const describeDataTypeOrFallback = useCallback(
+    () => describeRef.current?.() ?? dataType,
+    [dataType],
+  );
+
   // The clause must begin with the data type name — this prepends `Data of type ` to it
   const trip = useCallback((whatHappenedStartingWithDataType: string) => {
     hasTrippedRef.current = true;
@@ -131,10 +148,10 @@ function useRunawayLoopGuard(dataType: string): {
     if (!counters.deliveries.hasViolatedThreshold(RUNAWAY_WINDOW_MS)) return true;
 
     trip(
-      `${dataType} was updated ${RUNAWAY_EVENTS_PER_WINDOW} times in the last ${RUNAWAY_WINDOW_MS} milliseconds.`,
+      `${describeDataTypeOrFallback()} was updated ${RUNAWAY_EVENTS_PER_WINDOW} times in the last ${RUNAWAY_WINDOW_MS} milliseconds.`,
     );
     return false;
-  }, [dataType, getCounters, trip]);
+  }, [describeDataTypeOrFallback, getCounters, trip]);
 
   const recordSubscribe = useCallback(() => {
     if (hasTrippedRef.current) return false;
@@ -144,10 +161,10 @@ function useRunawayLoopGuard(dataType: string): {
     if (!counters.subscribes.hasViolatedThreshold(RUNAWAY_WINDOW_MS)) return true;
 
     trip(
-      `${dataType} was subscribed to ${RUNAWAY_EVENTS_PER_WINDOW} times in the last ${RUNAWAY_WINDOW_MS} milliseconds.`,
+      `${describeDataTypeOrFallback()} was subscribed to ${RUNAWAY_EVENTS_PER_WINDOW} times in the last ${RUNAWAY_WINDOW_MS} milliseconds.`,
     );
     return false;
-  }, [dataType, getCounters, trip]);
+  }, [describeDataTypeOrFallback, getCounters, trip]);
 
   // `RESOURCE_EXHAUSTED` lets consumers recognize a rate-limited hook without matching on message
   // text
@@ -218,6 +235,106 @@ type UseDataHookGeneric<TUseDataProviderParams extends unknown[]> = {
   ): UseDataProxy<TDataProvider>;
 };
 
+/** Longest selector description included in the runaway-render warning. Exported for tests. */
+export const MAX_SELECTOR_DESCRIPTION_LENGTH = 80;
+
+/**
+ * Collapses the characters that would break a line-oriented log, then trims to
+ * {@link MAX_SELECTOR_DESCRIPTION_LENGTH} on a grapheme boundary.
+ *
+ * A selector carries project names, queries and file paths, so it is not ASCII by construction: a
+ * native cut can land inside a surrogate pair and write a lone surrogate into both the warning and
+ * the `PlatformError` message every consumer of the tripped hook receives. A raw newline would
+ * split one warning across log lines, the way `sanitizeForLog` prevents for RPC payloads.
+ */
+function collapseAndTrim(description: string): string {
+  const collapsed = description.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ');
+  // Segmenting is the expensive part of the grapheme helpers, so this only reaches for them once
+  // the cheap native length says there may be something to cut. Native `length` counts code units,
+  // which is never fewer than the graphemes, so a string this says is short enough is short enough.
+  if (collapsed.length <= MAX_SELECTOR_DESCRIPTION_LENGTH) return collapsed;
+  if (stringLength(collapsed) <= MAX_SELECTOR_DESCRIPTION_LENGTH) return collapsed;
+  return `${slice(collapsed, 0, MAX_SELECTOR_DESCRIPTION_LENGTH)}…`;
+}
+
+/**
+ * One selector property, rendered without walking into it.
+ *
+ * A string property gets the same grapheme-safe cut {@link collapseAndTrim} applies to the whole
+ * description, and for the same reason: a selector's string values are project names, queries and
+ * file paths rather than anything ASCII by construction. Cutting here natively would put a lone
+ * surrogate inside the assembled description, where `collapseAndTrim`'s own length check then finds
+ * the total short enough to leave alone — so the damage escapes into both the log warning and the
+ * `PlatformError` message every consumer of the tripped hook receives.
+ */
+function describeSelectorValue(value: unknown): string {
+  if (isString(value)) {
+    // Same cheap native gate as `collapseAndTrim`: code units are never fewer than graphemes, so a
+    // string this says is short enough needs no segmenting.
+    if (value.length <= MAX_SELECTOR_DESCRIPTION_LENGTH) return value;
+    if (stringLength(value) <= MAX_SELECTOR_DESCRIPTION_LENGTH) return value;
+    return `${slice(value, 0, MAX_SELECTOR_DESCRIPTION_LENGTH)}…`;
+  }
+  if (typeof value === 'object' && value) return Array.isArray(value) ? '[…]' : '{…}';
+  return String(value);
+}
+
+/**
+ * Renders a selector for the warning WITHOUT serializing all of it.
+ *
+ * This runs inside the guard's trip handler, on the delivery path of the very update loop being
+ * reported, so what it costs is paid at the worst possible moment. `JSON.stringify` of the whole
+ * selector would walk an arbitrarily large object graph synchronously just so all but 80 characters
+ * of the result could be thrown away — a selector holding a USJ chapter or a comment thread list is
+ * megabytes. The input is bounded instead: own enumerable properties, one shallow line each, and
+ * the walk stops as soon as there is more text than the warning can show.
+ *
+ * Three layers bound the result, and the LAST one owns the guarantee: `describeSelectorValue` caps
+ * each value, the walk here stops once the budget is spent, and `collapseAndTrim` makes the final
+ * cut. Only that last cut is promised to hold - the first two keep the work bounded, but the
+ * assembled `{ a: …, b: … }` scaffolding can still push the total past the limit on its own.
+ */
+function describeSelector(selector: unknown): string {
+  // A bare string selector is bounded HERE rather than left to `collapseAndTrim`, whose regex
+  // `.replace` would otherwise scan the whole string before any length check reached it.
+  if (isString(selector)) return describeSelectorValue(selector);
+  if (typeof selector !== 'object' || !selector) return String(selector);
+
+  const rendered: string[] = [];
+  let remaining = MAX_SELECTOR_DESCRIPTION_LENGTH;
+  // `some` rather than `forEach` so the walk can stop; `Object.entries` reads own enumerable
+  // properties only, so a prototype chain cannot lengthen it.
+  Object.entries(selector).some(([key, value]) => {
+    const entry = `${key}: ${describeSelectorValue(value)}`;
+    rendered.push(entry);
+    remaining -= entry.length + 2;
+    return remaining <= 0;
+  });
+  return `{ ${rendered.join(', ')} }`;
+}
+
+/**
+ * Renders a data type and its selector for the runaway-render warning.
+ *
+ * Some data providers expose unnamed data types - `useSetting` reads the settings provider through
+ * an empty data type name - so the type alone can identify nothing, and every setting in the app
+ * shares one blank name. Including the selector is what lets a reader of the log tell them apart
+ * and name the hook that is re-rendering.
+ */
+function describeDataType(dataType: unknown, selector: unknown): string {
+  const typeName = String(dataType) || '(unnamed)';
+  let selectorDescription: string;
+  try {
+    selectorDescription = collapseAndTrim(describeSelector(selector));
+  } catch {
+    // A getter or a `toString` on the selector can throw. This runs while the app is already
+    // misbehaving, so a throw here would replace a useful warning with a fresh exception at exactly
+    // the wrong moment.
+    selectorDescription = '[undescribable]';
+  }
+  return `${typeName} (selector: ${selectorDescription})`;
+}
+
 /**
  * Create a `useData(...).DataType(selector, defaultValue, options)` hook for a specific subset of
  * data providers as supported by `useDataProviderHook`
@@ -256,8 +373,21 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
       ),
       boolean,
     ] {
+      // Held as a ref so the guard's description of this hook is computed only when it trips.
+      // Serializing the selector on every render would add work to the hot path the guard exists
+      // to protect, and an unstable selector - the very mistake being reported - would give the
+      // guard's callbacks a new identity every render.
+      const selectorRef = useRef(selector);
+      selectorRef.current = selector;
+      // No dependencies: `dataType` is fixed when this hook is generated, not a render value
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const describeThisDataType = useCallback(
+        () => describeDataType(dataType, selectorRef.current),
+        [],
+      );
       const { recordDelivery, recordSubscribe, runawayError } = useRunawayLoopGuard(
         String(dataType),
+        describeThisDataType,
       );
 
       // Use subscriberOptions as a ref so it doesn't update dependency arrays

@@ -551,6 +551,9 @@
   "%webView_project%": "Project",
   "%webView_projectAssignmentsAndProgress%": "Assignments and Progress",
   "%webView_title_type_formatString%": "{type} {defaultTitle}",
+  "%window_error_crashed_message%": "Something went wrong and this window could not be displayed. Reloading should bring it back.",
+  "%window_error_crashed_reloadButton%": "Reload",
+  "%window_error_crashed_title%": "This window stopped working",
   "%window_label_empty%": "Empty window",
   "%wordList%": "Word List"
 }

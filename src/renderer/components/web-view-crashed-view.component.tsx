@@ -1,21 +1,14 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { LocalizationData } from '@shared/services/localization.service-model';
-import { logger } from '@shared/services/logger.service';
 import {
-  formatReplacementString,
-  getErrorMessage,
-  isLocalizeKey,
-  LocalizeKey,
-} from 'platform-bible-utils';
+  CrashedViewLocalizationBoundary,
+  CrashedViewShell,
+} from '@renderer/components/crashed-view.component';
 import {
-  Component,
-  CSSProperties,
-  PropsWithChildren,
-  ReactNode,
-  useEffect,
-  useMemo,
-  useRef,
-} from 'react';
+  buildCrashedViewButtonStateCss,
+  createCrashedViewLocalizer,
+} from '@renderer/components/crashed-view.util';
+import { formatReplacementString, isLocalizeKey, LocalizeKey } from 'platform-bible-utils';
+import { CSSProperties, useMemo } from 'react';
 
 const TITLE_KEY = '%webView_error_crashed_title%';
 const MESSAGE_KEY = '%webView_error_crashed_message%';
@@ -55,19 +48,16 @@ export const WEB_VIEW_CRASHED_VIEW_STRING_KEYS: readonly LocalizeKey[] = STRING_
  * cause of a blank web view is a crash inside `useLocalizedStrings` itself. A user whose editor
  * just died is better served by English than by `%webView_error_crashed_title%`.
  */
-export const ENGLISH_DEFAULTS: Readonly<Record<WebViewCrashedViewStringKey, string>> = {
+export const WEB_VIEW_CRASHED_ENGLISH_DEFAULTS: Readonly<
+  Record<WebViewCrashedViewStringKey, string>
+> = {
   [TITLE_KEY]: 'This panel stopped working',
   [MESSAGE_KEY]: 'Something went wrong and “{webViewTitle}” could not be displayed.',
   [MESSAGE_NO_TITLE_KEY]: 'Something went wrong and this panel could not be displayed.',
   [RELOAD_BUTTON_KEY]: 'Reload',
 };
 
-function localize(localizedStrings: LocalizationData, key: WebViewCrashedViewStringKey): string {
-  const value = localizedStrings[key];
-  // `useLocalizedStrings` seeds each key with the key itself, so an unresolved string is
-  // indistinguishable from one that resolved to its own name — treat both as unresolved
-  return value && value !== key ? value : ENGLISH_DEFAULTS[key];
-}
+const localize = createCrashedViewLocalizer(WEB_VIEW_CRASHED_ENGLISH_DEFAULTS);
 
 // Styles are inline rather than Tailwind/shadcn on purpose. This component is rendered by the
 // renderer but mounts inside a web view's iframe, whose document carries only the CSP, the font and
@@ -86,7 +76,7 @@ const CONTAINER_STYLE: CSSProperties = {
   boxSizing: 'border-box',
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'center',
+  alignItems: 'safe center',
   justifyContent: 'safe center',
   overflow: 'auto',
   // Mirrors the `Empty` primitive this would compose if Tailwind were available here: gap-4, p-6
@@ -98,52 +88,9 @@ const CONTAINER_STYLE: CSSProperties = {
   fontFamily: 'inherit',
 };
 
-// Mirrors `EmptyTitle`: text-sm, font-medium, tracking-tight
-const TITLE_STYLE: CSSProperties = {
-  margin: 0,
-  fontSize: '0.875rem',
-  fontWeight: 500,
-  letterSpacing: '-0.015em',
-};
-
-// Mirrors `EmptyDescription` inside `EmptyHeader`, whose max-w-sm is 24rem
-const MESSAGE_STYLE: CSSProperties = {
-  margin: 0,
-  maxWidth: '24rem',
-  fontSize: '0.875rem',
-  color: 'var(--muted-foreground, #5b5b5b)',
-};
-
-// Mirrors shadcn `Button` default variant at default size: h-8, px-2.5, rounded-lg (= --radius),
-// text-sm, font-medium, and a TRANSPARENT border rather than a visible one - the border exists only
-// so the focus-visible state can color it without shifting layout.
-const BUTTON_STYLE: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  height: '2rem',
-  padding: '0 0.625rem',
-  border: '1px solid transparent',
-  borderRadius: 'var(--radius, 0.625rem)',
-  background: 'var(--primary, #1b1b1b)',
-  color: 'var(--primary-foreground, #ffffff)',
-  fontFamily: 'inherit',
-  fontSize: '0.875rem',
-  fontWeight: 500,
-  whiteSpace: 'nowrap',
-  cursor: 'pointer',
-};
-
 const BUTTON_CLASS = 'platform-web-view-crashed-reload';
 
-// Hover and focus-visible cannot be expressed as inline styles, and a button with no visible focus
-// indicator is unusable by keyboard - which matters here because the container takes focus first and
-// Tab moves to this button. A scoped <style> is allowed: the web view CSP includes 'unsafe-inline'
-// for styles. Kept to the two states inline styles cannot reach.
-const BUTTON_STATE_CSS = `
-.${BUTTON_CLASS}:hover { opacity: 0.9; }
-.${BUTTON_CLASS}:focus-visible { outline: 2px solid var(--ring, #7f7f7f); outline-offset: 2px; }
-`;
+const BUTTON_STATE_CSS = buildCrashedViewButtonStateCss(BUTTON_CLASS);
 
 export type WebViewCrashedViewProps = {
   /**
@@ -164,66 +111,6 @@ export type WebViewCrashedViewProps = {
    */
   webViewTitle?: string;
 };
-
-type CrashedViewShellProps = {
-  /** Heading, already resolved to display text. */
-  title: string;
-  /** Explanation naming the crashed pane, already resolved and interpolated. */
-  message: string;
-  /** Label on the reload button, already resolved to display text. */
-  reloadLabel: string;
-  /** Re-attempts loading the crashed web view. */
-  onReload: () => void;
-};
-
-/**
- * The panel itself: fixed markup and fixed styles over text that is already resolved.
- *
- * Calls React's own hooks only. Nothing here reaches a service, so it renders the same whether the
- * text came from the localization service or from {@link ENGLISH_DEFAULTS} - which is what lets the
- * English path stay identical in layout to the localized one.
- *
- * Takes focus on mount only if this web view already had it - the crash unmounted everything
- * focusable in the pane, so a keyboard or screen-reader user who was working here would otherwise
- * be left on `body` with no route to the reload button. `role="alert"` announces the text either
- * way, which is what covers the panes that do not take focus. See the effect for the cases.
- */
-function CrashedViewShell({ title, message, reloadLabel, onReload }: CrashedViewShellProps) {
-  // React refs passed to DOM elements must be initialized with null, not undefined.
-  // eslint-disable-next-line no-null/no-null
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Only claim focus if this web view already had it, i.e. the crash really did destroy what the
-    // user was working in. Several web views are visible at once, so a pane crashing on a shared
-    // state change while the user types elsewhere must not yank the caret out of that pane - and it
-    // would do so silently, since programmatic focus on a tabIndex={-1} container matches no
-    // `:focus-visible` ring.
-    //
-    // `ownerDocument` is required: this component is renderer-realm code rendered into a web view's
-    // iframe DOM, so a bare `document` here is the RENDERER's document, not this pane's.
-    //
-    // Hidden case: an inactive rc-dock tab is `display: none`, so it holds no focus and this is a
-    // no-op with no catch-up on activation. That is deliberate - `role="alert"` announces the
-    // message when the tab is opened, and stealing focus into a pane the user has not looked at yet
-    // would be worse than not moving it.
-    if (containerRef.current?.ownerDocument.hasFocus()) containerRef.current.focus();
-  }, []);
-
-  return (
-    <>
-      {/* Outside the alert region so the region holds only what is announced. */}
-      <style>{BUTTON_STATE_CSS}</style>
-      <div ref={containerRef} style={CONTAINER_STYLE} role="alert" tabIndex={-1}>
-        <p style={TITLE_STYLE}>{title}</p>
-        <p style={MESSAGE_STYLE}>{message}</p>
-        <button type="button" className={BUTTON_CLASS} style={BUTTON_STYLE} onClick={onReload}>
-          {reloadLabel}
-        </button>
-      </div>
-    </>
-  );
-}
 
 /**
  * The panel with its text resolved through the localization service.
@@ -269,12 +156,17 @@ function LocalizedCrashedView({ onReload, webViewTitle }: WebViewCrashedViewProp
       message={message}
       reloadLabel={localize(localizedStrings, RELOAD_BUTTON_KEY)}
       onReload={onReload}
+      containerStyle={CONTAINER_STYLE}
+      titleHeadingLevel={2}
+      buttonClass={BUTTON_CLASS}
+      buttonStateCss={BUTTON_STATE_CSS}
     />
   );
 }
 
 /**
- * The panel with its text taken straight from {@link ENGLISH_DEFAULTS}, reaching no service at all.
+ * The panel with its text taken straight from {@link WEB_VIEW_CRASHED_ENGLISH_DEFAULTS}, reaching no
+ * service at all.
  *
  * A localize-key title cannot be resolved on this path, so it degrades to the untitled message
  * rather than putting a raw `%…%` on screen.
@@ -284,68 +176,27 @@ function EnglishCrashedView({ onReload, webViewTitle }: WebViewCrashedViewProps)
 
   return (
     <CrashedViewShell
-      title={ENGLISH_DEFAULTS[TITLE_KEY]}
+      title={WEB_VIEW_CRASHED_ENGLISH_DEFAULTS[TITLE_KEY]}
       message={
         displayTitle
-          ? formatReplacementString(ENGLISH_DEFAULTS[MESSAGE_KEY], { webViewTitle: displayTitle })
-          : ENGLISH_DEFAULTS[MESSAGE_NO_TITLE_KEY]
+          ? formatReplacementString(WEB_VIEW_CRASHED_ENGLISH_DEFAULTS[MESSAGE_KEY], {
+              webViewTitle: displayTitle,
+            })
+          : WEB_VIEW_CRASHED_ENGLISH_DEFAULTS[MESSAGE_NO_TITLE_KEY]
       }
-      reloadLabel={ENGLISH_DEFAULTS[RELOAD_BUTTON_KEY]}
+      reloadLabel={WEB_VIEW_CRASHED_ENGLISH_DEFAULTS[RELOAD_BUTTON_KEY]}
       onReload={onReload}
+      containerStyle={CONTAINER_STYLE}
+      titleHeadingLevel={2}
+      buttonClass={BUTTON_CLASS}
+      buttonStateCss={BUTTON_STATE_CSS}
     />
   );
 }
 
-type CrashedViewLocalizationBoundaryProps = PropsWithChildren<{
-  /** Rendered instead of the children if resolving localized text throws. */
-  fallback: ReactNode;
-  /** Raw title of the crashed web view, named in the log so the failure can be traced to a pane. */
-  webViewTitle?: string;
-}>;
-
 /**
- * Shows `fallback` if resolving this panel's localized text throws.
- *
- * {@link WebViewErrorBoundary} cannot cover this. React hands an error thrown inside a boundary's
- * own fallback to the NEXT boundary up, and above a web view's root there is none - so a throw
- * while localizing this panel would blank the pane, which is the exact failure the panel exists to
- * replace. A crash inside `useLocalizedStrings` is one of the known causes of that blank pane, so
- * the one part of this panel that reaches a service gets its own boundary and degrades to English.
- *
- * Everything above this boundary - {@link CrashedViewShell} included - must stay service-free for
- * the same reason: a throw there still has nothing to catch it.
- */
-class CrashedViewLocalizationBoundary extends Component<
-  CrashedViewLocalizationBoundaryProps,
-  { hasError: boolean }
-> {
-  constructor(props: CrashedViewLocalizationBoundaryProps) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(): { hasError: boolean } {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: unknown) {
-    const { webViewTitle } = this.props;
-    logger.warn(
-      `Crash panel for web view ${webViewTitle ?? '(untitled)'} could not localize its text, falling back to English: ${getErrorMessage(error)}`,
-    );
-  }
-
-  render(): ReactNode {
-    const { children, fallback } = this.props;
-    const { hasError } = this.state;
-
-    return hasError ? fallback : children;
-  }
-}
-
-/**
- * Replaces a web view's content when {@link WebViewErrorBoundary} catches a render failure, so the
- * pane shows what happened instead of going blank.
+ * Replaces a web view's content when `WebViewErrorBoundary` catches a render failure, so the pane
+ * shows what happened instead of going blank.
  *
  * Localized when localization works, English when it does not - including when it throws, which
  * nothing above this component could catch.
@@ -354,7 +205,7 @@ export function WebViewCrashedView({ onReload, webViewTitle }: WebViewCrashedVie
   return (
     <CrashedViewLocalizationBoundary
       fallback={<EnglishCrashedView onReload={onReload} webViewTitle={webViewTitle} />}
-      webViewTitle={webViewTitle}
+      surfaceDescription={`web view ${webViewTitle ?? '(untitled)'}`}
     >
       <LocalizedCrashedView onReload={onReload} webViewTitle={webViewTitle} />
     </CrashedViewLocalizationBoundary>

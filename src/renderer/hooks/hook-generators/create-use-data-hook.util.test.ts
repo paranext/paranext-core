@@ -12,6 +12,7 @@ import {
   newPlatformError,
   PlatformError,
   RESOURCE_EXHAUSTED,
+  stringLength,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,6 +23,7 @@ import {
   createUseDataHook,
   RUNAWAY_COOLDOWN_MS,
   RUNAWAY_EVENTS_PER_WINDOW,
+  MAX_SELECTOR_DESCRIPTION_LENGTH,
   RUNAWAY_WINDOW_MS,
 } from '@renderer/hooks/hook-generators/create-use-data-hook.util';
 
@@ -510,5 +512,170 @@ describe('createUseDataHook runaway-loop guard', () => {
 
     expect(result.current[0]).toBe(`value ${deliveryCount - 1}`);
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('names the data type and its selector in the warning', async () => {
+    renderUseStuff(selectorGen1);
+    await act(async () => harness.subscriptions[0].resolveSubscribe());
+
+    deliverTimes(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 1);
+
+    expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('Data of type Stuff (selector: { book: GEN, chapterNum: 1 })'),
+    );
+  });
+
+  it('identifies an unnamed data type by its selector', async () => {
+    // `useSetting` reads the settings provider through an empty data type name, so every setting in
+    // the app shares one blank name in this warning, and four of the sixteen warnings in an
+    // observed storm looked like that. The selector is what tells them apart.
+    let deliverSetting: ((data: string) => void) | undefined;
+    // Mirrors the settings provider's shape: unprefixed `get`/`set`/`subscribe` rather than the
+    // `getStuff`/`setStuff`/`subscribeStuff` a named data type generates. Cast for the same reason
+    // the harness above casts — re-implementing the full network-object surface in a test double
+    // adds nothing, and structural typing rejects the narrower subscribe callback.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const settingsLikeProvider = {
+      get: vi.fn(async () => 'unused'),
+      set: vi.fn(async () => true),
+      subscribe: vi.fn(async (_selector: string, callback: (data: string) => void) => {
+        deliverSetting = callback;
+        return async () => true;
+      }),
+      onDidDispose: () => () => true,
+    } as unknown as IDataProvider;
+    const useSettingsLikeData = createUseDataHook<[]>(() => settingsLikeProvider);
+
+    // The generated proxy is typed by data type name, and '' is not expressible as one of those
+    // names, so the empty-name hook `useSetting` really calls can only be reached through an index
+    // signature.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const useEmptyNamedHook = useSettingsLikeData() as unknown as Record<
+      string,
+      (...hookArgs: unknown[]) => unknown
+    >;
+
+    renderHook(() => useEmptyNamedHook['']('platform.interfaceMode', 'simple'));
+    await act(async () => {});
+
+    // Captured once: the loop below closes over it, and reading the mutable binding from inside
+    // the loop would leave which callback each iteration delivers to up to when it happens to run
+    const deliverToSetting = deliverSetting;
+    // Each delivery in its own `act` with a distinct value, for the reasons `deliverTimes` documents
+    for (let i = 0; i < RUNAWAY_EVENTS_PER_WINDOW + 1; i += 1) {
+      const value = `value ${i}`;
+      act(() => deliverToSetting?.(value));
+    }
+
+    expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('Data of type (unnamed) (selector: platform.interfaceMode)'),
+    );
+  });
+
+  /** The selector description out of the one warning the guard logged. */
+  function loggedSelectorDescription(): string {
+    expect(logger.warn).toHaveBeenCalledOnce();
+    const warning = String(vi.mocked(logger.warn).mock.calls[0][0]);
+    const match = /\(selector: (.*)\)/.exec(warning);
+    if (!match) throw new Error(`The warning named no selector: ${warning}`);
+    return match[1];
+  }
+
+  /** Trips the guard on `selector` and returns the selector description it logged. */
+  async function describeSelectorInWarning(selector: TestSelector): Promise<string> {
+    renderUseStuff(selector);
+    await act(async () => harness.subscriptions[0].resolveSubscribe());
+
+    deliverTimes(harness.subscriptions[0], RUNAWAY_EVENTS_PER_WINDOW + 1);
+
+    return loggedSelectorDescription();
+  }
+
+  it('bounds a long selector rather than putting all of it in the warning', async () => {
+    const description = await describeSelectorInWarning({ book: 'G'.repeat(200), chapterNum: 1 });
+
+    expect(stringLength(description)).toBeLessThanOrEqual(MAX_SELECTOR_DESCRIPTION_LENGTH + 1);
+    expect(description.endsWith('…')).toBe(true);
+    // The point of bounding: the whole selector must not reach the log
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('G'.repeat(200)));
+  });
+
+  it('does not serialize a large selector just to throw all but 80 characters away', async () => {
+    // This runs inside the trip handler, on the delivery path of the very loop being reported, so a
+    // full `JSON.stringify` walk of a selector holding a chapter's worth of USJ is a stall at the
+    // worst possible moment. Nested values are named, not walked.
+    const deepValue = { usj: { content: Array.from({ length: 5000 }, () => 'deep-content') } };
+    // A nested selector cannot be built within `TestSelector`'s shape; the assertion is confined to
+    // attaching it.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const selector = { book: 'GEN', chapterNum: 1, deep: deepValue } as unknown as TestSelector;
+
+    const description = await describeSelectorInWarning(selector);
+
+    expect(description).toContain('book: GEN');
+    expect(description).not.toContain('deep-content');
+  });
+
+  it('describes a circular selector instead of throwing while reporting a trip', async () => {
+    // A throw here would replace the warning with a fresh exception at the moment the app is
+    // already misbehaving - which is the failure this whole guard exists to report rather than
+    // cause. `JSON.stringify` throws on a cycle; naming nested values rather than walking them
+    // means this one never arises.
+    const circularSelector: TestSelector = { book: 'GEN', chapterNum: 1 };
+    // A circular selector cannot be built without stepping outside `TestSelector`'s shape; the
+    // assertion is confined to attaching the cycle.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (circularSelector as unknown as { self: unknown }).self = circularSelector;
+
+    const description = await describeSelectorInWarning(circularSelector);
+
+    expect(description).toContain('book: GEN');
+    expect(description).toContain('self: {…}');
+  });
+
+  it('falls back to a placeholder when the selector cannot be described at all', async () => {
+    const hostileSelector = {
+      book: 'GEN',
+      get chapterNum(): number {
+        throw new Error('this getter is as unwell as the tree');
+      },
+    };
+    // A selector whose property getter throws is outside `TestSelector`'s shape; the assertion is
+    // confined to handing it over, which is the whole point of the case.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const selector = hostileSelector as unknown as TestSelector;
+
+    const description = await describeSelectorInWarning(selector);
+
+    expect(description).toBe('[undescribable]');
+  });
+
+  it('keeps the warning to one log line and never cuts a grapheme in half', async () => {
+    // Selectors carry project names, queries and file paths, so they are not ASCII by construction:
+    // a native cut can land inside a surrogate pair, and a raw newline splits one warning across
+    // log lines.
+    // A bare string selector is outside `TestSelector`'s shape - this is how the settings provider
+    // is read - so the assertion is confined to building one.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const selector = `a\nb\t${'👍'.repeat(100)}` as unknown as TestSelector;
+
+    const description = await describeSelectorInWarning(selector);
+
+    expect(description).not.toMatch(/[\n\r\t]/);
+    // A lone high surrogate is a half-character the log viewer renders as a replacement glyph
+    expect(description).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+    expect(stringLength(description)).toBeLessThanOrEqual(MAX_SELECTOR_DESCRIPTION_LENGTH + 1);
+  });
+
+  it("never cuts a grapheme in half inside an OBJECT selector's string property", async () => {
+    // The per-property cut is a second, independent cut, and the outer trim cannot repair it: the
+    // assembled description comes back under the grapheme budget, so the outer check leaves it
+    // alone and a lone surrogate reaches the log and the PlatformError message.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const selector = { projectName: `x${'👍'.repeat(100)}` } as unknown as TestSelector;
+
+    const description = await describeSelectorInWarning(selector);
+
+    expect(description).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
   });
 });
