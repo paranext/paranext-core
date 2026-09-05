@@ -104,8 +104,15 @@ type DecoratorConfig = {
   initialAdmin?: DblResourceReference[];
   /** Resource list seed. */
   resources?: DblResourceData[];
-  /** Whether the panel has a project. */
-  hasProject?: boolean;
+  /** Render the panel with no project open. */
+  isNoProject?: boolean;
+  /**
+   * Render the no-project FREE-RESOURCE entry point. Distinct from `isNoProject`: with an empty
+   * allowlist the panel has nothing to offer and falls back to the plain no-project message.
+   */
+  isFreeResourceEntryPoint?: boolean;
+  /** Fail the catalog specifically for an invalid registration, so that message is observable. */
+  hasRegistrationError?: boolean;
   /** Whether the user can write admin settings. */
   canWriteProjectSettings?: boolean;
   /** Disable install so the Selecting state is observable (otherwise it auto-completes). */
@@ -188,11 +195,18 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
       <style>{EDITOR_WRAPPER_STYLE}</style>
       <ModelTextPanel
         localizedStrings={localizedStrings}
-        hasProject={config.hasProject ?? true}
+        hasProject={!(config.isNoProject ?? false)}
+        isFreeResourceEntryPoint={config.isFreeResourceEntryPoint ?? false}
+        hasRegistrationError={config.hasRegistrationError ?? false}
         modelTextsState={modelTextsStateFor(config, effectiveModelTexts)}
         dblResources={resources}
         isCatalogReady={config.isCatalogReady ?? true}
         hasCatalogError={config.hasCatalogError ?? false}
+        onOpenRegistration={() => {
+          // Opening the real registration UI needs PAPI; logged so the control stays observable.
+          // eslint-disable-next-line no-console
+          console.log('onOpenRegistration');
+        }}
         onRetryCatalog={() => {
           // Catalog re-fetch — logged; these stories pin the state so the control stays observable.
           // eslint-disable-next-line no-console
@@ -289,9 +303,32 @@ export const UnknownResource: Story = {
   ],
 };
 
-/** The panel was opened without a project id. */
-export const NoProject: Story = {
-  decorators: [createDecorator({ hasProject: false })],
+/** No project open: the panel offers freely available resources to read instead. */
+export const NoProjectFreeResources: Story = {
+  decorators: [createDecorator({ isNoProject: true, isFreeResourceEntryPoint: true })],
+};
+
+/**
+ * No project open and nothing allowlisted as free, so there is no picker worth offering and the
+ * panel says only what is true. This is what ships until the allowlist is curated.
+ */
+export const NoProjectNothingToOffer: Story = {
+  decorators: [createDecorator({ isNoProject: true })],
+};
+
+/**
+ * No project open AND no valid registration. The DBL catalog is unreachable without one, so the
+ * panel says so instead of offering a picker that would contain nothing.
+ */
+export const NoProjectRegistrationRequired: Story = {
+  decorators: [
+    createDecorator({
+      isNoProject: true,
+      isFreeResourceEntryPoint: true,
+      hasCatalogError: true,
+      hasRegistrationError: true,
+    }),
+  ],
 };
 
 /** A non-admin user picks a model text — it persists at the user level (logged to console). */

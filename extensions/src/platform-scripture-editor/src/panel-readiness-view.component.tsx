@@ -6,7 +6,7 @@ import {
   EmptyHeader,
   EmptyMedia,
 } from 'platform-bible-react';
-import { AlertTriangle, BookOpen, CloudOff } from 'lucide-react';
+import { AlertTriangle, BookOpen, CircleUserRound, CloudOff } from 'lucide-react';
 import { ReactNode } from 'react';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { RetryableErrorView, LoadingView } from './panel-state-views.component';
@@ -36,33 +36,44 @@ import { RetryableErrorView, LoadingView } from './panel-state-views.component';
  *   and the panel recovers on its own once it becomes readable.
  * @param catalogErrorMessage Already-localized message for a failed resource-catalog fetch. Unlike
  *   the settings error this one IS recoverable, so it is paired with a working retry.
+ * @param registrationRequiredMessage Already-localized message for a catalog that is unreachable
+ *   without a valid Paratext registration. Paired with the registration action rather than a retry,
+ *   because re-running the fetch cannot succeed until the registration itself changes.
+ * @param registerLabel Already-localized label for the button that opens Paratext registration.
  * @param loadingLabel Already-localized status text shown beside the loading spinner.
  * @param emptyPrompt Already-localized prompt shown when nothing is configured.
  * @param pickLabel Already-localized label for the resource picker button.
  * @param retryLabel Already-localized label for the catalog retry button.
  * @param onPick Opens the resource picker.
  * @param onRetryCatalog Re-runs the resource-catalog fetch.
+ * @param onOpenRegistration Opens the Paratext registration UI.
  */
 export function PanelReadinessView({
   readiness,
   errorMessage,
   catalogErrorMessage,
+  registrationRequiredMessage,
+  registerLabel,
   loadingLabel,
   emptyPrompt,
   pickLabel,
   retryLabel,
   onPick,
   onRetryCatalog,
+  onOpenRegistration,
 }: {
   readiness: ResourcePanelReadiness;
   errorMessage: ReactNode;
   catalogErrorMessage: ReactNode;
+  registrationRequiredMessage: ReactNode;
+  registerLabel: ReactNode;
   loadingLabel: ReactNode;
   emptyPrompt: ReactNode;
   pickLabel: ReactNode;
   retryLabel: ReactNode;
   onPick: () => void;
   onRetryCatalog: () => void;
+  onOpenRegistration: () => void;
 }): ReactNode {
   // An unreadable setting is its own answer — never the empty prompt, which would invite the user
   // to replace a resource that may already be configured.
@@ -89,6 +100,29 @@ export function PanelReadinessView({
         onRetry={onRetryCatalog}
         icon={<CloudOff />}
       />
+    );
+  }
+
+  // Deliberately NOT a retry: re-running the fetch cannot succeed until the registration changes.
+  // It offers the action that can — opening the registration UI — which is the same pairing Home
+  // uses for this failure, so the user is never told to register with no way to do it.
+  if (readiness === 'registrationRequired') {
+    return (
+      <Empty
+        className="tw:h-screen"
+        role="alert"
+        data-testid="panel-readiness-registration-required"
+      >
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <CircleUserRound />
+          </EmptyMedia>
+          <EmptyDescription>{registrationRequiredMessage}</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button onClick={() => onOpenRegistration()}>{registerLabel}</Button>
+        </EmptyContent>
+      </Empty>
     );
   }
 

@@ -53,10 +53,36 @@ export function resolveResourcePanelStringKeys(
 }
 
 /**
+ * The keys the Bible Texts panel renders in the no-project free-resource entry point.
+ *
+ * Not part of {@link ResourcePanelStringKeys}: that type is resolved per resource type, and giving
+ * it these fields would demand commentary-worded twins that nothing can ever render — the
+ * commentary catalogue is the UBS handbook/notes set, none of it openly licensed, so a
+ * free-resource picker for the Commentaries tab would be empty by construction.
+ *
+ * They live here anyway, rather than beside their one consumer, because a web view is not testable
+ * (see {@link RESOURCE_PANEL_TYPED_STRING_KEYS}) — so keys declared inside one get no en/es parity
+ * coverage at all, which is the silent hole this module exists to close.
+ */
+export const NO_PROJECT_RESOURCE_PANEL_STRING_KEYS = Object.freeze({
+  emptyStatePromptKey: '%webView_resourcePanel_bibleTexts_noProject_emptyState_prompt%',
+  pickButtonKey: '%webView_resourcePanel_bibleTexts_noProject_pick%',
+  registrationRequiredKey: '%webView_resourcePanel_bibleTexts_noProject_registrationRequired%',
+  registerKey: '%webView_resourcePanel_bibleTexts_noProject_register%',
+  /**
+   * Shown above the picker's list whenever it is restricted to free resources. Explains a list that
+   * is short — or empty, if the user's catalog carries none of the allowlisted resources — which
+   * the dialog itself cannot account for, because it only sees the already-narrowed array.
+   */
+  freeResourcesOnlyNoticeKey: '%webView_resourcePanel_freeResourcesOnly_notice%',
+} satisfies Record<string, LocalizeKey>);
+
+/**
  * Every key the resource panel can render, both resource types together. Exported so the localized
  * strings parity test can drive off it rather than a hand-maintained literal list.
  */
 export const RESOURCE_PANEL_TYPED_STRING_KEYS: readonly LocalizeKey[] = Object.freeze([
   ...Object.values(BIBLE_TEXTS_KEYS),
   ...Object.values(COMMENTARIES_KEYS),
+  ...Object.values(NO_PROJECT_RESOURCE_PANEL_STRING_KEYS),
 ]);

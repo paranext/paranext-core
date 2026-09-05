@@ -1,6 +1,10 @@
 import papi, { logger } from '@papi/frontend';
 import { usePromise } from 'platform-bible-react';
-import { DblResourceData, getErrorMessage } from 'platform-bible-utils';
+import {
+  DblResourceData,
+  getErrorMessage,
+  isErrorMessageAboutRegistryAuthFailure,
+} from 'platform-bible-utils';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 /** The DBL resource catalog plus everything a panel needs to reason about its arrival. */
@@ -25,9 +29,57 @@ export type DblResourceCatalog = {
    * retry.
    */
   hasCatalogError: boolean;
+  /**
+   * Whether the DBL half failed specifically because the user's Paratext registration is missing or
+   * invalid. Always implies {@link DblResourceCatalog.hasCatalogError}.
+   *
+   * That failure is not the transient, retry-and-it-works kind — the catalog stays unreachable
+   * until the registration changes — so telling it apart lets a caller say what the user must
+   * actually do instead of offering a retry that cannot succeed. Recognized from the thrown message
+   * via `isErrorMessageAboutRegistryAuthFailure`, which carries the C# sentinel text verbatim; that
+   * avoids a second registration probe, since the session's one probe belongs to
+   * `registration-validity-store`, which a web view cannot reach.
+   *
+   * Deliberately NOT set for a resolved-but-undefined catalog: that is the absent-DBL-credentials
+   * answer, and credentials can arrive without the registration itself changing, so a retry there
+   * is worth offering.
+   */
+  hasRegistrationError: boolean;
   /** Re-runs the fetch, clearing any previous error. */
   refetchCatalog: () => void;
 };
+
+/**
+ * Asks whether the machine's Paratext registration is invalid — the one cause of a failed catalog
+ * that a retry cannot fix.
+ *
+ * Probed rather than inferred, and only after the catalog has ALREADY failed. The obvious inference
+ * — the resource provider's own `isGetDblResourcesAvailable` — is wrong for this question:
+ * `DblResourcePasswordProvider.IsPasswordAvailable` returns false both for an invalid registration
+ * AND for a build whose DBL user-secrets are absent, so acting on it tells a developer with a
+ * perfectly good registration to go register.
+ *
+ * `adr-registration-validity-once-per-session` deliberately routes the renderer's own probes
+ * through a shared store to avoid a cold-start retry storm. This one is not that: a web view cannot
+ * reach that store, and by the time a catalog fetch has come back failed the extension host has
+ * long since registered its handlers, so the retry loop that motivated the ADR does not apply
+ * here.
+ *
+ * @returns `true` only for a definitive "not registered". Anything else — a rejected probe, a
+ *   non-boolean, a timeout — is treated as "not a registration problem", because wrongly telling a
+ *   registered user to register is worse than offering them a retry that may work.
+ */
+async function isRegistrationInvalid(): Promise<boolean> {
+  try {
+    const isValid = await papi.commands.sendCommand(
+      'paratextRegistration.doesUserHaveValidRegistration',
+    );
+    return isValid === false;
+  } catch (e) {
+    logger.debug(`Registration probe did not complete: ${getErrorMessage(e)}`);
+    return false;
+  }
+}
 
 /**
  * Fetches the resource catalog for a panel: the DBL catalog plus the locally-installed non-DBL
@@ -47,6 +99,7 @@ export type DblResourceCatalog = {
 export function useDblResourceCatalog(): DblResourceCatalog {
   const [fetchResources, setFetchResources] = useState(true);
   const [hasCatalogError, setHasCatalogError] = useState(false);
+  const [hasRegistrationError, setHasRegistrationError] = useState(false);
 
   // `usePromise`'s own currency flag guards only its `setValue`/`setIsLoading` — a superseded
   // factory invocation still runs to completion and still writes state we own. Overlapping fetches
@@ -83,7 +136,14 @@ export function useDblResourceCatalog(): DblResourceCatalog {
         logger.warn(
           `Failed to load the DBL resource catalog: ${getErrorMessage(dblResult.reason)}`,
         );
-        if (generation === fetchGenerationRef.current) setHasCatalogError(true);
+        // The sentinel message is definitive when present, so it saves the probe.
+        const isRegistrationFailure =
+          isErrorMessageAboutRegistryAuthFailure(dblResult.reason) ||
+          (await isRegistrationInvalid());
+        if (generation === fetchGenerationRef.current) {
+          setHasCatalogError(true);
+          setHasRegistrationError(isRegistrationFailure);
+        }
 
         return localNonDblResources;
       }
@@ -93,11 +153,21 @@ export function useDblResourceCatalog(): DblResourceCatalog {
       // of spinning on a fetch that has already finished — and keep the locally-installed rows,
       // which loaded fine and are the only resources such a user has.
       if (dblResult.value === undefined) {
-        if (generation === fetchGenerationRef.current) setHasCatalogError(true);
+        // A missing registration reaches us HERE, not through the catch above: the provider returns
+        // early rather than throwing, so the thrown-sentinel path never runs for it. Without the
+        // probe this state offers a Try again button that can never succeed.
+        const isRegistrationFailure = await isRegistrationInvalid();
+        if (generation === fetchGenerationRef.current) {
+          setHasCatalogError(true);
+          setHasRegistrationError(isRegistrationFailure);
+        }
         return localNonDblResources;
       }
 
-      if (generation === fetchGenerationRef.current) setHasCatalogError(false);
+      if (generation === fetchGenerationRef.current) {
+        setHasCatalogError(false);
+        setHasRegistrationError(false);
+      }
 
       return [...dblResult.value, ...localNonDblResources];
     }, [fetchResources]),
@@ -112,6 +182,7 @@ export function useDblResourceCatalog(): DblResourceCatalog {
   const refetchCatalog = useCallback(() => {
     fetchGenerationRef.current += 1;
     setHasCatalogError(false);
+    setHasRegistrationError(false);
     setFetchResources(true);
   }, []);
 
@@ -121,6 +192,7 @@ export function useDblResourceCatalog(): DblResourceCatalog {
     isCatalogReady:
       !isLoadingResources && resourcesPossiblyUndefined !== undefined && !hasCatalogError,
     hasCatalogError,
+    hasRegistrationError,
     refetchCatalog,
   };
 }

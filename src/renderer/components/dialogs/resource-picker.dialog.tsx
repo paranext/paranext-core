@@ -54,6 +54,7 @@ function useResourceFetch(command: ResourceFetchCommand) {
 function ResourcePickerDialogWrapper({
   resourceType,
   selectedResourceIds,
+  allowedResourceIds,
   notice,
   allowSelectingInstalled,
   submitDialog,
@@ -79,9 +80,24 @@ function ResourcePickerDialogWrapper({
     [dblCatalogFetch, localResourceFetch, localizedStrings, notice],
   );
 
+  // Applied HERE rather than inside `ResourcePickerDialog` because the dialog derives its language
+  // filter options and its total count from whatever `allResources` it is handed. Narrowing the
+  // array on the way in keeps all three consistent; narrowing inside the dialog would leave it
+  // offering languages that no longer have a selectable resource and counting rows it will not show.
+  //
+  // Narrows the COMBINED list, so the restriction covers locally-installed non-DBL resources too —
+  // those carry `dblEntryUid === projectId`, which no allowlist entry matches, so a restricted
+  // caller correctly gets none of them.
+  const offeredResources = useMemo(() => {
+    // A missing list means "no restriction"; an empty one means "this caller may offer nothing".
+    if (!allowedResourceIds) return allResources;
+    const allowed = new Set(allowedResourceIds.map((id) => id.toUpperCase()));
+    return allResources.filter((resource) => allowed.has(resource.dblEntryUid.toUpperCase()));
+  }, [allResources, allowedResourceIds]);
+
   return (
     <ResourcePickerDialog
-      allResources={allResources}
+      allResources={offeredResources}
       isResourcesLoading={isDblLoading || isLocalLoading}
       resourceType={resourceType}
       selectedResourceIds={selectedResourceIds}

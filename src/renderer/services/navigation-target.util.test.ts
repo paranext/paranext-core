@@ -26,6 +26,10 @@ const EDITOR = {
 };
 /** A secondary navigable view (e.g. the model-text panel) the user last focused. */
 const TRACKED = { id: 'panel-1', projectId: 'project-1' };
+/** The Simple-mode Column 2 editor as it exists before any project is opened. */
+const PROJECTLESS_EDITOR = { id: 'editor-0', webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE };
+/** A Column 3 reading panel: navigable once it shows a resource, but never an editor. */
+const READING_PANEL = { id: 'bible-texts-1', shouldShowToolbar: true };
 
 describe('resolveTargetWebView', () => {
   beforeEach(() => {
@@ -57,5 +61,50 @@ describe('resolveTargetWebView', () => {
     getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([]);
 
     expect(resolveTargetWebView('panel-1', true)).toBeUndefined();
+  });
+
+  test('falls back to a project-less editor so a no-project user can still navigate', () => {
+    // Simple mode with no project open: the Column 2 editor exists but carries no projectId, so the
+    // with-project lookup finds nothing. Returning undefined here disables the toolbar's
+    // book/chapter control, which leaves a resource the user just chose in a reading panel readable
+    // at exactly one reference.
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([READING_PANEL, PROJECTLESS_EDITOR]);
+
+    expect(resolveTargetWebView(undefined, true)).toEqual({
+      id: 'editor-0',
+      definition: PROJECTLESS_EDITOR,
+    });
+  });
+
+  test('prefers an editor with a project over a project-less one', () => {
+    // Order-sensitive on purpose: the project-less editor is listed FIRST, so a fallback that
+    // simply took the first Scripture editor would pick the wrong one and point navigation at a
+    // view with no books to offer while a real project is open.
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([PROJECTLESS_EDITOR, EDITOR]);
+
+    expect(resolveTargetWebView(undefined, true)).toEqual({ id: 'editor-1', definition: EDITOR });
+  });
+
+  test('does not promote a project-less editor in Power mode, where nothing pins the target', () => {
+    // Simple mode only. In Power mode a project-less editor is not scripture-navigable, so it can
+    // never be the tracked view either — promoting it here would silently enable the toolbar's
+    // book/chapter control and start writing scroll group 0 for a view showing nothing.
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([PROJECTLESS_EDITOR]);
+
+    expect(resolveTargetWebView(undefined, false)).toBeUndefined();
+  });
+
+  test('still falls back to an editor WITH a project in Power mode', () => {
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([PROJECTLESS_EDITOR, EDITOR]);
+
+    expect(resolveTargetWebView(undefined, false)).toEqual({ id: 'editor-1', definition: EDITOR });
+  });
+
+  test('does not fall back to a non-editor view that merely shows a toolbar', () => {
+    // A reading panel is navigable when TRACKED, but it is not the main-editor fallback: in Simple
+    // mode the toolbar drives the scroll group through the editor, and every panel follows it.
+    getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([READING_PANEL]);
+
+    expect(resolveTargetWebView(undefined, true)).toBeUndefined();
   });
 });
