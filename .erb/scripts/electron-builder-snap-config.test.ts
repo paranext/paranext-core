@@ -9,20 +9,7 @@ import { readdirSync, readFileSync } from 'fs';
 import path from 'path';
 import JSON5 from 'json5';
 import { parse as parseYaml } from 'yaml';
-
-/**
- * The GNOME platform content snap that pairs with each snap base.
- *
- * These must stay in step: a base and a platform snap from different Ubuntu releases put the app's
- * staged libraries and the mounted platform libraries out of sync, and the app fails to launch. The
- * full rationale lives beside `base` in `electron-builder.json5`.
- */
-const GNOME_PLATFORM_BY_BASE: Readonly<Record<string, string>> = {
-  core18: 'gnome-3-28-1804',
-  core20: 'gnome-3-38-2004',
-  core22: 'gnome-42-2204',
-  core24: 'gnome-46-2404',
-};
+import { GNOME_PLATFORM_BY_BASE, GNOME_PLATFORM_TARGET } from './snap-platform-pairing';
 
 /**
  * The Ubuntu runner each snap base is built on.
@@ -42,9 +29,6 @@ const UBUNTU_RUNNER_BY_BASE: Readonly<Record<string, string>> = {
 
 /** Workflows that pin the Linux runner the snap is built on, via an `OS_LINUX` env value. */
 const LINUX_RUNNER_WORKFLOWS = ['test.yml', 'package-main.yml', 'publish.yml'];
-
-/** Mount point the snap's launch scripts read the GNOME platform from. */
-const GNOME_PLATFORM_TARGET = '$SNAP/gnome-platform';
 
 const REPO_ROOT = path.join(__dirname, '..', '..');
 

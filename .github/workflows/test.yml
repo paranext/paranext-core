@@ -225,6 +225,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run package
 
+      # Reads the snapcraft metadata the packaging step above generated. The unit-level guard
+      # (.erb/scripts/electron-builder-snap-config.test.ts) checks the same GNOME platform pairing
+      # from the inputs; everything that turns those inputs into the shipped plug list lives in
+      # app-builder-lib's snap.js and is visible only from the generated file. Linux-only because
+      # that is the leg that builds a snap.
+      - name: check generated snap metadata
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: npm run assert:snap-metadata
+
       - name: Delete previous Windows artifacts created by this workflow
         if: ${{ matrix.os == env.OS_WINDOWS }}
         env:
