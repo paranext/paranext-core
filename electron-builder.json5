@@ -103,6 +103,12 @@
     // override leaves existing installs mounting the old platform. The pairing therefore lives in
     // the `app-builder-lib` patch under `patches/`, and is enforced against this `base` value by
     // .erb/scripts/electron-builder-snap-config.test.ts
+    //
+    // Upstream knows: electron-builder issue #9452 root-caused the same stale `gnome-3-28-1804`
+    // runtime, and PR #9517 addressed it by migrating snap builds to the `snapcraft` CLI under a
+    // new root `snapcraft` config property, rather than by fixing this `snap` property's template.
+    // Remove the patch (and this note) once we migrate to that property, which needs an
+    // electron-builder upgrade -- 26.7.0 does not expose it.
     base: 'core22',
     category: 'Development',
     environment: {
