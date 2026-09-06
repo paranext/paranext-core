@@ -217,9 +217,9 @@ describe('electron-builder snap configuration', () => {
     // snapd matches stored connections by plug name across a refresh, so a plug left under an
     // older name revives the stale connection on every existing install — and a second plug under
     // any other name leaves two competing for this mount point, which snapd breaks by renaming one
-    // aside arbitrarily. Both failure modes ship an app that may or may not start.
-    // A failure here means either the patch stopped renaming the template plug, or something in
-    // `snap.plugs` declared a second plug on this mount point. Both ship a snap that may not start.
+    // aside arbitrarily. Both failure modes ship an app that may or may not start, and the
+    // unexpected key says which: a stale name means the patch stopped renaming the template plug,
+    // an extra one means something in `snap.plugs` declared a second plug on this mount point.
     expect(plugs.map((plug) => plug.key)).toEqual([expected]);
     expect(plugs[0].descriptor.interface).toBe('content');
     // A name/provider mismatch means snapd installs the wrong platform snap to satisfy the plug.
