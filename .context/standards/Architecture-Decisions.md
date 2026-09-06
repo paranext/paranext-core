@@ -2943,6 +2943,7 @@ step, no automation. Just a record.
   want to react to registration state.
 - **Source:** PT-4325 (registration reminder dot), sub-task of PT-4323; retry-cost evidence from
   `requestWithRetry` and `MAX_REQUEST_ATTEMPTS` in `src/shared/data/rpc.model.ts`.
+
 ## adr-snap-gnome-plug-renamed-by-patch: The snap's GNOME platform plug is renamed by patching electron-builder's template, not overridden in config
 
 - **Date:** 2026-09-02
@@ -2985,13 +2986,13 @@ step, no automation. Just a record.
   real patch body: the result carries the mercurial parts *and* `gnome-42-2204`. There is therefore
   **no collision, no forced merge order and no companion studio change**. The two hunks touch
   disjoint regions (~line 21 vs ~line 130), so apply order does not matter.
-- **Footgun:** regenerating this patch later with plain `npx patch-package app-builder-lib`, without
-  `--append`, collapses the sequence back into a single unsequenced `app-builder-lib+26.7.0.patch`
-  — which reintroduces exactly the collision the sequenced name avoids. Regenerate with `--append`,
-  or rename the output back.
-- **Also:** a renamed plug is a new content tag from the snap store's perspective, so store-granted
-  auto-connection for it should be confirmed on a published build rather than inferred from sideload
-  testing, which bypasses store assertions.
+  Two hazards come with that. Regenerating this patch later with plain
+  `npx patch-package app-builder-lib`, without `--append`, collapses the sequence back into a single
+  unsequenced `app-builder-lib+26.7.0.patch` — reintroducing exactly the collision the sequenced
+  name avoids; regenerate with `--append`, or rename the output back. And a renamed plug is a new
+  content tag from the snap store's perspective, so store-granted auto-connection for it should be
+  confirmed on a published build rather than inferred from sideload testing, which bypasses store
+  assertions.
 - **Source:** PT-4496. PR #2747 review raised the upgrade path, which the original cold-install
   diagnosis had not considered; its re-review then established the sequenced-patch mechanism above,
   correcting an earlier belief that patch-package allows only one patch per package+version and that
