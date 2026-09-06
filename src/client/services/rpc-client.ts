@@ -174,11 +174,12 @@ export class RpcClient implements IRpcMethodRegistrar {
         // listeners just attached will settle the attempt. Only 1 (OPEN) is already connected:
         // CLOSING and CLOSED have no further event left to settle this, so resolving on them
         // reports Connected on a dead socket, and every later send is dropped until the caller's
-        // own request timeout expires. Throw instead, so the catch below reports the failure and
-        // tears the attempt down the same way every other failure does.
+        // own request timeout expires. Fail the attempt rather than throwing past the await below:
+        // `connectionComplete` is armed from construction, so a variable left unsettled with
+        // nothing subscribed rejects on its own timeout as an unhandled rejection.
         if (this.ws.readyState === 1) this.connectionComplete.resolveToValue();
         else if (this.ws.readyState !== 0)
-          throw new Error(
+          this.failConnectionAttempt(
             `The websocket was already closing or closed (readyState ${this.ws.readyState})`,
           );
         await this.connectionComplete.promise;
