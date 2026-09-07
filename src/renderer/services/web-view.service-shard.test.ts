@@ -799,6 +799,27 @@ describe('handleSwitchToSimpleMode', () => {
     expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-cached');
   });
 
+  it('a window with no id of its own fails the switch rather than quietly running it here', async () => {
+    // Unlike the question genuinely going unanswered above, a missing window id is this window's
+    // own precondition failing before it ever asks anything — not a case the primary-window
+    // question's own fail-open concession covers.
+    globalThis.windowId = undefined;
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-cached' });
+    buildSimpleLayoutForProjectMock.mockClear();
+
+    await host.handleSwitchToSimpleMode();
+
+    const { logger } = await import('@shared/services/logger.service');
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Switching to Simple mode failed unexpectedly'),
+    );
+  });
+
   it('a list naming no primary at all stands the window down', async () => {
     // Fail closed. A list with no primary means the primary is absent from it — given up on, or
     // already recorded as closing — not that this window is it. Inferring otherwise let every
