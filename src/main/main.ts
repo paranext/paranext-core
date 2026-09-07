@@ -1483,9 +1483,13 @@ async function main() {
           // A window closing because the interface mode changed keeps its entry, so that entry has
           // to hold where the window actually is. Its placement is captured here because the
           // debounced capture is cancelled once the window has gone, and nothing else on this path
-          // records it — so without this a window moved just before the switch would come back at
-          // its old position. Wrapped, because the window can be destroyed underneath this: a
-          // capture that throws must not take the rest of the close with it.
+          // records it — so without this a window moved on the same display just before the switch
+          // would come back at its old position. `captureWindowBoundsState` can still withhold
+          // bounds it does not yet trust — a cross-display move finished within the settle window
+          // right before this switch leaves `updateWindowBounds` holding the pre-move placement,
+          // which is the trade `captureWindowBoundsState` documents at its own withholding site.
+          // Wrapped, because the window can be destroyed underneath this: a capture that throws
+          // must not take the rest of the close with it.
           try {
             cancelPendingBoundsCapture();
             updateWindowBounds(windowId, captureWindowBoundsState());
@@ -1980,11 +1984,13 @@ async function main() {
    * @param abandonedWindow Window whose renderer was given up on
    * @param abandonedWindowId That window's id
    * @param hasAlreadyAsked Whether the user has been asked about this window before
-   * @param recordAsked Called as the question goes up, so a notice that stayed silent, or gave up
-   *   before reaching the box, leaves the offer available rather than spending it. As the box goes
-   *   up rather than once it has: a second `render-process-gone` arriving while the dialog is open
-   *   must not put a duplicate beside it, and that is the likelier of the two. The gap left is a
-   *   `showMessageBox` that itself fails, which spends the offer on a box nobody saw.
+   * @param recordAsked Called once localization has settled, right before the box goes up, so a
+   *   notice that stayed silent leaves the offer available rather than spending it. Recording here
+   *   rather than at entry means a second `render-process-gone` arriving during the whole bounded
+   *   localization wait — up to `NOTICE_LOCALIZE_TIME_OUT_MS`, not just the moment the box itself
+   *   would show — could still reach past the check and show a duplicate. The trade is deliberate
+   *   the other way round: recording at entry would close that window but spend the offer on a
+   *   notice whose localization or dialog call itself failed and never reached the user at all.
    */
   async function offerToCloseAbandonedWindow(
     abandonedWindow: BrowserWindow,
