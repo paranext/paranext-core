@@ -1,10 +1,10 @@
 /**
  * Moving a web view from the window holding it into another, and putting it back when that fails.
  *
- * The policy the router used to carry inline: the in-flight registration, the pending-content
- * window it opens into, the abandoned-window close, the recovery ladder and the late-adopt probe.
- * The router keeps the two commands, their OpenRPC documentation and their argument checks, and
- * calls in here for what they mean.
+ * The policy for a move lives here: the in-flight registration, the pending-content window it opens
+ * into, the abandoned-window close, the recovery ladder and the late-adopt probe. The router keeps
+ * the two commands, their OpenRPC documentation and their argument checks, and calls in here for
+ * what they mean.
  */
 
 import {
