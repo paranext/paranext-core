@@ -3,6 +3,7 @@ import {
   chooseNoticeParentWindowId,
   decideAbandonedWindowNotice,
   eligibleNoticeParentCandidates,
+  shouldStillCloseAbandonedWindow,
   type AbandonedWindowNoticeInput,
   type NoticeParentEligibilityInput,
 } from '@main/abandoned-window-notice.util';
@@ -165,5 +166,23 @@ describe('eligibleNoticeParentCandidates', () => {
         { ...ELIGIBLE, windowId: '3', isAbandoned: true },
       ]),
     ).toEqual([]);
+  });
+});
+
+describe('shouldStillCloseAbandonedWindow', () => {
+  test('closes a window that is still there and not already on its way out', () => {
+    expect(shouldStillCloseAbandonedWindow(false, false)).toBe(true);
+  });
+
+  test('refuses a window that has already been destroyed', () => {
+    expect(shouldStillCloseAbandonedWindow(true, false)).toBe(false);
+  });
+
+  test('refuses a window whose own close has already begun', () => {
+    expect(shouldStillCloseAbandonedWindow(false, true)).toBe(false);
+  });
+
+  test('refuses a window that is both destroyed and marked closing', () => {
+    expect(shouldStillCloseAbandonedWindow(true, true)).toBe(false);
   });
 });
