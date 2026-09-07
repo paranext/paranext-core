@@ -434,6 +434,58 @@ describe('performShutdownTasks', () => {
     // The outer catch handled it via logger.error.
     expect(mockLoggerError).toHaveBeenCalled();
   });
+
+  it('drains an in-flight window-close sync even when the shutdown mode read fails', async () => {
+    // A closing window's sync is the only thing that can ever cover its editors, and an unreadable
+    // mode at quit must not skip waiting for it any more than either mode branch does.
+    mockSettingsGet.mockResolvedValueOnce('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(
+      asWindowWebViews([
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'p1',
+        },
+      ]),
+    );
+    let releaseWindowCloseSync = () => {};
+    mockRequestNoRetry.mockImplementation(async (requestType) => {
+      if (`${requestType}`.includes('sendReceiveProjects'))
+        await new Promise<void>((resolve) => {
+          releaseWindowCloseSync = resolve;
+        });
+      return undefined;
+    });
+
+    startWindowCloseTasksWithoutWaiting('2');
+    await vi.waitFor(() =>
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['p1'],
+      ),
+    );
+
+    // The shutdown's own mode read fails this time
+    mockSettingsGet.mockRejectedValue(new Error('extension host is going away'));
+    let shutdownSettled = false;
+    const shutdownTasks = performShutdownTasks().then(() => {
+      shutdownSettled = true;
+    });
+    try {
+      // Give the shutdown every chance to finish while the window's sync is still held open
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      expect(shutdownSettled).toBe(false);
+    } finally {
+      // Always release, even when the assertion above throws — an unreleased hold here would leave
+      // a promise permanently pending in the module-level in-flight set, hanging every later test
+      // that drains it.
+      releaseWindowCloseSync();
+      await shutdownTasks;
+    }
+    expect(shutdownSettled).toBe(true);
+  });
 });
 
 /**
