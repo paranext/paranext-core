@@ -247,10 +247,12 @@ describe('moveWebView', () => {
     await expect(moveWebView('view-1', { kind: 'window', windowId: '3' })).resolves.toBe('view-1');
   });
 
-  test('a target whose close is decided while its adopt runs does not report a move that worked', async () => {
+  test('a target whose close is decided after its adopt succeeds resolves to the destination without a second adopt', async () => {
     // The check before the adopt catches a close decided up to that moment. The adopt then waits on
     // a provider with no bound of its own, and a close decided inside that wait is invisible to it —
-    // so the window takes the web view down with it while the move reports the id it just got back.
+    // but by the time it lands, the destination already owns the web view. That is its own close
+    // path's problem to handle, not a reason to re-adopt the same id into a second window while the
+    // destination may still hold it live.
     const owner = windowShard(['view-1']);
     const target = windowShard([]);
     let targetClosing = false;
@@ -258,16 +260,20 @@ describe('moveWebView', () => {
       (windowId: string) => windowId === '3' && targetClosing,
     );
     target.adoptWebView.mockImplementation(async () => {
-      // The close lands while the adopt is in flight, which is the whole point
+      // The close lands right after the adopt succeeds, which is the whole point
       targetClosing = true;
       return 'view-1';
     });
     withWindows({ 2: owner, 3: target });
 
-    await expect(moveWebView('view-1', { kind: 'window', windowId: '3' })).rejects.toThrow();
-    // And the web view is not left to go down with the window: recovery put it back where it came
-    // from, which is what the throw is for.
-    expect(owner.adoptWebView).toHaveBeenCalled();
+    await expect(moveWebView('view-1', { kind: 'window', windowId: '3' })).resolves.toBe('view-1');
+
+    // No second adopt: the destination already has the web view, so nothing reopens it elsewhere
+    expect(owner.adoptWebView).not.toHaveBeenCalled();
+    expect(target.adoptWebView).toHaveBeenCalledTimes(1);
+    expect(mocks.loggerDebug).toHaveBeenCalledWith(
+      expect.stringContaining('close was decided while the adopt was running'),
+    );
   });
 
   test('moves to an existing window: captures in the owner, adopts in the target, answers the id', async () => {
@@ -653,11 +659,11 @@ describe('moveWebView', () => {
     );
   });
 
-  test('a fresh window whose close is decided while its adopt runs does not report a move that worked', async () => {
-    // Same race as the numbered-target case above, but for a window the move itself created:
-    // content reaches it and its close is decided in the interval the request has no way to
-    // observe. Reporting success here would tell the caller the view is somewhere it is about to
-    // be taken down from.
+  test('a fresh window whose close is decided after its adopt succeeds resolves to that window without a second adopt', async () => {
+    // Same race as the numbered-target case above, but for a window the move itself created: content
+    // reaches it and its close is decided in the interval the request has no way to observe. By then
+    // the created window already owns the web view, so its own close path is what handles it — not a
+    // second adopt into somewhere else while it may still be live there.
     const owner = windowShard(['view-1']);
     const created = windowShard([]);
     let createdWindowClosing = false;
@@ -665,7 +671,7 @@ describe('moveWebView', () => {
       (windowId: string) => windowId === '7' && createdWindowClosing,
     );
     created.adoptWebView.mockImplementation(async () => {
-      // The close lands while the adopt is in flight, which is the whole point
+      // The close lands right after the adopt succeeds, which is the whole point
       createdWindowClosing = true;
       return 'view-1';
     });
@@ -673,11 +679,11 @@ describe('moveWebView', () => {
     const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
     setWebViewWindowCreator(creator);
 
-    await expect(moveWebView('view-1', { kind: 'new' })).rejects.toThrow();
+    await expect(moveWebView('view-1', { kind: 'new' })).resolves.toBe('view-1');
 
-    // And the web view is not left to go down with the window: recovery put it back where it
-    // came from, which is what the throw is for.
-    expect(owner.adoptWebView).toHaveBeenCalled();
+    expect(owner.adoptWebView).not.toHaveBeenCalled();
+    expect(created.adoptWebView).toHaveBeenCalledTimes(1);
+    expect(creator.closeWindow).not.toHaveBeenCalled();
   });
 
   test('when nothing can reopen the view, the move rejects and the definition is in the log', async () => {
