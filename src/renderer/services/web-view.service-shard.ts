@@ -2633,6 +2633,10 @@ export async function openOrReloadWebView(
   isReloadOfAnOpenWebView = false,
 ): Promise<WebViewId | undefined> {
   const { webViewType } = savedWebViewDefinition;
+  // A load that starts and finishes entirely inside the provider await below, with nothing left in
+  // flight for the settle wait further down to catch, leaves `layoutLoadGeneration` as its only
+  // trace once it is over — recorded here, ahead of both, so the recheck further down can tell.
+  const layoutLoadGenerationBeforeProvider = layoutLoadGeneration;
 
   // Get the WebView definition from the webview provider
   const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType);
@@ -3042,7 +3046,23 @@ export async function openOrReloadWebView(
   // re-register invalidates a dock layout already read into a variable (see `getDockLayout`). The
   // close half of the same question is asked inside the try below — see `admitContentToDock` for
   // what the two halves are for.
+  //
+  // Read before the wait settles it, because this is what tells the two shapes a load taken during
+  // the provider await can have apart. One still in flight here is one the wait below is about to
+  // catch and wait out, and the dock it leaves behind when it settles is exactly the one this call
+  // should write into — no recheck needed once that wait has happened. One that instead ran to
+  // completion entirely inside the provider await has nothing left for the wait to find; a
+  // generation moved with nothing caught is the only trace it leaves, which the check below exists
+  // to catch.
+  const wasLayoutLoadInFlight = layoutLoadInFlight !== undefined;
   await waitForLayoutLoadToSettle();
+  if (!wasLayoutLoadInFlight && layoutLoadGeneration !== layoutLoadGenerationBeforeProvider) {
+    logger.debug(
+      `Not docking web view ${webView.id} (type ${webView.webViewType}): a layout load replaced this window's dock while it was being created`,
+    );
+    deleteWebViewNonce(webView.id);
+    return undefined;
+  }
   const dockLayoutVar = await getDockLayout();
   // A reload's caller read this web view out of the dock before the provider ran and before the
   // wait above, and either stretch is long enough to lose it: a load that runs inside one takes the
