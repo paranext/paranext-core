@@ -1826,10 +1826,10 @@ step, no automation. Just a record.
   where it used to be backslashed; it had no callers. A PDP over a store that cannot enumerate must
   document that its call fails, since consumers cannot detect it in advance. The method takes no
   Send/Receive write scope: it is a read.
-- **Source:** PDP extension-data enumeration work. The `list*`-vs-`get*` naming rule it applies is
-  already in `Paranext-Core-Patterns.md` ("Naming rule (read first)"); the optional-on-engine /
-  required-on-consumer shape and the feature-detection trap are promoted there as "Adding an
-  optional method to `platform.base`".
+- **Source:** PT-4527; execution plan at `.context/plans/pt-4527-pdp-extension-data-enumeration.md`.
+  The `list*`-vs-`get*` naming rule it applies is already in `Paranext-Core-Patterns.md` ("Naming
+  rule (read first)"); the optional-on-engine / required-on-consumer shape and the
+  feature-detection trap are promoted there as "Adding an optional method to `platform.base`".
 
 ## adr-per-web-view-ctrl-f-for-find: Per-web-view Ctrl+F for Find, not a main-process `before-input-event` branch
 
