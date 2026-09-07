@@ -32,15 +32,17 @@ export type MintedWebViewIdMap = ReadonlyMap<string, string>;
  * be unique within its own layout, which the data file already guarantees.
  *
  * @param tab Tab to mint a fresh web view id for
+ * @param projectId When given, baked into the tab's saved data alongside the minted id (see
+ *   {@link mintFreshWebViewIds}) so a project-bound materialization needs no separate bake pass
  * @returns A copy of `tab` with a freshly minted id, or an unchanged copy for a non-web-view tab
  */
-export function mintFreshWebViewIdInTab(tab: SavedTabInfo): SavedTabInfo {
+export function mintFreshWebViewIdInTab(tab: SavedTabInfo, projectId?: string): SavedTabInfo {
   if (tab.tabType !== TAB_TYPE_WEBVIEW || !tab.id) return { ...tab };
   const mintedId = newGuid();
   // The web view's own id is repeated inside the tab's saved data; both must agree
   const data =
     tab.data && typeof tab.data === 'object' && 'id' in tab.data
-      ? { ...tab.data, id: mintedId }
+      ? { ...tab.data, id: mintedId, ...(projectId === undefined ? undefined : { projectId }) }
       : tab.data;
   return { ...tab, id: mintedId, data };
 }
@@ -51,9 +53,14 @@ export function mintFreshWebViewIdInTab(tab: SavedTabInfo): SavedTabInfo {
  *
  * @param box Box or panel to mint fresh ids in
  * @param mintedIds Map to record each tab's original id against its freshly minted one
+ * @param projectId Forwarded to {@link mintFreshWebViewIdInTab} for every tab in this box
  * @returns A copy of `box` holding minted copies of everything below it
  */
-function mintFreshWebViewIdsInBox(box: LayoutBox, mintedIds: Map<string, string>): LayoutBox {
+function mintFreshWebViewIdsInBox(
+  box: LayoutBox,
+  mintedIds: Map<string, string>,
+  projectId?: string,
+): LayoutBox {
   const mintedBox: LayoutBox = { ...box };
 
   if (box.tabs) {
@@ -62,7 +69,7 @@ function mintFreshWebViewIdsInBox(box: LayoutBox, mintedIds: Map<string, string>
     // the user on a different tab than the one they left open
     const mintedIdsByOriginalId = new Map<string, string>();
     mintedBox.tabs = box.tabs.map((tab) => {
-      const mintedTab = mintFreshWebViewIdInTab(tab);
+      const mintedTab = mintFreshWebViewIdInTab(tab, projectId);
       if (tab.id && mintedTab.id !== tab.id) {
         mintedIdsByOriginalId.set(tab.id, mintedTab.id);
         mintedIds.set(tab.id, mintedTab.id);
@@ -80,7 +87,7 @@ function mintFreshWebViewIdsInBox(box: LayoutBox, mintedIds: Map<string, string>
       // here; the guard above is the real check, and `LayoutBox` only reads the properties every one
       // of those shapes may carry
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      return mintFreshWebViewIdsInBox(child as LayoutBox, mintedIds);
+      return mintFreshWebViewIdsInBox(child as LayoutBox, mintedIds, projectId);
     });
 
   return mintedBox;
@@ -101,10 +108,16 @@ function mintFreshWebViewIdsInBox(box: LayoutBox, mintedIds: Map<string, string>
  * read-only.
  *
  * @param layout Layout whose web view ids should be freshly minted
+ * @param projectId When given, baked into every web-view tab's saved data alongside its minted id —
+ *   the materialization this produces is already project-bound, with no separate bake pass needed
+ *   (see {@link mintFreshWebViewIdInTab})
  * @returns A copy of `layout` with every web view id freshly minted, and the map from each tab's
  *   original id to its minted one
  */
-export default function mintFreshWebViewIds(layout: LayoutInfo): {
+export default function mintFreshWebViewIds(
+  layout: LayoutInfo,
+  projectId?: string,
+): {
   layout: LayoutInfo;
   mintedIds: MintedWebViewIdMap;
 } {
@@ -116,13 +129,13 @@ export default function mintFreshWebViewIds(layout: LayoutInfo): {
   const mintedLayout: LayoutBoxes = { ...layoutBoxes };
 
   if (layoutBoxes.dockbox)
-    mintedLayout.dockbox = mintFreshWebViewIdsInBox(layoutBoxes.dockbox, mintedIds);
+    mintedLayout.dockbox = mintFreshWebViewIdsInBox(layoutBoxes.dockbox, mintedIds, projectId);
   if (layoutBoxes.floatbox)
-    mintedLayout.floatbox = mintFreshWebViewIdsInBox(layoutBoxes.floatbox, mintedIds);
+    mintedLayout.floatbox = mintFreshWebViewIdsInBox(layoutBoxes.floatbox, mintedIds, projectId);
   if (layoutBoxes.windowbox)
-    mintedLayout.windowbox = mintFreshWebViewIdsInBox(layoutBoxes.windowbox, mintedIds);
+    mintedLayout.windowbox = mintFreshWebViewIdsInBox(layoutBoxes.windowbox, mintedIds, projectId);
   if (layoutBoxes.maxbox)
-    mintedLayout.maxbox = mintFreshWebViewIdsInBox(layoutBoxes.maxbox, mintedIds);
+    mintedLayout.maxbox = mintFreshWebViewIdsInBox(layoutBoxes.maxbox, mintedIds, projectId);
 
   // Cross back to the opaque LayoutInfo the dock layout API expects, the same boundary the walk
   // above crossed in the other direction

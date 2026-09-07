@@ -129,12 +129,14 @@ export function buildSimpleLayoutForProject(projectId: string): {
   layout: LayoutBase;
   mintedIds: MintedWebViewIdMap;
 } {
-  const projectBoundLayout = applyProjectIdToTabs(simpleLayout, projectId);
   // LayoutBase and LayoutInfo are structurally compatible at runtime; LayoutInfo is opaque in the
   // shared model, so cross that boundary here rather than push it onto every caller.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const projectBoundLayoutInfo = projectBoundLayout as unknown as LayoutInfo;
-  const { layout: mintedLayout, mintedIds } = mintFreshWebViewIds(projectBoundLayoutInfo);
+  const simpleLayoutInfo = simpleLayout as unknown as LayoutInfo;
+  // Bakes projectId in the same pass that mints fresh ids (see mint-web-view-ids.util.ts), rather
+  // than baking it via applyProjectIdToTabs first and then minting over a second clone: every tab
+  // in simpleLayout is a web view, so the two produce identical data for this layout.
+  const { layout: mintedLayout, mintedIds } = mintFreshWebViewIds(simpleLayoutInfo, projectId);
   // Cast back across the same LayoutBase/LayoutInfo boundary crossed above.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return { layout: mintedLayout as unknown as LayoutBase, mintedIds };
