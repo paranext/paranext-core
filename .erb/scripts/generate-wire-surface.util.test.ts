@@ -632,6 +632,128 @@ describe('generateWireSurfaceDocument: identifier binding through the TypeScript
   });
 });
 
+describe('generateWireSurfaceDocument: matching by the bound callee symbol', () => {
+  const COMMAND_SERVICE_STUB = `
+    export const registerCommand = (commandName: string, handler: unknown, docs?: unknown, options?: unknown) => {
+      return Promise.resolve(() => Promise.resolve(true));
+    };
+  `;
+
+  const NETWORK_OBJECT_SERVICE_STUB = `
+    const set = async (id: string, objectToShare: unknown, objectType?: string) => {
+      return objectToShare;
+    };
+    const get = async (id: string) => undefined;
+
+    export interface BackendNetworkObjectService {
+      get: typeof get;
+      set: typeof set;
+    }
+
+    export const networkObjectService: BackendNetworkObjectService = {
+      get,
+      set,
+    };
+  `;
+
+  it('recognises registerCommand through a renamed import', () => {
+    const files: VirtualFile[] = [
+      { path: 'src/shared/services/command.service.ts', text: COMMAND_SERVICE_STUB },
+      {
+        path: 'src/fixture-renamed-import.ts',
+        text: `
+          import { registerCommand as rc } from '@shared/services/command.service';
+          rc('platform.renamedImportCommand', handler);
+        `,
+      },
+    ];
+    const document = generateWireSurfaceDocument(files);
+    expect(findRegistration(document.registrations, 'platform.renamedImportCommand')).toMatchObject(
+      { category: 'command', registeredVia: 'registerCommand' },
+    );
+  });
+
+  it('recognises networkObjectService.set through a destructured receiver', () => {
+    const files: VirtualFile[] = [
+      { path: 'src/shared/services/network-object.service.ts', text: NETWORK_OBJECT_SERVICE_STUB },
+      {
+        path: 'src/fixture-destructured-network-object.ts',
+        text: `
+          import { networkObjectService } from '@shared/services/network-object.service';
+          const { set } = networkObjectService;
+          set('platform.destructuredNetworkObject', obj);
+        `,
+      },
+    ];
+    const document = generateWireSurfaceDocument(files);
+    expect(
+      findRegistration(document.registrations, 'platform.destructuredNetworkObject'),
+    ).toMatchObject({ category: 'networkObject', registeredVia: 'networkObjectService.set' });
+  });
+
+  it('recognises a re-exported registration function under another name', () => {
+    const files: VirtualFile[] = [
+      { path: 'src/shared/services/command.service.ts', text: COMMAND_SERVICE_STUB },
+      {
+        path: 'src/fixture-barrel.ts',
+        text: `export { registerCommand as renamedBarrelCommand } from '@shared/services/command.service';`,
+      },
+      {
+        path: 'src/fixture-barrel-consumer.ts',
+        text: `
+          import { renamedBarrelCommand } from './fixture-barrel';
+          renamedBarrelCommand('platform.barrelRenamedCommand', handler);
+        `,
+      },
+    ];
+    const document = generateWireSurfaceDocument(files);
+    expect(findRegistration(document.registrations, 'platform.barrelRenamedCommand')).toMatchObject(
+      { category: 'command', registeredVia: 'registerCommand' },
+    );
+  });
+
+  it('still recognises a bare-identifier call the checker cannot bind (an extension importing the unresolved @papi/backend facade)', () => {
+    const files: VirtualFile[] = [
+      {
+        path: 'src/fixture-unresolved-module.ts',
+        text: `
+          import { papi } from '@papi/backend';
+          papi.commands.registerCommand('platform.viaUnresolvedModule', handler);
+        `,
+      },
+    ];
+    const document = generateWireSurfaceDocument(files);
+    // '@papi/backend' is not a tsconfig path alias this scanner resolves (extensions consume it
+    // through typeRoots/ambient .d.ts instead), so the checker binds no symbol for this callee at
+    // all -- exactly the case that falls back to matching the callee's literal name.
+    expect(findRegistration(document.registrations, 'platform.viaUnresolvedModule')).toMatchObject({
+      category: 'command',
+      registeredVia: 'registerCommand',
+    });
+  });
+
+  it('does not recognise a same-named function declared elsewhere when the checker binds it', () => {
+    const files: VirtualFile[] = [
+      { path: 'src/shared/services/command.service.ts', text: COMMAND_SERVICE_STUB },
+      {
+        path: 'src/fixture-shadow-command.ts',
+        text: `
+          function registerCommand(commandName: string, handler: unknown): void {
+            // A local helper that merely shares a name with the platform's real registerCommand.
+          }
+          registerCommand('platform.shadowedCommand', handler);
+        `,
+      },
+    ];
+    const document = generateWireSurfaceDocument(files);
+    expect(findRegistration(document.registrations, 'platform.shadowedCommand')).toBeUndefined();
+    expect(
+      document.registrations.some((r) => r.file === 'src/fixture-shadow-command.ts') ||
+        document.dynamicRegistrations.some((r) => r.file === 'src/fixture-shadow-command.ts'),
+    ).toBe(false);
+  });
+});
+
 describe('generateWireSurfaceDocument: determinism', () => {
   const files: VirtualFile[] = [
     { path: 'src/z-fixture.ts', text: `registerCommand('platform.zCommand', handler);` },

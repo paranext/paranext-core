@@ -137,6 +137,12 @@ const REQUEST_TYPE_SEPARATOR = ':';
 const COMMAND_CATEGORY_VALUE = 'command';
 
 const RECOGNIZED_PATTERNS: string[] = [
+  'Every pattern below is matched primarily by the symbol its callee is bound to (following renamed ' +
+    'imports, re-exports, and destructured local receivers through the TypeScript checker), not by ' +
+    "the callee's literal spelling -- so import { registerCommand as rc } ... ; rc(...) and const { " +
+    'set } = networkObjectService; set(...) are recognised exactly like the direct spelling. The ' +
+    'literal name is only a fallback for a callee the checker cannot bind to any declaration (see ' +
+    'excludedPatterns).',
   'registerCommand(name, handler, docs?, options?) -> category "command"',
   'registerRequestHandler(requestType, handler, docs?, options?) -> category "directRequestHandler"; ' +
     `when requestType is serializeRequestType(CATEGORY_COMMAND, directive) the registration is ` +
@@ -160,14 +166,17 @@ const RECOGNIZED_PATTERNS: string[] = [
 ];
 
 const EXCLUDED_PATTERNS: string[] = [
-  'A registration call reached through a renamed import (`import { registerCommand as rc }`) or a ' +
-    'destructured receiver (`const { set } = networkObjectService`) -- as opposed to the ' +
-    '`networkObjectService`, `networkObjects`, and `papi.networkObjects` receiver spellings this ' +
-    'scanner explicitly recognises for `.set(...)` (see recognizedPatterns). Call sites are matched ' +
-    "on the callee's literal identifier, so any OTHER rename is not recognised -- and it is not " +
-    'filed as dynamic either, since nothing matched to begin with. No such call site exists today; ' +
-    'this is stated so the limit is known rather than discovered. The live rpc.discover comparison ' +
-    'is what would surface one.',
+  'A call whose callee the TypeScript checker cannot bind to any declaration -- an unresolved ' +
+    "module specifier (e.g. an extension's `@papi/backend` import, which resolves outside this " +
+    "scan's own TypeScript program), a computed member access (`obj[key](...)`), or an alias/" +
+    'binding chain that never bottoms out in a real declaration -- falls back to matching the ' +
+    "callee's literal identifier, exactly as this scanner always has; failing that too, it is not " +
+    'recognised and not filed as dynamic either, since nothing matched to begin with. A callee the ' +
+    'checker DOES fully resolve, conversely, is authoritative even when it is not one of the ' +
+    'registration functions below -- a local, non-platform `function registerCommand(...)` that ' +
+    'merely shares a name is definitively excluded rather than falling back to the literal-name ' +
+    'match that would otherwise mistake it for the real one. The live rpc.discover comparison is ' +
+    'what would surface a genuinely new registration idiom neither path recognises.',
   'createNetworkEventEmitter(eventType) — the deprecated synchronous event emitter. It does not ' +
     'participate in central registration and deliberately does not appear in the generated OpenRPC ' +
     'document, so it is excluded here for the same reason.',
@@ -809,97 +818,259 @@ const NETWORK_OBJECT_SERVICE_SET_ALIAS_OBJECTS = new Set([
   'networkObjects',
 ]);
 
-function matchCall(call: ts.CallExpression): CallMatch | undefined {
-  const { name, objectName } = getCalleeInfo(call.expression);
+/**
+ * Where each recognised registration function is DECLARED in this repo, keyed by the exact
+ * (repo-relative POSIX file, declared name) pair `resolveCalleeOrigin` produces. This is what lets
+ * a call be matched by the symbol its callee is bound to rather than by the callee's literal
+ * spelling: a renamed import, a re-export under another name, or a destructured local all bind to
+ * the same declaration site, so they all resolve to the same table row. `name` is the declared
+ * symbol's own name at that site -- for the `networkObjectService.set` and deprecated
+ * `webViewProviders.register` aliases, that is the exported object's property name (`set`,
+ * `register`), not the underlying function they happen to be assigned from.
+ */
+const REGISTRATION_ORIGINS: ReadonlyArray<{ file: string; name: string; match: CallMatch }> = [
+  {
+    file: 'src/shared/services/command.service.ts',
+    name: 'registerCommand',
+    match: {
+      category: 'command',
+      nameArgIndex: 0,
+      docsArgIndex: 2,
+      registeredVia: 'registerCommand',
+    },
+  },
+  {
+    file: 'src/shared/services/network.service.ts',
+    name: 'registerRequestHandler',
+    match: {
+      category: 'directRequestHandler',
+      nameArgIndex: 0,
+      docsArgIndex: 2,
+      registeredVia: 'registerRequestHandler',
+    },
+  },
+  {
+    file: 'src/shared/services/network.service.ts',
+    name: 'createNetworkEventEmitterAsync',
+    match: {
+      category: 'networkEvent',
+      nameArgIndex: 0,
+      docsArgIndex: 1,
+      registeredVia: 'createNetworkEventEmitterAsync',
+    },
+  },
+  {
+    file: 'src/shared/services/network.service.ts',
+    name: 'createBufferedNetworkEventEmitter',
+    match: {
+      category: 'networkEvent',
+      nameArgIndex: 0,
+      docsArgIndex: 1,
+      registeredVia: 'createBufferedNetworkEventEmitter',
+    },
+  },
+  {
+    file: 'src/shared/services/network.service.ts',
+    name: 'createCoreMultiSourceEventEmitter',
+    match: {
+      category: 'networkEvent',
+      nameArgIndex: 0,
+      docsArgIndex: 1,
+      registeredVia: 'createCoreMultiSourceEventEmitter',
+    },
+  },
+  {
+    file: 'src/shared/services/network-object.service.ts',
+    name: 'set',
+    match: {
+      category: 'networkObject',
+      nameArgIndex: 0,
+      docsArgIndex: 4,
+      registeredVia: 'networkObjectService.set',
+    },
+  },
+  {
+    file: 'src/shared/services/data-provider.service.ts',
+    name: 'registerEngine',
+    match: {
+      category: 'dataProviderEngine',
+      nameArgIndex: 0,
+      docsArgIndex: 4,
+      registeredVia: 'registerEngine',
+    },
+  },
+  {
+    file: 'src/shared/services/data-provider.service.ts',
+    name: 'registerEngineByType',
+    match: {
+      category: 'dataProviderEngine',
+      nameArgIndex: 0,
+      docsArgIndex: 4,
+      registeredVia: 'registerEngineByType',
+    },
+  },
+  {
+    file: 'src/shared/services/web-view-provider.service.ts',
+    name: 'registerWebViewProvider',
+    match: {
+      category: 'webViewProvider',
+      nameArgIndex: 0,
+      docsArgIndex: 3,
+      registeredVia: 'registerWebViewProvider',
+    },
+  },
+  {
+    file: 'src/shared/services/web-view-provider.service.ts',
+    name: 'register',
+    match: {
+      category: 'webViewProvider',
+      nameArgIndex: 0,
+      docsArgIndex: 3,
+      registeredVia: 'webViewProviders.register (deprecated alias)',
+    },
+  },
+  {
+    file: 'src/shared/services/project-data-provider.service.ts',
+    name: 'registerProjectDataProviderEngineFactory',
+    match: {
+      category: 'pdpFactory',
+      nameArgIndex: 0,
+      docsArgIndex: 4,
+      registeredVia: 'registerProjectDataProviderEngineFactory',
+    },
+  },
+];
+
+/** `REGISTRATION_ORIGINS`, indexed by declared name, for `matchByLiteralName`'s fallback lookups. */
+const CALL_MATCH_BY_NAME: ReadonlyMap<string, CallMatch> = new Map(
+  REGISTRATION_ORIGINS.map((origin) => [origin.name, origin.match]),
+);
+
+/**
+ * The callee's own name node: the identifier itself for `f(...)`, or the rightmost property name
+ * for `a.b(...)`. Returns undefined for anything else -- a computed member access (`obj[key](...)`)
+ * has no single name the checker can bind, so `resolveCalleeOrigin` treats it the same as an
+ * unresolved module: fall back to the literal-name match, which cannot recognise it either.
+ */
+function getCalleeNameNode(callee: ts.Expression): ts.Identifier | undefined {
+  if (ts.isIdentifier(callee)) return callee;
+  if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.name)) return callee.name;
+  return undefined;
+}
+
+/**
+ * Dereferences a destructured local (`const { set } = networkObjectService`) to the property symbol
+ * it was destructured from, so the alias-hop loop in `resolveCalleeOrigin` can keep following it
+ * back to a real declaration. A destructuring `BindingElement` is not itself an alias symbol
+ * (`getSymbolAtLocation` on `set` in the call returns the binding element's own local symbol,
+ * declared right there in the destructuring pattern), so this has to be a distinct step from
+ * `SymbolFlags.Alias` following. Returns undefined for anything this scanner does not attempt to
+ * see through: a destructured function parameter (no initializer to resolve a type from), an
+ * array-destructuring element, or a property name this scanner cannot read as plain text (a
+ * computed property name).
+ */
+function resolveBindingElementOrigin(
+  bindingElement: ts.BindingElement,
+  checker: ts.TypeChecker,
+): ts.Symbol | undefined {
+  const pattern = bindingElement.parent;
+  if (!ts.isObjectBindingPattern(pattern)) return undefined;
+  const declaration = pattern.parent;
+  if (!ts.isVariableDeclaration(declaration) || !declaration.initializer) return undefined;
+
+  const propertyNameNode = bindingElement.propertyName ?? bindingElement.name;
+  if (!ts.isIdentifier(propertyNameNode)) return undefined;
+
+  const initializerType = checker.getTypeAtLocation(declaration.initializer);
+  return initializerType.getProperty(propertyNameNode.text);
+}
+
+/**
+ * Resolves a call's callee to the file and name it is actually DECLARED under, by binding through
+ * the TypeScript checker rather than reading the callee's own literal spelling -- so a renamed
+ * import (`import { registerCommand as rc } from ...; rc(...)`), a re-export under another name,
+ * and a destructured local receiver (`const { set } = networkObjectService; set(...)`) all resolve
+ * to the same origin as the direct spelling would. Returns undefined when the checker cannot bind
+ * the callee to any declaration at all -- no symbol (an unresolved module specifier, e.g. an
+ * extension's `@papi/backend` import, which lives outside this scan's own TypeScript program), a
+ * computed member access, or an alias/binding chain that never bottoms out in a real declaration --
+ * which is the caller's cue to fall back to the literal-name match instead.
+ */
+function resolveCalleeOrigin(
+  callee: ts.Expression,
+  checker: ts.TypeChecker,
+): { file: string; name: string } | undefined {
+  const nameNode = getCalleeNameNode(callee);
+  if (!nameNode) return undefined;
+
+  let symbol = checker.getSymbolAtLocation(nameNode);
+  if (!symbol) return undefined;
+
+  let hopsRemaining = MAX_ALIAS_HOPS;
+  let advanced = true;
+  while (hopsRemaining > 0 && advanced) {
+    advanced = false;
+    // SymbolFlags is a bitmask; this is the TypeScript compiler API's own idiom for testing whether a
+    // symbol is an alias.
+    // eslint-disable-next-line no-bitwise
+    if ((symbol.flags & ts.SymbolFlags.Alias) !== 0) {
+      symbol = checker.getAliasedSymbol(symbol);
+      hopsRemaining -= 1;
+      advanced = true;
+    } else if (symbol.valueDeclaration && ts.isBindingElement(symbol.valueDeclaration)) {
+      const dereferenced = resolveBindingElementOrigin(symbol.valueDeclaration, checker);
+      if (!dereferenced) return undefined;
+      symbol = dereferenced;
+      hopsRemaining -= 1;
+      advanced = true;
+    }
+  }
+
+  const declaration = symbol.declarations?.[0];
+  if (!declaration) return undefined;
+  return { file: declaration.getSourceFile().fileName, name: symbol.name };
+}
+
+/**
+ * Matches a call by the callee's own literal spelling -- the receiver's rightmost identifier for
+ * `a.b(...)`, ignoring what it is actually bound to. This is `matchCall`'s fallback for a callee
+ * the checker cannot bind to any declaration (see `resolveCalleeOrigin`); on its own it cannot tell
+ * a platform registration function from an unrelated same-named one, which is why `set` and
+ * `register` additionally require the receiver's literal name to be one of the recognised aliases
+ * below.
+ */
+function matchByLiteralName(callee: ts.Expression): CallMatch | undefined {
+  const { name, objectName } = getCalleeInfo(callee);
   if (!name) return undefined;
 
-  switch (name) {
-    case 'registerCommand':
-      return {
-        category: 'command',
-        nameArgIndex: 0,
-        docsArgIndex: 2,
-        registeredVia: 'registerCommand',
-      };
-    case 'registerRequestHandler':
-      return {
-        category: 'directRequestHandler',
-        nameArgIndex: 0,
-        docsArgIndex: 2,
-        registeredVia: 'registerRequestHandler',
-      };
-    case 'registerEngine':
-      return {
-        category: 'dataProviderEngine',
-        nameArgIndex: 0,
-        docsArgIndex: 4,
-        registeredVia: 'registerEngine',
-      };
-    case 'registerEngineByType':
-      return {
-        category: 'dataProviderEngine',
-        nameArgIndex: 0,
-        docsArgIndex: 4,
-        registeredVia: 'registerEngineByType',
-      };
-    case 'registerWebViewProvider':
-      return {
-        category: 'webViewProvider',
-        nameArgIndex: 0,
-        docsArgIndex: 3,
-        registeredVia: 'registerWebViewProvider',
-      };
-    case 'registerProjectDataProviderEngineFactory':
-      return {
-        category: 'pdpFactory',
-        nameArgIndex: 0,
-        docsArgIndex: 4,
-        registeredVia: 'registerProjectDataProviderEngineFactory',
-      };
-    case 'createNetworkEventEmitterAsync':
-      return {
-        category: 'networkEvent',
-        nameArgIndex: 0,
-        docsArgIndex: 1,
-        registeredVia: 'createNetworkEventEmitterAsync',
-      };
-    case 'createBufferedNetworkEventEmitter':
-      return {
-        category: 'networkEvent',
-        nameArgIndex: 0,
-        docsArgIndex: 1,
-        registeredVia: 'createBufferedNetworkEventEmitter',
-      };
-    case 'createCoreMultiSourceEventEmitter':
-      return {
-        category: 'networkEvent',
-        nameArgIndex: 0,
-        docsArgIndex: 1,
-        registeredVia: 'createCoreMultiSourceEventEmitter',
-      };
-    case 'set':
-      if (objectName && NETWORK_OBJECT_SERVICE_SET_ALIAS_OBJECTS.has(objectName)) {
-        return {
-          category: 'networkObject',
-          nameArgIndex: 0,
-          docsArgIndex: 4,
-          registeredVia: 'networkObjectService.set',
-        };
-      }
-      return undefined;
-    case 'register':
-      if (objectName && WEB_VIEW_PROVIDER_REGISTER_ALIAS_OBJECTS.has(objectName)) {
-        return {
-          category: 'webViewProvider',
-          nameArgIndex: 0,
-          docsArgIndex: 3,
-          registeredVia: 'webViewProviders.register (deprecated alias)',
-        };
-      }
-      return undefined;
-    default:
-      return undefined;
+  if (name === 'set') {
+    if (!objectName || !NETWORK_OBJECT_SERVICE_SET_ALIAS_OBJECTS.has(objectName)) return undefined;
+    return CALL_MATCH_BY_NAME.get('set');
   }
+  if (name === 'register') {
+    if (!objectName || !WEB_VIEW_PROVIDER_REGISTER_ALIAS_OBJECTS.has(objectName)) return undefined;
+    return CALL_MATCH_BY_NAME.get('register');
+  }
+  return CALL_MATCH_BY_NAME.get(name);
+}
+
+/**
+ * Matches a call expression against the registration shapes this scanner recognises. Tries symbol
+ * identity first (`resolveCalleeOrigin`): when the checker fully resolves the callee to a concrete
+ * declaration, that declaration is authoritative, whether or not it is one of ours -- a callee the
+ * checker proves is something else entirely (e.g. a local, non-platform `function registerCommand`
+ * that merely shares a name) is definitively not a match, and this does NOT fall through to the
+ * literal-name check below. Only a callee the checker cannot bind to any declaration at all falls
+ * back to `matchByLiteralName`, exactly as this scanner has always matched calls.
+ */
+function matchCall(call: ts.CallExpression, checker: ts.TypeChecker): CallMatch | undefined {
+  const origin = resolveCalleeOrigin(call.expression, checker);
+  if (origin) {
+    return REGISTRATION_ORIGINS.find(
+      (candidate) => candidate.file === origin.file && candidate.name === origin.name,
+    )?.match;
+  }
+  return matchByLiteralName(call.expression);
 }
 
 // #endregion
@@ -923,7 +1094,7 @@ function processCall(
   staticRegistrations: StaticRegistration[],
   dynamicRegistrations: DynamicRegistration[],
 ): void {
-  const match = matchCall(call);
+  const match = matchCall(call, checker);
   if (!match) return;
 
   const nameArg = call.arguments[match.nameArgIndex];
