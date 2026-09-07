@@ -386,9 +386,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (string.IsNullOrEmpty(scope.DataQualifier))
             throw new InvalidDataException("Must provide a data qualifier");
 
-        Stream? dataStream =
-            GetExtensionStream(scope, true)
-            ?? throw new InvalidDataException("Extension data not found");
+        // A read must not create the document it looked for: a file under shared/** is committed by
+        // Send/Receive to every clone, and there is no delete API to take it back. An absent
+        // document reads as "" - the same answer as an empty one - because that is the contract
+        // callers were written against; distinguishing the two (the TS type permits undefined) is a
+        // separate contract change.
+        Stream? dataStream = GetExtensionStream(scope, createIfNotExists: false);
+        if (dataStream == null)
+            return "";
         using (dataStream)
         {
             return new StreamReader(dataStream, Encoding.UTF8).ReadToEnd();
@@ -428,20 +433,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// Takes no sync write scope and no project write lock: this is a read, like
     /// <see cref="GetExtensionData"/>.
     /// </remarks>
+    /// <exception cref="InvalidDataException">
+    /// The scope has no extension name, or one that does not name a single directory. See
+    /// <see cref="GetExtensionDataRoot"/>.
+    /// </exception>
     public override string[] ListExtensionDataQualifiers(ProjectDataScope scope)
     {
-        if (string.IsNullOrEmpty(scope.ExtensionName))
-            throw new InvalidDataException("Must provide an extension name");
-
-        // Scoped to this extension's own data so a project's thousands of other files are never
+        // Scoped to this extension's own data - which GetExtensionDataRoot's own check on the
+        // extension name is what enforces - so a project's thousands of other files are never
         // walked, and so no other extension's layout is exposed
-        var qualifiers = CreateExtensionStreamManager()
+        return CreateExtensionStreamManager()
             .GetExistingDataStreamNames(GetExtensionDataRoot(scope));
-
-        var prefix = scope.DataQualifierPrefix;
-        return string.IsNullOrEmpty(prefix)
-            ? qualifiers
-            : [.. qualifiers.Where(q => q.StartsWith(prefix, StringComparison.Ordinal))];
     }
 
     private Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
@@ -458,9 +460,32 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// their stream names from this, which is what makes every name
     /// <see cref="ListExtensionDataQualifiers"/> returns readable by
     /// <see cref="GetExtensionData"/> — change the layout here and both sides move together.
+    ///
+    /// The extension name has to name one directory and nothing else, so it is checked here rather
+    /// than at each caller. An extension name is caller-supplied and lands directly in a path, and
+    /// the only downstream guard rejects the substring ".." — so "." or "./" would root the walk at
+    /// the shared extensions directory and hand back every extension's data, and a Windows-trimmed
+    /// trailing space or dot would do the same.
     /// </summary>
-    private static string GetExtensionDataRoot(ProjectDataScope scope) =>
-        $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{scope.ExtensionName}";
+    /// <exception cref="InvalidDataException">
+    /// The scope has no extension name, or one that does not name a single directory.
+    /// </exception>
+    private static string GetExtensionDataRoot(ProjectDataScope scope)
+    {
+        var extensionName = scope.ExtensionName;
+        if (string.IsNullOrWhiteSpace(extensionName))
+            throw new InvalidDataException("Must provide an extension name");
+        if (
+            extensionName.AsSpan().IndexOfAny('/', '\\') >= 0
+            || extensionName != extensionName.Trim()
+            || extensionName.EndsWith('.')
+        )
+            throw new InvalidDataException(
+                $"Extension name '{extensionName}' must name a single directory"
+            );
+
+        return $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{extensionName}";
+    }
 
     private IProjectStreamManager CreateExtensionStreamManager() =>
         CreateStreamManager(_paratextProjects.GetProjectDetails(ProjectDetails.Metadata.Id));
