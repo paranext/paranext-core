@@ -37,6 +37,12 @@ const workspace = defineConfig({
           include: ['scripts/**/*.test.ts'],
           environment: 'node',
           setupFiles: [intlWarmupSetup],
+          // The shared vitest.setup.ts raises testing-library's asyncUtilTimeout to 5 s so a
+          // `waitFor` slowed by CI contention gives up on its own before the test's overall
+          // budget, rather than sharing vitest's own testTimeout and losing the race to it. That
+          // budget must stay comfortably below this one for testing-library's richer failure to
+          // ever be reachable.
+          testTimeout: 15000,
         },
       },
       // Browser tests for Storybook
