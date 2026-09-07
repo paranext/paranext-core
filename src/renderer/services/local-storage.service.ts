@@ -52,10 +52,10 @@ const STORED_STATE_KEY_PATTERN = new RegExp(`^(.+)_${WEB_VIEW_STATE_KEY}$`);
  * RFC-4122-strict UUID.
  *
  * Deliberately excludes a bare run of digits, even though the pre-durable-id scheme prefixed keys
- * with one (see {@link OBSOLETE_WINDOW_ID_KEY_PATTERN}, which this store's own sweep already
- * targets by its own dedicated pattern): a bare run of digits is a plausible prefix for a key
- * belonging to someone else, and widening this pattern to match it would put those keys in reach of
- * deletion too.
+ * with one (see {@link OBSOLETE_WINDOW_ID_KEY_PATTERN}, which this store's own sweep already targets
+ * by its own dedicated pattern): a bare run of digits is a plausible prefix for a key belonging to
+ * someone else, and widening this pattern to match it would put those keys in reach of deletion
+ * too.
  */
 const WINDOW_ID_PATTERN = new RegExp(`^${WINDOW_ID_SHAPE_PATTERN_SOURCE}$`, 'i');
 
