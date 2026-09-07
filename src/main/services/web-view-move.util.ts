@@ -211,7 +211,7 @@ async function moveCapturedWebView(
    * same way a named target's is — a move to a new window has no target id to check until this is
    * set
    */
-  let freshWindowId: number | undefined;
+  let freshWindowId: string | undefined;
   /** Puts the captured definition in the destination resolved below */
   let adoptIntoDestination: (definition: SavedWebViewDefinition) => Promise<WebViewId | undefined>;
   /**
@@ -341,7 +341,7 @@ async function moveCapturedWebView(
         // it to the recovery below, which puts it somewhere that will still be there. A move to a
         // new window is not exempt: the window it created can start closing in the same gap, and
         // freshWindowId is what makes it askable here.
-        const adoptedWindowId = typeof target === 'number' ? target : freshWindowId;
+        const adoptedWindowId = target.kind === 'window' ? target.windowId : freshWindowId;
         if (adoptedWindowId !== undefined && isWindowClosing(adoptedWindowId))
           throw new Error(
             `window ${adoptedWindowId}'s close was decided while its adopt was running`,

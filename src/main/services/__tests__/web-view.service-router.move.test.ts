@@ -224,10 +224,10 @@ describe('moveWebView', () => {
     );
     withWindows({ 2: owner, 3: target });
 
-    const firstMove = moveWebView('view-1', 3);
+    const firstMove = moveWebView('view-1', { kind: 'window', windowId: '3' });
     await settle();
 
-    const refusal = await failedMove(moveWebView('view-1', 3));
+    const refusal = await failedMove(moveWebView('view-1', { kind: 'window', windowId: '3' }));
     expect(getErrorMessage(refusal)).toContain('it is already being moved');
     // The refused call never touched the tab — the still-running first call owns it — so the
     // caller has to be able to tell this apart from a failure that actually moved or lost the tab,
@@ -244,7 +244,7 @@ describe('moveWebView', () => {
     // view unmovable for the rest of the session, so with the target answering promptly the next
     // move of the same view has to go through.
     target.adoptWebView.mockImplementation(async () => 'view-1');
-    await expect(moveWebView('view-1', 3)).resolves.toBe('view-1');
+    await expect(moveWebView('view-1', { kind: 'window', windowId: '3' })).resolves.toBe('view-1');
   });
 
   test('a target whose close is decided while its adopt runs does not report a move that worked', async () => {
@@ -254,7 +254,9 @@ describe('moveWebView', () => {
     const owner = windowShard(['view-1']);
     const target = windowShard([]);
     let targetClosing = false;
-    mocks.isWindowClosing.mockImplementation((windowId: number) => windowId === 3 && targetClosing);
+    mocks.isWindowClosing.mockImplementation(
+      (windowId: string) => windowId === '3' && targetClosing,
+    );
     target.adoptWebView.mockImplementation(async () => {
       // The close lands while the adopt is in flight, which is the whole point
       targetClosing = true;
@@ -262,7 +264,7 @@ describe('moveWebView', () => {
     });
     withWindows({ 2: owner, 3: target });
 
-    await expect(moveWebView('view-1', 3)).rejects.toThrow();
+    await expect(moveWebView('view-1', { kind: 'window', windowId: '3' })).rejects.toThrow();
     // And the web view is not left to go down with the window: recovery put it back where it came
     // from, which is what the throw is for.
     expect(owner.adoptWebView).toHaveBeenCalled();
@@ -660,7 +662,7 @@ describe('moveWebView', () => {
     const created = windowShard([]);
     let createdWindowClosing = false;
     mocks.isWindowClosing.mockImplementation(
-      (windowId: number) => windowId === 7 && createdWindowClosing,
+      (windowId: string) => windowId === '7' && createdWindowClosing,
     );
     created.adoptWebView.mockImplementation(async () => {
       // The close lands while the adopt is in flight, which is the whole point
@@ -668,10 +670,10 @@ describe('moveWebView', () => {
       return 'view-1';
     });
     withWindows({ 2: owner, 7: created });
-    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
     setWebViewWindowCreator(creator);
 
-    await expect(moveWebView('view-1', 'new')).rejects.toThrow();
+    await expect(moveWebView('view-1', { kind: 'new' })).rejects.toThrow();
 
     // And the web view is not left to go down with the window: recovery put it back where it
     // came from, which is what the throw is for.
@@ -927,8 +929,8 @@ describe('a web view that is between windows on a move', () => {
     );
     withWindows({ 2: sourceA, 3: sourceB, 4: targetA, 5: targetB });
 
-    const movingA = moveWebView('home-1', 4);
-    const movingB = moveWebView('home-2', 5);
+    const movingA = moveWebView('home-1', { kind: 'window', windowId: '4' });
+    const movingB = moveWebView('home-2', { kind: 'window', windowId: '5' });
     await settle();
 
     const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
@@ -967,7 +969,7 @@ describe('a web view that is between windows on a move', () => {
     );
     withWindows({ 2: holder, 4: target });
 
-    const move = moveWebView('dragged-view', 4);
+    const move = moveWebView('dragged-view', { kind: 'window', windowId: '4' });
     await settle();
 
     const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
