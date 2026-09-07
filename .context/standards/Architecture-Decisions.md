@@ -75,6 +75,45 @@ step, no automation. Just a record.
 
 ---
 
+## adr-abandoned-window-notice-offers-manual-close: A window whose renderer crash-loops past its reload budget gets a native "close it?" notice, not a silent leave-open or an automatic close
+
+- **Date:** 2026-09-07
+- **Status:** Accepted
+- **Context:** `decideRendererCrashReload`'s reload budget (`renderer-crash-reload-budget.util.ts`,
+  seeded from `NO_RENDERER_CRASH_RELOADS_YET`) already leaves a window whose renderer keeps dying
+  open rather than closing it out from under the user — closing it costs nothing once
+  `keepsItsEntryOnClose` (`window-entry-disposition.util.ts`) keeps its entry, but taking a window
+  away unasked is not this handler's to decide. Left alone and merely marked (`markWindowAbandoned`),
+  that window is a dead page with no explanation, excluded from `platform.getWindows`, and the only
+  trace is a log line nobody reads.
+- **Decision:** `offerToCloseAbandonedWindow` (in `main.ts`) puts a native message box to the user,
+  mirroring `confirmCloseAllWindows`'s shape (bounded localization race, `AbortSignal` dismissal on
+  quit, English fallback on a failed localization lookup) so the application's native yes/no
+  questions about closing windows look and behave alike. Whether to ask at all, and which window
+  carries the question when the abandoned one is off screen, are decided through pure, unit-tested
+  functions — `decideAbandonedWindowNotice`, `chooseNoticeParentWindowId`, and
+  `eligibleNoticeParentCandidates` (`abandoned-window-notice.util.ts`) — rather than inline in the
+  handler. Offering the close is safe specifically because `keepsItsEntryOnClose` already keeps an
+  abandoned window's entry, so closing it only brings the window back later rather than costing the
+  user its tabs.
+- **Alternatives:** Automatically close the window once its crash budget is spent — rejected: closing
+  a window unasked is not the crash handler's to decide, and a user working around a misbehaving
+  extension might disagree. Leave it open with no further signal — rejected: that is exactly the
+  confusing dead page this notice exists to explain. A different UI shape (a toast, a persistent
+  banner) — rejected: the application's other one-shot question about closing windows already uses a
+  native message box (`confirmCloseAllWindows`), and a second idiom for the same kind of question
+  would itself be an inconsistency.
+- **Consequences:** The notice's own text promises only that the window comes back, not that closing
+  it is free of side effects — an abandoned window that still holds the primary role reaches the same
+  `decideWindowClose`/`confirmCloseAllWindows` path an ordinary primary-window close does when the
+  user answers "close it", so closing what looks like one dead window can still surface the
+  whole-application close-all prompt. That escalation is a known, separately tracked gap this
+  decision does not resolve.
+- **Source:** PT-4286 "Interface-mode switching"; design spec in the PRD folder
+  (`2026-09-02-pt-4286-mode-switch-spec.md`); depends on `adr-primary-window-owns-app-lifetime` for
+  what makes a window "primary" and on the crash-reload-budget decision in
+  `renderer-crash-reload-budget.util.ts` for when a window counts as abandoned.
+
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
 - **Formerly:** ADR-0014
@@ -1031,8 +1070,15 @@ step, no automation. Just a record.
   window. The persisted flag does not move; the role can. Usually they are the same window, so the
   survivor is also the entry simple mode restores next launch; in the fallback state they are not,
   and the survivor's layout is then not the one that comes back, because the restore opens the
-  marked entry. Simple mode also refuses to create a further window, so the mode cannot come to
-  hold windows it has no way to show. Only the primary window runs the renderer-side switch at all:
+  marked entry. When no live window is fit to be the survivor — every one is either abandoned or
+  already closing — nothing closes at all: the switch aborts, the cached mode rolls back to what it
+  was, and the setting is written back to match, so a switch that could not be carried out does not
+  leave the cache and the setting disagreeing with a window set that never changed. Once the switch
+  is known to be to simple, refusing to create a further window keeps that mode from *gaining* a
+  window beyond the survivor — but a delivery of "simple" arriving while the cache is still unknown
+  is adopted outright with nothing closed, so the mode can briefly read simple while every window
+  from before remains open, until the next delivery gives the switch a known "from" to act on. Only
+  the primary window runs the renderer-side switch at all:
   that switch starts a send/receive, applies the administrator's shared layout, records a
   recently-opened project and writes an application-wide browser-storage cache, all of which a
   window being closed by the same switch would duplicate — and could resolve to a different project
@@ -1061,9 +1107,12 @@ step, no automation. Just a record.
   A question that cannot be answered still runs the switch, because nothing was learned and leaving
   the mode changed with the dock never reloaded is worse; on that path the duplicate side effects
   above are unchanged. And the renderer stands down expecting the main process to close it, with no
-  fallback if that half never runs — reachable three ways, all tolerated: the subscription failing
+  fallback if that half never runs — reachable four ways, all tolerated: the subscription failing
   at startup, the reaction returning early because it is unwired or the application is shutting
-  down, and the mode arriving in the main process as an error while the renderer got a good value.
+  down, the mode arriving in the main process as an error while the renderer got a good value, and a
+  window that stood down and was then rescued by `undoModeSwitchClose` rather than actually closed —
+  it is shown again on its power-mode dock while the cached mode already reads simple, with nothing
+  left to re-trigger the renderer-side switch since the mode is not changing again.
   A window stranded that way keeps its power layout while the application reads simple, and its
   layout pushes are refused, until the mode changes again. And the layout-push refusal is scoped to windows closing for
   a mode switch rather than to any closing window: a window is recorded as closing before it flushes
