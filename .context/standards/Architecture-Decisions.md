@@ -4344,11 +4344,15 @@ step, no automation. Just a record.
   statically disprove a **wrong** one. A registration annotated transient or lazy that is in fact
   durably live is excluded from the live comparison forever, silently. Treat additions to that map
   as a deliberate narrowing of what gets verified, not as bookkeeping. Every PR that changes the
-  wire surface now shows it. The C# half is a
-  pattern-based text scan rather than an AST one (no Roslyn in this toolchain), so it is the weaker
-  half, and its limitation plus its one excluded idiom are stated in the artifact's own header. A
-  new registration shape that neither scanner recognises is still invisible until the live
-  assertion catches the divergence — which is why the recognised-pattern list is published in the
-  header, so a reader can see what would evade it.
+  wire surface now shows it. The C# half reads `ParanextDataProvider.csproj` through Roslyn's
+  semantic model (`c-sharp/Paranext.WireSurface`, spawned by the generator via `dotnet run`), so a
+  registration is recognised by the symbol it invokes or overrides — never by text shape — and a
+  name is resolved by binding, including one level of constructor/call-argument propagation; its
+  limits are the five recognised rules and that propagation depth, both stated in the artifact's
+  header; a new idiom neither half recognises is still invisible until the live assertion catches
+  it; a compilation that does not build fails the generator rather than producing a partial
+  artifact. A new registration shape that neither scanner recognises is still invisible until the
+  live assertion catches the divergence — which is why the recognised-pattern list is published in
+  the header, so a reader can see what would evade it.
 - **Source:** TJ's review of PR #2670, 2026-08-27: shape it as "a snapshot of the full wire surface
   that PRs diff the way they diff `papi.d.ts` — not as a marker-policing rule".

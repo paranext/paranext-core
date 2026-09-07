@@ -124,6 +124,10 @@ npm test -- path/to/test-file.test.ts --watch
 cd c-sharp-tests
 dotnet test
 
+# Run C# wire-surface scanner tests
+cd c-sharp/Paranext.WireSurface.Tests
+dotnet test
+
 # Run C# tests with watch mode
 cd c-sharp-tests
 dotnet watch test

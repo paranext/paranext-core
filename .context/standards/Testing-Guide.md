@@ -20,6 +20,7 @@ paranext-core uses a **layered testing approach** rather than comprehensive end-
 | TypeScript Unit Tests | Vitest                   | `src/**/*.test.ts`  | Services, utilities, hooks   |
 | React Component Tests | Vitest + Testing Library | `lib/**/*.test.tsx` | UI components                |
 | C# Unit Tests         | NUnit                    | `c-sharp-tests/`    | Data providers, services     |
+| C# Wire-Surface Scanner Tests | NUnit | `c-sharp/Paranext.WireSurface.Tests/` | Wire-surface registration scanner, in-memory fixture compilations plus one `[Category("Integration")]` MSBuildWorkspace test |
 | Component Stories     | Storybook + Playwright   | `**/*.stories.tsx`  | Visual testing, interactions |
 
 ---
@@ -534,6 +535,13 @@ dotnet test c-sharp-tests/c-sharp-tests.csproj --filter "FullyQualifiedName~Para
 dotnet test c-sharp-tests/c-sharp-tests.csproj --collect:"XPlat Code Coverage"
 ```
 
+`c-sharp/Paranext.WireSurface.Tests/Paranext.WireSurface.Tests.csproj` is a second, separate NUnit
+project: it exercises the wire-surface registration scanner (`c-sharp/Paranext.WireSurface`)
+against in-memory fixture compilations built from stub framework types
+(`Fixtures/FrameworkStubs.cs`), plus one `[Category("Integration")]` test that runs the scanner's
+real `MSBuildWorkspace` path against a temporary project — the cross-platform proof that CI runs on
+every platform. Run it with `dotnet test c-sharp/Paranext.WireSurface.Tests/Paranext.WireSurface.Tests.csproj`.
+
 ### Base Test Class
 
 `c-sharp-tests/PapiTestBase.cs` provides a shared base class for data-provider tests. It creates a `DummyPapiClient` and `DummyLocalParatextProjects`, and its `TestTearDown` cleans up `ScrTextCollection` with full index removal — see [ScrTextCollection Index Accumulation](#scrtextcollection-index-accumulation) below for why that matters.
@@ -755,7 +763,7 @@ The `storybook-review` GitHub label triggers a Chromatic CI workflow that publis
 
 ## CI/CD Pipeline
 
-`.github/workflows/test.yml` runs both test suites on every PR:
+`.github/workflows/test.yml` runs all three test suites on every PR:
 
 ```yaml
 jobs:
@@ -763,6 +771,9 @@ jobs:
     steps:
       - name: dotnet unit tests
         run: dotnet test c-sharp-tests/c-sharp-tests.csproj
+
+      - name: dotnet wire-surface scanner tests
+        run: dotnet test c-sharp/Paranext.WireSurface.Tests/Paranext.WireSurface.Tests.csproj
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
@@ -1521,6 +1532,9 @@ npm test
 
 # C#
 dotnet test c-sharp-tests/c-sharp-tests.csproj
+
+# C# wire-surface scanner
+dotnet test c-sharp/Paranext.WireSurface.Tests/Paranext.WireSurface.Tests.csproj
 ```
 
 ### Run Specific Tests
