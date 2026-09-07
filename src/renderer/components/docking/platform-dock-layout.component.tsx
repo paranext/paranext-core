@@ -112,7 +112,7 @@ export function PlatformDockLayout() {
         webView: WebViewTabProps,
         layout: Layout,
         shouldBringToFront = true,
-        activateWithoutDocumentFocus?: boolean,
+        activateWithoutDocumentFocus: boolean | undefined = undefined,
       ) =>
         addWebViewToDock(
           webView,
@@ -143,7 +143,7 @@ export function PlatformDockLayout() {
         webViewId: string,
         updateInfo: Partial<WebViewDefinitionUpdatableProperties>,
         shouldBringToFront = false,
-        activateWithoutDocumentFocus?: boolean,
+        activateWithoutDocumentFocus: boolean | undefined = undefined,
       ) =>
         updateWebViewDefinition(
           webViewId,
