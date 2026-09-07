@@ -519,6 +519,64 @@ describe('generateWireSurfaceDocument: unresolvable names', () => {
   });
 });
 
+describe('generateWireSurfaceDocument: identifier binding through the TypeScript checker', () => {
+  it('resolves each function-local const to its own value instead of the first same-named top-level declaration', () => {
+    const files: VirtualFile[] = [
+      {
+        path: 'src/fixture-locally-scoped-names.ts',
+        text: `
+          function registerFirst() {
+            const name = 'platform.firstLocallyScopedCommand';
+            registerCommand(name, handler);
+          }
+          function registerSecond() {
+            const name = 'platform.secondLocallyScopedCommand';
+            registerCommand(name, handler);
+          }
+        `,
+      },
+    ];
+    const document = generateWireSurfaceDocument(files);
+    expect(
+      findRegistration(document.registrations, 'platform.firstLocallyScopedCommand'),
+    ).toMatchObject({ category: 'command' });
+    expect(
+      findRegistration(document.registrations, 'platform.secondLocallyScopedCommand'),
+    ).toMatchObject({ category: 'command' });
+  });
+
+  it('does not leak a stale declaration across separate scans that reuse the same file path with different content', () => {
+    const firstFiles: VirtualFile[] = [
+      {
+        path: 'src/fixture-reused-path.ts',
+        text: `
+          const NAME = 'platform.reusedPathFirstValue';
+          registerCommand(NAME, handler);
+        `,
+      },
+    ];
+    const secondFiles: VirtualFile[] = [
+      {
+        path: 'src/fixture-reused-path.ts',
+        text: `
+          const NAME = 'platform.reusedPathSecondValue';
+          registerCommand(NAME, handler);
+        `,
+      },
+    ];
+
+    generateWireSurfaceDocument(firstFiles);
+    const secondDocument = generateWireSurfaceDocument(secondFiles);
+
+    expect(
+      findRegistration(secondDocument.registrations, 'platform.reusedPathSecondValue'),
+    ).toMatchObject({ category: 'command' });
+    expect(
+      findRegistration(secondDocument.registrations, 'platform.reusedPathFirstValue'),
+    ).toBeUndefined();
+  });
+});
+
 describe('generateWireSurfaceDocument: determinism', () => {
   const files: VirtualFile[] = [
     { path: 'src/z-fixture.ts', text: `registerCommand('platform.zCommand', handler);` },
