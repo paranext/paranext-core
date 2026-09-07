@@ -112,7 +112,7 @@ export function PlatformDockLayout() {
         webView: WebViewTabProps,
         layout: Layout,
         shouldBringToFront = true,
-        activateWithoutDocumentFocus = false,
+        activateWithoutDocumentFocus?: boolean,
       ) =>
         addWebViewToDock(
           webView,
@@ -143,7 +143,7 @@ export function PlatformDockLayout() {
         webViewId: string,
         updateInfo: Partial<WebViewDefinitionUpdatableProperties>,
         shouldBringToFront = false,
-        activateWithoutDocumentFocus = false,
+        activateWithoutDocumentFocus?: boolean,
       ) =>
         updateWebViewDefinition(
           webViewId,
@@ -159,7 +159,7 @@ export function PlatformDockLayout() {
       getTabInfoById: (tabId: string) =>
         getTabInfoById(dockLayoutRef.current, tabId, 'external getTabInfoById'),
       containsTab: (tabOrTabGroupId: string) => containsTab(dockLayoutRef.current, tabOrTabGroupId),
-      focusTab: (tabId: string, activateWithoutDocumentFocus = false) =>
+      focusTab: (tabId: string, activateWithoutDocumentFocus?: boolean) =>
         focusTab(dockLayoutRef.current, tabId, activateWithoutDocumentFocus),
       // `LayoutInfo` is intentionally opaque in the shared model so callers don't need to know
       // about rc-dock's `LayoutBase`. Cross the boundary here at the only place we know the
