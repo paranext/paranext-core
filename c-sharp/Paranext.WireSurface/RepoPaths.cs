@@ -25,7 +25,10 @@ public static class RepoPaths
         if (repoRoot.Length == 0)
             return filePath.Replace('\\', '/');
 
-        if (filePath.StartsWith(repoRoot, StringComparison.Ordinal))
+        if (
+            filePath.StartsWith(repoRoot, StringComparison.Ordinal)
+            && IsPathBoundary(filePath, repoRoot.Length)
+        )
         {
             var remainder = filePath[repoRoot.Length..].TrimStart('/', '\\');
             return remainder.Replace('\\', '/');
@@ -33,4 +36,13 @@ public static class RepoPaths
 
         return Path.GetRelativePath(repoRoot, filePath).Replace('\\', '/');
     }
+
+    /// <summary>
+    /// Whether <paramref name="filePath"/> ends exactly at <paramref name="prefixLength"/> or has a
+    /// path separator there — the check that tells a genuine directory ancestor (<c>/r/core</c> of
+    /// <c>/r/core/A.cs</c>) apart from a same-prefixed sibling whose name merely extends it
+    /// (<c>/r/core</c> is a string-prefix, but not a path ancestor, of <c>/r/core-2/A.cs</c>).
+    /// </summary>
+    private static bool IsPathBoundary(string filePath, int prefixLength) =>
+        filePath.Length == prefixLength || filePath[prefixLength] is '/' or '\\';
 }
