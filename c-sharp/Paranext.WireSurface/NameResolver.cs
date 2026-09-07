@@ -82,20 +82,9 @@ public sealed class NameResolver(Compilation compilation)
             .DeclaringSyntaxReferences.Select(r => r.GetSyntax())
             .OfType<VariableDeclaratorSyntax>()
             .FirstOrDefault();
-        if (declaration is null)
-            return null;
-
-        if (declaration.Initializer is not null)
-        {
-            var initializerModel = GetSemanticModel(declaration.SyntaxTree);
-            return TryGetConstant(declaration.Initializer.Value, initializerModel, out var value)
-                ? new NameResolution.Constants([value])
-                : null;
-        }
-
-        return TryFindSingleParameterAssignment(field, out var parameter)
-            ? ResolveParameter(parameter!)
-            : null;
+        return declaration is null
+            ? null
+            : ResolveFromInitializerOrConstructorAssignment(field, declaration.Initializer);
     }
 
     /// <summary>Rule 2, property case: the get-only-auto-property counterpart of <see cref="ResolveField"/>.</summary>
@@ -108,19 +97,41 @@ public sealed class NameResolver(Compilation compilation)
             .DeclaringSyntaxReferences.Select(r => r.GetSyntax())
             .OfType<PropertyDeclarationSyntax>()
             .FirstOrDefault();
-        if (declaration is null)
-            return null;
+        return declaration is null
+            ? null
+            : ResolveFromInitializerOrConstructorAssignment(property, declaration.Initializer);
+    }
 
-        if (declaration.Initializer is not null)
+    /// <summary>
+    /// The two ways a readonly field or get-only property can take its value from a constructor
+    /// parameter: an initializer that references a primary-constructor parameter directly (resolved
+    /// like any other parameter use), or — when there is no initializer — a plain assignment to the
+    /// member inside a constructor body. An initializer that is itself a plain constant resolves
+    /// directly without needing either.
+    /// </summary>
+    private NameResolution.Constants? ResolveFromInitializerOrConstructorAssignment(
+        ISymbol fieldOrProperty,
+        EqualsValueClauseSyntax? initializer
+    )
+    {
+        if (initializer is not null)
         {
-            var initializerModel = GetSemanticModel(declaration.SyntaxTree);
-            return TryGetConstant(declaration.Initializer.Value, initializerModel, out var value)
-                ? new NameResolution.Constants([value])
+            var model = GetSemanticModel(initializer.SyntaxTree);
+            if (TryGetConstant(initializer.Value, model, out var value))
+                return new NameResolution.Constants([value]);
+
+            return
+                model.GetSymbolInfo(initializer.Value).Symbol
+                    is IParameterSymbol
+                    {
+                        ContainingSymbol: IMethodSymbol { MethodKind: MethodKind.Constructor }
+                    } parameter
+                ? ResolveParameter(parameter)
                 : null;
         }
 
-        return TryFindSingleParameterAssignment(property, out var parameter)
-            ? ResolveParameter(parameter!)
+        return TryFindSingleParameterAssignment(fieldOrProperty, out var assignedParameter)
+            ? ResolveParameter(assignedParameter!)
             : null;
     }
 
@@ -294,21 +305,12 @@ public sealed class NameResolver(Compilation compilation)
             return true;
 
         var symbol = model.GetSymbolInfo(expression).Symbol;
-        NameResolution.Constants? resolved = symbol switch
+        if (
+            symbol is (IFieldSymbol or IPropertySymbol)
+            && HasConstantInitializerOnly(symbol, out var propagatedValue)
+        )
         {
-            IFieldSymbol field when HasConstantInitializerOnly(field, out var fieldValue) => new(
-                [fieldValue]
-            ),
-            IPropertySymbol property
-                when HasConstantInitializerOnly(property, out var propertyValue) => new(
-                [propertyValue]
-            ),
-            _ => null,
-        };
-
-        if (resolved is { Values.Count: 1 })
-        {
-            value = resolved.Values[0];
+            value = propagatedValue;
             return true;
         }
 
@@ -316,44 +318,37 @@ public sealed class NameResolver(Compilation compilation)
         return false;
     }
 
-    private bool HasConstantInitializerOnly(IFieldSymbol field, out string value)
+    /// <summary>
+    /// The propagation-site-only counterpart of a readonly field's or get-only property's constant
+    /// initializer: unlike <see cref="ResolveFromInitializerOrConstructorAssignment"/>, this never
+    /// follows a non-constant initializer through to a constructor parameter, so a propagation-site
+    /// argument can chain through at most one call site.
+    /// </summary>
+    private bool HasConstantInitializerOnly(ISymbol fieldOrProperty, out string value)
     {
         value = "";
-        if (field.IsConst || !field.IsReadOnly)
-            return false;
 
-        var declaration = field
-            .DeclaringSyntaxReferences.Select(r => r.GetSyntax())
-            .OfType<VariableDeclaratorSyntax>()
-            .FirstOrDefault();
-        if (declaration?.Initializer is null)
-            return false;
+        var initializer = fieldOrProperty switch
+        {
+            IFieldSymbol { IsConst: false, IsReadOnly: true } field => field
+                .DeclaringSyntaxReferences.Select(r => r.GetSyntax())
+                .OfType<VariableDeclaratorSyntax>()
+                .FirstOrDefault()
+                ?.Initializer,
+            IPropertySymbol { SetMethod: null } property => property
+                .DeclaringSyntaxReferences.Select(r => r.GetSyntax())
+                .OfType<PropertyDeclarationSyntax>()
+                .FirstOrDefault()
+                ?.Initializer,
+            _ => null,
+        };
 
-        return TryGetConstant(
-            declaration.Initializer.Value,
-            GetSemanticModel(declaration.SyntaxTree),
-            out value
-        );
-    }
-
-    private bool HasConstantInitializerOnly(IPropertySymbol property, out string value)
-    {
-        value = "";
-        if (property.SetMethod is not null)
-            return false;
-
-        var declaration = property
-            .DeclaringSyntaxReferences.Select(r => r.GetSyntax())
-            .OfType<PropertyDeclarationSyntax>()
-            .FirstOrDefault();
-        if (declaration?.Initializer is null)
-            return false;
-
-        return TryGetConstant(
-            declaration.Initializer.Value,
-            GetSemanticModel(declaration.SyntaxTree),
-            out value
-        );
+        return initializer is not null
+            && TryGetConstant(
+                initializer.Value,
+                GetSemanticModel(initializer.SyntaxTree),
+                out value
+            );
     }
 
     private static int IndexOfByName(IReadOnlyList<IParameterSymbol> parameters, string name)

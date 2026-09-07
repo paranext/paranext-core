@@ -218,6 +218,34 @@ public class NameResolverTests
     }
 
     [Test]
+    public void CtorParameterViaFieldInitializer()
+    {
+        // A field initializer that reads directly from a primary-constructor parameter
+        // (as opposed to a constructor-body assignment) must propagate the same way.
+        var resolution = Resolve(
+            """
+            internal class N(string eventName)
+            {
+                private readonly string _name = eventName;
+
+                public void Touch() => Marker.Use(_name);
+            }
+
+            internal class Caller
+            {
+                public void Go()
+                {
+                    _ = new N("z.y");
+                    _ = new N("a.b");
+                }
+            }
+            """
+        );
+
+        AssertConstants(resolution, "a.b", "z.y");
+    }
+
+    [Test]
     public void CtorParameterSiteViaReadonlyFieldIsConstant()
     {
         // Design §5 rule 2: a propagation-site argument may itself resolve via rule 2's
