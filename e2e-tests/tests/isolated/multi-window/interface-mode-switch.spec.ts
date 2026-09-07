@@ -58,11 +58,14 @@ const BASE_LAUNCH_OPTIONS: LaunchElectronAppOptions = {
 };
 
 /**
- * The window-scope suffix a window appends to the web view ids of any layout it loads. Keep in sync
- * with `WINDOW_SUFFIX_PATTERN` in
+ * The window-scope suffix a window appends to the web view ids of any layout it loads. Mirrors the
+ * durable-id branch of `WINDOW_SUFFIX_PATTERN` in
  * `src/renderer/components/docking/window-scoped-web-view-ids.util.ts` (not imported here — the e2e
- * project cannot resolve the app's path aliases). Built from the shared
- * {@link WINDOW_ID_SHAPE_SOURCE} mirror, since the suffix is a window id.
+ * project cannot resolve the app's path aliases), built from the shared
+ * {@link WINDOW_ID_SHAPE_SOURCE} mirror since the suffix is a window id. Deliberately not that
+ * pattern's legacy bare-digit alternative too: every window in an isolated test run is created
+ * fresh and so always mints a durable id, never the pre-durable-id numeric form a saved-from-disk
+ * layout can still carry.
  */
 const WINDOW_SCOPE_SUFFIX_PATTERN = new RegExp(`-w${WINDOW_ID_SHAPE_SOURCE}$`, 'i');
 
