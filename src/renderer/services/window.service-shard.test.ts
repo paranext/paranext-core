@@ -668,12 +668,10 @@ describe('a window still waiting for its first activation', () => {
   });
 
   test('gives the waiting tab its focus in the same turn as the gesture that triggers it', () => {
-    // The catch-up used to reach the dock through the async `getDockLayout()`, so its `focusTab`
-    // call always landed a microtask after the gesture that triggered it -- late enough that a
-    // keystroke's own default action, dispatched synchronously as part of that same gesture, could
-    // already have gone to whatever held focus before the catch-up moved it. Reaching the dock
-    // synchronously closes that gap: the call lands within the gesture's own event handling, with
-    // nothing left to await.
+    // The catch-up must reach the dock synchronously, within the gesture's own event handling: a
+    // keystroke's own default action is dispatched synchronously as part of that same gesture, so a
+    // `focusTab` call landed even a microtask later (e.g. through an async `getDockLayout()`) would
+    // let that default action go to whatever held focus before the catch-up could move it.
     globalThis.wasWindowCreatedWithoutActivation = true;
     testingWindowService.implementWindowDataProviderEngine();
     noteTabAwaitingDocumentFocus('tab-1');
