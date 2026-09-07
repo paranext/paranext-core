@@ -37,7 +37,7 @@ public sealed record ScanOptions(
         for (var i = 0; i < args.Length; i++)
         {
             var flag = args[i];
-            if (!RequiredFlags.Contains(flag) || i + 1 >= args.Length)
+            if (!RequiredFlags.Contains(flag) || i + 1 >= args.Length || values.ContainsKey(flag))
             {
                 stderr.WriteLine(Usage);
                 return null;
