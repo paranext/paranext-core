@@ -53,7 +53,7 @@ public sealed class NetworkEventRule : IRegistrationRule
 
             var file = context.RepoRelativePath(tree);
             var elements = GetCollectionElements(contentsArgument);
-            if (elements is null || elements.Count < 2)
+            if (elements is null || elements.Count < 1)
             {
                 yield return new ScanEntry.Dynamic(
                     new DynamicRegistration(
@@ -66,7 +66,12 @@ public sealed class NetworkEventRule : IRegistrationRule
                 continue;
             }
 
-            var documentation = context.Docs.Resolve(elements[1], model);
+            // Documentation is optional on the wire handler (`registerEvent(eventName,
+            // documentation?)`), so a one-element collection is a fully resolved, undocumented entry.
+            var documentation = context.Docs.Resolve(
+                elements.Count > 1 ? elements[1] : null,
+                model
+            );
             foreach (
                 var entry in ScanEntry.FromNameResolution(
                     context.Names.Resolve(elements[0], model),
