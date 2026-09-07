@@ -155,6 +155,8 @@ public class ProgramIntegrationTests
         return Path.Combine(_tempDir, "Fixture.csproj");
     }
 
+    private static readonly TimeSpan RestoreTimeout = TimeSpan.FromMinutes(5);
+
     /// <summary>
     /// A design-time build needs a restore first -- a freshly written SDK-style project has no
     /// <c>obj/project.assets.json</c> yet, and <c>MSBuildWorkspace</c> fails to resolve even the
@@ -171,7 +173,20 @@ public class ProgramIntegrationTests
         )!;
         var stdoutTask = restore.StandardOutput.ReadToEndAsync();
         var stderrTask = restore.StandardError.ReadToEndAsync();
-        await restore.WaitForExitAsync();
+
+        using var timeoutCts = new CancellationTokenSource(RestoreTimeout);
+        try
+        {
+            await restore.WaitForExitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            restore.Kill(entireProcessTree: true);
+            Assert.Fail(
+                $"dotnet restore {projectPath} did not exit within {RestoreTimeout}; killed the process tree."
+            );
+        }
+
         Assert.That(
             restore.ExitCode,
             Is.EqualTo(0),
