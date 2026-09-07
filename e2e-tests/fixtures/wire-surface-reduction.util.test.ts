@@ -9,6 +9,7 @@ import {
   matchDynamicObjectId,
   resolveNetworkObjectMethod,
   type LiveMethod,
+  type WireSurfaceDynamicRegistration,
   type WireSurfaceRegistration,
 } from './wire-surface-reduction.util';
 
@@ -22,6 +23,20 @@ function reg(
     docsStaticallyResolved: true,
     language: 'typescript',
     file: 'src/somewhere.ts',
+    registeredVia: 'test',
+    ...overrides,
+  };
+}
+
+/** Build a full {@link WireSurfaceDynamicRegistration}, defaulting the fields tests don't vary. */
+function dynamicReg(
+  overrides: Partial<WireSurfaceDynamicRegistration> &
+    Pick<WireSurfaceDynamicRegistration, 'category'>,
+): WireSurfaceDynamicRegistration {
+  return {
+    expression: 'someExpression',
+    file: 'src/somewhere.ts',
+    language: 'typescript',
     registeredVia: 'test',
     ...overrides,
   };
@@ -171,6 +186,19 @@ describe('buildExpectedLiveIdentifiers / findMissingFromLive', () => {
     );
     expect(missing).toEqual([]);
   });
+
+  it('defaults dynamicCategories to empty when no dynamicRegistrations are given', () => {
+    expect([...buildExpectedLiveIdentifiers(registrations).dynamicCategories]).toEqual([]);
+  });
+
+  it('collects the distinct categories present in dynamicRegistrations', () => {
+    const expected = buildExpectedLiveIdentifiers(registrations, [
+      dynamicReg({ category: 'command' }),
+      dynamicReg({ category: 'command' }),
+      dynamicReg({ category: 'pdpFactory' }),
+    ]);
+    expect([...expected.dynamicCategories].sort()).toEqual(['command', 'pdpFactory']);
+  });
 });
 
 /**
@@ -274,10 +302,15 @@ describe('resolveNetworkObjectMethod', () => {
 });
 
 describe('classifyLiveMethod', () => {
-  const expected = buildExpectedLiveIdentifiers([
-    reg({ category: 'command', name: 'platform.about' }),
-    reg({ category: 'networkObject', name: 'AppService' }),
-  ]);
+  const expected = buildExpectedLiveIdentifiers(
+    [
+      reg({ category: 'command', name: 'platform.about' }),
+      reg({ category: 'networkObject', name: 'AppService' }),
+    ],
+    // A real wire-surface.json always documents the four dynamic command-registration call sites;
+    // one representative entry is enough to corroborate the family for these tests.
+    [dynamicReg({ category: 'command' })],
+  );
 
   it('classifies core RPC infrastructure', () => {
     expect(classifyLiveMethod('rpc.discover', expected)).toEqual({ kind: 'infrastructure' });
@@ -339,6 +372,98 @@ describe('classifyLiveMethod', () => {
     expect(classifyLiveMethod('command:someExtension.contributedCommand', expected)).toEqual({
       kind: 'dynamicPattern',
       pattern: 'extension/runtime-contributed command',
+    });
+  });
+
+  it('classifies an unmatched command as unrecognized when the snapshot documents no dynamic command registration site at all', () => {
+    const noCommandSites = buildExpectedLiveIdentifiers([
+      reg({ category: 'networkObject', name: 'AppService' }),
+    ]);
+    expect(classifyLiveMethod('command:not.declared', noCommandSites)).toEqual({ kind: 'unknown' });
+  });
+
+  it('classifies a command matching a static command entry by exact name as expected, not the lenient family', () => {
+    expect(classifyLiveMethod('command:platform.about', expected)).toEqual({ kind: 'expected' });
+  });
+
+  it('classifies a command matching a C# standaloneMethod entry (already carrying the command: prefix) by exact name as expected', () => {
+    const withStandaloneCommand = buildExpectedLiveIdentifiers([
+      reg({
+        category: 'standaloneMethod',
+        name: 'command:paratextBibleSendReceive.breakSyncLock',
+        language: 'csharp',
+        registeredVia: 'PapiClient.RegisterRequestHandlerAsync',
+      }),
+    ]);
+    expect(
+      classifyLiveMethod('command:paratextBibleSendReceive.breakSyncLock', withStandaloneCommand),
+    ).toEqual({ kind: 'expected' });
+  });
+
+  describe('the -pdpf suffix family', () => {
+    it('classifies an unmatched -pdpf id as unrecognized when the snapshot has no pdpFactory entry at all', () => {
+      const noPdpFactory = buildExpectedLiveIdentifiers([
+        reg({ category: 'networkObject', name: 'AppService' }),
+      ]);
+      expect(classifyLiveMethod('object:platform.x-pdpf', noPdpFactory)).toEqual({
+        kind: 'unknown',
+      });
+    });
+
+    it('classifies a -pdpf id matching a static pdpFactory entry by exact declared name as expected', () => {
+      const withStaticPdpFactory = buildExpectedLiveIdentifiers([
+        reg({ category: 'pdpFactory', name: 'platform.x' }),
+      ]);
+      expect(classifyLiveMethod('object:platform.x-pdpf', withStaticPdpFactory)).toEqual({
+        kind: 'expected',
+      });
+    });
+
+    it('classifies an unmatched -pdpf id as the dynamic pattern once the snapshot documents a dynamic pdpFactory entry', () => {
+      const withDynamicPdpFactory = buildExpectedLiveIdentifiers(
+        [],
+        [dynamicReg({ category: 'pdpFactory' })],
+      );
+      expect(classifyLiveMethod('object:someExtension.other-pdpf', withDynamicPdpFactory)).toEqual({
+        kind: 'dynamicPattern',
+        pattern: 'PDP factory (unresolved call site)',
+      });
+    });
+  });
+
+  describe('the -webViewProvider suffix family', () => {
+    it('classifies an unmatched -webViewProvider id as unrecognized when the snapshot has no webViewProvider entry at all', () => {
+      const noWebViewProvider = buildExpectedLiveIdentifiers([
+        reg({ category: 'networkObject', name: 'AppService' }),
+      ]);
+      expect(classifyLiveMethod('object:platform.x-webViewProvider', noWebViewProvider)).toEqual({
+        kind: 'unknown',
+      });
+    });
+
+    it('classifies a -webViewProvider id matching a static webViewProvider entry by exact declared name as expected', () => {
+      const withStaticWebViewProvider = buildExpectedLiveIdentifiers([
+        reg({ category: 'webViewProvider', name: 'platform.x' }),
+      ]);
+      expect(
+        classifyLiveMethod('object:platform.x-webViewProvider', withStaticWebViewProvider),
+      ).toEqual({ kind: 'expected' });
+    });
+
+    it('classifies an unmatched -webViewProvider id as the dynamic pattern once the snapshot documents a dynamic webViewProvider entry', () => {
+      const withDynamicWebViewProvider = buildExpectedLiveIdentifiers(
+        [],
+        [dynamicReg({ category: 'webViewProvider' })],
+      );
+      expect(
+        classifyLiveMethod(
+          'object:someExtension.other-webViewProvider',
+          withDynamicWebViewProvider,
+        ),
+      ).toEqual({
+        kind: 'dynamicPattern',
+        pattern: 'web view provider (unresolved call site)',
+      });
     });
   });
 
