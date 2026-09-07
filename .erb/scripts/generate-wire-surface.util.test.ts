@@ -149,6 +149,30 @@ describe('generateWireSurfaceDocument: recognised shapes', () => {
   });
 });
 
+describe('generateWireSurfaceDocument: the papi.networkObjects.set public alias', () => {
+  it('recognises papi.networkObjects.set and the bare networkObjects.set alias as networkObjectService.set', () => {
+    const files: VirtualFile[] = [
+      {
+        path: 'src/fixture-network-objects-alias.ts',
+        text: `
+          papi.networkObjects.set('platform.viaPapiAlias', obj);
+          networkObjects.set('platform.viaBareAlias', obj);
+        `,
+      },
+    ];
+    const document = generateWireSurfaceDocument(files);
+
+    expect(findRegistration(document.registrations, 'platform.viaPapiAlias')).toMatchObject({
+      category: 'networkObject',
+      registeredVia: 'networkObjectService.set',
+    });
+    expect(findRegistration(document.registrations, 'platform.viaBareAlias')).toMatchObject({
+      category: 'networkObject',
+      registeredVia: 'networkObjectService.set',
+    });
+  });
+});
+
 describe('generateWireSurfaceDocument: documentation and the x-experimental flag', () => {
   it('captures an inline docs object with x-experimental: true', () => {
     const files: VirtualFile[] = [
