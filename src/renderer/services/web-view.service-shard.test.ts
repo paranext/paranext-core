@@ -544,6 +544,17 @@ beforeEach(() => {
   localStorage.clear();
   globalThis.windowId = '2';
   respondToGetLayout({ kind: 'empty' });
+  // vi.clearAllMocks() above clears call history but not a prior test's mockImplementation, so
+  // without a fresh one here a describe that never sets its own `platform.getWindows` answer would
+  // run against whatever an earlier describe left behind — including a window id that no longer
+  // matches globalThis.windowId, which reads as this window not being the primary. Derived from
+  // whatever window id the test is running as, so it cannot fight a test that chooses its own.
+  sendCommandMock.mockReset();
+  sendCommandMock.mockImplementation(async (command: string) =>
+    command === 'platform.getWindows'
+      ? [{ windowId: globalThis.windowId, label: '', isMain: true }]
+      : undefined,
+  );
 });
 
 describe('loadLayout scopes web view ids to this window', () => {
