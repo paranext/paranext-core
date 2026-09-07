@@ -64,8 +64,10 @@ public sealed class DocumentationOverrideRule : IRegistrationRule
 
     /// <summary>
     /// The single expression an overriding method returns: an expression-bodied member's expression,
-    /// or the sole <c>return</c> statement's expression when the method body contains exactly one.
-    /// Any other shape — no <c>return</c>, more than one, or a bare <c>return;</c> — cannot be
+    /// or the sole <c>return</c> statement's expression when the method body contains exactly one of
+    /// the method's own — a <c>return</c> inside a nested lambda, anonymous method, or local function
+    /// belongs to that nested scope, not the override, and never counts. Any other shape — no
+    /// <c>return</c> of the override's own, more than one, or a bare <c>return;</c> — cannot be
     /// resolved to a single value.
     /// </summary>
     private static ExpressionSyntax? FindSingleReturnedExpression(MethodDeclarationSyntax method)
@@ -76,7 +78,16 @@ public sealed class DocumentationOverrideRule : IRegistrationRule
         if (method.Body is not { } body)
             return null;
 
-        var returns = body.DescendantNodes().OfType<ReturnStatementSyntax>().ToList();
+        var returns = body.DescendantNodes(child =>
+                child
+                    is not (
+                        LambdaExpressionSyntax
+                        or AnonymousMethodExpressionSyntax
+                        or LocalFunctionStatementSyntax
+                    )
+            )
+            .OfType<ReturnStatementSyntax>()
+            .ToList();
         return returns.Count == 1 ? returns[0].Expression : null;
     }
 }
