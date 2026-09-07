@@ -24,9 +24,8 @@ export const WEBSOCKET_PORT = 8876;
  * id. Every materialization of a baked layout mints a fresh id for its web views (see
  * `mintFreshWebViewIds` in `src/renderer/components/docking/mint-web-view-ids.util.ts`), so this
  * value never appears in a live `data-web-view-id` — read a window's actual Home tab id off the DOM
- * with {@link getHomeTabWebViewId} instead. Still useful as a literal to embed in a hand-built
- * legacy-layout fixture that predates minting (see `buildTwoTabLegacyLayout` in
- * `window-layout-persistence.spec.ts`).
+ * with {@link getHomeTabWebViewId} instead. No code in these suites reads this constant; it stays
+ * here as the documented identity of the slot the other helpers' doc comments point back to.
  */
 export const HOME_TAB_UUID = '7fc0e34a-d601-4995-fadc-92daa9ef713f';
 
@@ -535,6 +534,9 @@ export function homeTabTitle(page: Page) {
  * it — callers that need the id (to prove focus, a persisted layout, or a move tracks THIS Home tab
  * and not some other one) must read it off the live DOM once and compare against the captured value
  * from then on.
+ *
+ * Resolves through {@link homeTabTitle}, so it carries the same single-match precondition: a page
+ * holding more than one Home-titled tab needs its own narrower locator instead of this helper.
  */
 export async function getHomeTabWebViewId(page: Page): Promise<string> {
   const title = homeTabTitle(page);
