@@ -601,7 +601,8 @@ describe('Tab menu', () => {
   test('hides a tab item marked hidden in simple mode', async () => {
     const { settingsService } = await import('@shared/services/settings.service');
     vi.mocked(settingsService.get).mockResolvedValue('simple');
-    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
     await Promise.resolve();
     await Promise.resolve();
 
@@ -615,7 +616,8 @@ describe('Tab menu', () => {
   test('shows that same item in power mode', async () => {
     const { settingsService } = await import('@shared/services/settings.service');
     vi.mocked(settingsService.get).mockResolvedValue('power');
-    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
     await Promise.resolve();
     await Promise.resolve();
 
