@@ -208,4 +208,31 @@ describe('mintFreshWebViewIdInTab', () => {
 
     expect(readIds(mintFreshWebViewIdInTab(toolTab)).id).toBe('some-tool');
   });
+
+  test('bakes a given projectId into the tab data alongside the minted id', () => {
+    const minted = mintFreshWebViewIdInTab(webViewTab('supplement-tab'), 'proj-1');
+
+    const data = minted.data as { projectId?: string };
+    expect(data.projectId).toBe('proj-1');
+  });
+
+  test('does not bake a projectId when none is given', () => {
+    const minted = mintFreshWebViewIdInTab(webViewTab('supplement-tab'));
+
+    const data = minted.data as { projectId?: string };
+    expect(data.projectId).toBeUndefined();
+  });
+
+  test('does not bake a projectId when the tab data carries no id (unlike applyProjectIdToTabs)', () => {
+    const tabWithoutDataId = {
+      id: 'supplement-tab',
+      tabType: TAB_TYPE_WEBVIEW,
+      data: { webViewType: 'test.webView', state: {} },
+    } as unknown as SavedTabInfo;
+
+    const minted = mintFreshWebViewIdInTab(tabWithoutDataId, 'proj-1');
+
+    const data = minted.data as { projectId?: string };
+    expect(data.projectId).toBeUndefined();
+  });
 });
