@@ -1763,11 +1763,15 @@ step, no automation. Just a record.
 ## adr-pdp-enumerates-extension-data-qualifiers: A PDP lists its extension-data qualifiers through a `list*` method, required of consumers but optional on engines
 
 - **Date:** 2026-09-04
-- **Status:** Accepted
+- **Status:** Proposed — no consumer exists yet, and two shape questions are open: whether the
+  missing third member of the extension-data triple (`deleteExtensionData`, mirroring
+  `resetSetting`) should ship alongside, and whether "this PDP can enumerate" should be advertised
+  as a `projectInterface` rather than discovered by failure. Promote to Accepted once a real
+  consumer has replaced a hand-maintained index document with it.
 - **Context:** `platform.base` exposed only `getExtensionData`/`setExtensionData`
   (`project-data-provider.model.ts`, `WithProjectDataProviderEngineExtensionDataMethods`), so an
   extension could read only a `dataQualifier` it could already name. Two costs followed. Probing for
-  a qualifier by reading it **creates** it: `ParatextProjectDataProvider.GetExtensionData` calls
+  a qualifier by reading it **created** it: `ParatextProjectDataProvider.GetExtensionData` called
   `GetExtensionStream(scope, createIfNotExists: true)` and
   `RawDirectoryProjectStreamManager.GetDataStream` does `Directory.CreateDirectory` +
   `FileMode.OpenOrCreate`, leaving a zero-byte file under `shared/**` that Send/Receive commits to
@@ -1787,28 +1791,45 @@ step, no automation. Just a record.
   keeps checking only `getExtensionData`/`getSetting`, so engines that predate the method — and ones
   like `platform-lexical-tools` that hold no extension data — still register. (3) No
   `subscribeExtensionDataQualifiers`: there is no data type behind the method, and
-  `subscribeExtensionData` on a known qualifier already covers change notification.
+  `subscribeExtensionData` on a known qualifier already covers change notification. (4)
+  `GetExtensionData` **stops creating** the document it looks for (`createIfNotExists: false`); an
+  absent document reads as `""`, the same answer callers always got for one, so the wire behavior is
+  unchanged and only the side effect is gone.
 - **Alternatives:** *A required engine method* — rejected: it breaks every third-party PDP engine at
   compile time, and the guard change would stop existing in-repo engines from registering.
   *Optional on the consumer too*, so callers could feature-detect with `?.` — rejected as actively
   misleading: a remote PDP proxy fabricates a request function for **any** property name
-  (`createRemoteProxy` in `network-object.service.ts`), so the optional check can never short-circuit
+  (`createRemoteProxy` in `network-object.service.ts`), so the optional check cannot short-circuit
   over the wire; it would always call and then reject. Hence the consumer contract is "required, may
-  reject" and callers treat a rejection as "unknown", not "no data". *Enumerate the project root and
+  reject" and callers treat a failure as "unknown", not "no data". This does **not** make `?.`
+  reliable in the other direction: a PDP registered in the *calling* process is reached through
+  `createLocalProxy`/`createDataProviderProxy` instead, which pass a missing method straight through
+  as `undefined`, so in-process the property really is absent and a direct call throws
+  **synchronously** rather than rejecting. Both shapes are caught by `try`/`catch` around an `await`;
+  a bare `.catch()` catches only the remote one. *Enumerate the project root and
   filter afterwards* — rejected: project directories hold thousands of files, and returning
   `Settings.xml` and every book file to an extension asking about its own data leaks the project
-  layout. *A new C# scope class* — rejected: `ProjectDataScope` already carries `ExtensionName`, and
-  a `DataQualifierPrefix` property was added beside `DataQualifier` so the TS type can name the field
-  for what it is instead of overloading `dataQualifier` to sometimes mean a prefix.
+  layout. *A `dataQualifierPrefix` narrowing parameter on the scope* — dropped before shipping: it
+  saved a caller one `.filter()` over an array it already held, had no consumer, and the two
+  in-repo implementations had already diverged on what "prefix" meant (ordinal vs grapheme-aware)
+  before either was used. Add it when a consumer needs it, and specify the match once. *Returning
+  `undefined` for an absent document* — deferred: the TS type permits it, but `""` is what every
+  caller was written against; telling absent from empty is a separate contract change.
 - **Consequences:** extensions can drop hand-maintained index documents and their self-healing
   repair logic (the Checking Assistant carries two such indexes; `platform-scripture` stores
-  `deniedResultsList` as one shared read-modify-write blob). `GetExistingDataStreamNames` gained an
-  optional `underPath` and now normalizes to `/` — the parameterless whole-project call still works,
-  but its result is forward-slashed on Windows where it used to be backslashed; it had no callers.
-  A PDP over a store that cannot enumerate must document that its call rejects, since consumers
-  cannot detect it in advance. The method takes no Send/Receive write scope: it is a read.
+  `deniedResultsList` as one shared read-modify-write blob) — with one caveat: nothing notifies a
+  consumer that a *new* qualifier has appeared (another machine's file arriving via Send/Receive),
+  since `subscribeExtensionData` needs a name and no subscription covers the set, so a consumer that
+  must stay current re-lists. `getExtensionData` no longer leaves a file behind, so probing by read
+  is safe. `GetExistingDataStreamNames` gained an optional `underPath` and now normalizes to `/` —
+  the parameterless whole-project call still works, but its result is forward-slashed on Windows
+  where it used to be backslashed; it had no callers. A PDP over a store that cannot enumerate must
+  document that its call fails, since consumers cannot detect it in advance. The method takes no
+  Send/Receive write scope: it is a read.
 - **Source:** PDP extension-data enumeration work. The `list*`-vs-`get*` naming rule it applies is
-  already in `Paranext-Core-Patterns.md` ("Naming rule (read first)").
+  already in `Paranext-Core-Patterns.md` ("Naming rule (read first)"); the optional-on-engine /
+  required-on-consumer shape and the feature-detection trap are promoted there as "Adding an
+  optional method to `platform.base`".
 
 ## adr-per-web-view-ctrl-f-for-find: Per-web-view Ctrl+F for Find, not a main-process `before-input-event` branch
 

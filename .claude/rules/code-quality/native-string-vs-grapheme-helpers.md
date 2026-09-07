@@ -42,6 +42,15 @@ Going the other way, some cases that look like they need grapheme awareness and 
 - **An ASCII haystack with an arbitrary needle** — such as an English book name or a 3-letter canon
   id searched with a user-typed query. Every cluster in an ASCII haystack is one code unit, so the
   two index spaces coincide and a non-ASCII needle cannot match either way.
+- **A machine-composed key taken apart on the boundary it was assembled on.** When the code builds
+  a key by native concatenation — `${extensionName}/${dataQualifier}` — and stores and looks it up
+  by exact `===`, splitting it back must be native too: the partner of a native join is a native
+  split. Grapheme matching disagrees with exact-string storage. A value that begins with a combining
+  mark fuses it onto the `/` into one cluster, so grapheme `startsWith(key, extensionName + '/')`
+  is `false` for a key the exact lookup finds, and the entry silently drops out of a listing while
+  a read still returns it. That the parts are extension-derived (see above) does not change this:
+  nothing is being searched for in text. `hello-rock3`'s `listExtensionDataQualifiers` is the
+  shipped example.
 
 When a site does not qualify but is hot, the answer is a single reused `GraphemeString` instance,
 not native `String`. Segmenting once and reusing is the fix for a loop that re-segments; it is not
