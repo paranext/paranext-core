@@ -324,7 +324,7 @@ public class DocumentationResolverTests
     }
 
     [Test]
-    public void NetworkObjectDocumentationExplicitNullFallsThroughToMethods()
+    public void NetworkObjectDocumentationExplicitNullIgnoresMethods()
     {
         var resolution = Resolve(
             """
@@ -348,11 +348,11 @@ public class DocumentationResolverTests
             """
         );
 
-        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, true, true)));
+        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, true, false)));
     }
 
     [Test]
-    public void NetworkObjectDocumentationMethodsFromOpaqueExpressionIsUnresolved()
+    public void NetworkObjectDocumentationOpaqueMethodsIsIgnored()
     {
         var resolution = Resolve(
             """
@@ -371,11 +371,11 @@ public class DocumentationResolverTests
             """
         );
 
-        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, false, false)));
+        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, true, false)));
     }
 
     [Test]
-    public void NetworkObjectDocumentationAllMethodsHelper()
+    public void NetworkObjectDocumentationAllMethodsWithoutObjectFlagIsNotExperimental()
     {
         var resolution = Resolve(
             """
@@ -398,7 +398,42 @@ public class DocumentationResolverTests
             """
         );
 
-        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, true, true)));
+        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, true, false)));
+    }
+
+    [Test]
+    public void NetworkObjectDocumentationPartialMethodsAnnotationIsNotExperimental()
+    {
+        // Mirrors ParatextProjectDataProvider.GetNetworkObjectDocumentation: only some of the
+        // network object's methods are annotated experimental via `Methods`, and the object-level
+        // `Experimental` flag is deliberately left unset so the rest of the object stays stable.
+        var resolution = Resolve(
+            """
+            using System.Collections.Generic;
+            using Paranext.DataProvider.NetworkObjects.Documentation;
+
+            internal class FixturePartialMethodsAnnotation
+            {
+                public void Go() =>
+                    Probe.Use(
+                        new NetworkObjectDocumentation
+                        {
+                            Methods = new Dictionary<string, OpenRpcSingleMethodDocumentation>
+                            {
+                                ["getFinalVerseNumber"] = ExperimentalMethodDocumentation.Create(
+                                    "Get the final verse number."
+                                ),
+                                ["setFinalVerseNumber"] = ExperimentalMethodDocumentation.Create(
+                                    "Set the final verse number."
+                                ),
+                            },
+                        }
+                    );
+            }
+            """
+        );
+
+        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, true, false)));
     }
 
     [Test]

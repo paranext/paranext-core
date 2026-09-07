@@ -229,7 +229,7 @@
       "category": "dataProvider",
       "docsStaticallyResolved": true,
       "documented": true,
-      "experimental": true,
+      "experimental": false,
       "file": "c-sharp/Projects/ParatextProjectDataProvider.cs",
       "language": "csharp",
       "name": "ParatextProjectDataProvider",

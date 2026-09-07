@@ -79,7 +79,7 @@ public class DocumentationOverrideRuleTests
     }
 
     [Test]
-    public void AllHelperMethodsIsExperimental()
+    public void AllHelperMethodsWithoutObjectFlagIsNotExperimental()
     {
         var entries = ScanFixtureTree(
             """
@@ -113,7 +113,7 @@ public class DocumentationOverrideRuleTests
                             "FixtureAllHelperMethods",
                             documented: true,
                             docsStaticallyResolved: true,
-                            experimental: true
+                            experimental: false
                         )
                     ),
                 }
