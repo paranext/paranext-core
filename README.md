@@ -248,7 +248,7 @@ To manually set up `scripture-editors` to be staged locally (this should all be 
    pnpm install
    cd ../paranext-core
    ```
-3. Run `npm install` in this repo. The preinstall script builds each package in `scripture-editors` and stages it into `dev-packages/staging/`.
+3. Run `npm install` in this repo. The preinstall script stages each package from `scripture-editors` into `dev-packages/staging/`, building it only if you are editing the editor yourself or your checkout predates the committed build.
 
 #### Getting your `scripture-editors` changes into this repo
 
