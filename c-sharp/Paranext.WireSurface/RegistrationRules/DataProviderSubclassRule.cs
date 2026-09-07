@@ -24,13 +24,9 @@ public sealed class DataProviderSubclassRule : IRegistrationRule
             if (model.GetDeclaredSymbol(classDeclaration) is not { } classSymbol)
                 continue;
 
-            if (
-                !context.Symbols.DerivesFrom(classSymbol, context.Symbols.DataProvider)
-                || SymbolEqualityComparer.Default.Equals(
-                    classSymbol.OriginalDefinition,
-                    context.Symbols.DataProvider
-                )
-            )
+            // DerivesFrom walks strictly from classSymbol.BaseType, so it is already false when
+            // classSymbol is DataProvider itself — no separate self-exclusion check is needed.
+            if (!context.Symbols.DerivesFrom(classSymbol, context.Symbols.DataProvider))
                 continue;
 
             var file = context.RepoRelativePath(tree);
