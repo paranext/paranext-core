@@ -494,6 +494,10 @@ async function findLayoutTargetOwner(
  *
  * It happens only when the caller did not opt out with `bringToFront: false` — see the comment
  * below.
+ *
+ * It happens only when the owning window is not itself withheld from activation. A window the
+ * platform opened in the background and the user has not been in yet must not be pulled to the
+ * foreground by content simply landing in it — see `shouldContentAvoidDocumentFocus`.
  */
 async function openWebViewInOwningWindow(
   owner: WindowShard,
