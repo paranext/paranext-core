@@ -349,7 +349,7 @@ export type FreshWindow = {
    * running, say — has an id to ask about; `runOpen`'s own return only ever carries the web view id
    * the open answered with.
    */
-  windowId: number;
+  windowId: string;
   /**
    * Run an open against the created window. A failure — and a provider decline — closes the window
    * again. Success takes the pending-content mark off, so a reload before the first layout push
