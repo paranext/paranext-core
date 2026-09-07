@@ -257,15 +257,65 @@ interface FileEntry {
   sourceFile: ts.SourceFile;
 }
 
-/** Repo-relative-path aliases from the root tsconfig.json, used to resolve `@alias/*` imports. */
-const PATH_ALIASES: ReadonlyArray<readonly [string, string]> = [
-  ['@shared/', 'src/shared/'],
-  ['@main/', 'src/main/'],
-  ['@node/', 'src/node/'],
-  ['@extension-host/', 'src/extension-host/'],
-  ['@renderer/', 'src/renderer/'],
-  ['@client/', 'src/client/'],
-];
+/**
+ * Extracts `[aliasPrefix, targetPrefix]` pairs from a tsconfig-style `compilerOptions.paths` map,
+ * for use by `resolveModuleSpecifier`. Only single-target, `/*`-suffixed entries participate --
+ * that is every alias this codebase actually resolves through a directory prefix; other shapes (a
+ * bare specifier mapped to one fixed file, like tsconfig's own `vite` shim, or a specifier mapped
+ * to more than one candidate directory) fall outside what this scanner needs to follow and are
+ * silently skipped rather than guessed at.
+ */
+export function derivePathAliases(
+  paths: Record<string, readonly string[]>,
+): ReadonlyArray<readonly [string, string]> {
+  return Object.entries(paths)
+    .flatMap((entry): Array<readonly [string, string]> => {
+      const [alias, targets] = entry;
+      if (!alias.endsWith('/*') || targets.length !== 1) return [];
+      const [target] = targets;
+      if (!target.endsWith('/*')) return [];
+      return [[alias.slice(0, -1), target.replace(/^\.\//, '').slice(0, -1)]];
+    })
+    .sort(([a], [b]) => compareCodeUnits(a, b));
+}
+
+function isPathsRecord(value: unknown): value is Record<string, readonly string[]> {
+  return (
+    typeof value === 'object' &&
+    // Testing null explicitly, since typeof null === 'object'.
+    // eslint-disable-next-line no-null/no-null
+    value !== null &&
+    Object.values(value).every(
+      (targets) => Array.isArray(targets) && targets.every((target) => typeof target === 'string'),
+    )
+  );
+}
+
+function readTsconfigPaths(tsconfigPath: string): Record<string, readonly string[]> {
+  const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+  if (configFile.error) {
+    throw new Error(
+      `Could not read ${tsconfigPath}: ${ts.flattenDiagnosticMessageText(
+        configFile.error.messageText,
+        '\n',
+      )}`,
+    );
+  }
+  const paths: unknown = configFile.config?.compilerOptions?.paths;
+  if (!isPathsRecord(paths)) {
+    throw new Error(`${tsconfigPath} has no compilerOptions.paths to derive path aliases from.`);
+  }
+  return paths;
+}
+
+/**
+ * Repo-relative-path aliases, derived at load time from the root tsconfig.json's own
+ * `compilerOptions.paths` (rather than hand-copied here) so this list can never drift from the
+ * aliases the rest of the codebase actually resolves through.
+ */
+const PATH_ALIASES: ReadonlyArray<readonly [string, string]> = derivePathAliases(
+  readTsconfigPaths(path.resolve(__dirname, '../../tsconfig.json')),
+);
 
 function buildFileMap(files: VirtualFile[]): Map<string, FileEntry> {
   const map = new Map<string, FileEntry>();
