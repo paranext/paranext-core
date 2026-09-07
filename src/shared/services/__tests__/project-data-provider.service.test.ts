@@ -39,7 +39,8 @@ function makeBaseEngine() {
 
 /** Make the registration boundaries succeed, returning minimal stand-in disposables. */
 function mockSuccessfulRegistration() {
-  // The mocks return minimal disposables standing in for the full network object / data provider.
+  // Cast: the doubles carry only the `dispose` surface these two call sites reach for, not the
+  // full network object / data provider each really resolves to.
   /* eslint-disable no-type-assertion/no-type-assertion */
   vi.mocked(networkObjectService.set).mockResolvedValue({ dispose: vi.fn() } as never);
   vi.mocked(registerEngineByType).mockResolvedValue({ dispose: vi.fn(async () => true) } as never);
@@ -140,7 +141,6 @@ describe('registerProjectDataProviderEngineFactory — platform-canonical attrib
 
     await registerProjectDataProviderEngineFactory('pdpf-id', ['platform.base'], engineFactory);
 
-    // Drive a PDP creation through the factory the service registered.
     await captureRegisteredFactory().getProjectDataProviderId('real-project-id');
 
     expect(registerEngineByType).toHaveBeenCalledTimes(1);
