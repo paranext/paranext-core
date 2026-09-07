@@ -56,54 +56,15 @@ public sealed class StandaloneRequestHandlerRule : IRegistrationRule
             var file = context.RepoRelativePath(tree);
 
             foreach (
-                var entry in BuildEntries(
+                var entry in ScanEntry.FromNameResolution(
                     context.Names.Resolve(nameArgument, model),
+                    RegistrationCategory.StandaloneMethod,
                     file,
+                    RegisteredVia.PapiClientRegisterRequestHandlerAsync,
                     documentation
                 )
             )
                 yield return entry;
         }
-    }
-
-    private static IEnumerable<ScanEntry> BuildEntries(
-        NameResolution name,
-        string file,
-        DocumentationResolution documentation
-    )
-    {
-        switch (name)
-        {
-            case NameResolution.Constant constant:
-                yield return ToStatic(constant.Value);
-                break;
-            case NameResolution.Constants constants:
-                foreach (var value in constants.Values)
-                    yield return ToStatic(value);
-                break;
-            case NameResolution.Dynamic dynamic:
-                yield return new ScanEntry.Dynamic(
-                    new DynamicRegistration(
-                        RegistrationCategory.StandaloneMethod,
-                        file,
-                        RegisteredVia.PapiClientRegisterRequestHandlerAsync,
-                        dynamic.ExpressionText
-                    )
-                );
-                break;
-        }
-
-        ScanEntry.Static ToStatic(string value) =>
-            new(
-                new StaticRegistration(
-                    RegistrationCategory.StandaloneMethod,
-                    value,
-                    file,
-                    RegisteredVia.PapiClientRegisterRequestHandlerAsync,
-                    documentation.Documented,
-                    documentation.DocsStaticallyResolved,
-                    documentation.Experimental
-                )
-            );
     }
 }

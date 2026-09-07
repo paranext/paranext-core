@@ -50,7 +50,7 @@ public sealed class NetworkObjectRegistrationRule : IRegistrationRule
             var file = context.RepoRelativePath(tree);
 
             foreach (
-                var entry in BuildEntries(
+                var entry in ScanEntry.FromNameResolution(
                     context.Names.Resolve(nameArgument, model),
                     category,
                     file,
@@ -98,43 +98,5 @@ public sealed class NetworkObjectRegistrationRule : IRegistrationRule
             RegistrationCategory.NetworkObject,
             RegisteredVia.NetworkObjectRegisterNetworkObjectAsync
         );
-    }
-
-    private static IEnumerable<ScanEntry> BuildEntries(
-        NameResolution name,
-        string category,
-        string file,
-        string registeredVia,
-        DocumentationResolution documentation
-    )
-    {
-        switch (name)
-        {
-            case NameResolution.Constant constant:
-                yield return ToStatic(constant.Value);
-                break;
-            case NameResolution.Constants constants:
-                foreach (var value in constants.Values)
-                    yield return ToStatic(value);
-                break;
-            case NameResolution.Dynamic dynamic:
-                yield return new ScanEntry.Dynamic(
-                    new DynamicRegistration(category, file, registeredVia, dynamic.ExpressionText)
-                );
-                break;
-        }
-
-        ScanEntry.Static ToStatic(string value) =>
-            new(
-                new StaticRegistration(
-                    category,
-                    value,
-                    file,
-                    registeredVia,
-                    documentation.Documented,
-                    documentation.DocsStaticallyResolved,
-                    documentation.Experimental
-                )
-            );
     }
 }
