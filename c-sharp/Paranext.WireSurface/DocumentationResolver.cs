@@ -135,12 +135,16 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
             IsType(symbols.NetworkObjectDocumentation, property.ContainingType)
         );
         var experimentalValue = FindInitializerValue(objectCreation, experimentalProperty, model);
-        if (experimentalValue is not null && !IsExplicitNull(experimentalValue, model))
+        if (experimentalValue is not null)
         {
             var constant = model.GetConstantValue(experimentalValue);
-            return constant.HasValue && constant.Value is bool boolValue
-                ? new DocumentationResolution(true, true, boolValue)
-                : Unresolved;
+            if (constant.HasValue && constant.Value is bool boolValue)
+                return new DocumentationResolution(true, true, boolValue);
+
+            // An explicit `Experimental = null` is equivalent to omitting the property — fall
+            // through to the Methods-derived answer below. Anything else non-bool is unresolvable.
+            if (constant is not { HasValue: true, Value: null })
+                return Unresolved;
         }
 
         var methodsValue = FindInitializerValue(objectCreation, _methodsProperty, model);
@@ -173,21 +177,18 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
     )
     {
         var value = FindInitializerValue(objectCreation, experimentalProperty, model);
-        if (value is null || IsExplicitNull(value, model))
+        if (value is null)
             return new DocumentationResolution(true, true, false);
 
         var constant = model.GetConstantValue(value);
-        return constant.HasValue && constant.Value is bool boolValue
-            ? new DocumentationResolution(true, true, boolValue)
+        if (constant.HasValue && constant.Value is bool boolValue)
+            return new DocumentationResolution(true, true, boolValue);
+
+        // An explicit `Experimental = null` is equivalent to omitting the property.
+        return constant is { HasValue: true, Value: null }
+            ? new DocumentationResolution(true, true, false)
             : Unresolved;
     }
-
-    /// <summary>
-    /// <c>Experimental</c> is a nullable bool whose doc comment treats an explicit <c>null</c> the
-    /// same as omitting the property entirely, so both must fall through the same way here.
-    /// </summary>
-    private static bool IsExplicitNull(ExpressionSyntax expression, SemanticModel model) =>
-        model.GetConstantValue(expression) is { HasValue: true, Value: null };
 
     /// <summary>
     /// <c>OpenRpcSingleMethodDocumentation</c>/<c>OpenRpcSingleNotificationDocumentation</c> carry
