@@ -267,6 +267,27 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void GetExtensionData_NeverWritten_ReadsEmptyAndCreatesNothing()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+
+            var data = provider.GetExtensionData(
+                new ProjectDataScope { ExtensionName = "myExtension", DataQualifier = "never.json" }
+            );
+
+            Assert.Multiple(() =>
+            {
+                // "" rather than null: the answer an absent document has always given, so no caller
+                // can tell the difference - only the side effect is gone
+                Assert.That(data, Is.EqualTo(""));
+                // A read that created the document would leave a zero-byte file under shared/**
+                // for Send/Receive to commit to every clone, with no delete API to take it back
+                Assert.That(provider.GetStoredStreamNames(), Is.Empty);
+            });
+        }
+
+        [Test]
         public void ListExtensionDataQualifiers_NothingWritten_IsEmptyAndCreatesNothing()
         {
             DummyParatextProjectDataProvider provider =
@@ -279,9 +300,8 @@ namespace TestParanextDataProvider.Projects
             Assert.Multiple(() =>
             {
                 Assert.That(qualifiers, Is.Empty);
-                // Listing must not write anything. This is the property the method exists for:
-                // discovering a qualifier by reading it leaves a zero-byte file behind under
-                // shared/**, which Send/Receive then commits to every clone with no way to delete it.
+                // Listing must not write anything: a zero-byte file under shared/** is committed by
+                // Send/Receive to every clone, with no delete API to take it back
                 Assert.That(provider.GetStoredStreamNames(), Is.Empty);
             });
         }
@@ -317,39 +337,6 @@ namespace TestParanextDataProvider.Projects
                     }
                 )
             );
-        }
-
-        [Test]
-        public void ListExtensionDataQualifiers_Prefix_NarrowsToMatchingQualifiers()
-        {
-            DummyParatextProjectDataProvider provider =
-                new(PdpName, Client, _projectDetails, ParatextProjects);
-            SetExtensionData(provider, "myExtension", "top.json", "top");
-            SetExtensionData(provider, "myExtension", "byMachine/ledger/abc.json", "nested");
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(
-                    provider.ListExtensionDataQualifiers(
-                        new ProjectDataScope
-                        {
-                            ExtensionName = "myExtension",
-                            DataQualifierPrefix = "byMachine/",
-                        }
-                    ),
-                    Is.EqualTo(new[] { "byMachine/ledger/abc.json" })
-                );
-                Assert.That(
-                    provider.ListExtensionDataQualifiers(
-                        new ProjectDataScope
-                        {
-                            ExtensionName = "myExtension",
-                            DataQualifierPrefix = "nothing/",
-                        }
-                    ),
-                    Is.Empty
-                );
-            });
         }
 
         [Test]
@@ -395,16 +382,50 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void ListExtensionDataQualifiers_NoExtensionName_Throws()
+        public void ListExtensionDataQualifiers_IsRegisteredOnTheWireSurface()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+
+            // Every other test here calls the method in-process, so none of them notices if the
+            // registration tuple is missing - and without it the method simply does not exist over
+            // JSON-RPC, which is the only way an extension can reach it
+            Assert.That(
+                provider.GetRegisteredFunctionNames(),
+                Does.Contain("listExtensionDataQualifiers")
+            );
+        }
+
+        [TestCase(null, TestName = "ListExtensionDataQualifiers_NoExtensionName_Throws")]
+        [TestCase("", TestName = "ListExtensionDataQualifiers_EmptyExtensionName_Throws")]
+        [TestCase("   ", TestName = "ListExtensionDataQualifiers_WhitespaceExtensionName_Throws")]
+        [TestCase(".", TestName = "ListExtensionDataQualifiers_DotExtensionName_Throws")]
+        [TestCase("./", TestName = "ListExtensionDataQualifiers_DotSlashExtensionName_Throws")]
+        [TestCase("..", TestName = "ListExtensionDataQualifiers_DotDotExtensionName_Throws")]
+        [TestCase(
+            "myExtension/..",
+            TestName = "ListExtensionDataQualifiers_TraversingExtensionName_Throws"
+        )]
+        [TestCase(
+            "myExtension ",
+            TestName = "ListExtensionDataQualifiers_TrailingSpaceExtensionName_Throws"
+        )]
+        public void ListExtensionDataQualifiers_ExtensionNameNotASingleDirectory_Throws(
+            string? extensionName
+        )
         {
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
             SetExtensionData(provider, "someOtherExtension", "theirs.json", "theirs");
 
-            // Without this guard the listing would be scoped to the extensions directory itself and
-            // hand the caller every extension's qualifiers
+            // Every one of these resolves to the shared extensions directory (or above it) once it
+            // reaches the filesystem, so without this guard the listing hands the caller every
+            // extension's qualifiers instead of the one extension it asked about
             Assert.Throws<InvalidDataException>(
-                () => provider.ListExtensionDataQualifiers(new ProjectDataScope())
+                () =>
+                    provider.ListExtensionDataQualifiers(
+                        new ProjectDataScope { ExtensionName = extensionName }
+                    )
             );
         }
 

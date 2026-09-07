@@ -28,19 +28,11 @@ export type ExtensionDataScope = {
   dataQualifier: string;
 };
 
-/** Indicates to a PDP which of an extension's `dataQualifier`s to list */
-export type ExtensionDataListScope = {
-  /** Name of an extension as provided in its manifest */
-  extensionName: string;
-  /**
-   * Optional prefix. When provided, only `dataQualifier`s that start with it are returned, so
-   * `byMachine/` lists everything the extension stores under that directory.
-   *
-   * Matched as a plain string prefix on the forward-slash form, so `byMachine` (no trailing slash)
-   * also matches `byMachineOther/x`. Include the trailing slash if you mean the directory.
-   */
-  dataQualifierPrefix?: string;
-};
+/**
+ * Indicates to a PDP whose `dataQualifier`s to list: the extension named, and nothing narrower. The
+ * whole list comes back; filter it at the call site.
+ */
+export type ExtensionDataListScope = Pick<ExtensionDataScope, 'extensionName'>;
 
 /**
  * `DataProviderDataTypes` that each project data provider **must** implement. They are assumed to
@@ -152,15 +144,14 @@ export type WithProjectDataProviderEngineExtensionDataMethods<
    * own data, nested paths included. The list is sorted and includes empty documents.
    *
    * Listing never creates anything, so an extension that has never written any data gets `[]`.
-   * Discovering the same thing by calling `getExtensionData` does not have that property — on the
-   * Paratext PDP a read creates the file it looked for.
    *
    * Optional, because not every Project Data Provider can enumerate its extension data (one over a
    * remote store may not be able to). A PDP that cannot simply does not implement it, and the call
    * fails. Callers that need to work against arbitrary PDPs should treat a failed call as
-   * "unknown", not as "no data".
+   * "unknown", not as "no data" — see the consumer-side declaration in `papi-shared-types` for how
+   * that failure actually reaches a caller, which differs between a local and a remote PDP.
    *
-   * @param scope Which extension's `dataQualifier`s to list, optionally narrowed by a prefix
+   * @param scope Which extension's `dataQualifier`s to list
    * @returns Sorted `dataQualifier`s that exist for that extension in this project
    */
   listExtensionDataQualifiers?(scope: ExtensionDataListScope): Promise<string[]>;

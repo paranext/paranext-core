@@ -34,7 +34,10 @@ namespace TestParanextDataProvider.Projects
         [TearDown]
         public void TearDown()
         {
-            _projectFolder?.Dispose();
+            // Recreated first because a test may have deleted it to stand in for an unreachable
+            // project, and TemporaryFolder.Dispose expects a folder it can remove
+            Directory.CreateDirectory(_projectFolder.Path);
+            _projectFolder.Dispose();
         }
 
         [Test]
@@ -74,28 +77,81 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void GetExistingDataStreamNames_EveryNameReadsBackThroughGetDataStream()
         {
-            WriteStream($"{ExtensionPath}/top.json", "top contents");
-            WriteStream($"{ExtensionPath}/byMachine/ledger/abc.json", "nested contents");
+            Dictionary<string, string> written =
+                new()
+                {
+                    ["top.json"] = "top contents",
+                    ["byMachine/ledger/abc.json"] = "nested contents",
+                };
+            foreach (var (streamName, contents) in written)
+                WriteStream($"{ExtensionPath}/{streamName}", contents);
 
             var streamNames = _streamManager.GetExistingDataStreamNames(ExtensionPath);
 
             Assert.Multiple(() =>
             {
+                // Asserted before the loop so the loop cannot be the whole test: with no listing to
+                // iterate, every assertion inside it is skipped and the test passes on an empty
+                // result - which is exactly what a broken enumeration returns
+                Assert.That(streamNames, Is.EquivalentTo(written.Keys));
                 foreach (var streamName in streamNames)
                 {
                     // Names come back relative to the path they were listed under, so a caller
-                    // rejoins them with that path to read them
-                    using var stream = _streamManager.GetDataStream(
-                        $"{ExtensionPath}/{streamName}",
-                        createIfNotExists: false
-                    );
+                    // rejoins them with that path to read them. Compared by contents, not just
+                    // non-null, so a name that resolves to some *other* existing file fails here
                     Assert.That(
-                        stream,
-                        Is.Not.Null,
-                        $"Listed name '{streamName}' must name a stream that already exists"
+                        ReadStream($"{ExtensionPath}/{streamName}"),
+                        Is.EqualTo(written[streamName]),
+                        $"Listed name '{streamName}' must read back the data written under it"
                     );
                 }
             });
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_HiddenStreams_AreStillListed()
+        {
+            WriteStream($"{ExtensionPath}/plain.json", "plain");
+            // Two spellings of "hidden", because each platform only recognizes one: .NET reports a
+            // dot-prefixed name as Hidden on Unix, while on Windows the attribute has to be set
+            WriteStream($"{ExtensionPath}/.dotted.json", "dotted");
+            WriteStream($"{ExtensionPath}/.dotdir/inside.json", "inside");
+            WriteStream($"{ExtensionPath}/attributed.json", "attributed");
+            var attributedPath = Path.Join(
+                _projectFolder.Path,
+                ExtensionPath.Replace('/', Path.DirectorySeparatorChar),
+                "attributed.json"
+            );
+            File.SetAttributes(
+                attributedPath,
+                File.GetAttributes(attributedPath) | FileAttributes.Hidden
+            );
+
+            var streamNames = _streamManager.GetExistingDataStreamNames(ExtensionPath);
+
+            // GetDataStream applies no attribute filter, so anything it can read has to be listed -
+            // otherwise the same project answers differently per platform and a caller cannot tell
+            // a complete listing from a short one
+            Assert.That(
+                streamNames,
+                Is.EqualTo(
+                    new[] { ".dotdir/inside.json", ".dotted.json", "attributed.json", "plain.json" }
+                )
+            );
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_ProjectStorageMissing_Throws()
+        {
+            WriteStream($"{ExtensionPath}/mine.json", "mine");
+            Directory.Delete(_projectFolder.Path, true);
+
+            // An absent sub-path is an empty list, but an absent project is a failure: a caller
+            // told to treat only an error as "unknown" would read [] as "this extension has no
+            // data" and reinitialize over data that was merely unreachable
+            Assert.Throws<DirectoryNotFoundException>(
+                () => _streamManager.GetExistingDataStreamNames(ExtensionPath)
+            );
         }
 
         [Test]
@@ -138,8 +194,20 @@ namespace TestParanextDataProvider.Projects
                 streamName,
                 createIfNotExists: true
             )!;
-            using StreamWriter writer = new(stream, Encoding.UTF8);
+            // BOM-less, so writing "" leaves a genuinely 0-byte file. Encoding.UTF8 emits its
+            // preamble on flush even with nothing written, which would make the empty-document
+            // fixture 3 bytes and leave the "empty documents are included" claim untested.
+            using StreamWriter writer = new(stream, new UTF8Encoding(false));
             writer.Write(contents);
+        }
+
+        private string ReadStream(string streamName)
+        {
+            using Stream stream =
+                _streamManager.GetDataStream(streamName, createIfNotExists: false)
+                ?? throw new AssertionException($"Listed name '{streamName}' names no stream");
+            using StreamReader reader = new(stream, Encoding.UTF8);
+            return reader.ReadToEnd();
         }
     }
 }

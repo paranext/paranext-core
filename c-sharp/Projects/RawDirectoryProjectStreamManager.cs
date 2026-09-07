@@ -35,6 +35,14 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
             ? _writableRootDir
             : GetFileNameFromStreamName(underPath);
 
+        // An absent sub-path means "nothing written there yet" and answers empty; an absent project
+        // directory means the project itself is unreachable and must not be reported as "no data",
+        // since callers cannot tell an authoritative empty answer from a failure they should retry.
+        if (!Directory.Exists(_writableRootDir))
+            throw new DirectoryNotFoundException(
+                $"Project contents missing for {_projectDetails.Name} ({_projectDetails.Metadata.Id})"
+            );
+
         // Enumerating a path that does not exist must not create it - callers use this to discover
         // what exists without writing to the project
         if (!Directory.Exists(rootDir))
@@ -48,6 +56,18 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
                 MatchType = MatchType.Simple,
                 RecurseSubdirectories = true,
                 ReturnSpecialDirectories = false,
+                // Two departures from EnumerationOptions' defaults, both required by this method's
+                // "every stream that exists" contract:
+                // - Hidden/System are NOT skipped (the default skips both). .NET reports every
+                //   dot-prefixed name as Hidden on Unix, so the default drops a `.foo.json` stream
+                //   - and every stream under a `.cache/` directory - on macOS and Linux but not on
+                //   Windows, while GetDataStream reads them on every platform.
+                // - ReparsePoint IS skipped, so recursion stops at a symlink or junction instead of
+                //   walking through it. Following one would report files from outside the project as
+                //   though they belonged to it, under names carrying no `..` for the guard in
+                //   GetFileNameFromStreamName to catch, and a link to an ancestor would recurse
+                //   until the path length overflowed.
+                AttributesToSkip = FileAttributes.ReparsePoint,
             }
         );
 
