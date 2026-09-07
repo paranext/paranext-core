@@ -1124,6 +1124,18 @@ declare module 'shared/global-this.model' {
      */
     var windowId: string | undefined;
     /**
+     * Whether this window was created without being activated, as of the moment it was created. Set
+     * in the renderer process from the URL search params; no other process assigns it, so it reads
+     * `undefined` there.
+     *
+     * This is the window's state at creation, not now: what content should do about it also depends
+     * on whether the user has since done anything in the window, which the renderer tracks
+     * separately.
+     *
+     * @experimental
+     */
+    var wasWindowCreatedWithoutActivation: boolean | undefined;
+    /**
      * Whether this renderer is the main window — the one that draws the top-level menu. On Windows
      * and Linux, secondary windows get identical chrome minus that menu; on macOS the top-level menu
      * lives in the OS-level menu bar rather than in-window, so this flag does not remove it there —
@@ -4205,13 +4217,21 @@ declare module 'shared/models/docking-framework.model' {
      * @param layout Information about where to put a new webview
      * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
      *   tabs. Defaults to `true`
+     * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+     *   taking document focus. Focusing a tab focuses its web view's iframe, and a `focus()` inside a
+     *   window that does not hold OS focus asks the browser to activate that window — so a window
+     *   opened deliberately in the background must dock its content without it. Left unspecified,
+     *   this defaults to whether this window is still awaiting its first activation.
      * @returns If WebView added, final layout used to display the new webView. If existing webView
      *   updated, `undefined`
+     * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+     *   member is long-established.
      */
     addWebViewToDock: (
       webView: WebViewTabProps,
       layout: Layout,
       shouldBringToFront?: boolean,
+      activateWithoutDocumentFocus?: boolean,
     ) => Layout | undefined;
     /**
      * Remove a tab in the layout
@@ -4283,12 +4303,19 @@ declare module 'shared/models/docking-framework.model' {
      *   doesn't always work well) or merged (so we can remove properties from `state`).
      * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
      *   tabs. Defaults to `false`
+     * @param activateWithoutDocumentFocus If true, a tab brought to the front is made active without
+     *   being given document focus. For content arriving in a window the user has not activated:
+     *   focusing the tab focuses its iframe, which asks the browser to bring that window forward.
+     *   Left unspecified, this defaults to whether this window is still awaiting its first
+     *   activation. **Experimental** — this parameter is the new part of this method
      * @returns True if successfully found the WebView to update; false otherwise
+     * @experimental
      */
     updateWebViewDefinition: (
       webViewId: string,
       updateInfo: WebViewDefinitionUpdateInfo,
       shouldBringToFront?: boolean,
+      activateWithoutDocumentFocus?: boolean,
     ) => boolean;
     /**
      * Gets info for a tab in a direction from the source tab.
@@ -4336,9 +4363,16 @@ declare module 'shared/models/docking-framework.model' {
      * tabs, and sets the document focus in that tab
      *
      * @param tabId ID of the tab to set active and focused
+     * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
+     *   taking document focus. Every mounted panel and every loaded web view asks to be focused, so a
+     *   window still waiting for its first activation would otherwise be pulled forward by its own
+     *   content arriving. Left unspecified, this defaults to whether this window is still awaiting
+     *   its first activation.
      * @returns `true` if successfully found tab to update, `false` otherwise
+     * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
+     *   member is long-established.
      */
-    focusTab: (tabId: string) => boolean;
+    focusTab: (tabId: string, activateWithoutDocumentFocus?: boolean) => boolean;
     /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *
@@ -4497,7 +4531,35 @@ declare module 'shared/services/window.service-model' {
    * surveil user input. Do not broaden what is announced here without a security review.
    */
   export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
-  /** Specific item that is intended to be focused at the top level of a window */
+  /**
+   * Payload of the {@link EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID} network event.
+   *
+   * @experimental
+   */
+  export type FocusedWindowIdEvent = {
+    /**
+     * The window the main process considers focused, or `undefined` if no window of this application
+     * currently does. Survives the whole application losing OS focus (e.g. the user alt-tabbing to
+     * another application) — it names the window the user was last working in, not whether any window
+     * currently holds OS focus. See `getFocusedWindowId`.
+     */
+    focusedWindowId: string | undefined;
+  };
+  /**
+   * Name of the network event the main process emits when the window it considers focused changes.
+   *
+   * Fires when a window takes focus (including the first window at startup) and when the focused
+   * window closes, leaving none. Deliberately does NOT fire when the application loses OS focus
+   * without a new window taking it (e.g. alt-tabbing away) — the payload keeps naming the window the
+   * user was last in, matching `getFocusedWindowId`'s survive-blur semantic, so a renderer that shows
+   * per-window UI (e.g. an active-tab focus ring) based on this event keeps showing it on the window
+   * the user will land back in rather than clearing it everywhere the moment the app is
+   * backgrounded.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_DID_CHANGE_FOCUSED_WINDOW_ID = 'platform.onDidChangeFocusedWindowId';
+  /** Specific item that is intended to be focused in the top-level app window */
   export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
   /** Instructions that indicate how to change the focus within a window */
   export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
@@ -5232,7 +5294,11 @@ declare module 'papi-shared-types' {
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from 'shared/services/scroll-group.service-model';
-  import type { AppWindowInputEvent, WindowSummary } from 'shared/services/window.service-model';
+  import type {
+    AppWindowInputEvent,
+    FocusedWindowIdEvent,
+    WindowSummary,
+  } from 'shared/services/window.service-model';
   import type {
     CloseWebViewEvent,
     OpenWebViewEvent,
@@ -5345,11 +5411,19 @@ declare module 'papi-shared-types' {
      * there to be classified on, not read.
      *
      * @param webViewId Web view to move
+     * @param isUserRequested Whether a person in this app asked for this move — a tab's own context
+     *   menu did. Defaults to `false`, which is the right answer for an extension moving a view on
+     *   its own: the window that appears does not take the foreground, so it cannot interrupt
+     *   whatever the user is doing. Pass `true` only from a control the user operated
      * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
      *   see above
-     * @experimental
+     * @experimental The `isUserRequested` parameter is new; the rest of this command is
+     *   long-established.
      */
-    'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
+    'platform.moveWebViewToNewWindow': (
+      webViewId: WebViewId,
+      isUserRequested?: boolean,
+    ) => Promise<WebViewId>;
     /**
      * Move a web view to an existing window, named by its window id (see
      * `papi.window.getWindowId()` for the id of the window the caller is in, or
@@ -6192,6 +6266,14 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.onDidAppWindowInput': AppWindowInputEvent;
+    /**
+     * Emitted by the main process when the window it considers focused changes. Survives the whole
+     * application losing OS focus (alt-tabbing to another application) — the payload keeps naming
+     * the window the user was last working in.
+     *
+     * @experimental
+     */
+    'platform.onDidChangeFocusedWindowId': FocusedWindowIdEvent;
   }
   /** Union of all known network event names (keys of {@link NetworkEvents}). */
   type NetworkEventTypes = keyof NetworkEvents;
@@ -9383,6 +9465,20 @@ declare module 'shared/data/platform.data' {
    */
   export const IS_MAIN_WINDOW_QUERY_PARAMETER = 'isMainWindow';
   /**
+   * Query parameter passed to the renderer. Present when the window was created without being
+   * activated. Written once, at creation, and never removed — whether the user has been in the window
+   * since is the renderer's own to track.
+   *
+   * A window told to stay in the background is undone by its own content: every mounted panel and
+   * every loaded web view asks this window's service to focus it, and focusing a tab focuses its web
+   * view's iframe, which asks the browser to activate the window. Those calls resolve this window's
+   * own service shard by name and never reach the main process, so this is how the fact gets to them.
+   * The renderer stops honouring it the first time the window is activated.
+   *
+   * @experimental
+   */
+  export const WINDOW_AWAITING_FIRST_ACTIVATION_QUERY_PARAMETER = 'awaitingFirstActivation';
+  /**
    * Query parameter key used to pass the serialized scroll group state main holds at the moment a
    * window is created, so that window's synchronous readers are right on its first render instead of
    * showing the default reference until a round trip returns.
@@ -11991,6 +12087,7 @@ declare module '@papi/core' {
   export type {
     AppWindowInputEvent,
     AppWindowInputKind,
+    FocusedWindowIdEvent,
     FocusSubject,
     SetFocusSubject,
     SetFocusSpecifier,
