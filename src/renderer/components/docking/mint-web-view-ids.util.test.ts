@@ -209,6 +209,12 @@ describe('mintFreshWebViewIdInTab', () => {
     expect(readIds(mintFreshWebViewIdInTab(toolTab)).id).toBe('some-tool');
   });
 
+  test('mints a fresh id for a web view tab whose baked id is an empty string', () => {
+    // An empty string is falsy but is still a (malformed) id, not the absence of one — a web view
+    // tab must always leave with a fresh id regardless of what id it carried in.
+    expect(readIds(mintFreshWebViewIdInTab(webViewTab(''))).id).not.toBe('');
+  });
+
   test('bakes a given projectId into the tab data alongside the minted id', () => {
     const minted = mintFreshWebViewIdInTab(webViewTab('supplement-tab'), 'proj-1');
 
