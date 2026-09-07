@@ -64,9 +64,13 @@
  *   could not statically resolve (a C# PDP factory's name is always a runtime string; one TS
  *   extension resolves its web view type through a property access this scanner does not follow)
  *   are accepted by the same `-pdpf`/`-webViewProvider` suffix used for the statically-resolved
- *   ones in this same family — the suffix alone is a strong, single-purpose signal (see
- *   {@link matchDynamicObjectId}'s comments for why this is a deliberate, narrow leniency rather
- *   than a blanket allowance).
+ *   ones in this same family — but only once corroborated: {@link classifyLiveMethod} additionally
+ *   requires wire-surface.json's `dynamicRegistrations` to document at least one `pdpFactory`
+ *   (resp. `webViewProvider`) entry before treating an otherwise-unmatched suffix match as this
+ *   family, rather than trusting the suffix in isolation (see {@link DYNAMIC_OBJECT_ID_PATTERNS}'s
+ *   `requiredDynamicCategory` field). The suffix is still a strong, single-purpose signal once
+ *   corroborated — see {@link matchDynamicObjectId}'s comments for why this is a deliberate, narrow
+ *   leniency rather than a blanket allowance.
  *
  * ## The one deliberately lenient family: commands
  *
@@ -76,10 +80,14 @@
  * `src/shared/services/command.service.ts`) where a command name is registered from a runtime value
  * — most importantly, extension-contributed commands looped from a manifest, which by design have
  * no literal for any static scanner to find. A live `command:*` method not already matched to a
- * snapshot entry is accepted as belonging to this family. This is a real, acknowledged gap: it
- * cannot catch a wrong or unexpectedly-renamed command introduced through one of those four sites,
- * only confirm that the command dispatch mechanism itself is still the documented one. Every other
- * family above is checked structurally instead.
+ * snapshot entry is accepted as belonging to this family only once the snapshot itself corroborates
+ * that the family exists — {@link classifyLiveMethod} requires at least one `command`-category entry
+ * in `dynamicRegistrations` before accepting an unmatched name this way, rather than
+ * blanket-accepting any `command:` prefix regardless of what the snapshot documents. This is a
+ * real, acknowledged gap even so: given that corroboration, it cannot catch a wrong or
+ * unexpectedly-renamed command introduced through one of those four sites, only confirm that the
+ * command dispatch mechanism itself is still the documented one. Every other family above is
+ * checked structurally instead.
  *
  * ## Declared but not durably live
  *
@@ -288,11 +296,27 @@ export interface ExpectedLiveIdentifiers {
   objectIds: ReadonlySet<string>;
   /** Registrations this reduction cannot check directly, with why (see {@link ExpectedLiveCheck}). */
   unresolvable: ReadonlyArray<{ registration: WireSurfaceRegistration; reason: string }>;
+  /**
+   * Categories with at least one entry in wire-surface.json's `dynamicRegistrations` array.
+   * {@link classifyLiveMethod} cross-checks the `command:`, `-pdpf` and `-webViewProvider` families
+   * against this before accepting an otherwise-unmatched live method as belonging to one of them —
+   * see the module doc comment's "one deliberately lenient family" section and
+   * {@link DYNAMIC_OBJECT_ID_PATTERNS}'s `requiredDynamicCategory` field. A family whose category is
+   * absent here has nothing in the snapshot corroborating that it exists, so a match against it is
+   * reported as unrecognized rather than silently accepted.
+   */
+  dynamicCategories: ReadonlySet<string>;
 }
 
-/** Reduce every snapshot registration to what it should look like live. */
+/**
+ * Reduce every snapshot registration to what it should look like live, and record which
+ * `dynamicRegistrations` categories the snapshot documents at all (used to corroborate the
+ * suffix/prefix families above). `dynamicRegistrations` defaults to empty for callers that only
+ * care about the exact/objectId reductions.
+ */
 export function buildExpectedLiveIdentifiers(
   registrations: readonly WireSurfaceRegistration[],
+  dynamicRegistrations: readonly WireSurfaceDynamicRegistration[] = [],
 ): ExpectedLiveIdentifiers {
   const exactWireNames = new Set<string>();
   const objectIds = new Set<string>();
@@ -305,7 +329,9 @@ export function buildExpectedLiveIdentifiers(
     else unresolvable.push({ registration: reg, reason: check.reason });
   });
 
-  return { exactWireNames, objectIds, unresolvable };
+  const dynamicCategories = new Set(dynamicRegistrations.map((dynamicReg) => dynamicReg.category));
+
+  return { exactWireNames, objectIds, unresolvable, dynamicCategories };
 }
 
 // #endregion
@@ -393,16 +419,30 @@ export const WEB_VIEW_CONTROLLER_PATTERN = /^webViewController[^.]+$/;
 /**
  * A PDP factory or web view provider this scanner could not resolve to a literal at its call site
  * (a runtime-built C# PDPF name; one TS extension's web view type resolved through a property
- * access) — accepted by suffix alone. Narrower than it looks: `-pdpf`/`-webViewProvider` are
+ * access) — matched by suffix at this layer. Narrower than it looks: `-pdpf`/`-webViewProvider` are
  * produced by exactly one function each (`getPDPFactoryNetworkObjectNameFromId`,
  * `getWebViewProviderObjectId`), so the suffix is a strong, single-purpose signal that this is
  * "some PDP factory" / "some web view provider", even when this reduction cannot name which one the
- * snapshot expected.
+ * snapshot expected. {@link classifyLiveMethod} additionally requires the snapshot to corroborate
+ * the family (see `DYNAMIC_OBJECT_ID_PATTERNS`'s `requiredDynamicCategory` field below) before
+ * treating a suffix match as accepted — the suffix alone is not the final word.
  */
 export const PDP_FACTORY_FAMILY_PATTERN = /-pdpf$/;
 export const WEB_VIEW_PROVIDER_FAMILY_PATTERN = /-webViewProvider$/;
 
-const DYNAMIC_OBJECT_ID_PATTERNS: ReadonlyArray<{ name: string; test: RegExp }> = [
+const DYNAMIC_OBJECT_ID_PATTERNS: ReadonlyArray<{
+  name: string;
+  test: RegExp;
+  /**
+   * The wire-surface.json `dynamicRegistrations` category that must have at least one entry before
+   * {@link classifyLiveMethod} accepts a match against this pattern. Present only for a pattern
+   * accepted by a fixed suffix with no further structure to check — a UUID-shaped window id or a
+   * nonce-minted PDP id cannot be produced by anything else, but a bare `-pdpf`/`-webViewProvider`
+   * suffix could in principle appear on an unrelated live method, so those two are corroborated
+   * against the snapshot rather than trusted on the suffix alone.
+   */
+  requiredDynamicCategory?: string;
+}> = [
   {
     name: 'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/NotificationService)',
     test: WINDOW_SHARD_NETWORK_OBJECT_PATTERN,
@@ -416,13 +456,32 @@ const DYNAMIC_OBJECT_ID_PATTERNS: ReadonlyArray<{ name: string; test: RegExp }> 
     test: PDP_PATTERN,
   },
   { name: 'per-open-webview controller', test: WEB_VIEW_CONTROLLER_PATTERN },
-  { name: 'PDP factory (unresolved call site)', test: PDP_FACTORY_FAMILY_PATTERN },
-  { name: 'web view provider (unresolved call site)', test: WEB_VIEW_PROVIDER_FAMILY_PATTERN },
+  {
+    name: 'PDP factory (unresolved call site)',
+    test: PDP_FACTORY_FAMILY_PATTERN,
+    requiredDynamicCategory: 'pdpFactory',
+  },
+  {
+    name: 'web view provider (unresolved call site)',
+    test: WEB_VIEW_PROVIDER_FAMILY_PATTERN,
+    requiredDynamicCategory: 'webViewProvider',
+  },
 ];
 
 /** Name of the first documented dynamic shape `objectId` matches, if any. */
 export function matchDynamicObjectId(objectId: string): string | undefined {
   return DYNAMIC_OBJECT_ID_PATTERNS.find(({ test }) => test.test(objectId))?.name;
+}
+
+/**
+ * The `dynamicRegistrations` category a dynamic-pattern match (by {@link matchDynamicObjectId}'s
+ * name) must be corroborated by before {@link classifyLiveMethod} accepts it, if any — see
+ * `DYNAMIC_OBJECT_ID_PATTERNS`'s `requiredDynamicCategory` field for which patterns this applies
+ * to.
+ */
+function requiredDynamicCategoryFor(patternName: string): string | undefined {
+  return DYNAMIC_OBJECT_ID_PATTERNS.find(({ name }) => name === patternName)
+    ?.requiredDynamicCategory;
 }
 
 // #endregion
@@ -552,9 +611,17 @@ export function classifyLiveMethod(
       expected.objectIds,
     );
     if (!resolution) return { kind: 'unknown' };
-    return resolution.matchedVia === 'expectedSnapshot'
-      ? { kind: 'expected' }
-      : { kind: 'dynamicPattern', pattern: resolution.matchedVia };
+    if (resolution.matchedVia === 'expectedSnapshot') return { kind: 'expected' };
+
+    // A structural match (window-shard UUID, nonce-minted PDP id, webview controller id) needs no
+    // further corroboration. A bare suffix match (PDP factory / web view provider "unresolved call
+    // site" family) does: it is only trustworthy when the snapshot itself documents that such an
+    // unresolved call site exists at all — see requiredDynamicCategoryFor's doc comment.
+    const requiredCategory = requiredDynamicCategoryFor(resolution.matchedVia);
+    if (requiredCategory && !expected.dynamicCategories.has(requiredCategory)) {
+      return { kind: 'unknown' };
+    }
+    return { kind: 'dynamicPattern', pattern: resolution.matchedVia };
   }
 
   if (liveMethodName.endsWith(ON_DID_UPDATE_SUFFIX)) {
@@ -578,9 +645,14 @@ export function classifyLiveMethod(
   if (prefixFamily) return { kind: 'dynamicPattern', pattern: prefixFamily.name };
 
   if (liveMethodName.startsWith('command:')) {
-    // See the module doc comment's "one deliberately lenient family" section: this cannot catch a
-    // wrong name introduced through one of the four dynamic command-registration sites, only confirm
-    // the dispatch mechanism itself is the documented one.
+    // See the module doc comment's "one deliberately lenient family" section: an unmatched command
+    // is only accepted as this family once the snapshot itself documents a dynamic `command`
+    // registration site — otherwise there is nothing corroborating that "runtime-contributed
+    // command" is even a live possibility, and a live command nobody declared must be reported
+    // rather than silently waved through by prefix alone. Even when corroborated, this cannot catch
+    // a wrong name introduced through one of those sites, only confirm the dispatch mechanism itself
+    // is the documented one.
+    if (!expected.dynamicCategories.has('command')) return { kind: 'unknown' };
     return { kind: 'dynamicPattern', pattern: 'extension/runtime-contributed command' };
   }
 

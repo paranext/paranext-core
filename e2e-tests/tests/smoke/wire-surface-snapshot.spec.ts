@@ -211,7 +211,10 @@ test.describe('Wire surface snapshot', () => {
       );
     }
 
-    const expected = buildExpectedLiveIdentifiers(registrationsToExpect);
+    const expected = buildExpectedLiveIdentifiers(
+      registrationsToExpect,
+      snapshot.dynamicRegistrations,
+    );
 
     // Direction 2 (the important one — see the module header): every live method reduces to a
     // snapshot entry, a documented dynamic pattern, or a known infrastructure method. Without this
