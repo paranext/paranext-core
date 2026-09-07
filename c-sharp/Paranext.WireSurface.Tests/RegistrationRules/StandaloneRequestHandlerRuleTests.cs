@@ -125,6 +125,31 @@ public class StandaloneRequestHandlerRuleTests
     }
 
     [Test]
+    public void NamedRequestTypeArgumentOutOfOrder()
+    {
+        var entries = ScanFixtureTree(
+            """
+            using System;
+            using Paranext.DataProvider;
+
+            internal static class FixtureNamedRequestType
+            {
+                public static void Register(PapiClient papi, Delegate handler) =>
+                    papi.RegisterRequestHandlerAsync(
+                        requestHandler: handler,
+                        requestType: "command:test.namedOutOfOrder"
+                    );
+            }
+            """
+        );
+
+        Assert.That(
+            entries,
+            Is.EqualTo(new[] { new ScanEntry.Static(Static("command:test.namedOutOfOrder")) })
+        );
+    }
+
+    [Test]
     public void NetworkObjectFanOutExcluded()
     {
         var compilation = FixtureCompilation.Create();

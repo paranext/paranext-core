@@ -39,7 +39,11 @@ public sealed class StandaloneRequestHandlerRule : IRegistrationRule
             )
                 continue;
 
-            var nameArgument = invocation.ArgumentList.Arguments.ElementAtOrDefault(0)?.Expression;
+            var nameArgument = ArgumentBinding.FindArgumentExpression(
+                invocation.ArgumentList,
+                "requestType",
+                parameterIndex: 0
+            );
             if (nameArgument is null)
                 continue;
 

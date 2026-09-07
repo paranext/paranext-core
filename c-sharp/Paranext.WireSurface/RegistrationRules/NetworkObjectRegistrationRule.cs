@@ -32,7 +32,11 @@ public sealed class NetworkObjectRegistrationRule : IRegistrationRule
             if (containingType is null)
                 continue;
 
-            var nameArgument = invocation.ArgumentList.Arguments.ElementAtOrDefault(0)?.Expression;
+            var nameArgument = ArgumentBinding.FindArgumentExpression(
+                invocation.ArgumentList,
+                "networkObjectName",
+                parameterIndex: 0
+            );
             if (nameArgument is null)
                 continue;
 
