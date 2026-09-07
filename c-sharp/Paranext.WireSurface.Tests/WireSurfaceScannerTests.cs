@@ -159,6 +159,16 @@ public class WireSurfaceScannerTests
     }
 
     [Test]
+    public void SiblingDirectoryPrefixCollisionFallsBackToGetRelativePath()
+    {
+        // "/r/core" is a string-prefix of "/r/core-2/A.cs" but not a path ancestor of it — the
+        // ordinal prefix strip must not fire here, or it would return the garbage "-2/A.cs".
+        var relative = RepoPaths.Relative("/r/core", "/r/core-2/A.cs");
+
+        Assert.That(relative, Is.EqualTo("../core-2/A.cs"));
+    }
+
+    [Test]
     public void ScanIsDeterministicAcrossTreeOrder()
     {
         var stubTree = CSharpSyntaxTree.ParseText(FrameworkStubs.Source, path: StubPath);
