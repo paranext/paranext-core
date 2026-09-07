@@ -1,21 +1,18 @@
-import { existsSync, readdirSync } from 'fs';
+import { execFileSync } from 'child_process';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'fs';
+import os from 'os';
 import path from 'path';
 import { parse as parseYaml } from 'yaml';
 import { GNOME_PLATFORM_BY_BASE, GNOME_PLATFORM_TARGET } from './snap-platform-pairing';
 
 /**
- * Where electron-builder leaves the snap metadata it generates, relative to a stage directory.
+ * Where a built snap keeps the metadata snapd reads when it installs and connects it.
  *
- * Which of the two it writes depends on `isUseTemplateApp`, which app-builder-lib derives rather
- * than exposes: the template app is used only when `buildPackages` is empty and `stagePackages`
- * matches its own default set. This repo overrides `stagePackages`, so today it is the
- * `snap/snapcraft.yaml` form -- but trimming that list back to the default would silently move the
- * file, so both are looked for.
+ * The intermediate `snapcraft.yaml` electron-builder generates is not an option: it is written into
+ * a stage directory that app-builder and snapcraft consume and do not leave behind, so nothing at
+ * that path survives a completed packaging run. This file does, and it is the one that ships.
  */
-const METADATA_PATHS_IN_STAGE_DIR = [
-  path.join('snap', 'snapcraft.yaml'),
-  path.join('meta', 'snap.yaml'),
-];
+const METADATA_PATH_IN_SNAP = 'meta/snap.yaml';
 
 /** A plain object, for walking into parsed YAML without asserting a shape. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -23,57 +20,67 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Every snap stage directory under an electron-builder output directory.
+ * The one snap in an electron-builder output directory, or an explanation of why there is not
+ * exactly one.
  *
- * Electron-builder names these `__<target>-<arch>`, so the architecture is not known ahead of time
- * and the directory is matched by prefix.
+ * Finding none has to be an error rather than a pass. This check exists because the input-level
+ * guard cannot see the merge that produces the shipped plug list, so "found nothing to check" is
+ * the one outcome that would reintroduce the blind spot it was written to close.
  */
-function findSnapStageDirs(outDir: string): string[] {
-  if (!existsSync(outDir)) return [];
-  return readdirSync(outDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name.startsWith('__snap-'))
-    .map((entry) => path.join(outDir, entry.name));
-}
-
-/**
- * The generated snap metadata files found under an electron-builder output directory.
- *
- * Returns every match rather than the first: more than one means the packaging run produced several
- * snaps (or left an earlier one behind), and checking an arbitrary one of those would report on a
- * build nobody asked about.
- */
-export function findGeneratedSnapMetadataPaths(outDir: string): string[] {
-  return findSnapStageDirs(outDir).flatMap((stageDir) =>
-    METADATA_PATHS_IN_STAGE_DIR.map((relativePath) => path.join(stageDir, relativePath)).filter(
-      (candidate) => existsSync(candidate),
-    ),
-  );
-}
-
-/**
- * The one generated snap metadata file to check, or an explanation of why there is not exactly one.
- *
- * A missing file has to be an error rather than a pass. This check exists because the input-level
- * guard cannot see the merge that produces this file, so "found nothing to check" is the one
- * outcome that would reintroduce the blind spot it was written to close.
- */
-export function resolveGeneratedSnapMetadataPath(outDir: string): string {
-  const found = findGeneratedSnapMetadataPaths(outDir);
+export function resolveSnapArtifact(outDir: string): string {
+  const found = existsSync(outDir)
+    ? readdirSync(outDir, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.snap'))
+        .map((entry) => path.join(outDir, entry.name))
+    : [];
 
   if (found.length === 0)
     throw new Error(
-      `No generated snap metadata found under ${outDir}. Expected one of ` +
-        `${METADATA_PATHS_IN_STAGE_DIR.join(' or ')} inside a __snap-<arch> stage directory. ` +
-        'This check must run after a packaging run that built a snap, on the Linux runner.',
+      `No snap artifact found in ${outDir}. This check must run after a packaging run that built a ` +
+        'snap, on the Linux runner, and before the snap is renamed for upload.',
     );
 
   if (found.length > 1)
     throw new Error(
-      `Found ${found.length} generated snap metadata files under ${outDir}, so it is ambiguous ` +
-        `which one ships: ${found.join(', ')}. Clean the output directory and package again.`,
+      `Found ${found.length} snap artifacts in ${outDir}, so it is ambiguous which one ships: ` +
+        `${found.join(', ')}. Clean the output directory and package again.`,
     );
 
   return found[0];
+}
+
+/**
+ * `meta/snap.yaml` read out of a built snap.
+ *
+ * A snap is a squashfs image, so this shells out to `unsquashfs` -- preinstalled on the Ubuntu
+ * runners, and a dependency of snapd regardless -- to extract the one file rather than unpacking a
+ * quarter-gigabyte image. The temporary directory is removed whether or not extraction succeeds.
+ */
+export function readSnapMetadata(snapPath: string): string {
+  const workDir = mkdtempSync(path.join(os.tmpdir(), 'snap-metadata-'));
+  try {
+    try {
+      execFileSync('unsquashfs', ['-force', '-dest', workDir, snapPath, METADATA_PATH_IN_SNAP], {
+        stdio: 'pipe',
+      });
+    } catch (error) {
+      throw new Error(
+        `Could not extract ${METADATA_PATH_IN_SNAP} from ${snapPath}. This needs \`unsquashfs\` ` +
+          `(squashfs-tools) on PATH. Cause: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+
+    const extracted = path.join(workDir, METADATA_PATH_IN_SNAP);
+    if (!existsSync(extracted))
+      throw new Error(
+        `${snapPath} contains no ${METADATA_PATH_IN_SNAP}. Every snap carries one, so this is ` +
+          'either not a snap or a truncated one.',
+      );
+
+    return readFileSync(extracted, 'utf8');
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
 }
 
 /**

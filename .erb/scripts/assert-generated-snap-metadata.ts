@@ -9,27 +9,27 @@
  * app-builder-lib's `snap.js` and is visible only from here.
  */
 
-import { readFileSync } from 'fs';
 import path from 'path';
 import {
   checkGeneratedSnapMetadata,
-  resolveGeneratedSnapMetadataPath,
+  readSnapMetadata,
+  resolveSnapArtifact,
 } from './assert-generated-snap-metadata.util';
 
 /** Matches `directories.output` in `electron-builder.json5`. */
 const OUT_DIR = path.join(__dirname, '..', '..', 'release', 'build');
 
 function main(): void {
-  const metadataPath = resolveGeneratedSnapMetadataPath(OUT_DIR);
-  const problems = checkGeneratedSnapMetadata(readFileSync(metadataPath, 'utf8'));
+  const snapPath = resolveSnapArtifact(OUT_DIR);
+  const problems = checkGeneratedSnapMetadata(readSnapMetadata(snapPath));
 
   if (problems.length > 0) {
-    console.error(`Generated snap metadata is wrong (${metadataPath}):\n`);
+    console.error(`The snap this build produced is wrong (${snapPath}):\n`);
     problems.forEach((problem) => console.error(`  - ${problem}\n`));
     process.exit(1);
   }
 
-  console.log(`Generated snap metadata mounts the correct GNOME platform plug (${metadataPath}).`);
+  console.log(`Snap mounts the correct GNOME platform plug (${snapPath}).`);
 }
 
 try {

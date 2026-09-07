@@ -1,19 +1,19 @@
 // @vitest-environment node
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import {
   checkGeneratedSnapMetadata,
-  resolveGeneratedSnapMetadataPath,
+  resolveSnapArtifact,
 } from './assert-generated-snap-metadata.util';
 import { GNOME_PLATFORM_TARGET } from './snap-platform-pairing';
 
 /**
- * A minimal stand-in for the snapcraft metadata electron-builder writes into its snap stage
- * directory. Only the fields this check reads are modelled; `plugs` is spliced in verbatim so a
- * case can express a shape a typed builder would not let it (two plugs on one mount point, a plug
- * with no `interface`) — which is the point, since those are the shapes being guarded against.
+ * A minimal stand-in for `meta/snap.yaml` inside a built snap. Only the fields this check reads are
+ * modelled; `plugs` is spliced in verbatim so a case can express a shape a typed builder would not
+ * let it (two plugs on one mount point, a plug with no `interface`) — which is the point, since
+ * those are the shapes being guarded against.
  */
 function metadata(base: string, plugs: string): string {
   return [
@@ -152,64 +152,55 @@ describe('checkGeneratedSnapMetadata', () => {
   });
 });
 
-describe('resolveGeneratedSnapMetadataPath', () => {
+describe('resolveSnapArtifact', () => {
   let outDir: string;
 
   beforeEach(() => {
-    outDir = mkdtempSync(path.join(os.tmpdir(), 'snap-metadata-'));
+    outDir = mkdtempSync(path.join(os.tmpdir(), 'snap-artifact-'));
   });
 
   afterEach(() => {
     rmSync(outDir, { recursive: true, force: true });
   });
 
-  /** Writes a metadata file into a stage directory the way electron-builder lays one out. */
-  function writeStagedMetadata(stageDirName: string, relativePath: string): string {
-    const file = path.join(outDir, stageDirName, relativePath);
-    mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, 'name: platform-bible\n');
+  /** Puts a file in the output directory. Contents are irrelevant; only the name is matched on. */
+  function writeArtifact(name: string): string {
+    const file = path.join(outDir, name);
+    writeFileSync(file, 'not really a squashfs\n');
     return file;
   }
 
-  it('finds the snapcraft.yaml a custom-stagePackages build writes', () => {
-    const expected = writeStagedMetadata('__snap-x64', path.join('snap', 'snapcraft.yaml'));
-    expect(resolveGeneratedSnapMetadataPath(outDir)).toBe(expected);
-  });
-
-  it('finds the snap.yaml a template-app build writes instead', () => {
-    // app-builder-lib switches to `meta/snap.yaml` when `stagePackages` matches its own defaults.
-    // Trimming that list back would move the file silently, so both shapes have to be found.
-    const expected = writeStagedMetadata('__snap-x64', path.join('meta', 'snap.yaml'));
-    expect(resolveGeneratedSnapMetadataPath(outDir)).toBe(expected);
+  it('finds the snap a Linux packaging run leaves in the output directory', () => {
+    const expected = writeArtifact('platform-bible_0.6.0-alpha.0_amd64.snap');
+    expect(resolveSnapArtifact(outDir)).toBe(expected);
   });
 
   it('throws when the output directory does not exist', () => {
     // The failure this check exists to prevent is a silent pass, so a run that packaged nothing has
     // to be an error rather than "no problems found".
-    expect(() => resolveGeneratedSnapMetadataPath(path.join(outDir, 'never-packaged'))).toThrow(
-      /No generated snap metadata found/,
+    expect(() => resolveSnapArtifact(path.join(outDir, 'never-packaged'))).toThrow(
+      /No snap artifact found/,
     );
   });
 
-  it('throws when a stage directory exists but holds no metadata', () => {
-    mkdirSync(path.join(outDir, '__snap-x64'), { recursive: true });
-    expect(() => resolveGeneratedSnapMetadataPath(outDir)).toThrow(
-      /No generated snap metadata found/,
-    );
+  it('throws when the packaging run produced no snap', () => {
+    // What a non-Linux leg leaves behind, and what a Linux run leaves if the snap target is dropped
+    // from `linux.target`.
+    writeArtifact('platform-bible-0.6.0-alpha.0.exe');
+    writeArtifact('builder-debug.yml');
+    expect(() => resolveSnapArtifact(outDir)).toThrow(/No snap artifact found/);
   });
 
-  it('ignores output that is not a snap stage directory', () => {
-    writeStagedMetadata('__appimage-x64', path.join('snap', 'snapcraft.yaml'));
-    expect(() => resolveGeneratedSnapMetadataPath(outDir)).toThrow(
-      /No generated snap metadata found/,
-    );
+  it('throws rather than picking one when several snaps are present', () => {
+    // Two snaps mean two architectures, or one left over from an earlier run. Checking an arbitrary
+    // one would report on a build nobody asked about.
+    writeArtifact('platform-bible_0.6.0-alpha.0_amd64.snap');
+    writeArtifact('platform-bible_0.6.0-alpha.0_arm64.snap');
+    expect(() => resolveSnapArtifact(outDir)).toThrow(/Found 2 snap artifacts/);
   });
 
-  it('throws rather than picking one when several builds are present', () => {
-    // Two metadata files mean two snaps, or one left over from an earlier run. Checking an
-    // arbitrary one would report on a build nobody asked about.
-    writeStagedMetadata('__snap-x64', path.join('snap', 'snapcraft.yaml'));
-    writeStagedMetadata('__snap-arm64', path.join('snap', 'snapcraft.yaml'));
-    expect(() => resolveGeneratedSnapMetadataPath(outDir)).toThrow(/Found 2 generated snap/);
+  it('does not mistake a directory named like a snap for the artifact', () => {
+    mkdtempSync(path.join(outDir, 'staging.snap-'));
+    expect(() => resolveSnapArtifact(outDir)).toThrow(/No snap artifact found/);
   });
 });
