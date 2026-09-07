@@ -242,6 +242,9 @@ jobs:
       - name: dotnet unit tests
         run: dotnet test c-sharp-tests/c-sharp-tests.csproj
 
+      - name: dotnet wire-surface scanner tests
+        run: dotnet test c-sharp/Paranext.WireSurface.Tests/Paranext.WireSurface.Tests.csproj
+
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
