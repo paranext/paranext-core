@@ -205,6 +205,32 @@ public class DataProviderSubclassRuleTests
     }
 
     [Test]
+    public void TwoHopPrimaryConstructorChainResolvesThroughBaseTypeArgument()
+    {
+        // FixtureMid passes its own primary-constructor parameter straight through to DataProvider;
+        // that parameter's value comes from FixtureLeaf's primary-constructor base type argument list
+        // (`: FixtureMid("fixture.two-hop-provider", papiClient)`), not an object-creation,
+        // invocation, or `: base(...)` initializer.
+        var entries = ScanFixtureTree(
+            """
+            using Paranext.DataProvider;
+            using Paranext.DataProvider.NetworkObjects;
+
+            internal abstract class FixtureMid(string label, PapiClient papiClient)
+                : DataProvider(label, papiClient) { }
+
+            internal sealed class FixtureLeaf(PapiClient papiClient)
+                : FixtureMid("fixture.two-hop-provider", papiClient) { }
+            """
+        );
+
+        Assert.That(
+            entries,
+            Is.EqualTo(new[] { new ScanEntry.Static(Static("fixture.two-hop-provider")) })
+        );
+    }
+
+    [Test]
     public void DerivedClassWithoutOwnBaseCallContributesNothing()
     {
         var entries = ScanFixtureTree(
