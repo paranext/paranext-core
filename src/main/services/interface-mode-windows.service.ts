@@ -72,10 +72,10 @@ export type ModeSwitchDependencies = {
    *
    * Called only when a switch to simple mode closed no window: whatever asked for the switch
    * already wrote the setting to simple before this ran, and every renderer follows that setting
-   * through its own local copy — in simple mode only the window carrying the primary role saves a
-   * layout, and with no window left to carry it every renderer would silently stop saving until the
-   * user toggled the mode again. Writing the setting back to what it was is what makes the toggle,
-   * and every renderer's local copy, agree with the window set that never actually changed.
+   * through its own local copy — no window saves a layout while the setting reads simple, so every
+   * renderer would silently stop saving until the user toggled the mode again, even though the
+   * window set never actually changed. Writing the setting back to what it was is what makes the
+   * toggle, and every renderer's local copy, agree with reality.
    */
   writeInterfaceModeSetting: (mode: InterfaceMode) => Promise<void>;
 };
@@ -422,7 +422,7 @@ async function reopenPreservedWindows(
 }
 
 /**
- * {@link reopenPreservedWindows}, run one at a time.
+ * {@link reopenPreservedWindows}, queued behind whichever run was already in flight.
  *
  * A reopen only notices it has been superseded between windows, so when a new switch arrives it is
  * still creating one — and the entry it is creating is still preserved, because an entry stops
@@ -430,6 +430,13 @@ async function reopenPreservedWindows(
  * that entry and the user would get two windows for one saved window. So this waits for it: the
  * older run stops at its next pass, and by then the entries it did not reach are still there to be
  * read.
+ *
+ * The wait below only holds one level deep — a third switch arriving while this one is already
+ * waiting on a second captures that same second run, not this one, and both can go on to call
+ * {@link reopenPreservedWindows} concurrently once it settles. What actually rules out a duplicate
+ * create in that case is `reopenPreservedWindows`'s own generation check at the top of every pass:
+ * a run for a generation the world has moved past exits before touching an entry, so the two
+ * concurrent calls never both act on the same one.
  *
  * The wait is what makes this different from {@link clearModeSwitchClose}, which skips instead. A
  * run already going there is the SAME switch's, and re-reads the set every pass; here it is an
