@@ -75,6 +75,46 @@ public class NetworkEventRuleTests
     }
 
     [Test]
+    public void OneElementCollectionWithoutDocsIsStaticUndocumented()
+    {
+        // registerEvent(eventName, documentation?) -- documentation is optional on the wire handler,
+        // so a one-element collection with just the name is a fully resolved, undocumented static
+        // registration, not a dynamic one.
+        var entries = ScanFixtureTree(
+            """
+            using System.Threading.Tasks;
+            using Paranext.DataProvider;
+
+            internal sealed class FixtureOneElement(PapiClient papiClient)
+            {
+                public Task RegisterAsync() =>
+                    papiClient.SendRequestAsync<bool>(
+                        "network:registerEvent",
+                        ["fixture.event.one-element"]
+                    );
+            }
+            """
+        );
+
+        Assert.That(
+            entries,
+            Is.EqualTo(
+                new[]
+                {
+                    new ScanEntry.Static(
+                        Static(
+                            "fixture.event.one-element",
+                            documented: false,
+                            docsStaticallyResolved: true,
+                            experimental: false
+                        )
+                    ),
+                }
+            )
+        );
+    }
+
+    [Test]
     public void ImplicitArrayName()
     {
         // The documentation value is held in an `object?`-typed local (not cast inline at the array
