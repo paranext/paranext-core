@@ -362,6 +362,17 @@ const summary = await pdp?.getBookSummary(bookNum);
 - **Forgetting to call `SendDataUpdateEvent` from a C# `Set*`.** The write succeeds but no `subscribe*` callback ever fires, because the TS data provider service never sees the change.
 - **Using `get`/`set`/`subscribe` as a prefix for a non-contract helper method.** Those prefixes opt the method into the data provider contract; for extra (non-contract) methods, use any other appropriate verb (e.g. `lookup*`, `compute*`, `list*`).
 
+#### Adding an optional method to `platform.base`
+
+`platform.base` is the one `projectInterface` every base PDP must serve, so a method added to it that not every engine can implement — `listExtensionDataQualifiers` is the shipped example; a PDP over a remote store may be unable to enumerate — follows a different shape from the contract recipe above:
+
+- **Optional on the engine, required on the consumer.** Declare it `method?(...)` on the engine-facing type (`WithProjectDataProviderEngine*Methods` in `src/shared/models/project-data-provider.model.ts`) and re-declare it required on `IBaseProjectDataProvider` (`src/declarations/papi-shared-types.ts`). An intersection of `m?()` and `m()` is required, so consumers see it as always present while engines that predate it keep compiling.
+- **Do not add it to the `platform.base` registration guard** (`src/shared/services/project-data-provider.service.ts`, which checks only `getExtensionData` and `getSetting`). Extending the guard stops every existing engine from registering.
+- **Consumers cannot feature-detect it, and the failure shape depends on where the PDP lives.** A PDP reached over the network is a `createRemoteProxy` (`network-object.service.ts`), which fabricates a request function for *any* property name — so `pdp.method?.()` never short-circuits; it calls and then rejects. A PDP in the *calling* process is a local proxy that passes a missing method through as `undefined` — so `?.()` short-circuits, and a direct call throws a synchronous `TypeError`. Extensions share one extension host, so an extension consuming another extension's PDP is on the local path. Document the method as "may fail; treat a failure as unknown, never as empty", tell callers to wrap the call in `try`/`catch` around an `await` (which catches both shapes; a bare `.catch()` catches only the remote one), and never to use `?.`.
+- **Name it with a non-magic verb** (`list*`, `lookup*`) per the naming rule above: it has no paired `set*`/`subscribe*`, so a `get*` name would fail registration for want of a setter.
+
+Rationale and rejected alternatives: `adr-pdp-enumerates-extension-data-qualifiers` in `Architecture-Decisions.md`.
+
 #### Drive variant/visibility logic from `projectInterfaces`, not a `ProjectKind` enum
 
 A `projectInterface` (the capability names a project advertises, registered as above) answers "what can this project do?" — and that is the question UI variant and visibility logic should ask. Do NOT reintroduce a PT9-style `ProjectKind` typology ("standard" / "resource" / "note-type") that asks "what category is this project in?"; PT10's extensibility model is interface-based, so a global `ProjectKind` enum would have to be updated every time an extension adds a new project type.
