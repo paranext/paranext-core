@@ -36,7 +36,13 @@ public sealed class DataProviderSubclassRule : IRegistrationRule
                     continue;
 
                 foreach (
-                    var entry in BuildEntries(context.Names.Resolve(nameArgument, model), file)
+                    var entry in ScanEntry.FromNameResolution(
+                        context.Names.Resolve(nameArgument, model),
+                        RegistrationCategory.DataProvider,
+                        file,
+                        RegisteredVia.DataProviderConstructor,
+                        new DocumentationResolution(false, true, false)
+                    )
                 )
                     yield return entry;
             }
@@ -108,42 +114,5 @@ public sealed class DataProviderSubclassRule : IRegistrationRule
         return parameterIndex < 0
             ? null
             : ArgumentBinding.FindArgumentExpression(argumentList, "name", parameterIndex);
-    }
-
-    private static IEnumerable<ScanEntry> BuildEntries(NameResolution name, string file)
-    {
-        switch (name)
-        {
-            case NameResolution.Constant constant:
-                yield return ToStatic(constant.Value);
-                break;
-            case NameResolution.Constants constants:
-                foreach (var value in constants.Values)
-                    yield return ToStatic(value);
-                break;
-            case NameResolution.Dynamic dynamic:
-                yield return new ScanEntry.Dynamic(
-                    new DynamicRegistration(
-                        RegistrationCategory.DataProvider,
-                        file,
-                        RegisteredVia.DataProviderConstructor,
-                        dynamic.ExpressionText
-                    )
-                );
-                break;
-        }
-
-        ScanEntry.Static ToStatic(string value) =>
-            new(
-                new StaticRegistration(
-                    RegistrationCategory.DataProvider,
-                    value,
-                    file,
-                    RegisteredVia.DataProviderConstructor,
-                    Documented: false,
-                    DocsStaticallyResolved: true,
-                    Experimental: false
-                )
-            );
     }
 }

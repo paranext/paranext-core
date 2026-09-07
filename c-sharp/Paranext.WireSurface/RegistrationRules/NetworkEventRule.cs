@@ -68,9 +68,11 @@ public sealed class NetworkEventRule : IRegistrationRule
 
             var documentation = context.Docs.Resolve(elements[1], model);
             foreach (
-                var entry in BuildEntries(
+                var entry in ScanEntry.FromNameResolution(
                     context.Names.Resolve(elements[0], model),
+                    RegistrationCategory.NetworkEvent,
                     file,
+                    RegisteredVia.PapiClientSendRequestAsyncRegisterEvent,
                     documentation
                 )
             )
@@ -99,45 +101,4 @@ public sealed class NetworkEventRule : IRegistrationRule
                 arrayCreation.Initializer?.Expressions.ToList(),
             _ => null,
         };
-
-    private static IEnumerable<ScanEntry> BuildEntries(
-        NameResolution name,
-        string file,
-        DocumentationResolution documentation
-    )
-    {
-        switch (name)
-        {
-            case NameResolution.Constant constant:
-                yield return ToStatic(constant.Value);
-                break;
-            case NameResolution.Constants constants:
-                foreach (var value in constants.Values)
-                    yield return ToStatic(value);
-                break;
-            case NameResolution.Dynamic dynamic:
-                yield return new ScanEntry.Dynamic(
-                    new DynamicRegistration(
-                        RegistrationCategory.NetworkEvent,
-                        file,
-                        RegisteredVia.PapiClientSendRequestAsyncRegisterEvent,
-                        dynamic.ExpressionText
-                    )
-                );
-                break;
-        }
-
-        ScanEntry.Static ToStatic(string value) =>
-            new(
-                new StaticRegistration(
-                    RegistrationCategory.NetworkEvent,
-                    value,
-                    file,
-                    RegisteredVia.PapiClientSendRequestAsyncRegisterEvent,
-                    documentation.Documented,
-                    documentation.DocsStaticallyResolved,
-                    documentation.Experimental
-                )
-            );
-    }
 }
