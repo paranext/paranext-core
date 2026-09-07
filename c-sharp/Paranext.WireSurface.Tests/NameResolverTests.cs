@@ -305,6 +305,25 @@ public class NameResolverTests
     }
 
     [Test]
+    public void CtorParameterViaPrimaryConstructorBaseTypeArgumentIsConstant()
+    {
+        // The call site binding N's parameter is a primary-constructor base type argument list
+        // (`: N("z.y")`), not an object-creation, invocation, or `: base(...)` initializer.
+        var resolution = Resolve(
+            """
+            internal abstract class N(string eventName)
+            {
+                public void Touch() => Marker.Use(eventName);
+            }
+
+            internal sealed class Leaf() : N("z.y") { }
+            """
+        );
+
+        AssertConstants(resolution, "z.y");
+    }
+
+    [Test]
     public void MethodParameterPropagatesThroughStaticFactory()
     {
         var resolution = Resolve(

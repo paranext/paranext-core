@@ -229,6 +229,12 @@ public sealed class NameResolver(Compilation compilation, SemanticModelCache sem
                         model.GetSymbolInfo(initializer).Symbol as IMethodSymbol,
                         initializer.ArgumentList
                     ),
+                    // A subclass's primary-constructor base type argument list (`: Base(arg)`) is a
+                    // call site for Base's constructor too, just like `: base(arg)` above.
+                    PrimaryConstructorBaseTypeSyntax primaryCtorBaseType => (
+                        model.GetSymbolInfo(primaryCtorBaseType).Symbol as IMethodSymbol,
+                        primaryCtorBaseType.ArgumentList
+                    ),
                     _ => (null, null),
                 };
 
