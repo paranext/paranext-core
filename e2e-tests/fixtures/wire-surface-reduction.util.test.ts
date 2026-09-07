@@ -578,4 +578,19 @@ describe('checkMarkerAgreement', () => {
     const registrations = [reg({ category: 'networkObject', name: 'Missing', experimental: true })];
     expect(checkMarkerAgreement(registrations, [])).toEqual([]);
   });
+
+  it("does not treat a dot-prefixed sibling object as one of this object's fanned methods", () => {
+    // Object ids may themselves contain dots (e.g. `platform.enhancedResources`), so
+    // `object:platform.enhancedResources` -- the sibling object's OWN existence method -- must not
+    // be mistaken for a fanned method of `platform` merely because it starts with `object:platform.`.
+    const registrations = [
+      reg({ category: 'networkObject', name: 'platform', experimental: true }),
+      reg({ category: 'networkObject', name: 'platform.enhancedResources', experimental: false }),
+    ];
+    const live: LiveMethod[] = [
+      { name: 'object:platform', 'x-experimental': true },
+      { name: 'object:platform.enhancedResources', 'x-experimental': false },
+    ];
+    expect(checkMarkerAgreement(registrations, live)).toEqual([]);
+  });
 });

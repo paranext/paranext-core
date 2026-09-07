@@ -680,6 +680,25 @@ export interface MarkerDisagreement {
 }
 
 /**
+ * The registered object id `afterObjectPrefix` (the part of a live `object:`-prefixed method name
+ * after that prefix) belongs to, if any — mirroring {@link resolveNetworkObjectMethod}'s two-step
+ * shape: try the whole string as an id first, then retry with everything after the last `.` treated
+ * as a function name, since object ids may themselves contain dots. Returns `undefined` when
+ * neither step resolves to a registered id, distinct from resolving to the same id a caller already
+ * expected.
+ */
+function resolveLiveObjectId(
+  afterObjectPrefix: string,
+  registeredObjectIds: ReadonlySet<string>,
+): string | undefined {
+  if (registeredObjectIds.has(afterObjectPrefix)) return afterObjectPrefix;
+  const lastDotIndex = afterObjectPrefix.lastIndexOf('.');
+  if (lastDotIndex === -1) return undefined;
+  const candidateId = afterObjectPrefix.slice(0, lastDotIndex);
+  return registeredObjectIds.has(candidateId) ? candidateId : undefined;
+}
+
+/**
  * Check every statically-resolved registration's declared `experimental` flag against what the live
  * document reports, per the fan-out rules described in the module doc comment.
  */
@@ -689,6 +708,17 @@ export function checkMarkerAgreement(
 ): MarkerDisagreement[] {
   const liveByName = new Map(liveMethods.map((method) => [method.name, method] as const));
   const disagreements: MarkerDisagreement[] = [];
+
+  // Every registered object id, so the fanned-method scan below can tell a sibling object's own
+  // existence/fanned methods apart from a genuine fanned method of the object under check --
+  // object ids may themselves contain dots (e.g. `platform.enhancedResources`), the same reason
+  // `resolveNetworkObjectMethod` tries the unsplit string as an id before splitting off a function
+  // name.
+  const registeredObjectIds = new Set<string>();
+  registrations.forEach((otherReg) => {
+    const otherCheck = getExpectedLiveCheck(otherReg);
+    if (otherCheck.kind === 'objectExistence') registeredObjectIds.add(otherCheck.objectId);
+  });
 
   const compare = (reg: WireSurfaceRegistration, liveMethodName: string): void => {
     const method = liveByName.get(liveMethodName);
@@ -721,6 +751,14 @@ export function checkMarkerAgreement(
     const methodPrefix = `${existenceMethodName}.`;
     liveMethods.forEach((method) => {
       if (!method.name.startsWith(methodPrefix)) return;
+      const resolvedObjectId = resolveLiveObjectId(
+        method.name.slice(OBJECT_METHOD_PREFIX.length),
+        registeredObjectIds,
+      );
+      // Belongs to a different registered object (its own existence method, or one of ITS fanned
+      // methods) -- not a fanned method of `check.objectId` merely because the name starts the
+      // same way.
+      if (resolvedObjectId !== undefined && resolvedObjectId !== check.objectId) return;
       if ((method['x-experimental'] ?? false) === true) return;
       disagreements.push({
         registration: reg,
