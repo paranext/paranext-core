@@ -96,6 +96,7 @@ import {
   waitForRendererRegistered,
   closeWindowLikeAUser,
   widenWindowForToolbarReference,
+  withPlatformWindow,
 } from './multi-window.util';
 
 // #region log markers
@@ -386,16 +387,14 @@ async function tabHasWindowFocusRing(page: Page, tabTitleText: string): Promise<
  */
 async function waitForWindowToBeRaised(
   electronApp: ElectronApplication,
-  windowId: number,
+  windowId: string,
   timeoutMs: number,
 ): Promise<void> {
   const startTime = Date.now();
   await pollUntil(
     async () => {
       if (Date.now() - startTime >= OS_FOCUS_COOPERATION_BUDGET_MS) {
-        await electronApp.evaluate(({ BrowserWindow }, id) => {
-          BrowserWindow.fromId(id)?.emit('focus');
-        }, windowId);
+        await withPlatformWindow(electronApp, windowId, (win) => win.emit('focus'));
       }
       return getFocusedWindowId();
     },

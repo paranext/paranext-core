@@ -408,10 +408,23 @@ test.describe('moving a web view between windows', () => {
     // the user's own — and the suite would still be green.
     const menuMoveFocus = await electronApp.evaluate(
       ({ BrowserWindow }, { id }) => {
-        const created = BrowserWindow.getAllWindows().find((win) => win.id !== id);
+        // Matched on the `windowId` query parameter, not `BrowserWindow.id`: the platform's id is a
+        // durable GUID with no relationship to Electron's numeric id (see `withPlatformWindow`'s own
+        // doc comment in `multi-window.util.ts` for why).
+        const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) => {
+          try {
+            return (
+              new URL(someWindow.webContents.getURL()).searchParams.get('windowId') ?? undefined
+            );
+          } catch {
+            return undefined;
+          }
+        };
+        const created = BrowserWindow.getAllWindows().find((win) => platformIdOf(win) !== id);
+        const focusedWindow = BrowserWindow.getFocusedWindow();
         return {
           createdIsFocused: created ? created.isFocused() : undefined,
-          focusedWindowId: BrowserWindow.getFocusedWindow()?.id,
+          focusedWindowId: focusedWindow ? platformIdOf(focusedWindow) : undefined,
         };
       },
       { id: window1Id },

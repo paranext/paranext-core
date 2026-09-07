@@ -363,10 +363,10 @@ describe('moveWebView', () => {
     const owner = windowShard(['view-1']);
     const created = windowShard([]);
     withWindows({ 2: owner, 7: created });
-    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
     setWebViewWindowCreator(creator);
 
-    await moveWebView('view-1', 'new', true);
+    await moveWebView('view-1', { kind: 'new' }, true);
 
     expect(creator.createPendingContentWindow).toHaveBeenCalledWith(true);
   });
@@ -376,10 +376,10 @@ describe('moveWebView', () => {
     const owner = windowShard(['view-1']);
     const created = windowShard([]);
     withWindows({ 2: owner, 7: created });
-    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
     setWebViewWindowCreator(creator);
 
-    await moveWebView('view-1', 'new');
+    await moveWebView('view-1', { kind: 'new' });
 
     expect(creator.createPendingContentWindow).toHaveBeenCalledWith(false);
   });
