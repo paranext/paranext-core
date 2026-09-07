@@ -18,7 +18,7 @@
  */
 
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage, type InterfaceMode } from 'platform-bible-utils';
+import { getErrorMessage, Mutex, type InterfaceMode } from 'platform-bible-utils';
 
 export type { InterfaceMode };
 
@@ -114,14 +114,18 @@ let switchGeneration = 0;
 const modeSwitchClosingWindowIds = new Set<string>();
 
 /**
- * The reopen running right now, if there is one.
+ * Serializes {@link reopenPreservedWindows} runs, one at a time.
  *
- * At most one may run: an entry stays preserved until its window exists, so two reopens reading the
- * set at the same moment both see the entry the other is midway through creating, and the user gets
- * two windows for one saved window. The two callers want opposite things from that, and both are
- * right — see {@link runReopen} and {@link clearModeSwitchClose}.
+ * An entry stays preserved until its window exists, so two reopens reading the set at the same
+ * moment both see the entry the other is midway through creating, and the user gets two windows for
+ * one saved window. The two callers of {@link runReopen} and {@link clearModeSwitchClose} want
+ * opposite things from a run already in progress — one waits for it, the other skips — and both are
+ * right; see their own docs.
+ *
+ * Replaced wholesale rather than reset in {@link resetForTesting}: a fresh instance is always
+ * unlocked, so a test that leaves a run pending cannot leave the next test waiting behind it.
  */
-let reopenInFlight: Promise<void> | undefined;
+let reopenMutex = new Mutex();
 
 /**
  * Wire the collaborators and seed the mode. Called once during startup, after the window restore
@@ -214,7 +218,7 @@ export function clearModeSwitchClose(windowId: string): void {
   // create a window per entry twice. Reaching this line means the mode reads power, which means a
   // switch back to power ran — so the reopen in flight is either that switch's own, which re-reads
   // the set on every pass, or an earlier one that its `runReopen` is already waiting behind.
-  if (reopenInFlight) return;
+  if (reopenMutex.isLocked()) return;
   // Not awaited: this runs from a window's `closed` handler, which is synchronous and has its own
   // teardown to finish. Failures are reported by the reopen itself, one window at a time.
   runReopen(deps, switchGeneration).catch((e: unknown) => {
@@ -427,21 +431,21 @@ async function reopenPreservedWindows(
 }
 
 /**
- * {@link reopenPreservedWindows}, queued behind whichever run was already in flight.
+ * {@link reopenPreservedWindows}, run one at a time.
  *
- * A reopen only notices it has been superseded between windows, so when a new switch arrives it is
- * still creating one — and the entry it is creating is still preserved, because an entry stops
- * being preserved only once its window exists. Starting alongside it would have both reopens claim
- * that entry and the user would get two windows for one saved window. So this waits for it: the
- * older run stops at its next pass, and by then the entries it did not reach are still there to be
- * read.
+ * A reopen only notices it has been superseded between windows, so when a new switch arrives the
+ * older run is still creating one — and the entry it is creating is still preserved, because an
+ * entry stops being preserved only once its window exists. Starting alongside it would have both
+ * reopens claim that entry and the user would get two windows for one saved window. So this always
+ * waits its turn: {@link reopenMutex} queues every call in the order it arrived, and a run only
+ * starts once every call queued ahead of it has fully finished — not merely the one immediately
+ * before it, however many are waiting.
  *
- * The wait below only holds one level deep — a third switch arriving while this one is already
- * waiting on a second captures that same second run, not this one, and both can go on to call
- * {@link reopenPreservedWindows} concurrently once it settles. What actually rules out a duplicate
- * create in that case is `reopenPreservedWindows`'s own generation check at the top of every pass:
- * a run for a generation the world has moved past exits before touching an entry, so the two
- * concurrent calls never both act on the same one.
+ * What a run so queued actually DOES once its turn comes is a separate question, answered by
+ * {@link reopenPreservedWindows}'s own generation check at the top of every pass: a run for a
+ * generation the world has moved past exits before touching an entry, so a switch superseded while
+ * its reopen was waiting in line creates nothing rather than duplicating what a later switch
+ * already put back.
  *
  * The wait is what makes this different from {@link clearModeSwitchClose}, which skips instead. A
  * run already going there is the SAME switch's, and re-reads the set every pass; here it is an
@@ -456,18 +460,7 @@ async function reopenPreservedWindows(
  * @param generation Switch this reopen belongs to
  */
 async function runReopen(deps: ModeSwitchDependencies, generation: number): Promise<void> {
-  // Its failure belongs to whoever started it, and has already been reported there
-  await reopenInFlight?.catch(() => {});
-  // A third switch arriving while this waited needs no check of its own: the reopen tests the
-  // generation before every window it creates, so a run that is already stale creates none
-  const run = reopenPreservedWindows(deps, generation);
-  reopenInFlight = run;
-  try {
-    await run;
-  } finally {
-    // Only if nothing has taken its place: a run that waited on this one has already claimed it
-    if (reopenInFlight === run) reopenInFlight = undefined;
-  }
+  await reopenMutex.runExclusive(() => reopenPreservedWindows(deps, generation));
 }
 
 /**
@@ -597,6 +590,6 @@ export function resetForTesting(): void {
   dependencies = undefined;
   cachedInterfaceMode = undefined;
   switchGeneration = 0;
-  reopenInFlight = undefined;
+  reopenMutex = new Mutex();
   modeSwitchClosingWindowIds.clear();
 }
