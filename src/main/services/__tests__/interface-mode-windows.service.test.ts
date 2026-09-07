@@ -191,6 +191,19 @@ describe('reacting to an interface-mode change', () => {
     expect(getCachedInterfaceMode()).toBe('power');
   });
 
+  test('a seed that could not read the mode does not clobber an already-known one', async () => {
+    // A later restore (macOS re-activation with no windows open) reports undefined when its
+    // settings read fails. That failure must not undo what an earlier, successful read already
+    // established, or isAdditionalWindowRefusedInSimpleMode silently stops refusing extra windows
+    // in simple mode until the next real change arrives.
+    const deps = makeDeps();
+    initializeModeSwitchOrchestration(deps, 'simple');
+
+    seedInterfaceMode(undefined, getSwitchGeneration());
+
+    expect(getCachedInterfaceMode()).toBe('simple');
+  });
+
   test('switching to simple closes every window but the primary', async () => {
     const deps = makeDeps();
     initializeModeSwitchOrchestration(deps, 'power');

@@ -160,7 +160,11 @@ export function getSwitchGeneration(): number {
  * The restore decides how many windows to build from its own read of the mode, and this is that
  * value. Reacting to it would run a switch against a window set that already matches it.
  *
- * @param mode Mode the restore read, or `undefined` if it could not be read
+ * @param mode Mode the restore read, or `undefined` if it could not be read. An unreadable result
+ *   never overwrites an already-known mode: it can only leave an unknown mode unknown, never turn a
+ *   known one back into an unknown one, since {@link isAdditionalWindowRefusedInSimpleMode} refuses
+ *   nothing while the mode is unknown and a mode that was already established losing that status
+ *   would silently stop being enforced until the next real change arrived.
  * @param sinceGeneration The generation {@link getSwitchGeneration} reported before the restore
  *   started. A real switch that ran in that window already moved the cache to a value this seed
  *   would otherwise stomp with a stale reading, so the seed is skipped when the generation has
@@ -170,6 +174,7 @@ export function getSwitchGeneration(): number {
  */
 export function seedInterfaceMode(mode: InterfaceMode | undefined, sinceGeneration: number): void {
   if (sinceGeneration !== switchGeneration) return;
+  if (mode === undefined && cachedInterfaceMode !== undefined) return;
   cachedInterfaceMode = mode;
 }
 
