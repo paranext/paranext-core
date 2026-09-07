@@ -3279,8 +3279,8 @@ step, no automation. Just a record.
   `window-scoped-web-view-ids.util.ts`) does the minting for the renderer's three materialization
   sites: `simple-layout.builder.ts` building a Simple-mode layout, the default-layout supplement's
   merge (re-keyed by `webViewType`, since a minted id can no longer serve as "is this entry already
-  present" — see the PR's commit re-keying `default-layout-supplement.util.ts`), and the test-layout
-  helper. A **persisted** id — anything loaded from a saved layout — is left exactly as saved: there
+  present" — see the PR's commit re-keying `default-layout-supplement.util.ts`), and the baked test
+  layout's own materialization in `web-view.service-shard.ts`. A **persisted** id — anything loaded from a saved layout — is left exactly as saved: there
   is no migration, and none is needed, because a persisted id was never window-scoped or stripped in
   the first place under this scheme; it is just an ordinary string. Once minted, a view's id is never
   rewritten again for any reason, including a move: capture returns the id it already had, and adopt
