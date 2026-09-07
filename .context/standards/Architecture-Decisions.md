@@ -4585,10 +4585,10 @@ and the rename lands with the `ProjectSelector` migration (PT-4549). Both names 
   where it used to be backslashed; it had no callers. A PDP over a store that cannot enumerate must
   document that its call fails, since consumers cannot detect it in advance. The method takes no
   Send/Receive write scope: it is a read.
-- **Source:** PDP extension-data enumeration work. The `list*`-vs-`get*` naming rule it applies is
-  already in `Paranext-Core-Patterns.md` ("Naming rule (read first)"); the optional-on-engine /
-  required-on-consumer shape and the feature-detection trap are promoted there as "Adding an
-  optional method to `platform.base`".
+- **Source:** PT-4527.
+  The `list*`-vs-`get*` naming rule it applies is already in `Paranext-Core-Patterns.md` ("Naming
+  rule (read first)"); the optional-on-engine / required-on-consumer shape and the
+  feature-detection trap are promoted there as "Adding an optional method to `platform.base`".
 
 ## adr-per-project-selection-collapses-scroll-groups: Per-project consumers collapse multi-scroll-group projects themselves
 
