@@ -975,19 +975,17 @@ async function main() {
 
     // The settle clock is seeded from where the window is being placed, rather than left unknown
     // until the first capture, so a drag away from the creation display starts counting from
-    // creation rather than from that later drag. `lastAcceptedDisplayId` stays unknown, though: the
-    // window's own creation is a landing like any other — Win32 and Chromium can disagree about a
-    // freshly created window's DPI on a scaled display the same way they can mid-drag — so a
-    // capture on the creation display still has to clear `areCapturedBoundsTrustworthy`'s settle
-    // wait before it earns the trust that lets later captures on that same display through at once.
+    // creation rather than from that later drag. The window's own creation is a landing like any
+    // other — Win32 and Chromium can disagree about a freshly created window's DPI on a scaled
+    // display the same way they can mid-drag — so a capture on the creation display still has to
+    // clear `areCapturedBoundsTrustworthy`'s settle wait before it earns the trust that lets later
+    // captures on that same display through at once.
     const initialDisplaySettle = trackDisplaySettle(
       captureCorrectedBounds(newWindow.getBounds()),
       screen.getAllDisplays(),
       { displayId: undefined, since: Date.now() },
       Date.now(),
     );
-    /** Display the last accepted placement was on, so a move between displays can be recognized */
-    let lastAcceptedDisplayId: number | undefined;
     /** Which display this window's bounds lie within, and since when — see `trackDisplaySettle` */
     let displaySettle: DisplaySettleState = initialDisplaySettle;
 
@@ -1005,16 +1003,8 @@ async function main() {
         // way a maximized or minimized window's is: `updateWindowBounds` keeps the last one it was
         // given when a capture carries none, so the window keeps the placement it last held rather
         // than gaining a wrong one. See `areCapturedBoundsTrustworthy`.
-        if (
-          areCapturedBoundsTrustworthy(
-            bounds,
-            displays,
-            lastAcceptedDisplayId,
-            now - displaySettle.since,
-          )
-        ) {
+        if (areCapturedBoundsTrustworthy(bounds, displays, now - displaySettle.since)) {
           capturedState.bounds = bounds;
-          lastAcceptedDisplayId = displaySettle.displayId;
         }
       }
       return capturedState;
