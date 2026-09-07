@@ -97,11 +97,27 @@ async function getInterfaceMode(): Promise<string> {
 }
 
 /**
- * Wait until the application reports the mode it was told to take.
+ * How long to wait, once the settings store confirms it holds the new interface mode, for main's
+ * own reaction to that change to complete.
  *
- * Polling the window count instead would synchronize nothing where the count is already right: a
- * poll whose condition holds on its first read returns immediately, so the assertion after it can
- * run before the application has reacted to the change at all.
+ * The settings write resolves as soon as the store holds the new value, which says nothing about
+ * whether main — a separate subscriber — has caught up: main's subscribe callback assigns its
+ * cached mode as its first effect once the change notification reaches it, over one network hop
+ * with no further round trip, so this only needs to cover that hop plus scheduling jitter, not a
+ * user-visible reaction.
+ */
+const MODE_REACTION_SETTLE_MS = 1_000;
+
+/**
+ * Wait until the application reports the mode it was told to take, and give main's own reaction to
+ * that change time to complete.
+ *
+ * Confirming the settings store holds the new value is not the same as confirming main has reacted
+ * to it: the store takes a write synchronously, before main's own subscription callback ever runs,
+ * so a caller that stopped at the read-back could still race that callback. Polling the window
+ * count instead would be worse in a different way: where the count is already right, a poll whose
+ * condition holds on its first read returns immediately and synchronizes nothing at all. See
+ * {@link MODE_REACTION_SETTLE_MS} for how the callback race is closed.
  */
 async function waitForInterfaceMode(mode: 'simple' | 'power'): Promise<void> {
   await pollUntil(
@@ -110,6 +126,9 @@ async function waitForInterfaceMode(mode: 'simple' | 'power'): Promise<void> {
     SWITCH_SETTLE_TIMEOUT_MS,
     `the application to report the ${mode} interface mode`,
   );
+  await new Promise((resolve) => {
+    setTimeout(resolve, MODE_REACTION_SETTLE_MS);
+  });
 }
 
 /** Ask the application which windows it has, and which of them holds the primary role */
