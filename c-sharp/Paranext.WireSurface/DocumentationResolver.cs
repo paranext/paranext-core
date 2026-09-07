@@ -135,7 +135,7 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
             IsType(symbols.NetworkObjectDocumentation, property.ContainingType)
         );
         var experimentalValue = FindInitializerValue(objectCreation, experimentalProperty, model);
-        if (experimentalValue is not null)
+        if (experimentalValue is not null && !IsExplicitNull(experimentalValue, model))
         {
             var constant = model.GetConstantValue(experimentalValue);
             return constant.HasValue && constant.Value is bool boolValue
@@ -147,7 +147,10 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
         if (methodsValue is null)
             return new DocumentationResolution(true, true, false);
 
-        var entryValues = GetDictionaryEntryValues(methodsValue).ToList();
+        var entryValues = GetDictionaryEntryValues(methodsValue);
+        if (entryValues is null)
+            return Unresolved; // Methods is assigned from a shape we cannot enumerate.
+
         if (entryValues.Count == 0)
             return new DocumentationResolution(true, true, false);
 
@@ -170,7 +173,7 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
     )
     {
         var value = FindInitializerValue(objectCreation, experimentalProperty, model);
-        if (value is null)
+        if (value is null || IsExplicitNull(value, model))
             return new DocumentationResolution(true, true, false);
 
         var constant = model.GetConstantValue(value);
@@ -178,6 +181,13 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
             ? new DocumentationResolution(true, true, boolValue)
             : Unresolved;
     }
+
+    /// <summary>
+    /// <c>Experimental</c> is a nullable bool whose doc comment treats an explicit <c>null</c> the
+    /// same as omitting the property entirely, so both must fall through the same way here.
+    /// </summary>
+    private static bool IsExplicitNull(ExpressionSyntax expression, SemanticModel model) =>
+        model.GetConstantValue(expression) is { HasValue: true, Value: null };
 
     /// <summary>
     /// <c>OpenRpcSingleMethodDocumentation</c>/<c>OpenRpcSingleNotificationDocumentation</c> carry
@@ -291,21 +301,25 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
         return null;
     }
 
-    private static IEnumerable<ExpressionSyntax> GetDictionaryEntryValues(
+    /// <summary>
+    /// The entry values of a <c>Methods</c> dictionary initializer, or <see langword="null"/> when
+    /// the assigned expression is not an inline dictionary object-creation we can enumerate (a local,
+    /// a field, a method call) — distinct from an inline dictionary that is simply empty.
+    /// </summary>
+    private static IReadOnlyList<ExpressionSyntax>? GetDictionaryEntryValues(
         ExpressionSyntax dictionaryExpression
     )
     {
-        if (
-            dictionaryExpression
-            is not BaseObjectCreationExpressionSyntax { Initializer: { } initializer }
-        )
-            yield break;
+        if (dictionaryExpression is not BaseObjectCreationExpressionSyntax objectCreation)
+            return null;
 
-        foreach (var expression in initializer.Expressions)
-        {
-            if (expression is AssignmentExpressionSyntax assignment)
-                yield return assignment.Right;
-        }
+        if (objectCreation.Initializer is not { } initializer)
+            return [];
+
+        return initializer
+            .Expressions.OfType<AssignmentExpressionSyntax>()
+            .Select(assignment => assignment.Right)
+            .ToList();
     }
 
     private static bool IsType(INamedTypeSymbol candidate, INamedTypeSymbol expected) =>
