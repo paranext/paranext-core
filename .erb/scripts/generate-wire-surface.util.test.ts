@@ -1,5 +1,8 @@
+import * as path from 'path';
+import * as ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import {
+  derivePathAliases,
   DynamicRegistration,
   findStaleLivenessAnnotations,
   generateWireSurfaceDocument,
@@ -609,6 +612,45 @@ describe('generateWireSurfaceDocument: combined TypeScript + C# scanning', () =>
     const withoutCSharp = generateWireSurfaceDocument(tsFiles);
     expect(withoutCSharp.registrations.every((r) => r.language === 'typescript')).toBe(true);
     expect(withoutCSharp.registrations).toHaveLength(2);
+  });
+});
+
+describe('generateWireSurfaceDocument: path aliases derived from tsconfig', () => {
+  it('derives every alias the module resolver used to hard-code, plus @assets/*, from the real tsconfig.json paths', () => {
+    const tsconfigPath = path.resolve(__dirname, '../../tsconfig.json');
+    const configFile = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+    expect(configFile.error).toBeUndefined();
+    // `configFile.config` is `any` (that's `ts.readConfigFile`'s own return shape), so this reads
+    // the real tsconfig.json's paths map with no cast needed.
+    const { paths } = configFile.config.compilerOptions;
+
+    const derived = derivePathAliases(paths);
+
+    const previousHandList: ReadonlyArray<readonly [string, string]> = [
+      ['@shared/', 'src/shared/'],
+      ['@main/', 'src/main/'],
+      ['@node/', 'src/node/'],
+      ['@extension-host/', 'src/extension-host/'],
+      ['@renderer/', 'src/renderer/'],
+      ['@client/', 'src/client/'],
+    ];
+    previousHandList.forEach((alias) => expect(derived).toContainEqual(alias));
+    expect(derived).toContainEqual(['@assets/', 'assets/']);
+
+    // Nothing in the derived list is absent from tsconfig: every derived alias prefix has to come
+    // from a "prefix/*" key that is actually present in the paths map that produced it.
+    derived.forEach(([prefix]) => expect(paths[`${prefix}*`]).toBeDefined());
+  });
+
+  it('ignores a paths entry that is not a single "*"-suffixed directory mapping (e.g. a single-file shim)', () => {
+    const derived = derivePathAliases({
+      '@dir/*': ['./src/dir/*'],
+      vite: ['./src/@types/shims-vite.d.ts'],
+      '@multi/*': ['./src/a/*', './src/b/*'],
+    });
+    expect(derived).toContainEqual(['@dir/', 'src/dir/']);
+    expect(derived.some(([prefix]) => prefix === 'vite')).toBe(false);
+    expect(derived.some(([prefix]) => prefix === '@multi/')).toBe(false);
   });
 });
 
