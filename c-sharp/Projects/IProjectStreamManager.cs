@@ -22,6 +22,15 @@ internal interface IProjectStreamManager
     /// or empty lists every stream in the project, relative to the project root.
     /// </param>
     /// <returns>Stream names, sorted with <see cref="StringComparer.Ordinal"/></returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="underPath"/> is not a valid path within the project - an implementation must
+    /// reject a path that would escape the project rather than enumerate outside it.
+    /// </exception>
+    /// <exception cref="DirectoryNotFoundException">
+    /// The project's own storage is missing or unreachable. Distinct from an absent
+    /// <paramref name="underPath"/>, which is an empty array: a caller must be able to tell "nothing
+    /// has been written there" from "the project could not be read".
+    /// </exception>
     string[] GetExistingDataStreamNames(string? underPath = null);
 
     /// <summary>

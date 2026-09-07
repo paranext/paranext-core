@@ -60,13 +60,9 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     /// <paramref name="scope"/>.
     ///
     /// Listing creates nothing, so an extension that has never written any data gets an empty
-    /// array. Discovering the same thing by calling <see cref="GetExtensionData"/> does not have
-    /// that property — on the Paratext PDP a read creates the data it looked for.
+    /// array.
     /// </summary>
-    /// <param name="scope">
-    /// Whose data to list: ExtensionName selects the extension, and DataQualifierPrefix — when set
-    /// — narrows the result to the DataQualifiers starting with it.
-    /// </param>
+    /// <param name="scope">Whose data to list: ExtensionName selects the extension.</param>
     /// <returns>
     /// Every DataQualifier that exists for that extension, sorted with
     /// <see cref="StringComparer.Ordinal"/>. Each is a valid DataQualifier for
@@ -74,5 +70,10 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     /// forward slashes, relative to the extension's own data, nested paths included. Empty
     /// documents are included; an extension with no data at all gets an empty array.
     /// </returns>
+    /// <exception cref="InvalidDataException">
+    /// The scope has no ExtensionName, or one that does not name a single directory of extension
+    /// data. An implementation must reject an ExtensionName that would widen the listing past the
+    /// one extension asked about.
+    /// </exception>
     public abstract string[] ListExtensionDataQualifiers(ProjectDataScope scope);
 }
