@@ -76,6 +76,11 @@ export function runCSharpWireSurfaceScanner(
           `stderr:\n${result.stderr}`,
       );
     }
+    // A clean exit can still carry a warning on stderr (e.g. a compiled file the tracked-file list
+    // does not cover) -- surface it instead of letting it vanish silently.
+    if (result.stderr) {
+      console.warn(`[wire-surface C# scanner] ${result.stderr}`);
+    }
 
     const raw = fs.readFileSync(outputPath, 'utf8');
     const parsed: unknown = JSON.parse(raw);

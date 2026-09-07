@@ -1,7 +1,7 @@
 import * as childProcess from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { runCSharpWireSurfaceScanner } from './run-wire-surface-scanner';
 import { CSharpScanResult } from './wire-surface.model';
 
@@ -92,6 +92,38 @@ describe('runCSharpWireSurfaceScanner: success path', () => {
     });
     expect(capturedTempDir).not.toBe('');
     expect(fs.existsSync(capturedTempDir)).toBe(false);
+  });
+});
+
+describe('runCSharpWireSurfaceScanner: warnings on the success path', () => {
+  it('forwards non-empty stderr to console.warn when the scanner exits 0', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const skippedFileWarning =
+        'wire-surface: these compiled files are not in the tracked-file list and were skipped:\n' +
+        '  c-sharp/Fixtures/FixtureC.cs\n';
+      runCSharpWireSurfaceScanner(REPO_ROOT, TRACKED_FILES, (_command, args) => {
+        const outPath = args[args.indexOf('--out') + 1];
+        fs.writeFileSync(outPath, JSON.stringify(SCAN_RESULT));
+        return fakeSpawnResult({ stderr: skippedFileWarning });
+      });
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const [warned] = warnSpy.mock.calls[0];
+      expect(warned).toContain('[wire-surface C# scanner]');
+      expect(warned).toContain(skippedFileWarning);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('does not call console.warn when the scanner exits 0 with empty stderr', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      runCSharpWireSurfaceScanner(REPO_ROOT, TRACKED_FILES, makeSuccessfulSpawn(SCAN_RESULT));
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });
 
