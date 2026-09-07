@@ -4349,8 +4349,7 @@ step, no automation. Just a record.
   registration is recognised by the symbol it invokes or overrides — never by text shape — and a
   name is resolved by binding, including one level of constructor/call-argument propagation; its
   limits are the five recognised rules and that propagation depth, both stated in the artifact's
-  header; a new idiom neither half recognises is still invisible until the live assertion catches
-  it; a compilation that does not build fails the generator rather than producing a partial
+  header; a compilation that does not build fails the generator rather than producing a partial
   artifact. A new registration shape that neither scanner recognises is still invisible until the
   live assertion catches the divergence — which is why the recognised-pattern list is published in
   the header, so a reader can see what would evade it.
