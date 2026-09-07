@@ -10,7 +10,7 @@ export type AbandonedWindowNoticeParent = 'abandoned-window' | 'another-window';
 /** A live window the notice could be shown on */
 export type NoticeParentCandidate = {
   /** The window's id */
-  windowId: number;
+  windowId: string;
   /** Whether this window holds the primary role right now */
   isPrimary: boolean;
 };
@@ -88,9 +88,9 @@ export function decideAbandonedWindowNotice(
  * @returns The window to parent the question to, or `undefined` to show it unparented
  */
 export function chooseNoticeParentWindowId(
-  abandonedWindowId: number,
+  abandonedWindowId: string,
   candidates: readonly NoticeParentCandidate[],
-): number | undefined {
+): string | undefined {
   const otherWindows = candidates.filter((candidate) => candidate.windowId !== abandonedWindowId);
   return (otherWindows.find((candidate) => candidate.isPrimary) ?? otherWindows[0])?.windowId;
 }

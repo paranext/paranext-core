@@ -1894,21 +1894,25 @@ async function main() {
   function resolveNoticeParent(
     parent: AbandonedWindowNoticeParent,
     abandonedWindow: BrowserWindow,
-    abandonedWindowId: number,
+    abandonedWindowId: string,
   ): BrowserWindow | undefined {
     if (parent === 'abandoned-window') return abandonedWindow;
     // The runtime answer, as the mode switch uses — including its fallback to the oldest live
     // window — rather than the persisted flag, which is empty whenever no live window holds the
     // marked entry. `getWindows` has already left out the destroyed ones.
     const liveWindows = getWindows();
+    const candidates = liveWindows.flatMap((window) => {
+      const windowId = getWindowIdOf(window);
+      return windowId === undefined ? [] : [{ window, windowId }];
+    });
     const parentWindowId = chooseNoticeParentWindowId(
       abandonedWindowId,
-      liveWindows.map((window) => ({
-        windowId: window.id,
-        isPrimary: isPrimaryWindow(window.id),
+      candidates.map(({ windowId }) => ({
+        windowId,
+        isPrimary: isPrimaryWindow(windowId),
       })),
     );
-    return liveWindows.find((window) => window.id === parentWindowId);
+    return candidates.find((candidate) => candidate.windowId === parentWindowId)?.window;
   }
 
   /**
@@ -1936,7 +1940,7 @@ async function main() {
    */
   async function offerToCloseAbandonedWindow(
     abandonedWindow: BrowserWindow,
-    abandonedWindowId: number,
+    abandonedWindowId: string,
     hasAlreadyAsked: boolean,
     recordAsked: () => void,
   ): Promise<void> {

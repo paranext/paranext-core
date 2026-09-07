@@ -83,37 +83,37 @@ describe('chooseNoticeParentWindowId', () => {
     // the persisted entry — which a window given up on keeps. Answering with it would put the
     // question back on the window nobody is shown, which is the whole thing this avoids.
     expect(
-      chooseNoticeParentWindowId(1, [
-        { windowId: 1, isPrimary: true },
-        { windowId: 2, isPrimary: false },
+      chooseNoticeParentWindowId('1', [
+        { windowId: '1', isPrimary: true },
+        { windowId: '2', isPrimary: false },
       ]),
-    ).toBe(2);
+    ).toBe('2');
   });
 
   test('prefers the primary among the windows that are left', () => {
     expect(
-      chooseNoticeParentWindowId(1, [
-        { windowId: 2, isPrimary: false },
-        { windowId: 3, isPrimary: true },
+      chooseNoticeParentWindowId('1', [
+        { windowId: '2', isPrimary: false },
+        { windowId: '3', isPrimary: true },
       ]),
-    ).toBe(3);
+    ).toBe('3');
   });
 
   test('takes any other window when none of them holds the role', () => {
     // Reachable exactly when the abandoned window is the primary: some window has to carry the
     // question, and any window the user can see beats one they cannot
     expect(
-      chooseNoticeParentWindowId(1, [
-        { windowId: 1, isPrimary: true },
-        { windowId: 2, isPrimary: false },
-        { windowId: 3, isPrimary: false },
+      chooseNoticeParentWindowId('1', [
+        { windowId: '1', isPrimary: true },
+        { windowId: '2', isPrimary: false },
+        { windowId: '3', isPrimary: false },
       ]),
-    ).toBe(2);
+    ).toBe('2');
   });
 
   test('answers with nothing when there is no other window', () => {
     // The caller shows the box with no parent rather than parenting it to a window off screen
-    expect(chooseNoticeParentWindowId(1, [{ windowId: 1, isPrimary: true }])).toBeUndefined();
-    expect(chooseNoticeParentWindowId(1, [])).toBeUndefined();
+    expect(chooseNoticeParentWindowId('1', [{ windowId: '1', isPrimary: true }])).toBeUndefined();
+    expect(chooseNoticeParentWindowId('1', [])).toBeUndefined();
   });
 });
