@@ -518,6 +518,26 @@ describe('generateWireSurfaceDocument: unresolvable names', () => {
       category: 'webViewProvider',
     });
   });
+
+  it('bounds a cycle of object literals referencing each other through field reads instead of recursing without bound', () => {
+    const files: VirtualFile[] = [
+      {
+        path: 'src/fixture-object-literal-cycle.ts',
+        text: `
+          const a = { x: b.x };
+          const b = { x: a.x };
+          registerCommand(a.x, handler);
+        `,
+      },
+    ];
+    const document = generateWireSurfaceDocument(files);
+    expect(
+      document.registrations.some((r) => r.file === 'src/fixture-object-literal-cycle.ts'),
+    ).toBe(false);
+    expect(findDynamic(document.dynamicRegistrations, 'a.x')).toMatchObject({
+      category: 'command',
+    });
+  });
 });
 
 describe('generateWireSurfaceDocument: identifier binding through the TypeScript checker', () => {

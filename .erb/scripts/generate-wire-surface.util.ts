@@ -620,17 +620,22 @@ function evaluateStringExpression(
     if (!objectRef) return { resolved: false };
     const prop = findPropertyAssignment(objectRef.node, expr.name.text);
     if (!prop) return { resolved: false };
-    return evaluateStringExpression(prop.initializer, objectRef.entry, checker, visited);
+    return evaluateStringExpression(prop.initializer, objectRef.entry, checker, objectRef.visited);
   }
 
   if (ts.isElementAccessExpression(expr)) {
     const objectRef = resolveObjectLiteral(expr.expression, entry, checker, visited);
     if (!objectRef) return { resolved: false };
-    const keyResult = evaluateStringExpression(expr.argumentExpression, entry, checker, visited);
+    const keyResult = evaluateStringExpression(
+      expr.argumentExpression,
+      entry,
+      checker,
+      objectRef.visited,
+    );
     if (!keyResult.resolved || keyResult.value === undefined) return { resolved: false };
     const prop = findPropertyAssignment(objectRef.node, keyResult.value);
     if (!prop) return { resolved: false };
-    return evaluateStringExpression(prop.initializer, objectRef.entry, checker, visited);
+    return evaluateStringExpression(prop.initializer, objectRef.entry, checker, objectRef.visited);
   }
 
   return { resolved: false };
@@ -656,6 +661,13 @@ function findPropertyAssignment(
 interface ObjectLiteralRef {
   node: ts.ObjectLiteralExpression;
   entry: FileEntry;
+  /**
+   * The `visited` set enriched with every identifier hopped through to reach this literal. A caller
+   * that keeps resolving through `node` (e.g. a further property read) must continue with this set,
+   * not the one it started with, or a cycle of object literals referencing each other's fields
+   * recurses without bound instead of terminating.
+   */
+  visited: ReadonlySet<string>;
 }
 
 function resolveObjectLiteral(
@@ -666,7 +678,7 @@ function resolveObjectLiteral(
 ): ObjectLiteralRef | undefined {
   const expr = unwrapExpression(rawExpr);
 
-  if (ts.isObjectLiteralExpression(expr)) return { node: expr, entry };
+  if (ts.isObjectLiteralExpression(expr)) return { node: expr, entry, visited };
 
   if (ts.isIdentifier(expr)) {
     const key = `${entry.path}#${expr.text}`;
@@ -683,17 +695,22 @@ function resolveObjectLiteral(
     if (!objectRef) return undefined;
     const prop = findPropertyAssignment(objectRef.node, expr.name.text);
     if (!prop) return undefined;
-    return resolveObjectLiteral(prop.initializer, objectRef.entry, checker, visited);
+    return resolveObjectLiteral(prop.initializer, objectRef.entry, checker, objectRef.visited);
   }
 
   if (ts.isElementAccessExpression(expr)) {
     const objectRef = resolveObjectLiteral(expr.expression, entry, checker, visited);
     if (!objectRef) return undefined;
-    const keyResult = evaluateStringExpression(expr.argumentExpression, entry, checker, visited);
+    const keyResult = evaluateStringExpression(
+      expr.argumentExpression,
+      entry,
+      checker,
+      objectRef.visited,
+    );
     if (!keyResult.resolved || keyResult.value === undefined) return undefined;
     const prop = findPropertyAssignment(objectRef.node, keyResult.value);
     if (!prop) return undefined;
-    return resolveObjectLiteral(prop.initializer, objectRef.entry, checker, visited);
+    return resolveObjectLiteral(prop.initializer, objectRef.entry, checker, objectRef.visited);
   }
 
   return undefined;
