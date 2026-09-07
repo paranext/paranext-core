@@ -89,6 +89,13 @@ export async function performShutdownTasks(): Promise<void> {
 }
 
 async function performShutdownTasksInternal(): Promise<void> {
+  // Drained before the mode is even read, not just before either branch: a closing window's sync
+  // belongs to no mode, since it was started under whichever mode was in force when that window
+  // closed and the mode can have changed since. An unreadable mode must not skip this wait either —
+  // it is the only thing that can ever cover that window's editors, and both branches below go on
+  // to cancel whatever is in progress once this has drained.
+  await drainInFlightWindowCloseSyncs();
+
   // An unreadable mode must NOT fall through to Simple mode's open-editor S/R (symmetric with
   // startup): the read can fail exactly when the app is closing, and Simple mode S/Rs whatever
   // writable editors happen to be open — for a Power user, possibly projects they excluded from
@@ -102,12 +109,6 @@ async function performShutdownTasksInternal(): Promise<void> {
     );
     return;
   }
-
-  // Before either branch, because a closing window's sync belongs to no mode: it was started under
-  // whichever mode was in force when that window closed, and the mode can have changed since. Both
-  // branches go on to cancel whatever is in progress, so a sync left running here would be
-  // cancelled by the very shutdown that is meant to let it finish.
-  await drainInFlightWindowCloseSyncs();
 
   if (interfaceMode === 'power') {
     await performPowerModeShutdownSync();
