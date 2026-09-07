@@ -322,6 +322,50 @@ public class DocumentationOverrideRuleTests
     }
 
     [Test]
+    public void ReturnWithNestedLocalFunctionReturnStillSingleReturn()
+    {
+        var entries = ScanFixtureTree(
+            """
+            using Paranext.DataProvider;
+            using Paranext.DataProvider.NetworkObjects;
+            using Paranext.DataProvider.NetworkObjects.Documentation;
+
+            internal sealed class FixtureNestedLocalFunctionReturn(PapiClient papiClient)
+                : DataProvider("fixture.nested-local-function-return", papiClient)
+            {
+                protected override NetworkObjectDocumentation? GetNetworkObjectDocumentation()
+                {
+                    int Double(int x)
+                    {
+                        return x * 2;
+                    }
+
+                    Double(1);
+                    return new NetworkObjectDocumentation { Experimental = true };
+                }
+            }
+            """
+        );
+
+        Assert.That(
+            entries,
+            Is.EqualTo(
+                new[]
+                {
+                    new ScanEntry.Static(
+                        Static(
+                            "FixtureNestedLocalFunctionReturn",
+                            documented: true,
+                            docsStaticallyResolved: true,
+                            experimental: true
+                        )
+                    ),
+                }
+            )
+        );
+    }
+
+    [Test]
     public void TwoOverridesInOneFileBothReported()
     {
         var entries = ScanFixtureTree(
