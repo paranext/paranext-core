@@ -2,7 +2,9 @@ import { describe, expect, test } from 'vitest';
 import {
   chooseNoticeParentWindowId,
   decideAbandonedWindowNotice,
+  eligibleNoticeParentCandidates,
   type AbandonedWindowNoticeInput,
+  type NoticeParentEligibilityInput,
 } from '@main/abandoned-window-notice.util';
 
 /** A window that has just been given up on, on screen, with nothing else going on */
@@ -115,5 +117,53 @@ describe('chooseNoticeParentWindowId', () => {
     // The caller shows the box with no parent rather than parenting it to a window off screen
     expect(chooseNoticeParentWindowId('1', [{ windowId: '1', isPrimary: true }])).toBeUndefined();
     expect(chooseNoticeParentWindowId('1', [])).toBeUndefined();
+  });
+});
+
+describe('eligibleNoticeParentCandidates', () => {
+  /** A window with nothing standing in the way of carrying the notice */
+  const ELIGIBLE: NoticeParentEligibilityInput = {
+    windowId: '2',
+    isPrimary: false,
+    isClosing: false,
+    isAbandoned: false,
+    isVisible: true,
+  };
+
+  test('keeps a window with nothing standing in the way', () => {
+    expect(eligibleNoticeParentCandidates([ELIGIBLE])).toEqual([
+      { windowId: '2', isPrimary: false },
+    ]);
+  });
+
+  test('drops a window whose close has already begun', () => {
+    // On its way out; a question parented to it would go down with it
+    expect(eligibleNoticeParentCandidates([{ ...ELIGIBLE, isClosing: true }])).toEqual([]);
+  });
+
+  test('drops a window that has itself been given up on', () => {
+    // A dead page is not a place to ask a question
+    expect(eligibleNoticeParentCandidates([{ ...ELIGIBLE, isAbandoned: true }])).toEqual([]);
+  });
+
+  test('drops a window that is minimized or hidden', () => {
+    // Same reason the abandoned window itself is skipped when it is off screen: nobody would see
+    // the question
+    expect(eligibleNoticeParentCandidates([{ ...ELIGIBLE, isVisible: false }])).toEqual([]);
+  });
+
+  test('keeps the primary flag on a surviving candidate', () => {
+    expect(eligibleNoticeParentCandidates([{ ...ELIGIBLE, isPrimary: true }])).toEqual([
+      { windowId: '2', isPrimary: true },
+    ]);
+  });
+
+  test('answers with nothing when every window is ineligible', () => {
+    expect(
+      eligibleNoticeParentCandidates([
+        { ...ELIGIBLE, isClosing: true },
+        { ...ELIGIBLE, windowId: '3', isAbandoned: true },
+      ]),
+    ).toEqual([]);
   });
 });

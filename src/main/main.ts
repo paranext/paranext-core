@@ -82,6 +82,7 @@ import {
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
   shouldWindowCloseAbortReadinessWait,
+  whenQuitRequested,
 } from '@main/services/shutdown-latch.service';
 import { setAppShutdownSignal } from '@main/services/rpc-server';
 import {
@@ -167,6 +168,7 @@ import { keepsItsEntryOnClose } from '@main/window-entry-disposition.util';
 import {
   chooseNoticeParentWindowId,
   decideAbandonedWindowNotice,
+  eligibleNoticeParentCandidates,
   type AbandonedWindowNoticeParent,
 } from '@main/abandoned-window-notice.util';
 import {
@@ -1938,7 +1940,9 @@ async function main() {
     if (parent === 'abandoned-window') return abandonedWindow;
     // The runtime answer, as the mode switch uses — including its fallback to the oldest live
     // window — rather than the persisted flag, which is empty whenever no live window holds the
-    // marked entry. `getWindows` has already left out the destroyed ones.
+    // marked entry. `getWindows` has already left out the destroyed ones; `eligibleNoticeParentCandidates`
+    // additionally rules out a window whose own close has begun, one itself given up on, and one
+    // that is minimized or hidden — none of which could actually show the question to the user.
     const liveWindows = getWindows();
     const candidates = liveWindows.flatMap((window) => {
       const windowId = getWindowIdOf(window);
@@ -1946,10 +1950,15 @@ async function main() {
     });
     const parentWindowId = chooseNoticeParentWindowId(
       abandonedWindowId,
-      candidates.map(({ windowId }) => ({
-        windowId,
-        isPrimary: isPrimaryWindow(windowId),
-      })),
+      eligibleNoticeParentCandidates(
+        candidates.map(({ window, windowId }) => ({
+          windowId,
+          isPrimary: isPrimaryWindow(windowId),
+          isClosing: isWindowMarkedClosing(windowId),
+          isAbandoned: isWindowAbandoned(windowId),
+          isVisible: !window.isMinimized() && window.isVisible(),
+        })),
+      ),
     );
     return candidates.find((candidate) => candidate.windowId === parentWindowId)?.window;
   }
@@ -2033,7 +2042,19 @@ async function main() {
 
       const closeIndex = 0;
       const leaveOpenIndex = 1;
+      // A quit arriving while this question is open takes the box down with it, the same way
+      // `confirmCloseAllWindows` does — see that function's own comment on `dismissOnQuit`. Without
+      // this the question would sit on screen, inert, through the whole shutdown.
+      const dismissOnQuit = new AbortController();
+      const armDismissalOnQuit = async () => {
+        await whenQuitRequested();
+        dismissOnQuit.abort();
+      };
+      armDismissalOnQuit().catch((e: unknown) =>
+        logger.warn(`Could not arm the abandoned-window notice's dismissal: ${getErrorMessage(e)}`),
+      );
       const noticeOptions: MessageBoxOptions = {
+        signal: dismissOnQuit.signal,
         type: 'warning',
         // No `title`, matching the close-all prompt: macOS hides it and the others print it twice
         message: strings[messageKey],
@@ -2059,6 +2080,18 @@ async function main() {
         ? await dialog.showMessageBox(parentWindow, noticeOptions)
         : await dialog.showMessageBox(noticeOptions);
       if (response !== closeIndex) return;
+      // Re-checked here rather than trusted from the decision made before the box went up: that
+      // decision is up to `NOTICE_LOCALIZE_TIME_OUT_MS` old by the time the user answers, long
+      // enough for the window to have been destroyed or for some other close to have already
+      // started on it. Acting on a stale decision here would call `close()` on a window already
+      // mid-close, which lands on that handler's own early return and destroys the window without
+      // running its shutdown work.
+      if (abandonedWindow.isDestroyed() || isWindowMarkedClosing(abandonedWindowId)) {
+        logger.info(
+          `Not closing abandoned window ${abandonedWindowId}: it is already gone or already closing`,
+        );
+        return;
+      }
       logger.info(`Closing abandoned window ${abandonedWindowId} at the user's request`);
       abandonedWindow.close();
     } catch (e) {
