@@ -437,6 +437,72 @@ step, no automation. Just a record.
   open follow-up work.
 - **Source:** PR #2770.
 
+## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** `scripture-editors` supplies `@eten-tech-foundation/platform-editor` and
+  `@eten-tech-foundation/scripture-utilities`. Every consumer declared them as registry ranges
+  (`~0.8.15` / `~0.1.6`) and then yalc-linked a locally built copy over the installed package. The
+  registry entry's real job was never the code — that is discarded seconds later — but the
+  *dependency closure*: 8 of the editor's 13 runtime dependencies (`@floating-ui/dom`, five
+  `@lexical/*`, `quill-delta`, plus the `yjs` peer) reach this repo's `node_modules` only as
+  transitive dependencies of the published package. That ties the editor's dependency set to
+  whatever was last published by an organization we do not control: a dependency the editor adds is
+  never installed, and one it bumps silently resolves to the older published version. The source had
+  already drifted to 0.8.16 against a published 0.8.15, and a fresh worktree resolving the registry
+  copy failed 36 tests against a symbol the published build lacked.
+- **Decision:** A `preinstall` step (`.erb/scripts/stage-dev-packages.ts`) builds each package listed
+  in `dev-packages.json` and copies exactly the files `npm pack` would publish into
+  `dev-packages/staging/<stagingFolder>`. Every `package.json` here depends on that folder with a
+  `file:` specifier. npm reads the staged manifest and installs the package's own dependencies into
+  this repo's tree, so the editor's dependency set is authoritative and no consumer restates it.
+  The dev repos commit their built `dist/`, so staging is a copy: consumers need none of their
+  toolchain (no pnpm, no nx, no build) to run this app, and the publish-shaping their
+  `prepublishOnly` performs — dropping the `development` export and `devDependencies`, rewriting
+  `workspace:` specifiers — is applied to the staged copy here instead, which also means the source
+  checkout is never mutated. A build happens only in `--local` mode or when a checkout has no
+  `dist/`, and always with `--skip-nx-cache`: nx declares `dist` a cached target output, so a cache
+  hit would restore its copy over the committed one and silently delete files the cache predates.
+  Staging must run before npm resolves, because the staged folders are the resolution targets; the
+  script is therefore plain Node importing only the standard library, since no devDependency exists
+  yet. It is wired to `preinstall` so an existing checkout re-stages on every install (skipping
+  the build when a `.staged-from` marker shows the staged copy already matches the source commit).
+  npm resolves the tree from the on-disk state it saw at startup, so the run that first creates the
+  staged folders cannot also install their dependencies; the root postinstall (`postinstall.ts`)
+  closes that gap by detecting the incomplete closure and re-running the install once, guarded
+  against recursion. `npm ci` needs no re-run: it installs the closure recorded in
+  `package-lock.json`. The complement: when the editor's own dependencies change, core's lockfile
+  must be refreshed (`npm install` + commit) — `npm ci` fails loudly on the mismatch when staging
+  is present, and the postinstall check fails with instructions when it is not. Install-path
+  scripts (workspace lifecycle scripts, which run before the root's) must not import
+  `platform-bible-utils` or anything else that loads the editor packages, since those may not
+  exist yet mid-install.
+  pnpm `workspace:` specifiers are rewritten to `file:` paths at the sibling staged package, keeping
+  the whole graph on the build we just made. yalc is removed.
+- **Alternatives:** **Keep yalc, declare the editor's dependencies here** — rejected: correct, but
+  the sync obligation multiplies by consumer (paratext-bible-extensions is already a second one) and
+  every editor dependency change would require edits in each. **`file:` straight at the source
+  package** — rejected: the source sits in a pnpm workspace whose per-package `node_modules` holds
+  its own `react`, `react-dom`, and `lexical`; Node resolves a link through its real path, so the
+  editor would bind to those, giving duplicate React (invalid hook calls) and duplicate Lexical
+  (cross-boundary `instanceof` node checks fail). It also installs no closure, since npm only does
+  that for a target inside the project. **`file:` at a packed tarball** — rejected: npm never
+  re-reads a tarball at a stable path, so a rebuild silently installs the cached previous build.
+  **Publishing** (npm scope or GitHub Release assets) — deferred: both work and both give semver
+  ranges, but publishing needs a scope we own, which means renaming the packages.
+- **Consequences:** Nothing here resolves the editor from the npm registry, and `scripture-editors`
+  can change its dependencies freely. Install gets stricter: `preinstall` now needs git, pnpm, and
+  reachability of the dev repo, so a failure to stage fails the install rather than silently leaving
+  a stale published copy. `package-lock.json` records the staged packages' resolved dependencies, so
+  an editor dependency change produces a lockfile commit here. Honoring the editor's declared ranges
+  surfaced that it asks for `@sillsdev/scripture@^2.1.0` while this repo's lockfile pinned 2.0.5 —
+  previously masked, since the linked build just resolved whatever was in the tree. Only the staged
+  output must live inside this repo; the source checkout may stay a sibling.
+  **Revisit** if a third consumer appears that cannot build the editor or sit beside a built
+  `paranext-core`, which is the point at which publishing earns its cost.
+- **Source:** PT-4500, forking `scripture-editors` into the paranext organization.
+
 ## adr-durable-window-ids: Window ids are durable across a restart; the separate persisted-layout "slot" indirection is removed
 
 - **Date:** 2026-08-28
@@ -2646,6 +2712,64 @@ step, no automation. Just a record.
 - **What covers this ground instead:** `adr-scroll-group-hosted-in-main` and
   `adr-theme-hosted-in-main`.
 
+## adr-staged-closure-owned-by-core: paranext-core owns the editor's dependency closure; every other consumer resolves through it
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** `adr-dev-packages-staged-file-deps` records *that* the staged copy has to live
+  inside this repo. It does not record *why* the same
+  `file:` specifier behaves differently one directory up, or what that means for the ten repos in
+  the organization that depend on `lib/platform-bible-react` and `lib/platform-bible-utils`. Both
+  questions came up again when a consumer's CI broke, and both were answered by measurement rather
+  than by reading npm's documentation, so the measurements belong here.
+
+  npm treats a `file:` dependency two entirely different ways depending on whether its target is
+  inside the depending project:
+
+  | Target | What npm does | `npm ci` when the target's manifest gains a dependency |
+  | --- | --- | --- |
+  | `file:dev-packages/staging/platform-editor` (inside) | real install: the target's whole dependency closure lands in this repo's `node_modules` | **fails**, `EUSAGE … Missing: <dep> from lock file` |
+  | `file:../scripture-editors/packages/platform` (outside) | bare symlink; the closure is never installed | **exits 0**, dependency silently absent |
+
+  Node and webpack resolve a symlinked package from its **real path**, so a package reached by
+  symlink looks for its own dependencies where it physically sits, not where the link is. Those two
+  facts together explain everything downstream.
+
+- **Decision:** Exactly one repository installs the editor's dependency closure, and that repository
+  is paranext-core, which is why the staged copy must sit inside it. Everything else reaches the
+  editor by symlink and resolves its dependencies out of core's `node_modules` through the real
+  path. No other repository declares, installs, or gates on that closure.
+
+  Concretely, an extension repo depends on `file:../paranext-core/lib/platform-bible-react`, which
+  npm links rather than installs. Its lockfile records PBR's dependency *declaration* — including
+  the editor — but resolves nothing from it and never validates it. When the extension's webpack
+  bundles PBR (PBR is not in the extension template's `externals`; `platform-bible-utils` is), the
+  editor import resolves from `paranext-core/lib/platform-bible-react/` upward into
+  `paranext-core/node_modules/`, which core's own install populated for real.
+
+- **Alternatives:** **Point core at the source checkout instead of copying** (`file:` one directory
+  up) — rejected, and this is the failure that motivated the copy: npm installs no closure for an
+  out-of-tree target, so the editor's dependencies stay in `scripture-editors/node_modules` under
+  pnpm's layout and nothing in core can resolve them. **Gate `platform-yalc` on every dependent
+  repo's lockfile** — rejected: it would enforce a constraint that does not exist. An editor
+  dependency change invalidates exactly one lockfile, core's, which
+  `verify-consumer-lockfile-sync.mjs` already checks on every push to `platform-yalc`. Scanning the
+  organization would turn each editor dependency bump into an N-way lockstep merge, growing with
+  every new consumer, to protect lockfiles that install nothing.
+
+- **Consequences:** Adding a consumer costs nothing: it needs no lockfile refresh when the editor's
+  dependencies change, and no entry in any list. What it does need is for core's `node_modules` to
+  be genuinely populated, which is why every consumer CI job that installs core with
+  `--ignore-scripts` must run `node .erb/scripts/stage-dev-packages.ts` first — without it npm links
+  a target that does not exist, `npm ci` still exits 0, and
+  `node_modules/@eten-tech-foundation/platform-editor` is left a dangling symlink. That surfaces far
+  away, as an unresolved module during a consumer's lint or typecheck (PBR imports the editor in 28
+  files, PBU in 10), which is a long way from the cause.
+
+  The reasoning holds only while consumers reach core from **outside** it. A repo that vendored core
+  inside itself, or that added a staged package as an in-tree `file:` dependency of its own, would
+  join core in the hard-coupled class and would then need its lockfile kept in sync.
+- **Source:** PT-4500, review of #2745.
 ## adr-startup-sync-readiness-gate: Core owns startup-sync ordering and gates it on project-data-provider readiness
 
 - **Date:** 2026-08-16
@@ -3318,127 +3442,3 @@ step, no automation. Just a record.
   a true invariant.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
-## adr-dev-packages-staged-file-deps: Dev packages are staged into the repo and consumed as `file:` dependencies, not yalc-linked over a registry pin
-
-- **Date:** 2026-08-31
-- **Status:** Accepted
-- **Context:** `scripture-editors` supplies `@eten-tech-foundation/platform-editor` and
-  `@eten-tech-foundation/scripture-utilities`. Every consumer declared them as registry ranges
-  (`~0.8.15` / `~0.1.6`) and then yalc-linked a locally built copy over the installed package. The
-  registry entry's real job was never the code — that is discarded seconds later — but the
-  *dependency closure*: 8 of the editor's 13 runtime dependencies (`@floating-ui/dom`, five
-  `@lexical/*`, `quill-delta`, plus the `yjs` peer) reach this repo's `node_modules` only as
-  transitive dependencies of the published package. That ties the editor's dependency set to
-  whatever was last published by an organization we do not control: a dependency the editor adds is
-  never installed, and one it bumps silently resolves to the older published version. The source had
-  already drifted to 0.8.16 against a published 0.8.15, and a fresh worktree resolving the registry
-  copy failed 36 tests against a symbol the published build lacked.
-- **Decision:** A `preinstall` step (`.erb/scripts/stage-dev-packages.ts`) builds each package listed
-  in `dev-packages.json` and copies exactly the files `npm pack` would publish into
-  `dev-packages/staging/<stagingFolder>`. Every `package.json` here depends on that folder with a
-  `file:` specifier. npm reads the staged manifest and installs the package's own dependencies into
-  this repo's tree, so the editor's dependency set is authoritative and no consumer restates it.
-  The dev repos commit their built `dist/`, so staging is a copy: consumers need none of their
-  toolchain (no pnpm, no nx, no build) to run this app, and the publish-shaping their
-  `prepublishOnly` performs — dropping the `development` export and `devDependencies`, rewriting
-  `workspace:` specifiers — is applied to the staged copy here instead, which also means the source
-  checkout is never mutated. A build happens only in `--local` mode or when a checkout has no
-  `dist/`, and always with `--skip-nx-cache`: nx declares `dist` a cached target output, so a cache
-  hit would restore its copy over the committed one and silently delete files the cache predates.
-  Staging must run before npm resolves, because the staged folders are the resolution targets; the
-  script is therefore plain Node importing only the standard library, since no devDependency exists
-  yet. It is wired to `preinstall` so an existing checkout re-stages on every install (skipping
-  the build when a `.staged-from` marker shows the staged copy already matches the source commit).
-  npm resolves the tree from the on-disk state it saw at startup, so the run that first creates the
-  staged folders cannot also install their dependencies; the root postinstall (`postinstall.ts`)
-  closes that gap by detecting the incomplete closure and re-running the install once, guarded
-  against recursion. `npm ci` needs no re-run: it installs the closure recorded in
-  `package-lock.json`. The complement: when the editor's own dependencies change, core's lockfile
-  must be refreshed (`npm install` + commit) — `npm ci` fails loudly on the mismatch when staging
-  is present, and the postinstall check fails with instructions when it is not. Install-path
-  scripts (workspace lifecycle scripts, which run before the root's) must not import
-  `platform-bible-utils` or anything else that loads the editor packages, since those may not
-  exist yet mid-install.
-  pnpm `workspace:` specifiers are rewritten to `file:` paths at the sibling staged package, keeping
-  the whole graph on the build we just made. yalc is removed.
-- **Alternatives:** **Keep yalc, declare the editor's dependencies here** — rejected: correct, but
-  the sync obligation multiplies by consumer (paratext-bible-extensions is already a second one) and
-  every editor dependency change would require edits in each. **`file:` straight at the source
-  package** — rejected: the source sits in a pnpm workspace whose per-package `node_modules` holds
-  its own `react`, `react-dom`, and `lexical`; Node resolves a link through its real path, so the
-  editor would bind to those, giving duplicate React (invalid hook calls) and duplicate Lexical
-  (cross-boundary `instanceof` node checks fail). It also installs no closure, since npm only does
-  that for a target inside the project. **`file:` at a packed tarball** — rejected: npm never
-  re-reads a tarball at a stable path, so a rebuild silently installs the cached previous build.
-  **Publishing** (npm scope or GitHub Release assets) — deferred: both work and both give semver
-  ranges, but publishing needs a scope we own, which means renaming the packages.
-- **Consequences:** Nothing here resolves the editor from the npm registry, and `scripture-editors`
-  can change its dependencies freely. Install gets stricter: `preinstall` now needs git, pnpm, and
-  reachability of the dev repo, so a failure to stage fails the install rather than silently leaving
-  a stale published copy. `package-lock.json` records the staged packages' resolved dependencies, so
-  an editor dependency change produces a lockfile commit here. Honoring the editor's declared ranges
-  surfaced that it asks for `@sillsdev/scripture@^2.1.0` while this repo's lockfile pinned 2.0.5 —
-  previously masked, since the linked build just resolved whatever was in the tree. Only the staged
-  output must live inside this repo; the source checkout may stay a sibling.
-  **Revisit** if a third consumer appears that cannot build the editor or sit beside a built
-  `paranext-core`, which is the point at which publishing earns its cost.
-- **Source:** PT-4500, forking `scripture-editors` into the paranext organization.
-
-## adr-staged-closure-owned-by-core: paranext-core owns the editor's dependency closure; every other consumer resolves through it
-
-- **Date:** 2026-09-03
-- **Status:** Accepted
-- **Context:** `adr-dev-packages-staged-file-deps` records *that* the staged copy has to live
-  inside this repo. It does not record *why* the same
-  `file:` specifier behaves differently one directory up, or what that means for the ten repos in
-  the organization that depend on `lib/platform-bible-react` and `lib/platform-bible-utils`. Both
-  questions came up again when a consumer's CI broke, and both were answered by measurement rather
-  than by reading npm's documentation, so the measurements belong here.
-
-  npm treats a `file:` dependency two entirely different ways depending on whether its target is
-  inside the depending project:
-
-  | Target | What npm does | `npm ci` when the target's manifest gains a dependency |
-  | --- | --- | --- |
-  | `file:dev-packages/staging/platform-editor` (inside) | real install: the target's whole dependency closure lands in this repo's `node_modules` | **fails**, `EUSAGE … Missing: <dep> from lock file` |
-  | `file:../scripture-editors/packages/platform` (outside) | bare symlink; the closure is never installed | **exits 0**, dependency silently absent |
-
-  Node and webpack resolve a symlinked package from its **real path**, so a package reached by
-  symlink looks for its own dependencies where it physically sits, not where the link is. Those two
-  facts together explain everything downstream.
-
-- **Decision:** Exactly one repository installs the editor's dependency closure, and that repository
-  is paranext-core, which is why the staged copy must sit inside it. Everything else reaches the
-  editor by symlink and resolves its dependencies out of core's `node_modules` through the real
-  path. No other repository declares, installs, or gates on that closure.
-
-  Concretely, an extension repo depends on `file:../paranext-core/lib/platform-bible-react`, which
-  npm links rather than installs. Its lockfile records PBR's dependency *declaration* — including
-  the editor — but resolves nothing from it and never validates it. When the extension's webpack
-  bundles PBR (PBR is not in the extension template's `externals`; `platform-bible-utils` is), the
-  editor import resolves from `paranext-core/lib/platform-bible-react/` upward into
-  `paranext-core/node_modules/`, which core's own install populated for real.
-
-- **Alternatives:** **Point core at the source checkout instead of copying** (`file:` one directory
-  up) — rejected, and this is the failure that motivated the copy: npm installs no closure for an
-  out-of-tree target, so the editor's dependencies stay in `scripture-editors/node_modules` under
-  pnpm's layout and nothing in core can resolve them. **Gate `platform-yalc` on every dependent
-  repo's lockfile** — rejected: it would enforce a constraint that does not exist. An editor
-  dependency change invalidates exactly one lockfile, core's, which
-  `verify-consumer-lockfile-sync.mjs` already checks on every push to `platform-yalc`. Scanning the
-  organization would turn each editor dependency bump into an N-way lockstep merge, growing with
-  every new consumer, to protect lockfiles that install nothing.
-
-- **Consequences:** Adding a consumer costs nothing: it needs no lockfile refresh when the editor's
-  dependencies change, and no entry in any list. What it does need is for core's `node_modules` to
-  be genuinely populated, which is why every consumer CI job that installs core with
-  `--ignore-scripts` must run `node .erb/scripts/stage-dev-packages.ts` first — without it npm links
-  a target that does not exist, `npm ci` still exits 0, and
-  `node_modules/@eten-tech-foundation/platform-editor` is left a dangling symlink. That surfaces far
-  away, as an unresolved module during a consumer's lint or typecheck (PBR imports the editor in 28
-  files, PBU in 10), which is a long way from the cause.
-
-  The reasoning holds only while consumers reach core from **outside** it. A repo that vendored core
-  inside itself, or that added a staged package as an in-tree `file:` dependency of its own, would
-  join core in the hard-coupled class and would then need its lockfile kept in sync.
-- **Source:** PT-4500, review of #2745.
