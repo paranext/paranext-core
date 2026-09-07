@@ -16,10 +16,6 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
     private static readonly DocumentationResolution Unresolved = new(true, false, false);
 
     private readonly Dictionary<SyntaxTree, SemanticModel> _semanticModels = [];
-    private readonly IPropertySymbol _methodsProperty = symbols
-        .NetworkObjectDocumentation.GetMembers("Methods")
-        .OfType<IPropertySymbol>()
-        .Single();
     private readonly IPropertySymbol _methodWrapperProperty = symbols
         .OpenRpcSingleMethodDocumentation.GetMembers("Method")
         .OfType<IPropertySymbol>()
@@ -102,9 +98,6 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
         if (model.GetTypeInfo(objectCreation).Type is not INamedTypeSymbol type)
             return Unresolved;
 
-        if (IsType(type, symbols.NetworkObjectDocumentation))
-            return ResolveNetworkObjectDocumentation(objectCreation, model, visited);
-
         var experimentalProperty = symbols.ExperimentalProperties.FirstOrDefault(property =>
             IsType(type, property.ContainingType)
         );
@@ -121,54 +114,14 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
     }
 
     /// <summary>
-    /// <see cref="Paranext.DataProvider.NetworkObjects.Documentation.NetworkObjectDocumentation"/>'s
-    /// own object-level <c>Experimental</c> is authoritative; when it is absent, the entry is
-    /// experimental only if every entry of a non-empty <c>Methods</c> initializer is.
-    /// </summary>
-    private DocumentationResolution ResolveNetworkObjectDocumentation(
-        BaseObjectCreationExpressionSyntax objectCreation,
-        SemanticModel model,
-        HashSet<ISymbol> visited
-    )
-    {
-        var experimentalProperty = symbols.ExperimentalProperties.First(property =>
-            IsType(symbols.NetworkObjectDocumentation, property.ContainingType)
-        );
-        var experimentalValue = FindInitializerValue(objectCreation, experimentalProperty, model);
-        if (experimentalValue is not null)
-        {
-            var constant = model.GetConstantValue(experimentalValue);
-            if (constant.HasValue && constant.Value is bool boolValue)
-                return new DocumentationResolution(true, true, boolValue);
-
-            // An explicit `Experimental = null` is equivalent to omitting the property — fall
-            // through to the Methods-derived answer below. Anything else non-bool is unresolvable.
-            if (constant is not { HasValue: true, Value: null })
-                return Unresolved;
-        }
-
-        var methodsValue = FindInitializerValue(objectCreation, _methodsProperty, model);
-        if (methodsValue is null)
-            return new DocumentationResolution(true, true, false);
-
-        var entryValues = GetDictionaryEntryValues(methodsValue);
-        if (entryValues is null)
-            return Unresolved; // Methods is assigned from a shape we cannot enumerate.
-
-        if (entryValues.Count == 0)
-            return new DocumentationResolution(true, true, false);
-
-        var entryResolutions = entryValues
-            .Select(value => ResolveExpression(value, model, visited))
-            .ToList();
-        return entryResolutions.Any(r => !r.DocsStaticallyResolved)
-            ? Unresolved
-            : new DocumentationResolution(true, true, entryResolutions.All(r => r.Experimental));
-    }
-
-    /// <summary>
-    /// <c>OpenRpcMethodDocumentation</c> and <c>OpenRpcNotificationDocumentation</c> read their own
-    /// <c>Experimental</c> directly — no <c>Methods</c>-style fallback, unlike the object-level shape.
+    /// <see cref="Paranext.DataProvider.NetworkObjects.Documentation.NetworkObjectDocumentation"/>,
+    /// <c>OpenRpcMethodDocumentation</c> and <c>OpenRpcNotificationDocumentation</c> all read their
+    /// own <c>Experimental</c> property directly. For
+    /// <see cref="Paranext.DataProvider.NetworkObjects.Documentation.NetworkObjectDocumentation"/>
+    /// specifically, its <c>Methods</c> entries are never folded into this answer — the runtime
+    /// (<c>NetworkObject.RegisterNetworkObjectAsync</c>) only ever reads the object-level flag, and
+    /// <c>Methods</c> is routinely used to annotate a subset of a network object's methods while the
+    /// object itself, and its unlisted methods, stay stable.
     /// </summary>
     private static DocumentationResolution ResolveExperimentalPropertyOnly(
         BaseObjectCreationExpressionSyntax objectCreation,
@@ -300,27 +253,6 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
                 return assignment.Right;
         }
         return null;
-    }
-
-    /// <summary>
-    /// The entry values of a <c>Methods</c> dictionary initializer, or <see langword="null"/> when
-    /// the assigned expression is not an inline dictionary object-creation we can enumerate (a local,
-    /// a field, a method call) — distinct from an inline dictionary that is simply empty.
-    /// </summary>
-    private static IReadOnlyList<ExpressionSyntax>? GetDictionaryEntryValues(
-        ExpressionSyntax dictionaryExpression
-    )
-    {
-        if (dictionaryExpression is not BaseObjectCreationExpressionSyntax objectCreation)
-            return null;
-
-        if (objectCreation.Initializer is not { } initializer)
-            return [];
-
-        return initializer
-            .Expressions.OfType<AssignmentExpressionSyntax>()
-            .Select(assignment => assignment.Right)
-            .ToList();
     }
 
     private static bool IsType(INamedTypeSymbol candidate, INamedTypeSymbol expected) =>
