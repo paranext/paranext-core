@@ -4535,7 +4535,10 @@ step, no automation. Just a record.
   path — a move record added after the view leaves the dock, and a target's adopt landing before the
   move's reply reaches main — are unaffected by this change and remain open (ledgered as A17
   mechanisms 3 and 4 in the multi-window small-items ledger, item below); they are about *when*
-  state updates land, not about what a view's id is.
+  state updates land, not about what a view's id is. `web-view-state.service.ts`'s per-webview
+  state store, keyed on the same ids, drops its former window-scope-stripping lookup for the same
+  reason and with the same no-migration consequence: state saved under an older build's
+  window-scoped id spelling is not carried forward to the new unscoped one.
 - **Source:** PR #2758 (PT-4463), TJ's review direction on #2758 (comment 5516318337) accepted by
   Rolf. The retired ADR and the move-lifecycle cases sharing this root cause are ledgered as A16 and
   A17 in the multi-window small-items ledger — a dated tracking document maintained outside this
