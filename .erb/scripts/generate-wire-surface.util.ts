@@ -149,7 +149,9 @@ const RECOGNIZED_PATTERNS: string[] = [
     `when requestType is serializeRequestType(CATEGORY_COMMAND, directive) the registration is ` +
     're-filed under category "command" with the resolved directive as its name, so a command ' +
     'registered by bypassing registerCommand is not missed',
-  'networkObjectService.set(id, obj, objectType?, attributes?, objectDocumentation?) -> category "networkObject"',
+  'networkObjectService.set(id, obj, objectType?, attributes?, objectDocumentation?) -> category ' +
+    '"networkObject"; also recognised through its public papi.networkObjects.set spelling and the ' +
+    'bare networkObjects.set form, both filed under the same registeredVia',
   'registerEngine(name, engine, type?, attributes?, documentation?) and its ' +
     'registerEngineByType(name, engine, type?, attributes?, documentation?) sibling -> category "dataProviderEngine"',
   'registerWebViewProvider(webViewType, provider, attributes?, documentation?), including its ' +
@@ -166,11 +168,13 @@ const RECOGNIZED_PATTERNS: string[] = [
 
 const EXCLUDED_PATTERNS: string[] = [
   'A registration call reached through a renamed import (`import { registerCommand as rc }`) or a ' +
-    'destructured receiver (`const { set } = networkObjectService`). Call sites are matched on the ' +
-    "callee's literal identifier, so a renamed one is not recognised -- and it is not filed as " +
-    'dynamic either, since nothing matched to begin with. No such call site exists today; this is ' +
-    'stated so the limit is known rather than discovered. The live rpc.discover comparison is what ' +
-    'would surface one.',
+    'destructured receiver (`const { set } = networkObjectService`) -- as opposed to the ' +
+    '`networkObjectService`, `networkObjects`, and `papi.networkObjects` receiver spellings this ' +
+    'scanner explicitly recognises for `.set(...)` (see recognizedPatterns). Call sites are matched ' +
+    "on the callee's literal identifier, so any OTHER rename is not recognised -- and it is not " +
+    'filed as dynamic either, since nothing matched to begin with. No such call site exists today; ' +
+    'this is stated so the limit is known rather than discovered. The live rpc.discover comparison ' +
+    'is what would surface one.',
   'createNetworkEventEmitter(eventType) — the deprecated synchronous event emitter. It does not ' +
     'participate in central registration and deliberately does not appear in the generated OpenRPC ' +
     'document, so it is excluded here for the same reason.',
@@ -672,6 +676,17 @@ const WEB_VIEW_PROVIDER_REGISTER_ALIAS_OBJECTS = new Set([
   'webViewProviderService',
 ]);
 
+/**
+ * Receiver spellings recognised for the network object registration alias: the service itself
+ * (`networkObjectService.set`), its shorthand on the `papi` facade (`papi.networkObjects.set`,
+ * matched by the receiver's own rightmost identifier -- see `getCalleeInfo`), and the bare
+ * `networkObjects.set` form reached when that facade property is destructured into a local.
+ */
+const NETWORK_OBJECT_SERVICE_SET_ALIAS_OBJECTS = new Set([
+  'networkObjectService',
+  'networkObjects',
+]);
+
 function matchCall(call: ts.CallExpression): CallMatch | undefined {
   const { name, objectName } = getCalleeInfo(call.expression);
   if (!name) return undefined;
@@ -741,7 +756,7 @@ function matchCall(call: ts.CallExpression): CallMatch | undefined {
         registeredVia: 'createCoreMultiSourceEventEmitter',
       };
     case 'set':
-      if (objectName === 'networkObjectService') {
+      if (objectName && NETWORK_OBJECT_SERVICE_SET_ALIAS_OBJECTS.has(objectName)) {
         return {
           category: 'networkObject',
           nameArgIndex: 0,
