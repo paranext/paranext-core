@@ -128,3 +128,24 @@ export function eligibleNoticeParentCandidates(
     .filter((window) => !window.isClosing && !window.isAbandoned && window.isVisible)
     .map(({ windowId, isPrimary }) => ({ windowId, isPrimary }));
 }
+
+/**
+ * Whether an abandoned window a notice was offered for is still there to close once the user
+ * answers it.
+ *
+ * The dialog can sit open for as long as the user takes to answer — long enough for the window to
+ * have been destroyed outright, or for some other close to have already started on it since the
+ * notice went up. Closing it again in either case would call the window's own close a second time:
+ * on a destroyed window that throws, and on one already mid-close it skips past that close's own
+ * shutdown work rather than letting it run.
+ *
+ * @param isWindowDestroyed Whether the window has already been destroyed
+ * @param isWindowClosing Whether the window's own close has already begun
+ * @returns Whether the window is still there, and not already on its way out, to close
+ */
+export function shouldStillCloseAbandonedWindow(
+  isWindowDestroyed: boolean,
+  isWindowClosing: boolean,
+): boolean {
+  return !isWindowDestroyed && !isWindowClosing;
+}

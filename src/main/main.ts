@@ -186,6 +186,7 @@ import {
   chooseNoticeParentWindowId,
   decideAbandonedWindowNotice,
   eligibleNoticeParentCandidates,
+  shouldStillCloseAbandonedWindow,
   type AbandonedWindowNoticeParent,
 } from '@main/abandoned-window-notice.util';
 import {
@@ -2229,7 +2230,12 @@ async function main() {
       // started on it. Acting on a stale decision here would call `close()` on a window already
       // mid-close, which lands on that handler's own early return and destroys the window without
       // running its shutdown work.
-      if (abandonedWindow.isDestroyed() || isWindowMarkedClosing(abandonedWindowId)) {
+      if (
+        !shouldStillCloseAbandonedWindow(
+          abandonedWindow.isDestroyed(),
+          isWindowMarkedClosing(abandonedWindowId),
+        )
+      ) {
         logger.info(
           `Not closing abandoned window ${abandonedWindowId}: it is already gone or already closing`,
         );
