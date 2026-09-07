@@ -5911,16 +5911,22 @@ declare module 'papi-shared-types' {
           options?: DataProviderSubscriberOptions,
         ): Promise<UnsubscriberAsync>;
         /**
-         * Lists the `dataQualifier`s an extension has data for in this project. See
-         * {@link WithProjectDataProviderEngineExtensionDataMethods} for the full contract.
+         * Lists the `dataQualifier`s an extension has data for in this project.
          *
-         * Required here, though it is optional on the engine, because a PDP reached over the
-         * network cannot be feature-detected: the remote proxy answers with a request function for
-         * any property name, so `pdp.listExtensionDataQualifiers?.()` never short-circuits — it
-         * calls and then rejects. Treat a rejection as "unknown", not as "no data". (Making this
-         * honestly optional needs the remote proxy to know a network object's real method list,
-         * which it already receives as `NetworkObjectDetails.functionNames` and currently discards;
-         * see the `TODO` on `getRemoteNetworkObjectFunctions` in `network-object.service.ts`.)
+         * Every returned string is a valid `dataQualifier` for `getExtensionData` under the same
+         * `extensionName`, exactly as it would be passed: forward slashes, relative to the
+         * extension's own data, nested paths included. The list is sorted and includes empty
+         * documents.
+         *
+         * Listing never creates anything, so an extension that has never written any data gets
+         * `[]`. Discovering the same thing by calling `getExtensionData` does not have that
+         * property — on the Paratext PDP a read creates the file it looked for.
+         *
+         * Not every Project Data Provider can enumerate its extension data (one over a remote store
+         * may not be able to), so this call rejects on a PDP that cannot. There is no way to check
+         * in advance: a PDP reached over the network answers with a request function for any
+         * property name, so `pdp.listExtensionDataQualifiers?.()` never short-circuits — it calls
+         * and then rejects. Treat a rejection as "unknown", never as "this extension has no data".
          *
          * @param scope Which extension's `dataQualifier`s to list, optionally narrowed by a prefix
          * @returns Sorted `dataQualifier`s that exist for that extension in this project
