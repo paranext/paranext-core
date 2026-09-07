@@ -159,8 +159,8 @@ describe('dataProviderService.registerEngine — documentation forwarding', () =
     // This is why the PDP method that enumerates extension data is called
     // `listExtensionDataQualifiers` and not `getExtensionDataQualifiers`: `get`/`set`/`subscribe`
     // are magic prefixes here, so a getter-shaped name would demand a setter with nothing to set
-    // (see the test below, which is what a rename would run into) and imply a subscriber with
-    // nothing to notify.
+    // and imply a subscriber with nothing to notify. Renaming it to `get___` lands in
+    // "refuses to register an unignored get___ method with no matching setter".
     const engine = {
       getData: async () => 1,
       setData: async () => true,

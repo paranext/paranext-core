@@ -46,25 +46,33 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     }
 
     /// <summary>
-    /// Get an extension's data in a project identified by <param name="scope"></param>.
+    /// Get an extension's data in a project identified by <paramref name="scope"/>.
     /// </summary>
     public abstract object? GetExtensionData(ProjectDataScope scope);
 
     /// <summary>
-    /// Set an extension's data in a project identified by <param name="scope"></param>.
+    /// Set an extension's data in a project identified by <paramref name="scope"/>.
     /// </summary>
     public abstract bool SetExtensionData(ProjectDataScope scope, string data);
 
     /// <summary>
     /// List the DataQualifiers that exist for the extension identified by
-    /// <param name="scope"></param>, optionally narrowed to those starting with the scope's
-    /// DataQualifierPrefix.
+    /// <paramref name="scope"/>.
     ///
-    /// Every returned string is a valid DataQualifier for <see cref="GetExtensionData"/> under the
-    /// same ExtensionName, exactly as it would be passed: forward slashes, relative to the
-    /// extension's own data, nested paths included. Sorted, and includes empty documents.
-    ///
-    /// Listing creates nothing, so an extension that has never written any data gets an empty array.
+    /// Listing creates nothing, so an extension that has never written any data gets an empty
+    /// array. Discovering the same thing by calling <see cref="GetExtensionData"/> does not have
+    /// that property — on the Paratext PDP a read creates the data it looked for.
     /// </summary>
+    /// <param name="scope">
+    /// Whose data to list: ExtensionName selects the extension, and DataQualifierPrefix — when set
+    /// — narrows the result to the DataQualifiers starting with it.
+    /// </param>
+    /// <returns>
+    /// Every DataQualifier that exists for that extension, sorted with
+    /// <see cref="StringComparer.Ordinal"/>. Each is a valid DataQualifier for
+    /// <see cref="GetExtensionData"/> under the same ExtensionName, exactly as it would be passed:
+    /// forward slashes, relative to the extension's own data, nested paths included. Empty
+    /// documents are included; an extension with no data at all gets an empty array.
+    /// </returns>
     public abstract string[] ListExtensionDataQualifiers(ProjectDataScope scope);
 }
