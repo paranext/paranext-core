@@ -15,11 +15,25 @@
       "registeredVia": "DataProvider(name, papiClient) constructor"
     },
     {
+      "category": "networkEvent",
+      "expression": "eventName",
+      "file": "c-sharp/Projects/SendReceive/SendReceiveSnapshotNotifierService.cs",
+      "language": "csharp",
+      "registeredVia": "PapiClient.SendRequestAsync(\"network:registerEvent\")"
+    },
+    {
       "category": "pdpFactory",
       "expression": "$\"platform.{_pdpfName}-pdpf\"",
       "file": "c-sharp/Projects/ProjectDataProviderFactory.cs",
       "language": "csharp",
       "registeredVia": "ProjectDataProviderFactory.InitializeAsync"
+    },
+    {
+      "category": "standaloneMethod",
+      "expression": "commandName",
+      "file": "c-sharp/Projects/SendReceive/SendReceiveSnapshotNotifierService.cs",
+      "language": "csharp",
+      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
     },
     {
       "category": "standaloneMethod",
@@ -291,16 +305,6 @@
       "registeredVia": "DataProvider(name, papiClient) constructor"
     },
     {
-      "category": "networkEvent",
-      "docsStaticallyResolved": true,
-      "documented": true,
-      "experimental": true,
-      "file": "c-sharp/Projects/SendReceive/SendReceiveBlockNotifierService.cs",
-      "language": "csharp",
-      "name": "paratextBibleSendReceive.onSyncWriteLockChanged",
-      "registeredVia": "PapiClient.SendRequestAsync(\"network:registerEvent\")"
-    },
-    {
       "category": "networkObject",
       "docsStaticallyResolved": true,
       "documented": true,
@@ -368,16 +372,6 @@
       "file": "c-sharp/Projects/SendReceive/ParatextProjectSendReceiveService.cs",
       "language": "csharp",
       "name": "command:paratextBibleSendReceive.commitDaily",
-      "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
-    },
-    {
-      "category": "standaloneMethod",
-      "docsStaticallyResolved": true,
-      "documented": true,
-      "experimental": true,
-      "file": "c-sharp/Projects/SendReceive/SendReceiveBlockNotifierService.cs",
-      "language": "csharp",
-      "name": "command:paratextBibleSendReceive.getAutoSyncBlocking",
       "registeredVia": "PapiClient.RegisterRequestHandlerAsync"
     },
     {
@@ -684,6 +678,16 @@
       "category": "command",
       "docsStaticallyResolved": true,
       "documented": true,
+      "experimental": true,
+      "file": "src/main/main.ts",
+      "language": "typescript",
+      "name": "platform.getWindows",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
       "experimental": false,
       "file": "src/main/main.ts",
       "language": "typescript",
@@ -878,6 +882,16 @@
       "file": "extensions/src/platform-get-resources/src/main.ts",
       "language": "typescript",
       "name": "platformGetResources.getCachedResources",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-get-resources/src/main.ts",
+      "language": "typescript",
+      "name": "platformGetResources.getLocalNonDblResources",
       "registeredVia": "registerCommand"
     },
     {
@@ -1400,6 +1414,16 @@
       "file": "src/main/main.ts",
       "language": "typescript",
       "name": "windowLayout:emptied",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "directRequestHandler",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/window-layout-persistence.service.ts",
+      "language": "typescript",
+      "name": "windowLayout:filterDeadWindowIds",
       "registeredVia": "registerRequestHandler"
     },
     {
