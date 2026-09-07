@@ -335,18 +335,20 @@ async function moveCapturedWebView(
         );
       const movedWebViewId = await adoptIntoDestination(captured);
       if (movedWebViewId !== undefined) {
-        // Read again on the way out. The check above covers a close decided before the adopt; the
-        // adopt itself waits on a provider with no bound, and a close decided during it would take
-        // the web view down with the window while this reported a move that worked. Throwing hands
-        // it to the recovery below, which puts it somewhere that will still be there. A move to a
-        // new window is not exempt: the window it created can start closing in the same gap, and
-        // freshWindowId is what makes it askable here.
+        // Read again on the way out, but only to note it, not to undo it: once the adopt has
+        // succeeded the destination owns the web view, and a close decided during or after the
+        // adopt is the destination's own close path to handle, exactly like any other tab it
+        // holds. Handing this to the recovery below would re-adopt the same id into a second
+        // window while the destination may still hold it live — the collision the in-flight
+        // register and every rung of that ladder exist to prevent, not something to invite here.
+        // A move to a new window is not exempt: the window it created can start closing in the
+        // same gap, and freshWindowId is what makes it askable here.
         const adoptedWindowId = target.kind === 'window' ? target.windowId : freshWindowId;
         if (adoptedWindowId !== undefined && isWindowClosing(adoptedWindowId))
-          throw new Error(
-            `window ${adoptedWindowId}'s close was decided while its adopt was running`,
+          logger.debug(
+            `Webview ${webViewId}'s adopt into window ${adoptedWindowId} succeeded, but that window's close was decided while the adopt was running; its own close path will handle the view.`,
           );
-        raiseMoveTarget(target);
+        else raiseMoveTarget(target);
         return movedWebViewId;
       }
       logger.warn(
