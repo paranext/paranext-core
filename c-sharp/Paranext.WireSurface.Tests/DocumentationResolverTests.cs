@@ -40,7 +40,7 @@ public class DocumentationResolverTests
     {
         var compilation = FixtureCompilation.Create([ProbeSource, .. sources]);
         var resolver = new DocumentationResolver(
-            compilation,
+            new SemanticModelCache(compilation),
             FrameworkSymbols.Resolve(compilation)
         );
         var (expression, model) = FindMarkedExpression(compilation);
@@ -51,7 +51,7 @@ public class DocumentationResolverTests
     {
         var compilation = FixtureCompilation.Create(ProbeSource);
         var resolver = new DocumentationResolver(
-            compilation,
+            new SemanticModelCache(compilation),
             FrameworkSymbols.Resolve(compilation)
         );
         var model = compilation.GetSemanticModel(compilation.SyntaxTrees.First());

@@ -10,24 +10,8 @@ namespace Paranext.WireSurface;
 /// or reports it as dynamic. A missing symbol never falls back to text matching: every answer comes
 /// from Roslyn's semantic model, so formatting can never change a resolved value.
 /// </summary>
-public sealed class NameResolver(Compilation compilation)
+public sealed class NameResolver(Compilation compilation, SemanticModelCache semanticModels)
 {
-    private readonly Dictionary<SyntaxTree, SemanticModel> _semanticModels = [];
-
-    /// <summary>
-    /// The semantic model for <paramref name="tree"/>, cached per tree so every rule and resolver
-    /// can share the same (expensive to build, cheap to reuse) models over one compilation.
-    /// </summary>
-    public SemanticModel GetSemanticModel(SyntaxTree tree)
-    {
-        if (!_semanticModels.TryGetValue(tree, out var model))
-        {
-            model = compilation.GetSemanticModel(tree);
-            _semanticModels[tree] = model;
-        }
-        return model;
-    }
-
     public NameResolution Resolve(ExpressionSyntax expression, SemanticModel model)
     {
         if (TryGetConstant(expression, model, out var constant))
@@ -116,7 +100,7 @@ public sealed class NameResolver(Compilation compilation)
     {
         if (initializer is not null)
         {
-            var model = GetSemanticModel(initializer.SyntaxTree);
+            var model = semanticModels.For(initializer.SyntaxTree);
             if (TryGetConstant(initializer.Value, model, out var value))
                 return new NameResolution.Constants([value]);
 
@@ -164,7 +148,7 @@ public sealed class NameResolver(Compilation compilation)
                 if (body is null)
                     continue;
 
-                var model = GetSemanticModel(constructorSyntax.SyntaxTree);
+                var model = semanticModels.For(constructorSyntax.SyntaxTree);
                 foreach (
                     var assignment in body.DescendantNodesAndSelf()
                         .OfType<AssignmentExpressionSyntax>()
@@ -228,7 +212,7 @@ public sealed class NameResolver(Compilation compilation)
 
         foreach (var tree in compilation.SyntaxTrees)
         {
-            var model = GetSemanticModel(tree);
+            var model = semanticModels.For(tree);
             foreach (var node in tree.GetRoot().DescendantNodes())
             {
                 (IMethodSymbol? boundMethod, BaseArgumentListSyntax? argumentList) = node switch
@@ -349,7 +333,7 @@ public sealed class NameResolver(Compilation compilation)
         return initializer is not null
             && TryGetConstant(
                 initializer.Value,
-                GetSemanticModel(initializer.SyntaxTree),
+                semanticModels.For(initializer.SyntaxTree),
                 out value
             );
     }

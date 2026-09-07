@@ -39,7 +39,7 @@ public class NameResolverTests
     private static NameResolution Resolve(params string[] sources)
     {
         var compilation = FixtureCompilation.Create([MarkerSource, .. sources]);
-        var resolver = new NameResolver(compilation);
+        var resolver = new NameResolver(compilation, new SemanticModelCache(compilation));
         var (expression, model) = FindMarkedExpression(compilation);
         return resolver.Resolve(expression, model);
     }
@@ -151,9 +151,9 @@ public class NameResolverTests
             ]
         );
 
-        var resolverFirst = new NameResolver(compilation);
+        var resolverFirst = new NameResolver(compilation, new SemanticModelCache(compilation));
         var (firstExpression, firstModel) = FindMarkedExpression(compilation);
-        var resolverSecond = new NameResolver(second);
+        var resolverSecond = new NameResolver(second, new SemanticModelCache(second));
         var (secondExpression, secondModel) = FindMarkedExpression(second);
 
         Assert.That(

@@ -26,8 +26,9 @@ public static class WireSurfaceScanner
     )
     {
         var symbols = FrameworkSymbols.Resolve(compilation);
-        var names = new NameResolver(compilation);
-        var docs = new DocumentationResolver(compilation, symbols);
+        var semanticModels = new SemanticModelCache(compilation);
+        var names = new NameResolver(compilation, semanticModels);
+        var docs = new DocumentationResolver(semanticModels, symbols);
 
         var pathsByTree = new Dictionary<SyntaxTree, string>();
         string RepoRelativePath(SyntaxTree t)
@@ -54,7 +55,7 @@ public static class WireSurfaceScanner
             if (!trackedRepoRelativePaths.Contains(relativePath))
                 continue;
 
-            var model = names.GetSemanticModel(tree);
+            var model = semanticModels.For(tree);
             foreach (var rule in Rules)
             {
                 foreach (var entry in rule.Scan(tree, model, context))
