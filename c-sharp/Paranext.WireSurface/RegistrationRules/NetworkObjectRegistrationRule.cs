@@ -37,7 +37,7 @@ public sealed class NetworkObjectRegistrationRule : IRegistrationRule
                 continue;
 
             var (category, registeredVia) = Classify(containingType, context.Symbols);
-            var documentationArgument = FindArgumentExpression(
+            var documentationArgument = ArgumentBinding.FindArgumentExpression(
                 invocation.ArgumentList,
                 "documentation",
                 parameterIndex: 3
@@ -132,27 +132,5 @@ public sealed class NetworkObjectRegistrationRule : IRegistrationRule
                     documentation.Experimental
                 )
             );
-    }
-
-    /// <summary>
-    /// Binds an invocation argument to a parameter by name (a named argument) or by position among
-    /// the remaining positional arguments — the same binding rule C# itself uses for a call site.
-    /// </summary>
-    private static ExpressionSyntax? FindArgumentExpression(
-        BaseArgumentListSyntax argumentList,
-        string parameterName,
-        int parameterIndex
-    )
-    {
-        var namedArgument = argumentList.Arguments.FirstOrDefault(a =>
-            a.NameColon?.Name.Identifier.Text == parameterName
-        );
-        if (namedArgument is not null)
-            return namedArgument.Expression;
-
-        var positionalArguments = argumentList.Arguments.Where(a => a.NameColon is null).ToList();
-        return parameterIndex < positionalArguments.Count
-            ? positionalArguments[parameterIndex].Expression
-            : null;
     }
 }

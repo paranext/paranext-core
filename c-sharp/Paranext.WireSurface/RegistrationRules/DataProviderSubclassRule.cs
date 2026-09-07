@@ -108,10 +108,10 @@ public sealed class DataProviderSubclassRule : IRegistrationRule
         )
             return null;
 
-        var parameterIndex = IndexOfByName(boundConstructor.Parameters, "name");
+        var parameterIndex = ArgumentBinding.IndexOfByName(boundConstructor.Parameters, "name");
         return parameterIndex < 0
             ? null
-            : FindArgumentExpression(argumentList, "name", parameterIndex);
+            : ArgumentBinding.FindArgumentExpression(argumentList, "name", parameterIndex);
     }
 
     private static IEnumerable<ScanEntry> BuildEntries(NameResolution name, string file)
@@ -149,33 +149,5 @@ public sealed class DataProviderSubclassRule : IRegistrationRule
                     Experimental: false
                 )
             );
-    }
-
-    private static int IndexOfByName(IReadOnlyList<IParameterSymbol> parameters, string name)
-    {
-        for (var i = 0; i < parameters.Count; i++)
-        {
-            if (parameters[i].Name == name)
-                return i;
-        }
-        return -1;
-    }
-
-    private static ExpressionSyntax? FindArgumentExpression(
-        BaseArgumentListSyntax argumentList,
-        string parameterName,
-        int parameterIndex
-    )
-    {
-        var namedArgument = argumentList.Arguments.FirstOrDefault(a =>
-            a.NameColon?.Name.Identifier.Text == parameterName
-        );
-        if (namedArgument is not null)
-            return namedArgument.Expression;
-
-        var positionalArguments = argumentList.Arguments.Where(a => a.NameColon is null).ToList();
-        return parameterIndex < positionalArguments.Count
-            ? positionalArguments[parameterIndex].Expression
-            : null;
     }
 }

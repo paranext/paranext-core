@@ -216,7 +216,10 @@ public sealed class NameResolver(Compilation compilation)
         if (parameter.ContainingSymbol is not IMethodSymbol containingMember)
             return null;
 
-        var parameterIndex = IndexOfByName(containingMember.Parameters, parameter.Name);
+        var parameterIndex = ArgumentBinding.IndexOfByName(
+            containingMember.Parameters,
+            parameter.Name
+        );
         if (parameterIndex < 0)
             return null;
 
@@ -257,7 +260,7 @@ public sealed class NameResolver(Compilation compilation)
 
                 foundAnySite = true;
 
-                var argumentExpression = FindArgumentExpression(
+                var argumentExpression = ArgumentBinding.FindArgumentExpression(
                     argumentList,
                     parameter.Name,
                     parameterIndex
@@ -349,34 +352,6 @@ public sealed class NameResolver(Compilation compilation)
                 GetSemanticModel(initializer.SyntaxTree),
                 out value
             );
-    }
-
-    private static int IndexOfByName(IReadOnlyList<IParameterSymbol> parameters, string name)
-    {
-        for (var i = 0; i < parameters.Count; i++)
-        {
-            if (parameters[i].Name == name)
-                return i;
-        }
-        return -1;
-    }
-
-    private static ExpressionSyntax? FindArgumentExpression(
-        BaseArgumentListSyntax argumentList,
-        string parameterName,
-        int parameterIndex
-    )
-    {
-        var namedArgument = argumentList.Arguments.FirstOrDefault(a =>
-            a.NameColon?.Name.Identifier.Text == parameterName
-        );
-        if (namedArgument is not null)
-            return namedArgument.Expression;
-
-        var positionalArguments = argumentList.Arguments.Where(a => a.NameColon is null).ToList();
-        return parameterIndex < positionalArguments.Count
-            ? positionalArguments[parameterIndex].Expression
-            : null;
     }
 
     private static string CollapseWhitespace(string text) =>
