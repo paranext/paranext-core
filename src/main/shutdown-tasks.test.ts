@@ -8,6 +8,7 @@ import {
 } from '@main/services/web-view.service-router';
 import { logger } from '@shared/services/logger.service';
 import { RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE } from '@main/scheduled-session-sync.util';
+import type { SettingTypes } from 'papi-shared-types';
 import {
   performShutdownTasks,
   performWindowCloseTasks,
@@ -470,6 +471,7 @@ describe('performShutdownTasks', () => {
     let shutdownSettled = false;
     const shutdownTasks = performShutdownTasks().then(() => {
       shutdownSettled = true;
+      return undefined;
     });
     try {
       // Give the shutdown every chance to finish while the window's sync is still held open
@@ -691,6 +693,37 @@ describe('startWindowCloseTasksWithoutWaiting', () => {
     return () => release();
   }
 
+  it('reads what the window had open before its first await, so a caller that destroys the window right after calling this cannot race that read', async () => {
+    // The window may be destroyed the instant this function first yields control back to its
+    // caller, so the request for what it had open must already be in flight before that — reading
+    // it only after learning the interface mode would let the window disappear first.
+    let resolveModeRead: (mode: SettingTypes['platform.interfaceMode']) => void = () => {};
+    mockSettingsGet.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveModeRead = resolve;
+        }),
+    );
+    mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
+
+    startWindowCloseTasksWithoutWaiting('2');
+
+    try {
+      expect(mockGetOpenWebViewsForWindow).toHaveBeenCalledWith('2');
+    } finally {
+      // Always let the sync settle, even when the assertion above throws — an unresolved mode read
+      // here would leave a promise permanently pending in the module-level in-flight set, hanging
+      // every later test that drains it.
+      resolveModeRead('simple');
+      await vi.waitFor(() =>
+        expect(mockRequestNoRetry).toHaveBeenCalledWith(
+          expect.stringContaining('sendReceiveProjects'),
+          ['p1'],
+        ),
+      );
+    }
+  });
+
   it('lets the window go before the sync settles', async () => {
     // A window that is only changing mode comes back, so it must not sit on screen for as long as a
     // send/receive takes — once per window
@@ -779,5 +812,56 @@ describe('startWindowCloseTasksWithoutWaiting', () => {
     expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).toContainEqual(
       expect.stringContaining(RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE),
     );
+  });
+
+  it('waits for a second window-close sync that registers while the drain is already waiting on the first', async () => {
+    // The drain exists precisely so a shutdown cannot cancel a closing window's sync out from under
+    // it. A snapshot taken once at the start misses any sync that registers afterward — which is
+    // exactly the sync most likely to still be running, since it is the one whose window closing
+    // triggered this shutdown in the first place.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockImplementation(async (windowId) =>
+      asWindowWebViews([writableEditor(`project-${windowId}`)]),
+    );
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+    const releasers = new Map<string, () => void>();
+    mockRequestNoRetry.mockImplementation(async (requestType, ...params) => {
+      if (`${requestType}`.includes('sendReceiveProjects')) {
+        // requestNoRetry's params are generic (unknown[] here); sendReceiveProjects always takes a
+        // single project-id array.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const [projectIds] = params as [string[]];
+        await new Promise<void>((resolve) => {
+          releasers.set(projectIds[0], resolve);
+        });
+      }
+      return undefined;
+    });
+
+    startWindowCloseTasksWithoutWaiting('2');
+    await vi.waitFor(() => expect(releasers.has('project-2')).toBe(true));
+
+    let shutdownSettled = false;
+    const shutdownTasks = performShutdownTasks().then(() => {
+      shutdownSettled = true;
+      return undefined;
+    });
+    // Registered right after the drain's synchronous first snapshot — the window whose sync a
+    // single-snapshot drain would miss.
+    startWindowCloseTasksWithoutWaiting('3');
+    await vi.waitFor(() => expect(releasers.has('project-3')).toBe(true));
+
+    try {
+      releasers.get('project-2')?.();
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      // The shutdown must still be waiting on the second window's sync
+      expect(shutdownSettled).toBe(false);
+    } finally {
+      releasers.get('project-3')?.();
+      await shutdownTasks;
+    }
+    expect(shutdownSettled).toBe(true);
   });
 });
