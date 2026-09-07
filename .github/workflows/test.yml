@@ -253,8 +253,8 @@ jobs:
 
       - name: Warm the .NET data provider Debug build
         # The dev app starts the provider with `dotnet watch`; on a cold runner its first launch
-        # builds the Debug configuration inside the smoke suite's readiness budget (CI run 34120517262:
-        # no C# registration in 5.5 min on the first launch, all present within 50 s on relaunch).
+        # builds the Debug configuration inside the smoke suite's readiness budget, so warm the
+        # build here first rather than have the suite wait on it.
         run: dotnet build c-sharp/ParanextDataProvider.csproj
 
       # No --server-args, so this runs at Xvfb's 1280x1024x8 default. Fine here: the smoke
