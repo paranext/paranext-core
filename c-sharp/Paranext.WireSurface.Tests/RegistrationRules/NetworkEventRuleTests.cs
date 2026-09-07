@@ -314,6 +314,48 @@ public class NetworkEventRuleTests
     }
 
     [Test]
+    public void NamedArgumentsOutOfOrder()
+    {
+        var entries = ScanFixtureTree(
+            """
+            using System.Threading.Tasks;
+            using Paranext.DataProvider;
+            using Paranext.DataProvider.NetworkObjects.Documentation;
+
+            internal sealed class FixtureNamedOutOfOrder(PapiClient papiClient)
+            {
+                public Task RegisterAsync() =>
+                    papiClient.SendRequestAsync<bool>(
+                        requestContents:
+                        [
+                            "fixture.event.named-out-of-order",
+                            new OpenRpcSingleNotificationDocumentation(),
+                        ],
+                        requestType: "network:registerEvent"
+                    );
+            }
+            """
+        );
+
+        Assert.That(
+            entries,
+            Is.EqualTo(
+                new[]
+                {
+                    new ScanEntry.Static(
+                        Static(
+                            "fixture.event.named-out-of-order",
+                            documented: true,
+                            docsStaticallyResolved: true,
+                            experimental: false
+                        )
+                    ),
+                }
+            )
+        );
+    }
+
+    [Test]
     public void OtherRequestTypesIgnored()
     {
         var entries = ScanFixtureTree(

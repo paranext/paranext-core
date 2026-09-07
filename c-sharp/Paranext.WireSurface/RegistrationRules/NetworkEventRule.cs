@@ -30,9 +30,11 @@ public sealed class NetworkEventRule : IRegistrationRule
             )
                 continue;
 
-            var requestTypeArgument = invocation
-                .ArgumentList.Arguments.ElementAtOrDefault(0)
-                ?.Expression;
+            var requestTypeArgument = ArgumentBinding.FindArgumentExpression(
+                invocation.ArgumentList,
+                "requestType",
+                parameterIndex: 0
+            );
             if (requestTypeArgument is null)
                 continue;
             if (
@@ -41,9 +43,11 @@ public sealed class NetworkEventRule : IRegistrationRule
             )
                 continue;
 
-            var contentsArgument = invocation
-                .ArgumentList.Arguments.ElementAtOrDefault(1)
-                ?.Expression;
+            var contentsArgument = ArgumentBinding.FindArgumentExpression(
+                invocation.ArgumentList,
+                "requestContents",
+                parameterIndex: 1
+            );
             if (contentsArgument is null)
                 continue;
 
