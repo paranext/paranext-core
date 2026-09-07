@@ -115,6 +115,8 @@
  * {@link MarkerDisagreement}.
  */
 
+import { WINDOW_ID_SHAPE_SOURCE } from './window-id-shape';
+
 // #region Snapshot document shape (subset of lib/papi-dts/wire-surface.json used here)
 
 /**
@@ -341,10 +343,16 @@ export function findMissingFromLive(
 
 /**
  * Per-window network objects set directly via `networkObjectService.set` (no `-data` suffix): named
- * `{Label}-{windowId}` (see `book-chapter-control.service-shard.model.ts`,
- * `dialog.service-shard.model.ts`, `notification.service-model.ts`,
- * `usersnap.service-shard.model.ts`, and `NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE` in
- * `web-view.service-model.ts`).
+ * `{Label}-{windowId}` (see `book-chapter-control.service-shard.ts`, `dialog.service-shard.ts`,
+ * `notification.service-shard.ts`, `usersnap.service-shard.ts`, and
+ * `NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE` in `web-view.service-model.ts`).
+ *
+ * `{windowId}` is `globalThis.windowId` — the durable id `mintWindowId`
+ * (`src/main/services/window-state.service.ts`) mints for a brand-new window (a GUID from
+ * `createUuid()`) or hands back from a restored window's persisted layout entry.
+ * {@link WINDOW_ID_SHAPE_SOURCE} is imported rather than re-declared so this stays in lockstep with
+ * the shape's own drift guard (`src/shared/utils/window-id-shape.test.ts`); see that constant's doc
+ * comment for why it is hex-grouped rather than RFC-4122-strict.
  */
 const WINDOW_SHARD_NETWORK_OBJECT_LABELS = [
   'DialogService',
@@ -354,14 +362,18 @@ const WINDOW_SHARD_NETWORK_OBJECT_LABELS = [
   'NotificationService',
 ];
 export const WINDOW_SHARD_NETWORK_OBJECT_PATTERN = new RegExp(
-  `^(?:${WINDOW_SHARD_NETWORK_OBJECT_LABELS.join('|')})-\\d+$`,
+  `^(?:${WINDOW_SHARD_NETWORK_OBJECT_LABELS.join('|')})-${WINDOW_ID_SHAPE_SOURCE}$`,
+  'i',
 );
 
 /**
  * `window.service-shard.ts`'s per-window data provider — registered via `registerEngine`, so
  * (unlike the plain network-object shards above) it also carries the `-data` suffix.
  */
-export const WINDOW_SHARD_DATA_PROVIDER_PATTERN = /^platform\.windowServiceDataProvider-\d+-data$/;
+export const WINDOW_SHARD_DATA_PROVIDER_PATTERN = new RegExp(
+  `^platform\\.windowServiceDataProvider-${WINDOW_ID_SHAPE_SOURCE}-data$`,
+  'i',
+);
 
 /**
  * A nonce-minted TS project data provider (`${newNonce()}-pdp`, `project-data-provider.service.ts`)
