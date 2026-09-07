@@ -35,7 +35,7 @@ let mockDockLayoutInstance: DockLayout;
 vi.mock('@renderer/components/docking/dock-layout-wrapper.component', () => ({
   DockLayoutWrapper: forwardRef((_props: unknown, ref: ForwardedRef<DockLayout>) => {
     useImperativeHandle(ref, () => mockDockLayoutInstance);
-    return null;
+    return undefined;
   }),
 }));
 
