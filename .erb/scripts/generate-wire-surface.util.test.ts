@@ -575,6 +575,40 @@ describe('generateWireSurfaceDocument: identifier binding through the TypeScript
       findRegistration(secondDocument.registrations, 'platform.reusedPathFirstValue'),
     ).toBeUndefined();
   });
+
+  it('resolves a name through a re-export barrel, both under its own name and renamed', () => {
+    const files: VirtualFile[] = [
+      {
+        path: 'src/fixture-reexport-origin.ts',
+        text: `
+          export const DIRECTLY_REEXPORTED_NAME = 'platform.reexportedDirectCommand';
+          export const RENAMED_ON_REEXPORT_NAME = 'platform.reexportedRenamedCommand';
+        `,
+      },
+      {
+        path: 'src/fixture-reexport-barrel.ts',
+        text: `
+          export { DIRECTLY_REEXPORTED_NAME } from './fixture-reexport-origin';
+          export { RENAMED_ON_REEXPORT_NAME as ALIASED_NAME } from './fixture-reexport-origin';
+        `,
+      },
+      {
+        path: 'src/fixture-reexport-consumer.ts',
+        text: `
+          import { DIRECTLY_REEXPORTED_NAME, ALIASED_NAME } from './fixture-reexport-barrel';
+          registerCommand(DIRECTLY_REEXPORTED_NAME, handler);
+          registerCommand(ALIASED_NAME, handler);
+        `,
+      },
+    ];
+    const document = generateWireSurfaceDocument(files);
+    expect(
+      findRegistration(document.registrations, 'platform.reexportedDirectCommand'),
+    ).toMatchObject({ category: 'command' });
+    expect(
+      findRegistration(document.registrations, 'platform.reexportedRenamedCommand'),
+    ).toMatchObject({ category: 'command' });
+  });
 });
 
 describe('generateWireSurfaceDocument: determinism', () => {
