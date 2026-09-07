@@ -2545,6 +2545,56 @@ step, no automation. Just a record.
 - **Source:** punctuation-checklist port (markers-consumption verdict); see `08_Checklists.md` in the
   PT9 feature inventory for the per-tool behavior and the verse-range divergence.
 
+## adr-root-package-json-no-name: The root `package.json` carries no `name` or `version`; app identity lives in `release/app/package.json`
+
+- **Date:** 2026-09-08
+- **Status:** Accepted
+- **Context:** The root `package.json` has no `name` and no `version` field. That absence is
+  load-bearing rather than an oversight, but nothing in the repo said so, and it is repeatedly
+  re-proposed — PR #2199, a revision of PR #2257, and again during unrelated dependency work in
+  September 2026 — each time rediscovering the reasoning from scratch.
+  electron-builder resolves app identity from **both** the root manifest and
+  `release/app/package.json` in ways neither file makes obvious: `electron-builder.json5` sets
+  `productName` and `appId` and points `directories.app` at `release/app`, while
+  `release/app/package.json` carries the real identity (`name: "platform-bible"`). Adding
+  `name`/`version` to the root is *recollected* to have broken the macOS build once — raised by
+  tjcouch-sil in review of #2257, who asked jolierabideau to confirm it. Treat that as unverified
+  recollection rather than established fact: it has not been reproduced, and the review carries no
+  corroboration. The visible cost of the absence is that npm falls back to the containing directory
+  name, so `npm install` from a clone or git worktree not named `paranext-core` rewrites the
+  lockfile's root `name`.
+- **Decision:** Leave the root `package.json` without `name` or `version`. Guard the *symptom*
+  instead: `.husky/pre-commit` blocks a commit that stages a `package-lock.json` whose root `name`
+  is not `paranext-core`, alongside the existing yalc-entries check. It reads the staged blob, and
+  only when the lockfile is staged, so an unrelated commit is never blocked and a drifted staged
+  copy is never missed because the working tree was fixed without re-staging.
+- **Alternatives:**
+  - *Add `name` to the root manifest* — deferred, not rejected on merit. PR #2199 proposed
+    `paranext-core` and a revision of PR #2257 proposed `platform-bible`; the two attempts did not
+    agree on the value, which is itself a sign the question is unsettled. The payoff is removing a
+    one-line lockfile annoyance; the exposure is app identity across two products and three
+    operating systems.
+  - *Add it here and in `paratext-10-studio` together* — that coordination would be mandatory, not
+    optional: `lib/build.ts` there rewrites `release/app/package.json` (setting
+    `releaseAppPackage.name` and `.version`) and never touches the root manifest, so a root `name`
+    would survive the Paratext 10 Studio rename unchanged.
+  - *Leave it undocumented* — rejected: the undocumented status quo is what produced the repeated
+    rediscoveries.
+- **Consequences:** Dev runs store data under `%appdata%/Electron` rather than a product-named
+  directory (prod is unaffected); the team treats the resulting dev/prod log separation as a minor
+  benefit. Anyone revisiting this must first clear the bar set in review of #2257 — test dev **and**
+  prod (portable and installed), on Platform.Bible **and** Paratext 10 Studio, on all three
+  operating systems, checking app data paths (`%appdata%/<name>`, `~/<name>`, install dir), deep
+  links and the displayed app name, the output executable name, executable metadata, and signing.
+  Revisit if electron-builder's field resolution becomes documented well enough to retire that
+  matrix, or if someone confirms or refutes the macOS recollection.
+- **Source:** PR #2199 (`fix: add explicit name to package.json`, opened 2026-04-14 by merchako, who
+  later asked to hand it off after the review below), and
+  tjcouch-sil's CHANGES_REQUESTED review of PR #2257 (2026-05-11), which carries the full rationale
+  and the test matrix. #2257 itself is unrelated work ("Update some vestigial Paranext references to
+  Platform.Bible", merged 2026-05-13) that briefly proposed the same root-`name` addition and
+  dropped it.
+
 ## adr-runaway-data-hook-guard: `useData`'s runaway guard counts subscribes and deliveries, degrades rather than throws, and expires
 
 - **Date:** 2026-08-28

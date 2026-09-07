@@ -44,6 +44,32 @@ if grep -q '\.yalc' package-lock.json 2>/dev/null; then
   exit 1
 fi
 
+# Block committing a package-lock.json whose root name has drifted (staged only). The root
+# package.json deliberately has no "name" field (see adr-root-package-json-no-name in
+# .context/standards/Architecture-Decisions.md), so npm falls back to the containing directory name:
+# any clone or git worktree not named paranext-core rewrites it on npm install. This inspects the
+# staged blob rather than the working tree, so a commit that does not touch the lockfile is never
+# blocked, and a drifted staged copy is never missed because the working tree was fixed but not
+# re-staged.
+if git diff --cached --name-only --diff-filter=ACMR | grep -qx 'package-lock.json'; then
+  LOCK_ROOT_NAME=$(git show :package-lock.json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).name" 2>/dev/null)
+  if [ "$LOCK_ROOT_NAME" != "paranext-core" ]; then
+    echo ""
+    echo "Error: package-lock.json's root \"name\" is \"$LOCK_ROOT_NAME\", expected \"paranext-core\"."
+    echo "npm falls back to the directory name because the root package.json has no \"name\" field."
+    echo "Do NOT add a \"name\" to package.json - that field is deliberately absent."
+    echo "See adr-root-package-json-no-name in .context/standards/Architecture-Decisions.md."
+    echo ""
+    echo "If the lockfile has no other changes you want to keep, discard it:"
+    echo "  git checkout HEAD -- package-lock.json"
+    echo ""
+    echo "Otherwise edit the root \"name\" (the second line of the file) back to"
+    echo "\"paranext-core\" and re-stage:"
+    echo "  git add package-lock.json"
+    exit 1
+  fi
+fi
+
 echo "Format and stylelint fixes..."
 npm run lint:staged
 echo "Format and stylelint fixes finished"
