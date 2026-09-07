@@ -1251,16 +1251,16 @@ describe('window state tracking', () => {
       // implementation, since the orchestration only ever sees it through an injected mock.
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
-      markWindowClosing(1);
-      expect(isWindowClosing(1)).toBe(true);
+      markWindowClosing('1');
+      expect(isWindowClosing('1')).toBe(true);
 
-      markWindowNotClosing(1);
+      markWindowNotClosing('1');
 
-      expect(isWindowClosing(1)).toBe(false);
+      expect(isWindowClosing('1')).toBe(false);
       // Only the window named: window 2's close is still going ahead
-      markWindowClosing(2);
-      markWindowNotClosing(1);
-      expect(isWindowClosing(2)).toBe(true);
+      markWindowClosing('2');
+      markWindowNotClosing('1');
+      expect(isWindowClosing('2')).toBe(true);
     });
 
     test('taking back a mark a window never had changes nothing', () => {
@@ -1269,9 +1269,9 @@ describe('window state tracking', () => {
       // rather than an announcement of a change that did not happen.
       addWindow(fakeWindow(1));
 
-      expect(() => markWindowNotClosing(1)).not.toThrow();
+      expect(() => markWindowNotClosing('1')).not.toThrow();
 
-      expect(isWindowClosing(1)).toBe(false);
+      expect(isWindowClosing('1')).toBe(false);
     });
 
     test('reports the app going down when the only window closes', () => {
@@ -1365,17 +1365,17 @@ describe('window state tracking', () => {
       // back — so a window rescued from a close that never happened would stay unused.
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
-      markWindowReady(1);
-      markWindowReady(2);
-      setFocusedWindowId(1);
-      markWindowClosing(1);
-      const heard: (number | undefined)[] = [];
+      markWindowReady('1');
+      markWindowReady('2');
+      setFocusedWindowId('1');
+      markWindowClosing('1');
+      const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      markWindowNotClosing(1);
+      markWindowNotClosing('1');
       unsubscribe();
 
-      expect(heard).toEqual([1]);
+      expect(heard).toEqual(['1']);
     });
 
     test('keeps routing to the closing window when every window is closing', () => {
