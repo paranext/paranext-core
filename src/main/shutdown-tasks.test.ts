@@ -702,7 +702,7 @@ describe('startWindowCloseTasksWithoutWaiting', () => {
     mockGetOpenWebViewsForWindow.mockResolvedValue(asWindowWebViews([writableEditor('p1')]));
     const release = holdTheSync();
 
-    startWindowCloseTasksWithoutWaiting(2);
+    startWindowCloseTasksWithoutWaiting('2');
     await vi.waitFor(() =>
       expect(mockRequestNoRetry).toHaveBeenCalledWith(
         expect.stringContaining('sendReceiveProjects'),

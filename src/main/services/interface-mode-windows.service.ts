@@ -417,9 +417,7 @@ async function reopenPreservedWindows(
       // failing together
       logger.warn(`Could not reopen the window for entry ${entryId}: ${getErrorMessage(e)}`);
     }
-    remaining = deps
-      .getPreservedEntryIds()
-      .filter((candidate) => !reopenedEntryIds.has(candidate));
+    remaining = deps.getPreservedEntryIds().filter((candidate) => !reopenedEntryIds.has(candidate));
   }
 }
 
