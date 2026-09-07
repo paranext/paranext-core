@@ -35,6 +35,7 @@ import {
   LaunchElectronAppOptions,
   sendPapiRequestOnce,
   waitForAppReady,
+  WINDOW_ID_SHAPE_SOURCE,
 } from '../../../fixtures/helpers';
 import {
   WEBSOCKET_PORT,
@@ -57,6 +58,15 @@ const BASE_LAUNCH_OPTIONS: LaunchElectronAppOptions = {
 };
 
 /**
+ * The window-scope suffix a window appends to the web view ids of any layout it loads. Keep in sync
+ * with `WINDOW_SUFFIX_PATTERN` in
+ * `src/renderer/components/docking/window-scoped-web-view-ids.util.ts` (not imported here — the e2e
+ * project cannot resolve the app's path aliases). Built from the shared
+ * {@link WINDOW_ID_SHAPE_SOURCE} mirror, since the suffix is a window id.
+ */
+const WINDOW_SCOPE_SUFFIX_PATTERN = new RegExp(`-w${WINDOW_ID_SHAPE_SOURCE}$`, 'i');
+
+/**
  * A tab id without the window suffix a tab carries.
  *
  * A tab's `data-web-view-id` is the web view id plus the id of the window it is in, so the same web
@@ -64,7 +74,7 @@ const BASE_LAUNCH_OPTIONS: LaunchElectronAppOptions = {
  * before a switch with what it holds after one has to compare the web views, not the windows.
  */
 function stripWindowScope(tabId: string): string {
-  return tabId.replace(/-w\d+$/, '');
+  return tabId.replace(WINDOW_SCOPE_SUFFIX_PATTERN, '');
 }
 
 /** How long a switch may take to settle before a poll gives up */
