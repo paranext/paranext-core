@@ -21,6 +21,7 @@ public static class ProjectLoader
 {
     private static readonly object s_registrationLock = new();
     private static bool s_registered;
+    private static string? s_msbuildPath;
 
     public static Task<Compilation?> LoadCompilationAsync(string projectPath, TextWriter stderr)
     {
@@ -28,16 +29,27 @@ public static class ProjectLoader
         return LoadCoreAsync(projectPath, stderr);
     }
 
+    /// <summary>
+    /// Registers the MSBuild SDK at most once per process (<see cref="MSBuildLocator.RegisterDefaults"/>
+    /// throws if called twice), but writes a resolved-SDK line to <paramref name="stderr"/> on every
+    /// call -- including one that finds registration already done -- so a caller that scans this
+    /// process's stderr for that line sees it regardless of how many times, or in what order, this
+    /// method has already run.
+    /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void EnsureMSBuildRegistered(TextWriter stderr)
     {
         lock (s_registrationLock)
         {
             if (s_registered)
+            {
+                stderr.WriteLine($"wire-surface: MSBuild SDK already resolved at {s_msbuildPath}");
                 return;
+            }
 
             var instance = MSBuildLocator.RegisterDefaults();
-            stderr.WriteLine($"wire-surface: resolved MSBuild SDK at {instance.MSBuildPath}");
+            s_msbuildPath = instance.MSBuildPath;
+            stderr.WriteLine($"wire-surface: resolved MSBuild SDK at {s_msbuildPath}");
             s_registered = true;
         }
     }
