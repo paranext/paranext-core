@@ -94,3 +94,37 @@ export function chooseNoticeParentWindowId(
   const otherWindows = candidates.filter((candidate) => candidate.windowId !== abandonedWindowId);
   return (otherWindows.find((candidate) => candidate.isPrimary) ?? otherWindows[0])?.windowId;
 }
+
+/** A live window being considered as a parent, with what decides whether it can carry the notice */
+export type NoticeParentEligibilityInput = {
+  /** The window's id */
+  windowId: string;
+  /** Whether this window holds the primary role right now */
+  isPrimary: boolean;
+  /** Whether this window's own close has already begun */
+  isClosing: boolean;
+  /** Whether this window has itself been given up on */
+  isAbandoned: boolean;
+  /** Whether this window is on screen right now — not minimized, not hidden */
+  isVisible: boolean;
+};
+
+/**
+ * Narrows the live window set down to the ones {@link chooseNoticeParentWindowId} may choose among.
+ *
+ * A window whose close has begun is on its way out, so a question parented to it would go down with
+ * it. One that has itself been given up on is a dead page, not a place to ask a question about a
+ * different dead page. And one that is minimized or hidden would carry the question off screen with
+ * it, exactly the reason {@link decideAbandonedWindowNotice} avoids the abandoned window itself when
+ * it is not visible.
+ *
+ * @param windows Every live window, in tracking order
+ * @returns The subset eligible to carry the notice
+ */
+export function eligibleNoticeParentCandidates(
+  windows: readonly NoticeParentEligibilityInput[],
+): NoticeParentCandidate[] {
+  return windows
+    .filter((window) => !window.isClosing && !window.isAbandoned && window.isVisible)
+    .map(({ windowId, isPrimary }) => ({ windowId, isPrimary }));
+}
