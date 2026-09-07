@@ -10,6 +10,7 @@ import {
   StaticRegistration,
   VirtualFile,
 } from './generate-wire-surface.util';
+import { CSharpScanResult } from './wire-surface.model';
 
 function findRegistration(
   registrations: StaticRegistration[],
@@ -696,21 +697,44 @@ describe('generateWireSurfaceDocument: combined TypeScript + C# scanning', () =>
     { path: 'src/z-fixture.ts', text: `registerCommand('platform.zCommand', handler);` },
     { path: 'src/a-fixture.ts', text: `registerCommand('platform.aCommand', handler);` },
   ];
-  const csharpFiles = [
-    {
-      path: 'c-sharp/Fixtures/FixtureCombined.cs',
-      text: `
-        internal class FixtureCombined : NetworkObject
-        {
-            private const string NetworkObjectName = "platform.fixtureCombined";
-            public Task Go() => RegisterNetworkObjectAsync(NetworkObjectName, fns, details);
-        }
-      `,
-    },
-  ];
+  // A pre-scanned CSharpScanResult, as run-wire-surface-scanner.ts would hand it in -- this module
+  // no longer scans C# source text itself, so the fixture is the scan RESULT, not C# source.
+  const csharpScan: CSharpScanResult = {
+    registrations: [
+      {
+        category: 'networkObject',
+        name: 'platform.fixtureCombined',
+        file: 'c-sharp/Fixtures/FixtureCombined.cs',
+        registeredVia: 'NetworkObject.RegisterNetworkObjectAsync',
+        documented: false,
+        docsStaticallyResolved: true,
+        experimental: false,
+        language: 'csharp',
+      },
+      {
+        category: 'dataProvider',
+        name: 'platform.fixtureProvider-data',
+        file: 'c-sharp/Fixtures/FixtureProvider.cs',
+        registeredVia: 'DataProvider.RegisterDataProviderAsync',
+        documented: false,
+        docsStaticallyResolved: true,
+        experimental: false,
+        language: 'csharp',
+      },
+    ],
+    dynamicRegistrations: [
+      {
+        category: 'standaloneMethod',
+        file: 'c-sharp/Fixtures/FixtureCombined.cs',
+        registeredVia: 'PapiClient.RegisterRequestHandlerAsync',
+        expression: 'someRuntimeName',
+        language: 'csharp',
+      },
+    ],
+  };
 
   it('tags every entry with its originating language and merges both halves into one document', () => {
-    const document = generateWireSurfaceDocument(tsFiles, csharpFiles);
+    const document = generateWireSurfaceDocument(tsFiles, csharpScan);
     expect(findRegistration(document.registrations, 'platform.aCommand')).toMatchObject({
       language: 'typescript',
     });
@@ -720,21 +744,40 @@ describe('generateWireSurfaceDocument: combined TypeScript + C# scanning', () =>
     });
   });
 
+  it('merges the C# entries into the same (language, category, name, file) code-unit order as the TypeScript entries, rather than appending them', () => {
+    const document = generateWireSurfaceDocument(tsFiles, csharpScan);
+    // 'csharp' < 'typescript' by code unit, so every C# entry sorts before every TypeScript entry;
+    // within each language, category ("dataProvider" < "networkObject" < ... < "command") then name
+    // break the remaining ties. This is the exact order a naive [...ts, ...csharp] concatenation
+    // (never re-sorted) would NOT produce, since it would put the TypeScript entries first.
+    expect(document.registrations.map((r) => r.name)).toEqual([
+      'platform.fixtureProvider-data',
+      'platform.fixtureCombined',
+      'platform.aCommand',
+      'platform.zCommand',
+    ]);
+    expect(document.dynamicRegistrations.map((r) => r.expression)).toEqual(['someRuntimeName']);
+  });
+
   it('produces byte-identical serialized output across two separate runs', () => {
-    const first = serializeWireSurfaceDocument(generateWireSurfaceDocument(tsFiles, csharpFiles));
-    const second = serializeWireSurfaceDocument(generateWireSurfaceDocument(tsFiles, csharpFiles));
+    const first = serializeWireSurfaceDocument(generateWireSurfaceDocument(tsFiles, csharpScan));
+    const second = serializeWireSurfaceDocument(generateWireSurfaceDocument(tsFiles, csharpScan));
     expect(first).toBe(second);
   });
 
-  it('produces identical output regardless of the input file order, in either language', () => {
-    const forward = serializeWireSurfaceDocument(generateWireSurfaceDocument(tsFiles, csharpFiles));
+  it('produces identical output regardless of the input order, in either language', () => {
+    const forward = serializeWireSurfaceDocument(generateWireSurfaceDocument(tsFiles, csharpScan));
+    const reversedCsharpScan: CSharpScanResult = {
+      registrations: [...csharpScan.registrations].reverse(),
+      dynamicRegistrations: [...csharpScan.dynamicRegistrations].reverse(),
+    };
     const reversed = serializeWireSurfaceDocument(
-      generateWireSurfaceDocument([...tsFiles].reverse(), [...csharpFiles].reverse()),
+      generateWireSurfaceDocument([...tsFiles].reverse(), reversedCsharpScan),
     );
     expect(forward).toBe(reversed);
   });
 
-  it('defaults csharpFiles to empty, leaving existing TypeScript-only callers unaffected', () => {
+  it('defaults csharpScan to an empty result, leaving existing TypeScript-only callers unaffected', () => {
     const withoutCSharp = generateWireSurfaceDocument(tsFiles);
     expect(withoutCSharp.registrations.every((r) => r.language === 'typescript')).toBe(true);
     expect(withoutCSharp.registrations).toHaveLength(2);
@@ -802,13 +845,29 @@ describe('generateWireSurfaceDocument: header content', () => {
 
     const excluded = document.header.excludedPatterns.join('\n');
     expect(excluded).toContain('createNetworkEventEmitter');
-    expect(excluded).not.toContain('network:registerEvent');
+    expect(excluded).toContain('RegisterNetworkObjectAsync');
+    expect(excluded).toContain('RegisterRequestHandlerAsync');
+    expect(excluded).toContain('SendRequestAsync');
   });
 
-  it('states that C# is now covered and that the C# scan is pattern-based, not AST-based', () => {
+  it('describes exactly five C# recognition rules, each with its own A-E marker, and exactly five excluded patterns (two TypeScript, three C#)', () => {
     const document = generateWireSurfaceDocument([]);
-    expect(document.header.scope).toContain('c-sharp/**');
-    expect(document.header.scope.toLowerCase()).toContain('pattern-based');
+    ['A. ', 'B. ', 'C. ', 'D. ', 'E. '].forEach((marker) => {
+      expect(
+        document.header.recognizedPatterns.filter((pattern) => pattern.startsWith(marker)),
+      ).toHaveLength(1);
+    });
+    // 2 TypeScript exclusions (a renamed-import/destructured receiver; the deprecated
+    // createNetworkEventEmitter) plus the three real C# exclusions -- the C# list was always
+    // empty before this generator read a real Roslyn scan.
+    expect(document.header.excludedPatterns).toHaveLength(5);
+  });
+
+  it("describes the C# half as reading the data provider project through Roslyn's semantic model, not a text scan", () => {
+    const document = generateWireSurfaceDocument([]);
+    expect(document.header.scope).toContain('Roslyn');
+    expect(document.header.scope).toContain('Paranext.WireSurface');
+    expect(document.header.scope.toLowerCase()).not.toContain('pattern-based');
     expect(document.header.scope).not.toContain('not yet covered');
   });
 

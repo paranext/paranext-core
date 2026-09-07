@@ -1,10 +1,12 @@
 /**
  * CLI entry point: walks `src/**` and the bundled `extensions/src/**` (TypeScript) plus
- * `c-sharp/**` (C#), scans every file for the wire-visible registration patterns
- * `generate-wire-surface.util.ts` and `generate-wire-surface.csharp.util.ts` recognise, and writes
- * the result to `lib/papi-dts/wire-surface.json` — the generated-public-surface snapshot alongside
- * `papi.d.ts`. Run via `npm run build:wire-surface`, and as part of `npm run build` so CI's "verify
- * no files changed after build" step catches a stale snapshot.
+ * `c-sharp/**` (C#), scans the TypeScript files directly against a real AST
+ * (`generate-wire-surface.util.ts`) and the C# files by spawning the Roslyn-based
+ * `Paranext.WireSurface` .NET tool over the data provider project (`run-wire-surface-scanner.ts`),
+ * merges both halves into the declared wire-visible registration surface, and writes the result to
+ * `lib/papi-dts/wire-surface.json` — the generated-public-surface snapshot alongside `papi.d.ts`.
+ * Run via `npm run build:wire-surface`, and as part of `npm run build` so CI's "verify no files
+ * changed after build" step catches a stale snapshot.
  */
 
 import * as childProcess from 'child_process';
@@ -17,20 +19,23 @@ import {
   serializeWireSurfaceDocument,
   VirtualFile,
 } from './generate-wire-surface.util';
-import { compareCodeUnits } from './generate-wire-surface.csharp.util';
+import { compareCodeUnits } from './wire-surface.model';
+import { runCSharpWireSurfaceScanner } from './run-wire-surface-scanner';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const SCAN_ROOTS = ['src', 'extensions/src'];
 const EXCLUDED_DIR_NAMES = new Set(['node_modules', 'dist', 'temp-build', '__tests__']);
 const CSHARP_SCAN_ROOT = 'c-sharp';
-// Paranext.Analyzers[.Tests] are Roslyn tooling, not part of the wire surface, and its test project
-// specifically embeds C#-look-alike source inside string fixtures that this pattern-based scanner
-// has no business trying to interpret as real declarations.
+// Paranext.Analyzers[.Tests] and Paranext.WireSurface[.Tests] are tooling that analyses or produces
+// the wire surface, not part of it -- and the analyzer test project specifically embeds
+// C#-look-alike source inside string fixtures that would otherwise register as fake surface.
 const CSHARP_EXCLUDED_DIR_NAMES = new Set([
   'bin',
   'obj',
   'Paranext.Analyzers',
   'Paranext.Analyzers.Tests',
+  'Paranext.WireSurface',
+  'Paranext.WireSurface.Tests',
 ]);
 
 /**
@@ -110,7 +115,11 @@ const OUTPUT_PATH = path.resolve(REPO_ROOT, 'lib/papi-dts/wire-surface.json');
 
 const files = collectSourceFiles();
 const csharpFiles = collectCSharpFiles();
-const document = generateWireSurfaceDocument(files, csharpFiles);
+const csharpScan = runCSharpWireSurfaceScanner(
+  REPO_ROOT,
+  csharpFiles.map((file) => file.path),
+);
+const document = generateWireSurfaceDocument(files, csharpScan);
 
 // This scan is the real, whole codebase (unlike this module's unit tests, which scan small fixture
 // file sets and would trip this check on every annotated name they don't happen to include) -- so a

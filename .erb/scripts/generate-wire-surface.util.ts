@@ -16,13 +16,7 @@
 
 import * as path from 'path';
 import * as ts from 'typescript';
-import {
-  compareCodeUnits,
-  CSHARP_EXCLUDED_PATTERNS,
-  CSHARP_RECOGNIZED_PATTERNS,
-  scanCSharpFiles,
-  VirtualFile as CSharpVirtualFile,
-} from './generate-wire-surface.csharp.util';
+import { compareCodeUnits, CSharpScanResult } from './wire-surface.model';
 
 // #region Public types
 
@@ -67,8 +61,7 @@ export type RegistrationLiveness = 'transient' | 'lazy';
  * `category` and `registeredVia` are typed as plain `string` here (rather than the narrower
  * `RegistrationCategory`/`RegisteredVia` unions used internally by the TypeScript scan below) so
  * that this single shape can also carry C#-origin entries, whose category/registeredVia vocabulary
- * is defined in `generate-wire-surface.csharp.util.ts`. `language` is the field to filter or group
- * on.
+ * is defined in `wire-surface.model.ts`. `language` is the field to filter or group on.
  */
 export interface StaticRegistration {
   category: string;
@@ -180,6 +173,62 @@ const EXCLUDED_PATTERNS: string[] = [
     'document, so it is excluded here for the same reason.',
 ];
 
+/**
+ * The five rules the Roslyn-based `Paranext.WireSurface` tool (`c-sharp/Paranext.WireSurface`)
+ * applies to the data provider project, described here (rather than in the tool itself) so this
+ * generator's own header stays the single place that documents both halves of the wire surface side
+ * by side. Every rule matches by symbol identity, never by identifier text, so a rename, an added
+ * type parameter, or reformatting cannot make a real registration invisible to it.
+ */
+const CSHARP_RECOGNIZED_PATTERNS: string[] = [
+  'A. An invocation of NetworkObject.RegisterNetworkObjectAsync, matched by symbol identity -> ' +
+    'category "pdpFactory" when the containing type is ProjectDataProviderFactory, "dataProvider" ' +
+    '(registeredVia DataProvider.RegisterDataProviderAsync) when the containing type is ' +
+    'DataProvider, otherwise "networkObject"; the name is argument 0, resolved by binding through ' +
+    'the Roslyn semantic model, including one level of constructor/call-argument propagation (see ' +
+    'the Name resolution section of the design record).',
+  'B. A class whose base chain reaches DataProvider (excluding DataProvider itself) -> category ' +
+    '"dataProvider", registeredVia "DataProvider(name, papiClient) constructor"; the name is the ' +
+    "name argument of the class's own base call -- a primary-constructor base argument, or a " +
+    ": base(...) initializer whose target constructor's chain reaches DataProvider(string, ...) -- " +
+    'resolved by the same binding and one-level propagation as rule A.',
+  'C. A method whose OverriddenMethod chain reaches DataProvider.GetNetworkObjectDocumentation -> ' +
+    'category "dataProvider", registeredVia "DataProvider.GetNetworkObjectDocumentation override"; ' +
+    "the name is the overriding method's own containing class, since no wire name is available at " +
+    "the override's declaration site -- the provider it documents is only named where it is " +
+    'registered.',
+  'D. An invocation of PapiClient.RegisterRequestHandlerAsync -> category "standaloneMethod"; the ' +
+    'name is argument 0, resolved the same way as rule A. Skipped when the invocation is reached ' +
+    "through NetworkObject's own containing type -- see excludedPatterns.",
+  'E. An invocation of either PapiClient.SendRequestAsync overload whose argument 0 resolves to ' +
+    'the constant "network:registerEvent" -> category "networkEvent", registeredVia ' +
+    'PapiClient.SendRequestAsync("network:registerEvent"); the name is element 0 of argument 1 ' +
+    'when it is a collection/array-creation initializer, otherwise the whole argument-1 text, ' +
+    'whitespace-collapsed, as a dynamic expression.',
+];
+
+/**
+ * The three real exclusions the Roslyn scanner applies -- replacing the old text scanner's
+ * always-empty list, which meant this array was never actually exercised. Each has a fixture test
+ * in `c-sharp/Paranext.WireSurface.Tests` proving it is excluded, so the list can never go vacuous
+ * again without a test failing first.
+ */
+const CSHARP_EXCLUDED_PATTERNS: string[] = [
+  "NetworkObject.RegisterNetworkObjectAsync's own per-function RegisterRequestHandlerAsync fan-out " +
+    '-- one call to register the object itself and one per registered function -- is not filed as ' +
+    'a separate standaloneMethod entry under rule D: each is already represented by the owning ' +
+    'networkObject/dataProvider/pdpFactory entry that rule A recorded, and re-filing it separately ' +
+    'would double-count the same registration.',
+  'PapiClient.RegisterRequestHandlerAsync\'s own internal SendRequestAsync("network:registerMethod", ' +
+    '...) call, which is how a registered handler actually reaches the wire, is not itself filed as ' +
+    'a networkEvent entry: rule E recognises only a SendRequestAsync call whose first argument ' +
+    'resolves to the constant "network:registerEvent".',
+  'Every other PapiClient.SendRequestAsync/SendRequestAsync<T> call -- a client-side request into ' +
+    'an already-registered network object, whose first argument is any request type other than ' +
+    '"network:registerEvent" -- is ignored. Only the network:registerEvent request is itself central ' +
+    'registration surface; everything else is a call against surface recorded elsewhere.',
+];
+
 function buildHeader(): WireSurfaceHeader {
   return {
     purpose:
@@ -203,13 +252,17 @@ function buildHeader(): WireSurfaceHeader {
       'directories, *.test.ts(x) files, node_modules, dist, and temp-build), walked with the ' +
       'TypeScript compiler API and matched against a real AST. Third-party extensions live ' +
       'outside this repository and are excluded by construction, not by an explicit rule. C#: ' +
-      'the data provider backend under c-sharp/** (excluding bin, obj, and the ' +
-      'Paranext.Analyzers/Paranext.Analyzers.Tests projects), matched with a pattern-based text ' +
-      'scan — there is no C# parser (e.g. Roslyn) in this toolchain, so the C# half recognises a ' +
-      'fixed set of call-site and declaration idioms (see recognizedPatterns) rather than a real ' +
-      'syntax tree. That is a real difference in rigour from the TypeScript half: an unusual ' +
-      'formatting choice, or a new C#-side registration idiom this generator has never seen, can ' +
-      'evade the C# scan more easily than it could evade the TypeScript AST scan. Every entry ' +
+      'the data provider project (c-sharp/ParanextDataProvider.csproj) as MSBuild compiles it, ' +
+      "read through Roslyn's semantic model by the Paranext.WireSurface tool " +
+      '(c-sharp/Paranext.WireSurface, spawned by run-wire-surface-scanner.ts) rather than by a ' +
+      'text scan of c-sharp/** -- excluding bin, obj, and the ' +
+      'Paranext.Analyzers[.Tests]/Paranext.WireSurface[.Tests] projects, which analyse or produce ' +
+      'the wire surface rather than declaring it. The C# half recognises a registration by the ' +
+      'symbol it invokes (five rules, matched by symbol identity rather than identifier text -- ' +
+      'see recognizedPatterns), resolves its name by binding rather than by pattern-matching ' +
+      'source text, and propagates a name through one level of constructor/call-argument passing. ' +
+      'An unusual formatting choice can no longer evade it the way it could a text scan, but a ' +
+      'genuinely new registration idiom this generator has never seen still can. Every entry ' +
       "carries a language field ('typescript' or 'csharp') so a reader can tell at a glance which " +
       "half's guarantees apply to it.",
     granularity:
@@ -1040,14 +1093,16 @@ function compareDynamicRegistrations(a: DynamicRegistration, b: DynamicRegistrat
 }
 
 /**
- * Scans the given TypeScript files (via the TypeScript compiler API's AST) and C# files (via a
- * pattern-based text scan — see `generate-wire-surface.csharp.util.ts`), and returns the full wire
- * surface document, deterministically ordered. `csharpFiles` defaults to empty so existing callers
- * that only pass TypeScript files (including this module's own unit tests) are unaffected.
+ * Scans the given TypeScript files (via the TypeScript compiler API's AST) and merges in
+ * `csharpScan` — the already-scanned, already-validated result of running the Roslyn-based
+ * `Paranext.WireSurface` tool over the C# data provider project (see `run-wire-surface-scanner.ts`)
+ * — returning the full wire surface document, deterministically ordered. `csharpScan` defaults to
+ * an empty result so existing callers that only care about the TypeScript half (including most of
+ * this module's own unit tests) are unaffected.
  */
 export function generateWireSurfaceDocument(
   inputFiles: VirtualFile[],
-  csharpFiles: CSharpVirtualFile[] = [],
+  csharpScan: CSharpScanResult = { registrations: [], dynamicRegistrations: [] },
 ): WireSurfaceDocument {
   const files = buildFileMap(inputFiles);
   const checker = buildProgram(files).getTypeChecker();
@@ -1061,14 +1116,12 @@ export function generateWireSurfaceDocument(
     );
   });
 
-  const csharpResult = scanCSharpFiles(csharpFiles);
-
   const allStaticRegistrations = applyLivenessAnnotations(
-    [...staticRegistrations, ...csharpResult.registrations].sort(compareStaticRegistrations),
+    [...staticRegistrations, ...csharpScan.registrations].sort(compareStaticRegistrations),
   );
   const allDynamicRegistrations = [
     ...dynamicRegistrations,
-    ...csharpResult.dynamicRegistrations,
+    ...csharpScan.dynamicRegistrations,
   ].sort(compareDynamicRegistrations);
 
   return {
