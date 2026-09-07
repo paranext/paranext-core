@@ -359,97 +359,99 @@ function resolveModuleSpecifier(
   return candidates.find((candidate) => files.has(candidate));
 }
 
-interface FileDeclarations {
-  /** Every top-level `const NAME = expr`, exported or not. */
-  consts: Map<string, ts.Expression>;
-  /** Named imports: local name -> { specifier, exported name }. */
-  imports: Map<string, { specifier: string; exportedName: string }>;
-  /**
-   * `export { A } from './mod'` / `export { A as B } from './mod'`: local (exported) name ->
-   * source.
-   */
-  reExports: Map<string, { specifier: string; exportedName: string }>;
+/**
+ * Compiler options for `buildProgram`'s checker-binding program: no lib files or ambient types
+ * (this scan only cares about the shape of the source itself, never real type-checking), and no
+ * automatic root-file expansion (`noResolve`) since every file the checker could need is already
+ * passed as an explicit root -- a module specifier this scan can't otherwise account for (a real
+ * npm package, a lib.d.ts global) simply stays unresolved rather than pulling in files outside the
+ * scanned set.
+ */
+const PROGRAM_COMPILER_OPTIONS: ts.CompilerOptions = {
+  noResolve: true,
+  noLib: true,
+  types: [],
+  allowJs: false,
+  skipLibCheck: true,
+};
+
+/**
+ * Builds a `ts.Program` (and its `TypeChecker`) over exactly the given files, reusing their
+ * already-parsed `sourceFile` objects rather than reparsing -- required so the identifier nodes
+ * this module's own AST walk already found are the very same nodes the checker's binder visited,
+ * which is what lets `checker.getSymbolAtLocation` resolve them at all. Cross-file imports resolve
+ * through `resolveModuleSpecifier`, the same tsconfig-derived `PATH_ALIASES` logic the rest of this
+ * module uses, so a module reference this scanner already knew how to follow keeps resolving the
+ * same way.
+ *
+ * Built fresh on every `generateWireSurfaceDocument` call rather than cached: the CLI entry point
+ * scans the whole codebase once per process, and this module's own tests each pass a different file
+ * set, so there is no reuse a cache would capture -- and a cache keyed only by file path is exactly
+ * what let the resolver this replaces return a stale declaration when a later call reused the same
+ * path with different content.
+ */
+function buildProgram(files: Map<string, FileEntry>): ts.Program {
+  const host: ts.CompilerHost = {
+    getSourceFile: (fileName) => files.get(fileName)?.sourceFile,
+    getDefaultLibFileName: () => 'lib.d.ts',
+    writeFile: () => {},
+    getCurrentDirectory: () => '',
+    getCanonicalFileName: (fileName) => fileName,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => '\n',
+    fileExists: (fileName) => files.has(fileName),
+    readFile: (fileName) => files.get(fileName)?.sourceFile.text,
+    resolveModuleNames: (moduleNames, containingFile) =>
+      moduleNames.map((moduleName): ts.ResolvedModule | undefined => {
+        const resolvedFileName = resolveModuleSpecifier(containingFile, moduleName, files);
+        if (!resolvedFileName) return undefined;
+        return {
+          resolvedFileName,
+          extension: resolvedFileName.endsWith('.tsx') ? ts.Extension.Tsx : ts.Extension.Ts,
+          isExternalLibraryImport: false,
+        };
+      }),
+  };
+  return ts.createProgram([...files.keys()], PROGRAM_COMPILER_OPTIONS, host);
 }
 
-const declarationsCache = new Map<string, FileDeclarations>();
+/** Depth cap guarding against a pathological alias cycle chasing a re-exported name forever. */
+const MAX_ALIAS_HOPS = 25;
 
-function getFileDeclarations(entry: FileEntry): FileDeclarations {
-  const cached = declarationsCache.get(entry.path);
-  if (cached) return cached;
-
-  const consts: FileDeclarations['consts'] = new Map();
-  const imports: FileDeclarations['imports'] = new Map();
-  const reExports: FileDeclarations['reExports'] = new Map();
-
-  entry.sourceFile.statements.forEach((statement) => {
-    if (ts.isVariableStatement(statement)) {
-      statement.declarationList.declarations.forEach((declaration) => {
-        if (ts.isIdentifier(declaration.name) && declaration.initializer) {
-          consts.set(declaration.name.text, declaration.initializer);
-        }
-      });
-      return;
-    }
-
-    if (
-      ts.isImportDeclaration(statement) &&
-      statement.importClause?.namedBindings &&
-      ts.isNamedImports(statement.importClause.namedBindings) &&
-      ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
-      const specifier = statement.moduleSpecifier.text;
-      statement.importClause.namedBindings.elements.forEach((element) => {
-        const exportedName = (element.propertyName ?? element.name).text;
-        imports.set(element.name.text, { specifier, exportedName });
-      });
-      return;
-    }
-
-    if (
-      ts.isExportDeclaration(statement) &&
-      statement.moduleSpecifier &&
-      ts.isStringLiteral(statement.moduleSpecifier) &&
-      statement.exportClause &&
-      ts.isNamedExports(statement.exportClause)
-    ) {
-      const specifier = statement.moduleSpecifier.text;
-      statement.exportClause.elements.forEach((element) => {
-        const exportedName = (element.propertyName ?? element.name).text;
-        reExports.set(element.name.text, { specifier, exportedName });
-      });
-    }
-  });
-
-  const result: FileDeclarations = { consts, imports, reExports };
-  declarationsCache.set(entry.path, result);
-  return result;
-}
-
-/** Depth cap guarding against a pathological import cycle chasing a re-exported name forever. */
-const MAX_DECLARATION_HOPS = 25;
-
+/**
+ * Resolves an identifier to the file and initializer expression it's declared with, binding through
+ * the TypeScript checker rather than a hand-rolled, top-level-only name lookup -- so a function- or
+ * block-scoped `const` correctly shadows a same-named declaration elsewhere, and an import (direct,
+ * renamed, path-aliased, or re-exported through another file) resolves to its real origin
+ * regardless of how many hops away that origin is. Returns undefined for anything that isn't a
+ * plain `const`/`let`/`var` binding with an initializer -- a function parameter, a destructured
+ * binding, a class member -- exactly like the resolver it replaces, since those aren't statically
+ * evaluable names either.
+ */
 function findDeclaration(
-  entry: FileEntry,
-  name: string,
-  files: Map<string, FileEntry>,
-  hopsRemaining: number = MAX_DECLARATION_HOPS,
+  identifier: ts.Identifier,
+  checker: ts.TypeChecker,
 ): { entry: FileEntry; expr: ts.Expression } | undefined {
-  if (hopsRemaining <= 0) return undefined;
+  const initialSymbol = checker.getSymbolAtLocation(identifier);
+  if (!initialSymbol) return undefined;
 
-  const declarations = getFileDeclarations(entry);
+  let symbol = initialSymbol;
+  let hopsRemaining = MAX_ALIAS_HOPS;
+  // SymbolFlags is a bitmask; this is the TypeScript compiler API's own idiom for testing whether
+  // a symbol is an alias.
+  // eslint-disable-next-line no-bitwise
+  while ((symbol.flags & ts.SymbolFlags.Alias) !== 0 && hopsRemaining > 0) {
+    symbol = checker.getAliasedSymbol(symbol);
+    hopsRemaining -= 1;
+  }
 
-  const localExpr = declarations.consts.get(name);
-  if (localExpr) return { entry, expr: localExpr };
+  const declaration = symbol.valueDeclaration;
+  if (!declaration || !ts.isVariableDeclaration(declaration) || !declaration.initializer) {
+    return undefined;
+  }
 
-  const importInfo = declarations.imports.get(name) ?? declarations.reExports.get(name);
-  if (!importInfo) return undefined;
-
-  const targetPath = resolveModuleSpecifier(entry.path, importInfo.specifier, files);
-  if (!targetPath) return undefined;
-  const targetEntry = files.get(targetPath);
-  if (!targetEntry) return undefined;
-
-  return findDeclaration(targetEntry, importInfo.exportedName, files, hopsRemaining - 1);
+  const sourceFile = declaration.getSourceFile();
+  return { entry: { path: sourceFile.fileName, sourceFile }, expr: declaration.initializer };
 }
 
 // #endregion
@@ -505,7 +507,7 @@ interface StringEvalResult {
 function evaluateStringExpression(
   rawExpr: ts.Expression,
   entry: FileEntry,
-  files: Map<string, FileEntry>,
+  checker: ts.TypeChecker,
   visited: ReadonlySet<string>,
 ): StringEvalResult {
   const expr = unwrapExpression(rawExpr);
@@ -514,7 +516,7 @@ function evaluateStringExpression(
 
   if (ts.isTemplateExpression(expr)) {
     const spanResults = expr.templateSpans.map((span) =>
-      evaluateStringExpression(span.expression, entry, files, visited),
+      evaluateStringExpression(span.expression, entry, checker, visited),
     );
     if (!spanResults.every((result) => result.resolved)) return { resolved: false };
     const value = spanResults.reduce(
@@ -527,18 +529,18 @@ function evaluateStringExpression(
   if (ts.isIdentifier(expr)) {
     const key = `${entry.path}#${expr.text}`;
     if (visited.has(key)) return { resolved: false };
-    const found = findDeclaration(entry, expr.text, files);
+    const found = findDeclaration(expr, checker);
     if (!found) return { resolved: false };
     const nextVisited = new Set(visited);
     nextVisited.add(key);
-    return evaluateStringExpression(found.expr, found.entry, files, nextVisited);
+    return evaluateStringExpression(found.expr, found.entry, checker, nextVisited);
   }
 
   if (ts.isCallExpression(expr)) {
     const { name: calleeName } = getCalleeInfo(expr.expression);
     if (calleeName === 'serializeRequestType' && expr.arguments.length === 2) {
-      const categoryResult = evaluateStringExpression(expr.arguments[0], entry, files, visited);
-      const directiveResult = evaluateStringExpression(expr.arguments[1], entry, files, visited);
+      const categoryResult = evaluateStringExpression(expr.arguments[0], entry, checker, visited);
+      const directiveResult = evaluateStringExpression(expr.arguments[1], entry, checker, visited);
       if (categoryResult.resolved && directiveResult.resolved) {
         return {
           resolved: true,
@@ -561,21 +563,21 @@ function evaluateStringExpression(
   // string twice. A field read off anything else (a class instance, a function call result) is not
   // attempted: finding a class's field initializer is a different, unimplemented problem.
   if (ts.isPropertyAccessExpression(expr)) {
-    const objectRef = resolveObjectLiteral(expr.expression, entry, files, visited);
+    const objectRef = resolveObjectLiteral(expr.expression, entry, checker, visited);
     if (!objectRef) return { resolved: false };
     const prop = findPropertyAssignment(objectRef.node, expr.name.text);
     if (!prop) return { resolved: false };
-    return evaluateStringExpression(prop.initializer, objectRef.entry, files, visited);
+    return evaluateStringExpression(prop.initializer, objectRef.entry, checker, visited);
   }
 
   if (ts.isElementAccessExpression(expr)) {
-    const objectRef = resolveObjectLiteral(expr.expression, entry, files, visited);
+    const objectRef = resolveObjectLiteral(expr.expression, entry, checker, visited);
     if (!objectRef) return { resolved: false };
-    const keyResult = evaluateStringExpression(expr.argumentExpression, entry, files, visited);
+    const keyResult = evaluateStringExpression(expr.argumentExpression, entry, checker, visited);
     if (!keyResult.resolved || keyResult.value === undefined) return { resolved: false };
     const prop = findPropertyAssignment(objectRef.node, keyResult.value);
     if (!prop) return { resolved: false };
-    return evaluateStringExpression(prop.initializer, objectRef.entry, files, visited);
+    return evaluateStringExpression(prop.initializer, objectRef.entry, checker, visited);
   }
 
   return { resolved: false };
@@ -606,7 +608,7 @@ interface ObjectLiteralRef {
 function resolveObjectLiteral(
   rawExpr: ts.Expression,
   entry: FileEntry,
-  files: Map<string, FileEntry>,
+  checker: ts.TypeChecker,
   visited: ReadonlySet<string>,
 ): ObjectLiteralRef | undefined {
   const expr = unwrapExpression(rawExpr);
@@ -616,29 +618,29 @@ function resolveObjectLiteral(
   if (ts.isIdentifier(expr)) {
     const key = `${entry.path}#${expr.text}`;
     if (visited.has(key)) return undefined;
-    const found = findDeclaration(entry, expr.text, files);
+    const found = findDeclaration(expr, checker);
     if (!found) return undefined;
     const nextVisited = new Set(visited);
     nextVisited.add(key);
-    return resolveObjectLiteral(found.expr, found.entry, files, nextVisited);
+    return resolveObjectLiteral(found.expr, found.entry, checker, nextVisited);
   }
 
   if (ts.isPropertyAccessExpression(expr)) {
-    const objectRef = resolveObjectLiteral(expr.expression, entry, files, visited);
+    const objectRef = resolveObjectLiteral(expr.expression, entry, checker, visited);
     if (!objectRef) return undefined;
     const prop = findPropertyAssignment(objectRef.node, expr.name.text);
     if (!prop) return undefined;
-    return resolveObjectLiteral(prop.initializer, objectRef.entry, files, visited);
+    return resolveObjectLiteral(prop.initializer, objectRef.entry, checker, visited);
   }
 
   if (ts.isElementAccessExpression(expr)) {
-    const objectRef = resolveObjectLiteral(expr.expression, entry, files, visited);
+    const objectRef = resolveObjectLiteral(expr.expression, entry, checker, visited);
     if (!objectRef) return undefined;
-    const keyResult = evaluateStringExpression(expr.argumentExpression, entry, files, visited);
+    const keyResult = evaluateStringExpression(expr.argumentExpression, entry, checker, visited);
     if (!keyResult.resolved || keyResult.value === undefined) return undefined;
     const prop = findPropertyAssignment(objectRef.node, keyResult.value);
     if (!prop) return undefined;
-    return resolveObjectLiteral(prop.initializer, objectRef.entry, files, visited);
+    return resolveObjectLiteral(prop.initializer, objectRef.entry, checker, visited);
   }
 
   return undefined;
@@ -676,7 +678,7 @@ function lookupBooleanProperty(obj: ts.ObjectLiteralExpression, keyText: string)
 function resolveExperimentalFlag(
   docsRef: ObjectLiteralRef,
   segments: string[],
-  files: Map<string, FileEntry>,
+  checker: ts.TypeChecker,
 ): { resolved: boolean; value: boolean } {
   if (segments.length === 1) {
     const outcome = lookupBooleanProperty(docsRef.node, segments[0]);
@@ -688,24 +690,24 @@ function resolveExperimentalFlag(
   const prop = findPropertyAssignment(docsRef.node, head);
   if (!prop) return { resolved: false, value: false };
 
-  const nestedRef = resolveObjectLiteral(prop.initializer, docsRef.entry, files, new Set());
+  const nestedRef = resolveObjectLiteral(prop.initializer, docsRef.entry, checker, new Set());
   if (!nestedRef) return { resolved: false, value: false };
 
-  return resolveExperimentalFlag(nestedRef, rest, files);
+  return resolveExperimentalFlag(nestedRef, rest, checker);
 }
 
 function resolveDocsInfo(
   argExpr: ts.Expression | undefined,
   category: RegistrationCategory,
   entry: FileEntry,
-  files: Map<string, FileEntry>,
+  checker: ts.TypeChecker,
 ): { documented: boolean; docsStaticallyResolved: boolean; experimental: boolean } {
   if (!argExpr) return { documented: false, docsStaticallyResolved: true, experimental: false };
 
-  const objectRef = resolveObjectLiteral(argExpr, entry, files, new Set());
+  const objectRef = resolveObjectLiteral(argExpr, entry, checker, new Set());
   if (!objectRef) return { documented: true, docsStaticallyResolved: false, experimental: false };
 
-  const flag = resolveExperimentalFlag(objectRef, DOCS_EXPERIMENTAL_PATH[category], files);
+  const flag = resolveExperimentalFlag(objectRef, DOCS_EXPERIMENTAL_PATH[category], checker);
   return { documented: true, docsStaticallyResolved: flag.resolved, experimental: flag.value };
 }
 
@@ -847,7 +849,7 @@ function collectCallExpressions(sourceFile: ts.SourceFile): ts.CallExpression[] 
 function processCall(
   call: ts.CallExpression,
   entry: FileEntry,
-  files: Map<string, FileEntry>,
+  checker: ts.TypeChecker,
   staticRegistrations: StaticRegistration[],
   dynamicRegistrations: DynamicRegistration[],
 ): void {
@@ -857,7 +859,7 @@ function processCall(
   const nameArg = call.arguments[match.nameArgIndex];
   if (!nameArg) return;
 
-  const nameEval = evaluateStringExpression(nameArg, entry, files, new Set());
+  const nameEval = evaluateStringExpression(nameArg, entry, checker, new Set());
 
   const isCommandBypass =
     match.category === 'directRequestHandler' &&
@@ -883,7 +885,7 @@ function processCall(
     : (nameEval.value ?? '');
 
   const docsArg = call.arguments[match.docsArgIndex];
-  const docsInfo = resolveDocsInfo(docsArg, category, entry, files);
+  const docsInfo = resolveDocsInfo(docsArg, category, entry, checker);
 
   staticRegistrations.push({
     category,
@@ -1048,13 +1050,14 @@ export function generateWireSurfaceDocument(
   csharpFiles: CSharpVirtualFile[] = [],
 ): WireSurfaceDocument {
   const files = buildFileMap(inputFiles);
+  const checker = buildProgram(files).getTypeChecker();
   const staticRegistrations: StaticRegistration[] = [];
   const dynamicRegistrations: DynamicRegistration[] = [];
 
   files.forEach((entry) => {
     const calls = collectCallExpressions(entry.sourceFile);
     calls.forEach((call) =>
-      processCall(call, entry, files, staticRegistrations, dynamicRegistrations),
+      processCall(call, entry, checker, staticRegistrations, dynamicRegistrations),
     );
   });
 
