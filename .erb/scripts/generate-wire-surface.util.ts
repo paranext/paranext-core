@@ -402,7 +402,7 @@ function buildProgram(files: Map<string, FileEntry>): ts.Program {
     fileExists: (fileName) => files.has(fileName),
     readFile: (fileName) => files.get(fileName)?.sourceFile.text,
     resolveModuleNames: (moduleNames, containingFile) =>
-      moduleNames.map((moduleName): ts.ResolvedModule | undefined => {
+      moduleNames.map((moduleName): ts.ResolvedModuleFull | undefined => {
         const resolvedFileName = resolveModuleSpecifier(containingFile, moduleName, files);
         if (!resolvedFileName) return undefined;
         return {
