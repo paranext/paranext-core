@@ -2427,6 +2427,63 @@ describe('loadLayout discards a load a newer one has superseded', () => {
   });
 });
 
+describe('openOrReloadWebView docks into the layout the window was showing when it started', () => {
+  test('does not add a fresh open to the dock a mode switch replaced while its provider was still running', async () => {
+    let interfaceMode = 'simple';
+    settingsGetMock.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? interfaceMode : false,
+    );
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    settingsSubscribeMock.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    respondToGetLayout({ kind: 'entry', layout: layoutWithTab('power-tab') });
+
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout(layoutWithAnchor());
+    host.registerDockLayout(fakeDockLayout);
+    await vi.waitFor(() => expect(fakeDockLayout.loadLayout).toHaveBeenCalledTimes(1));
+
+    // The provider is held open, the way a slow extension would leave it — nothing about this
+    // window's dock has changed yet, so this open's own pre-provider checks sail through.
+    let releaseGetWebView: (() => void) | undefined;
+    getWebViewProviderMock.mockImplementation(async () => ({
+      getWebView: async (saved: { id: string; webViewType: string }) =>
+        new Promise((resolve) => {
+          releaseGetWebView = () =>
+            resolve({
+              id: saved.id,
+              webViewType: saved.webViewType,
+              contentType: 'html',
+              content: '<p>held</p>',
+              state: {},
+            });
+        }),
+    }));
+    const opening = host.openOrReloadWebView({ id: 'fresh-tab', webViewType: 'test.type' });
+    await vi.waitFor(() => expect(releaseGetWebView).toBeDefined());
+
+    // While the provider is still thinking, the user switches to Power mode. That switch's whole
+    // load — start to finish — runs inside the gap the open is waiting through.
+    interfaceMode = 'power';
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+    await interfaceModeCallback('power');
+    expect(fakeDockLayout.loadLayout).toHaveBeenCalledTimes(2);
+    expect(tabIdsIn(vi.mocked(fakeDockLayout.loadLayout).mock.calls[1][0])).toContain('power-tab');
+
+    // Now the provider answers. The mode switch is already over, so a wait for a load in flight
+    // finds nothing left to wait for — only noticing the generation moved on catches this.
+    if (!releaseGetWebView) throw new Error('the provider was never asked');
+    releaseGetWebView();
+
+    await expect(opening).resolves.toBeUndefined();
+    expect(fakeDockLayout.addWebViewToDock).not.toHaveBeenCalled();
+  });
+});
+
 describe('saveLayout pushes this window’s layout to the main process', () => {
   beforeEach(() => {
     settingsGetMock.mockImplementation(async (key: string) =>
