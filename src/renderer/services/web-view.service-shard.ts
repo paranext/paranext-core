@@ -1700,6 +1700,10 @@ const PRIMARY_WINDOW_QUESTION_TIMEOUT_MS = 5_000;
  * path the duplication above is unchanged.
  */
 async function isThisWindowRunningTheSwitchToSimple(): Promise<boolean> {
+  // Read outside the try below: a missing window id is this window's own precondition failing, not
+  // a case where the primary-window question could not be asked, so it must not be swallowed into
+  // the same fail-open answer as a rejected or timed-out question.
+  const thisWindowId = getWindowIdOrThrow();
   try {
     // Bounded like every other wait in this switch. It is served by a main process that is
     // concurrently closing windows, and an unbounded wait here would hold the switch behind the
@@ -1714,7 +1718,6 @@ async function isThisWindowRunningTheSwitchToSimple(): Promise<boolean> {
       );
       return true;
     }
-    const thisWindowId = getWindowIdOrThrow();
     // Absent from the list means already recorded as closing — which is what the main process does
     // to a window just before it closes it for this very switch — or given up on
     const thisWindow = windows.find((summary) => summary.windowId === thisWindowId);
