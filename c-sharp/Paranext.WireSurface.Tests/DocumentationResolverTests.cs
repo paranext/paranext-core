@@ -307,6 +307,74 @@ public class DocumentationResolverTests
     }
 
     [Test]
+    public void ExplicitNullExperimentalIsNotExperimental()
+    {
+        var resolution = Resolve(
+            """
+            using Paranext.DataProvider.NetworkObjects.Documentation;
+
+            internal class FixtureExplicitNull
+            {
+                public void Go() => Probe.Use(new OpenRpcMethodDocumentation { Experimental = null });
+            }
+            """
+        );
+
+        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, true, false)));
+    }
+
+    [Test]
+    public void NetworkObjectDocumentationExplicitNullFallsThroughToMethods()
+    {
+        var resolution = Resolve(
+            """
+            using System.Collections.Generic;
+            using Paranext.DataProvider.NetworkObjects.Documentation;
+
+            internal class FixtureExplicitNullObjectLevel
+            {
+                public void Go() =>
+                    Probe.Use(
+                        new NetworkObjectDocumentation
+                        {
+                            Experimental = null,
+                            Methods = new Dictionary<string, OpenRpcSingleMethodDocumentation>
+                            {
+                                ["exists"] = ExperimentalMethodDocumentation.Marker(),
+                            },
+                        }
+                    );
+            }
+            """
+        );
+
+        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, true, true)));
+    }
+
+    [Test]
+    public void NetworkObjectDocumentationMethodsFromOpaqueExpressionIsUnresolved()
+    {
+        var resolution = Resolve(
+            """
+            using System.Collections.Generic;
+            using Paranext.DataProvider.NetworkObjects.Documentation;
+
+            internal class FixtureOpaqueMethods
+            {
+                private static IReadOnlyDictionary<
+                    string,
+                    OpenRpcSingleMethodDocumentation
+                > BuildMethods() => new Dictionary<string, OpenRpcSingleMethodDocumentation>();
+
+                public void Go() => Probe.Use(new NetworkObjectDocumentation { Methods = BuildMethods() });
+            }
+            """
+        );
+
+        Assert.That(resolution, Is.EqualTo(new DocumentationResolution(true, false, false)));
+    }
+
+    [Test]
     public void NetworkObjectDocumentationAllMethodsHelper()
     {
         var resolution = Resolve(
