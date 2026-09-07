@@ -67,11 +67,20 @@ public sealed class FrameworkSymbols
                 );
         }
 
-        IPropertySymbol ResolveProperty(INamedTypeSymbol type, string propertyName) =>
-            type.GetMembers(propertyName).OfType<IPropertySymbol>().SingleOrDefault()
-            ?? throw new InvalidOperationException(
-                $"wire-surface: framework property not found: {type}.{propertyName}"
-            );
+        IPropertySymbol ResolveProperty(INamedTypeSymbol type, string propertyName)
+        {
+            var candidates = type.GetMembers(propertyName).OfType<IPropertySymbol>().ToList();
+            return candidates.Count switch
+            {
+                1 => candidates[0],
+                0 => throw new InvalidOperationException(
+                    $"wire-surface: framework property not found: {type}.{propertyName}"
+                ),
+                _ => throw new InvalidOperationException(
+                    $"wire-surface: framework property is ambiguous: {type}.{propertyName}"
+                ),
+            };
+        }
 
         var networkObject = ResolveType("Paranext.DataProvider.NetworkObjects.NetworkObject");
         var dataProvider = ResolveType("Paranext.DataProvider.NetworkObjects.DataProvider");
