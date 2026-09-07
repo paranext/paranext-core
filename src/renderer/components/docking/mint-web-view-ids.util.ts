@@ -37,7 +37,10 @@ export type MintedWebViewIdMap = ReadonlyMap<string, string>;
  * @returns A copy of `tab` with a freshly minted id, or an unchanged copy for a non-web-view tab
  */
 export function mintFreshWebViewIdInTab(tab: SavedTabInfo, projectId?: string): SavedTabInfo {
-  if (tab.tabType !== TAB_TYPE_WEBVIEW || !tab.id) return { ...tab };
+  // Every web view tab gets a fresh id regardless of what id it carried in — including a falsy one
+  // (missing or empty string). A web view's existing id is never a reason to skip minting; only its
+  // tab type is.
+  if (tab.tabType !== TAB_TYPE_WEBVIEW) return { ...tab };
   const mintedId = newGuid();
   // The web view's own id is repeated inside the tab's saved data; both must agree
   const data =
