@@ -154,9 +154,7 @@ describe('areCapturedBoundsTrustworthy', () => {
     // Chromium briefly disagree about its DPI and the captured size comes out around 25% too large
     const straddling = { x: 1800, y: 100, width: 400, height: 600 };
 
-    expect(
-      areCapturedBoundsTrustworthy(straddling, BOTH_DISPLAYS, PRIMARY_WITH_ID.id, 10_000),
-    ).toBe(false);
+    expect(areCapturedBoundsTrustworthy(straddling, BOTH_DISPLAYS, 10_000)).toBe(false);
   });
 
   test('bounds on a display the window has only just reached are not trustworthy yet', () => {
@@ -165,28 +163,39 @@ describe('areCapturedBoundsTrustworthy', () => {
     // yet agreed
     const onSecondary = { x: 2000, y: 100, width: 800, height: 600 };
 
-    expect(areCapturedBoundsTrustworthy(onSecondary, BOTH_DISPLAYS, PRIMARY_WITH_ID.id, 50)).toBe(
-      false,
-    );
+    expect(areCapturedBoundsTrustworthy(onSecondary, BOTH_DISPLAYS, 50)).toBe(false);
   });
 
   test('bounds on a display the window has settled on are trustworthy', () => {
     const onSecondary = { x: 2000, y: 100, width: 800, height: 600 };
 
-    expect(
-      areCapturedBoundsTrustworthy(onSecondary, BOTH_DISPLAYS, PRIMARY_WITH_ID.id, 10_000),
-    ).toBe(true);
+    expect(areCapturedBoundsTrustworthy(onSecondary, BOTH_DISPLAYS, 10_000)).toBe(true);
   });
 
-  test('bounds moved within the same display are trustworthy at once', () => {
-    // The control that keeps the guard from degrading into "never persist": a window moved inside
-    // one display has crossed no boundary, so nothing is owed a settle and its placement must be
-    // saved immediately. Without this, a guard that always refused would pass every test above.
-    const movedWithinPrimary = { x: 300, y: 200, width: 800, height: 600 };
+  test('a return to a display right after leaving it is not trustworthy, even though the window was already trusted there', () => {
+    // A capture right after RETURNING to a display looks identical, from `msSinceDisplayChange`
+    // alone, to one taken right after FIRST reaching it: `trackDisplaySettle` restarts its clock on
+    // any change of display, including a landing back on one the window was on moments ago. Only
+    // the elapsed-time check tells the two apart — there is nothing else here to lean on instead.
+    const onPrimary = { x: 100, y: 100, width: 800, height: 600 };
+    const onSecondary = { x: 2000, y: 100, width: 800, height: 600 };
+
+    let state: DisplaySettleState = trackDisplaySettle(
+      onPrimary,
+      BOTH_DISPLAYS,
+      { displayId: undefined, since: 0 },
+      0,
+    );
+    // Long enough on the primary to be trusted there
+    expect(areCapturedBoundsTrustworthy(onPrimary, BOTH_DISPLAYS, DISPLAY_SETTLE_MS)).toBe(true);
+
+    // Leaves for the secondary, then returns to the primary right away
+    state = trackDisplaySettle(onSecondary, BOTH_DISPLAYS, state, DISPLAY_SETTLE_MS + 10);
+    state = trackDisplaySettle(onPrimary, BOTH_DISPLAYS, state, DISPLAY_SETTLE_MS + 20);
 
     expect(
-      areCapturedBoundsTrustworthy(movedWithinPrimary, BOTH_DISPLAYS, PRIMARY_WITH_ID.id, 0),
-    ).toBe(true);
+      areCapturedBoundsTrustworthy(onPrimary, BOTH_DISPLAYS, DISPLAY_SETTLE_MS + 20 - state.since),
+    ).toBe(false);
   });
 
   test('the first capture of a session is not trustworthy before it has had time to settle', () => {
@@ -196,15 +205,13 @@ describe('areCapturedBoundsTrustworthy', () => {
     // because nothing has been accepted yet.
     const onPrimary = { x: 100, y: 50, width: 800, height: 600 };
 
-    expect(areCapturedBoundsTrustworthy(onPrimary, BOTH_DISPLAYS, undefined, 0)).toBe(false);
+    expect(areCapturedBoundsTrustworthy(onPrimary, BOTH_DISPLAYS, 0)).toBe(false);
   });
 
   test('the first capture of a session is trustworthy once it has settled', () => {
     const onPrimary = { x: 100, y: 50, width: 800, height: 600 };
 
-    expect(
-      areCapturedBoundsTrustworthy(onPrimary, BOTH_DISPLAYS, undefined, DISPLAY_SETTLE_MS),
-    ).toBe(true);
+    expect(areCapturedBoundsTrustworthy(onPrimary, BOTH_DISPLAYS, DISPLAY_SETTLE_MS)).toBe(true);
   });
 });
 
@@ -228,9 +235,7 @@ describe('trackDisplaySettle', () => {
     // ...and then completes the crossing
     state = trackDisplaySettle(landed, BOTH_DISPLAYS, state, 5_100);
 
-    expect(
-      areCapturedBoundsTrustworthy(landed, BOTH_DISPLAYS, PRIMARY_WITH_ID.id, 5_100 - state.since),
-    ).toBe(false);
+    expect(areCapturedBoundsTrustworthy(landed, BOTH_DISPLAYS, 5_100 - state.since)).toBe(false);
   });
 
   test('a window moved within one display keeps the clock it already had', () => {
@@ -275,21 +280,12 @@ describe('a scaled display does not compound a window size across quit/reopen cy
       { displayId: undefined, since: 0 },
       0,
     );
-    let lastAcceptedDisplayId: number | undefined;
     let persisted = startingBounds;
 
     readings.forEach(({ at, bounds }) => {
       displaySettle = trackDisplaySettle(bounds, [display], displaySettle, at);
-      if (
-        areCapturedBoundsTrustworthy(
-          bounds,
-          [display],
-          lastAcceptedDisplayId,
-          at - displaySettle.since,
-        )
-      ) {
+      if (areCapturedBoundsTrustworthy(bounds, [display], at - displaySettle.since)) {
         persisted = bounds;
-        lastAcceptedDisplayId = displaySettle.displayId;
       }
     });
 
@@ -341,9 +337,13 @@ describe('a scaled display does not compound a window size across quit/reopen cy
   test('a reading taken once the display has settled is trusted, unlike an unsettled one', () => {
     // Positive control: the simulation can accept a reading — DISPLAY_SETTLE_MS is well past what
     // the two "before it settles" tests above wait for, so this is not merely a guard that refuses
-    // everything.
+    // everything. Starting from bounds distinct from the reading makes acceptance observable: a
+    // guard that quietly rejected every reading would leave the starting bounds in place instead of
+    // adopting the one from the settled reading.
+    const startingBounds = { x: 0, y: 0, width: 500, height: 400 };
+
     const persisted = runSessionCycle(
-      REQUESTED,
+      startingBounds,
       [{ at: DISPLAY_SETTLE_MS, bounds: REQUESTED }],
       SCALED_DISPLAY,
     );

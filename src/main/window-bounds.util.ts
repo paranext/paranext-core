@@ -169,38 +169,40 @@ export function trackDisplaySettle(
  * brings the window back at the wrong size — and because nothing corrects it afterward, that wrong
  * size becomes what the NEXT restore starts from, growing again the same way on every cycle.
  *
- * Three moments are refused, and the third is the one that actually corrupts anything:
+ * Two moments are refused, and the second is the one that actually corrupts anything:
  *
  * - Bounds lying in no single display: the window is straddling. Restoring these would be refused
  *   anyway by {@link ensureBoundsVisibleOnSomeDisplay}, which requires containment in one display —
  *   so this half only avoids replacing a good placement with one already known to be unusable.
- * - Bounds on a display the window has just reached, before {@link DISPLAY_SETTLE_MS} has passed.
- *   These pass containment and would be restored, and they are the ones that come back wrong: the
- *   geometry has landed while the two DPI answers have not yet met.
- * - Bounds on the display the window was CREATED on, before {@link DISPLAY_SETTLE_MS} has passed:
- *   `lastAcceptedDisplayId` starts `undefined` and stays that way until some capture actually
- *   clears this wait, so a window's own creation earns trust the same way a live crossing does
- *   rather than being waved through because nothing has been accepted yet to compare it against.
+ * - Bounds on a display the window has not been on for at least {@link DISPLAY_SETTLE_MS}. A display
+ *   just reached (the geometry has landed while the two DPI answers have not yet met), a display
+ *   the window was CREATED on (the settle clock is seeded from the creation bounds, so a freshly
+ *   created window earns trust the same way a dragged one does rather than being waved through
+ *   because nothing has cleared the wait yet), and a display just LEFT and returned to are all the
+ *   same shape from here — {@link trackDisplaySettle} restarts its clock on any change of display,
+ *   including a landing back on one the window was on moments ago — so a single elapsed-time check
+ *   covers all three.
  *
- * A window moved within a display it has ALREADY settled on crosses nothing and is trusted at once,
- * which is what keeps this from quietly freezing every saved placement once a placement has cleared
- * the wait a single time.
+ * A window moved within a display it has already been on for a while crosses no boundary, so
+ * {@link trackDisplaySettle} never restarts its clock for it — the elapsed time checked here only
+ * grows the longer the window stays put, and was already past {@link DISPLAY_SETTLE_MS} once that
+ * display was first accepted. That, rather than a separate memory of which display was last
+ * accepted, is what keeps this from quietly freezing every saved placement once a placement has
+ * cleared the wait a single time: remembering "the last accepted display" and trusting a capture on
+ * it outright could not tell "never left" from "just came back", and a capture taken the instant a
+ * window returns to a display is exactly the kind this guard exists to refuse.
  *
  * @param bounds Placement captured just now
  * @param displays Displays connected right now
- * @param lastAcceptedDisplayId Display the last accepted capture was on, or `undefined` if none has
- *   been accepted this session yet
  * @param msSinceDisplayChange How long the window has been on the display it is on now
  * @returns Whether the placement can be persisted
  */
 export function areCapturedBoundsTrustworthy(
   bounds: WindowRectangle,
   displays: readonly IdentifiedDisplayLike[],
-  lastAcceptedDisplayId: number | undefined,
   msSinceDisplayChange: number,
 ): boolean {
   const containingDisplay = displays.find((display) => isContainedIn(bounds, display));
   if (!containingDisplay) return false;
-  if (containingDisplay.id === lastAcceptedDisplayId) return true;
   return msSinceDisplayChange >= DISPLAY_SETTLE_MS;
 }
