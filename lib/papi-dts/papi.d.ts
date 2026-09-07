@@ -3532,19 +3532,11 @@ declare module 'shared/models/project-data-provider.model' {
      */
     dataQualifier: string;
   };
-  /** Indicates to a PDP which of an extension's `dataQualifier`s to list */
-  export type ExtensionDataListScope = {
-    /** Name of an extension as provided in its manifest */
-    extensionName: string;
-    /**
-     * Optional prefix. When provided, only `dataQualifier`s that start with it are returned, so
-     * `byMachine/` lists everything the extension stores under that directory.
-     *
-     * Matched as a plain string prefix on the forward-slash form, so `byMachine` (no trailing slash)
-     * also matches `byMachineOther/x`. Include the trailing slash if you mean the directory.
-     */
-    dataQualifierPrefix?: string;
-  };
+  /**
+   * Indicates to a PDP whose `dataQualifier`s to list: the extension named, and nothing narrower. The
+   * whole list comes back; filter it at the call site.
+   */
+  export type ExtensionDataListScope = Pick<ExtensionDataScope, 'extensionName'>;
   /**
    * `DataProviderDataTypes` that each project data provider **must** implement. They are assumed to
    * exist and are used by other data providers.
@@ -3654,15 +3646,14 @@ declare module 'shared/models/project-data-provider.model' {
      * own data, nested paths included. The list is sorted and includes empty documents.
      *
      * Listing never creates anything, so an extension that has never written any data gets `[]`.
-     * Discovering the same thing by calling `getExtensionData` does not have that property — on the
-     * Paratext PDP a read creates the file it looked for.
      *
      * Optional, because not every Project Data Provider can enumerate its extension data (one over a
      * remote store may not be able to). A PDP that cannot simply does not implement it, and the call
      * fails. Callers that need to work against arbitrary PDPs should treat a failed call as
-     * "unknown", not as "no data".
+     * "unknown", not as "no data" — see the consumer-side declaration in `papi-shared-types` for how
+     * that failure actually reaches a caller, which differs between a local and a remote PDP.
      *
-     * @param scope Which extension's `dataQualifier`s to list, optionally narrowed by a prefix
+     * @param scope Which extension's `dataQualifier`s to list
      * @returns Sorted `dataQualifier`s that exist for that extension in this project
      */
     listExtensionDataQualifiers?(scope: ExtensionDataListScope): Promise<string[]>;
@@ -5919,16 +5910,24 @@ declare module 'papi-shared-types' {
          * documents.
          *
          * Listing never creates anything, so an extension that has never written any data gets
-         * `[]`. Discovering the same thing by calling `getExtensionData` does not have that
-         * property — on the Paratext PDP a read creates the file it looked for.
+         * `[]`.
          *
          * Not every Project Data Provider can enumerate its extension data (one over a remote store
-         * may not be able to), so this call rejects on a PDP that cannot. There is no way to check
-         * in advance: a PDP reached over the network answers with a request function for any
-         * property name, so `pdp.listExtensionDataQualifiers?.()` never short-circuits — it calls
-         * and then rejects. Treat a rejection as "unknown", never as "this extension has no data".
+         * may not be able to), and the method is optional on the PDP's engine. It is declared
+         * required here because a PDP reached over the network cannot be feature-detected: the
+         * remote proxy answers with a request function for any property name, so
+         * `pdp.listExtensionDataQualifiers?.()` does not short-circuit — it calls and then
+         * rejects.
          *
-         * @param scope Which extension's `dataQualifier`s to list, optionally narrowed by a prefix
+         * A PDP in the CALLING process is not proxied that way, so there the property really is
+         * absent when its engine omits the method: `?.()` short-circuits to `undefined`, and a
+         * direct call throws synchronously rather than rejecting. Extensions share one extension
+         * host, so an extension consuming another extension's PDP is on that path. Wrap the call in
+         * `try`/`catch` around an `await` — which catches both shapes, where a bare `.catch()`
+         * catches only the remote one — and treat a failure as "unknown", never as "this extension
+         * has no data". Do not use `?.`: `undefined` is indistinguishable from an empty list.
+         *
+         * @param scope Which extension's `dataQualifier`s to list
          * @returns Sorted `dataQualifier`s that exist for that extension in this project
          */
         listExtensionDataQualifiers(scope: ExtensionDataListScope): Promise<string[]>;

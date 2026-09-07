@@ -10,7 +10,6 @@ import type {
   ProjectSettingNames,
   ProjectSettingTypes,
 } from 'papi-shared-types';
-import { slice, startsWith, stringLength } from 'platform-bible-utils';
 
 /** The `projectInterface`s the hello rock3 pdpf serves */
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
@@ -116,24 +115,20 @@ export class HelloRock3ProjectDataProviderEngine
   }
 
   async listExtensionDataQualifiers(scope: ExtensionDataListScope): Promise<string[]> {
-    // Grapheme-aware `startsWith`/`slice`/`stringLength` rather than the native `String` methods:
-    // extension names and data qualifiers are author-chosen and not restricted to ASCII, so a
-    // native prefix match can match half of a user-perceived character. The grapheme index
-    // `stringLength` returns is only interchangeable with the grapheme-aware `slice`, so both
-    // halves of the split have to come from the same family.
+    // Native `String` methods, not the grapheme-aware ones from `platform-bible-utils`, and the
+    // whole expression stays native so the prefix length and the slice index share an index space.
+    // Extension names are author-chosen and need not be ASCII, but nothing here is a search through
+    // text: `getExtensionDataKey` composes these keys with a native template literal and
+    // `getExtensionData` looks one up by exact string equality, so the listing has to split them on
+    // exactly the same terms. Grapheme-aware matching does not agree with exact-string storage: a
+    // `dataQualifier` beginning with a combining mark fuses it onto the `/` into one cluster, so a
+    // grapheme `startsWith` rejects a key `getExtensionData` reads back fine, and the qualifier
+    // vanishes from the listing.
     const keyPrefix = getExtensionKeyPrefix(scope.extensionName);
-    const keyPrefixLength = stringLength(keyPrefix);
-    const qualifiers = Object.keys(this.projectData.extensionData)
-      .filter((key) => startsWith(key, keyPrefix))
-      .map((key) => slice(key, keyPrefixLength));
-    // Skipped entirely when no prefix was given, rather than matched against `''`: each of these
-    // helpers segments its input into graphemes, so a no-op filter is a full pass over every key
-    const { dataQualifierPrefix } = scope;
-    return (
-      dataQualifierPrefix
-        ? qualifiers.filter((qualifier) => startsWith(qualifier, dataQualifierPrefix))
-        : qualifiers
-    ).sort();
+    return Object.keys(this.projectData.extensionData)
+      .filter((key) => key.startsWith(keyPrefix))
+      .map((key) => key.slice(keyPrefix.length))
+      .sort();
   }
 
   async setRandomNumber(max: number, newNum: number) {
