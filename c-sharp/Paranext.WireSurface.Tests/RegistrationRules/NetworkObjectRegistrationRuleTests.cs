@@ -109,6 +109,52 @@ public class NetworkObjectRegistrationRuleTests
     }
 
     [Test]
+    public void NamedNetworkObjectNameArgumentOutOfOrder()
+    {
+        var compilation = FixtureCompilation.Create(
+            """
+            using System.Threading.Tasks;
+            using Paranext.DataProvider;
+            using Paranext.DataProvider.NetworkObjects;
+
+            internal class FixtureNamedOutOfOrder : NetworkObject
+            {
+                public FixtureNamedOutOfOrder(PapiClient papiClient) : base(papiClient) { }
+
+                public Task RegisterAsync() =>
+                    RegisterNetworkObjectAsync(
+                        registrationParameters: new NetworkObjectCreatedDetails(),
+                        networkObjectName: "fixture.named-out-of-order",
+                        functionsToRegister: []
+                    );
+            }
+            """
+        );
+
+        var entries = Scan(compilation, compilation.SyntaxTrees.Last());
+
+        Assert.That(
+            entries,
+            Is.EqualTo(
+                new[]
+                {
+                    new ScanEntry.Static(
+                        new StaticRegistration(
+                            RegistrationCategory.NetworkObject,
+                            "fixture.named-out-of-order",
+                            "c-sharp/Fixtures/Fixture1.cs",
+                            RegisteredVia.NetworkObjectRegisterNetworkObjectAsync,
+                            Documented: false,
+                            DocsStaticallyResolved: true,
+                            Experimental: false
+                        )
+                    ),
+                }
+            )
+        );
+    }
+
+    [Test]
     public void NestedHelperMethodInSubclassStillCounts()
     {
         var compilation = FixtureCompilation.Create(
