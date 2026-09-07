@@ -453,10 +453,10 @@ describe('reacting to an interface-mode change', () => {
 
   test('a switch to simple that closes nothing writes the setting back to the previous mode', async () => {
     // The setting on disk was already written to simple by whoever asked for the switch, and every
-    // renderer follows that setting through its own local copy. In simple mode only the window
-    // carrying the primary role saves a layout, and this switch left none carrying it — so without
-    // this write-back every renderer would silently stop saving layout changes until the user
-    // toggled the mode again by hand.
+    // renderer follows that setting through its own local copy. No window saves a layout while the
+    // setting reads simple, regardless of role — so without this write-back every renderer would
+    // silently stop saving layout changes until the user toggled the mode again by hand, even
+    // though the window set never actually changed.
     const deps = makeDeps({ isWindowAbandoned: (windowId) => windowId === '1' });
     initializeModeSwitchOrchestration(deps, 'power');
 

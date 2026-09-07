@@ -543,9 +543,9 @@ export async function handleInterfaceModeChanged(newMode: InterfaceMode): Promis
         // this mode — including one that arrives once whatever is blocking the survivor is gone.
         cachedInterfaceMode = modeBeforeSwitch;
         // The setting on disk still reads simple, and every renderer would keep following it —
-        // silently dropping layout saves, since none of them carries the primary role a switch
-        // like this was supposed to leave behind. Writing it back to modeBeforeSwitch is what
-        // makes the toggle, and every renderer, agree with the window set that never changed. The
+        // silently dropping layout saves, since every renderer stops saving while the setting
+        // reads simple, regardless of role. Writing it back to modeBeforeSwitch is what makes the
+        // toggle, and every renderer, agree with the window set that never changed. The
         // write redelivers this same value through the subscription this function is called from,
         // but the cache was already rolled back above, so that redelivery meets the same-value
         // guard at the top of this function and starts no second switch.
