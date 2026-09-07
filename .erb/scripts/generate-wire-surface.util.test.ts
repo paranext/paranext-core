@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as ts from 'typescript';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   derivePathAliases,
   DynamicRegistration,
@@ -562,6 +562,40 @@ describe('generateWireSurfaceDocument: determinism', () => {
     // Header keys sorted alphabetically: excludedPatterns comes before granularity/purpose/...
     const headerKeys = Object.keys(parsed.header);
     expect(headerKeys).toEqual([...headerKeys].sort());
+  });
+});
+
+describe('generateWireSurfaceDocument: determinism across fresh module instances', () => {
+  const files: VirtualFile[] = [
+    {
+      path: 'src/fixture-fresh-module-instance.ts',
+      text: `
+        const EVENT_DOCS = {
+          method: { 'x-experimental': true, params: [], result: { name: 'r', schema: {} } },
+        };
+        const eventName = 'platform.freshModuleInstanceEvent';
+        registerCommand(eventName, handler, EVENT_DOCS);
+      `,
+    },
+  ];
+
+  it('produces identical output when the module is re-imported after vi.resetModules(), proving per-scan state (e.g. the identifier declaration cache) never survives across separate scans', async () => {
+    vi.resetModules();
+    const firstModule = await import('./generate-wire-surface.util');
+    const firstOutput = firstModule.serializeWireSurfaceDocument(
+      firstModule.generateWireSurfaceDocument(files),
+    );
+
+    vi.resetModules();
+    const secondModule = await import('./generate-wire-surface.util');
+    const secondOutput = secondModule.serializeWireSurfaceDocument(
+      secondModule.generateWireSurfaceDocument(files),
+    );
+
+    expect(secondOutput).toBe(firstOutput);
+    // Sanity check the fixture actually exercised name/docs resolution rather than trivially
+    // matching on empty output.
+    expect(firstOutput).toContain('platform.freshModuleInstanceEvent');
   });
 });
 
