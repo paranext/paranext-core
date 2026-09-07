@@ -14,10 +14,11 @@ public static class RuleContextFactory
     public static RuleContext Create(Compilation compilation)
     {
         var symbols = FrameworkSymbols.Resolve(compilation);
+        var semanticModels = new SemanticModelCache(compilation);
         return new RuleContext(
             symbols,
-            new NameResolver(compilation),
-            new DocumentationResolver(compilation, symbols),
+            new NameResolver(compilation, semanticModels),
+            new DocumentationResolver(semanticModels, symbols),
             tree => tree.FilePath
         );
     }

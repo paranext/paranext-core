@@ -10,12 +10,14 @@ namespace Paranext.WireSurface;
 /// whether it marks the registration experimental — all by reading the framework's documentation
 /// types through their symbols, never by matching identifier text or nesting depth textually.
 /// </summary>
-public sealed class DocumentationResolver(Compilation compilation, FrameworkSymbols symbols)
+public sealed class DocumentationResolver(
+    SemanticModelCache semanticModels,
+    FrameworkSymbols symbols
+)
 {
     private static readonly DocumentationResolution Undocumented = new(false, true, false);
     private static readonly DocumentationResolution Unresolved = new(true, false, false);
 
-    private readonly Dictionary<SyntaxTree, SemanticModel> _semanticModels = [];
     private readonly IPropertySymbol _methodWrapperProperty = symbols
         .OpenRpcSingleMethodDocumentation.GetMembers("Method")
         .OfType<IPropertySymbol>()
@@ -38,16 +40,6 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
             model,
             new HashSet<ISymbol>(SymbolEqualityComparer.Default)
         );
-    }
-
-    private SemanticModel GetSemanticModel(SyntaxTree tree)
-    {
-        if (!_semanticModels.TryGetValue(tree, out var model))
-        {
-            model = compilation.GetSemanticModel(tree);
-            _semanticModels[tree] = model;
-        }
-        return model;
     }
 
     private DocumentationResolution ResolveExpression(
@@ -174,7 +166,7 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
                     .FirstOrDefault();
                 return declarator?.Initializer is null
                     ? null
-                    : (declarator.Initializer.Value, GetSemanticModel(declarator.SyntaxTree));
+                    : (declarator.Initializer.Value, semanticModels.For(declarator.SyntaxTree));
             }
             case IPropertySymbol property:
             {
@@ -184,7 +176,7 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
                     .FirstOrDefault();
                 return declaration?.Initializer is null
                     ? null
-                    : (declaration.Initializer.Value, GetSemanticModel(declaration.SyntaxTree));
+                    : (declaration.Initializer.Value, semanticModels.For(declaration.SyntaxTree));
             }
             case ILocalSymbol local:
             {
@@ -196,7 +188,7 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
                     return null;
                 return HasAnyOtherAssignment(local, declarator)
                     ? null
-                    : (declarator.Initializer.Value, GetSemanticModel(declarator.SyntaxTree));
+                    : (declarator.Initializer.Value, semanticModels.For(declarator.SyntaxTree));
             }
             default:
                 return null;
@@ -218,7 +210,7 @@ public sealed class DocumentationResolver(Compilation compilation, FrameworkSymb
                             or AccessorDeclarationSyntax
                             or LocalFunctionStatementSyntax
                 ) ?? declarator.SyntaxTree.GetRoot();
-        var model = GetSemanticModel(declarator.SyntaxTree);
+        var model = semanticModels.For(declarator.SyntaxTree);
         return scope
             .DescendantNodes()
             .OfType<AssignmentExpressionSyntax>()
