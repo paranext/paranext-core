@@ -292,8 +292,8 @@ describe('a scaled display does not compound a window size across quit/reopen cy
     return persisted;
   }
 
-  // A single 150%-scaled display — the window never crosses to another one, which is the case the
-  // settle guard used to treat as needing no wait at all.
+  // A single 150%-scaled display — the window never crosses to another one, but the settle guard
+  // still waits out the full settle window before trusting bounds captured on it.
   const SCALED_DISPLAY = { id: 1, bounds: { x: 0, y: 0, width: 2560, height: 1440 } };
   const REQUESTED = { x: 100, y: 100, width: 1024, height: 768 };
   // What getBounds() reports while Win32 (still on the scale the window is landing FROM) and
