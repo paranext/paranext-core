@@ -1537,7 +1537,7 @@ describe('loadLayout restores this window’s layout from the main process', () 
 
     const loaded = await loadLayoutInWindow(layoutWithAnchor());
 
-    expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:get', 2);
+    expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:get', '2');
     // A genuinely-persisted layout is never re-minted or rescoped - a web view keeps the one id it
     // was minted with for its whole life (see `mint-web-view-ids.util.ts`).
     expect(tabIdsIn(loaded)).toEqual(['saved-tab-id']);
