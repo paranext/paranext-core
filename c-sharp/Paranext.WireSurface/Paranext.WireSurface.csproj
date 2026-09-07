@@ -6,7 +6,14 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Paranext.WireSurface</RootNamespace>
     <IsPackable>false</IsPackable>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <!--
+      This tool hosts MSBuildWorkspace in-process to load the data provider project, so MSBuild's
+      own globalization-dependent logic runs inside this process too. Invariant mode disables
+      non-invariant culture support process-wide, which breaks MSBuild's handling of the target
+      project's satellite resources (it fails as soon as it processes a non-invariant culture like
+      "ja"), so this tool cannot opt into invariant globalization the way a standalone console
+      utility could.
+    -->
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Build.Locator" Version="1.11.2" />
