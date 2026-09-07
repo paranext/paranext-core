@@ -354,6 +354,11 @@ public sealed class NameResolver(Compilation compilation)
             );
     }
 
-    private static string CollapseWhitespace(string text) =>
+    /// <summary>
+    /// Collapses whitespace runs to one space so an unresolved expression's source text is stable
+    /// across formatting and line-ending differences. Shared with <see cref="RegistrationRules.NetworkEventRule"/>,
+    /// which applies the same normalisation to a whole non-collection argument's text.
+    /// </summary>
+    internal static string CollapseWhitespace(string text) =>
         Regex.Replace(text, @"\s+", " ").Trim();
 }

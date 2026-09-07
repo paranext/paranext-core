@@ -1,0 +1,139 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+namespace Paranext.WireSurface.RegistrationRules;
+
+/// <summary>
+/// Recognises a C# network event registered through
+/// <c>PapiClient.SendRequestAsync("network:registerEvent", [name, documentation])</c> — the generic
+/// request path Send/Receive's snapshot notifiers use because <c>PapiClient</c> has no dedicated
+/// wrapper for the central event registry's registration method. Every other request type sent
+/// through <c>SendRequestAsync</c> is a client-side call into a TypeScript-registered object and is
+/// deliberately excluded — not reported at all, not even as dynamic.
+/// </summary>
+public sealed class NetworkEventRule : IRegistrationRule
+{
+    private const string RegisterEventRequestType = "network:registerEvent";
+
+    public IEnumerable<ScanEntry> Scan(SyntaxTree tree, SemanticModel model, RuleContext context)
+    {
+        foreach (
+            var invocation in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>()
+        )
+        {
+            var invokedMethod = model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
+            if (
+                invokedMethod is null
+                || !context.Symbols.SendRequestAsyncOverloads.Any(overload =>
+                    context.Symbols.IsSameMethod(invokedMethod, overload)
+                )
+            )
+                continue;
+
+            var requestTypeArgument = invocation
+                .ArgumentList.Arguments.ElementAtOrDefault(0)
+                ?.Expression;
+            if (requestTypeArgument is null)
+                continue;
+            if (
+                context.Names.Resolve(requestTypeArgument, model)
+                is not NameResolution.Constant { Value: RegisterEventRequestType }
+            )
+                continue;
+
+            var contentsArgument = invocation
+                .ArgumentList.Arguments.ElementAtOrDefault(1)
+                ?.Expression;
+            if (contentsArgument is null)
+                continue;
+
+            var file = context.RepoRelativePath(tree);
+            var elements = GetCollectionElements(contentsArgument);
+            if (elements is null || elements.Count < 2)
+            {
+                yield return new ScanEntry.Dynamic(
+                    new DynamicRegistration(
+                        RegistrationCategory.NetworkEvent,
+                        file,
+                        RegisteredVia.PapiClientSendRequestAsyncRegisterEvent,
+                        NameResolver.CollapseWhitespace(contentsArgument.ToString())
+                    )
+                );
+                continue;
+            }
+
+            var documentation = context.Docs.Resolve(elements[1], model);
+            foreach (
+                var entry in BuildEntries(
+                    context.Names.Resolve(elements[0], model),
+                    file,
+                    documentation
+                )
+            )
+                yield return entry;
+        }
+    }
+
+    /// <summary>
+    /// The element expressions of the collection-shaped argument-1 forms this rule recognises — a
+    /// collection expression, an implicitly-typed array, or an explicitly-typed array with an
+    /// initializer — or <see langword="null"/> when the argument is none of these (a variable, a
+    /// method call, or an array creation with no initializer), which the caller treats as dynamic.
+    /// </summary>
+    private static IReadOnlyList<ExpressionSyntax>? GetCollectionElements(
+        ExpressionSyntax expression
+    ) =>
+        expression switch
+        {
+            CollectionExpressionSyntax collection => collection
+                .Elements.OfType<ExpressionElementSyntax>()
+                .Select(element => element.Expression)
+                .ToList(),
+            ImplicitArrayCreationExpressionSyntax implicitArray =>
+                implicitArray.Initializer.Expressions.ToList(),
+            ArrayCreationExpressionSyntax arrayCreation =>
+                arrayCreation.Initializer?.Expressions.ToList(),
+            _ => null,
+        };
+
+    private static IEnumerable<ScanEntry> BuildEntries(
+        NameResolution name,
+        string file,
+        DocumentationResolution documentation
+    )
+    {
+        switch (name)
+        {
+            case NameResolution.Constant constant:
+                yield return ToStatic(constant.Value);
+                break;
+            case NameResolution.Constants constants:
+                foreach (var value in constants.Values)
+                    yield return ToStatic(value);
+                break;
+            case NameResolution.Dynamic dynamic:
+                yield return new ScanEntry.Dynamic(
+                    new DynamicRegistration(
+                        RegistrationCategory.NetworkEvent,
+                        file,
+                        RegisteredVia.PapiClientSendRequestAsyncRegisterEvent,
+                        dynamic.ExpressionText
+                    )
+                );
+                break;
+        }
+
+        ScanEntry.Static ToStatic(string value) =>
+            new(
+                new StaticRegistration(
+                    RegistrationCategory.NetworkEvent,
+                    value,
+                    file,
+                    RegisteredVia.PapiClientSendRequestAsyncRegisterEvent,
+                    documentation.Documented,
+                    documentation.DocsStaticallyResolved,
+                    documentation.Experimental
+                )
+            );
+    }
+}
