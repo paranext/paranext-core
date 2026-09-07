@@ -173,18 +173,27 @@ describe('buildExpectedLiveIdentifiers / findMissingFromLive', () => {
   });
 });
 
+/**
+ * A window id in the shape `mintWindowId` (`src/main/services/window-state.service.ts`) actually
+ * mints — lifted verbatim from a live CI run's `rpc.discover` document rather than invented, so
+ * these tests fail against a pattern that only recognizes the pre-GUID numeric ids.
+ */
+const LIVE_WINDOW_ID = '1f638eb7-cda2-460c-984d-f563db876704';
+/** A second live window id (uppercase-folded is covered separately below), from the same CI run. */
+const LIVE_WINDOW_ID_2 = 'f4cee79b-945c-4eff-8fb8-6d8049bc7281';
+
 describe('matchDynamicObjectId', () => {
   it.each([
     [
-      'DialogService-42',
+      `DialogService-${LIVE_WINDOW_ID}`,
       'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/NotificationService)',
     ],
     [
-      'NotificationService-7',
+      `NotificationService-${LIVE_WINDOW_ID_2}`,
       'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/NotificationService)',
     ],
     [
-      'platform.windowServiceDataProvider-3-data',
+      `platform.windowServiceDataProvider-${LIVE_WINDOW_ID}-data`,
       'per-window data-provider shard (window.service-shard.ts)',
     ],
     [
@@ -198,8 +207,19 @@ describe('matchDynamicObjectId', () => {
     expect(matchDynamicObjectId(id)).toBe(expectedPattern);
   });
 
+  it('matches a window id with uppercase hex digits (not RFC-4122-strict)', () => {
+    expect(matchDynamicObjectId(`DialogService-${LIVE_WINDOW_ID.toUpperCase()}`)).toBe(
+      'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/NotificationService)',
+    );
+  });
+
   it('does not match a plain static id', () => {
     expect(matchDynamicObjectId('AppService')).toBeUndefined();
+  });
+
+  it('does not match a pre-GUID numeric window id (the shape no live id has any more)', () => {
+    expect(matchDynamicObjectId('DialogService-42')).toBeUndefined();
+    expect(matchDynamicObjectId('platform.windowServiceDataProvider-3-data')).toBeUndefined();
   });
 
   it('does not treat a per-function call on a webViewController id as the bare id', () => {
@@ -233,9 +253,12 @@ describe('resolveNetworkObjectMethod', () => {
   });
 
   it('resolves a dynamic-pattern id with a function name', () => {
-    const result = resolveNetworkObjectMethod('DialogService-9.showDialog', expectedObjectIds);
+    const result = resolveNetworkObjectMethod(
+      `DialogService-${LIVE_WINDOW_ID}.showDialog`,
+      expectedObjectIds,
+    );
     expect(result).toEqual({
-      objectId: 'DialogService-9',
+      objectId: `DialogService-${LIVE_WINDOW_ID}`,
       functionName: 'showDialog',
       matchedVia:
         'per-window network-object shard (Dialog/Usersnap/BookChapterControl/WebView/NotificationService)',
@@ -281,7 +304,10 @@ describe('classifyLiveMethod', () => {
   });
 
   it('classifies a dynamic window-shard object as a dynamic pattern', () => {
-    const result = classifyLiveMethod('object:DialogService-3.showDialog', expected);
+    const result = classifyLiveMethod(
+      `object:DialogService-${LIVE_WINDOW_ID}.showDialog`,
+      expected,
+    );
     expect(result.kind).toBe('dynamicPattern');
   });
 
@@ -322,6 +348,38 @@ describe('classifyLiveMethod', () => {
 
   it('classifies a fully unrecognized bare method as unknown', () => {
     expect(classifyLiveMethod('somethingNobodyRecognizes', expected)).toEqual({ kind: 'unknown' });
+  });
+
+  describe('every per-window-shard family, by exact live name', () => {
+    // One existence method, one fanned method, per shard family — lifted verbatim from a live CI
+    // run's rpc.discover document (window id 1f638eb7-cda2-460c-984d-f563db876704). A pattern
+    // scoped to the pre-GUID numeric shape classifies every one of these as 'unknown'.
+    it.each([
+      `object:BookChapterControlService-${LIVE_WINDOW_ID}`,
+      `object:BookChapterControlService-${LIVE_WINDOW_ID}.open`,
+      `object:DialogService-${LIVE_WINDOW_ID}`,
+      `object:DialogService-${LIVE_WINDOW_ID}.selectProject`,
+      `object:DialogService-${LIVE_WINDOW_ID}.showAboutDialog`,
+      `object:DialogService-${LIVE_WINDOW_ID}.showDialog`,
+      `object:NotificationService-${LIVE_WINDOW_ID}`,
+      `object:NotificationService-${LIVE_WINDOW_ID}.dismiss`,
+      `object:NotificationService-${LIVE_WINDOW_ID}.send`,
+      `object:platform.windowServiceDataProvider-${LIVE_WINDOW_ID}-data`,
+      `object:platform.windowServiceDataProvider-${LIVE_WINDOW_ID}-data.getFocus`,
+      `object:platform.windowServiceDataProvider-${LIVE_WINDOW_ID}-data.getNavigationContext`,
+      `object:platform.windowServiceDataProvider-${LIVE_WINDOW_ID}-data.setFocus`,
+      `platform.windowServiceDataProvider-${LIVE_WINDOW_ID}-data:onDidUpdate`,
+      `object:UsersnapService-${LIVE_WINDOW_ID}`,
+      `object:UsersnapService-${LIVE_WINDOW_ID}.closeOpenForm`,
+      `object:UsersnapService-${LIVE_WINDOW_ID}.isFormCurrentlyOpen`,
+      `object:UsersnapService-${LIVE_WINDOW_ID}.reportIssue`,
+      `object:UsersnapService-${LIVE_WINDOW_ID}.submitIdea`,
+      `object:WebViewService-${LIVE_WINDOW_ID}`,
+      `object:WebViewService-${LIVE_WINDOW_ID}.adoptWebView`,
+      `object:WebViewService-${LIVE_WINDOW_ID}.openWebView`,
+    ])('classifies %s as a dynamic pattern, not unknown', (liveMethodName) => {
+      expect(classifyLiveMethod(liveMethodName, expected).kind).toBe('dynamicPattern');
+    });
   });
 });
 
