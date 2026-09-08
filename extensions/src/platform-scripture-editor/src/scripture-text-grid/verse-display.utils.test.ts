@@ -396,6 +396,18 @@ describe('hasAlignableVerse', () => {
     );
   });
 
+  it('reports none when the only verses live in a table', () => {
+    // The editor makes no verse block for a verse inside a table, so the aligned grid would show an
+    // empty column: the placeholder is the honest answer, not a blank.
+    expect(
+      hasAlignableVerse(
+        chapterWith(
+          '<table><row style="tr"><cell style="tc1" align="start"><verse number="1" style="v" sid="GEN 1:1" />in a table</cell></row></table>',
+        ),
+      ),
+    ).toBe(false);
+  });
+
   it('reports none for an empty chapter', () => {
     expect(hasAlignableVerse(chapterWith(''))).toBe(false);
   });

@@ -14,7 +14,7 @@ export const LOADING_KEY = '%webView_scriptureTextGrid_cell_status_loading%';
 export const FAILED_KEY = '%webView_scriptureTextGrid_cell_status_failed%';
 export const BOOK_NOT_AVAILABLE_KEY = '%webView_scriptureTextGrid_cell_status_bookNotAvailable%';
 export const EMPTY_KEY = '%webView_scriptureTextGrid_cell_verse_empty%';
-export const NO_ALIGNABLE_VERSES_KEY = '%webView_scriptureTextGrid_cell_noVersesToAlign%';
+export const NO_VERSES_TO_SHOW_KEY = '%webView_scriptureTextGrid_cell_noVersesToShow%';
 export const ZOOM_IN_KEY = '%webView_scriptureTextGrid_cell_zoomIn%';
 export const ZOOM_OUT_KEY = '%webView_scriptureTextGrid_cell_zoomOut%';
 export const RESET_ZOOM_KEY = '%webView_scriptureTextGrid_cell_resetZoom%';
@@ -28,7 +28,7 @@ export const RESOURCE_CELL_STRING_KEYS = Object.freeze([
   FAILED_KEY,
   BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
-  NO_ALIGNABLE_VERSES_KEY,
+  NO_VERSES_TO_SHOW_KEY,
   ZOOM_IN_KEY,
   ZOOM_OUT_KEY,
   RESET_ZOOM_KEY,
