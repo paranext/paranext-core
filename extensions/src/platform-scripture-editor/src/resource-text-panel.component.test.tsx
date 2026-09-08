@@ -36,12 +36,12 @@ const COMMENTARY_MISSING_BOOK = 'This book does not exist in this commentary.';
 const BLANK_CHAPTER = 'This chapter is empty in this resource.';
 const TEXT_UNAVAILABLE = 'This text could not be loaded.';
 const PICK_BIBLE_TEXTS = 'Pick Bible texts…';
+const SELECTING = 'Selecting resource…';
 
 const STRINGS = {
   '%webView_platformScriptureEditor_emptyChapter_messageResource%': BLANK_CHAPTER,
   '%webView_resourcePanel_noProject%': 'No project.',
   '%webView_resourcePanel_installing%': 'Installing resource…',
-  '%webView_resourcePanel_selecting%': 'Selecting resource…',
   '%webView_resourcePanel_installFailed%': "The resource couldn't be installed.",
   '%webView_resourcePanel_installFailedOffline%':
     "The resource couldn't be installed. Check your connection and try again.",
@@ -53,6 +53,7 @@ const STRINGS = {
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%':
     'No Bible texts selected. Pick one to display a reference translation alongside your project.',
   '%webView_resourcePanel_bibleTexts_pick%': PICK_BIBLE_TEXTS,
+  '%webView_resourcePanel_selecting%': SELECTING,
   '%webView_resourcePanel_textUnavailable%': TEXT_UNAVAILABLE,
   '%webView_resourcePanel_bibleTexts_bookNotAvailable%': BIBLE_TEXT_MISSING_BOOK,
   '%webView_resourcePanel_commentaries_bookNotAvailable%': COMMENTARY_MISSING_BOOK,
@@ -382,5 +383,23 @@ describe('ResourceTextPanel resource picker', () => {
     fireEvent.click(screen.getByRole('button', { name: PICK_BIBLE_TEXTS }));
 
     expect(onShowResourcePicker).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ResourceTextPanel pick in flight', () => {
+  it('reports progress during a first pick, when nothing is configured yet', () => {
+    // A first pick cannot show up in the reference list until `selectTextConnection` has installed
+    // the resource and the write has propagated back, so readiness is still `empty` for the whole
+    // download. If the readiness branch were tested first the reader would sit on "no texts
+    // selected" — with an enabled pick button and no progress — until it finished.
+    renderPanel({
+      readiness: 'empty',
+      filteredResources: [],
+      selectedRef: undefined,
+      isSelecting: true,
+    });
+
+    expect(screen.getByText(SELECTING)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PICK_BIBLE_TEXTS })).not.toBeInTheDocument();
   });
 });
