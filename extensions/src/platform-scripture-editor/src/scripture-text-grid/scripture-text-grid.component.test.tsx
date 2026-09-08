@@ -19,6 +19,7 @@ const mockResourceCell = vi.fn(
     showDragHandle,
     reorderHandleLabel,
     onReorderKeyDown,
+    headerDrag,
   }: {
     resourceRef: { label: string; projectId: string; resourceId: string };
     scrRef: { verseNum: number };
@@ -27,9 +28,21 @@ const mockResourceCell = vi.fn(
     showDragHandle?: boolean;
     reorderHandleLabel?: string;
     onReorderKeyDown?: (event: React.KeyboardEvent) => void;
+    headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
   }) => (
     <div data-testid={`cell-${resourceRef.projectId}`} data-view-mode={viewMode}>
       {`${resourceRef.label}@${scrRef.verseNum}`}
+      {/* The real cell's header band, which is the reorder drag source — the column itself must not
+          be draggable, or a click-drag over the text starts a reorder instead of selecting. */}
+      {headerDrag ? (
+        <div
+          data-cell-header
+          data-testid={`header-${resourceRef.resourceId}`}
+          draggable
+          onDragStart={headerDrag.onDragStart}
+          onDragEnd={headerDrag.onDragEnd}
+        />
+      ) : undefined}
       {/* In the aligned grid the real cell renders an editor whose verse blocks carry the range the
           layout places them on, and which the reference scroll targets. Stand in for those, with
           the geometry the scroll reads (jsdom measures nothing) declared per element. */}
@@ -86,6 +99,9 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   return {
     ...original,
     useViewVisibility: () => mockVisibility.isVisible,
+    // The aligned stylesheet is inert in jsdom (no layout) and its `:has()` rule crashes jsdom's
+    // rule matcher, so it is not injected here. `aligned-grid.styles.test.ts` asserts its content.
+    useStylesheet: () => {},
     ResizablePanelGroup: ({ children }: { children: React.ReactNode }) => (
       <div data-testid="resizable-panel-group">{children}</div>
     ),
@@ -540,7 +556,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
       />,
     );
     const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
-    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    fireEvent.dragStart(screen.getByTestId('header-r-b')); // drag KJV by its header
     fireEvent.drop(wrappers[0]); // onto WEB (resourceId 'r-a')
     expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
   });
@@ -555,12 +571,12 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
       />,
     );
     const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
-    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    fireEvent.dragStart(screen.getByTestId('header-r-b')); // drag KJV by its header
     fireEvent.dragOver(wrappers[0]); // hover over WEB (resourceId 'r-a')
     expect(wrappers[0].className).toContain('tw:ring-2');
     expect(wrappers[0].className).toContain('tw:ring-inset');
     expect(wrappers[0].className).toContain('tw:ring-primary');
-    fireEvent.dragEnd(wrappers[1]);
+    fireEvent.dragEnd(screen.getByTestId('header-r-b'));
     expect(wrappers[0].className).not.toContain('tw:ring-2');
   });
   it('does not highlight the dragged cell itself when hovered', () => {
@@ -574,7 +590,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
       />,
     );
     const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
-    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    fireEvent.dragStart(screen.getByTestId('header-r-b')); // drag KJV by its header
     fireEvent.dragOver(wrappers[1]); // hover over itself
     expect(wrappers[1].className).not.toContain('tw:ring-2');
   });
@@ -590,7 +606,7 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
       />,
     );
     const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
-    fireEvent.dragStart(wrappers[1]);
+    fireEvent.dragStart(screen.getByTestId('header-r-b'));
     fireEvent.dragOver(wrappers[0]);
     expect(wrappers[0].className).toContain('tw:ring-2');
     fireEvent.drop(wrappers[0]);
@@ -741,17 +757,7 @@ describe('ScriptureTextGrid — aligned (Grid) view', () => {
       const scrolledBy = this.classList.contains('verse-block') ? (port?.scrollTop ?? 0) : 0;
       const top = isPort ? 0 : Number(this.dataset.stubTop ?? 0) - scrolledBy;
       const height = isPort ? PORT_HEIGHT : Number(this.dataset.stubHeight ?? 0);
-      return {
-        top,
-        height,
-        bottom: top + height,
-        left: 0,
-        right: 0,
-        width: 0,
-        x: 0,
-        y: top,
-        toJSON: () => ({}),
-      } as DOMRect;
+      return new DOMRect(0, top, 0, height);
     });
   }
 
@@ -831,6 +837,47 @@ describe('ScriptureTextGrid — aligned (Grid) view', () => {
     fireEvent.click(screen.getAllByRole('region')[0]);
 
     expect(screen.queryByTestId('scripture-text-grid-chapter-context')).not.toBeInTheDocument();
+  });
+
+  describe('reorder', () => {
+    const reorderProps = {
+      onReorder: vi.fn(),
+      getReorderHandleLabel: (name: string) => `Reorder ${name}`,
+    };
+
+    beforeEach(() => {
+      reorderProps.onReorder.mockClear();
+    });
+
+    it('moves a column with the keyboard', () => {
+      renderAligned(alignedRef, resources, reorderProps);
+
+      fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowRight' });
+
+      expect(reorderProps.onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
+    });
+
+    it('moves a column by dragging its header onto another column', () => {
+      // The header is the drag source; the column is the drop target. A column-wide drag source
+      // would start a reorder when the reader tried to select text.
+      renderAligned(alignedRef, resources, reorderProps);
+      const columns = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+
+      fireEvent.dragStart(screen.getByTestId('header-r-b'));
+      fireEvent.drop(columns[0]);
+
+      expect(reorderProps.onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
+    });
+
+    it('rings the hovered column as a drop target', () => {
+      renderAligned(alignedRef, resources, reorderProps);
+      const columns = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+
+      fireEvent.dragStart(screen.getByTestId('header-r-b'));
+      fireEvent.dragOver(columns[0]);
+
+      expect(columns[0].className).toContain('tw:ring-2');
+    });
   });
 
   describe('scrolling to the reference', () => {

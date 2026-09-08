@@ -377,6 +377,9 @@ export function ScriptureTextGrid({
               onChapterContextChange(resource);
             }
           : undefined;
+        // Same reorder wiring the columns use. The listitem cannot be a `ResourceColumn` — it has
+        // its own role and activation — but it must not carry a second copy of the handlers.
+        const reorder = buildReorder(resource);
         return (
           // The listitem is an interactive resource entry. jsx-a11y flags role="listitem" with
           // tabIndex/handlers as "non-interactive", but it IS keyboard-accessible (Tab to focus,
@@ -391,7 +394,7 @@ export function ScriptureTextGrid({
             data-testid={onReorder ? 'scripture-text-grid-cell-draggable' : undefined}
             aria-label={verseItemName(resource.label)}
             tabIndex={activate ? 0 : undefined}
-            draggable={onReorder ? true : undefined}
+            draggable={reorder ? true : undefined}
             onClick={activate}
             onKeyDown={
               activate
@@ -403,33 +406,12 @@ export function ScriptureTextGrid({
                   }
                 : undefined
             }
-            onDragStart={
-              onReorder
-                ? () => {
-                    draggedIdRef.current = resource.resourceId;
-                  }
-                : undefined
-            }
-            onDragEnd={
-              onReorder
-                ? () => {
-                    draggedIdRef.current = undefined;
-                    setDragOverId(undefined);
-                  }
-                : undefined
-            }
-            onDragOver={
-              onReorder
-                ? (event) => {
-                    event.preventDefault();
-                    // No onDragLeave — it fires on child elements; clearing on drop/dragEnd instead
-                    // is more reliable.
-                    setDragOverId(resource.resourceId);
-                  }
-                : undefined
-            }
-            onDrop={onReorder ? () => handleReorderDrop(resource.resourceId) : undefined}
-            className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:flex-col tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring${activate ? ' tw:cursor-pointer' : ''}${onReorder && dragOverId === resource.resourceId && draggedIdRef.current !== resource.resourceId ? ' tw:ring-2 tw:ring-inset tw:ring-primary' : ''}`}
+            onDragStart={reorder?.onDragStart}
+            onDragEnd={reorder?.onDragEnd}
+            // No onDragLeave — it fires on child elements; clearing on drop/dragEnd is more reliable.
+            onDragOver={reorder?.onDragOver}
+            onDrop={reorder?.onDrop}
+            className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:flex-col tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring${activate ? ' tw:cursor-pointer' : ''}${reorder?.isDropTarget ? ' tw:ring-2 tw:ring-inset tw:ring-primary' : ''}`}
           >
             <ResourceCell
               resourceRef={resource}
@@ -438,16 +420,10 @@ export function ScriptureTextGrid({
               viewMode={viewMode}
               zoom={zoom}
               zoomMenuLabels={zoomMenuLabels}
-              showDragHandle={onReorder ? true : undefined}
-              reorderHandleLabel={
-                onReorder && getReorderHandleLabel
-                  ? getReorderHandleLabel(resource.label)
-                  : undefined
-              }
-              reorderHint={onReorder ? reorderHint : undefined}
-              onReorderKeyDown={
-                onReorder ? (event) => handleReorderKeyDown(event, resource) : undefined
-              }
+              showDragHandle={reorder ? true : undefined}
+              reorderHandleLabel={reorder?.handleLabel}
+              reorderHint={reorder?.hint}
+              onReorderKeyDown={reorder?.onKeyDown}
             />
           </div>
           /* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
