@@ -4,10 +4,22 @@ import { WebViewCrashedView } from './web-view-crashed-view.component';
 /**
  * Constrains the story to a pane-sized box, since the component fills its host and a web view is
  * never the whole window.
+ *
+ * `position: relative` is what makes the box a containing block. The component is `position:
+ * absolute; inset: 0`, so without a positioned ancestor it is measured from the docs iframe's
+ * initial containing block and paints full-bleed over the autodocs description and controls instead
+ * of filling this box.
  */
 function InPane(Story: Parameters<Decorator>[0]): ReturnType<Decorator> {
   return (
-    <div style={{ height: '32rem', border: '1px dashed var(--border, #d4d4d4)', overflow: 'auto' }}>
+    <div
+      style={{
+        position: 'relative',
+        height: '32rem',
+        border: '1px dashed var(--border, #d4d4d4)',
+        overflow: 'auto',
+      }}
+    >
       <Story />
     </div>
   );
