@@ -44,15 +44,15 @@ import { test, expect } from '../../fixtures/enhanced-resources.fixture';
 import { waitForAppReady, waitForOpenWebViewIdByType } from '../../fixtures/helpers';
 import { ctrlWheel } from '../../fixtures/content-zoom-helpers';
 import { getEditorFrame, readFactor } from '../../fixtures/scripture-editor-helpers';
+import { closeAllNonHomeDockTabs } from './test-helpers';
 import {
-  closeAllNonHomeDockTabs,
   discoverAdminTextConnectionProject,
   flagResourcesAndOpenScriptureTextGrid,
   openScriptureTextGrid,
   restoreScriptureTextGridProjectSettings,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-} from './test-helpers';
-import type { FlaggedResourceItem } from './test-helpers';
+  type FlaggedResourceItem,
+} from './scripture-text-grid.page';
 
 /**
  * `scriptureTextGrid.zoomByResourceId` from the grid web view's own definition state
