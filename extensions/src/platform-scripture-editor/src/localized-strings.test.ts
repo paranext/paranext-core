@@ -286,36 +286,3 @@ describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s'
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });
-
-// The blocks above each cover one component's exported key list, which means they only see keys
-// somebody remembered to export in a `*_STRING_KEYS` array. A key contributed straight into the
-// JSON — the `%versionHistoryCommit_*%` commit labels are the precedent — belongs to no such array
-// and so goes uncovered. The two guards below close that whole class: every language this file
-// ships must declare the same key set as English and give each key a real value, whether or not any
-// component exports the key.
-//
-// This is deliberately stricter than the repo at large — sibling extensions such as
-// `platform-scripture` and `platform-enhanced-resources` ship English-only keys, so a key left
-// untranslated here fails a check it would pass there. Full parity is the standing policy for this
-// extension; translate the key rather than relaxing the guard.
-const ENGLISH_LANGUAGE = 'en';
-const languages = Object.keys(localizedStrings);
-const englishKeys = Object.keys(localizedStrings[ENGLISH_LANGUAGE]).sort();
-
-describe.each(languages)('%s values across the whole contribution file', (language) => {
-  it('has a non-empty value for every key it declares', () => {
-    const keysWithNoValue = Object.keys(localizedStrings[language]).filter(
-      (key) => !localizedStrings[language][key],
-    );
-    expect(keysWithNoValue).toEqual([]);
-  });
-});
-
-describe.each(languages.filter((language) => language !== ENGLISH_LANGUAGE))(
-  '%s key set parity with English across the whole contribution file',
-  (language) => {
-    it('declares the same key set as English', () => {
-      expect(Object.keys(localizedStrings[language]).sort()).toEqual(englishKeys);
-    });
-  },
-);

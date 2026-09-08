@@ -1,12 +1,13 @@
 import { LocalizeKey } from 'platform-bible-utils';
 
 /**
- * The localize keys {@link CharacterMarkerControl} resolves.
+ * The localize keys `CharacterMarkerControl` resolves.
  *
  * Kept in their own module, apart from the component, so that consumers which only need the key
  * list — the editor web view's preload list, the localized-strings parity test — can import it
- * without pulling in React and the component library. The parity test runs in a `node` environment
- * and cannot load a module that reaches for `document`.
+ * without pulling React and the component library into their module graph. That keeps the parity
+ * test's collect time down; the component imports fine from a `node` test, so this is a cost choice
+ * rather than a load-time constraint.
  */
 
 export const ARIA_LABEL_KEY: LocalizeKey =
