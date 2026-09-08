@@ -51,7 +51,8 @@ type OnboardingTourCommandName = 'platform.showOnboardingTour';
 const ONBOARDING_TOUR_COMMAND_DOCS: Record<OnboardingTourCommandName, SingleMethodDocumentation> = {
   'platform.showOnboardingTour': {
     method: {
-      summary: 'Show the Simple-mode orientation tour again from its first stop',
+      summary:
+        'Show the orientation tour again from its first stop, in either interface mode (in Power mode it reduces to the stops whose anchors exist there)',
       params: [],
       result: { name: 'return value', schema: { type: 'null' } },
       'x-experimental': true,

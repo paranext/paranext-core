@@ -1,6 +1,6 @@
 /**
- * Onboarding tour service shard — the Simple-mode orientation tour for THIS window. Registered as a
- * network object under a window-scoped name (e.g. "OnboardingTourService-1") so several windows can
+ * Onboarding tour service shard — the orientation tour for THIS window. Registered as a network
+ * object under a window-scoped name (e.g. "OnboardingTourService-1") so several windows can
  * coexist; the main process's `onboarding-tour.service-router.ts` publishes the
  * `platform.showOnboardingTour` command and forwards it to the window the user is working in.
  *

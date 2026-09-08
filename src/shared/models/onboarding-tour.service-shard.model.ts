@@ -19,8 +19,8 @@
 export const ONBOARDING_TOUR_SERVICE_SHARD_NETWORK_OBJECT_NAME = 'OnboardingTourService';
 
 /**
- * What one window's onboarding tour service shard serves — the Simple-mode orientation tour in that
- * window.
+ * What one window's onboarding tour service shard serves — the orientation tour in that window, in
+ * whichever interface mode that window is in.
  *
  * @experimental
  */
