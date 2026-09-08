@@ -952,12 +952,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     footnotesPaneVisibleRef.current = footnotesPaneVisible;
   }, [footnotesPaneVisible]);
 
+  /**
+   * Bumped after each context key this web view publishes has been written to the store, so the
+   * menu evaluation below re-runs against the written value. The store is written in an effect,
+   * after the render that evaluated the menu, so a memo keyed on the state itself would read the
+   * previous value and show a checkbox one toggle behind the pane
+   */
+  const [contextKeysVersion, setContextKeysVersion] = useState(0);
+
   // Publish the context key driving `checkedWhen` on this web view's Show Footnotes menu item
   useEffect(() => {
     papi.contextKeys.set(
       `platformScriptureEditor.webView.${webViewId}.footnotesPaneVisible`,
       footnotesPaneVisible,
     );
+    setContextKeysVersion((version) => version + 1);
   }, [footnotesPaneVisible, webViewId]);
 
   /**
@@ -3551,14 +3560,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   // Evaluate menu when-expressions (enabledWhen / checkedWhen / when) using current context keys.
-  // IMPORTANT: papi.contextKeys has no onDidChange in @papi/frontend (v1, by design), so this
-  // useMemo will NOT re-evaluate when arbitrary context keys change - only keys listed as explicit
-  // dependencies trigger re-evaluation. Currently:
-  //   - `footnotesPaneVisible`: listed as a dep (changes on toggle, published by this web view)
-  //   - `isEditable`: NOT listed (static per web view, set once in getWebViewDefinition)
-  // If you add a menu item whose when-expression references a new dynamically-changing key, you
-  // MUST add that key's driving state as an explicit dep here too (reading it via
-  // papi.contextKeys.get inside the memo is not sufficient to create reactivity).
+  // papi.contextKeys has no onDidChange in @papi/frontend (v1, by design), so this memo cannot
+  // react to arbitrary context key changes. It re-evaluates on `contextKeysVersion`, which the
+  // effects publishing this web view's own keys bump after writing the store. Keys other producers
+  // publish (`isEditable`, set once by the extension host when the web view is created) are read
+  // as they stand at evaluation time. A new key published by this web view must bump
+  // `contextKeysVersion` after its write, the way the footnotes pane key does.
   const webViewMenu = useMemo(() => {
     if (!webViewMenuRaw.topMenu) return webViewMenuRaw;
     const evaluatedTopMenu = evaluateMenu(
@@ -3572,9 +3579,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       },
     );
     return { ...webViewMenuRaw, topMenu: evaluatedTopMenu };
-    // footnotesPaneVisible drives checkedWhen so re-evaluate when it changes
+    // contextKeysVersion is not read inside the memo; it is here to re-run it after a key is written
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webViewMenuRaw, menuTemplateVars, footnotesPaneVisible]);
+  }, [webViewMenuRaw, menuTemplateVars, contextKeysVersion]);
 
   const [booksPresentPossiblyError] = useProjectSetting(
     projectId,

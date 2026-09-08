@@ -365,9 +365,11 @@ an ai-prompts follow-up, out of scope for this branch.
    `shouldShowToolbar: false` (e.g. the scripture editor) render their top menu inside the
    iframe, so the platform's renderer-side evaluation (`useEvaluatedMenu` in
    `web-view.component.tsx`) never touches it. v1 resolution: such web views evaluate their
-   own menu with `evaluateMenu` + `papi.contextKeys.get`, using explicit React dependencies
-   for any dynamically-changing keys (the frontend deliberately has no `onDidChange`). See
-   the prominent comment in `platform-scripture-editor.web-view.tsx`.
+   own menu with `evaluateMenu` + `papi.contextKeys.get`, re-evaluating on a version counter
+   that the effects publishing its own keys bump after writing the store (the frontend
+   deliberately has no `onDidChange`). Keying the evaluation on the React state itself reads
+   the store before the write lands and shows the previous value. See the comment in
+   `platform-scripture-editor.web-view.tsx`.
 2. **Extension-host hot-reload vs key ownership.** Shared-store ownership is keyed to a
    random per-process ID minted at startup. When the extension host restarts without a full
    app restart (dev hot-reload), it gets a new process ID and can no longer update keys
