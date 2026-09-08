@@ -120,7 +120,16 @@ const configuration: webpack.Configuration = {
 
   optimization: {
     minimize: true,
-    minimizer: [new TerserPlugin(), new CssMinimizerPlugin()],
+    minimizer: [
+      new TerserPlugin({
+        // React builds the component stack an error boundary logs out of function and class names,
+        // so mangling them costs every crash report the name of the component that threw. See
+        // `adr-keep-component-names-in-packaged-bundles` in
+        // `.context/standards/Architecture-Decisions.md` for the measured size cost.
+        terserOptions: { keep_classnames: true, keep_fnames: true },
+      }),
+      new CssMinimizerPlugin(),
+    ],
   },
 
   plugins: [

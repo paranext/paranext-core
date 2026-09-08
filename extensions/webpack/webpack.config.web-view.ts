@@ -2,6 +2,7 @@
 
 import webpack from 'webpack';
 import merge from 'webpack-merge';
+import TerserPlugin from 'terser-webpack-plugin';
 import configBase, { rootDir } from './webpack.config.base';
 import { getWebViewEntries } from './webpack.util';
 
@@ -21,6 +22,16 @@ const configWebView: webpack.Configuration = merge(configBase, {
   output: {
     // Build all the WebViews in the folders where they are with the temp dir appended
     path: rootDir,
+  },
+  optimization: {
+    minimizer: [
+      new TerserPlugin({
+        // React builds the component stack an error boundary logs out of function and class names,
+        // so mangling them costs every WebView crash report the name of the component that threw.
+        // Scoped to WebViews because they are the React trees an error boundary reports on.
+        terserOptions: { keep_classnames: true, keep_fnames: true },
+      }),
+    ],
   },
 });
 
