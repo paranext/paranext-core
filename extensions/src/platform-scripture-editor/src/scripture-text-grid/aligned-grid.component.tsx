@@ -4,7 +4,11 @@ import { Children, useRef, type ReactNode } from 'react';
 import { ALIGNED_GRID_CLASS, ALIGNED_GRID_STYLESHEET } from './aligned-grid.styles';
 import { useAlignedReferenceScroll } from './use-aligned-reference-scroll.hook';
 
-/** Narrowest a column may become before the grid scrolls sideways instead of shrinking further. */
+/**
+ * Narrowest a column may become before the grid scrolls sideways instead of shrinking further.
+ * Matches the chapter row's `tw:min-w-3xs` (Tailwind's `3xs` container size) — the same product
+ * decision, spelled differently because this one goes into `grid-template-columns`.
+ */
 const MIN_COLUMN_WIDTH = '16rem';
 
 export type AlignedGridProps = {

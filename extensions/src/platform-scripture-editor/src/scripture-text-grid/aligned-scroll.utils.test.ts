@@ -92,7 +92,7 @@ function buildPortWithBlock(blockTop: number, blockHeight: number) {
   block.className = 'verse-block';
   port.append(header, block);
 
-  const rect = (top: number, height: number) => ({ top, height, bottom: top + height }) as DOMRect;
+  const rect = (top: number, height: number) => new DOMRect(0, top, 0, height);
   port.getBoundingClientRect = () => rect(0, 300);
   header.getBoundingClientRect = () => rect(0, 20);
   block.getBoundingClientRect = () => rect(blockTop, blockHeight);
