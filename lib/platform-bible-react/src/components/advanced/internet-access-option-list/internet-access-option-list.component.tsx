@@ -1,4 +1,5 @@
-import { Info } from 'lucide-react';
+import { Info, TriangleAlert } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/shadcn-ui/alert';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import {
@@ -8,7 +9,11 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui/utils';
-import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import {
+  formatReplacementString,
+  type LanguageStrings,
+  type LocalizeKey,
+} from 'platform-bible-utils';
 import { useEffect, useId, useRef } from 'react';
 
 // Local alias — identical string literals to the extension's InternetUse type.
@@ -115,12 +120,28 @@ function isInternetUse(value: string): value is InternetUse {
   );
 }
 
+/**
+ * Whether the app can honor this internet-use value.
+ *
+ * `InternetSettings.xml` is shared with a co-installed Paratext 9 and can be copied in from one, so
+ * a stored value may name an option this app does not implement yet (the "Coming soon" rows). Such
+ * a value is shown selected and called out in a banner rather than silently replaced — callers that
+ * gate on a usable selection (the first-run wizard's Next button) should refuse to advance until
+ * this returns true.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export function isSupportedInternetUse(value: InternetUse): boolean {
+  return OPTION_ROWS.some((row) => row.value === value && row.isEnabled);
+}
+
 /** @experimental This export is unstable and may change shape or disappear without notice */
 // Derived from OPTION_ROWS so adding a new row automatically includes its strings.
 export const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[] = [
   ...OPTION_ROWS.flatMap((row) => [row.labelKey, row.descriptionKey]),
   '%paratextRegistration_internetUse_comingSoon%',
-  '%paratextRegistration_internetUse_footer%',
+  '%paratextRegistration_internetUse_unsupportedSelection_title%',
+  '%paratextRegistration_internetUse_unsupportedSelection_description%',
 ];
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
@@ -133,13 +154,6 @@ export type InternetAccessOptionListProps = {
   onChange: (value: InternetUse) => void;
   /** When true, all rows are non-interactive (loading or saving in progress). */
   disabled: boolean;
-  /**
-   * Whether to show the "disabled options are planned for future updates" note below the rows.
-   * Defaults to true. Set false where vertical space is tight (the first-run wizard step, whose
-   * heading and Next button compete for the same fold) — the per-row "Coming soon" badges still
-   * convey that those options are not yet available.
-   */
-  showFooter?: boolean;
 };
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
@@ -148,7 +162,6 @@ export function InternetAccessOptionList({
   value,
   onChange,
   disabled,
-  showFooter = true,
 }: InternetAccessOptionListProps) {
   // Instance-scoped so two lists on one page (e.g. a Storybook autodocs page) don't collide on
   // duplicate ids, which would point a row's label and aria-describedby at the other list's row.
@@ -157,8 +170,28 @@ export function InternetAccessOptionList({
   const descriptionId = (optionValue: OptionRow['value']) => `${radioId(optionValue)}-description`;
   const lastInputWasKeyboard = useLastInputWasKeyboardRef();
 
+  // A stored value the app cannot honor still selects its row, so the user can see exactly which
+  // setting is carried over, and this banner says why nothing will act on it.
+  const unsupportedRow = OPTION_ROWS.find((row) => row.value === value && !row.isEnabled);
+
   return (
     <div className="tw:flex tw:flex-col tw:gap-1">
+      {unsupportedRow && (
+        <Alert className="tw:mb-2">
+          <TriangleAlert />
+          <AlertTitle>
+            {localizedStrings['%paratextRegistration_internetUse_unsupportedSelection_title%']}
+          </AlertTitle>
+          <AlertDescription>
+            {formatReplacementString(
+              localizedStrings[
+                '%paratextRegistration_internetUse_unsupportedSelection_description%'
+              ] ?? '',
+              { selectedOption: localizedStrings[unsupportedRow.labelKey] ?? unsupportedRow.value },
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
       <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
         <RadioGroup
           value={value}
@@ -251,11 +284,6 @@ export function InternetAccessOptionList({
           ))}
         </RadioGroup>
       </TooltipProvider>
-      {showFooter && (
-        <p className="tw:px-2 tw:text-xs tw:text-muted-foreground">
-          {localizedStrings['%paratextRegistration_internetUse_footer%']}
-        </p>
-      )}
     </div>
   );
 }

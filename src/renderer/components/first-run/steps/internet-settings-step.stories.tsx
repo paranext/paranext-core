@@ -81,6 +81,18 @@ export const Enabled: Story = {
   },
 };
 
+/**
+ * The stored setting names an option this app does not implement yet. `InternetSettings.xml` is
+ * shared with a co-installed Paratext 9 and can be copied in from one, so the wizard can meet this
+ * on a first run. The row stays selected under a banner, and the step holds Next shut until the
+ * user picks an option that will actually take effect.
+ */
+export const UnsupportedStoredValue: Story = {
+  beforeEach() {
+    return mockHooks({ value: { ...MOCK_SETTINGS, permittedInternetUse: 'Disabled' } });
+  },
+};
+
 /** The read failed (a `PlatformError` from the provider): friendly error alert and a Retry button. */
 export const LoadError: Story = {
   beforeEach() {

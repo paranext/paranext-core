@@ -85,6 +85,7 @@ export {
 export {
   default as InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
+  isSupportedInternetUse,
 } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
 export type { InternetAccessOptionListProps } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
 export {
