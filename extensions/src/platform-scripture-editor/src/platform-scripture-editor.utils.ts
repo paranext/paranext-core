@@ -11,7 +11,12 @@
  * on any module the host's `require` shim does not supply.
  */
 
-import { LocalizationSelectors, OpenWebViewOptions, SavedWebViewDefinition } from '@papi/core';
+import {
+  LocalizationSelectors,
+  OpenWebViewOptions,
+  SavedWebViewDefinition,
+  WebViewDefinition,
+} from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
 // Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
@@ -1270,9 +1275,9 @@ export async function openOrUpdateRelatedPanels(
  * excess-property check. It does NOT catch an omission: `projectId` has to stay optional, so `{
  * bringToFront: false }` still typechecks and the provider's `openWebViewOptions.projectId ??
  * savedWebView.projectId` would quietly fall back to the stale saved id, leaving the panel on the
- * outgoing project with `typecheck` green. `resolveGridProviderProjectId` pins that precedence; the
- * provider's own call to it is still uncovered. (Mirrors `FindWebViewOptions`, which Find exports
- * once and uses on both sides.)
+ * outgoing project with `typecheck` green. `resolveGridProviderProjectId` pins that precedence and
+ * `buildScriptureTextGridWebView` is what the provider calls, so both the rule and its use are
+ * covered. (Mirrors `FindWebViewOptions`, which Find exports once and uses on both sides.)
  */
 export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
 
@@ -1799,3 +1804,54 @@ export function resolveResourceContentState({
 }
 
 // #endregion Missing Book Detection
+
+/** Localize key for the Text Collection tab's title and tooltip. */
+export const SCRIPTURE_TEXT_GRID_TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
+
+/**
+ * Builds the Text Collection's web view definition.
+ *
+ * Lives here rather than inline in the provider so the project-binding seam is reachable by a test:
+ * `main.ts` is the extension entry point and no test imports it, so inline the precedence between
+ * `openWebViewOptions.projectId` and `savedWebView.projectId` could be inverted — leaving the panel
+ * on the outgoing project — with the whole suite still green.
+ *
+ * The web view's content and styles are passed in rather than imported: they are webpack `?inline`
+ * assets, and importing them here would pull them into every consumer of this module.
+ *
+ * @param papi The instance of papi to read the interface mode and localized strings from.
+ * @param savedWebView The saved definition being re-provided.
+ * @param openWebViewOptions Options the caller passed to `openWebView`/`reloadWebView`.
+ * @param webViewContent The web view's inline content and styles.
+ * @returns The definition to provide.
+ */
+export async function buildScriptureTextGridWebView(
+  papi: typeof PapiBackend,
+  savedWebView: SavedWebViewDefinition,
+  openWebViewOptions: TextCollectionPanelOptions,
+  webViewContent: { content: string; styles: string },
+): Promise<WebViewDefinition> {
+  if (savedWebView.webViewType !== SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
+    throw new Error(
+      `${SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
+    );
+
+  const projectId = resolveGridProviderProjectId(openWebViewOptions, savedWebView);
+  const interfaceMode = await papi.settings.get('platform.interfaceMode');
+  const titleLocalizedStrings = await papi.localization.getLocalizedStrings({
+    localizeKeys: [SCRIPTURE_TEXT_GRID_TITLE_KEY],
+  });
+
+  return {
+    ...savedWebView,
+    title: SCRIPTURE_TEXT_GRID_TITLE_KEY,
+    tooltip: titleLocalizedStrings[SCRIPTURE_TEXT_GRID_TITLE_KEY],
+    isClosable: interfaceMode === 'power',
+    shouldShowToolbar: false,
+    projectId,
+    content: webViewContent.content,
+    styles: webViewContent.styles,
+    iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
+    scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+  };
+}

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  resolveGridBodyAnnouncement,
   resolveGridBodyState,
   resolveIsGridBodyWaiting,
   resolveHasSourcesError,
@@ -270,5 +271,44 @@ describe('resolveIsGridBodyWaiting', () => {
 
   it('is not waiting once everything has settled', () => {
     expect(resolveIsGridBodyWaiting({ ...waiting, areSourcesResolved: true })).toBe(false);
+  });
+});
+
+describe('resolveGridBodyAnnouncement', () => {
+  const base = {
+    loadingLabel: 'Loading…',
+    terminalMessage: 'No texts to display.',
+    announcement: 'Chapter view opened',
+  };
+
+  it('announces the wait while loading', () => {
+    expect(resolveGridBodyAnnouncement({ ...base, bodyState: 'loading' })).toBe('Loading…');
+  });
+
+  it('announces the outcome when the wait ends with nothing to show', () => {
+    // Reverting to the caller's message here would end an announced wait in silence.
+    expect(resolveGridBodyAnnouncement({ ...base, bodyState: 'empty' })).toBe(
+      'No texts to display.',
+    );
+  });
+
+  it('announces the outcome when the wait ends in a failure', () => {
+    expect(resolveGridBodyAnnouncement({ ...base, bodyState: 'error' })).toBe(
+      'No texts to display.',
+    );
+  });
+
+  it("leaves the view's own message alone once there are cells", () => {
+    // The grid is navigable and self-describing, so it has nothing to announce of its own — and
+    // clobbering here would swallow the chapter-context message.
+    expect(resolveGridBodyAnnouncement({ ...base, bodyState: 'cells' })).toBe(
+      'Chapter view opened',
+    );
+  });
+
+  it('announces nothing rather than a raw key while the loading string resolves', () => {
+    expect(resolveGridBodyAnnouncement({ ...base, bodyState: 'loading', loadingLabel: '' })).toBe(
+      '',
+    );
   });
 });

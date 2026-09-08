@@ -195,3 +195,42 @@ export function resolveIsGridBodyWaiting({
   if (!hasProject || hasSourcesError) return false;
   return !areSourcesResolved || isLoadingCachedResources;
 }
+
+/** Inputs for {@link resolveGridBodyAnnouncement}. */
+export type GridBodyAnnouncementInput = {
+  /** The body state being rendered. */
+  bodyState: GridBodyState;
+  /** Already-localized "loading" text, or `''` while the string is still resolving. */
+  loadingLabel: string;
+  /** Already-localized text the terminal branches render. */
+  terminalMessage: string;
+  /** The message the view is announcing for its own reasons, e.g. a chapter-context change. */
+  announcement: string;
+};
+
+/**
+ * What the grid's always-mounted live region should contain.
+ *
+ * The region is the only thing in this view that can announce anything. A live region speaks text
+ * inserted while it is already mounted, so a component that renders its own message — `LoadingView`
+ * and `EmptyState` both do — arrives with the text already inside it and stays silent. A re-point
+ * rebuilds the whole iframe document, so that is every time, not an edge case.
+ *
+ * The outcome matters as much as the wait. Announcing "Loading…" and then reverting to the caller's
+ * own message (usually empty) ends an announced wait with silence, leaving a screen-reader user
+ * told that something started and never that it finished. `cells` is the one state that reports
+ * nothing of its own: the grid is navigable and describes itself, so the caller's message stands.
+ *
+ * @param input See {@link GridBodyAnnouncementInput}.
+ * @returns The live region's contents.
+ */
+export function resolveGridBodyAnnouncement({
+  bodyState,
+  loadingLabel,
+  terminalMessage,
+  announcement,
+}: GridBodyAnnouncementInput): string {
+  if (bodyState === 'loading') return loadingLabel;
+  if (bodyState === 'cells') return announcement;
+  return terminalMessage;
+}

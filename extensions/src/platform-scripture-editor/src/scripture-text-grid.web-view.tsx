@@ -49,6 +49,7 @@ import { useTextCollectionSources } from './use-text-collection-sources.hook';
 import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import {
+  resolveGridBodyAnnouncement,
   resolveGridBodyState,
   resolveIsGridBodyWaiting,
   resolveTextCollectionProjectId,
@@ -579,6 +580,12 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // unnamed for that window, which is the lesser of the two.
   const viewOptionsLabel = resolveLocalizedString(localizedStrings, VIEW_OPTIONS_BUTTON_KEY);
 
+  // The terminal branches share one message today; hoisted so the live region announces exactly
+  // what the body shows rather than re-deriving it.
+  const terminalMessage = formatReplacementString(localizedStrings[EMPTY_STATE_KEY], {
+    viewOptionsLabel: localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
+  });
+
   let viewOptionsDisabledMessage: string | undefined;
   if (!effectiveProjectId)
     viewOptionsDisabledMessage = resolveLocalizedString(localizedStrings, NO_PROJECT_KEY);
@@ -633,13 +640,14 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     // Centered in the grid body; the message names the View Options button by interpolating
     // its own localized label so a rename can't desync the copy.
     bodyContent = (
-      <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
+      // `aria-hidden` because the live region above announces this message instead. `EmptyState`
+      // mounts its own `role="status"` with the text already inside it, which is never announced,
+      // and leaving it would put two status regions in one subtree.
+      <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4" aria-hidden>
         <EmptyState
           id="scripture-text-grid-empty-state"
           className="tw:text-center"
-          message={formatReplacementString(localizedStrings[EMPTY_STATE_KEY], {
-            viewOptionsLabel: localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
-          })}
+          message={terminalMessage}
         />
       </div>
     );
@@ -653,13 +661,15 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       {/* Polite live region announcing chapter-context open/close. Placed at the top of the render
           tree so it exists in the DOM before any announcement fires (a screen reader ignores text
           present at initial render). */}
-      {/* Also carries the body's loading state. `LoadingView` cannot announce its own: a live
-          region inserted with its text already inside it is not read out, and a re-point rebuilds
-          this whole document, so its region is mounted populated every time. Routing through this
-          always-mounted one makes the text an insertion, which is announced. The chapter-context
-          message is untouched — it simply resumes when the body leaves 'loading'. */}
+      {/* Also carries the body's state, wait and outcome alike. A live region only speaks text
+          inserted while it is already mounted, so neither `LoadingView` nor `EmptyState` can
+          announce its own — a re-point rebuilds this whole document, so both mount already
+          populated. Routing both through this always-mounted region makes each an insertion. It
+          matters that the outcome is announced too: ending an announced wait by reverting to ''
+          would tell a screen reader nothing about how it ended. `cells` falls through to the
+          chapter-context message, since the grid itself is navigable and self-describing. */}
       <div role="status" aria-live="polite" aria-atomic="true" className="tw:sr-only">
-        {bodyState === 'loading' ? loadingLabel : announcement}
+        {resolveGridBodyAnnouncement({ bodyState, loadingLabel, terminalMessage, announcement })}
       </div>
       <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
         <Popover>
@@ -694,9 +704,14 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
               onCheckedChange={handleCheckedChange}
               onRemoveFromList={handleRemoveFromList}
               onGetResources={showResourcePicker}
-              // No project/PDP bound yet → every action would silently no-op, so disable the
-              // controls. Show the "no project" prompt only when there is genuinely no project (not
-              // during the brief load after one is bound).
+              // Without sources or a PDP every action would silently no-op, so disable the
+              // controls. This is not only the brief post-bind load: an unresolved read stays
+              // disabled until the elapsed-time bound trips, so it can hold for the full
+              // SOURCES_TIMEOUT_MS with no message, since `viewOptionsDisabledMessage` explains
+              // only the no-project and failed states. This state still needs its own message and
+              // a retry, the way the sibling panels' RetryableErrorView does; the borrowed catalog
+              // string also misnames the cause for a settings failure or a timeout. Deliberately
+              // out of scope here — it needs new localized strings.
               disabled={!sources || !textConnectionPdp}
               disabledMessage={viewOptionsDisabledMessage}
               localizedStrings={localizedStrings}

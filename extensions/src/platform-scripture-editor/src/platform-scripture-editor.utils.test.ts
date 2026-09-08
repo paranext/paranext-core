@@ -18,6 +18,7 @@ import {
   resolveViewTypeForInterfaceMode,
   syncOnProjectSwitch,
   openOrUpdateRelatedPanels,
+  buildScriptureTextGridWebView,
   resolveGridProviderProjectId,
   updateRelatedTextCollectionPanel,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
@@ -3573,6 +3574,98 @@ describe('resolveGridProviderProjectId', () => {
   it('binds no project when neither half names one', () => {
     // The shipped default-layout open: the grid starts unbound and follows the scroll group.
     expect(resolveGridProviderProjectId({}, {})).toBeUndefined();
+  });
+});
+
+// #endregion
+
+// #region buildScriptureTextGridWebView
+
+/** Papi mock exposing only what the grid's web view provider reads. */
+function createGridProviderMockPapi(interfaceMode: string) {
+  // Must cast since the mock only includes the papi properties the provider uses.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return {
+    settings: { get: vi.fn().mockResolvedValue(interfaceMode) },
+    localization: {
+      getLocalizedStrings: vi
+        .fn()
+        .mockResolvedValue({ '%webView_scriptureTextGrid_title_multiple%': 'Text Collection' }),
+    },
+  } as unknown as typeof PapiBackend;
+}
+
+const GRID_ASSETS = { content: '<html></html>', styles: '.a{}' };
+
+/**
+ * A saved Text Collection definition carrying only the fields the provider reads. `webViewType` is
+ * a parameter so the wrong-type case needs no mutation.
+ */
+function savedGrid(
+  projectId: string | undefined,
+  webViewType: string = SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+): SavedWebViewDefinition {
+  const definition = { id: 'grid-1', webViewType, projectId };
+  // A full SavedWebViewDefinition carries fields this function never touches; constructing them
+  // would obscure which ones the assertions below actually depend on.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return definition as unknown as SavedWebViewDefinition;
+}
+
+describe('buildScriptureTextGridWebView', () => {
+  it('binds the project a switch supplied rather than the one the tab already had', async () => {
+    // The provider half of the re-point. Inverting this precedence leaves the panel on the
+    // outgoing project, which is the bug this whole mechanism exists to prevent — and it is only
+    // caught here, since the provider itself is unreachable from a test.
+    const papi = createGridProviderMockPapi('simple');
+
+    const definition = await buildScriptureTextGridWebView(
+      papi,
+      savedGrid('outgoing'),
+      { projectId: 'incoming' },
+      GRID_ASSETS,
+    );
+
+    expect(definition.projectId).toBe('incoming');
+  });
+
+  it('keeps the saved project when the caller supplied none', async () => {
+    const papi = createGridProviderMockPapi('simple');
+
+    const definition = await buildScriptureTextGridWebView(
+      papi,
+      savedGrid('saved'),
+      {},
+      GRID_ASSETS,
+    );
+
+    expect(definition.projectId).toBe('saved');
+  });
+
+  it('pins the panel to scroll group 0 and makes it unclosable in Simple mode', async () => {
+    const papi = createGridProviderMockPapi('simple');
+
+    const definition = await buildScriptureTextGridWebView(papi, savedGrid('p1'), {}, GRID_ASSETS);
+
+    expect(definition.isClosable).toBe(false);
+    expect(definition.scrollGroupScrRef).toBe(0);
+  });
+
+  it('leaves the panel closable and its scroll group alone in Power mode', async () => {
+    const papi = createGridProviderMockPapi('power');
+
+    const definition = await buildScriptureTextGridWebView(papi, savedGrid('p1'), {}, GRID_ASSETS);
+
+    expect(definition.isClosable).toBe(true);
+  });
+
+  it('refuses to provide a web view of another type', async () => {
+    const papi = createGridProviderMockPapi('simple');
+    const wrongType = savedGrid('p1', 'someOther.webView');
+
+    await expect(buildScriptureTextGridWebView(papi, wrongType, {}, GRID_ASSETS)).rejects.toThrow(
+      'someOther.webView',
+    );
   });
 });
 

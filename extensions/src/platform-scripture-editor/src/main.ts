@@ -44,7 +44,7 @@ import {
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-  resolveGridProviderProjectId,
+  buildScriptureTextGridWebView,
   type TextCollectionPanelOptions,
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
@@ -60,7 +60,6 @@ const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
 /** Tab title/tooltip for the Text Collection (Scripture Text Grid) tab. */
-const SCRIPTURE_TEXT_GRID_TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 
 // #region Editor Selection Tracking
 
@@ -1037,58 +1036,12 @@ const currentResourceTextPanelProjectIds = new Map<string, string | undefined>()
 const scriptureTextGridWebViewProvider: IWebViewProvider = {
   async getWebView(
     savedWebView: SavedWebViewDefinition,
-    // The same type `updateRelatedTextCollectionPanel` writes, so the two halves of the re-point are
-    // linked by the type system rather than only by the field name.
     openWebViewOptions: TextCollectionPanelOptions,
   ): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
-      throw new Error(
-        `${SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
-      );
-    // Project-binding seam: the grid is project-bound so it can fire first-open overlay init and,
-    // once content selection lands, select its contents. Both branches are live: the
-    // default-layout open passes no projectId, so the grid starts unbound and falls back to
-    // following the scroll group, while `updateRelatedTextCollectionPanel` supplies one here on a
-    // Simple-mode project switch, which is what keeps the panel off the outgoing project.
-    const projectId = resolveGridProviderProjectId(openWebViewOptions, savedWebView);
-    // Re-read every call so mode changes are picked up at open/replace/restore time.
-    const interfaceMode = await papi.settings.get('platform.interfaceMode');
-    // Resolve here (not left to the web view's own effect): PlatformTabTitle auto-resolves a raw
-    // LocalizeKey passed as `title`, so that half needs no resolution — but `tooltip` is a plain
-    // string, never auto-resolved, so it must already be localized text by the time it's set. Doing
-    // both here means the tab shows "Text Collection" and a working tooltip from its very first
-    // render, instead of depending on this tab's own (possibly backgrounded, and therefore
-    // unreliably-timed) web view to push the resolved strings back out via updateWebViewDefinition
-    // after mount.
-    const titleLocalizedStrings = await papi.localization.getLocalizedStrings({
-      localizeKeys: [SCRIPTURE_TEXT_GRID_TITLE_KEY],
-    });
-    return {
-      ...savedWebView,
-      title: SCRIPTURE_TEXT_GRID_TITLE_KEY,
-      tooltip: titleLocalizedStrings[SCRIPTURE_TEXT_GRID_TITLE_KEY],
-      // This webview is dual-mode: in simple mode it's part of Column 3's fixed layout and must
-      // always remain open (the X-button is omitted and there is no keyboard close shortcut, so
-      // this covers both close paths), so it's non-closable there. Power mode allows closing
-      // freely, matching the other Column 3 providers (ScriptureEditorWebViewFactory,
-      // createResourceTextPanelProvider) — this also determines its rc-dock group (getTabGroup):
-      // isClosable === false routes it to TAB_GROUP_RESOURCES, which getGroups() only registers in
-      // Simple mode, so leaving this unconditionally false left the tab pointing at a group with no
-      // registered config in Power mode.
-      isClosable: interfaceMode === 'power',
-      // No top toolbar in this view; the View Options icon button lives in the web view's header.
-      shouldShowToolbar: false,
-      projectId,
+    return buildScriptureTextGridWebView(papi, savedWebView, openWebViewOptions, {
       content: scriptureTextGridWebView,
-      // The grid embeds Editorial; ship the same editor stylesheet bundle the other editor/resource
-      // web views use so the toolbar and context menu render styled (not bare/transparent).
       styles: scriptureTextGridWebViewStyles,
-      // Lucide "Library" glyph (books on a shelf) for the tab icon.
-      iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
-      // In simple mode, force scroll group 0 so the grid stays verse-synced with the scripture
-      // editor (which is also forced to 0 in simple mode). Power mode preserves the saved value.
-      scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
-    };
+    });
   },
 };
 
