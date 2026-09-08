@@ -1686,6 +1686,94 @@ step, no automation. Just a record.
   `adr-shard-discovery-by-type`.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
+## adr-picker-partial-failure-is-a-notice: A partial resource fetch explains itself; only a total one replaces the list
+
+- **Date:** 2026-09-04
+- **Status:** Accepted
+- **Context:** The resource picker draws from two independently-failing sources — the DBL catalog and
+  the locally-installed non-DBL resources — and two changes arrived at the same problem from
+  opposite ends. PT-4059 added the second source and a `notice` line above the list saying why the
+  list might be short; PT-4433 added a body state that replaces the list with a message and a retry.
+  Applied together and unconditionally they contradict each other: a DBL outage on a machine that
+  has local resources would hide a perfectly usable list behind an error card, while a total failure
+  would show a notice about a list that is not there. The two were never really rival designs — each
+  had solved the half of the problem its own source model made visible.
+- **Decision:** The rule is **what survived**, not **what failed**. If anything is renderable, the
+  list renders and the `notice` explains what is missing; the picker's body state reports a failure
+  only when there is nothing to show at all, and only then offers the retry.
+  `getResourcePickerBodyState` therefore returns `list` before it considers any failure, and
+  `buildResourcePickerNotice` returns nothing when the list is entirely empty so the two never speak
+  at once. The same rule already governs `GetResources`, whose host suppresses its error state while
+  a previously-loaded catalog is still on screen.
+- **Alternatives:** **Notice only** — rejected: with nothing on screen the notice sits above an empty
+  void and, in PT-4059's original copy, told the user to "close and reopen the resource picker",
+  which is a retry instruction written for want of a retry button. **Body state only** — rejected: it
+  discards resources the user can act on, which is the more expensive mistake, and it cannot express
+  a partial outage at all.
+- **Consequences:** A third source would slot in without changing the rule — it either contributes
+  rows or contributes a clause to the notice. The failure arm of `ResourceFetchResult` carries
+  `isPermanent`, so an installation with no DBL credentials gets its own sentence and no retry
+  instead of being told to check a connection that is fine; `%resourcePicker_notice_allResourcesUnavailable%`
+  was retired because the body state now covers that case with a control rather than an instruction.
+  **Revisit** if a source ever fails in a way the user can fix from inside the picker, which would
+  make the notice itself need an action.
+- **Source:** PT-4433 reconciled with PT-4059 (#2630) during rebase.
+
+## adr-picker-recovery-injected-fetch-hook: A failed fetch is recovered through an injected-fetcher hook in `platform-bible-react`
+
+- **Date:** 2026-08-31
+- **Status:** Accepted
+- **Context:** The resource panels resolve their front state through `getResourcePanelReadiness` and
+  render it through `PanelReadinessView`, which was built to make a failed DBL-catalog fetch say so
+  and offer a retry. That held only for a *rejected* fetch: `getCachedResources` also signalled
+  failure by resolving `undefined`, which `useDblResourceCatalog` read as "not ready yet", so the
+  panels spun forever with no message and no retry on a build with no DBL credentials — the most
+  common case in the wild. The picker surfaces those panels hand off to were worse still: the
+  `platform.resourcePicker` dialog, the Share Layout dialog's two embedded pickers, and the Get
+  Resources web view all reported a failed catalog as "no results", which reads as a truthful empty
+  catalog and leaves the user no control that could change it. Worse, Get Resources is where the
+  picker's empty state points, so the two screens agreed on a false answer. The
+  fetch-with-error-and-retry logic already existed once, in `useDblResourceCatalog`, but it imports
+  PAPI and lives in `platform-scripture-editor`, so neither the renderer nor a different extension
+  could reuse it.
+- **Decision:** Two halves. First, `platformGetResources.getCachedResources` answers with a
+  discriminated `DblResourceCatalog` — `{ status: 'available', resources }` or
+  `{ status: 'unavailable', reason: 'notConfigured' | 'notReady' }` — and **rejects** on a genuine
+  fetch failure, so "this build cannot download DBL resources" is never confusable with "the fetch
+  broke". Second, the recovery primitive is `useRetryablePromise` in `platform-bible-react`: a
+  PAPI-free hook taking the caller's fetch as an injected callback and returning
+  `{ data, isLoading, hasError, hasSettled, refetch }`, with a generation guard so a superseded
+  in-flight fetch cannot clear an error raised by a newer one (`usePromise`'s own currency flag
+  guards only the state it owns). Presentational components take the failure as a prop and pair it
+  with a retry callback (`hasResourcesError`/`onRetryResources` on `ResourcePickerDialog`,
+  `isResourcesError`/`onRetryResources` on `GetResources`); each host injects its own
+  command-sending mechanism, which is what lets the renderer's `sendCommand` and a web view's
+  `papi.commands.sendCommand` share one hook.
+- **Alternatives:** **Duplicate the error-and-retry logic in each host** — rejected: it is ~25 lines
+  whose subtlety (a rejection is not an empty result; a stale fetch must not clear a newer error) is
+  exactly what gets copied wrong, and it would have made a fourth near-copy. **Move
+  `useDblResourceCatalog` into a shared package** — rejected: it imports PAPI, which
+  `lib/platform-bible-react/` must not.
+- **Consequences:** The three-state result is what makes the UI rule statable: **render the error
+  state from the rejection, never from an absent value.** An earlier revision of this work had each
+  host fold `hasError || (!isLoading && data === undefined)` instead, which read a build with no DBL
+  credentials as a load failure and attached a retry that could never succeed — a *new* dead end
+  created by the change meant to remove them. Anything reading this catalog should branch on
+  `status`, and treat `unavailable` as an empty list rather than an error.
+  `useRetryablePromise` therefore exposes `hasSettled` alongside `isLoading`: `isLoading` is false
+  both before the first fetch starts and between a retry click and the effect that restarts it, so
+  a host deriving "finished" from `!isLoading` paints a settled state over a fetch that has not run.
+  Its generation guard is bumped synchronously on **both** kinds of supersession — a `refetch` and a
+  changed factory identity — because a generation derived from state lands a render late, leaving a
+  window in which a superseded fetch can resurrect a cleared error.
+  `useDblResourceCatalog` remains a near-duplicate of the shared hook and is still not migrated onto
+  it; that is a refactor, and this change was already large. Tracked as PT-4518, which records the
+  one subtlety: `isCatalogReady` maps onto `hasSettled && !hasError`, not onto `hasSettled` alone.
+  **Revisit** when a consumer needs a fourth catalog state, or wants a value where `undefined` is a
+  legitimate result — the hook stays deliberately generic about that, and the `status` branching
+  lives in the hosts.
+- **Source:** PT-4433 (NN5d, Sprint 89 Simple Quality), resource-picker dead-ends.
+
 ## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
 
 - **Date:** 2026-08-26
@@ -2198,6 +2286,28 @@ step, no automation. Just a record.
   scope, the shared-decision correction, and the `isLoading` mechanism correction from PR #2704
   review.
 
+## adr-retryable-error-view-is-the-shared-failure-zero-state: One icon+message+retry view for every surface
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** `adr-empty-is-zero-state-primitive` says zero states compose the shadcn `Empty`
+  primitive, but composing it is not the same as agreeing on the result. The DBL catalog failure is
+  reported by five surfaces — the resource panels, the resource picker, Get Resources, the Text
+  Collection grid and Share Layout — and each had independently chosen its own `role`, icon and
+  `Button` variant/size, so the same failure offered a visibly different retry control depending on
+  which screen the user reached it from. `RetryableErrorView` already existed with the right shape,
+  but it lived in `platform-scripture-editor`, which `lib/platform-bible-react` cannot import from.
+- **Decision:** `RetryableErrorView` moves to `platform-bible-react` (`components/basics/`, stable
+  export) with `onRetry`/`retryLabel` optional — omitting them renders the message alone rather than
+  an inert button, which is what a permanent condition such as "this installation cannot download
+  resources" needs. `panel-state-views.component.tsx` keeps a thin `PanelRetryableErrorView` wrapper
+  that adds only the full-panel height the panels want.
+- **Alternatives:** **Leave the copies and align them by review** — rejected: they had already
+  drifted once with no reviewer catching it, and each new surface is another chance.
+- **Consequences:** Restyling this failure state is now one edit. A surface that wants a different
+  look should pass `className`/`icon` rather than re-composing `Empty`.
+- **Source:** PT-4433 review round 2 (finding 15).
+
 ## adr-reuse-shared-checklist-framework: Reuse the shared checklist framework when porting a new checklist tool
 
 - **Formerly:** ADR-0006
@@ -2456,6 +2566,38 @@ step, no automation. Just a record.
   focus PLUS readiness PLUS not-closing, so swapping them changes what `papi.window` answers during
   startup, teardown and quit. That is its own change with its own tests, not a rename.
 - **Source:** PT-4275 epic (multi-window architecture plan step 2).
+
+## adr-share-layout-renders-without-a-catalog: Share Layout always renders, and states what it cannot show
+
+- **Date:** 2026-09-03
+- **Status:** Accepted
+- **Context:** `ShareLayoutDialogContent` snapshots the lists it edits into `useState` at mount, and
+  Confirm writes that snapshot back over `platformScripture.referencedProjectsAndResources`. Every
+  input to that snapshot is indistinguishable from a legitimate empty value while it is in flight: a
+  project setting resolves to its `defaultValue` (`createUseDataHook`), the personal lists are
+  `undefined`, and without the DBL catalog `splitResourcesByTab` cannot tell a saved `dblResource`
+  reference's tab, so all of them land in `otherResources`. Mounting early therefore lets Confirm
+  erase a project's shared resource list, or publish the admin's personal list to the team. The
+  first attempt at a fix gated the mount on the catalog alone and, when the catalog was unavailable,
+  replaced the entire dialog with an error card — which put the tab and model-text settings (nothing
+  to do with DBL) out of reach, and on a core build with no DBL credentials the dialog would then
+  never open at all, because `notConfigured` is the normal state there.
+- **Decision:** The dialog blocks on **delivery**, not on success. It renders a spinner until
+  `canWrite`, all three project settings, both personal lists and the catalog have each settled once
+  — and then it always renders, whatever the catalog said. References it cannot classify stay in
+  `otherResources` (round-tripped unchanged by Confirm, as before) and are **counted out loud** in a
+  notice above the tabs, carrying a retry only when the reason is recoverable. The settle gate
+  latches on the FIRST settle, so a retry driven from inside the mounted dialog cannot unmount the
+  body and discard the admin's in-progress edits.
+- **Alternatives:** **Keep blocking on a failed catalog** — rejected: it makes a transient provider
+  registration (~10s of background retries) hide unrelated settings, and a retry landing after the
+  body mounted cannot fix a snapshot anyway, which is what the delivery gate already handles.
+  **Render with no catalog and say nothing** — rejected: that is the dead end this epic exists to
+  remove, under a heading that promises a review of what is about to be shared.
+- **Consequences:** Any new input to the mount-time snapshot must be added to the settle gate, or it
+  reintroduces the erasure. A surface that cannot show part of its own subject should say how much
+  it is hiding rather than rendering a short list silently.
+- **Source:** PT-4433 review round 2 (findings 2, 3, 5, 13).
 
 ## adr-simple-mode-column-minimums: Simple-mode column minimums are derived from the window minimum, dividers included
 
