@@ -7,6 +7,13 @@ import { RefObject, useEffect, useState } from 'react';
  * weak signal — with a few hundred options the thumb is only a few pixels tall, and on platforms
  * with overlay scrollbars it reserves no width at all. Callers use this to draw an explicit cue.
  *
+ * The scroller must be attached by the time this hook's effect runs, and must stay mounted for the
+ * hook's lifetime. The listeners bind to whatever `scrollerRef.current` holds then, and React does
+ * not re-run an effect when a ref's contents change, so a scroller that mounts late or is swapped
+ * for another element leaves the answer frozen at what the previous element reported. Mount the
+ * hook alongside the scroller — as `OptionListScrollCue` does inside the popover's portal — rather
+ * than above something that mounts it conditionally.
+ *
  * @param scrollerRef Ref to the scrolling element.
  * @param isEnabled Whether to observe at all. When false the hook reports `false` and attaches
  *   nothing. Defaults to `true`.
