@@ -107,6 +107,28 @@ describe('WindowCrashedView', () => {
     ).toBeInTheDocument();
   });
 
+  it('still renders when reading the layout direction throws', () => {
+    // The screen sets its own base direction from `localStorage`, and a `localStorage` access
+    // throws outright where storage is unavailable. That read happens while rendering the fallback
+    // of the boundary that catches renderer crashes, and there is no boundary above that one — so
+    // an unguarded throw here unmounts the root and produces the blank window this screen replaces.
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('storage unavailable', 'SecurityError');
+    });
+
+    try {
+      render(<WindowCrashedView onReload={vi.fn()} />);
+
+      expect(getItem).toHaveBeenCalled();
+      expect(
+        screen.getByText(WINDOW_CRASHED_ENGLISH_DEFAULTS['%window_error_crashed_title%']),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('alert').closest('[dir]')).toHaveAttribute('dir', 'ltr');
+    } finally {
+      getItem.mockRestore();
+    }
+  });
+
   it('reloads when the button is pressed', () => {
     const onReload = vi.fn();
     render(<WindowCrashedView onReload={onReload} />);

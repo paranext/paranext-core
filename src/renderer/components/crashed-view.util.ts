@@ -1,5 +1,6 @@
 import { LocalizationData } from '@shared/services/localization.service-model';
 import { LocalizeKey } from 'platform-bible-utils';
+import { Direction, readDirection } from 'platform-bible-react/experimental';
 import { CSSProperties } from 'react';
 
 // Styling data shared by the app's crash screens - `WebViewCrashedView`, which replaces a single
@@ -107,4 +108,24 @@ export function createCrashedViewLocalizer<TKey extends LocalizeKey>(
     // indistinguishable from one that resolved to its own name — treat both as unresolved
     return value && value !== key ? value : englishDefaults[key];
   };
+}
+
+/**
+ * The layout direction to lay a crash screen out in, or `'ltr'` when it cannot be determined.
+ *
+ * `readDirection` reads `localStorage` unguarded, and a `localStorage` property access itself
+ * throws when storage is unavailable. Every other caller in the app renders under a boundary that
+ * would catch that; a crash screen is what the boundaries fall back TO, so a throw here has nothing
+ * above it to catch it and unmounts the root - the blank window the screens exist to replace.
+ *
+ * @returns The persisted direction, or `'ltr'` if storage is unavailable
+ */
+export function readDirectionSafely(): Direction {
+  try {
+    return readDirection();
+  } catch {
+    // Storage unavailable (sandboxed or restricted environments); an LTR crash screen the user can
+    // read beats no screen at all
+    return 'ltr';
+  }
 }

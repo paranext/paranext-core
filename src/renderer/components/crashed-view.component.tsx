@@ -3,10 +3,10 @@ import {
   CRASHED_VIEW_ALERT_STYLE,
   CRASHED_VIEW_MESSAGE_STYLE,
   CRASHED_VIEW_TITLE_STYLE,
+  readDirectionSafely,
 } from '@renderer/components/crashed-view.util';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
-import { readDirection } from 'platform-bible-react/experimental';
 import { Component, CSSProperties, PropsWithChildren, ReactNode, useEffect, useRef } from 'react';
 
 export type CrashedViewShellProps = {
@@ -61,9 +61,10 @@ export type CrashedViewShellProps = {
  *
  * Sets its own base direction. Every other surface in the app is inside something that has already
  * established one, but a crash screen may be the only thing left in its document - so an RTL user
- * would otherwise read this screen laid out LTR, with trailing punctuation on the wrong side.
- * `readDirection` is a bare `localStorage` read, so honoring it costs none of the "reach no
- * service" constraint above.
+ * would otherwise read this screen laid out LTR, with trailing punctuation on the wrong side. Read
+ * through `readDirectionSafely`, which covers the two properties this position needs: the direction
+ * is a bare `localStorage` read that reaches no service, and a `localStorage` access that throws is
+ * caught rather than propagating out of the render of a screen nothing catches.
  */
 export function CrashedViewShell({
   title,
@@ -92,7 +93,7 @@ export function CrashedViewShell({
     <>
       {/* Outside the alert region so the region holds only what is announced. */}
       <style>{buttonStateCss}</style>
-      <div ref={containerRef} style={containerStyle} dir={readDirection()} tabIndex={-1}>
+      <div ref={containerRef} style={containerStyle} dir={readDirectionSafely()} tabIndex={-1}>
         {/* `role="alert"` is scoped to the TEXT, not the whole screen. The ARIA APG reserves
             `alert` for content that needs no response and says it must not contain focusable
             elements; with the button inside it, a screen reader announces twice on the paths where
