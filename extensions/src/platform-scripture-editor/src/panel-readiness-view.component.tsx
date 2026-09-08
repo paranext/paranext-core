@@ -9,7 +9,7 @@ import {
 import { AlertTriangle, BookOpen, CloudOff } from 'lucide-react';
 import { ReactNode } from 'react';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
-import { RetryableErrorView, LoadingView } from './panel-state-views.component';
+import { PanelRetryableErrorView, LoadingView } from './panel-state-views.component';
 
 /**
  * Renders the front of a resource panel's state machine — everything before it has something to
@@ -83,7 +83,7 @@ export function PanelReadinessView({
   // state gets a control and the settings error does not.
   if (readiness === 'catalogError') {
     return (
-      <RetryableErrorView
+      <PanelRetryableErrorView
         message={catalogErrorMessage}
         retryLabel={retryLabel}
         onRetry={onRetryCatalog}
