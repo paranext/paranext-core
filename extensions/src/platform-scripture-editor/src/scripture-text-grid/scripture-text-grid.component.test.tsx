@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
+
+/** Verse blocks the mocked cell renders in aligned mode; `top` is the stubbed geometry. */
+let alignedVerseBlocks: { start: number; end: number; top: number }[] = [];
 
 const mockResourceCell = vi.fn(
   ({
@@ -27,6 +30,24 @@ const mockResourceCell = vi.fn(
   }) => (
     <div data-testid={`cell-${resourceRef.projectId}`} data-view-mode={viewMode}>
       {`${resourceRef.label}@${scrRef.verseNum}`}
+      {/* In the aligned grid the real cell renders an editor whose verse blocks carry the range the
+          layout places them on, and which the reference scroll targets. Stand in for those, with
+          the geometry the scroll reads (jsdom measures nothing) declared per element. */}
+      {viewMode === 'aligned' ? (
+        <>
+          <div data-cell-header data-stub-top="0" data-stub-height="20" />
+          {alignedVerseBlocks.map((block) => (
+            <div
+              key={block.start}
+              className="verse-block"
+              data-testid={`block-${resourceRef.projectId}-${block.start}`}
+              data-verse-start={block.start}
+              data-verse-end={block.end}
+              data-stub-top={block.top}
+            />
+          ))}
+        </>
+      ) : undefined}
       {showDragHandle ? (
         // Mirror the real wiring: a focusable grip that forwards keydown and exposes its id.
         <button
@@ -54,10 +75,17 @@ vi.mock('./use-resource-zoom-input.hook', () => ({
   useResourceZoomInput: vi.fn(),
 }));
 
+// Mutable so a test can model an inactive dock tab. `useViewVisibility` itself needs an
+// IntersectionObserver, which jsdom has not got, and would report `false` regardless because jsdom
+// reports zero geometry for everything — so the aligned grid's deferred scroll could never be
+// observed without this.
+const mockVisibility = { isVisible: true };
+
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
   return {
     ...original,
+    useViewVisibility: () => mockVisibility.isVisible,
     ResizablePanelGroup: ({ children }: { children: React.ReactNode }) => (
       <div data-testid="resizable-panel-group">{children}</div>
     ),
@@ -687,5 +715,144 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
       />,
     );
     expect(screen.getByTestId('grip-r-a')).toHaveFocus();
+  });
+});
+
+describe('ScriptureTextGrid — aligned (Grid) view', () => {
+  const alignedRef = { book: 'MAT', chapterNum: 5, verseNum: 1, versificationStr: 'English' };
+
+  /**
+   * Jsdom lays nothing out, so every rect is zero and the reference scroll would be unobservable.
+   * Give each element the geometry it declares via `data-stub-*` instead, so the scroll arithmetic
+   * runs on real numbers and a wrong target produces a wrong `scrollTop`.
+   *
+   * Verse blocks move with the port's scroll, as they would in a browser — without that the
+   * viewport-relative arithmetic would re-measure an already-scrolled block from its original
+   * position and every scroll after the first would overshoot. The header does not move: it is
+   * `position: sticky` against this same port, which is exactly why the scroll subtracts its
+   * height.
+   */
+  function stubGeometry() {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function stub(
+      this: HTMLElement,
+    ) {
+      const port = this.closest<HTMLElement>('[data-testid="scripture-text-grid-aligned"]');
+      const scrolledBy = this.classList.contains('verse-block') ? (port?.scrollTop ?? 0) : 0;
+      const top = Number(this.dataset.stubTop ?? 0) - scrolledBy;
+      const height = Number(this.dataset.stubHeight ?? 0);
+      return {
+        top,
+        height,
+        bottom: top + height,
+        left: 0,
+        right: 0,
+        width: 0,
+        x: 0,
+        y: top,
+        toJSON: () => ({}),
+      } as DOMRect;
+    });
+  }
+
+  function renderAligned(
+    reference: typeof alignedRef,
+    gridResources: typeof resources = resources,
+    extraProps: Record<string, unknown> = {},
+  ) {
+    const ui = (currentRef: typeof alignedRef) => (
+      <ScriptureTextGrid
+        resources={gridResources}
+        scrRef={currentRef}
+        setScrRef={setScrRef}
+        viewMode="aligned"
+        ariaLabel="Text Collection"
+        {...extraProps}
+      />
+    );
+    const result = render(ui(reference));
+    return { ...result, rerenderAt: (next: typeof alignedRef) => result.rerender(ui(next)) };
+  }
+
+  beforeEach(() => {
+    mockVisibility.isVisible = true;
+    alignedVerseBlocks = [
+      { start: 1, end: 1, top: 100 },
+      { start: 2, end: 2, top: 200 },
+      { start: 4, end: 5, top: 300 },
+    ];
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('renders every resource as a column of one grid, with no verse listitems', () => {
+    renderAligned(alignedRef);
+
+    expect(screen.getByTestId('scripture-text-grid-aligned')).toBeInTheDocument();
+    expect(screen.getAllByRole('region')).toHaveLength(3);
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+  });
+
+  it('puts every cell in aligned mode, so each asks the editor for block verses', () => {
+    renderAligned(alignedRef);
+
+    expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'aligned');
+    expect(screen.getByTestId('cell-b')).toHaveAttribute('data-view-mode', 'aligned');
+  });
+
+  it('renders a single resource as a one-column aligned grid, not a chapter view (R8)', () => {
+    renderAligned(alignedRef, [resources[0]]);
+
+    expect(screen.getByTestId('scripture-text-grid-aligned')).toBeInTheDocument();
+    expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'aligned');
+  });
+
+  it('opens no chapter-context split, even when a handler is provided', () => {
+    renderAligned(alignedRef, resources, { onChapterContextChange: vi.fn() });
+
+    fireEvent.click(screen.getAllByRole('region')[0]);
+
+    expect(screen.queryByTestId('scripture-text-grid-chapter-context')).not.toBeInTheDocument();
+  });
+
+  it('scrolls the grid to the referenced verse when the reference changes', () => {
+    stubGeometry();
+    const { rerenderAt } = renderAligned(alignedRef);
+    const port = screen.getByTestId('scripture-text-grid-aligned');
+
+    // Mounting at verse 1 already scrolled to its block (100), less the sticky header (20).
+    expect(port.scrollTop).toBe(80);
+
+    rerenderAt({ ...alignedRef, verseNum: 2 });
+
+    expect(port.scrollTop).toBe(180);
+  });
+
+  it('scrolls to the bridge that covers a verse no resource starts', () => {
+    stubGeometry();
+    const { rerenderAt } = renderAligned(alignedRef);
+    const port = screen.getByTestId('scripture-text-grid-aligned');
+
+    rerenderAt({ ...alignedRef, verseNum: 5 });
+
+    // No block starts at 5; the 4-5 bridge covers it.
+    expect(port.scrollTop).toBe(280);
+  });
+
+  it('defers the scroll while the tab is hidden and catches up when it is shown', () => {
+    stubGeometry();
+    mockVisibility.isVisible = false;
+    const { rerenderAt } = renderAligned(alignedRef);
+    const port = screen.getByTestId('scripture-text-grid-aligned');
+
+    rerenderAt({ ...alignedRef, verseNum: 2 });
+    // A hidden rc-dock pane has no layout, so scrolling now would silently do nothing.
+    expect(port.scrollTop).toBe(0);
+
+    mockVisibility.isVisible = true;
+    rerenderAt({ ...alignedRef, verseNum: 2 });
+
+    expect(port.scrollTop).toBe(180);
   });
 });
