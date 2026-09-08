@@ -322,6 +322,18 @@ describe('GetResources language filter', () => {
     expect(openLanguageFilter().some((label) => label.includes('Coptic'))).toBe(true);
   });
 
+  it('drops a persisted type this build does not offer instead of badging it with no label', () => {
+    // The type selection is a plain `string[]` in web view state, so it can hold a value that is
+    // not one of this build's types. `Filter` labels a badge by looking the value up in its
+    // entries, so passing the raw selection through would render an X with nothing beside it.
+    renderGetResources({ selectedTypes: ['RetiredResource'] });
+
+    // The badges placeholder stands where the badges would be, so nothing is selected.
+    expect(screen.getByText('%resources_any_type%')).toBeInTheDocument();
+    // And with no type in play the grid shows the whole catalogue rather than nothing.
+    expect(screen.getByText('Resource Coptic XmlResource')).toBeInTheDocument();
+  });
+
   it('ignores a selected language the type filter no longer offers, rather than emptying the grid', () => {
     // Coptic is persisted from a session where XML resources were shown. Filtering rows on it now
     // would hide every Scripture row and leave no way to un-pick it.
