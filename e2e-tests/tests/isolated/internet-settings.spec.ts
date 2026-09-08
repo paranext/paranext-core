@@ -14,25 +14,28 @@
  */
 import { test, expect } from '../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { internetSettingsFrame, openInternetSettings } from './internet-settings.page';
+import {
+  internetSettingsFrame,
+  openInternetSettings,
+  openUserProfilePopover,
+  selectTheOtherConnectivityOption,
+} from './internet-settings.page';
 
 test.describe('Internet & Connectivity settings', () => {
-  test('profile popover shows "Internet and connectivity" label and opens settings panel', async ({
+  test('profile popover shows the "Internet & connectivity" label and opens settings panel', async ({
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await mainPage.getByTestId('user-profile-popover-trigger').click();
 
-    // The button label should read "Internet and connectivity" (not "Network settings")
-    await expect(mainPage.getByTestId('user-profile-action-network')).toContainText(
-      'Internet and connectivity',
-    );
+    // The button label is %userProfile_networkSettings_2% (superseding "Network settings")
+    await expect(await openUserProfilePopover(mainPage)).toContainText('Internet & connectivity');
 
-    await mainPage.getByTestId('user-profile-action-network').click();
+    await openInternetSettings(mainPage);
 
     const frame = internetSettingsFrame(mainPage);
     await expect(frame.locator('h2')).toBeVisible({ timeout: 15_000 });
-    await expect(frame.locator('h2')).toContainText('Internet & Connectivity');
+    // %internetSettings_webView_title_2%
+    await expect(frame.locator('h2')).toContainText('Internet & connectivity');
     await expect(frame.locator('p').first()).toContainText('only apply to the Paratext app');
   });
 
@@ -60,7 +63,8 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(frame.getByText(/Disables access to Registry, Send\/Receive/)).toBeVisible();
 
     // Coming-soon rows have disabled radio buttons
-    await expect(frame.getByRole('radio', { name: /Disable ALL internet access/ })).toBeDisabled();
+    // %paratextRegistration_description_internetUse_option_Disabled_2%
+    await expect(frame.getByRole('radio', { name: 'Disable all Internet access' })).toBeDisabled();
     await expect(
       frame.getByRole('radio', { name: /Block internet when in sensitive locations/ }),
     ).toBeDisabled();
@@ -101,8 +105,7 @@ test.describe('Internet & Connectivity settings', () => {
     const resetButton = frame.getByRole('button', { name: 'Discard changes' });
     await expect(saveButton).toBeDisabled({ timeout: 10_000 });
 
-    // Default is VpnRequired; clicking Unrestricted (option 1) makes a change.
-    await frame.getByRole('radio', { name: 'Unrestricted' }).click();
+    await selectTheOtherConnectivityOption(frame);
 
     await expect(saveButton).toBeEnabled();
     await expect(resetButton).toBeEnabled();
@@ -122,13 +125,18 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(saveButton).toBeDisabled({ timeout: 10_000 });
 
     // Change selection
-    await frame.getByRole('radio', { name: 'Unrestricted' }).click();
+    const originalOption = await selectTheOtherConnectivityOption(frame);
+    await expect(originalOption).not.toBeChecked();
     await expect(saveButton).toBeEnabled();
 
     // Click Reset — should restore original state
     await resetButton.click();
 
-    // Both buttons become disabled again (no unsaved changes)
+    // The selection the panel loaded with comes back, and with no unsaved changes left both
+    // buttons disable again. The selection assertion is what makes this a reset test rather than a
+    // button-state test: clearing the dirty flag without restoring the radio would satisfy the
+    // button assertions alone.
+    await expect(originalOption).toBeChecked({ timeout: 5_000 });
     await expect(saveButton).toBeDisabled({ timeout: 5_000 });
     await expect(resetButton).toBeDisabled();
   });

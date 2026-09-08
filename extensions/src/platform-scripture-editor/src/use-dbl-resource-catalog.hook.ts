@@ -4,7 +4,7 @@ import { DblResourceData, getErrorMessage } from 'platform-bible-utils';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 /** The DBL resource catalog plus everything a panel needs to reason about its arrival. */
-export type DblResourceCatalog = {
+export type DblResourceCatalogState = {
   /** The catalog, coerced to `[]` before it arrives. */
   dblResources: DblResourceData[];
   /** Whether the fetch is in flight. */
@@ -19,10 +19,13 @@ export type DblResourceCatalog = {
    */
   isCatalogReady: boolean;
   /**
-   * Whether the DBL half of the fetch failed or resolved without an answer (offline, provider
-   * unavailable). Recoverable — call {@link DblResourceCatalog.refetchCatalog}. `dblResources` still
-   * carries any locally-installed resources that loaded, so a panel can show those alongside the
-   * retry.
+   * Whether the DBL catalog is not coming from the last fetch — it rejected, or the provider had
+   * not registered yet. Recoverable either way — call
+   * {@link DblResourceCatalogState.refetchCatalog}. `dblResources` still carries any
+   * locally-installed resources that loaded, so a panel can show those alongside the retry.
+   *
+   * Distinct from an installation with no DBL credentials, which delivers an empty DBL catalog:
+   * that is an answer, and no retry can improve on it.
    */
   hasCatalogError: boolean;
   /** Re-runs the fetch, clearing any previous error. */
@@ -42,9 +45,17 @@ export type DblResourceCatalog = {
  * A rejected fetch is caught deliberately. `usePromise` has no rejection path — an uncaught
  * rejection never reaches its `setIsLoading(false)`, so the panel would spin forever with no
  * message and no way out. Resolving to an empty catalog and reporting `hasCatalogError` lets the
- * panel say what happened and offer a retry that can actually re-drive the fetch.
+ * panel say what happened and offer a retry that can actually re-drive the fetch. A `notReady`
+ * catalog takes the same path for the same reason: it is a catalog still on its way, not an empty
+ * one.
+ *
+ * TODO(PT-4518): Migrate onto `useRetryablePromise` from `platform-bible-react`, which now provides
+ * this hook's whole mechanism generically — the supersession guard, the error flag cleared on
+ * refetch, and the settled-vs-loading distinction this hook spells `isCatalogReady`. Only the PAPI
+ * calls and the `unavailable`-reason mapping below would remain here. Note that `isCatalogReady`
+ * maps onto `hasSettled && !hasError`, not onto `hasSettled` alone.
  */
-export function useDblResourceCatalog(): DblResourceCatalog {
+export function useDblResourceCatalog(): DblResourceCatalogState {
   const [fetchResources, setFetchResources] = useState(true);
   const [hasCatalogError, setHasCatalogError] = useState(false);
 
@@ -88,18 +99,21 @@ export function useDblResourceCatalog(): DblResourceCatalog {
         return localNonDblResources;
       }
 
-      // A resolved-but-undefined catalog is the offline / provider-unavailable answer, not an empty
-      // one. Report it as an error so the panel offers the retry that can re-drive the fetch instead
-      // of spinning on a fetch that has already finished — and keep the locally-installed rows,
-      // which loaded fine and are the only resources such a user has.
-      if (dblResult.value === undefined) {
-        if (generation === fetchGenerationRef.current) setHasCatalogError(true);
+      // The two `unavailable` reasons are opposite answers and must not collapse into one. An
+      // installation with no DBL credentials has ARRIVED at its answer: there is no catalog and
+      // there never will be, so it is not an error and must not carry a retry that cannot work.
+      // `notReady` is the opposite — the provider registers in the background, so the catalog is
+      // still coming and a retry genuinely works. Either way the locally-installed rows loaded fine
+      // and are the only resources such a user has, so they are kept.
+      if (dblResult.value.status !== 'available') {
+        if (generation === fetchGenerationRef.current)
+          setHasCatalogError(dblResult.value.reason === 'notReady');
         return localNonDblResources;
       }
 
       if (generation === fetchGenerationRef.current) setHasCatalogError(false);
 
-      return [...dblResult.value, ...localNonDblResources];
+      return [...dblResult.value.resources, ...localNonDblResources];
     }, [fetchResources]),
     undefined,
   );

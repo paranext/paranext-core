@@ -5,6 +5,11 @@ import userEvent from '@testing-library/user-event';
 import { ChangeEvent, ReactNode } from 'react';
 import * as commandService from '@shared/services/command.service';
 import * as firstRunStore from '@renderer/services/first-run-store';
+import {
+  getRegistrationValidity,
+  publishRegistrationValidity,
+  resetRegistrationValidityStore,
+} from '@renderer/services/registration-validity-store';
 import { settingsService } from '@shared/services/settings.service';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -174,8 +179,13 @@ function mockCommands(
         return overrides.saveError
           ? Promise.reject(overrides.saveError)
           : Promise.resolve(undefined);
-      default:
+      case 'platform.restart':
         return Promise.resolve(undefined);
+      default:
+        // Every command IdentifyStep sends is named above, so an unlisted one means the component
+        // grew a dependency this helper does not model. Fail loudly rather than hand back a silent
+        // `undefined` that some later assertion misreads as a real answer.
+        return Promise.reject(new Error(`Unexpected command: ${command}`));
     }
   });
 }
@@ -188,6 +198,9 @@ beforeEach(() => {
   mockSendCommand.mockReset();
   mockCommands();
   mockIsDemoMode.mockReturnValue(false);
+  // Module-global and shared with the toolbar, so a value published by one test would otherwise be
+  // the starting state of the next.
+  resetRegistrationValidityStore();
   vi.useFakeTimers();
 });
 
@@ -280,6 +293,35 @@ describe('IdentifyStep', () => {
       'paratextRegistration.setParatextRegistrationData',
       expect.objectContaining({ name: 'Test User', code: VALID_CODE }),
     );
+  });
+
+  it('clears a cached invalid registration in this session once the save succeeds', async () => {
+    const user = setupUser();
+    mockCommands({ validate: true });
+    // The toolbar mounts behind the wizard and has already cached a definitive answer.
+    publishRegistrationValidity('invalid');
+    // A restart that never settles models the best-effort restart failing to take the process down.
+    const onRestartAfterSave = vi.fn().mockReturnValue(new Promise<never>(() => {}));
+
+    render(
+      <IdentifyStep
+        onNext={onNext}
+        setCanProceed={setCanProceed}
+        onRestartAfterSave={onRestartAfterSave}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
+    );
+
+    await user.click(screen.getByRole('button', { name: /save and restart/i }));
+
+    // Verify that the cached registration state was corrected so the reminder dot won't nag.
+    await waitFor(() => expect(getRegistrationValidity()).toBe('valid'));
   });
 
   it('calls onRestartAfterSave instead of platform.restart when provided', async () => {

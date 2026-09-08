@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { SavedTabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
+import { WindowClosingError } from '@renderer/services/window-closing-error.model';
 
 const mocks = vi.hoisted(() => ({
   reloadWebView:
@@ -83,6 +84,28 @@ describe('a restored tab fetching the content it was saved without', () => {
     const { loadWebViewTab } = await import('./web-view.component');
     mocks.reloadWebView.mockResolvedValue(undefined);
     mocks.getSavedWebViewDefinitionSync.mockReturnValue(undefined);
+
+    loadWebViewTab(RESTORED_TAB);
+
+    await vi.waitFor(() =>
+      expect(mocks.loggerDebug).toHaveBeenCalledWith(
+        expect.stringMatching(new RegExp(SAVED_WEB_VIEW_ID)),
+      ),
+    );
+    expect(mocks.loggerError).not.toHaveBeenCalled();
+  });
+
+  test('says nothing louder than debug when the window refused the reload because it is closing', async () => {
+    // A window that has been told it is closing refuses in-flight reloads. That refusal is an
+    // ordinary part of closing, so it must not reach the error level the catch otherwise uses — it
+    // arrives there with the whole tab serialized into the message, which reads like a defect worth
+    // chasing.
+    const { loadWebViewTab } = await import('./web-view.component');
+    mocks.reloadWebView.mockRejectedValue(
+      new WindowClosingError(
+        `web-view.service-shard: window 2 cannot reload web view ${SAVED_WEB_VIEW_ID}: the main process has told this window that it is closing.`,
+      ),
+    );
 
     loadWebViewTab(RESTORED_TAB);
 

@@ -1,6 +1,20 @@
 #!/bin/bash
 # Quick app refresh - stops, rebuilds, and restarts Platform.Bible with CDP enabled
 # This is a FAST operation (~30s). Agents should run this freely without optimization concerns.
+#
+# Environment passed through to the app:
+#   DEV_NOISY=true    Load the test extensions (helloRock3 etc.) and their default layout. Off by
+#                     default, and no suite needs it on FROM HERE — which is not the same as no
+#                     suite needing it: the overlay suite drives the helloRock3 web views and
+#                     requires it, but it launches its own Electron and sets its own default
+#                     (launchElectronApp defaults DEV_NOISY to 'true' for every fixture). What this flag governs is the
+#                     app THIS script starts, which only the CDP-attached suites use, and none of
+#                     those reference the test extensions. Turning it on adds
+#                     startup web views that shift iframe ordering (see find.fixture.ts). It is for
+#                     poking at the test extensions by hand:
+#                       DEV_NOISY=true ./.erb/scripts/refresh.sh
+#   Any other variable the app reads is likewise inherited; this script does not sanitize the
+#   environment.
 set -e
 cd "$(dirname "$0")/../.."
 
@@ -16,13 +30,23 @@ unset ELECTRON_RUN_AS_NODE
 
 # Start with CDP enabled. On Linux, use xvfb for headless operation.
 # On macOS (and other platforms without xvfb), show the GUI window.
+# PT_NO_DEVTOOLS keeps the docked DevTools panel closed. It takes roughly 555px of the window, so
+# an app started for automation otherwise hands every CDP-based suite a renderer about half the
+# width a user sees, with dock tabs ending up underneath web views. F12 still opens it on demand.
+#
+# --window-size rather than --maximize under xvfb: a bare Xvfb has no window manager, so there is
+# nothing to honour a maximize request and the window stays at its default (~1024px). The value
+# must be a separate argv token — `--window-size 1920x1080`, never `--window-size=1920x1080` —
+# because the parser matches the flag by exact token (src/node/utils/command-line.util.ts:104).
 if command -v xvfb-run >/dev/null 2>&1; then
-  echo "Starting with CDP enabled (headless via xvfb)..."
+  echo "Starting with CDP enabled (headless via xvfb, 1920x1080, DevTools closed)..."
   xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
-      env MAIN_ARGS="--remote-debugging-port=9223 --maximize" npm start &
+      env PT_NO_DEVTOOLS=true \
+      MAIN_ARGS="--remote-debugging-port=9223 --window-size 1920x1080" npm start &
 else
+  # A real window manager honours --maximize, and a visible window is what a human wants here.
   echo "Starting with CDP enabled (visible window — xvfb not available)..."
-  env MAIN_ARGS="--remote-debugging-port=9223 --maximize" npm start &
+  env PT_NO_DEVTOOLS=true MAIN_ARGS="--remote-debugging-port=9223 --maximize" npm start &
 fi
 APP_PID=$!
 

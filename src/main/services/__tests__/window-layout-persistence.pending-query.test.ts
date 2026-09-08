@@ -23,42 +23,42 @@ describe('querying whether a window is marked pending content', () => {
   test('a never-marked window answers false', async () => {
     const service = await freshService();
 
-    expect(service.isWindowPendingContent(1)).toBe(false);
+    expect(service.isWindowPendingContent('1')).toBe(false);
   });
 
   test('a window answers true once marked', async () => {
     const service = await freshService();
 
-    service.markWindowPendingContent(1);
+    service.markWindowPendingContent('1');
 
-    expect(service.isWindowPendingContent(1)).toBe(true);
+    expect(service.isWindowPendingContent('1')).toBe(true);
   });
 
   test('a window answers false again once cleared', async () => {
     const service = await freshService();
-    service.markWindowPendingContent(1);
+    service.markWindowPendingContent('1');
 
-    service.clearWindowPendingContent(1);
+    service.clearWindowPendingContent('1');
 
-    expect(service.isWindowPendingContent(1)).toBe(false);
+    expect(service.isWindowPendingContent('1')).toBe(false);
   });
 
   test('marks are per-window: another id was never marked, even while one is', async () => {
     const service = await freshService();
 
-    service.markWindowPendingContent(1);
+    service.markWindowPendingContent('1');
 
-    expect(service.isWindowPendingContent(2)).toBe(false);
+    expect(service.isWindowPendingContent('2')).toBe(false);
   });
 
   test('marks are per-window: clearing one window leaves another window marked', async () => {
     const service = await freshService();
-    service.markWindowPendingContent(1);
-    service.markWindowPendingContent(2);
+    service.markWindowPendingContent('1');
+    service.markWindowPendingContent('2');
 
-    service.clearWindowPendingContent(1);
+    service.clearWindowPendingContent('1');
 
-    expect(service.isWindowPendingContent(1)).toBe(false);
-    expect(service.isWindowPendingContent(2)).toBe(true);
+    expect(service.isWindowPendingContent('1')).toBe(false);
+    expect(service.isWindowPendingContent('2')).toBe(true);
   });
 });

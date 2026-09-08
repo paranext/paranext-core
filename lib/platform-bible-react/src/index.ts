@@ -227,6 +227,8 @@ export type {
 export { default as ResultsCard } from './components/basics/results-card.component';
 export { EmptyState } from './components/basics/empty-state.component';
 export type { EmptyStateProps } from './components/basics/empty-state.component';
+export { RetryableErrorView } from './components/basics/retryable-error-view.component';
+export type { RetryableErrorViewProps } from './components/basics/retryable-error-view.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Spinner } from './components/basics/spinner.component';
@@ -317,6 +319,8 @@ export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
+export { default as useRetryablePromise } from './hooks/use-retryable-promise.hook';
+export type { RetryablePromiseState } from './hooks/use-retryable-promise.hook';
 export { useStylesheet } from './hooks/use-stylesheet.hook';
 export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
 export { useViewVisibility } from './hooks/use-view-visibility.hook';

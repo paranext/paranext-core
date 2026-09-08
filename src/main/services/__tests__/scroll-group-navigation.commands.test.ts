@@ -74,14 +74,14 @@ const NAVIGATION_COMMAND_NAMES = [
  * Wire the target window to answer with the given navigation context, and hand back the window's
  * WebView shard so tests can see what was written to it.
  */
-function withNavigationContext(context: unknown, windowId = 2) {
+function withNavigationContext(context: unknown, windowId = '2') {
   const webViewShard = { setDetachedScrRef: vi.fn(async () => true) };
   mocks.getTargetWindowId.mockReturnValue(windowId);
   mocks.getTargetWindowServiceShard.mockImplementation(async () => ({
     windowId: mocks.getTargetWindowId(),
     shard: { getNavigationContext: vi.fn(async () => context) },
   }));
-  mocks.getWebViewShard.mockImplementation(async (id: number) =>
+  mocks.getWebViewShard.mockImplementation(async (id: string) =>
     id === windowId ? webViewShard : undefined,
   );
   return webViewShard;
@@ -172,7 +172,7 @@ describe('when there is no window to navigate in', () => {
     '%s reports a window that failed to answer what to navigate',
     async (name) => {
       mocks.getTargetWindowServiceShard.mockResolvedValue({
-        windowId: 2,
+        windowId: '2',
         shard: {
           getNavigationContext: vi.fn(async () => {
             throw new Error('the websocket went away mid-call');
@@ -317,13 +317,13 @@ describe('a detached target', () => {
     // reading the context and writing the result — the two must target the same window
     const answeringWindowShard = { setDetachedScrRef: vi.fn(async () => true) };
     const otherWindowShard = { setDetachedScrRef: vi.fn(async () => true) };
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
     mocks.getTargetWindowServiceShard.mockResolvedValue({
-      windowId: 2,
+      windowId: '2',
       shard: {
         getNavigationContext: vi.fn(async () => {
           // Focus moves to window 3 while this window is answering
-          mocks.getTargetWindowId.mockReturnValue(3);
+          mocks.getTargetWindowId.mockReturnValue('3');
           return {
             readDirection: 'ltr',
             target: { webViewId: 'web-view-1', scrollGroupScrRef: GEN_5_3 },
@@ -331,8 +331,8 @@ describe('a detached target', () => {
         }),
       },
     });
-    mocks.getWebViewShard.mockImplementation(async (id: number) =>
-      id === 2 ? answeringWindowShard : otherWindowShard,
+    mocks.getWebViewShard.mockImplementation(async (id: string) =>
+      id === '2' ? answeringWindowShard : otherWindowShard,
     );
     const goToNextVerse = await getHandler('platform.goToNextVerse');
 
@@ -435,7 +435,7 @@ describe('serialization across windows', () => {
     // The mutex is app-global now that the handler runs in main, where it used to be per-renderer.
     // Two windows driving the same scroll group interleave without it, each reading the same
     // starting reference and losing a step.
-    const contextsByWindowId: Record<number, unknown> = {
+    const contextsByWindowId: Record<string, unknown> = {
       2: { readDirection: 'ltr', target: { webViewId: 'a', scrollGroupScrRef: 2, projectId: 'p' } },
       3: { readDirection: 'ltr', target: { webViewId: 'b', scrollGroupScrRef: 2, projectId: 'p' } },
     };
@@ -454,9 +454,9 @@ describe('serialization across windows', () => {
     });
     const goToNextVerse = await getHandler('platform.goToNextVerse');
 
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
     const fromWindow2 = goToNextVerse();
-    mocks.getTargetWindowId.mockReturnValue(3);
+    mocks.getTargetWindowId.mockReturnValue('3');
     const fromWindow3 = goToNextVerse();
     await Promise.all([fromWindow2, fromWindow3]);
 
@@ -501,9 +501,9 @@ describe('serialization across windows', () => {
     });
     const goToNextVerse = await getHandler('platform.goToNextVerse');
 
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
     const stalledInWindow2 = goToNextVerse();
-    mocks.getTargetWindowId.mockReturnValue(3);
+    mocks.getTargetWindowId.mockReturnValue('3');
     const fromWindow3 = goToNextVerse();
     // Let everything that CAN make progress make it, without waiting on the stalled window
     await new Promise((resolve) => {
@@ -527,9 +527,9 @@ describe('serialization within one window', () => {
     const setDetachedScrRef = vi.fn<
       (webViewId: string, newRef: SerializedVerseRef) => Promise<boolean>
     >(async () => true);
-    mocks.getTargetWindowId.mockReturnValue(2);
-    mocks.getWebViewShard.mockImplementation(async (id: number) =>
-      id === 2 ? { setDetachedScrRef } : undefined,
+    mocks.getTargetWindowId.mockReturnValue('2');
+    mocks.getWebViewShard.mockImplementation(async (id: string) =>
+      id === '2' ? { setDetachedScrRef } : undefined,
     );
     // Stateful window: it answers with the reference the last write put on the web view, as a real
     // window does — the write updates that window's dock layout synchronously, so it is already

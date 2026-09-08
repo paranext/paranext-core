@@ -1,10 +1,16 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
-import { usePromise } from 'platform-bible-react';
+import { useRetryablePromise } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { GetResources, GET_RESOURCES_STRING_KEYS, ResourceAction } from './get-resources.component';
+import { shouldReportCatalogFailure } from './dbl-catalog.utils';
+import {
+  GetResources,
+  GET_RESOURCES_STRING_KEYS,
+  newResourceActionProviderNotReadyError,
+  ResourceAction,
+} from './get-resources.component';
 
 type InstallInfo = {
   dblEntryUid: string;
@@ -20,22 +26,41 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installResource = dblResourcesProvider?.installDblResource;
   const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
-  const [fetchResources, setFetchResources] = useState(true);
-  const [resources, isLoadingResources] = usePromise(
-    useCallback(async () => {
-      if (fetchResources) {
-        // Sets the `fetchResources` flag to false which will trigger the promise again next render
-        // to fetch the resources
-        setFetchResources(false);
-        return Promise.resolve(undefined);
-      }
-
-      return papi.commands.sendCommand('platformGetResources.getCachedResources');
-    }, [fetchResources]),
-    undefined,
+  const {
+    data: catalog,
+    isLoading,
+    hasError: isResourcesError,
+    hasSettled,
+    refetch: refetchResources,
+  } = useRetryablePromise(
+    useCallback(
+      async () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      [],
+    ),
   );
 
-  const resolvedResources = useMemo(() => resources ?? [], [resources]);
+  // `!hasSettled` counts as loading, not just `isLoading`. A retry clears the error synchronously
+  // while `usePromise` only raises its loading flag in an effect, so the render in between would
+  // otherwise report "no resources found" on the very click meant to disprove it.
+  const isLoadingResources = isLoading || !hasSettled;
+
+  const resolvedResources = useMemo(
+    () => (catalog?.status === 'available' ? catalog.resources : []),
+    [catalog],
+  );
+
+  // The two unavailable reasons need opposite treatments. `notReady` means the provider has not
+  // registered yet — transient, so a retry genuinely can work and it earns the error state (see
+  // `shouldReportCatalogFailure`). `notConfigured` means this installation has no DBL credentials,
+  // which no retry can change; it gets its own message rather than an unexplained empty list.
+  const areDownloadsUnavailable =
+    catalog?.status === 'unavailable' && catalog.reason === 'notConfigured';
+
+  const isResourcesUnavailable = shouldReportCatalogFailure(
+    catalog,
+    isResourcesError,
+    resolvedResources.length > 0,
+  );
 
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
@@ -83,7 +108,13 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const installOrRemoveResource = useCallback(
     (dblEntryUid: string, action: ResourceAction): Promise<void> | void => {
-      if (!installResource || !uninstallResource) return undefined;
+      // Reject rather than returning a bare `undefined`. The component awaits this inside a
+      // try/catch and surfaces a rejection in its error alert; awaiting `undefined` resolves, so a
+      // click landing before the data provider resolves would produce no spinner, no error and no
+      // log — the user cannot tell it from a click that did nothing at all. The rejection carries no
+      // prose: the component holds the localized strings and maps it onto one of its own.
+      if (!installResource || !uninstallResource)
+        return Promise.reject(newResourceActionProviderNotReadyError());
       const newInstallInfo: InstallInfo = {
         dblEntryUid,
         action: action === 'install' ? 'installing' : 'removing',
@@ -96,7 +127,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       return actionFunction(dblEntryUid)
         .then(() => {
           // Trigger a refetch so the resource list reflects the new installed state.
-          setFetchResources(true);
+          refetchResources();
           return undefined;
         })
         .catch((error) => {
@@ -107,7 +138,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
           throw error;
         });
     },
-    [installResource, uninstallResource],
+    [installResource, uninstallResource, refetchResources],
   );
 
   /** Removes resources from array of resources that are currently being handled */
@@ -132,7 +163,9 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       localizedStringsWithLoadingState={localizedStringsWithLoadingState}
       resources={resolvedResources}
       isLoadingResources={isLoadingResources}
-      isResourcesError={false}
+      isResourcesError={isResourcesUnavailable}
+      onRetryResources={refetchResources}
+      areDownloadsUnavailable={areDownloadsUnavailable}
       idsBeingHandled={idsBeingHandled}
       selectedTypes={selectedTypes}
       selectedLanguages={selectedLanguages}

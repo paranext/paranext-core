@@ -566,50 +566,72 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'menubar-close',
     purpose: 'Close the open application menu',
     category: 'Menus',
-    context: 'Application menu bar',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
     keys: { macOS: '⌥', windows: 'Alt', linux: 'Alt' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
     ],
   },
   {
     id: 'menubar-project',
     purpose: 'Open the Project menu',
     category: 'Menus',
-    context: 'Application menu bar',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
     keys: { macOS: '⌥P', windows: 'Alt+P', linux: 'Alt+P' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
     ],
   },
   {
     id: 'menubar-window',
     purpose: 'Open the Window menu',
     category: 'Menus',
-    context: 'Application menu bar',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
     keys: { macOS: '⌥L', windows: 'Alt+L', linux: 'Alt+L' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
     ],
   },
   {
     id: 'menubar-layout',
     purpose: 'Open the Layout menu',
     category: 'Menus',
-    context: 'Application menu bar',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
     keys: { macOS: '⌥N', windows: 'Alt+N', linux: 'Alt+N' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
     ],
   },
   {
     id: 'menubar-help',
     purpose: 'Open the Help menu',
     category: 'Menus',
-    context: 'Application menu bar',
+    context:
+      'Application menu bar (main window only — secondary windows have no in-window menu bar and this shortcut does not exist there on any platform; on macOS the menu commands stay reachable through the OS menu bar, which assigns no accelerators of its own)',
     keys: { macOS: '⌥H', windows: 'Alt+H', linux: 'Alt+H' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
+      'src/renderer/components/platform-bible-toolbar.tsx',
     ],
+  },
+  {
+    id: 'tab-context-menu',
+    purpose: 'Open the context menu for the focused tab',
+    category: 'Menus',
+    // Not a shortcut the app registers: the browser raises `contextmenu` at the focused tab, which
+    // the tab title forwards into the menu's trigger. macOS has no Menu key and no Shift+F10
+    // equivalent for this, so the menu is reached there by right-clicking (or Control-clicking) the
+    // tab. Power mode only — Simple mode offers no tab menu.
+    context: 'Renderer (focused tab, Power mode)',
+    keys: { macOS: '— (no equivalent)', windows: 'Shift+F10 / Menu', linux: 'Shift+F10 / Menu' },
+    locations: ['src/renderer/components/docking/platform-tab-title.component.tsx'],
   },
 ];

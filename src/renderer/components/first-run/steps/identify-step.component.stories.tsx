@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { expect, fn, spyOn, within, userEvent, waitFor } from 'storybook/test';
-import * as commandService from '@shared/services/command.service';
+import { expect, fn, within, userEvent, waitFor } from 'storybook/test';
+// Deep relative (not aliased) so tsc follows only the dependency-free channel, never the
+// webpack-only mock it drives. Same reasoning as the first-run language mock.
+import {
+  resetCommandServiceMock,
+  setCommandServiceMock,
+} from '../../../../../.storybook/mocks/command-service-mock-channel';
 import { IdentifyStep } from './identify-step.component';
 
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
@@ -36,12 +41,12 @@ export const RegistryLinkFollowsSelectedServer: Story = {
   beforeEach: () => {
     // Route by command name so the mount-time URL lookup returns the non-production site while
     // any other command (none are triggered here) resolves harmlessly.
-    const spy = spyOn(commandService, 'sendCommand').mockImplementation((command: string) =>
+    setCommandServiceMock((command) =>
       command === 'paratextRegistration.getParatextRegistryUrl'
-        ? Promise.resolve(NON_PRODUCTION_REGISTRY_URL)
-        : Promise.resolve(undefined),
+        ? NON_PRODUCTION_REGISTRY_URL
+        : undefined,
     );
-    return () => spy.mockRestore();
+    return () => resetCommandServiceMock();
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -75,9 +80,9 @@ export const FilledValid: Story = {
  */
 export const InvalidCode: Story = {
   beforeEach: () => {
-    // Replaces sendCommand so every validation attempt returns false (not found).
-    const spy = spyOn(commandService, 'sendCommand').mockResolvedValue(false);
-    return () => spy.mockRestore();
+    // Every command answers false, which is what a validation attempt reads as "not found".
+    setCommandServiceMock(() => false);
+    return () => resetCommandServiceMock();
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -118,19 +123,19 @@ export const RestartPending: Story = {
     // Route by command name so the mount-time registry-URL lookup can't consume the
     // validation/save mocks off a positional queue (it would leave Save disabled). Restart never
     // settles because the real process reboots here.
-    const spy = spyOn(commandService, 'sendCommand').mockImplementation((command: string) => {
+    setCommandServiceMock((command) => {
       switch (command) {
         case 'paratextRegistration.validateParatextRegistrationData':
-          return Promise.resolve(true);
+          return true;
         case 'paratextRegistration.setParatextRegistrationData':
-          return Promise.resolve(undefined);
+          return undefined;
         case 'platform.restart':
           return new Promise<never>(() => {});
         default:
-          return Promise.resolve(undefined);
+          return undefined;
       }
     });
-    return () => spy.mockRestore();
+    return () => resetCommandServiceMock();
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

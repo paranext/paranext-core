@@ -263,6 +263,7 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       localizeColumns(retVal.defaultWebViewTopMenu.columns),
       localizeMenuItems(retVal.defaultWebViewTopMenu.items),
       localizeMenuItems(retVal.defaultWebViewContextMenu.items),
+      localizeMenuItems(retVal.defaultWebViewTabMenu?.items),
       Object.getOwnPropertyNames(retVal.webViewMenus).map(async (webViewName: string) => {
         // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
         // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -272,6 +273,7 @@ export class MenuDocumentCombiner extends DocumentCombiner {
           localizeColumns(webViewMenu.topMenu?.columns),
           localizeMenuItems(webViewMenu.topMenu?.items),
           localizeMenuItems(webViewMenu.contextMenu?.items),
+          localizeMenuItems(webViewMenu.tabMenu?.items),
         ]);
       }),
     ]);
@@ -320,6 +322,12 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       namePrefix,
       currentMenus?.defaultWebViewContextMenu.groups,
     );
+    checkNewGroups(newMenus.defaultWebViewTabMenu?.groups, namePrefix, undefined);
+    checkNewMenuItems(
+      newMenus.defaultWebViewTabMenu?.items,
+      namePrefix,
+      currentMenus?.defaultWebViewTabMenu?.groups,
+    );
     const newWebViewMenus = newMenus?.webViewMenus;
     if (!newWebViewMenus) return;
     Object.getOwnPropertyNames(newWebViewMenus).forEach((webViewName: string) => {
@@ -343,6 +351,8 @@ export class MenuDocumentCombiner extends DocumentCombiner {
         namePrefix,
         currentWebView?.contextMenu?.groups,
       );
+      checkNewGroups(newWebView?.tabMenu?.groups, namePrefix, undefined);
+      checkNewMenuItems(newWebView?.tabMenu?.items, namePrefix, currentWebView?.tabMenu?.groups);
     });
 
     // TODO: Validate that extensions only add to objects that are marked as extensible
@@ -361,6 +371,8 @@ export class MenuDocumentCombiner extends DocumentCombiner {
     checkMenuItemsForDuplicateOrdering(allMenus.defaultWebViewTopMenu.items);
     checkMenuGroupsForDuplicateOrdering(allMenus.defaultWebViewContextMenu.groups);
     checkMenuItemsForDuplicateOrdering(allMenus.defaultWebViewContextMenu.items);
+    checkMenuGroupsForDuplicateOrdering(allMenus.defaultWebViewTabMenu?.groups);
+    checkMenuItemsForDuplicateOrdering(allMenus.defaultWebViewTabMenu?.items);
     Object.getOwnPropertyNames(allMenus.webViewMenus).forEach((webViewName: string) => {
       // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
       // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -370,6 +382,8 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       checkMenuItemsForDuplicateOrdering(webViewMenu.topMenu?.items);
       checkMenuGroupsForDuplicateOrdering(webViewMenu.contextMenu?.groups);
       checkMenuItemsForDuplicateOrdering(webViewMenu.contextMenu?.items);
+      checkMenuGroupsForDuplicateOrdering(webViewMenu.tabMenu?.groups);
+      checkMenuItemsForDuplicateOrdering(webViewMenu.tabMenu?.items);
     });
   }
 
@@ -386,12 +400,28 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       const typedWebViewName = webViewName as ReferencedItem;
       const webViewMenu = retVal.webViewMenus[typedWebViewName];
 
-      // Check if we need to fold the default menus into this web view's menus
-      if (!webViewMenu.includeDefaults) return;
       const options: DocumentCombinerOptions = {
         copyDocuments: false,
         ignoreDuplicateProperties: true,
       };
+
+      // The tab menu folds in regardless of `includeDefaults`. Its items act on the tab frame
+      // rather than on the web view's contents, so they apply to a tab whatever the web view
+      // contributes — a web view opting out of platform menus is saying something about its own
+      // toolbar and content menu, not about whether its tab can be moved.
+      // Both sides fall back to a menu with nothing in it rather than to `{}`: the output schema
+      // requires `groups` and `items`, so folding two bare objects together produces a tab menu that
+      // fails validation and takes the contributing extension's whole menus.json down with it
+      const emptyTabMenu = { groups: {}, items: [] };
+      const startingTabMenu = webViewMenu.tabMenu ?? emptyTabMenu;
+      const tabMenuCombiner = new NonValidatingDocumentCombiner(startingTabMenu, options);
+      tabMenuCombiner.addOrUpdateContribution('', retVal.defaultWebViewTabMenu ?? emptyTabMenu);
+      // Assert the type that schema validation should have already sorted out
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      webViewMenu.tabMenu = tabMenuCombiner.output as SingleColumnMenu | undefined;
+
+      // Check if we need to fold the remaining default menus into this web view's menus
+      if (!webViewMenu.includeDefaults) return;
 
       const startingTopMenu = webViewMenu.topMenu ?? {};
       const topMenuCombiner = new NonValidatingDocumentCombiner(startingTopMenu, options);

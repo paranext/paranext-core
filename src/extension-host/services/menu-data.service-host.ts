@@ -15,6 +15,7 @@ import {
   MultiColumnMenu,
   InterfaceMode,
   ReferencedItem,
+  SingleColumnMenu,
   WebViewMenu,
   Localized,
   Unsubscriber,
@@ -46,6 +47,11 @@ class MenuDataDataProviderEngine
   private mainMenu: Localized<MultiColumnMenu> = { groups: {}, items: [], columns: {} };
   private unlocalizedMainMenu: MultiColumnMenu = { groups: {}, items: [], columns: {} };
   private webViewMenusMap = new Map<ReferencedItem, Localized<WebViewMenu>>();
+  /**
+   * Kept on its own because tabs hosting no web view — dialogs, error tabs — have no name to look a
+   * menu up by, and the items in a tab menu act on the tab rather than on its contents
+   */
+  private defaultTabMenu: Localized<SingleColumnMenu> = { groups: {}, items: [] };
   private unsubscribeOnDidResyncContributions: Unsubscriber | undefined;
   private unsubscribeFromInterfaceMode: UnsubscriberAsync | undefined;
   private currentMode: InterfaceMode = 'power';
@@ -104,7 +110,14 @@ class MenuDataDataProviderEngine
     const webViewMenu = this.webViewMenusMap.get(webViewName);
     if (!webViewMenu) {
       logger.debug(`Missing/invalid web view menu data for web view ${webViewName}`);
-      return { contextMenu: undefined, includeDefaults: false, topMenu: undefined };
+      // A tab hosting no web view still has a tab menu, and the platform items in it apply to every
+      // tab, so an unrecognized name is answered with those rather than with nothing
+      return {
+        contextMenu: undefined,
+        includeDefaults: false,
+        topMenu: undefined,
+        tabMenu: this.#filteredTabMenu(this.defaultTabMenu),
+      };
     }
     const topMenu = webViewMenu.topMenu
       ? {
@@ -118,7 +131,11 @@ class MenuDataDataProviderEngine
           items: filterItemsForInterfaceMode(webViewMenu.contextMenu.items, this.currentMode),
         }
       : undefined;
-    return { ...webViewMenu, topMenu, contextMenu };
+    // Unlike the top and context menus, the tab menu is not opt-in: its items act on the tab frame
+    // rather than on the web view's contents, so every tab gets them whether or not the web view
+    // asked for platform defaults. A web view that contributes none of its own gets exactly these
+    const tabMenu = this.#filteredTabMenu(webViewMenu.tabMenu ?? this.defaultTabMenu);
+    return { ...webViewMenu, topMenu, contextMenu, tabMenu };
   }
 
   // setWebViewMenu doesn't use instance state but cannot be static because it implements the
@@ -140,6 +157,11 @@ class MenuDataDataProviderEngine
       return success;
     }
     return true;
+  }
+
+  /** Apply the interface-mode filter to a tab menu */
+  #filteredTabMenu(tabMenu: Localized<SingleColumnMenu>): Localized<SingleColumnMenu> {
+    return { ...tabMenu, items: filterItemsForInterfaceMode(tabMenu.items, this.currentMode) };
   }
 
   /**
@@ -188,11 +210,13 @@ class MenuDataDataProviderEngine
   #loadAllMenuData(unlocalizedMainMenu: PlatformMenus, menuData: Localized<PlatformMenus>): void {
     this.mainMenu = { groups: {}, items: [], columns: {} };
     this.unlocalizedMainMenu = { groups: {}, items: [], columns: {} };
+    this.defaultTabMenu = { groups: {}, items: [] };
     this.webViewMenusMap.clear();
 
     try {
       this.mainMenu = menuData.mainMenu;
       this.unlocalizedMainMenu = unlocalizedMainMenu.mainMenu;
+      this.defaultTabMenu = menuData.defaultWebViewTabMenu ?? { groups: {}, items: [] };
       const { webViewMenus } = menuData;
 
       Object.entries(webViewMenus).forEach(([webViewType, value]) => {

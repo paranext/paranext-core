@@ -55,6 +55,7 @@ import {
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { windowService } from '@shared/services/window.service';
+import { WindowClosingError } from '@renderer/services/window-closing-error.model';
 import {
   BOOKS_PRESENT_DEFAULT,
   getBookIdsFromBooksPresent,
@@ -648,6 +649,16 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
         try {
           await retrieveWebViewContent(data.webViewType, data.id);
         } catch (e) {
+          // A window that has been told it is closing refuses in-flight reloads; that refusal is
+          // an ordinary part of closing, not a failure worth surfacing at error level.
+          if (e instanceof WindowClosingError) {
+            logger.debug(
+              `web-view.component did not retrieve web view content for ${serialize(
+                savedTabInfo,
+              )}: ${getErrorMessage(e)}`,
+            );
+            return;
+          }
           logger.error(
             `web-view.component failed to retrieve web view content for ${serialize(
               savedTabInfo,
