@@ -827,3 +827,24 @@ export const MixedDirectionRow: Story = {
     </CellRowBox>
   ),
 };
+
+/**
+ * `contentOverflow="visible"` hands scrolling to an ancestor instead of the cell. The aligned grid
+ * needs it: a cell that scrolls its own content cannot take part in the grid's shared rows, and
+ * would drift out of step with its neighbours. Compare with `Ready`, which scrolls its own
+ * content.
+ */
+export const ContentScrolledByAncestor: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        contentOverflow="visible"
+        editor={<SampleChapter />}
+      />
+    </CellBox>
+  ),
+};

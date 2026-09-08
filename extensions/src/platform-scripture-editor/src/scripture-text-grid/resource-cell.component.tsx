@@ -177,11 +177,10 @@ export function ResourceCell({
       );
   }, [usjPossiblyError, resourceRef.resourceId]);
   const extraValidMarkers = useExtraValidMarkers(usj);
-  // The block-verse layout is read-only by construction (a paragraph spanning verses is split
-  // across their blocks, so it no longer round-trips to USJ). Every cell here is already read-only,
-  // so nothing is given up: this grid never exports USJ, applies updates, or addresses selection by
-  // USJ location. `getViewOptions` returns undefined for an unknown mode, in which case the editor
-  // falls back to its default (inline) layout and the grid renders unaligned rather than blank.
+  // The block-verse layout is read-only by construction, which costs this grid nothing: every cell
+  // is already read-only and none of them export USJ or address selection by USJ location.
+  // `getViewOptions` returns undefined for an unknown mode, leaving the editor on its default
+  // inline layout — the grid then renders unaligned rather than blank.
   const options: EditorOptions = useMemo(
     () => ({
       isReadonly: true,

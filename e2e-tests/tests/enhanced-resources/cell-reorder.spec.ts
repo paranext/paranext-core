@@ -26,15 +26,15 @@
 import { FrameLocator } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
+import { closeAllNonHomeDockTabs } from './test-helpers';
 import {
-  closeAllNonHomeDockTabs,
   discoverAdminTextConnectionProject,
   flagResourcesAndOpenScriptureTextGrid,
   openScriptureTextGrid,
   restoreScriptureTextGridProjectSettings,
   ScriptureTextGrid,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-} from './test-helpers';
+} from './scripture-text-grid.page';
 
 // ---------------------------------------------------------------------------
 // Env-var driven resource IDs (same pattern as scripture-text-grid.spec.ts)

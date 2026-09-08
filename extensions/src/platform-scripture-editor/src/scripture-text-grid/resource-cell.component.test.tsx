@@ -291,6 +291,15 @@ describe('ResourceCell viewMode', () => {
     expect(lastFedUsjText()).toContain('verse one');
   });
 
+  it('hands scrolling to the grid in aligned mode, which is what keeps the columns aligned', async () => {
+    // A cell that kept `overflow: auto` would both break the subgrid chain and scroll out of step
+    // with its neighbours — and the grid would still render, just unaligned.
+    renderResourceCell({ viewMode: 'aligned', chapterUsj: twoVerseChapterUsj });
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+
+    expect(document.querySelector('[data-cell-content]')).toHaveClass('tw:overflow-visible');
+  });
+
   it('leaves the other modes on the editor default layout', async () => {
     renderResourceCell({
       viewMode: 'chapter',

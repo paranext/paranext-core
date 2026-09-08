@@ -413,7 +413,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'scripture-text-grid-reorder-cell',
     purpose:
-      'Reorder the focused Scripture Text Grid cell one position (verse view: up/down; chapter view: left/right)',
+      'Reorder the focused Scripture Text Grid cell one position (verse view: up/down; chapter and Grid views: left/right)',
     category: 'View',
     context: 'Scripture Text Grid web view',
     keys: {
@@ -423,6 +423,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-column.component.tsx',
     ],
   },
   {

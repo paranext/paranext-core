@@ -1,35 +1,31 @@
 /**
- * Stylesheet for the verse-aligned grid (`viewMode="aligned"`), injected with `useStylesheet` only
- * while that mode is active.
+ * Stylesheet for the verse-aligned grid, injected by `AlignedGrid`.
  *
- * It lives in TypeScript rather than a `.scss` file because the row rules are generated (one pair
- * per possible verse number) and because generating them here makes the mapping unit-testable — the
- * alignment rule is the load-bearing part of this view and nothing else can assert it in a DOM-less
- * test (jsdom does no layout).
+ * In TypeScript rather than `.scss` because the row rules are generated, one pair per verse number,
+ * and generating them here makes the mapping unit-testable.
  */
 
 /** Class marking the grid root, which owns the row axis and is the single scroll port. */
 export const ALIGNED_GRID_CLASS = 'stg-aligned';
 
 /**
- * How many verse rows the grid root declares. Rows nothing occupies collapse to zero height, so
- * declaring more than a chapter uses costs nothing visually and removes any need to measure the
- * chapter first. 200 clears the longest chapter in any versification Platform.Bible ships (Psalm
- * 119, 176 verses) with room to spare. A verse numbered beyond this would fall outside the explicit
- * grid and be placed in an implicit row per column, which would not be shared — so this must stay
- * above any real verse number rather than being tuned down.
+ * How many verse rows the grid root declares. Unoccupied rows collapse to zero height, so declaring
+ * more than a chapter uses costs nothing and saves measuring the chapter first. 200 clears the
+ * longest chapter Platform.Bible ships (Psalm 119, 176 verses). A verse numbered beyond this falls
+ * into a per-column implicit row, which is not shared — so keep this above any real verse number
+ * rather than tuning it down.
  */
 export const MAX_ALIGNED_VERSE_ROWS = 200;
 
 /**
  * The row a verse block occupies, as CSS declarations.
  *
- * Line numbers inside a subgrid are LOCAL to the span that subgrid covers, and the content subgrid
- * covers the root rows _after_ the header, so verse N is simply local line N to N+1 — counting the
- * header row here would shift every verse by one and silently push the last verse off the explicit
- * grid. `grid-row-start` and `grid-row-end` are set by separate rules keyed on the block's own
- * `data-verse-start` / `data-verse-end`, which is what lets a bridged verse (`14-15`, start 14, end
- * 15) span its rows without a rule per pair.
+ * Grid line numbers inside a subgrid are LOCAL to the rows it spans, and the content subgrid starts
+ * below the header, so verse N is local line N to N+1. Counting the header here would shift every
+ * verse by one and push a chapter's last verse off the explicit grid.
+ *
+ * Start and end come from separate rules keyed on the block's own `data-verse-start`/`-end`, which
+ * is what lets a bridge (`14-15`) span its two rows without a rule per pair.
  *
  * @param maxVerseRows Highest verse number to emit rules for.
  * @returns The generated CSS text.
@@ -46,16 +42,13 @@ export function buildVerseRowRules(maxVerseRows: number): string {
 }
 
 /**
- * The `display: contents` / `subgrid` chain from the grid root down to the verse blocks, plus the
- * consequences of flattening it.
+ * The `display: contents` / `subgrid` chain from the grid root down to the verse blocks.
  *
- * Every level between the root and a verse block has to stop generating a box, or the blocks are
- * laid out against their own cell instead of the grid's shared row axis. That includes three
- * elements this repo does not own — `.editor-container`, `.editor-inner`, and `.editor-input` come
- * from `@eten-tech-foundation/platform-editor` — so this is a deliberate coupling to that DOM;
- * `adr-aligned-grid-flattens-the-editor-dom` records why one editor per column made it the only
- * option. Two things are discarded by the flattening and re-applied here: the cell's padding (it
- * lived on a wrapper that is now `display: contents`) and the editor input's own padding.
+ * Every level between the two must stop generating a box, or the blocks lay out against their own
+ * cell instead of the grid's shared rows. Three of those levels belong to the editor
+ * (`@eten-tech-foundation/platform-editor`), so this couples to a DOM this repo does not own;
+ * `adr-aligned-grid-flattens-the-editor-dom` records why one editor per column left no alternative.
+ * Flattening discards two wrappers' padding, re-applied on the verse blocks below.
  */
 const CHAIN_RULES = `
 .${ALIGNED_GRID_CLASS}{

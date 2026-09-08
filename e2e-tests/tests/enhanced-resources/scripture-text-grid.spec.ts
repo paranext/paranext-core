@@ -15,17 +15,18 @@
  * NOT covered (need an app relaunch the CDP fixture can't do; verified manually): `useWebViewState`
  * restart-persistence, and feature-flag-OFF hiding the view (registration happens at activation).
  */
+import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
+import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
 import {
-  closeAllNonHomeDockTabs,
   discoverAdminTextConnectionProject,
   flagResourcesAndOpenScriptureTextGrid,
-  openEnhancedResource,
+  openAlignedGridWithResources,
   openScriptureTextGrid,
   restoreScriptureTextGridProjectSettings,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-} from './test-helpers';
+} from './scripture-text-grid.page';
 
 test.describe('Scripture Text Grid (scaffold)', () => {
   test.beforeEach(async ({ mainPage }) => {
@@ -691,11 +692,11 @@ test.describe('Scripture Text Grid accessibility', () => {
 // ---------------------------------------------------------------------------
 // PT-4184 — verse-aligned (Grid) view.
 //
-// The alignment itself can only be checked where there is layout, so these measure the rendered
-// geometry in the running app: every column's block for verse N must have the same top. That is the
-// one assertion no unit test can make (jsdom lays nothing out), and it fails if the subgrid chain
-// breaks anywhere between the grid root and the verse blocks — including inside the editor's own
-// wrappers, which this repo does not own.
+// Alignment can only be checked where there is layout, so these measure rendered geometry in the
+// running app: every column's block for verse N must have the same top. No unit test can make that
+// assertion (jsdom lays nothing out), and it fails if the subgrid chain breaks anywhere between the
+// grid root and the verse blocks — including inside the editor's own wrappers, which this repo does
+// not own.
 // ---------------------------------------------------------------------------
 test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
   test.beforeEach(async ({ mainPage }) => {
@@ -706,38 +707,38 @@ test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
     await restoreScriptureTextGridProjectSettings(mainPage);
   });
 
-  test('verse N of every resource shares a row, natively', async ({ mainPage }) => {
+  /**
+   * Shared prerequisites: a local admin-writable project and enough downloaded resources. Returns
+   * the project id, or skips the test with a warning naming what is missing.
+   */
+  async function requireProjectAndResources(mainPage: Page, resourceCount: number) {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
     warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
     warnAndSkip(
-      REAL_RESOURCE_IDS.length < 2,
-      'Set E2E_TEST_RESOURCE_IDS with at least two downloaded resource IDs',
+      REAL_RESOURCE_IDS.length < resourceCount,
+      `Set E2E_TEST_RESOURCE_IDS with at least ${resourceCount} downloaded resource IDs`,
     );
+    return projectId;
+  }
 
-    await flagResourcesAndOpenScriptureTextGrid(
+  test('verse N of every resource shares a row, natively', async ({ mainPage }) => {
+    const projectId = await requireProjectAndResources(mainPage, 2);
+    const stg = await openAlignedGridWithResources(
       mainPage,
       projectId,
-      REAL_RESOURCE_IDS.slice(0, 2).map((id, index) => ({
-        type: 'project' as const,
-        name: `Aligned ${index + 1}`,
-        id,
-        isInTextCollection: true,
-      })),
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'Aligned',
     );
 
-    const stg = await openScriptureTextGrid(mainPage);
-    await stg.switchToGridView();
-
     const grid = stg.frame.getByTestId('scripture-text-grid-aligned');
-    await expect(grid).toBeVisible({ timeout: 15_000 });
     await expect(stg.frame.locator('.verse-block[data-verse-start]').first()).toBeVisible({
       timeout: 15_000,
     });
 
-    const rows = await grid.evaluate((root) => {
+    const topsByVerse = await grid.evaluate((root) => {
       const tops: Record<string, number[]> = {};
       root.querySelectorAll<HTMLElement>('.verse-block[data-verse-start]').forEach((block) => {
         const verse = block.dataset.verseStart ?? '';
@@ -746,9 +747,9 @@ test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
       return tops;
     });
 
-    // Positive control: a verse rendered by more than one column must exist, or "every shared verse
+    // Positive control: some verse must be rendered by more than one column, or "every shared verse
     // aligns" would hold vacuously over a grid where no verse is shared.
-    const sharedVerses = Object.entries(rows).filter(([, tops]) => tops.length > 1);
+    const sharedVerses = Object.entries(topsByVerse).filter(([, tops]) => tops.length > 1);
     expect(sharedVerses.length).toBeGreaterThan(0);
     sharedVerses.forEach(([verse, tops]) => {
       expect(new Set(tops).size, `verse ${verse} tops: ${tops.join(', ')}`).toBe(1);
@@ -756,39 +757,22 @@ test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
   });
 
   test('no interior grid lines between columns', async ({ mainPage }) => {
-    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
-    await waitForAppReady(mainPage);
-
-    const projectId = await discoverAdminTextConnectionProject(mainPage);
-    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
-    warnAndSkip(
-      REAL_RESOURCE_IDS.length < 2,
-      'Set E2E_TEST_RESOURCE_IDS with at least two downloaded resource IDs',
-    );
-
-    await flagResourcesAndOpenScriptureTextGrid(
+    const projectId = await requireProjectAndResources(mainPage, 2);
+    const stg = await openAlignedGridWithResources(
       mainPage,
       projectId,
-      REAL_RESOURCE_IDS.slice(0, 2).map((id, index) => ({
-        type: 'project' as const,
-        name: `Borderless ${index + 1}`,
-        id,
-        isInTextCollection: true,
-      })),
+      REAL_RESOURCE_IDS.slice(0, 2),
+      'Borderless',
     );
 
-    const stg = await openScriptureTextGrid(mainPage);
-    await stg.switchToGridView();
-
-    const grid = stg.frame.getByTestId('scripture-text-grid-aligned');
-    await expect(grid).toBeVisible({ timeout: 15_000 });
-
-    const columnBorders = await grid.evaluate((root) =>
-      Array.from(root.children).map((column) => {
-        const style = getComputedStyle(column);
-        return [style.borderLeftWidth, style.borderRightWidth].join('/');
-      }),
-    );
+    const columnBorders = await stg.frame
+      .getByTestId('scripture-text-grid-aligned')
+      .evaluate((root) =>
+        Array.from(root.children).map((column) => {
+          const style = getComputedStyle(column);
+          return [style.borderLeftWidth, style.borderRightWidth].join('/');
+        }),
+      );
 
     expect(columnBorders.length).toBeGreaterThan(1);
     columnBorders.forEach((borders) => expect(borders).toBe('0px/0px'));
@@ -797,29 +781,13 @@ test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
   test('grid frame budget: >=5 aligned columns render under the chapter-mode baseline', async ({
     mainPage,
   }) => {
-    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
-    await waitForAppReady(mainPage);
-
-    const projectId = await discoverAdminTextConnectionProject(mainPage);
-    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
-    warnAndSkip(
-      REAL_RESOURCE_IDS.length < 5,
-      'Set E2E_TEST_RESOURCE_IDS with five downloaded resource IDs',
-    );
-
-    await flagResourcesAndOpenScriptureTextGrid(
+    const projectId = await requireProjectAndResources(mainPage, 5);
+    const stg = await openAlignedGridWithResources(
       mainPage,
       projectId,
-      REAL_RESOURCE_IDS.slice(0, 5).map((id, index) => ({
-        type: 'project' as const,
-        name: `AlignedPerf ${index + 1}`,
-        id,
-        isInTextCollection: true,
-      })),
+      REAL_RESOURCE_IDS.slice(0, 5),
+      'AlignedPerf',
     );
-
-    const stg = await openScriptureTextGrid(mainPage);
-    await stg.switchToGridView();
 
     const elapsedMs = await stg.frame.locator('body').evaluate(async () => {
       const start = performance.now();
@@ -837,9 +805,8 @@ test.describe('Scripture Text Grid — verse-aligned (Grid) view', () => {
     });
 
     await expect(stg.frame.locator('[role="region"]')).toHaveCount(5, { timeout: 15_000 });
-    // Same shape and threshold as the chapter-mode budget: aligned mode renders the same five whole
-    // chapters, and alignment itself is native layout rather than measurement, so it should not cost
-    // materially more. A regression here means the row placement started costing something.
+    // Same threshold as the chapter-mode budget: this renders the same five whole chapters, and
+    // alignment is native layout rather than measurement, so it should not cost materially more.
     // eslint-disable-next-line no-console -- surfaces the measured baseline in CI/local logs
     console.log(`[aligned frame budget] ${elapsedMs.toFixed(1)}ms for 5 aligned columns`);
     expect(elapsedMs).toBeLessThan(2000);

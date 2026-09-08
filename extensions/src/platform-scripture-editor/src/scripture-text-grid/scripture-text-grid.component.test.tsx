@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 
@@ -720,26 +720,27 @@ describe('ScriptureTextGrid — chapter view reorder', () => {
 
 describe('ScriptureTextGrid — aligned (Grid) view', () => {
   const alignedRef = { book: 'MAT', chapterNum: 5, verseNum: 1, versificationStr: 'English' };
+  /** Height of the stubbed scroll port; a block below this is off screen. */
+  const PORT_HEIGHT = 300;
+  /** Height of the stubbed sticky header, which covers the top of the port. */
+  const HEADER_HEIGHT = 20;
 
   /**
-   * Jsdom lays nothing out, so every rect is zero and the reference scroll would be unobservable.
-   * Give each element the geometry it declares via `data-stub-*` instead, so the scroll arithmetic
-   * runs on real numbers and a wrong target produces a wrong `scrollTop`.
+   * Jsdom lays nothing out, so every rect is zero and none of the scroll decisions would be
+   * observable. Give each element the geometry it declares via `data-stub-*` instead.
    *
-   * Verse blocks move with the port's scroll, as they would in a browser — without that the
-   * viewport-relative arithmetic would re-measure an already-scrolled block from its original
-   * position and every scroll after the first would overshoot. The header does not move: it is
-   * `position: sticky` against this same port, which is exactly why the scroll subtracts its
-   * height.
+   * Verse blocks move with the port's scroll, as they would in a browser; the port and its
+   * `position: sticky` header do not.
    */
   function stubGeometry() {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function stub(
       this: HTMLElement,
     ) {
+      const isPort = this.getAttribute('data-testid') === 'scripture-text-grid-aligned';
       const port = this.closest<HTMLElement>('[data-testid="scripture-text-grid-aligned"]');
       const scrolledBy = this.classList.contains('verse-block') ? (port?.scrollTop ?? 0) : 0;
-      const top = Number(this.dataset.stubTop ?? 0) - scrolledBy;
-      const height = Number(this.dataset.stubHeight ?? 0);
+      const top = isPort ? 0 : Number(this.dataset.stubTop ?? 0) - scrolledBy;
+      const height = isPort ? PORT_HEIGHT : Number(this.dataset.stubHeight ?? 0);
       return {
         top,
         height,
@@ -770,15 +771,16 @@ describe('ScriptureTextGrid — aligned (Grid) view', () => {
       />
     );
     const result = render(ui(reference));
-    return { ...result, rerenderAt: (next: typeof alignedRef) => result.rerender(ui(next)) };
+    const port = screen.getByTestId('scripture-text-grid-aligned');
+    return { ...result, port, rerenderAt: (next: typeof alignedRef) => result.rerender(ui(next)) };
   }
 
   beforeEach(() => {
     mockVisibility.isVisible = true;
+    // Verse 1 starts on screen; the 4-5 bridge is far below it.
     alignedVerseBlocks = [
       { start: 1, end: 1, top: 100 },
-      { start: 2, end: 2, top: 200 },
-      { start: 4, end: 5, top: 300 },
+      { start: 4, end: 5, top: 900 },
     ];
   });
 
@@ -801,7 +803,22 @@ describe('ScriptureTextGrid — aligned (Grid) view', () => {
     expect(screen.getByTestId('cell-b')).toHaveAttribute('data-view-mode', 'aligned');
   });
 
-  it('renders a single resource as a one-column aligned grid, not a chapter view (R8)', () => {
+  it('lays out one column per resource', () => {
+    const { port } = renderAligned(alignedRef);
+
+    expect(port.style.gridTemplateColumns).toBe('repeat(3, minmax(16rem, 1fr))');
+  });
+
+  it('asks for one column while the resource list is still empty, since repeat() rejects zero', () => {
+    // The web view passes an empty list briefly while its sources load.
+    const { port } = renderAligned(alignedRef, []);
+
+    expect(port.style.gridTemplateColumns).toBe('repeat(1, minmax(16rem, 1fr))');
+  });
+
+  it('renders a single resource as a one-column aligned grid, not a chapter view', () => {
+    // Falling through to the chapter branch here would silently drop the aligned layout for anyone
+    // down to one text.
     renderAligned(alignedRef, [resources[0]]);
 
     expect(screen.getByTestId('scripture-text-grid-aligned')).toBeInTheDocument();
@@ -816,43 +833,82 @@ describe('ScriptureTextGrid — aligned (Grid) view', () => {
     expect(screen.queryByTestId('scripture-text-grid-chapter-context')).not.toBeInTheDocument();
   });
 
-  it('scrolls the grid to the referenced verse when the reference changes', () => {
-    stubGeometry();
-    const { rerenderAt } = renderAligned(alignedRef);
-    const port = screen.getByTestId('scripture-text-grid-aligned');
+  describe('scrolling to the reference', () => {
+    it('scrolls a reference that is off screen to just below the sticky header', () => {
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
 
-    // Mounting at verse 1 already scrolled to its block (100), less the sticky header (20).
-    expect(port.scrollTop).toBe(80);
+      rerenderAt({ ...alignedRef, verseNum: 5 });
 
-    rerenderAt({ ...alignedRef, verseNum: 2 });
+      // No block starts at verse 5; the 4-5 bridge covers it, and sits at 900.
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+    });
 
-    expect(port.scrollTop).toBe(180);
-  });
+    it('leaves a reference that is already on screen where it is', () => {
+      // Clicking a verse reports it as the new reference. Scrolling it to the top of the port would
+      // move the passage out from under the reader in response to their own click.
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
 
-  it('scrolls to the bridge that covers a verse no resource starts', () => {
-    stubGeometry();
-    const { rerenderAt } = renderAligned(alignedRef);
-    const port = screen.getByTestId('scripture-text-grid-aligned');
+      rerenderAt({ ...alignedRef, verseNum: 1 });
 
-    rerenderAt({ ...alignedRef, verseNum: 5 });
+      expect(port.scrollTop).toBe(0);
+    });
 
-    // No block starts at 5; the 4-5 bridge covers it.
-    expect(port.scrollTop).toBe(280);
-  });
+    it('scrolls again when a late-arriving column pushes the target back off screen', async () => {
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
 
-  it('defers the scroll while the tab is hidden and catches up when it is shown', () => {
-    stubGeometry();
-    mockVisibility.isVisible = false;
-    const { rerenderAt } = renderAligned(alignedRef);
-    const port = screen.getByTestId('scripture-text-grid-aligned');
+      // A slower resource renders: its verse 2 block appears, adding height above the target and
+      // moving it down the page.
+      alignedVerseBlocks = [
+        { start: 1, end: 1, top: 100 },
+        { start: 2, end: 2, top: 600 },
+        { start: 4, end: 5, top: 1500 },
+      ];
+      rerenderAt({ ...alignedRef, verseNum: 5 });
 
-    rerenderAt({ ...alignedRef, verseNum: 2 });
-    // A hidden rc-dock pane has no layout, so scrolling now would silently do nothing.
-    expect(port.scrollTop).toBe(0);
+      await waitFor(() => expect(port.scrollTop).toBe(1500 - HEADER_HEIGHT));
+    });
 
-    mockVisibility.isVisible = true;
-    rerenderAt({ ...alignedRef, verseNum: 2 });
+    it('stops correcting once the reader scrolls, until the reference changes', async () => {
+      stubGeometry();
+      const { port, rerenderAt } = renderAligned(alignedRef);
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
 
-    expect(port.scrollTop).toBe(180);
+      // The reader scrolls away, then a slower resource renders and moves the target again.
+      port.scrollTop = 200;
+      alignedVerseBlocks = [
+        { start: 1, end: 1, top: 100 },
+        { start: 2, end: 2, top: 600 },
+        { start: 4, end: 5, top: 1500 },
+      ];
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      await waitFor(() => expect(screen.getByTestId('block-a-2')).toBeInTheDocument());
+
+      expect(port.scrollTop).toBe(200);
+
+      // A new reference re-arms it.
+      rerenderAt({ ...alignedRef, verseNum: 1 });
+      await waitFor(() => expect(port.scrollTop).toBe(100 - HEADER_HEIGHT));
+    });
+
+    it('defers the scroll while the tab is hidden and catches up when it is shown', () => {
+      stubGeometry();
+      mockVisibility.isVisible = false;
+      const { port, rerenderAt } = renderAligned(alignedRef);
+
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+      // A hidden rc-dock pane has no layout, so scrolling now would silently do nothing.
+      expect(port.scrollTop).toBe(0);
+
+      mockVisibility.isVisible = true;
+      rerenderAt({ ...alignedRef, verseNum: 5 });
+
+      expect(port.scrollTop).toBe(900 - HEADER_HEIGHT);
+    });
   });
 });
