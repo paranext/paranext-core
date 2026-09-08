@@ -36,6 +36,7 @@ const STRINGS: Record<string, string> = Object.fromEntries(
 STRINGS['%webView_scriptureTextGrid_viewOptions_viewHeader%'] = 'View';
 STRINGS['%webView_scriptureTextGrid_viewOptions_verse%'] = 'Verse';
 STRINGS['%webView_scriptureTextGrid_viewOptions_chapter%'] = 'Chapter';
+STRINGS['%webView_scriptureTextGrid_viewOptions_grid%'] = 'Grid';
 STRINGS['%webView_scriptureTextGrid_viewOptions_comingSoon%'] = 'Coming soon';
 STRINGS['%webView_scriptureTextGrid_viewOptions_textsHeader%'] = 'Texts';
 STRINGS['%webView_scriptureTextGrid_viewOptions_getResources%'] = 'Get resources…';
@@ -109,6 +110,19 @@ describe('ResourceCollectionOptions — VIEW toggle', () => {
     const props = renderComponent({ viewMode: 'verse', isChapterEnabled: false });
     fireEvent.click(screen.getByRole('radio', { name: /Chapter/ }));
     expect(props.onViewModeChange).not.toHaveBeenCalled();
+  });
+
+  it('offers Grid as a third mode and reports it as `aligned`', () => {
+    // The label is "Grid"; the value stays `aligned` because the whole surface is the Scripture
+    // Text Grid, so `viewMode === 'grid'` inside it would not say which grid.
+    const props = renderComponent({ viewMode: 'verse', isChapterEnabled: true });
+    fireEvent.click(screen.getByRole('radio', { name: 'Grid' }));
+    expect(props.onViewModeChange).toHaveBeenCalledWith('aligned');
+  });
+
+  it('shows Grid as the selected mode when it is active', () => {
+    renderComponent({ viewMode: 'aligned', isChapterEnabled: true });
+    expect(screen.getByRole('radio', { name: 'Grid' })).toHaveAttribute('data-state', 'on');
   });
 });
 
