@@ -75,6 +75,47 @@ step, no automation. Just a record.
 
 ---
 
+## adr-aligned-grid-flattens-the-editor-dom: The verse-aligned grid flattens the editor's own DOM into its subgrid chain, and places verses by explicit row
+
+- **Date:** 2026-09-07
+- **Status:** Accepted
+- **Context:** PT-4184 adds a third Scripture Text Grid view where verse N of every resource shares
+  a row. AC6 requires selecting and copying a passage down a column, which means one editor per
+  column rather than one per cell — so the verse elements the layout has to position
+  (`div.verse-block[data-verse-start|-end]`, produced by PT-4304 upstream) sit inside
+  `@eten-tech-foundation/platform-editor`'s DOM: `.editor-container` > `.editor-inner` >
+  `.editor-input`. CSS subgrid only reaches a descendant if every level between it and the grid root
+  stops generating a box, and a scroll container's children cannot participate in an ancestor's grid
+  at all. PT-4304's R1 proof established the chain survives this repo's own cell chrome; it modelled
+  the cell wrappers only, not those three editor elements.
+- **Decision:** Flatten the whole chain — this repo's cell padding wrapper AND the editor's three
+  wrappers — with `display: contents`, from one stylesheet
+  (`extensions/src/platform-scripture-editor/src/scripture-text-grid/aligned-grid.styles.ts`)
+  injected only while the aligned view is active, and give the cell content wrapper a
+  `contentOverflow` prop so it stops being a scroll container in this mode. Place each verse block
+  with an explicit `grid-row` derived from its own `data-verse-start`/`-end`, via generated static
+  rules rather than JS: subgrid alone lays blocks out in document order, so one resource missing a
+  verse would shift every row below it. Declare a fixed 200 verse rows on the root; rows nothing
+  occupies collapse to zero height, so no chapter has to be measured first.
+- **Alternatives considered:** **One editor per cell**, which would keep the editor's DOM out of the
+  chain entirely — rejected because it breaks copying a continuous passage down a column, the reason
+  approach D was chosen in PT-4064. **JS height synchronisation** (measure each row, set heights) —
+  rejected by AC1, and it degrades exactly where per-resource zoom puts columns at different font
+  sizes, which native rows handle for free. **Asking upstream for a flat DOM** or a layout-neutral
+  wrapper — a larger change to a shared editor for one consumer's view; revisit if a second consumer
+  needs it. **Computing the row count from the chapter** — real work (an async versification lookup,
+  or lifting each cell's USJ into the parent) to save rows that cost nothing.
+- **Consequences:** This view is coupled to three class names it does not own. A rename upstream
+  breaks alignment *silently* — the grid still renders, just unaligned — so a unit test pins the
+  selectors and an e2e test measures real block geometry across columns in the running app, which is
+  the only check that can see the chain break. Section headings and other between-verse content are
+  hidden in this view (they have no row, and disagree across translations); the model still carries
+  them, so showing them later is a change to one rule. Scroll-to-reference is explicit here, because
+  Lexical skips the DOM-selection write — and its scroll-into-view — for a read-only editor. A verse
+  numbered above 200 would fall outside the explicit grid and stop sharing rows; revisit if a
+  versification ever exceeds it.
+- **Source:** PT-4184; PT-4304 R1 proof (findings F1-F3), extended here to the editor's own wrappers.
+
 ## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
 - **Formerly:** ADR-0014

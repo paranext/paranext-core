@@ -6,8 +6,12 @@ import type { ViewOptionsTextEntry } from '../scripture-text-grid-contents.utils
 // type is needed.
 export type { ViewOptionsTextEntry };
 
-/** The display mode. `'chapter'` rendering is added by a later subtask. */
-export type ResourceCollectionViewMode = 'verse' | 'chapter';
+/**
+ * The display mode. `'aligned'` is the verse-aligned grid: verse N of every resource on one row.
+ * Its visible label is "Grid" — the value stays `'aligned'` because the whole surface is already
+ * called the Scripture Text Grid, so `viewMode === 'grid'` inside it would not say which grid.
+ */
+export type ResourceCollectionViewMode = 'verse' | 'chapter' | 'aligned';
 
 /**
  * Localization keys this component reads, keyed by role. This is the single source for the key
@@ -18,6 +22,7 @@ export const RESOURCE_COLLECTION_OPTIONS_KEYS = {
   viewHeader: '%webView_scriptureTextGrid_viewOptions_viewHeader%',
   verse: '%webView_scriptureTextGrid_viewOptions_verse%',
   chapter: '%webView_scriptureTextGrid_viewOptions_chapter%',
+  grid: '%webView_scriptureTextGrid_viewOptions_grid%',
   comingSoon: '%webView_scriptureTextGrid_viewOptions_comingSoon%',
   textsHeader: '%webView_scriptureTextGrid_viewOptions_textsHeader%',
   emptyTexts: '%webView_scriptureTextGrid_viewOptions_emptyState_prompt%',
@@ -32,6 +37,7 @@ export const RESOURCE_COLLECTION_OPTIONS_STRING_KEYS = Object.freeze([
   RESOURCE_COLLECTION_OPTIONS_KEYS.viewHeader,
   RESOURCE_COLLECTION_OPTIONS_KEYS.verse,
   RESOURCE_COLLECTION_OPTIONS_KEYS.chapter,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.grid,
   RESOURCE_COLLECTION_OPTIONS_KEYS.comingSoon,
   RESOURCE_COLLECTION_OPTIONS_KEYS.textsHeader,
   RESOURCE_COLLECTION_OPTIONS_KEYS.emptyTexts,

@@ -1,4 +1,10 @@
-import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
+import {
+  BLOCK_VERSE_VIEW_MODE,
+  Editorial,
+  EditorOptions,
+  EditorRef,
+  getViewOptions,
+} from '@eten-tech-foundation/platform-editor';
 import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
@@ -32,7 +38,13 @@ type ResourceCellProps = {
   resourceRef: GridResource;
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
-  viewMode?: 'chapter' | 'verse';
+  /**
+   * `'chapter'` and `'aligned'` both feed the editor the whole chapter; `'verse'` feeds only the
+   * reference's verse. `'aligned'` additionally asks the editor for its block-verse layout, which
+   * wraps each verse in a positionable element so the grid can put verse N of every resource on one
+   * row, and hands scrolling to the grid root.
+   */
+  viewMode?: 'chapter' | 'verse' | 'aligned';
   /** Per-resource zoom controller; when omitted the cell renders without zoom surfaces. */
   zoom?: ResourceZoomController;
   /** Localized zoom menu copy, passed straight to the view. */
@@ -165,14 +177,20 @@ export function ResourceCell({
       );
   }, [usjPossiblyError, resourceRef.resourceId]);
   const extraValidMarkers = useExtraValidMarkers(usj);
+  // The block-verse layout is read-only by construction (a paragraph spanning verses is split
+  // across their blocks, so it no longer round-trips to USJ). Every cell here is already read-only,
+  // so nothing is given up: this grid never exports USJ, applies updates, or addresses selection by
+  // USJ location. `getViewOptions` returns undefined for an unknown mode, in which case the editor
+  // falls back to its default (inline) layout and the grid renders unaligned rather than blank.
   const options: EditorOptions = useMemo(
     () => ({
       isReadonly: true,
       hasSpellCheck: false,
       textDirection,
+      ...(viewMode === 'aligned' ? { view: getViewOptions(BLOCK_VERSE_VIEW_MODE) } : {}),
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
     }),
-    [textDirection, extraValidMarkers],
+    [textDirection, viewMode, extraValidMarkers],
   );
   // Only the USJ fed to the editor is resolved — `scrRef` passes through untouched. Keying the memo
   // on the resolved verse (not scrRef.verseNum) also keeps 1:0 -> 1:1 from re-feeding identical
@@ -237,6 +255,8 @@ export function ResourceCell({
       localizedStrings={localizedStrings}
       isVerseEmpty={isVerseEmpty}
       nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
+      // In the aligned grid the single scroll port is the grid root; see `contentOverflow`.
+      contentOverflow={viewMode === 'aligned' ? 'visible' : 'auto'}
       zoomFactor={zoomFactor}
       canZoomIn={canZoomIn}
       canZoomOut={canZoomOut}

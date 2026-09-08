@@ -193,8 +193,12 @@ export type ScriptureTextGrid = {
   chapterViewOption: Locator;
   /** The draggable cell wrappers (`data-testid="scripture-text-grid-cell-draggable"`). */
   cellDraggable: Locator;
+  /** The "Grid" radio in the View Options VIEW toggle (the verse-aligned grid). */
+  gridViewOption: Locator;
   /** Open View Options, switch to Chapter view, dismiss the popover. */
   switchToChapterView: () => Promise<void>;
+  /** Open View Options, switch to the verse-aligned Grid view, dismiss the popover. */
+  switchToGridView: () => Promise<void>;
 };
 
 /** Open (or focus) the Scripture Text Grid tab and return a page object with pre-bound locators. */
@@ -214,8 +218,10 @@ export async function openScriptureTextGrid(page: Page): Promise<ScriptureTextGr
     viewOptionsButton: viewOptionsButton(frame),
     verseViewOption: verseViewOption(frame),
     chapterViewOption: chapterViewOption(frame),
+    gridViewOption: gridViewOption(frame),
     cellDraggable: frame.getByTestId('scripture-text-grid-cell-draggable'),
     switchToChapterView: async () => switchToChapterView(frame),
+    switchToGridView: async () => switchToGridView(frame),
   };
 }
 
@@ -238,6 +244,11 @@ export function chapterViewOption(frame: FrameLocator) {
   return frame.getByRole('radio', { name: /Chapter/ });
 }
 
+/** The "Grid" radio in the View Options VIEW toggle — the verse-aligned grid. */
+export function gridViewOption(frame: FrameLocator) {
+  return frame.getByRole('radio', { name: /^Grid$/ });
+}
+
 /** The grid body — a neutral whitespace target to press Escape on and dismiss the popover. */
 export function gridBody(frame: FrameLocator) {
   return frame.locator('body');
@@ -251,6 +262,13 @@ export function gridBody(frame: FrameLocator) {
 export async function switchToChapterView(frame: FrameLocator): Promise<void> {
   await viewOptionsButton(frame).click();
   await chapterViewOption(frame).click();
+  await gridBody(frame).press('Escape');
+}
+
+/** Same three-step sequence as {@link switchToChapterView}, for the verse-aligned Grid view. */
+export async function switchToGridView(frame: FrameLocator): Promise<void> {
+  await viewOptionsButton(frame).click();
+  await gridViewOption(frame).click();
   await gridBody(frame).press('Escape');
 }
 

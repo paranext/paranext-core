@@ -55,6 +55,10 @@ vi.mock('@eten-tech-foundation/platform-editor', () => {
     onScrRefChange?: (scrRef: unknown) => void;
   };
   return {
+    BLOCK_VERSE_VIEW_MODE: 'block-verse',
+    // Stands in for the real view-options builder: records which mode the cell asked for without
+    // pinning this test to the option fields upstream happens to set for it.
+    getViewOptions: (viewMode: string) => ({ viewOptionsFor: viewMode }),
     Editorial: React.forwardRef((props: EditorialMockProps, ref: React.Ref<unknown>) => {
       capturedEditorOptions(props.options);
       capturedEditorScrRef(props.scrRef);
@@ -271,6 +275,31 @@ describe('ResourceCell viewMode', () => {
     });
     await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
     expect(lastFedUsjText()).toContain('verse one'); // whole chapter present
+  });
+
+  it('aligned mode asks the editor for the block-verse layout, so verses become placeable rows', async () => {
+    renderResourceCell({
+      viewMode: 'aligned',
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 2 },
+      chapterUsj: twoVerseChapterUsj,
+    });
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+
+    const options = capturedEditorOptions.mock.lastCall?.[0];
+    expect(options).toMatchObject({ view: { viewOptionsFor: 'block-verse' }, isReadonly: true });
+    // The grid aligns a whole passage, so the cell feeds the chapter, not one verse's slice.
+    expect(lastFedUsjText()).toContain('verse one');
+  });
+
+  it('leaves the other modes on the editor default layout', async () => {
+    renderResourceCell({
+      viewMode: 'chapter',
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 2 },
+      chapterUsj: twoVerseChapterUsj,
+    });
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+
+    expect(capturedEditorOptions.mock.lastCall?.[0]).not.toHaveProperty('view');
   });
 
   it('verse mode with no text for the verse shows the empty state, not the editor or "loading…"', async () => {

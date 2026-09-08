@@ -772,3 +772,40 @@ describe('ResourceCellView reorder grip', () => {
     expect(screen.getByRole('button')).toBeInTheDocument();
   });
 });
+
+describe('ResourceCellView content scroll ownership', () => {
+  const baseProps = {
+    state: 'ready' as const,
+    label: 'WEB',
+    textDirection: 'ltr',
+    localizedStrings,
+    editor: <div data-testid="editor" />,
+  };
+
+  it('scrolls its own content by default', () => {
+    const { container } = renderCells(<ResourceCellView {...baseProps} />);
+
+    expect(container.querySelector('[data-cell-content]')).toHaveClass('tw:overflow-auto');
+  });
+
+  it('hands scrolling to an ancestor when asked, so an aligned grid can own the scroll port', () => {
+    // A scroll container's children cannot participate in an ancestor's grid, so leaving
+    // `overflow: auto` here would stop the verse blocks aligning across columns.
+    const { container } = renderCells(
+      <ResourceCellView {...baseProps} contentOverflow="visible" />,
+    );
+
+    const content = container.querySelector('[data-cell-content]');
+    expect(content).toHaveClass('tw:overflow-visible');
+    expect(content).not.toHaveClass('tw:overflow-auto');
+  });
+
+  it('exposes the layout anchors the aligned grid styles hook onto', () => {
+    // These attributes are load-bearing for that view's layout, not test ids.
+    const { container } = renderCells(<ResourceCellView {...baseProps} />);
+
+    expect(container.querySelector('[data-cell-root]')).toBeInTheDocument();
+    expect(container.querySelector('[data-cell-header]')).toBeInTheDocument();
+    expect(container.querySelector('[data-cell-pad]')).toBeInTheDocument();
+  });
+});

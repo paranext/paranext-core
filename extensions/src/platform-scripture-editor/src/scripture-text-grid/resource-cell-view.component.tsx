@@ -78,6 +78,15 @@ export type ResourceCellViewProps = {
    * render outside `Editorial` (paranext-core only).
    */
   nameDisplay?: ResourceNameDisplay;
+  /**
+   * Who owns scrolling of this cell's content. `'auto'` (default) keeps today's behavior: the cell
+   * scrolls its own content. `'visible'` hands scrolling to an ancestor, which the verse-aligned
+   * grid needs for two independent reasons — a scroll container's children cannot participate in an
+   * ancestor's grid (so the subgrid chain that aligns verse rows would stop here), and cells that
+   * scroll separately drift out of alignment with each other, which is the whole point of that
+   * view.
+   */
+  contentOverflow?: 'auto' | 'visible';
   /** Current zoom factor for this resource (1 = default). */
   zoomFactor?: number;
   /** False when the factor is at MAX_ZOOM_FACTOR. */
@@ -202,6 +211,7 @@ export function ResourceCellView({
   editor,
   isVerseEmpty,
   nameDisplay = 'header',
+  contentOverflow = 'auto',
   zoomFactor,
   canZoomIn = true,
   canZoomOut = true,
@@ -298,10 +308,17 @@ export function ResourceCellView({
 
   const contentStyle: CSSProperties | undefined =
     zoomFactor !== undefined && zoomFactor !== 1 ? { zoom: zoomFactor } : undefined;
+  const contentOverflowClass =
+    contentOverflow === 'visible' ? 'tw:overflow-visible' : 'tw:overflow-auto';
 
   return (
     <div
       onContextMenuCapture={zoomMenuLabels ? handleCellContextMenu : undefined}
+      // The `data-cell-*` attributes on this element and the content wrappers below are the hooks
+      // the aligned grid's stylesheet uses to turn this flex chrome into its subgrid chain
+      // (`aligned-grid.styles.ts`). They are layout anchors, not test ids — renaming one changes
+      // that view's layout.
+      data-cell-root
       // `group` powers the hover/focus-visible kebab reveal. Activation (opening the chapter split)
       // is owned by the parent verse `listitem` in ScriptureTextGrid — this cell is presentational.
       className="tw:group tw:flex tw:min-w-0 tw:flex-col"
@@ -314,7 +331,7 @@ export function ResourceCellView({
         // remaining min-w-0 column. Only the verse text scales with zoom; the hanging name is fixed.
         <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
           <ResourceNameLabel label={label} className="tw:max-w-24 tw:min-w-0 tw:text-sm" />
-          <div className="tw:min-w-0 tw:flex-1 tw:overflow-auto" style={contentStyle}>
+          <div className={`tw:min-w-0 tw:flex-1 ${contentOverflowClass}`} style={contentStyle}>
             {stateContent}
           </div>
         </div>
@@ -324,7 +341,10 @@ export function ResourceCellView({
         // truncate; the tooltip reveals the full name only when actually clipped. Only the content
         // scales with zoom, not the header.
         <>
-          <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-0.5">
+          <div
+            data-cell-header
+            className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-0.5"
+          >
             {showDragHandle ? (
               // Nested tooltip on the grip so `reorderHint` shows on hover AND keyboard focus.
               // Its own provider/tooltip keeps it independent of the name-truncation tooltip.
@@ -391,8 +411,15 @@ export function ResourceCellView({
               </TooltipProvider>
             ) : undefined}
           </div>
-          <div className="tw:flex-1 tw:overflow-auto" style={contentStyle} dir={textDirection}>
-            <div className="tw:p-2">{stateContent}</div>
+          <div
+            data-cell-content
+            className={`tw:flex-1 ${contentOverflowClass}`}
+            style={contentStyle}
+            dir={textDirection}
+          >
+            <div data-cell-pad className="tw:p-2">
+              {stateContent}
+            </div>
           </div>
         </>
       )}

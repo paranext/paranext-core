@@ -79,7 +79,7 @@ export function ResourceCollectionOptions({
   const handleViewModeChange = (value: string) => {
     // Radix single-toggle emits '' when the active item is clicked again; ignore that (a view mode
     // is always selected) and any unexpected value.
-    if (value === 'verse' || value === 'chapter') onViewModeChange(value);
+    if (value === 'verse' || value === 'chapter' || value === 'aligned') onViewModeChange(value);
   };
 
   const renderRow = (row: ViewOptionsTextEntry) => {
@@ -171,6 +171,11 @@ export function ResourceCollectionOptions({
             </ToggleGroupItem>
             <ToggleGroupItem value="chapter" disabled={!isChapterEnabled}>
               {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.chapter)}
+            </ToggleGroupItem>
+            {/* The verse-aligned grid. Labeled "Grid" for the user; the value is `aligned` because
+                the surface as a whole is the Scripture Text Grid. */}
+            <ToggleGroupItem value="aligned">
+              {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.grid)}
             </ToggleGroupItem>
           </ToggleGroup>
           {!isChapterEnabled && (
