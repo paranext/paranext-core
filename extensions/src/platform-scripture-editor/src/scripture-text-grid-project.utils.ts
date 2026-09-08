@@ -1,3 +1,5 @@
+import { isPlatformError } from 'platform-bible-utils';
+
 /** Inputs for {@link resolveTextCollectionProjectId}. */
 export type TextCollectionProjectCandidate = {
   /** The web view's own `projectId` when opened with one; always wins when set. */
@@ -120,4 +122,36 @@ export function resolveGridBodyState({
   if (hasWaitedTooLong) return 'error';
   if (!areSourcesResolved || isLoadingCachedResources) return 'loading';
   return 'empty';
+}
+
+/** Inputs for {@link resolveHasSourcesError}. */
+export type SourcesErrorInput = {
+  /** Whether the admin referenced-list setting is still being read. */
+  isReferencedLoading: boolean;
+  /** An error reported alongside the admin referenced list, if any. */
+  adminReferencedError: unknown;
+  /** The admin referenced list itself, which may itself be a PlatformError value. */
+  adminReferenced: unknown;
+};
+
+/**
+ * Whether the text-collection sources resolved to a failure rather than a value.
+ *
+ * Both channels have to be checked. `useBufferedLayoutSetting` does not apply a PlatformError to
+ * its held copy — it stays armed so a transient failure can self-heal — so past the initial load
+ * the held value is a placeholder and only the separate error reports the failure.
+ *
+ * Distinguishing this from "still loading" is what lets a caller pick a terminal state instead of a
+ * spinner that cannot end, so it must stay false while the read is genuinely in flight.
+ *
+ * @param input See {@link SourcesErrorInput}.
+ * @returns Whether the sources failed.
+ */
+export function resolveHasSourcesError({
+  isReferencedLoading,
+  adminReferencedError,
+  adminReferenced,
+}: SourcesErrorInput): boolean {
+  if (isReferencedLoading) return false;
+  return !!adminReferencedError || isPlatformError(adminReferenced);
 }

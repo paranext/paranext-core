@@ -18,6 +18,7 @@ import {
   resolveViewTypeForInterfaceMode,
   syncOnProjectSwitch,
   openOrUpdateRelatedPanels,
+  resolveGridProviderProjectId,
   updateRelatedTextCollectionPanel,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
   type OpenEditorDispatch,
@@ -3552,3 +3553,27 @@ describe('openOrUpdateRelatedPanels', () => {
 });
 
 // #endregion openOrUpdateRelatedPanels
+
+// #region resolveGridProviderProjectId
+
+describe('resolveGridProviderProjectId', () => {
+  it('prefers the project a switch supplied over the one the tab already had', () => {
+    // Inverting this is PT-4238: the re-point passes the incoming project in options, and falling
+    // back to the saved id leaves the panel on the outgoing project.
+    expect(resolveGridProviderProjectId({ projectId: 'incoming' }, { projectId: 'outgoing' })).toBe(
+      'incoming',
+    );
+  });
+
+  it('keeps the saved project when the caller supplied none', () => {
+    // A restored tab, or one re-provided for a reason unrelated to a project switch.
+    expect(resolveGridProviderProjectId({}, { projectId: 'saved' })).toBe('saved');
+  });
+
+  it('binds no project when neither half names one', () => {
+    // The shipped default-layout open: the grid starts unbound and follows the scroll group.
+    expect(resolveGridProviderProjectId({}, {})).toBeUndefined();
+  });
+});
+
+// #endregion

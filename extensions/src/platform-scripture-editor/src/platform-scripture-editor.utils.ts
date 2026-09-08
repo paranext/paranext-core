@@ -1276,6 +1276,30 @@ export async function openOrUpdateRelatedPanels(
 export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
 
 /**
+ * Which project the Text Collection provider should hand its web view.
+ *
+ * The two halves of the re-point meet here. `openWebViewOptions` is the half a project switch fills
+ * in — `updateRelatedTextCollectionPanel` passes the incoming project through `reloadWebView` — and
+ * it has to win: preferring the saved definition when a switch supplied a project IS PT-4238, the
+ * panel left rendering the outgoing project's texts. `savedWebView.projectId` is what keeps a
+ * restored tab, or one re-provided for an unrelated reason, on the project it already had.
+ *
+ * Extracted from the provider so this precedence is testable: the provider itself lives in
+ * `main.ts`, which no test imports, so inline the rule could be inverted and every test would still
+ * pass.
+ *
+ * @param openWebViewOptions Options the caller passed to `openWebView`/`reloadWebView`.
+ * @param savedWebView The saved definition being re-provided.
+ * @returns The project id to bind the web view to, or `undefined` when neither half names one.
+ */
+export function resolveGridProviderProjectId(
+  openWebViewOptions: TextCollectionPanelOptions,
+  savedWebView: Pick<SavedWebViewDefinition, 'projectId'>,
+): string | undefined {
+  return openWebViewOptions.projectId ?? savedWebView.projectId;
+}
+
+/**
  * Re-points the Text Collection panel at `projectId`, the way {@link openOrUpdateRelatedPanels}
  * re-points the rest of Column 3.
  *

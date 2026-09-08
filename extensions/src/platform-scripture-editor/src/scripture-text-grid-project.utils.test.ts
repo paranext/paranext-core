@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolveGridBodyState,
+  resolveHasSourcesError,
   resolveTextCollectionProjectId,
   type GridBodyStateInput,
 } from './scripture-text-grid-project.utils';
@@ -178,5 +179,45 @@ describe('resolveGridBodyState', () => {
 
   it('shows the empty state once a bound project resolves to no texts', () => {
     expect(resolveGridBodyState(settled)).toBe('empty');
+  });
+});
+
+describe('resolveHasSourcesError', () => {
+  const loaded = {
+    isReferencedLoading: false,
+    adminReferencedError: undefined,
+    adminReferenced: [],
+  };
+
+  it('reports no failure while the setting is still being read', () => {
+    // Must stay false here, or a wait in progress would be rendered as a terminal failure.
+    expect(
+      resolveHasSourcesError({
+        ...loaded,
+        isReferencedLoading: true,
+        adminReferencedError: 'boom',
+      }),
+    ).toBe(false);
+  });
+
+  it('reports a failure carried on the separate error channel', () => {
+    expect(resolveHasSourcesError({ ...loaded, adminReferencedError: new Error('boom') })).toBe(
+      true,
+    );
+  });
+
+  it('reports a failure carried as a PlatformError in the value itself', () => {
+    // useBufferedLayoutSetting leaves its held copy armed rather than applying the error, so past
+    // the initial load this is the only channel that reports it.
+    expect(
+      resolveHasSourcesError({
+        ...loaded,
+        adminReferenced: { platformErrorVersion: 1, message: 'boom' },
+      }),
+    ).toBe(true);
+  });
+
+  it('reports no failure once the setting reads cleanly', () => {
+    expect(resolveHasSourcesError(loaded)).toBe(false);
   });
 });

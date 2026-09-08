@@ -44,6 +44,7 @@ import {
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+  resolveGridProviderProjectId,
   type TextCollectionPanelOptions,
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
@@ -1049,7 +1050,7 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
     // default-layout open passes no projectId, so the grid starts unbound and falls back to
     // following the scroll group, while `updateRelatedTextCollectionPanel` supplies one here on a
     // Simple-mode project switch, which is what keeps the panel off the outgoing project.
-    const projectId = openWebViewOptions.projectId ?? savedWebView.projectId;
+    const projectId = resolveGridProviderProjectId(openWebViewOptions, savedWebView);
     // Re-read every call so mode changes are picked up at open/replace/restore time.
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
     // Resolve here (not left to the web view's own effect): PlatformTabTitle auto-resolves a raw
