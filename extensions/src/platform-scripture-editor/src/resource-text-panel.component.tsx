@@ -503,6 +503,12 @@ export function ResourceTextPanel({
   // Distinguish the two causes so the label is accurate: a user pick (isSelecting) reads
   // "Selecting…", while an auto-install of an already-configured resource (isInstalling) — where
   // the user picked nothing and it is just downloading — reads "Installing…".
+  //
+  // TODO(PT-4561): Fold this into `getResourcePanelReadiness` so branch order here is not a second
+  // answer to "is this panel ready?", per `adr-panel-readiness-from-sources`. Ordering it here also
+  // makes a pick in flight outrank an unreadable settings list, which that function's own precedence
+  // argues against — PT-4561 decides that deliberately. `model-text-panel.component.tsx` still tests
+  // readiness first and so has this same first-pick defect.
   if (isSelecting || isInstalling) {
     return (
       <LoadingView
