@@ -64,6 +64,12 @@ async function pickHiddenCaller() {
   return { onChange };
 }
 
+// Vitest's 5s default is too tight for this file's `userEvent`-driven Radix menu interactions on a
+// Windows CI worker, where the `unit` project runs alongside the Playwright-backed `storybook`
+// project and a single click can take seconds. Raised here rather than for the whole project so a
+// genuinely hanging test elsewhere still fails fast.
+vi.setConfig({ testTimeout: 20_000 });
+
 describe('footnote caller dropdown', () => {
   it('reports the caller the user picked, exactly once', async () => {
     // Two separate defects met here. The commit runs from the menu's close handler and picking an
