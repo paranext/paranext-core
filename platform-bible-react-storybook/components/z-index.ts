@@ -37,8 +37,14 @@ export const Z_INDEX_MODAL = 500;
  */
 export const Z_INDEX_TOOLTIP = 550;
 /**
- * Z-index for the first-run setup wizard gate. Must sit above every other layer (including the
- * menubar at Z_INDEX_ABOVE_DOCK=600 and tooltips at 550) so the wizard fully gates the app at
- * startup and nothing behind it remains clickable or focusable.
+ * Z-index for the one-shot onboarding tour spotlight. Sits above Z_INDEX_ABOVE_DOCK and
+ * Z_INDEX_TOOLTIP so it can spotlight toolbar buttons and columns, but below Z_INDEX_FIRST_RUN so
+ * the wizard always wins if both are mounted.
+ */
+export const Z_INDEX_ONBOARDING_TOUR = 650;
+/**
+ * Z-index for the first-run setup wizard gate. Must sit above every other layer (including
+ * Z_INDEX_ABOVE_DOCK and Z_INDEX_TOOLTIP) so the wizard fully gates the app at startup and nothing
+ * behind it remains clickable or focusable.
  */
 export const Z_INDEX_FIRST_RUN = 700;
