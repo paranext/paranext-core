@@ -13,17 +13,19 @@ import {
 
 // jsdom implements none of what opening a combo box needs: ResizeObserver for cmdk's command list,
 // and scrollIntoView for the option it highlights.
+const originalScrollIntoView = Element.prototype.scrollIntoView;
 beforeAll(() => {
   vi.stubGlobal(
     'ResizeObserver',
     vi.fn(() => ({ observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() })),
   );
-  if (!Element.prototype.scrollIntoView) {
-    Element.prototype.scrollIntoView = () => {};
-  }
+  Element.prototype.scrollIntoView = vi.fn();
 });
 afterAll(() => {
   vi.unstubAllGlobals();
+  // A prototype write is invisible to `unstubAllGlobals`, so it is undone by hand; leaving a
+  // working no-op behind would make any later suite's scroll assertion pass without scrolling.
+  Element.prototype.scrollIntoView = originalScrollIntoView;
 });
 
 /*
