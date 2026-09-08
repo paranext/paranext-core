@@ -295,9 +295,9 @@ export default function ResourcePickerDialog({
    * below: the rendered rows, the language options and the total. Deriving all three from one list
    * is what keeps them from disagreeing about which resources count.
    *
-   * The narrowing is kept apart from the user’s own filters because only the latter are
-   * clearable. Counting or offering to clear against `allResources` would describe a set this
-   * dialog was never allowed to show.
+   * The narrowing is kept apart from the user’s own filters because only the latter are clearable.
+   * Counting or offering to clear against `allResources` would describe a set this dialog was never
+   * allowed to show.
    */
   const typeScopedResources = useMemo(
     () => allResources.filter((r) => matchesResourceType(r, resourceType)),

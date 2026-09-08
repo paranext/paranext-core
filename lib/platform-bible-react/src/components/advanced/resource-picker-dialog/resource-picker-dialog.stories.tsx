@@ -82,7 +82,7 @@ function getOfferedLanguages(doc: Document): string[] {
 }
 
 export const Default: Story = {
-  play: async ({ canvasElement, userEvent, step }) => {
+  play: async ({ canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body);
 
     await step('Open the language filter', async () => {
@@ -203,7 +203,7 @@ export const ManyLanguages: Story = {
     allResources: MANY_LANGUAGE_RESOURCES,
     selectedResourceIds: [],
   },
-  play: async ({ canvasElement, userEvent, step }) => {
+  play: async ({ canvasElement, step }) => {
     // The language popover portals out of the canvas, so query the whole document.
     const body = within(canvasElement.ownerDocument.body);
 
@@ -291,7 +291,7 @@ export const ManyLanguagesScopedToScripture: Story = {
     selectedResourceIds: [],
     resourceType: 'ScriptureResource',
   },
-  play: async ({ canvasElement, userEvent, step }) => {
+  play: async ({ canvasElement, step }) => {
     const body = within(canvasElement.ownerDocument.body);
 
     await step('Open the language filter', async () => {
