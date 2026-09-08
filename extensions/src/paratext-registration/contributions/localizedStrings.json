@@ -178,6 +178,8 @@
       "%paratextRegistration_developer_section_label%": "Developer only",
       "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "You must provide a valid Paratext registration before opening resources from the Digital Bible Library.",
       "%paratextRegistration_internetUse_comingSoon%": "Coming soon",
+      "%paratextRegistration_internetUse_unsupportedSelection_description%": "Your Paratext internet settings have “{selectedOption}” selected. This version of Paratext does not support that option yet, so choose one of the available options to continue.",
+      "%paratextRegistration_internetUse_unsupportedSelection_title%": "This internet setting is not supported yet",
       "%paratextRegistration_label_emailAddress%": "Email address",
       "%paratextRegistration_label_proxyHost%": "Host",
       "%paratextRegistration_label_proxyMode%": "Mode",
