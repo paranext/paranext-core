@@ -78,6 +78,14 @@ const configuration: webpack.Configuration = {
       // ids into the output, so a rebuilt DLL must invalidate the cache. Omitted when the DLL is
       // skipped, since `buildDependencies` entries must be files that exist.
       ...(skipDLLs ? {} : { dll: [manifest] }),
+      // webpack's default `snapshot.managedPaths` validates everything under `node_modules` by
+      // package `name@version` rather than content, so editing a patch and re-running
+      // `npm install` would otherwise restore the patched module with no rebuild. List the patch
+      // files, not the `patches` directory — webpack cannot resolve a directory here and responds
+      // by writing no pack at all, silently disabling the cache.
+      patches: fs
+        .readdirSync(path.join(webpackPaths.rootPath, 'patches'))
+        .map((patch) => path.join(webpackPaths.rootPath, 'patches', patch)),
     },
     compression: 'gzip',
   },

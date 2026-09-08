@@ -1,5 +1,6 @@
 /** Webpack config for development electron main process */
 
+import fs from 'fs';
 import path from 'path';
 import webpack from 'webpack';
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
@@ -48,6 +49,14 @@ const configuration: webpack.Configuration = {
     buildDependencies: {
       config: [__filename, path.resolve(__dirname, 'webpack.config.base.ts')],
       tsconfig: [path.resolve(webpackPaths.rootPath, 'tsconfig.json')],
+      // webpack's default `snapshot.managedPaths` validates everything under `node_modules` by
+      // package `name@version` rather than content, so editing a patch and re-running
+      // `npm install` would otherwise restore the patched module with no rebuild. List the patch
+      // files, not the `patches` directory — webpack cannot resolve a directory here and responds
+      // by writing no pack at all, silently disabling the cache.
+      patches: fs
+        .readdirSync(path.join(webpackPaths.rootPath, 'patches'))
+        .map((patch) => path.join(webpackPaths.rootPath, 'patches', patch)),
     },
     compression: 'gzip',
   },
