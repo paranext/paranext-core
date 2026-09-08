@@ -331,4 +331,3 @@ describe('GetResources language filter', () => {
     expect(screen.getByText('Resource Nepali ScriptureResource')).toBeDefined();
   });
 });
-

@@ -99,6 +99,12 @@ function renderDialogForRerender(
   };
 }
 
+/**
+ * Matches a language option by its language, tolerating the resource count rendered beside it — an
+ * option's accessible name is the language followed by that count.
+ */
+const languageOptionName = (language: string) => (name: string) => name.startsWith(`${language} `);
+
 describe('ResourcePickerDialog', () => {
   it('shows "Already Selected" section heading with selected resource names', () => {
     renderDialog();
@@ -196,7 +202,7 @@ describe('ResourcePickerDialog', () => {
     fireEvent.click(screen.getByRole('combobox'));
     // Scoped to the option: "Spanish" also appears as the language cell of the RVR60 row behind the
     // popover.
-    fireEvent.click(screen.getByRole('option', { name: 'Spanish' }));
+    fireEvent.click(screen.getByRole('option', { name: languageOptionName('Spanish') }));
     // Narrowed to Spanish: the English entries are gone, the Spanish one remains.
     expect(screen.queryByText('NIV')).not.toBeInTheDocument();
     expect(screen.getByText('RVR60')).toBeInTheDocument();
@@ -252,7 +258,7 @@ describe('ResourcePickerDialog', () => {
 
     fireEvent.click(screen.getByRole('combobox'));
     ['English', 'Spanish', 'Greek', 'Hebrew'].forEach((language) => {
-      const option = screen.queryByRole('option', { name: language });
+      const option = screen.queryByRole('option', { name: languageOptionName(language) });
       if (option) fireEvent.click(option);
     });
 
@@ -321,20 +327,22 @@ describe('ResourcePickerDialog', () => {
     renderDialog({ resourceType: 'XmlResource' });
 
     fireEvent.click(screen.getByRole('combobox'));
-    const english = screen.getByRole('option', { name: 'English' });
+    const english = screen.getByRole('option', { name: languageOptionName('English') });
     fireEvent.click(english);
 
     expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
   });
 
-  // The costlier direction: a selection that hides every row while reporting itself as no filter
-  // withdraws the one control that could reveal them again.
-  it('keeps Clear filters when the catalog changes out from under a selected language', () => {
+  // The costlier direction: a language selection that outlives the catalog offering it would hide
+  // every row while reporting itself as no filter, withdrawing the one control that could reveal
+  // them again. Deriving the selection down to the languages still on offer removes the dead end
+  // instead of making it recoverable.
+  it('ignores a selected language the catalog no longer offers, rather than emptying the list', () => {
     const { rerender } = renderDialogForRerender();
 
     fireEvent.click(screen.getByRole('combobox'));
-    fireEvent.click(screen.getByRole('option', { name: 'Spanish' }));
+    fireEvent.click(screen.getByRole('option', { name: languageOptionName('Spanish') }));
 
     // A retry, or a host that persists the language filter, can deliver a catalog whose languages
     // no longer include the selected one.
@@ -343,8 +351,9 @@ describe('ResourcePickerDialog', () => {
       selectedResourceIds: [],
     });
 
-    expect(screen.getByText('No resources match the current filters.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
+    expect(screen.queryByText('No resources match the current filters.')).not.toBeInTheDocument();
+    expect(screen.getByText('NIV')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
   });
 
   // The button lives inside the region it removes, so without a deliberate move focus falls to
