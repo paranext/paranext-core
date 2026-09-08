@@ -6,7 +6,6 @@ import {
   isBlockInPortView,
   scrollPortToBlock,
 } from './aligned-scroll.utils';
-import { resolveDisplayVerseNum } from './verse-display.utils';
 
 /** Scroll positions within a pixel of each other are the same position. */
 const SCROLL_MATCH_TOLERANCE_PX = 1;
@@ -37,8 +36,11 @@ export function useAlignedReferenceScroll(
   // Where this hook last left the port. A scrollTop that no longer matches means the reader moved
   // it, so the reference is left alone until it changes. `undefined` re-arms.
   const appliedScrollTopRef = useRef<number | undefined>(undefined);
-  const displayVerseNum = resolveDisplayVerseNum(scrRef.verseNum);
-  const targetReference = `${scrRef.book} ${scrRef.chapterNum}:${displayVerseNum}`;
+  // The verse is used as given: this view shows a whole chapter, so it has no reason to resolve a
+  // verse-0 reference forward the way a one-verse-tall cell does — and doing so made verse 0 and
+  // verse 1 the same key, so stepping between them never re-armed. `findVerseBlockForVerse` already
+  // puts a reference above the first block at the top of the passage.
+  const targetReference = `${scrRef.book} ${scrRef.chapterNum}:${scrRef.verseNum} ${scrRef.versificationStr}`;
 
   const isViewVisible = useViewVisibility();
   // An inactive dock tab has no layout: geometry reads return zero and the scroll would silently do
@@ -53,7 +55,7 @@ export function useAlignedReferenceScroll(
       return;
 
     // No verse block has rendered yet; a later mutation will bring one.
-    const block = findVerseBlockForVerse(port, displayVerseNum);
+    const block = findVerseBlockForVerse(port, scrRef.verseNum);
     if (!block) return;
 
     if (!isBlockInPortView(port, block)) scrollPortToBlock(port, block);

@@ -465,15 +465,25 @@ test.describe('Scripture Text Grid renderer', () => {
 
     const elapsedMs = await stg.frame.locator('body').evaluate(async () => {
       const start = performance.now();
+      const hasAllColumns = () => document.querySelectorAll('[role="region"]').length >= 5;
       await new Promise<void>((resolve) => {
         const observer = new MutationObserver(() => {
-          if (document.querySelectorAll('[role="region"]').length >= 5) {
+          if (hasAllColumns()) {
             observer.disconnect();
             resolve();
           }
         });
         observer.observe(document.body, { childList: true, subtree: true });
-        if (document.querySelectorAll('[role="region"]').length >= 5) resolve();
+        // Give up rather than hang: a run that never renders five columns should fail on the count
+        // assertion below, which says what went wrong, not on Playwright's global timeout.
+        setTimeout(() => {
+          observer.disconnect();
+          resolve();
+        }, 15_000);
+        if (hasAllColumns()) {
+          observer.disconnect();
+          resolve();
+        }
       });
       return performance.now() - start;
     });

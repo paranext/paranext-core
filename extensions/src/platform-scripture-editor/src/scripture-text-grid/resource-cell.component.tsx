@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'rea
 import { deriveCellState } from './resource-cell.utils';
 import {
   EMPTY_KEY,
-  NO_ALIGNABLE_VERSES_KEY,
+  NO_VERSES_TO_SHOW_KEY,
   RESOURCE_CELL_STRING_KEYS,
   ResourceCellView,
   type ZoomMenuLabels,
@@ -62,6 +62,8 @@ type ResourceCellProps = {
   reorderHint?: string;
   /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
   onReorderKeyDown?: (event: KeyboardEvent) => void;
+  /** Makes the cell's header band the drag source for a reorder; passed straight to the view. */
+  headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
 };
 
 /**
@@ -82,6 +84,7 @@ export function ResourceCell({
   reorderHandleLabel,
   reorderHint,
   onReorderKeyDown,
+  headerDrag,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -251,10 +254,12 @@ export function ResourceCell({
   // as a blank column with no explanation.
   let emptyMessage: string | undefined;
   if (state === 'ready') {
+    // Falling back to the key keeps "should this be empty?" from riding on "did the string
+    // resolve?" — an unresolved key renders as itself, which is visible, rather than as the editor.
     if (viewMode === 'verse' && (verseSlice?.isEmpty ?? false))
-      emptyMessage = localizedStrings[EMPTY_KEY];
+      emptyMessage = localizedStrings[EMPTY_KEY] ?? EMPTY_KEY;
     else if (viewMode === 'aligned' && usj && !hasAlignableVerse(usj))
-      emptyMessage = localizedStrings[NO_ALIGNABLE_VERSES_KEY];
+      emptyMessage = localizedStrings[NO_VERSES_TO_SHOW_KEY] ?? NO_VERSES_TO_SHOW_KEY;
   }
 
   return (
@@ -280,6 +285,7 @@ export function ResourceCell({
       reorderHandleLabel={reorderHandleLabel}
       reorderHint={reorderHint}
       onReorderKeyDown={onReorderKeyDown}
+      headerDrag={headerDrag}
       editor={
         <Editorial
           ref={editorRef}

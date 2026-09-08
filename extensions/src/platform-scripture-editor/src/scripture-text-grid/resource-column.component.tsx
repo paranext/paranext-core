@@ -4,7 +4,12 @@ import { ResourceCell, GridResource } from './resource-cell.component';
 import type { ZoomMenuLabels } from './resource-cell-view.component';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 
-/** Drag-and-keyboard reorder wiring for one column; omit to render a column that cannot move. */
+/**
+ * Drag-and-keyboard reorder wiring for one column; omit to render a column that cannot move.
+ *
+ * The column is the drop target, but only its header is the drag source — see `headerDrag` on
+ * `ResourceCellView` for why the whole column must not be draggable.
+ */
 export type ResourceColumnReorder = {
   /** True while a dragged column is hovering this one, which shows the drop-target ring. */
   isDropTarget: boolean;
@@ -61,15 +66,10 @@ export function ResourceColumn({
       data-project-id={resource.projectId}
       data-resource-id={resource.resourceId}
       data-testid="scripture-text-grid-cell-draggable"
-      draggable={reorder ? true : undefined}
-      onDragStart={reorder?.onDragStart}
-      onDragEnd={reorder?.onDragEnd}
       // No onDragLeave — it fires on child elements; the parent clears on drop/dragEnd instead.
       onDragOver={reorder?.onDragOver}
       onDrop={reorder?.onDrop}
-      // `cursor-grab` on the wrapper (the drag source) so the grab affordance covers where the drag
-      // actually starts, not only the grip icon.
-      className={`${className}${reorder ? ' tw:cursor-grab' : ''}${dropTargetRing}`}
+      className={`${className}${dropTargetRing}`}
     >
       <ResourceCell
         resourceRef={resource}
@@ -82,6 +82,9 @@ export function ResourceColumn({
         reorderHandleLabel={reorder?.handleLabel}
         reorderHint={reorder?.hint}
         onReorderKeyDown={reorder?.onKeyDown}
+        headerDrag={
+          reorder ? { onDragStart: reorder.onDragStart, onDragEnd: reorder.onDragEnd } : undefined
+        }
       />
     </div>
   );

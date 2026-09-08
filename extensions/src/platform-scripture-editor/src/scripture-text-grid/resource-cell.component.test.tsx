@@ -43,7 +43,8 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_scriptureTextGrid_cell_status_loading%': 'Resource is loading…',
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
       '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
-      '%webView_scriptureTextGrid_cell_noVersesToAlign%': 'No verses to align in this chapter',
+      '%webView_scriptureTextGrid_cell_noVersesToShow%':
+        'No verses to show in this chapter. Switch to Verse or Chapter view to read this text.',
     },
     false,
   ],
@@ -315,7 +316,7 @@ describe('ResourceCell viewMode', () => {
     // an empty column and no reason for it.
     renderResourceCell({ viewMode: 'aligned', chapterUsj: introOnlyChapterUsj });
 
-    expect(await screen.findByText('No verses to align in this chapter')).toBeInTheDocument();
+    expect(await screen.findByText(/No verses to show in this chapter/)).toBeInTheDocument();
     expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
   });
 
@@ -324,7 +325,7 @@ describe('ResourceCell viewMode', () => {
     await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
 
     expect(screen.getByTestId('editorial')).toBeInTheDocument();
-    expect(screen.queryByText('No verses to align in this chapter')).not.toBeInTheDocument();
+    expect(screen.queryByText(/No verses to show in this chapter/)).not.toBeInTheDocument();
   });
 
   it('leaves the other modes on the editor default layout', async () => {

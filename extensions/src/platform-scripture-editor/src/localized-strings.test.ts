@@ -7,6 +7,7 @@ import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
 import { RESOURCE_CELL_STRING_KEYS } from './scripture-text-grid/resource-cell.const';
+import { RESOURCE_COLLECTION_OPTIONS_STRING_KEYS } from './resource-collection-options/resource-collection-options.types';
 import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
 import { RESOURCE_PANEL_TYPED_STRING_KEYS } from './resource-panel-strings.utils';
 import { VIEW_OPTIONS_NOTICE_STRING_KEYS } from './scripture-text-grid/view-options-notice.utils';
@@ -241,6 +242,23 @@ describe.each([...MODEL_TEXT_PANEL_STRING_KEYS])('model text panel label %s', (k
 // The Scripture Text Grid cell's status and action labels, likewise driven off the component's own
 // exported key list.
 describe.each([...RESOURCE_CELL_STRING_KEYS])('resource cell label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// Every label in the View Options panel: the VIEW toggle, the TEXTS list, and its buttons. Covered
+// for the same reason as the cell labels above — nothing else checks that a key added here reaches
+// both shipped languages.
+describe.each([...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS])('View Options label %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();
   });

@@ -192,8 +192,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const [refreshCounter, setRefreshCounter] = useState(0);
 
   // Chapter-context overlay opened from a verse cell; Escape closes it. Intentionally NOT cleared on
-  // a view-mode switch: chapter mode ignores it, and keeping it restores the open split when the user
-  // returns to verse mode.
+  // a view-mode switch: the other views ignore it, and keeping it restores the open split when the
+  // user returns to verse mode. The Escape handler below is gated on the verse view for that reason
+  // — it is a capture-phase listener, so leaving it live would swallow Escape in the other views for
+  // a split the reader cannot see.
   const [chapterContext, setChapterContext] = useState<ChapterContextResource | undefined>(
     undefined,
   );
@@ -215,14 +217,14 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   }, [localizedStrings]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || chapterContext === undefined) return;
+      if (event.key !== 'Escape' || chapterContext === undefined || viewMode !== 'verse') return;
       event.preventDefault();
       event.stopPropagation();
       handleCloseChapterContext();
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [chapterContext, handleCloseChapterContext]);
+  }, [chapterContext, handleCloseChapterContext, viewMode]);
 
   // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
   // installed project id the cell fetches chapter text with; project references need no lookup. It

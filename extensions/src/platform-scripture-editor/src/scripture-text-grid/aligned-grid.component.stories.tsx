@@ -104,7 +104,7 @@ function StubColumn({
   );
 }
 
-const greek: StubVerse[] = [
+const versePerRow: StubVerse[] = [
   {
     marker: '1',
     lines: [
@@ -117,8 +117,8 @@ const greek: StubVerse[] = [
   { marker: '5', lines: ['So he came to a town of Samaria called Sychar.'] },
 ];
 
-/** Bridges verses 3 and 4 into one block, which spans both rows. */
-const nrsv: StubVerse[] = [
+/** Bridges verses 3 and 4 into one block, which spans both of their rows. */
+const withBridgedVerses: StubVerse[] = [
   { marker: '1', lines: ['Now when Jesus learned that the Pharisees had heard'] },
   { marker: '2', lines: ['— although it was not Jesus himself but his disciples who baptized —'] },
   {
@@ -128,8 +128,8 @@ const nrsv: StubVerse[] = [
   { marker: '5', lines: ['So he came to a Samaritan city called Sychar.'] },
 ];
 
-/** Has no verse 3 at all, and sets verse 5 as poetry lines. */
-const cpb: StubVerse[] = [
+/** Has no verse 3 at all, and sets verse 5 as two poetry lines. */
+const withMissingVerseAndPoetry: StubVerse[] = [
   { marker: '1', lines: ['Jesus knew the Pharisees had heard.'] },
   { marker: '2', lines: ['His disciples did the baptizing.'] },
   { marker: '4', lines: ['He had to go through Samaria.'] },
@@ -145,9 +145,9 @@ export const ThreeTranslations: Story = {
   render: () => (
     <div style={GRID_BOX_STYLE}>
       <AlignedGrid scrRef={scrRef} ariaLabel="Text Collection">
-        <StubColumn label="GRK" verses={greek} />
-        <StubColumn label="NRSV" verses={nrsv} />
-        <StubColumn label="CPB" verses={cpb} />
+        <StubColumn label="GRK" verses={versePerRow} />
+        <StubColumn label="NRSV" verses={withBridgedVerses} />
+        <StubColumn label="CPB" verses={withMissingVerseAndPoetry} />
       </AlignedGrid>
     </div>
   ),
@@ -158,7 +158,7 @@ export const WithRightToLeftColumn: Story = {
   render: () => (
     <div style={GRID_BOX_STYLE}>
       <AlignedGrid scrRef={scrRef} ariaLabel="Text Collection">
-        <StubColumn label="WEB" verses={greek} />
+        <StubColumn label="WEB" verses={versePerRow} />
         <StubColumn
           label="עברית"
           textDirection="rtl"
@@ -184,7 +184,7 @@ export const ManyColumnsScrollSideways: Story = {
     <div style={GRID_BOX_STYLE}>
       <AlignedGrid scrRef={scrRef} ariaLabel="Text Collection">
         {['GRK', 'NRSV', 'CPB', 'WEB', 'KJV', 'ESV'].map((label) => (
-          <StubColumn key={label} label={label} verses={greek} />
+          <StubColumn key={label} label={label} verses={versePerRow} />
         ))}
       </AlignedGrid>
     </div>

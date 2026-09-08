@@ -5,6 +5,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Button,
+  EmptyState,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -42,7 +43,7 @@ export {
   FAILED_KEY,
   BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
-  NO_ALIGNABLE_VERSES_KEY,
+  NO_VERSES_TO_SHOW_KEY,
   ZOOM_IN_KEY,
   ZOOM_OUT_KEY,
   RESET_ZOOM_KEY,
@@ -115,6 +116,13 @@ export type ResourceCellViewProps = {
   reorderHint?: string;
   /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
   onReorderKeyDown?: (event: KeyboardEvent) => void;
+  /**
+   * Makes the header band the drag source for a reorder. It is deliberately the header and not the
+   * whole cell: a `draggable` ancestor makes its entire subtree draggable, so a column-wide drag
+   * source turns a click-drag across the text into a reorder instead of a selection — and selecting
+   * a passage down a column is the reason this view renders one editor per column.
+   */
+  headerDrag?: { onDragStart: () => void; onDragEnd: () => void };
 };
 
 function ZoomItemsShared({
@@ -226,15 +234,16 @@ export function ResourceCellView({
   reorderHandleLabel,
   reorderHint,
   onReorderKeyDown,
+  headerDrag,
 }: ResourceCellViewProps) {
   let readyContent: ReactNode = editor;
   if (emptyMessage) {
     readyContent = (
       <div
         data-cell-placeholder
-        className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:text-center"
+        className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center"
       >
-        <span className="tw:text-sm tw:text-muted-foreground">{emptyMessage}</span>
+        <EmptyState message={emptyMessage} className="tw:text-center" />
       </div>
     );
   }
@@ -349,7 +358,10 @@ export function ResourceCellView({
         <>
           <div
             data-cell-header
-            className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-0.5"
+            draggable={headerDrag ? true : undefined}
+            onDragStart={headerDrag?.onDragStart}
+            onDragEnd={headerDrag?.onDragEnd}
+            className={`tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-0.5${headerDrag ? ' tw:cursor-grab' : ''}`}
           >
             {showDragHandle ? (
               // Nested tooltip on the grip so `reorderHint` shows on hover AND keyboard focus.

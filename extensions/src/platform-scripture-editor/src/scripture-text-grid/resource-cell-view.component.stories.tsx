@@ -4,7 +4,7 @@ import { expect, within } from 'storybook/test';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import {
   EMPTY_KEY,
-  NO_ALIGNABLE_VERSES_KEY,
+  NO_VERSES_TO_SHOW_KEY,
   RESET_ZOOM_KEY,
   RESOURCE_CELL_STRING_KEYS,
   ResourceCellView,
@@ -843,7 +843,7 @@ export const NoVersesToAlign: Story = {
         label="HBKENG"
         textDirection="ltr"
         localizedStrings={localizedStrings}
-        emptyMessage={localizedStrings[NO_ALIGNABLE_VERSES_KEY]}
+        emptyMessage={localizedStrings[NO_VERSES_TO_SHOW_KEY]}
         contentOverflow="visible"
         editor={<SampleChapter />}
       />
