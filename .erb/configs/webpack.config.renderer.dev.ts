@@ -63,8 +63,8 @@ const configuration: webpack.Configuration = {
   // outside the module graph that shapes the output changes.
   cache: {
     type: 'filesystem',
-    // Distinct from the production renderer's `webpack-renderer` directory: same source tree, very
-    // different output (mode, devtool, DLL reference), so they must not share a cache.
+    // Distinct directory per dev config: all three are `mode: 'development'` with no `cache.name`,
+    // so they would share one `default-development` pack if they shared a directory.
     cacheDirectory: path.join(
       webpackPaths.rootPath,
       'node_modules',
@@ -85,7 +85,6 @@ const configuration: webpack.Configuration = {
       ...(skipDLLs ? {} : { dll: [manifest] }),
     },
     compression: 'gzip',
-    maxMemoryGenerations: 5,
   },
 
   module: {

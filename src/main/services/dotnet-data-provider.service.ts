@@ -102,7 +102,8 @@ function startDotnetDataProvider() {
   // `dotnet watch` restores and builds before the provider's `Main()` runs at all, which is the
   // single largest block of dev startup. Opting out (`npm run start:no-dotnet-watch`) runs the
   // already-built assembly instead, so that cost moves out of startup — at the price of hot reload
-  // on C# edits: you must run `npm run build:data` yourself after changing C#, or the app keeps
+  // on C# edits: you must run `npm run build:data` yourself and restart the app (the provider is
+  // started once, from main.ts, and never re-spawned in place), or the app keeps
   // running the previous build. Logged below, because a stale build is otherwise invisible: the app
   // starts and behaves normally, just against older C#.
   // `run --no-build` rather than the built assembly directly: the build output path is

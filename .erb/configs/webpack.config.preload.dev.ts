@@ -49,7 +49,6 @@ const configuration: webpack.Configuration = {
       tsconfig: [path.resolve(webpackPaths.rootPath, 'tsconfig.json')],
     },
     compression: 'gzip',
-    maxMemoryGenerations: 5,
   },
 
   plugins: [

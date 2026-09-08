@@ -265,9 +265,11 @@ npm start
 
 After you run `npm start` (or, in VSCode, launch `Debug Platform`), you can edit the code, and the relevant processes will hot reload.
 
+Dev builds are cached under `node_modules/.cache`. If you ever suspect a stale bundle, `npm run clean:build-cache` clears every cache in that directory (Storybook's and the extensions' included) and the next build repopulates them.
+
 ### Starting without the .NET watcher
 
-`npm start` runs the .NET data provider under `dotnet watch`, which restores and builds the project before the provider's `Main()` runs — 15-24 seconds of dev startup, depending on how warm the MSBuild and Roslyn servers are. If you are not editing C#, you can skip it:
+`npm start` runs the .NET data provider under `dotnet watch`, which restores and builds the project before the provider's `Main()` runs — 15-24 seconds of dev startup, depending on how warm the MSBuild and Roslyn servers are (measured on one machine; reproduce with the [Startup performance timing](#startup-performance-timing) tooling below). If you are not editing C#, you can skip it:
 
 ```bash
 npm run start:no-dotnet-watch
@@ -275,7 +277,7 @@ npm run start:no-dotnet-watch
 
 This runs the already-built assembly instead, which takes roughly 3 seconds off the time to a fully loaded app and about 15 seconds off how long the data provider takes to become ready.
 
-The script is a thin wrapper that sets `PT_DOTNET_NO_WATCH=true`. If you start the app some other way, set the variable directly — this is the only handle you have when the npm script is out of reach:
+The script is a thin wrapper that sets `PT_DOTNET_NO_WATCH=true`. The value must be exactly `true`; any other value (including other truthy-looking strings) is ignored and the watcher runs as normal. If you start the app some other way, set the variable directly — this is the only handle you have when the npm script is out of reach:
 
 ```bash
 PT_DOTNET_NO_WATCH=true npm start
@@ -283,7 +285,7 @@ PT_DOTNET_NO_WATCH=true npm start
 
 That includes VSCode's `Debug Platform`, whose `Debug Platform Backend` configuration runs `npm run start` with a fixed `env` block, so it cannot pick up the script. Add `"PT_DOTNET_NO_WATCH": "true"` to that block in `.vscode/launch.json` to get the same behavior while debugging.
 
-**The trade-off is that C# changes are no longer picked up.** You have to run `npm run build:data` yourself after editing C#, or the app will keep running the previous build — it starts and behaves normally, just against older C# code, so the startup log says explicitly when this mode is active. You also need to have built the provider at least once (`npm run build:data`) before the script will work at all.
+**The trade-off is that C# changes are no longer picked up.** You have to run `npm run build:data` yourself after editing C# **and then restart the app** — the provider is started once and is never re-spawned in place — or the app will keep running the previous build — it starts and behaves normally, just against older C# code, so the startup log says explicitly when this mode is active. You also need to have built the provider at least once (`npm run build:data`) before the script will work at all.
 
 ### Developing Extensions
 
