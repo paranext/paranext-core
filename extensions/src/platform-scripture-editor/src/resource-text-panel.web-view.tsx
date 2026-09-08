@@ -78,7 +78,11 @@ import {
   RESOURCE_PANEL_TYPED_STRING_KEYS,
   resolveResourcePanelStringKeys,
 } from './resource-panel-strings.utils';
-import { ExpandableInfo, PanelRetryableErrorView, LoadingView } from './panel-state-views.component';
+import {
+  ExpandableInfo,
+  PanelRetryableErrorView,
+  LoadingView,
+} from './panel-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
