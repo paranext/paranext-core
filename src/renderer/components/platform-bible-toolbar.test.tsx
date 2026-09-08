@@ -171,12 +171,17 @@ vi.mock('platform-bible-react', async (importOriginal) => {
       className,
       configAreaChildren,
       children,
+      menuData,
     }: {
       className?: string;
       configAreaChildren?: React.ReactNode;
       children?: React.ReactNode;
+      menuData?: unknown;
     }) => (
       <div data-testid="toolbar-root" className={className}>
+        {/* The real Toolbar renders its menubar only when `menuData` is truthy; this marker mirrors
+            that so tests can assert which windows get a menu without the real Radix internals. */}
+        {menuData ? <div data-testid="toolbar-menubar" /> : undefined}
         <div data-testid="toolbar-config-area">{configAreaChildren}</div>
         <div data-testid="toolbar-main-area">{children}</div>
       </div>
@@ -243,6 +248,11 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 // Sync-button block last set would leak into every describe that follows.
 beforeEach(() => {
   vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
+  // vitest has no URL search params for the renderer to read this from, so without a file-wide
+  // default it is `undefined` (a secondary window) in every describe that doesn't say otherwise —
+  // the opposite of what a main-window user actually sees. Describes that care about the secondary
+  // case still set `false` explicitly as a deliberate override.
+  globalThis.isMainWindow = true;
   vi.mocked(useOpenProjectBookIds).mockReturnValue(['REV']);
   // The real `useInterfaceMode` runs in these tests and caches the resolved mode, so without this
   // a test that renders while the setting is still loading would inherit the previous test's mode
@@ -1014,6 +1024,13 @@ describe('PlatformBibleToolbar — main menu data stays live', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSendCommand(true);
+    // Already the file-wide default; stated explicitly because these tests are about the MAIN
+    // window specifically, and `vi.clearAllMocks()` above doesn't touch globals.
+    globalThis.isMainWindow = true;
+  });
+
+  afterEach(() => {
+    globalThis.isMainWindow = undefined;
   });
 
   it('subscribes to MainMenu via useData instead of a one-shot fetch, so interface-mode and localization updates reach it without reopening the menu', async () => {
@@ -1026,6 +1043,38 @@ describe('PlatformBibleToolbar — main menu data stays live', () => {
       undefined,
       expect.objectContaining({ columns: {}, groups: {}, items: [] }),
     );
+  });
+});
+
+describe('PlatformBibleToolbar — the menu belongs to the main window only', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendCommand(true);
+  });
+
+  afterEach(() => {
+    globalThis.isMainWindow = undefined;
+  });
+
+  it('gives the Toolbar menu data in the main window', async () => {
+    globalThis.isMainWindow = true;
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-menubar')).toBeInTheDocument();
+    });
+  });
+
+  it('withholds menu data in a secondary window, and does not subscribe to the provider at all', async () => {
+    globalThis.isMainWindow = false;
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-root')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('toolbar-menubar')).not.toBeInTheDocument();
+    // The gate is upstream of the subscription, not just of the prop: passing `undefined` as the
+    // source is what keeps every secondary window from paying for a merged, localized menu it
+    // then discards.
+    expect(useData).not.toHaveBeenCalledWith(menuDataService.dataProviderName);
   });
 });
 
