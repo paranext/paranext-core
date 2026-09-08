@@ -26,7 +26,6 @@ import { ResourceCellState } from './resource-cell.utils';
 import {
   BOOK_NOT_AVAILABLE_KEY,
   COPY_KEY,
-  EMPTY_KEY,
   FAILED_KEY,
   LOADING_KEY,
   NOT_INSTALLED_KEY,
@@ -43,6 +42,7 @@ export {
   FAILED_KEY,
   BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
+  NO_ALIGNABLE_VERSES_KEY,
   ZOOM_IN_KEY,
   ZOOM_OUT_KEY,
   RESET_ZOOM_KEY,
@@ -69,8 +69,12 @@ export type ResourceCellViewProps = {
   localizedStrings: ResourceCellLocalizedStrings;
   /** The editor rendered when `state` is `ready` (the connected cell supplies `Editorial`). */
   editor: ReactNode;
-  /** When true (verse mode, slice empty), render the empty label instead of the editor. */
-  isVerseEmpty?: boolean;
+  /**
+   * Message to render instead of the editor when the resource has text but none of it belongs in
+   * this view — the focused verse is missing in verse mode, the chapter has no verses to align in
+   * the aligned grid. Omit to render the editor.
+   */
+  emptyMessage?: string;
   /**
    * How to show the resource name. `'header'` (default) is a compact header line above the content,
    * used by chapter contexts (single-resource full-width + chapter-context split). `'inline'` hangs
@@ -206,7 +210,7 @@ export function ResourceCellView({
   textDirection,
   localizedStrings,
   editor,
-  isVerseEmpty,
+  emptyMessage,
   nameDisplay = 'header',
   contentOverflow = 'auto',
   zoomFactor,
@@ -224,10 +228,13 @@ export function ResourceCellView({
   onReorderKeyDown,
 }: ResourceCellViewProps) {
   let readyContent: ReactNode = editor;
-  if (isVerseEmpty) {
+  if (emptyMessage) {
     readyContent = (
-      <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:text-center">
-        <span className="tw:text-sm tw:text-muted-foreground">{localizedStrings[EMPTY_KEY]}</span>
+      <div
+        data-cell-placeholder
+        className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:text-center"
+      >
+        <span className="tw:text-sm tw:text-muted-foreground">{emptyMessage}</span>
       </div>
     );
   }
@@ -271,7 +278,10 @@ export function ResourceCellView({
     state === 'ready' ? (
       readyContent
     ) : (
-      <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center">
+      <div
+        data-cell-placeholder
+        className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center"
+      >
         {unavailableContent}
       </div>
     );

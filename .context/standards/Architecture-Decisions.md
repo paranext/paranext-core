@@ -108,12 +108,23 @@ step, no automation. Just a record.
 - **Consequences:** This view is coupled to three class names it does not own, and a rename upstream
   breaks alignment *silently* — the grid still renders, just unaligned. Three things watch for that:
   a unit test pins the selectors, a Storybook story reproduces the markup so Chromatic sees the
-  layout, and an e2e test measures real block geometry across columns in the running app. Section
-  headings and other between-verse content are hidden here (they have no row of their own and
-  disagree across translations); the model still carries them, so showing them later is a change to
-  one rule. Scrolling to a reference is explicit, because Lexical skips the DOM-selection write —
-  and the scroll-into-view inside it — for a read-only editor. A verse numbered above 200 would fall
-  outside the explicit grid and stop sharing rows; revisit if a versification ever exceeds that.
+  layout, and an e2e test measures real block geometry across columns in the running app. Scrolling
+  to a reference is explicit, because Lexical skips the DOM-selection write — and the
+  scroll-into-view inside it — for a read-only editor. A verse numbered above 200 would fall outside
+  the explicit grid and stop sharing rows; revisit if a versification ever exceeds that.
+
+  Two decisions follow from the row model rather than from taste, so they are recorded here:
+
+  - **Section headings are hidden.** They sit between verse blocks, so they have no row of their own,
+    and they are translation-specific — showing them per column would put a heading beside verse 5 in
+    one text and verse 6 in another. Placing them instead on the row of the verse they precede is not
+    expressible in CSS (no selector reaches a following sibling's attributes) and would need JS. The
+    model still carries them, so a later pass can span one across a full-width row keyed to a
+    reference resource; until then the reference screenshot's clean look is what ships.
+  - **Rows are visual, not announced.** The grid is a group of labeled column regions. ARIA table
+    semantics would need a row-major DOM, which the one-editor-per-column requirement rules out;
+    verse numbers rendered at the start of each block are what let a screen-reader user correlate
+    columns. Flagged for AT validation with the rest of this surface.
 - **Source:** PT-4184, building on PT-4304's subgrid-chain proof and extending it to the editor's own
   wrappers.
 

@@ -43,6 +43,7 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_scriptureTextGrid_cell_status_loading%': 'Resource is loading…',
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
       '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
+      '%webView_scriptureTextGrid_cell_noVersesToAlign%': 'No verses to align in this chapter',
     },
     false,
   ],
@@ -118,6 +119,15 @@ const twoVerseChapterUsj = usxStringToUsj(`<?xml version="1.0" encoding="utf-8"?
   <chapter number="1" style="c" sid="GEN 1" />
   <para style="p">
     <verse number="1" style="v" sid="GEN 1:1" />verse one<verse eid="GEN 1:1" /><verse number="2" style="v" sid="GEN 1:2" />verse two<verse eid="GEN 1:2" /></para>
+</usx>
+`);
+
+// Chapter with prose but no verse markers at all — nothing the aligned grid can place on a row.
+const introOnlyChapterUsj = usxStringToUsj(`<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="GEN" style="id">Sample</book>
+  <chapter number="1" style="c" sid="GEN 1" />
+  <para style="ip">Introduction prose with no verses.</para>
 </usx>
 `);
 
@@ -300,6 +310,23 @@ describe('ResourceCell viewMode', () => {
     expect(document.querySelector('[data-cell-content]')).toHaveClass('tw:overflow-visible');
   });
 
+  it('aligned mode explains a chapter with no verses instead of rendering a blank column', async () => {
+    // The aligned view hides everything between verse blocks, so a chapter that has none would show
+    // an empty column and no reason for it.
+    renderResourceCell({ viewMode: 'aligned', chapterUsj: introOnlyChapterUsj });
+
+    expect(await screen.findByText('No verses to align in this chapter')).toBeInTheDocument();
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+
+  it('renders the editor in aligned mode as soon as the chapter has a verse', async () => {
+    renderResourceCell({ viewMode: 'aligned', chapterUsj: twoVerseChapterUsj });
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+    expect(screen.queryByText('No verses to align in this chapter')).not.toBeInTheDocument();
+  });
+
   it('leaves the other modes on the editor default layout', async () => {
     renderResourceCell({
       viewMode: 'chapter',
@@ -444,7 +471,7 @@ describe('ResourceCell verse-0 fall-forward (PT-3133)', () => {
   });
 
   // Leaving the empty state, which the tests above only ever enter. `ResourceCellView` swaps the
-  // editor out entirely for the ghost-text label while `isVerseEmpty`, so `Editorial` unmounts
+  // editor out entirely for the ghost-text label while the verse is empty, so `Editorial` unmounts
   // and `editorRef.current` goes null; navigating to a verse the resource HAS remounts it and
   // the effect must refeed. That only works because React assigns refs during commit, before
   // effects run — an ordering dependency nothing else here guards. Fall-forward makes this

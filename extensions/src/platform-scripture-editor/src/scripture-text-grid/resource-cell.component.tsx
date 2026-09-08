@@ -14,13 +14,15 @@ import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { deriveCellState } from './resource-cell.utils';
 import {
+  EMPTY_KEY,
+  NO_ALIGNABLE_VERSES_KEY,
   RESOURCE_CELL_STRING_KEYS,
   ResourceCellView,
   type ZoomMenuLabels,
 } from './resource-cell-view.component';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.utils';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
-import { resolveDisplayVerseNum, sliceUsjToVerse } from './verse-display.utils';
+import { hasAlignableVerse, resolveDisplayVerseNum, sliceUsjToVerse } from './verse-display.utils';
 import { useCommentaryMarkerStyles } from '../use-commentary-marker-styles.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -244,7 +246,16 @@ export function ResourceCell({
   }, [state, usjPossiblyError, viewMode, verseSlice]);
   // #endregion
 
-  const isVerseEmpty = viewMode === 'verse' && state === 'ready' && (verseSlice?.isEmpty ?? false);
+  // What to show when the resource is fine but this view has nothing to draw from it. The aligned
+  // grid hides everything between verse blocks, so a chapter with no verses would otherwise render
+  // as a blank column with no explanation.
+  let emptyMessage: string | undefined;
+  if (state === 'ready') {
+    if (viewMode === 'verse' && (verseSlice?.isEmpty ?? false))
+      emptyMessage = localizedStrings[EMPTY_KEY];
+    else if (viewMode === 'aligned' && usj && !hasAlignableVerse(usj))
+      emptyMessage = localizedStrings[NO_ALIGNABLE_VERSES_KEY];
+  }
 
   return (
     <ResourceCellView
@@ -252,7 +263,7 @@ export function ResourceCell({
       label={resourceRef.label}
       textDirection={textDirection}
       localizedStrings={localizedStrings}
-      isVerseEmpty={isVerseEmpty}
+      emptyMessage={emptyMessage}
       nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
       // In the aligned grid the single scroll port is the grid root; see `contentOverflow`.
       contentOverflow={viewMode === 'aligned' ? 'visible' : 'auto'}

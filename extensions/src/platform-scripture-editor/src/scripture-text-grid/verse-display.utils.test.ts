@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { usxStringToUsj, Usj, MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import {
+  hasAlignableVerse,
   parseVerseRange,
   verseRangeIncludes,
   sliceUsjToVerse,
@@ -368,5 +369,34 @@ describe('sliceUsjToVerse — boundaries and empty', () => {
 `;
     const { isEmpty } = sliceUsjToVerse(usxStringToUsj(usxCharWhitespace), 5);
     expect(isEmpty).toBe(true);
+  });
+});
+
+describe('hasAlignableVerse', () => {
+  const chapterWith = (paras: string) =>
+    usxStringToUsj(`<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="GEN" style="id">Sample</book>
+  <chapter number="1" style="c" sid="GEN 1" />
+  ${paras}
+</usx>
+`);
+
+  it('finds a verse in an ordinary paragraph', () => {
+    expect(
+      hasAlignableVerse(
+        chapterWith('<para style="p"><verse number="1" style="v" sid="GEN 1:1" />text</para>'),
+      ),
+    ).toBe(true);
+  });
+
+  it('reports none for a chapter of prose with no verse markers', () => {
+    expect(hasAlignableVerse(chapterWith('<para style="ip">Introduction only.</para>'))).toBe(
+      false,
+    );
+  });
+
+  it('reports none for an empty chapter', () => {
+    expect(hasAlignableVerse(chapterWith(''))).toBe(false);
   });
 });

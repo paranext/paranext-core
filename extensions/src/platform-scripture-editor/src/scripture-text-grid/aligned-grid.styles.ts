@@ -92,6 +92,13 @@ const CHAIN_RULES = `
   padding:0.25rem 0.5rem;
   min-width:0;
 }
+/* A cell with no editor to show — downloading, unavailable, or no verses to align — puts its
+   message across the column rather than in the first verse's row. The minimum height is for the
+   case where every column is in that state, leaving no row heights to borrow. */
+.${ALIGNED_GRID_CLASS} [data-cell-placeholder]{
+  grid-row:1/-1;
+  min-height:6rem;
+}
 /* Section headings and other between-verse content are suppressed in v1: they are
    translation-specific, so they disagree across columns, and they have no row of their own. The
    model still carries them (upstream keeps them as ordinary paragraphs), so showing them later is a

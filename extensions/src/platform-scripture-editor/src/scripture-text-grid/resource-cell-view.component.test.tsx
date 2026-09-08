@@ -277,7 +277,7 @@ describe('ResourceCellView name display', () => {
         textDirection="ltr"
         localizedStrings={localizedStrings}
         nameDisplay="inline"
-        isVerseEmpty
+        emptyMessage={localizedStrings[EMPTY_KEY]}
         editor={undefined}
       />,
     );
