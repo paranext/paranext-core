@@ -29,15 +29,27 @@ import { ReactNode } from 'react';
  *   resource…"). Doubles as the state's accessible name.
  * @param className Overrides the default full-panel sizing. Conflicting Tailwind utilities win over
  *   the defaults.
+ * @param announce Whether this view owns a live region. Pass `false` when the caller already has an
+ *   always-mounted one and will announce the wait itself — two `role="status"` regions in one
+ *   subtree compete, and this one cannot announce anyway, because a region inserted with its text
+ *   already inside it is not read out.
  */
-export function LoadingView({ label, className }: { label: ReactNode; className?: string }) {
+export function LoadingView({
+  label,
+  className,
+  announce = true,
+}: {
+  label: ReactNode;
+  className?: string;
+  announce?: boolean;
+}) {
   return (
     <div
       className={cn(
         'tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center',
         className,
       )}
-      role="status"
+      role={announce ? 'status' : undefined}
     >
       <Spinner aria-hidden />
       <span>{label}</span>

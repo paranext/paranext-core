@@ -560,6 +560,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // never arrived is the other, and without it the controls are simply inert with nothing saying
   // why — the empty state's "open View Options to choose which texts to show" then points at a
   // button that cannot be opened.
+  // Held back until it resolves: before then it is a raw `%key%`, and this is the accessible name.
+  const loadingLabel = isLoadingLocalizedStrings ? '' : (localizedStrings[LOADING_KEY] ?? '');
+
   let viewOptionsDisabledMessage: string | undefined;
   if (!effectiveProjectId)
     viewOptionsDisabledMessage = resolveLocalizedString(localizedStrings, NO_PROJECT_KEY);
@@ -600,7 +603,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     bodyContent = (
       <LoadingView
         className="tw:h-full tw:p-4"
-        label={isLoadingLocalizedStrings ? '' : localizedStrings[LOADING_KEY]}
+        label={loadingLabel}
+        // The always-mounted region below announces this instead; see its comment.
+        announce={false}
       />
     );
   } else {
@@ -632,8 +637,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       {/* Polite live region announcing chapter-context open/close. Placed at the top of the render
           tree so it exists in the DOM before any announcement fires (a screen reader ignores text
           present at initial render). */}
+      {/* Also carries the body's loading state. `LoadingView` cannot announce its own: a live
+          region inserted with its text already inside it is not read out, and a re-point rebuilds
+          this whole document, so its region is mounted populated every time. Routing through this
+          always-mounted one makes the text an insertion, which is announced. The chapter-context
+          message is untouched — it simply resumes when the body leaves 'loading'. */}
       <div role="status" aria-live="polite" aria-atomic="true" className="tw:sr-only">
-        {announcement}
+        {bodyState === 'loading' ? loadingLabel : announcement}
       </div>
       <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
         <Popover>
