@@ -231,11 +231,12 @@ internal class ParatextProjectSendReceiveService(
     /// <item>If <see langword="null"/> and at least one shared project the account knows about is
     /// already present locally (not new), every locally-present project is synced; new projects
     /// are left alone.</item>
-    /// <item>If <see langword="null"/> and every shared project the account knows about is
-    /// currently new (a true first sync, or the rarer case where every previously-local project
-    /// has since gone missing from disk), downloading stops as soon as one synced project gives
-    /// the current user a non-Observer role — trying a small initial batch, then the rest one at a
-    /// time — rather than unconditionally syncing the whole account.</item>
+    /// <item>If <see langword="null"/> and no shared project the account knows about is present
+    /// locally yet (whether a genuine first sync, or every previously-local project has since gone
+    /// missing from disk), an implementation is expected to try to make at least one project
+    /// available for the current user to work in, if the account has one — but may stop short of
+    /// downloading every shared project in the account, trading completeness for performance.
+    /// Callers MUST NOT assume every shared project is present locally once this resolves.</item>
     /// <item>An empty array is a no-op.</item>
     /// </list>
     /// </param>
