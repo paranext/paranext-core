@@ -283,9 +283,9 @@ The script is a thin wrapper that sets `PT_DOTNET_NO_WATCH=true`. The value must
 PT_DOTNET_NO_WATCH=true npm start
 ```
 
-That includes VSCode's `Debug Platform`, whose `Debug Platform Backend` configuration runs `npm run start` with a fixed `env` block, so it cannot pick up the script. Add `"PT_DOTNET_NO_WATCH": "true"` to that block in `.vscode/launch.json` to get the same behavior while debugging.
+In VSCode, use the **`Debug Platform (no .NET watcher)`** compound instead of `Debug Platform` — it is the same configuration with `PT_DOTNET_NO_WATCH` already set. (`Debug Platform Backend` runs `npm run start` with a fixed `env` block, so it cannot pick up the npm script, which is why this ships as its own entry rather than something you edit.)
 
-**The trade-off is that C# changes are no longer picked up.** You have to run `npm run build:data` yourself after editing C# **and then restart the app** — the provider is started once and is never re-spawned in place — or the app will keep running the previous build — it starts and behaves normally, just against older C# code, so the startup log says explicitly when this mode is active. You also need to have built the provider at least once (`npm run build:data`) before the script will work at all.
+**The trade-off is that C# changes are no longer picked up.** After editing C# you have to run `npm run build:data` yourself **and then restart the app** — the provider is started once and never re-spawned in place, so a rebuild alone will not reach it. Otherwise the app keeps running the previous build: it starts and behaves normally, just against older C# code, which is why the startup log says explicitly when this mode is active. You also need to have built the provider at least once before the script will work at all.
 
 ### Developing Extensions
 
