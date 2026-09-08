@@ -53,6 +53,7 @@ import {
   resolveTextCollectionProjectId,
 } from './scripture-text-grid-project.utils';
 import { LoadingView } from './panel-state-views.component';
+import { useHasTimedOut } from './use-has-timed-out.hook';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 import {
   ResourceCollectionOptions,
@@ -99,6 +100,12 @@ const ARIA_CLOSED_KEY = '%webView_scriptureTextGrid_aria_chapterContextClosed%';
 const REORDER_ANNOUNCEMENT_KEY = '%webView_scriptureTextGrid_cell_reorderAnnouncement%';
 const REORDER_HANDLE_KEY = '%webView_scriptureTextGrid_cell_reorderHandle%';
 const REORDER_HINT_KEY = '%webView_scriptureTextGrid_cell_reorderHint%';
+
+/**
+ * How long to wait for the text-collection sources before treating them as unresolvable. Generous
+ * on purpose: a backstop against a wait that can never end, not a latency budget.
+ */
+const SOURCES_TIMEOUT_MS = 30000;
 
 const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
@@ -529,6 +536,14 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // This window opens on every Simple-mode project switch, not only at first mount, because the
   // switch re-points this panel by reloading it (see `updateRelatedTextCollectionPanel`), which is
   // why the body gets a real loading state rather than an empty container.
+  // Bounds the wait for the sources. Neither of the ways that wait can never end — a subscribe that
+  // rejects, or a settings provider that never resolves — surfaces as an error, so without this the
+  // body would spin indefinitely on both.
+  const hasWaitedTooLong = useHasTimedOut(
+    effectiveProjectId !== undefined && sources === undefined && !hasSourcesError,
+    SOURCES_TIMEOUT_MS,
+  );
+
   const bodyState = resolveGridBodyState({
     hasResources: resources.length > 0,
     hasProject: effectiveProjectId !== undefined,
@@ -536,6 +551,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     hasSourcesError,
     isLoadingCachedResources,
     isLoadingLocalizedStrings,
+    hasWaitedTooLong,
   });
 
   let bodyContent: ReactNode;

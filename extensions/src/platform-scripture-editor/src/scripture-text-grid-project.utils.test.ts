@@ -72,6 +72,7 @@ describe('resolveGridBodyState', () => {
     hasSourcesError: false,
     isLoadingCachedResources: false,
     isLoadingLocalizedStrings: false,
+    hasWaitedTooLong: false,
   };
 
   it('renders cells as soon as there are any, even while the cached DBL list loads', () => {
@@ -145,6 +146,34 @@ describe('resolveGridBodyState', () => {
     expect(
       resolveGridBodyState({ ...settled, hasSourcesError: true, isLoadingLocalizedStrings: true }),
     ).toBe('error');
+  });
+
+  it('gives up on a wait that has outlasted its allowance rather than spinning forever', () => {
+    expect(
+      resolveGridBodyState({ ...settled, areSourcesResolved: false, hasWaitedTooLong: true }),
+    ).toBe('error');
+  });
+
+  it('does not give up before the strings arrive, which would render a raw key', () => {
+    expect(
+      resolveGridBodyState({
+        ...settled,
+        areSourcesResolved: false,
+        hasWaitedTooLong: true,
+        isLoadingLocalizedStrings: true,
+      }),
+    ).toBe('loading');
+  });
+
+  it('keeps the no-project steady state rather than calling it a timeout', () => {
+    expect(
+      resolveGridBodyState({
+        ...settled,
+        hasProject: false,
+        areSourcesResolved: false,
+        hasWaitedTooLong: true,
+      }),
+    ).toBe('empty');
   });
 
   it('shows the empty state once a bound project resolves to no texts', () => {

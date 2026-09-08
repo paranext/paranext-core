@@ -64,6 +64,13 @@ export type GridBodyStateInput = {
   isLoadingCachedResources: boolean;
   /** Whether the localized strings this body renders are still resolving. */
   isLoadingLocalizedStrings: boolean;
+  /**
+   * Whether the wait for the sources has gone on long enough to be treated as unresolvable. Some
+   * waits never end — a rejected subscribe is only logged, and a settings provider that never
+   * resolves pins its loading flag true — and neither surfaces as an error, so without a bound the
+   * body would spin forever. See {@link useHasTimedOut}.
+   */
+  hasWaitedTooLong: boolean;
 };
 
 /**
@@ -95,6 +102,7 @@ export function resolveGridBodyState({
   hasSourcesError,
   isLoadingCachedResources,
   isLoadingLocalizedStrings,
+  hasWaitedTooLong,
 }: GridBodyStateInput): GridBodyState {
   if (hasResources) return 'cells';
   if (hasSourcesError) return 'error';
@@ -104,6 +112,12 @@ export function resolveGridBodyState({
   // exempt: its labels resolve per cell and it has content worth showing meanwhile.
   if (isLoadingLocalizedStrings) return 'loading';
   if (!hasProject) return 'empty';
+  // A spinner promises an answer is coming; past this point we can no longer promise that. Checked
+  // after the strings, because a terminal state renders prose and would otherwise show a raw
+  // `%key%`, and after `hasProject`, because no project is already a steady state rather than a
+  // wait. `error` rather than `empty`: "we never got an answer" is a failure, not a confident
+  // "nothing to show".
+  if (hasWaitedTooLong) return 'error';
   if (!areSourcesResolved || isLoadingCachedResources) return 'loading';
   return 'empty';
 }
