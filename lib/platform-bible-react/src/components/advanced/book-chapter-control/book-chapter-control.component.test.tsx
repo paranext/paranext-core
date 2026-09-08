@@ -291,9 +291,13 @@ describe('BookChapterControl — Space on the empty search input', () => {
     await user.keyboard('1 sam');
 
     expect(input).toHaveValue('1 sam');
-    // Still in books view, with the search resolving.
+    // Still in books view, with the search resolving. The top-match row is where the resolved book
+    // is named — it is the only place, since the preview grid below it carries no heading of its
+    // own.
     expect(document.querySelector('[cmdk-input]')).not.toBeNull();
-    expect(await screen.findByText('1 Samuel')).toBeVisible();
+    const topMatchRow = await screen.findByRole('option', { name: /1SA/ });
+    expect(topMatchRow).toHaveTextContent('1 Samuel');
+    expect(topMatchRow).toBeVisible();
   });
 
   test("the control's own submitKeys still win over the patch", async () => {
@@ -1546,3 +1550,250 @@ describe('BookChapterControl yields keys it does not own', () => {
     );
   });
 }, 15_000);
+
+describe('BookChapterControl shows one focus indicator at a time', () => {
+  /**
+   * The keyboard highlight is a ring rather than a background (the popover's items suppress cmdk's
+   * own `data-selected` colours), so the ring class is what "the list is showing keyboard focus"
+   * means in the DOM. jsdom applies no stylesheet, so the class is the only observable form of it.
+   */
+  const RING_CLASS = 'tw:data-selected:ring-2';
+
+  test('focusing a quick-nav button takes the keyboard highlight off the book list', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+
+    const matthewRow = await screen.findByRole('option', { name: /Matthew/ });
+    await waitFor(() => expect(matthewRow).toHaveAttribute('data-selected', 'true'));
+    expect(matthewRow.className).toContain(RING_CLASS);
+
+    const nextChapter = screen.getByRole('button', { name: 'Next chapter' });
+    await act(async () => {
+      nextChapter.focus();
+    });
+
+    // Two rings on screen at once leave no way to tell which surface the next keystroke reaches.
+    await waitFor(() => expect(matthewRow.className).not.toContain(RING_CLASS));
+  });
+
+  test('returning focus to the search input gives the highlight back to the list', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+
+    const matthewRow = await screen.findByRole('option', { name: /Matthew/ });
+    await waitFor(() => expect(matthewRow).toHaveAttribute('data-selected', 'true'));
+
+    const nextChapter = screen.getByRole('button', { name: 'Next chapter' });
+    await act(async () => {
+      nextChapter.focus();
+    });
+    await waitFor(() => expect(matthewRow.className).not.toContain(RING_CLASS));
+
+    const input = screen
+      .getAllByRole('combobox')
+      .find((element) => element instanceof HTMLInputElement);
+    await act(async () => {
+      if (input instanceof HTMLInputElement) input.focus();
+    });
+
+    // Suppressing the paint rather than the state is what makes this cheap: cmdk still holds the
+    // same `data-selected` item, so the highlight comes back exactly where the user left it.
+    await waitFor(() => expect(matthewRow.className).toContain(RING_CLASS));
+    expect(matthewRow).toHaveAttribute('data-selected', 'true');
+  });
+});
+
+describe('BookChapterControl keeps Tab inside the picker', () => {
+  test('Tab in the chapter grid does not close the popover', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await waitFor(() => expect(screen.getByRole('option', { name: '12' })).toBeInTheDocument());
+
+    // The chapter and verse views render no tab stop of their own (the back button is deliberately
+    // out of the tab order), so a Tab that is allowed through moves focus out of the popover and
+    // Radix dismisses it — losing the user's place with no way back.
+    await user.tab();
+
+    expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.getByRole('option', { name: '12' })).toBeInTheDocument();
+  });
+
+  test('Tab in the verse grid does not close the popover', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+        getEndVerse={() => 30}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await user.click(await screen.findByRole('option', { name: '12' }));
+    await waitFor(() => expect(screen.getByRole('option', { name: '30' })).toBeInTheDocument());
+
+    await user.tab();
+
+    expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.getByRole('option', { name: '30' })).toBeInTheDocument();
+  });
+
+  test('Tab past the last control in the books view wraps instead of closing', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await screen.findByRole('option', { name: /Matthew/ });
+
+    // Far more tabs than the books view has stops, so this runs off the end however many there are.
+    for (let i = 0; i < 12; i++) {
+      // Each Tab moves focus from wherever the previous one left it, so these are sequential by
+      // definition — the parallelism `no-await-in-loop` guards against would press every key at
+      // once and assert nothing about tab order.
+      // eslint-disable-next-line no-await-in-loop
+      await user.tab();
+    }
+
+    expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    // Staying open is not enough on its own — focus has to still be somewhere the next keystroke
+    // reaches, or the picker is open with the keyboard pointed at the page behind it.
+    const commandSurface = document.querySelector('[cmdk-root]');
+    expect(commandSurface).not.toBeNull();
+    expect(commandSurface?.contains(document.activeElement)).toBe(true);
+  });
+});
+
+describe('BookChapterControl top-match preview headings', () => {
+  test('the preview grid does not repeat what the top-match row already says', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('lam');
+
+    // The top-match row names the book and the reference directly above the grid.
+    const topMatchRow = await screen.findByRole('option', { name: /LAM/ });
+    expect(topMatchRow).toHaveTextContent('Lamentations 1:1');
+
+    expect(screen.queryByText('Select chapter')).not.toBeInTheDocument();
+  });
+
+  test('the chapters view still labels its grid', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+
+    // The dedicated views have no top-match row, so their header is the only thing naming the book
+    // and the task. ("Matthew" also appears on the trigger, so it is counted rather than matched.)
+    expect(await screen.findByText('Select chapter')).toBeInTheDocument();
+    expect(screen.getAllByText('Matthew')).toHaveLength(2);
+  });
+});
+
+describe('BookChapterControl hands the arrows to the preview grid once entered', () => {
+  function getSearchInput(): HTMLInputElement {
+    const input = screen
+      .getAllByRole('combobox')
+      .find((element) => element instanceof HTMLInputElement);
+    if (!(input instanceof HTMLInputElement)) throw new Error('expected the search input');
+    return input;
+  }
+
+  async function typeVerseQuery() {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+        getEndVerse={() => 30}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('mat 12:15');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '15' })).toHaveAttribute('data-selected', 'true'),
+    );
+    return { user };
+  }
+
+  test('ArrowDown moves the horizontal arrows from the caret to the grid', async () => {
+    const { user } = await typeVerseQuery();
+
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '21' })).toHaveAttribute('data-selected', 'true'),
+    );
+
+    const input = getSearchInput();
+    const caretBeforeArrow = input.selectionStart;
+
+    await user.keyboard('{ArrowLeft}');
+
+    // Having stepped into the grid, the user is navigating cells — leaving the horizontal arrows on
+    // the caret strands them there, able to move the highlight down but never back along a row.
+    expect(input.selectionStart).toBe(caretBeforeArrow);
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '20' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('typing again returns the horizontal arrows to the caret', async () => {
+    const { user } = await typeVerseQuery();
+
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '21' })).toHaveAttribute('data-selected', 'true'),
+    );
+
+    // Editing the query is the user saying they are back in the text.
+    await user.keyboard('{Backspace}');
+    const input = getSearchInput();
+    const caretBeforeArrow = input.selectionStart ?? 0;
+
+    await user.keyboard('{ArrowLeft}');
+
+    expect(input.selectionStart).toBe(caretBeforeArrow - 1);
+  });
+});

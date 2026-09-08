@@ -22,6 +22,13 @@ export interface NumberedItemGridProps {
   isDimmed?: (n: number) => boolean;
   /** Whether item `n` is the currently-selected item (highlighted). Defaults to false. */
   isSelected?: (n: number) => boolean;
+  /**
+   * When true, cells paint no keyboard focus ring even while cmdk still marks one `data-selected`.
+   * Set it while a control outside the grid holds focus, so the grid and that control never show a
+   * focus indicator at the same time. Suppresses the paint, not the state — see the matching prop
+   * on `BookItem`.
+   */
+  suppressKeyboardHighlight?: boolean;
   /** Optional additional class name applied to the grid wrapper. */
   className?: string;
 }
@@ -41,6 +48,7 @@ export function NumberedItemGrid({
   isDisabled,
   isDimmed,
   isSelected,
+  suppressKeyboardHighlight = false,
   className,
 }: NumberedItemGridProps) {
   if (count <= 0) return undefined;
@@ -73,7 +81,7 @@ export function NumberedItemGrid({
                 // Hide CommandItem's own trailing check icon (a multiselect affordance this grid
                 // doesn't use) and give cells pointer feedback distinct from the keyboard focus ring.
                 'tw:[&>svg]:hidden tw:hover:bg-muted',
-                LIST_ITEM_KEYBOARD_FOCUS_RING,
+                !suppressKeyboardHighlight && LIST_ITEM_KEYBOARD_FOCUS_RING,
                 // cmdk highlights the focused cell with its own data-selected background/text; this
                 // grid shows keyboard focus with the ring above instead, so neutralize that here.
                 // The selected-cell rule below re-asserts its own colors under data-selected so the
@@ -86,7 +94,14 @@ export function NumberedItemGrid({
                   // the popover opens. `primary-foreground` is the token already guaranteed to read
                   // against `primary`. `cn` merges away the earlier ring color, so this wins by
                   // argument order rather than by CSS output order.
-                  'tw:bg-primary tw:text-primary-foreground tw:data-selected:bg-primary tw:data-selected:text-primary-foreground tw:data-selected:ring-primary-foreground/70':
+                  //
+                  // Hover keeps the filled treatment (`bg-primary`) instead of taking the shared
+                  // `hover:bg-muted` above. This cell's text is `primary-foreground` — near-white,
+                  // chosen to read against the fill — so swapping the fill for a pale muted
+                  // background on hover leaves near-white text on a near-white ground and the
+                  // current chapter all but disappears under the pointer. `/90` keeps the pointer
+                  // feedback that hover owes the user without touching the contrast.
+                  'tw:bg-primary tw:text-primary-foreground tw:hover:bg-primary/90 tw:data-selected:bg-primary tw:data-selected:text-primary-foreground tw:data-selected:ring-primary-foreground/70':
                     isSelected?.(n) ?? false,
                 },
                 {

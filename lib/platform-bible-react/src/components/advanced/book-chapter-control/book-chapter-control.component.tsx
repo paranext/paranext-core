@@ -74,6 +74,23 @@ import { ChapterGrid } from './chapter-grid.component';
 import { VerseGrid } from './verse-grid.component';
 
 /**
+ * Elements that can hold a tab stop. Deliberately narrower than `getFocusableElements` in
+ * `focus.util`: that answers "can this be focused at all", which includes the back button this
+ * control keeps out of the tab order on purpose, and it also filters on rendered geometry — which
+ * jsdom reports as zero for everything, so Tab handling built on it could not be tested. Every
+ * element inside an open popover is rendered, so `tabindex` alone is the right question here.
+ */
+const TAB_STOP_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]';
+
+/** The tab stops inside `container`, in document order. */
+function getTabStops(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(TAB_STOP_SELECTOR)).filter(
+    (element) => element.tabIndex >= 0,
+  );
+}
+
+/**
  * `BookChapterControl` is a component that provides an interactive UI for selecting book chapters.
  * It allows users to input a search query to find specific books and chapters, navigate through
  * options with keyboard interactions, and submit selections. The component handles various
@@ -132,6 +149,16 @@ export function BookChapterControl({
   // Whether the book list is expanded past the active project's books. Governs browsing only —
   // searching always spans every reachable book.
   const [isShowingMoreBooks, setIsShowingMoreBooks] = useState(false);
+  // Whether a control in the books-view header (a quick-nav arrow, the recent-searches trigger)
+  // rather than the search input holds focus. Those controls draw their own focus ring, so the
+  // list below must stop drawing one: two focus indicators at once leave the user no way to tell
+  // which surface the next keystroke reaches.
+  const [isHeaderControlFocused, setIsHeaderControlFocused] = useState(false);
+  // Whether the books view's preview grid has taken over the keyboard from the search input. The
+  // vertical arrows are the only way in — they are never caret keys — and editing the query is the
+  // way back out. Until then the caret keeps the horizontal arrows, so a user typing a reference
+  // can still move through what they typed. See `handleCommandKeyDown`.
+  const [hasPreviewGridKeyboardControl, setHasPreviewGridKeyboardControl] = useState(false);
 
   // Reference to the PopoverTrigger button. Used by `onPointerDownOutside` to detect
   // clicks on our own trigger while the popover is open — see that handler for the full
@@ -380,11 +407,21 @@ export function BookChapterControl({
     localizedStrings,
   );
 
+  // Editing the query hands the keyboard back to the text: the user is typing a reference again,
+  // so the horizontal arrows have to be able to reach what they typed.
+  const handleInputValueChange = useCallback((nextInputValue: string) => {
+    setInputValue(nextInputValue);
+    setHasPreviewGridKeyboardControl(false);
+  }, []);
+
   const handleBackToBooks = useCallback(() => {
     setViewMode('books');
     setSelectedBookForChaptersView(undefined);
     setSelectedBookForVersesView(undefined);
     setSelectedChapterForVersesView(undefined);
+    // The books view is reached with the caret back in the search input, so the preview grid starts
+    // without the keyboard however the user left it last time.
+    setHasPreviewGridKeyboardControl(false);
 
     // Focus the search input when returning to book view
     setTimeout(() => {
@@ -422,6 +459,8 @@ export function BookChapterControl({
         setSelectedBookForVersesView(undefined);
         setSelectedChapterForVersesView(undefined);
         setInputValue('');
+        setHasPreviewGridKeyboardControl(false);
+        setIsHeaderControlFocused(false);
         // Seed, don't force: the list opens expanded when the current book is outside the project so
         // that book is visible, and the toggle still collapses from there.
         setIsShowingMoreBooks(isCurrentBookOutsideProject);
@@ -688,6 +727,31 @@ export function BookChapterControl({
       if (!isInOwnCommandSurface && eventTarget?.closest('[role="menu"], [role="menuitem"]'))
         return;
 
+      // Tab keeps focus inside the picker instead of dismissing it. Radix closes a non-modal
+      // popover as soon as focus leaves it, and the chapter and verse views offer no tab stop of
+      // their own — the back button is deliberately out of the tab order — so every Tab there lands
+      // outside and takes the whole picker down, dropping the user back to the trigger with their
+      // book and chapter choice discarded. Cycle through the current view's own stops instead (the
+      // books view has the search input, the recent-searches trigger, the quick-nav arrows and the
+      // show-more toggle) and swallow the key outright when the view has none. Escape still
+      // dismisses, so this traps Tab rather than the user.
+      if (event.key === 'Tab') {
+        const tabStops = commandRef.current ? getTabStops(commandRef.current) : [];
+        if (tabStops.length === 0) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        const lastStop = tabStops[tabStops.length - 1];
+        const edge = event.shiftKey ? tabStops[0] : lastStop;
+        if (document.activeElement === edge) {
+          event.preventDefault();
+          event.stopPropagation();
+          (event.shiftKey ? lastStop : tabStops[0]).focus();
+        }
+        return;
+      }
+
       const { isLetter, isDigit } = getKeyCharacterType(event.key);
 
       // Enter / Space pick the highlighted chapter / verse. cmdk binds Enter natively on
@@ -815,7 +879,17 @@ export function BookChapterControl({
       // query: pressing ArrowLeft to edit the verse in "mat 12:15" would step the highlight to 14
       // and submit a verse that was never typed. The dedicated chapter and verse views render no
       // input and take all four arrows.
-      if (viewMode === 'books' && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      //
+      // Once the user has stepped into the preview grid, though, they are navigating cells and the
+      // whole grid answers to the arrows. Leaving the horizontal pair on the caret strands them
+      // there: able to move the highlight down a row but never back along one. The vertical arrows
+      // are the way in (they were never caret keys) and editing the query is the way out, so the
+      // caret is never taken away from someone who is still typing.
+      if (
+        viewMode === 'books' &&
+        !hasPreviewGridKeyboardControl &&
+        (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+      ) {
         // Only when the caret is actually IN the input. An `<input>` keeps its selection offsets
         // after blur, so reading them unconditionally would yield the key to a caret that cannot
         // move — and cmdk binds no horizontal arrows on the Command root, so the keystroke would do
@@ -908,6 +982,14 @@ export function BookChapterControl({
       // no grid cell can match, which silently blanks the highlight.
       if (grid.max <= 0) return;
 
+      // The grid is taking this key, so from here it owns the keyboard and the horizontal arrows
+      // follow the vertical ones into it. Set before the clamp below, because entering the grid is
+      // the point even on the press that cannot move the highlight — in a single-row grid
+      // (Lamentations has five chapters) ArrowDown has nowhere to go, and a user who could not get
+      // the arrows to follow would have no way in at all. Only the books view tracks this; the
+      // dedicated grid views have no caret competing for the keys.
+      if (viewMode === 'books') setHasPreviewGridKeyboardControl(true);
+
       if (grid.takeFocus) {
         // Arrow keys drive the grid now — pull focus off the back button (the only natively
         // focusable element in these views) so its focus ring doesn't compete with the grid's
@@ -941,6 +1023,7 @@ export function BookChapterControl({
       topMatch,
       shouldShowVerseGridForTopMatch,
       isCommandListHidden,
+      hasPreviewGridKeyboardControl,
       direction,
       handleBackToBooks,
       handleBackToChapters,
@@ -1330,12 +1413,28 @@ export function BookChapterControl({
           >
             {/* Header: Input (with quick nav buttons) for book view, fixed header for chapter view */}
             {viewMode === 'books' ? (
-              <div className={cn('tw:flex tw:items-end', isCommandListHidden && 'tw:pb-1')}>
+              <div
+                className={cn('tw:flex tw:items-end', isCommandListHidden && 'tw:pb-1')}
+                // Focus events are `focusin` / `focusout` in React, so one pair on the row covers
+                // every control in it. The search input is the one that speaks for the list — it is
+                // where the highlight is steered from — so focus on anything else here is focus
+                // that has left the list and must take the list's ring with it.
+                onFocus={(event) => {
+                  setIsHeaderControlFocused(event.target !== commandInputRef.current);
+                }}
+                onBlur={(event) => {
+                  // Moving between two buttons in this row fires a blur before the next focus.
+                  // Ignore it while focus is still landing inside the row, so the ring does not
+                  // flicker back on between the quick-nav arrows.
+                  if (event.currentTarget.contains(event.relatedTarget)) return;
+                  setIsHeaderControlFocused(false);
+                }}
+              >
                 <div className="tw:relative tw:flex-1">
                   <CommandInput
                     ref={commandInputRef}
                     value={inputValue}
-                    onValueChange={setInputValue}
+                    onValueChange={handleInputValueChange}
                     onKeyDown={handleInputKeyDown}
                     onFocus={() => setIsCommandListHidden(false)}
                     className={recentSearches && recentSearches.length > 0 ? 'tw:pe-8!' : ''}
@@ -1386,7 +1485,15 @@ export function BookChapterControl({
                             onClick();
                           }}
                           disabled={isQuickNavDisabled}
-                          className="tw:h-8.5 tw:w-6 tw:p-0"
+                          // `rounded-lg!` re-asserts all four corners against `ButtonGroup`'s
+                          // horizontal variant, which squares off the inner edges so that flush
+                          // buttons read as one bar. These four are not flush — `gap-1` on the
+                          // group separates them — so the squared edges buy nothing and cost
+                          // something: the focus ring traces the border radius, so tabbing along
+                          // the row produced a ring that changed shape from button to button. The
+                          // radius matches what `size="sm"` already applies inside a button group,
+                          // so only the corners the group removed come back.
+                          className="tw:h-8.5 tw:w-6 tw:rounded-lg! tw:p-0"
                           aria-label={title}
                           onKeyDown={handleQuickNavButtonKeyDown}
                         >
@@ -1501,6 +1608,7 @@ export function BookChapterControl({
                                 }
                                 section={getSectionForBook(bookId)}
                                 commandValue={generateCommandValue(bookId)}
+                                suppressKeyboardHighlight={isHeaderControlFocused}
                                 ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
                                 localizedBookNames={localizedBookNames}
                                 disabled={isBookDisabled(bookId)}
@@ -1563,48 +1671,40 @@ export function BookChapterControl({
                       shouldShowVerseGridForTopMatch &&
                       topMatch.chapterNum &&
                       getEndVerse && (
-                        <>
-                          <div className="tw:mb-2 tw:flex tw:items-center tw:justify-between tw:px-3 tw:text-sm tw:font-medium tw:text-muted-foreground">
-                            <span>
-                              {`${getLocalizedBookName(topMatch.book, localizedBookNames)} ${topMatch.chapterNum}`}
-                            </span>
-                            <span>{selectVerseTitle}</span>
-                          </div>
-                          <VerseGrid
-                            bookId={topMatch.book}
-                            chapterNum={topMatch.chapterNum}
-                            endVerse={getEndVerse(topMatch.book, topMatch.chapterNum)}
-                            scrRef={scrRef}
-                            onVerseSelect={handleVerseSelect}
-                            setVerseRef={setVerseRef}
-                            isVerseDisabled={makeIsVerseDisabled(
-                              topMatch.book,
-                              topMatch.chapterNum,
-                            )}
-                            className="tw:px-4 tw:pb-4"
-                          />
-                        </>
+                        // No heading over this grid: the top-match row sits directly above it and
+                        // already names the book and the reference the grid is refining, so a
+                        // heading here only repeated the book back to the user one line later. The
+                        // dedicated verses view still carries one, because there it is the only
+                        // thing naming the book.
+                        <VerseGrid
+                          bookId={topMatch.book}
+                          chapterNum={topMatch.chapterNum}
+                          endVerse={getEndVerse(topMatch.book, topMatch.chapterNum)}
+                          scrRef={scrRef}
+                          onVerseSelect={handleVerseSelect}
+                          setVerseRef={setVerseRef}
+                          isVerseDisabled={makeIsVerseDisabled(topMatch.book, topMatch.chapterNum)}
+                          suppressKeyboardHighlight={isHeaderControlFocused}
+                          className="tw:px-4 tw:pb-4"
+                        />
                       )}
 
                     {/* Chapter Selector - Show when we have a top match without a verse separator */}
                     {topMatch &&
                       !shouldShowVerseGridForTopMatch &&
                       fetchEndChapter(topMatch.book) > 1 && (
-                        <>
-                          <div className="tw:mb-2 tw:flex tw:items-center tw:justify-between tw:px-3 tw:text-sm tw:font-medium tw:text-muted-foreground">
-                            <span>{getLocalizedBookName(topMatch.book, localizedBookNames)}</span>
-                            <span>{selectChapterTitle}</span>
-                          </div>
-                          <ChapterGrid
-                            bookId={topMatch.book}
-                            scrRef={scrRef}
-                            onChapterSelect={handleChapterSelect}
-                            setChapterRef={setChapterRef}
-                            isChapterDimmed={doesChapterMatch}
-                            isChapterDisabled={makeIsChapterDisabled(topMatch.book)}
-                            className="tw:px-4 tw:pb-4"
-                          />
-                        </>
+                        // No heading here either, for the same reason as the verse preview above:
+                        // the top-match row directly above already names the book.
+                        <ChapterGrid
+                          bookId={topMatch.book}
+                          scrRef={scrRef}
+                          onChapterSelect={handleChapterSelect}
+                          setChapterRef={setChapterRef}
+                          isChapterDimmed={doesChapterMatch}
+                          isChapterDisabled={makeIsChapterDisabled(topMatch.book)}
+                          suppressKeyboardHighlight={isHeaderControlFocused}
+                          className="tw:px-4 tw:pb-4"
+                        />
                       )}
                   </>
                 )}

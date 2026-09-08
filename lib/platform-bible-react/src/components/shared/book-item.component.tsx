@@ -31,6 +31,17 @@ type BookItemProps = {
   localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
   /** Value to use for Command component matching */
   commandValue?: string;
+  /**
+   * When true, the item paints no keyboard focus ring even while cmdk still marks it
+   * `data-selected`. Set it while a control outside the list holds focus, so the list and that
+   * control never show a focus indicator at the same time — two at once leave the user no way to
+   * tell which surface the next keystroke reaches.
+   *
+   * Suppresses the paint, not the state: cmdk keeps its highlighted item, so the ring returns to
+   * exactly where the user left it. Clearing the highlight instead would hand it to cmdk's
+   * select-first-item fallback, which moves it rather than removing it.
+   */
+  suppressKeyboardHighlight?: boolean;
   /** When true, renders the item as disabled: suppresses onSelect and dims the visuals. */
   disabled?: boolean;
   /**
@@ -81,6 +92,7 @@ export function BookItem({
   showCheck = false,
   localizedBookNames,
   commandValue,
+  suppressKeyboardHighlight = false,
   disabled = false,
   dimmedReason,
   dimmedDescription,
@@ -147,7 +159,7 @@ export function BookItem({
       aria-label={ariaLabel}
       disabled={disabled}
       className={cn(
-        LIST_ITEM_KEYBOARD_FOCUS_RING,
+        !suppressKeyboardHighlight && LIST_ITEM_KEYBOARD_FOCUS_RING,
         // Suppress CommandItem's own data-selected background and text color so the keyboard
         // highlight is the ring alone. Book rows and grid cells belong to one control and share one
         // highlight language; a background here would make the same keyboard state look different

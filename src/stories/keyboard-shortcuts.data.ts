@@ -117,7 +117,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'book-chapter-control-move-grid-highlight',
     purpose:
-      'Move the highlighted chapter or verse in the Book Chapter Control grid (mirrored horizontally in right-to-left layouts). While the search box is on screen the horizontal arrows move the text caret first, and reach the preview grid only once the caret has nowhere left to go',
+      'Move the highlighted chapter or verse in the Book Chapter Control grid (mirrored horizontally in right-to-left layouts). While the search box is on screen the horizontal arrows move the text caret first, and reach the preview grid either once the caret has nowhere left to go or once a vertical arrow has stepped into the grid; editing the query hands them back to the caret',
     category: 'Navigation',
     context: 'Book Chapter Control popover',
     keys: {
@@ -137,6 +137,17 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Navigation',
     context: 'Book Chapter Control popover',
     keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+    ],
+  },
+  {
+    id: 'book-chapter-control-cycle-focus',
+    purpose:
+      'Move between the Book Chapter Control’s own controls (search box, recent searches, quick-navigation arrows, show-more toggle), wrapping at the ends rather than leaving the popover. The chapter and verse views have no controls of their own, so there the key does nothing — Escape closes the picker',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
     ],

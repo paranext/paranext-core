@@ -15,6 +15,8 @@ export interface ChapterGridProps {
   isChapterDimmed?: (chapter: number) => boolean;
   /** Optional function to determine if a chapter should be disabled (not selectable). */
   isChapterDisabled?: (chapter: number) => boolean;
+  /** Forwarded to `NumberedItemGrid` — see `suppressKeyboardHighlight` there. */
+  suppressKeyboardHighlight?: boolean;
   /** Optional additional class name for styling */
   className?: string;
 }
@@ -30,6 +32,7 @@ export function ChapterGrid({
   setChapterRef,
   isChapterDimmed,
   isChapterDisabled,
+  suppressKeyboardHighlight,
   className,
 }: ChapterGridProps) {
   if (!bookId) return undefined;
@@ -43,6 +46,7 @@ export function ChapterGrid({
       isDisabled={isChapterDisabled}
       isDimmed={isChapterDimmed}
       isSelected={(chapter) => bookId === scrRef.book && chapter === scrRef.chapterNum}
+      suppressKeyboardHighlight={suppressKeyboardHighlight}
       className={className}
     />
   );

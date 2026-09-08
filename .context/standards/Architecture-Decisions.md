@@ -312,6 +312,58 @@ step, no automation. Just a record.
   two canon books have English names that end in digits (`PS2` → "Psalm 151", `PS3` → "Psalms
   152-155"), so a trailing-number match alone reads a book ROW as a chapter cell of itself.
 
+## adr-bcv-keyboard-ownership: The BookChapterControl popover is one keyboard surface — exactly one thing is focused, and Tab stays inside it
+
+- **Date:** 2026-09-08
+- **Status:** Accepted
+- **Context:** The picker stacks three keyboard consumers in one popover: a text input (the search
+  box, which owns a caret), a cmdk list whose highlight is a `data-selected` ring on an item that
+  never holds DOM focus, and header buttons (quick navigation, recent searches) that do hold DOM
+  focus and draw their own ring. Reviewing the shipped behaviour surfaced three ways they collided.
+  Tabbing to a quick-nav arrow left the book list's ring painted alongside the button's, so two
+  focus indicators were on screen with nothing saying which one the next keystroke addressed.
+  `Tab` in the chapters and verses views dismissed the whole picker, because those views render no
+  tab stop of their own — the back button is deliberately out of the tab order — so focus left the
+  popover and Radix closed it, discarding a book-and-chapter selection the user had already made.
+  And the horizontal arrows stayed with the caret unconditionally, which is right while the user is
+  typing but strands anyone who has stepped into the preview grid with a vertical arrow: they can
+  move the highlight down a row and never back along one.
+- **Decision:** Treat the open popover as a single keyboard surface with one focused thing at a
+  time. (1) **One focus indicator.** While a header control holds focus, the list and grids paint
+  no keyboard ring — `suppressKeyboardHighlight` on `BookItem` / `NumberedItemGrid` suppresses the
+  *paint*, not cmdk's highlight state, so the ring returns to exactly where the user left it.
+  (2) **Tab cycles, never dismisses.** `Tab` / `Shift+Tab` wrap through the current view's own tab
+  stops and are swallowed outright in views that have none; `Escape` and the trigger remain the
+  ways out. (3) **The grid takes the arrows once entered.** In the books view a horizontal arrow
+  belongs to the caret until either the caret has nowhere left to go or a vertical arrow has
+  stepped into the preview grid; editing the query hands them back. The vertical arrows are the way
+  in and typing is the way out, so the caret is never taken from someone still typing.
+- **Alternatives:** (a) **Clear cmdk's highlight when a button takes focus** rather than suppress
+  its paint — rejected: an empty controlled value hands the highlight to cmdk's select-first-item
+  fallback, which *moves* it rather than removing it, and the user's place is lost on the way back.
+  (b) **Let Tab dismiss, as the WAI-ARIA combobox pattern has it** — rejected for this surface: the
+  pattern assumes a popup whose whole content is one listbox, whereas this popover is a multi-view
+  picker with its own toolbar, and dismissing mid-selection costs more than the convention buys.
+  The trap is bounded by `Escape` still closing, which is what keeps it from stranding a keyboard
+  user. (c) **Give the horizontal arrows to the grid unconditionally once a preview is on screen**
+  — rejected: it freezes the caret mid-query and silently retargets what Enter submits, since the
+  top-match row prefers the highlighted cell over the parsed query. (d) **Make the vertical arrows
+  a pure mode switch that does not move the highlight** — rejected as a larger change to a reviewed
+  behaviour than the report warranted; the first vertical arrow both enters the grid and moves,
+  which reads correctly because a single-row grid has nowhere to move to and so shows only the
+  entry.
+- **Consequences:** Three surfaces now agree on one rule, so a future keyboard change has one
+  invariant to preserve rather than three local conventions. The suppression is a prop rather than
+  a CSS descendant rule, which keeps it assertable in jsdom, where no stylesheet is applied. Tab
+  being trapped means `Escape` is load-bearing for keyboard exit; it is Radix's own
+  document-capture handler, ahead of this control's handlers, so the picker cannot swallow it. The
+  books view's preview grids lost their headings as part of the same pass — the top-match row
+  directly above already names the book, so the heading repeated it one line later — which means
+  the top-match row is now the only place the resolved book is named in that view.
+- **Source:** PT-4345, PR #2750, review round three. Supplements
+  [`adr-bcv-item-value-contract`](#adr-bcv-item-value-contract-bookchaptercontrol-owns-the-cmdk-item-value-contract-activation-reads-component-state-not-cmdks-dom-internals),
+  which governs how the highlight is spelled; this one governs who owns the keyboard.
+
 ## adr-blank-chapter-simple-mode-only: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
 
 - **Date:** 2026-08-25
