@@ -18,7 +18,7 @@ import {
 import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
-import { reconcileInstalledFlags } from './installed-flags.util';
+import { reconcileInstalledFlags } from './installed-flags.utils';
 import newTabReact from './new-tab.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
 
@@ -140,9 +140,10 @@ async function syncInstalledFlags(): Promise<void> {
   try {
     const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
     const installStatus = await provider?.recomputeDblResourcesInstallStatus();
-    // An empty status means the backend could not answer — its catalog has not loaded yet, or
-    // another DBL operation holds its gate. Syncing against it would mark every installed resource
-    // not-installed and persist that, so leave the flags alone until it can.
+    // An empty status is not an answer: the backend's catalog has not loaded yet, another DBL
+    // operation still held its gate when the wait expired, or the catalog really is empty — and it
+    // reports all three the same way. Syncing against it would mark every installed resource
+    // not-installed and persist that, so leave the flags alone until there is something to act on.
     if (!installStatus || Object.keys(installStatus).length === 0) return;
 
     // Wrap the read-modify-write in fetchMutex so a concurrent fetchAndCacheResources call cannot

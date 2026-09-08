@@ -1,15 +1,5 @@
 import type { DblResourceData } from 'platform-bible-utils';
-
-/**
- * The local project id for each catalogued DBL resource, keyed by DBL entry uid. An empty string
- * means the resource is not installed.
- *
- * Only the backend can produce this: a resource project's id is unrelated to the DBL entry it was
- * installed from — the entry uid is recorded in the project's settings, which is what ParatextData
- * matches on. A resource missing from this map is one the backend did not report on, and keeps
- * whatever the cache already says.
- */
-export type DblResourceInstallStatus = { [dblEntryUid: string]: string };
+import type { DblResourceInstallStatus } from 'platform-get-resources';
 
 /** Result of reconciling the cached DBL resource list against the backend's install status. */
 export type ReconciledInstalledFlags = {
@@ -55,5 +45,3 @@ export function reconcileInstalledFlags(
 
   return { resources, isChanged };
 }
-
-export default reconcileInstalledFlags;

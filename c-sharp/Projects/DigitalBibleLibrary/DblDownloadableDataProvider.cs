@@ -227,17 +227,27 @@ internal class DblResourcesDataProvider(
             {
                 FetchResourcesCore();
                 return _resources
-                    .Select(resource => new DblResourceData(
-                        resource.DBLEntryUid.Id,
-                        resource.DisplayName,
-                        resource.FullName,
-                        resource.BestLanguageName,
-                        resource.Type,
-                        resource.Size,
-                        resource.Installed,
-                        resource.IsNewerThanCurrentlyInstalled(),
-                        GetInstalledProjectId(resource)
-                    ))
+                    .Select(resource =>
+                    {
+                        // `installed` and `projectId` must come from one rule, the same one
+                        // RecomputeDblResourcesInstallStatus uses, because the front end reads the
+                        // flag as "there is a project id I can open". ParatextData's own `Installed`
+                        // answers a different question for an InstallAsDictionary resource, and two
+                        // rules would let a catalog fetch and a reconcile flip the flag back and
+                        // forth — with the reconcile persisting its answer to user storage.
+                        var installedProjectId = GetInstalledProjectId(resource);
+                        return new DblResourceData(
+                            resource.DBLEntryUid.Id,
+                            resource.DisplayName,
+                            resource.FullName,
+                            resource.BestLanguageName,
+                            resource.Type,
+                            resource.Size,
+                            installedProjectId != "",
+                            resource.IsNewerThanCurrentlyInstalled(),
+                            installedProjectId
+                        );
+                    })
                     .ToList();
             }
         });
@@ -268,8 +278,11 @@ internal class DblResourcesDataProvider(
     /// </remarks>
     /// <returns>
     /// The local project id of each catalogued resource, keyed by DBL entry uid, empty for one that
-    /// is not installed. The dictionary itself is empty when the catalog has not loaded yet or when
-    /// another DBL operation holds the gate; callers then keep the values they have.
+    /// is not installed. The dictionary itself is empty in three cases it does not distinguish: the
+    /// catalog has not loaded yet, another DBL operation still held the gate when the
+    /// <see cref="INSTALL_STATUS_GATE_TIMEOUT_MS"/> wait expired, or the catalog loaded and is
+    /// genuinely empty. Callers must read an empty dictionary as "no answer" and keep the values
+    /// they have.
     /// </returns>
     private Task<Dictionary<string, string>> RecomputeDblResourcesInstallStatus() =>
         Task.Run(() =>

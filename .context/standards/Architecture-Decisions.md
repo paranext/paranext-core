@@ -3046,3 +3046,53 @@ step, no automation. Just a record.
   becomes primary later — PT-4278's window-manager service is the durable answer for that.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
+
+## adr-dbl-install-status-from-backend: The C# provider is the authority on which DBL resources are installed, and the front end pulls it
+
+- **Date:** 2026-09-08
+- **Status:** Accepted
+- **Context:** The front end decided whether a catalogued DBL resource was installed locally by
+  testing `localProjectId.startsWith(dblEntryUid)`. That premise is false. A resource project's id
+  is unrelated to the DBL entry it was installed from — ParatextData records the entry uid in the
+  project's settings (`InstallableResource.ExistingScrText` matches on `scr.Settings.DBLId`) — so
+  the ids coincide for some resources and share nothing for others. TNCV is the second kind (entry
+  `07ff1d5c6a53cb05`, project `9D60FD8F4A6E03BE…ABCDEFFF`, both observed from a live install), and
+  for it the inference could never succeed: Get Resources spun forever after a successful install
+  and still offered "Get" on reopen. The same premise had also reached the C# post-install
+  verification, which read a successful install as a failure and suppressed the events that tell
+  the rest of the app a project appeared.
+- **Decision:** Only the backend can answer the question, so it does. A new provider function
+  `recomputeDblResourcesInstallStatus` returns the local project id per DBL entry uid (empty string
+  for not-installed), the extension host reconciles its cached catalog against that map
+  (`reconcileInstalledFlags`), and the front end stops inferring. Both halves of a row —
+  `installed` and `projectId` — are derived from one rule, `GetInstalledProjectId(resource) != ""`,
+  in the catalog projection and in the recompute alike. The channel is a **pull**: the recompute is
+  a bare provider function that callers invoke, and a `platformGetResources.refreshInstalledFlags`
+  command lets a caller that just installed something wait for the correction before re-reading,
+  bounded so it cannot outlive the JSON-RPC timeout. The recompute deliberately never loads the
+  catalog and takes the provider gate with a bounded `Monitor.TryEnter`, returning an empty map —
+  read as "no answer", never as "nothing installed" — rather than blocking a UI refresh behind an
+  unbounded download.
+- **Alternatives:** Keep inferring, but from a better heuristic — rejected; every heuristic on the
+  front end is guessing at a link only the project's settings record. Push the status over the
+  provider's existing `SendDataUpdateEvent(DBL_RESOURCES, …)`, which install and uninstall already
+  emit — rejected for now, and it is the shape this should grow into: nothing in TypeScript
+  subscribes to that event today (both post-install events are logged as discarded by the central
+  registry), and `DblResources` is unsubscribable in practice because its getter is the unbounded
+  catalog fetch. Making install status its own cheap data type with get + update event is the
+  design that would close this properly; it is more than the bug needed. Deriving `installed` from
+  ParatextData's own `Installed` property — rejected; it asks a different question for an
+  `InstallAsDictionary` resource, and two rules for one flag let a catalog fetch and a reconcile
+  flip it back and forth, with the reconcile persisting its answer to user storage.
+- **Consequences:** The prefix convention survives as a documented best-effort fallback rather than
+  an invariant — `doesCatalogRowCoverProject` still tries it, after an exact `projectId` match — and
+  the four sites that asserted it as fact now say so. Two behavioural sites still resolve by prefix
+  only: `matchesDownloaded` in `platform-scripture-editor` (the admin-configured resource path, with
+  no catalog fallback) and the commentary-marker-style lookup, which degrades to missing styles.
+  `matchesDownloaded` is deferred to its own change because fixing it moves its callers and
+  `doesCatalogRowCoverProject` with it. The pull channel means every consumer that installs a
+  resource must call `refreshInstalledFlags` before re-reading the catalog; the Get Resources dialog
+  and the shared `useInstallDblResource` hook do, and a future consumer that forgets gets a stale
+  read rather than an error. `INSTALL_STATUS_GATE_TIMEOUT_MS` is the first bounded lock wait in
+  `c-sharp/`.
+- **Source:** PT-4484; reviewed by the contracts, architecture, tests, and clarity PR reviewers.

@@ -72,8 +72,14 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
 
 /**
  * Whether a downloaded project is the same resource as an existing reference: exact project-id
- * match for ProjectReferences, or a dblEntryUid prefix match for DblResourceReferences (the local
- * project id of an installed DBL resource begins with its dblEntryUid).
+ * match for ProjectReferences, or a dblEntryUid prefix match for DblResourceReferences.
+ *
+ * The prefix branch is unreliable and has no fallback here. A resource project's id is unrelated to
+ * the DBL entry it was installed from — ParatextData records the entry uid in the project's
+ * settings and matches on that — so a resource whose ids diverge is reported as not downloaded even
+ * when it is installed. Resolving the reference through the catalog's `projectId` (the value the
+ * backend reports) is the fix, and it has to move this function's callers with it, so it is
+ * deliberately left for its own change rather than done here.
  */
 export function matchesDownloaded(
   project: DownloadedResource,

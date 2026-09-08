@@ -3,6 +3,18 @@ declare module 'platform-get-resources' {
   import { DataProviderDataType, IDataProvider } from '@papi/core';
   import type { DblResourceData } from 'platform-bible-utils';
 
+  /**
+   * The local project id for each catalogued DBL resource, keyed by DBL entry uid. An empty string
+   * means the resource is not installed; a resource absent from the map is one the backend did not
+   * report on, and keeps whatever the caller already has.
+   *
+   * Only the backend can produce this: a resource project's id is unrelated to the DBL entry it was
+   * installed from — the entry uid is recorded in the project's settings, which is what
+   * ParatextData matches on — so nothing in the local project list identifies the catalog row it
+   * belongs to.
+   */
+  export type DblResourceInstallStatus = { [dblEntryUid: string]: string };
+
   export type GetResourcesDataTypes = {
     /** List of information about resources that are available from the DBL */
     DblResources: DataProviderDataType<undefined, DblResourceData[], never>;
@@ -13,20 +25,17 @@ declare module 'platform-get-resources' {
      * Recomputes which of the resources in the DBL catalog are installed locally, and under which
      * project id.
      *
-     * Callers cannot work this out for themselves: a resource project's id is unrelated to the DBL
-     * entry it was installed from — the entry uid is recorded in the project's settings, which is
-     * what ParatextData matches on — so nothing in the local project list identifies the catalog
-     * row it belongs to.
+     * Never contacts the DBL, so it is cheap enough to call on a UI refresh — but not free: it
+     * waits up to two seconds for another DBL operation (a fetch, install, or uninstall) to release
+     * the catalog before giving up.
      *
-     * Does not contact the DBL, so it is cheap enough to call on a UI refresh. In exchange it can
-     * answer for only what it already knows: the result is empty if the catalog has not been
-     * fetched yet this session, or if another DBL operation (a fetch, install, or uninstall) is in
-     * progress.
-     *
-     * @returns The local project id of each catalogued resource, keyed by DBL Entry UID; an empty
-     *   string for a resource that is not installed.
+     * @returns The local project id of each catalogued resource. The map is empty in three cases it
+     *   does not distinguish: the catalog has not been fetched yet this session, another DBL
+     *   operation still held it when the two-second wait expired, or the catalog was fetched and is
+     *   genuinely empty. Treat an empty map as "no answer" and keep the values you already have —
+     *   reading it as "nothing is installed" would clear every installed flag.
      */
-    recomputeDblResourcesInstallStatus: () => Promise<{ [dblEntryUid: string]: string }>;
+    recomputeDblResourcesInstallStatus: () => Promise<DblResourceInstallStatus>;
     /**
      * Installs or updates a DBL resource to the local filesystem
      *
