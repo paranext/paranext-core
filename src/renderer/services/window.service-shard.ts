@@ -124,7 +124,7 @@ function setLastSelectedScriptureNavigableWebViewId(newWebViewId: WebViewId | un
   if (newWebViewId === lastSelectedScriptureNavigableWebViewId) return;
   lastSelectedScriptureNavigableWebViewId = newWebViewId;
   onDidChangeLastSelectedScriptureNavigableWebViewIdEmitter.emit(newWebViewId);
-  recomputeNavigationTargetWebView();
+  scheduleRecomputeNavigationTargetWebView();
 }
 
 /**
@@ -213,19 +213,22 @@ export function getNavigationTargetWebView(): ResolvedWebView | undefined {
 
 /**
  * Cached `platform.interfaceMode`, kept current by the subscription below.
- * {@link recomputeNavigationTargetWebView} reads it synchronously to decide whether to pin the
- * target to the main editor (Simple mode). `undefined` only before the subscription's first
- * (immediate) delivery at startup — treated as "not Simple" so power-mode users are never briefly
- * mis-pinned; the seed's own recompute switches Simple mode on a tick later.
+ * {@link recomputeNavigationTargetWebView} reads it to decide whether to pin the target to the main
+ * editor (Simple mode). `undefined` only before the subscription's first (immediate) delivery at
+ * startup — treated as "not Simple" so power-mode users are never briefly mis-pinned; the seed's
+ * own recompute switches Simple mode on a tick later.
  */
 let currentInterfaceMode: 'simple' | 'power' | undefined;
 
 /**
  * Recomputes the resolved navigation target and notifies subscribers when it actually changed.
- * Cheap (synchronous renderer-local reads), so it can run on every web view lifecycle event, raw
- * tracker change, and interface-mode change; the deepEqual gate keeps no-op events from rippling
+ * Cheap (synchronous renderer-local reads); the deepEqual gate keeps no-op events from rippling
  * downstream. In Simple interface mode the target is pinned to the main project editor (see
  * {@link currentInterfaceMode} and {@link resolveTargetWebView}).
+ *
+ * Always reached through {@link scheduleRecomputeNavigationTargetWebView}, never called directly —
+ * it reads this window's dock layout, and every trigger below can arrive before the dock has
+ * adopted the layout it is reporting.
  */
 function recomputeNavigationTargetWebView(): void {
   const newTarget = resolveTargetWebView(
@@ -237,8 +240,34 @@ function recomputeNavigationTargetWebView(): void {
   onDidChangeNavigationTargetWebViewEmitter.emit(navigationTargetWebView);
 }
 
+let isRecomputePending = false;
+
+/**
+ * Requests a navigation-target recompute on a later microtask, coalescing a burst into one.
+ *
+ * The deferral is required, not an optimization. `onDidCloseWebView` is emitted from inside
+ * rc-dock's `onLayoutChange` (`web-view.service-shard.ts`'s `onLayoutChange`, before any await),
+ * and a network event's local subscribers run synchronously — so a recompute taken inside the
+ * handler resolves the target against the layout the dock is changing FROM, and finds the very tab
+ * that is closing. A microtask is enough, and is the same deferral
+ * `platform-dock-layout.component.tsx` uses for its own post-`onLayoutChange` read: `setLayout`
+ * assigns `tempLayout` synchronously, and `getLayout()` returns it, so the new layout is readable
+ * as soon as the synchronous stack unwinds.
+ *
+ * Coalescing costs nothing here because the recompute is idempotent and deepEqual-gated: N triggers
+ * in one tick describe one layout and resolve one target.
+ */
+function scheduleRecomputeNavigationTargetWebView(): void {
+  if (isRecomputePending) return;
+  isRecomputePending = true;
+  queueMicrotask(() => {
+    isRecomputePending = false;
+    recomputeNavigationTargetWebView();
+  });
+}
+
 // A web view OPENING can change the resolved target: a new Scripture editor may become the fallback
-onDidOpenWebView(() => recomputeNavigationTargetWebView());
+onDidOpenWebView(() => scheduleRecomputeNavigationTargetWebView());
 // Updates fire far more often (every definition change — detached-ref writes, tabs loading, etc.).
 // An update changes the resolved target only when it touches the tracked web view (its own
 // definition drives the tracked resolution, e.g. its scroll group ref) or a Scripture editor (the
@@ -250,22 +279,22 @@ onDidUpdateWebView(({ webView }) => {
     webView.id === lastSelectedScriptureNavigableWebViewId ||
     webView.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE
   )
-    recomputeNavigationTargetWebView();
+    scheduleRecomputeNavigationTargetWebView();
 });
 
 // A closing web view can change the resolved navigation target, so BOTH branches recompute:
 // - If the CLOSED web view is the tracked last-selected one, clear the tracker; its setter
-//   (setLastSelectedScriptureNavigableWebViewId) then recomputes the target — which now falls back
-//   to the main editor. The id guard also prevents a stale close event for a previously-selected web
-//   view from clearing a newer selection.
+//   (setLastSelectedScriptureNavigableWebViewId) then requests the recompute — which now falls back
+//   to the main editor. The id guard also prevents a stale close event for a previously-selected
+//   web view from clearing a newer selection.
 // - Otherwise the closed web view was not the tracked one, but it could still have been the
-//   main-editor fallback (or otherwise part of resolution), so recompute directly. This is why the
-//   non-tracked branch recomputes rather than doing nothing: a non-tracked close can still move the
-//   target.
+//   main-editor fallback (or otherwise part of resolution), so request the recompute here. This is
+//   why the non-tracked branch recomputes rather than doing nothing: a non-tracked close can still
+//   move the target.
 onDidCloseWebView(({ webView }) => {
   if (webView.id === lastSelectedScriptureNavigableWebViewId)
     setLastSelectedScriptureNavigableWebViewId(undefined);
-  else recomputeNavigationTargetWebView();
+  else scheduleRecomputeNavigationTargetWebView();
 });
 
 // Keep `currentInterfaceMode` current and recompute the target when the mode flips: Simple pins the
@@ -287,7 +316,7 @@ onDidCloseWebView(({ webView }) => {
         }
         if (newMode === currentInterfaceMode) return;
         currentInterfaceMode = newMode;
-        recomputeNavigationTargetWebView();
+        scheduleRecomputeNavigationTargetWebView();
       },
       { retrieveDataImmediately: true },
     );
