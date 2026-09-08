@@ -24,15 +24,15 @@
  */
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
+import { closeAllNonHomeDockTabs } from './test-helpers';
 import {
-  closeAllNonHomeDockTabs,
   discoverAdminTextConnectionProject,
   flagResourcesAndOpenScriptureTextGrid,
   openScriptureTextGrid,
   restoreScriptureTextGridProjectSettings,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
-} from './test-helpers';
-import type { FlaggedResourceItem } from './test-helpers';
+  type FlaggedResourceItem,
+} from './scripture-text-grid.page';
 
 /**
  * Two synthetic resource IDs for seeding the grid. The `id` values do not need to resolve to
