@@ -227,6 +227,22 @@ describe('ResourceCell', () => {
     expect(screen.getByTestId('editorial')).toBeInTheDocument();
     expect(setUsjSpy).toHaveBeenCalledWith(chapter); // whole chapter, unspliced
   });
+  it('re-feeds the editor when a read finishes with the same chapter already in hand', () => {
+    // The cell unmounts Editorial to show the loading message, so the editor it remounts on the way
+    // back holds nothing. The USJ object never changes across this transition — only the in-flight
+    // flag does — which is why the feed cannot be keyed on the USJ alone.
+    setUsjResult(chapter, true);
+    const { rerender } = render(<ResourceCell {...props} />);
+    expect(screen.getByText('Resource is loading…')).toBeInTheDocument();
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    setUsjSpy.mockClear();
+
+    setUsjResult(chapter, false);
+    rerender(<ResourceCell {...props} />);
+
+    expect(screen.getByTestId('editorial')).toBeInTheDocument();
+    expect(setUsjSpy).toHaveBeenCalledWith(chapter);
+  });
   it('applies the resource own text direction', () => {
     setUsjResult(chapter, false);
     mockUseProjectSetting.mockReturnValue(['rtl', vi.fn(), vi.fn(), false]);

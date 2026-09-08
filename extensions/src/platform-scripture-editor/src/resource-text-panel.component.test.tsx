@@ -338,6 +338,24 @@ describe('ResourceTextPanel blank chapter', () => {
     expect(setUsjSpy).toHaveBeenCalledWith(BLANK_USJ);
   });
 
+  it('re-feeds the editor when the resource resolves with the same chapter already in hand', () => {
+    // The row is picked but not yet resolved to a project, so the chapter in hand cannot be
+    // attributed to it: a spinner, not content. The USJ object never changes across this
+    // transition, which is why the feed cannot be keyed on the USJ alone.
+    const unresolvedRow: PickerResource = { ...WEB_ROW, projectId: undefined };
+    const { rerenderWith } = renderPanel({
+      selectedRef: unresolvedRow,
+      usjPossiblyError: SAMPLE_USJ,
+    });
+    expect(screen.getByTestId(RESOURCE_TEXT_WAITING_TEST_ID)).toBeInTheDocument();
+    setUsjSpy.mockClear();
+
+    rerenderWith({ selectedRef: WEB_ROW, usjPossiblyError: SAMPLE_USJ });
+
+    expectEditorShowing();
+    expect(setUsjSpy).toHaveBeenCalledWith(SAMPLE_USJ);
+  });
+
   it('calls a book the resource lacks missing, not empty', () => {
     // Both conditions hold at once: the read failed AND the USJ in hand is blank. The missing book
     // is the more specific claim, so it wins.
