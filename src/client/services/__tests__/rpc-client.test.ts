@@ -245,4 +245,32 @@ describe('RpcClient initial connection', () => {
 
     await expect(client.connect(() => {})).resolves.toBe(false);
   }, 1000);
+
+  it('leaves no unhandled rejection when it gives up on an already-closed socket', async () => {
+    // `connectionComplete` is armed from construction, so any path that settles nothing leaves it
+    // to reject on its own 10s timeout with nobody subscribed — which surfaces as an unhandled
+    // rejection rather than a test failure. Fake timers stand in for that wait, so pinning it costs
+    // milliseconds instead of holding the file open. Install them before constructing the client,
+    // since the variable arms itself in a field initializer.
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      vi.useFakeTimers();
+      mocks.state.initialReadyState = 3;
+
+      await expect(new RpcClient().connect(() => {})).resolves.toBe(false);
+
+      await vi.advanceTimersByTimeAsync(10_001);
+      vi.useRealTimers();
+      // A rejection is only reported on the next macrotask, which needs the real clock back.
+      await new Promise((resolve) => {
+        setImmediate(resolve);
+      });
+
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      process.off('unhandledRejection', unhandled);
+    }
+  });
 });
