@@ -77,6 +77,26 @@ function isVerseOpener(node: MarkerContent): node is MarkerObject {
 }
 
 /**
+ * Whether the chapter has a verse the aligned grid could place on a row.
+ *
+ * That view shows verse blocks and hides everything between them, so a chapter with no verse marker
+ * in any paragraph renders an empty column unless the caller says otherwise. Only paragraphs count:
+ * the editor makes no verse block for a verse inside a table or sidebar, so those would not show
+ * either.
+ *
+ * @param usj The chapter to inspect.
+ * @returns True when at least one paragraph opens a verse.
+ */
+export function hasAlignableVerse(usj: Usj): boolean {
+  return usj.content.some(
+    (node) =>
+      isMarkerObject(node) &&
+      node.type === 'para' &&
+      (Array.isArray(node.content) ? node.content : []).some(isVerseOpener),
+  );
+}
+
+/**
  * Slices a chapter USJ down to a single verse. Walks the chapter's top-level paragraphs in document
  * order, collecting the target verse's content PER PARAGRAPH (so poetry `q1`/`q2` stay as separate
  * paragraphs). `usxStringToUsj` (the only USJ producer we consume) drops eid-only verse closers, so
