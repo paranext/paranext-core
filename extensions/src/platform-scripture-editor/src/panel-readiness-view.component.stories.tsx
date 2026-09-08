@@ -7,11 +7,19 @@ import { RESOURCE_PANEL_STRING_KEYS } from './resource-text-panel.const';
  * Resolved from the extension's real `localizedStrings.json` rather than hardcoded, so this story
  * cannot drift from the copy that ships.
  *
- * Driven off the Resource panel's own key list rather than a copy of the handful this view reads,
- * so a renamed key surfaces here as an unresolved `%...%` token instead of a stale hardcoded
- * sentence. The list is a leaf module, so importing it costs nothing beyond the string array. The
- * args below pick the Bible Texts wording; the Commentaries tab and the Model Text panel render the
- * same view with their own equivalents.
+ * Requested via the Resource panel's own key list rather than a copy of the handful this view
+ * reads, which is worth it only for not maintaining that copy — the list is a leaf module, so
+ * importing it costs nothing beyond the string array.
+ *
+ * It does NOT make a renamed key visible here. `getLocalizedStrings` falls back to the key for
+ * anything it is asked for and cannot find, so a rename resolves fine in this map while the `args`
+ * below still ask for it by its old literal — and an absent key reads as `undefined`, not as a
+ * `%...%` token, with no `noUncheckedIndexedAccess` to catch it. Renaming a key means editing those
+ * literals too. Reading them through `resolveResourcePanelStringKeys` would fix that for the two
+ * per-resource-type keys, which are the only ones reachable as named values.
+ *
+ * The args below pick the Bible Texts wording; the Commentaries tab and the Model Text panel render
+ * the same view with their own equivalents.
  */
 const localizedStrings = getLocalizedStrings([...RESOURCE_PANEL_STRING_KEYS]);
 

@@ -60,9 +60,9 @@ export function resolveResourcePanelStringKeys(
 }
 
 /**
- * Every key the resource panel can render, both resource types together. Exported so the localized
- * strings parity test can drive off it rather than a hand-maintained literal list, and so
- * `RESOURCE_PANEL_STRING_KEYS` can fold these in without restating them.
+ * Every key the resource panel can render, both resource types together. Exported so
+ * `RESOURCE_PANEL_STRING_KEYS` can fold these in without restating them — which is what puts them
+ * under the localized-strings parity test, since that test drives off the folded list.
  */
 // Deliberately NOT annotated `: readonly LocalizeKey[]`. That annotation would widen these literals
 // back to `LocalizeKey`, which absorbs any `%...%` string — and because

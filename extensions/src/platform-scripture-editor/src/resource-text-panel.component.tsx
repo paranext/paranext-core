@@ -488,6 +488,21 @@ export function ResourceTextPanel({
         dir={options.textDirection}
         data-testid={RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID}
       >
+        {/*
+          Hidden case: intentionally not handled. In Simple mode the Bible texts and Commentaries
+          tabs share one Column 3 stack, so whichever is inactive stays mounted under
+          `display: none` and keeps receiving scroll-group reference changes. The data half needs
+          nothing — the chapter subscription keeps delivering and the `setUsj` feed above works
+          without layout — but `Editorial` navigating to `scrRef` is geometry, and scrolling inside
+          a display-none iframe no-ops. So a panel that was hidden across several reference changes
+          can show the right chapter scrolled to the wrong verse until the next move, because the
+          feed will not re-run for a chapter whose USJ has not changed.
+
+          Accepted rather than deferred with `useViewVisibility`/`useRunWhenVisible`: this panel is
+          read-only with no scroll state of its own worth catching up, the chapter on screen is
+          always correct, and the next reference change corrects the verse. Revisit if the panel
+          ever gains its own scroll position or a highlight to keep in sync.
+        */}
         <Editorial
           ref={editorRef}
           scrRef={scrRef}
