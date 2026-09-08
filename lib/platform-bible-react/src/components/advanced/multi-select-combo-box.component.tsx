@@ -34,15 +34,24 @@ function OptionListScrollCue({
 }) {
   const hasContentBelow = useHasContentBelow(scrollerRef, isEnabled);
 
+  // Nothing is wrapped when the cue is off, so a consumer that has not opted in gets the same DOM
+  // it had before the cue existed rather than an extra block between `Command` and its list.
+  if (!isEnabled) return children;
+
   return (
-    <div className="tw:relative">
+    // `min-h-0` and the flex column keep the scroller, not this wrapper, as the box that shrinks:
+    // the wrapper stands between `Command`'s flex column and `CommandList`, and a block whose
+    // `min-height` resolves to its content height would push the list out of a capped popover
+    // instead of letting it scroll.
+    <div className="tw:relative tw:flex tw:min-h-0 tw:flex-col">
       {children}
       {hasContentBelow && (
         <div
           data-slot="command-list-scroll-cue"
           aria-hidden
-          // Kept shorter than a row (rows are ~32px) so the fade reads as "more below" without
-          // dimming the last row's text or washing out its hover/highlight background.
+          // Rows are ~32px and the list rarely ends on an empty strip, so the fade always covers
+          // the bottom edge of a real row. Kept to a third of one: enough to read as "more below",
+          // little enough to leave that row's text and its hover highlight legible.
           className="tw:pointer-events-none tw:absolute tw:inset-x-0 tw:bottom-0 tw:h-3 tw:bg-gradient-to-t tw:from-popover tw:to-transparent"
         />
       )}
@@ -195,11 +204,17 @@ export function MultiSelectComboBox({
     return [...starredItems, ...nonStarredItems];
   }, [entries, sortSelection, sortSelected]);
 
+  // The snapshot is refreshed here as well as on open. These buttons are not rows, so re-sorting
+  // moves nothing out from under the pointer — and leaving the snapshot alone would float entries
+  // the user has just cleared above the ones they kept, an order contradicting the check marks.
   const handleSelectAll = () => {
-    onChange(entries.map((entry) => entry.value));
+    const allValues = entries.map((entry) => entry.value);
+    setSortSelection(allValues);
+    onChange(allValues);
   };
 
   const handleClearAll = () => {
+    setSortSelection([]);
     onChange([]);
   };
 
