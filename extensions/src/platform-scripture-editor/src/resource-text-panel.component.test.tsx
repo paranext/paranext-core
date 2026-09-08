@@ -2,6 +2,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon } from '@sillsdev/scripture';
@@ -369,6 +370,31 @@ describe('ResourceTextPanel logging', () => {
     });
 
     expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ResourceTextPanel resource selection', () => {
+  it('reports the row the user chose from the dropdown', async () => {
+    // The dropdown is the only way a user changes which text the panel displays, so this is its
+    // primary control — and like the picker below, stubbing it to a no-op leaves every other test
+    // in this file green.
+    const onSelectResource = vi.fn();
+    renderPanel({
+      filteredResources: [WEB_ROW, COMMENTARY_ROW],
+      selectedRef: WEB_ROW,
+      dblResources: [INSTALLED_RESOURCE, INSTALLED_COMMENTARY],
+      onSelectResource,
+    });
+
+    // `userEvent` rather than `fireEvent`: the Radix trigger opens on a real pointer sequence, and
+    // this is the pattern the repo's other Radix dropdown tests use.
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /WEB/ }));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: /HBKENG/ }));
+
+    // The namespaced row id, not the bare DBL entry uid — `resolveResourceSelection` compares row
+    // ids, so reporting the bare id would never match the list.
+    expect(onSelectResource).toHaveBeenCalledWith('dbl:uid-hbk');
   });
 });
 
