@@ -211,7 +211,7 @@ Examples:
 
 #### One key-prefix convention per feature namespace
 
-**Within a single feature namespace in `localizedStrings.json`, all new keys MUST share one prefix convention.** Prefer **camelCase feature-prefix with `_` subsegment separators** (e.g. `%webView_book_selector_more%` (an existing snake_case exception; do not copy its style), `%markerMenu_searchPlaceholder%`) — this matches the dominant in-repo style. Lowercase `snake_case` throughout is acceptable *only* if the namespace has no pre-existing keys.
+**Within a single feature namespace in `localizedStrings.json`, all new keys MUST share one prefix convention.** Prefer **camelCase feature-prefix with `_` subsegment separators** (e.g. `%webView_scriptureTextGrid_cell_zoomIn%`, `%markerMenu_searchPlaceholder%`) — this matches the dominant in-repo style; a few older keys such as `%webView_book_selector_more%` are snake_case exceptions, not a style to copy. Lowercase `snake_case` throughout is acceptable *only* if the namespace has no pre-existing keys.
 
 - **Avoid:** mixing camelCase and snake_case variants of the same prefix inside one namespace (e.g. `markersChecklist_*` alongside `markers_checklist_*`).
 
