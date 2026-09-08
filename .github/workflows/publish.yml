@@ -255,6 +255,20 @@ jobs:
           clean: false
           ref: ${{ inputs.bumpRef }}
 
+      # The bump ends in a `git commit`, which runs this repo's husky pre-commit hook. That hook
+      # requires gitleaks on PATH and blocks the commit without it (see README "Install gitleaks"),
+      # and gitleaks is not part of the runner image.
+      - name: Install gitleaks for the pre-commit hook
+        if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' }}
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin" gitleaks
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/gitleaks" version
+
       - name: Bump repo versions
         if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' }}
         uses: ./.github/actions/bump-versions-action
