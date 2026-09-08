@@ -87,6 +87,7 @@ const VIEW_OPTIONS_BUTTON_KEY = '%webView_scriptureTextGrid_viewOptions_openPane
 const INSTALL_FAILED_KEY = '%webView_selectDblResource_installFailed%';
 const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed%';
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
+const CATALOG_UNAVAILABLE_KEY = '%webView_resourcePanel_catalogUnavailable%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
 // The resource panels' generic loading string, reused rather than duplicated: this body renders
@@ -111,6 +112,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
   VIEW_OPTIONS_BUTTON_KEY,
   NO_PROJECT_KEY,
+  CATALOG_UNAVAILABLE_KEY,
   ...VIEW_OPTIONS_NOTICE_STRING_KEYS,
   CHAPTER_CONTEXT_CLOSE_KEY,
   EMPTY_STATE_KEY,
@@ -554,6 +556,16 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     hasWaitedTooLong,
   });
 
+  // Every disabled state needs a reason on screen. No project bound is one; sources that failed or
+  // never arrived is the other, and without it the controls are simply inert with nothing saying
+  // why — the empty state's "open View Options to choose which texts to show" then points at a
+  // button that cannot be opened.
+  let viewOptionsDisabledMessage: string | undefined;
+  if (!effectiveProjectId)
+    viewOptionsDisabledMessage = resolveLocalizedString(localizedStrings, NO_PROJECT_KEY);
+  else if (bodyState === 'error')
+    viewOptionsDisabledMessage = resolveLocalizedString(localizedStrings, CATALOG_UNAVAILABLE_KEY);
+
   let bodyContent: ReactNode;
   if (bodyState === 'cells') {
     bodyContent = (
@@ -660,11 +672,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
               // controls. Show the "no project" prompt only when there is genuinely no project (not
               // during the brief load after one is bound).
               disabled={!sources || !textConnectionPdp}
-              disabledMessage={
-                effectiveProjectId
-                  ? undefined
-                  : resolveLocalizedString(localizedStrings, NO_PROJECT_KEY)
-              }
+              disabledMessage={viewOptionsDisabledMessage}
               localizedStrings={localizedStrings}
             />
           </PopoverContent>
