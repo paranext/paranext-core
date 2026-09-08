@@ -9,6 +9,7 @@ import type { DblResourceData } from 'platform-bible-utils';
 import type { PickerResource } from './downloaded-resources.utils';
 import {
   RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID,
+  RESOURCE_TEXT_WAITING_TEST_ID,
   ResourceTextPanel,
   ResourceTextPanelProps,
 } from './resource-text-panel.component';
@@ -181,16 +182,18 @@ function expectEditorShowing() {
  * as one object so that "the panel is waiting" is a claim about ALL of them at once — checking only
  * the message the test has in mind would pass just as happily on a panel showing a different one.
  *
- * `selector` is what makes the waiting assertions falsifiable. Every one of them is otherwise
- * purely negative, and a negative assertion passes just as well against a panel that rendered
- * nothing at all: replacing this component's whole render with `<div />` leaves them green. The
- * selector stays mounted in every content state by design — losing it would strip the reader's only
- * route to a text that has the book — so requiring it proves the panel is alive and that the
- * content area specifically is empty.
+ * `spinner` is what makes the waiting assertions falsifiable, and it has to be the SPINNER rather
+ * than anything outside the content area. Each waiting assertion is otherwise purely negative, and
+ * a negative assertion passes just as well against a content area that rendered nothing at all —
+ * deleting both spinner branches from `renderContent` leaves such tests green. `selector` cannot
+ * stand in for it: the selector renders OUTSIDE `renderContent`, so it is invariant across every
+ * content branch and cannot tell "spinner" from "nothing". It is kept as a second control, for the
+ * whole-panel early returns, which do replace it.
  */
 function contentOnScreen() {
   return {
     selector: !!screen.queryByRole('button', { name: /WEB|HBKENG/ }),
+    spinner: !!screen.queryByTestId(RESOURCE_TEXT_WAITING_TEST_ID),
     editor: !!screen.queryByTestId('editorial'),
     missingBook: !!screen.queryByText(BIBLE_TEXT_MISSING_BOOK),
     blankChapter: !!screen.queryByText(BLANK_CHAPTER),
@@ -198,9 +201,10 @@ function contentOnScreen() {
   };
 }
 
-/** The selector and nothing else: the panel is alive and the content area is waiting. */
-const NOTHING_BUT_THE_SELECTOR = {
+/** The panel is alive and its content area is showing the spinner rather than any outcome. */
+const WAITING_FOR_CONTENT = {
   selector: true,
+  spinner: true,
   editor: false,
   missingBook: false,
   blankChapter: false,
@@ -265,13 +269,13 @@ describe('ResourceTextPanel book not in this resource', () => {
   it('keeps waiting when the failure names the book the user just left', () => {
     renderPanel({ scrRef: MAT_1_1, usjPossiblyError: missingBookError('GEN') });
 
-    expect(contentOnScreen()).toEqual(NOTHING_BUT_THE_SELECTOR);
+    expect(contentOnScreen()).toEqual(WAITING_FOR_CONTENT);
   });
 
   it('keeps waiting when the failure names a resource the panel has switched away from', () => {
     renderPanel({ usjPossiblyError: missingBookError('MAT', 'some-other-project') });
 
-    expect(contentOnScreen()).toEqual(NOTHING_BUT_THE_SELECTOR);
+    expect(contentOnScreen()).toEqual(WAITING_FOR_CONTENT);
   });
 });
 
@@ -294,6 +298,7 @@ describe('ResourceTextPanel blank chapter', () => {
     // rendered nothing at all.
     expect(contentOnScreen()).toEqual({
       selector: true,
+      spinner: false,
       editor: true,
       missingBook: false,
       blankChapter: false,
@@ -342,7 +347,7 @@ describe('ResourceTextPanel content that cannot be shown', () => {
     // edit in a text the reader cannot edit.
     renderPanel({ usjPossiblyError: undefined });
 
-    expect(contentOnScreen()).toEqual(NOTHING_BUT_THE_SELECTOR);
+    expect(contentOnScreen()).toEqual(WAITING_FOR_CONTENT);
   });
 });
 
