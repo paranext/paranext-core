@@ -228,6 +228,12 @@ globalThis.webViewComponent = function ResourceTextPanelWebView({
   // Holds the row id of a resource just selected from the picker while it propagates through the
   // reactive settings chain and into filteredResources. Written from the reference
   // `selectTextConnection` actually stored, so it is comparable to the row ids of the list.
+  //
+  // TODO(PT-4509): The dropdown is interactive during that window — `isSelecting` goes false in its
+  // `finally`, removing the LoadingView that covered the selector, before the written reference
+  // reaches `filteredResources` — and `resolveResourceSelection`'s pending branch ignores
+  // `selectedResourceId`. So a user who changes their mind in that window watches the panel jump to
+  // the resource they abandoned, with nothing indicating their own earlier pick won.
   const [pendingResourceId, setPendingResourceId] = useState<string | undefined>(undefined);
 
   // Committing a pick, holding still while one is in flight, migrating a legacy bare id and

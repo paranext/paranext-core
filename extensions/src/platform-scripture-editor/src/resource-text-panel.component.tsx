@@ -219,6 +219,14 @@ export type ResourceTextPanelProps = {
  * down as a prop and this component MUST NOT re-derive it — a second derivation would be a second
  * answer to one question, free to disagree with the subscription that produced the content on
  * screen. Resolve it once, in the caller, and pass it (see `resolveResourceSelection`).
+ *
+ * This callback-out shape is the pattern to follow for a panel component, not merely one of two
+ * in-tree options. `ModelTextPanelProps` takes `showResourcePicker` returning the chosen resource
+ * plus the get/set/install callbacks, and owns the pick, the install and the write inside the
+ * component; this panel takes an argument-free `onShowResourcePicker` and owns none of them.
+ * Keeping that work in the caller is what keeps `@papi` out of this file — which is what makes the
+ * component renderable from a test and a story at all, since neither can serve a PAPI call.
+ * `ModelTextPanel` has not converged yet; see PT-4561, which already touches both panels.
  */
 export function ResourceTextPanel({
   localizedStrings,
