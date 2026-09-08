@@ -538,9 +538,9 @@ declare module 'papi-shared-types' {
      * Unknown project IDs are skipped. Deduplication is handled internally.
      *
      * This signature matches this repository's C# stub (`String[]? projectIds`, no return value),
-     * which core itself calls (e.g. the startup sync passes `undefined` for its zero-state
-     * bootstrap case — see the cases below for what that actually syncs). The Send/Receive
-     * extension's own declaration also returns the S/R results; core does not consume them.
+     * which core itself calls with `undefined` — see the cases below for what that actually syncs.
+     * The Send/Receive extension's own declaration also returns the S/R results; core does not
+     * consume them.
      *
      * @param projectIds IDs of the projects to sync.
      *
@@ -549,11 +549,12 @@ declare module 'papi-shared-types' {
      *       are skipped.
      *   - If omitted and at least one shared project the account knows about is already present locally
      *       (not new), every locally-present project is synced; new projects are left alone.
-     *   - If omitted and every shared project the account knows about is currently new (a true first
-     *       sync, or the rarer case where every previously-local project has since gone missing
-     *       from disk), downloading stops as soon as one synced project gives the current user a
-     *       non-Observer role — trying a small initial batch, then the rest one at a time — rather
-     *       than unconditionally syncing the whole account.
+     *   - If omitted and no shared project the account knows about is present locally yet (whether a
+     *       genuine first sync, or every previously-local project has since gone missing from
+     *       disk), an implementation is expected to try to make at least one project available for
+     *       the current user to work in, if the account has one — but may stop short of downloading
+     *       every shared project in the account, trading completeness for performance. Callers MUST
+     *       NOT assume every shared project is present locally once this resolves.
      *   - An empty array is a no-op.
      *
      * @throws `PlatformUnimplementedException` if not running in an application that implements
