@@ -10,7 +10,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Check, ChevronsUpDown, Star } from 'lucide-react';
-import { ReactNode, RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, RefObject, useCallback, useMemo, useRef, useState } from 'react';
 import { type VariantProps } from 'class-variance-authority';
 import { useHasContentBelow } from '@/hooks/use-has-content-below.hook';
 
@@ -164,13 +164,17 @@ export function MultiSelectComboBox({
 
   // `sortSelected` floats a just-selected entry above the unselected ones. Re-sorting on every
   // toggle moves rows out from under the pointer mid-interaction, so the selection that drives the
-  // order is snapshotted when the list opens and held until it closes.
-  const selectedRef = useRef(selected);
-  selectedRef.current = selected;
+  // order is snapshotted on the closed-to-open transition and held until the list closes.
+  //
+  // Taken during render rather than in an effect: an effect runs after the commit, so a reopened
+  // list would be laid out with the previous snapshot's order and reordered afterwards, which is
+  // visible as a jump whenever that commit overruns the frame.
+  const [wasOpen, setWasOpen] = useState(actualIsOpen);
   const [sortSelection, setSortSelection] = useState(selected);
-  useEffect(() => {
-    if (actualIsOpen) setSortSelection(selectedRef.current);
-  }, [actualIsOpen]);
+  if (wasOpen !== actualIsOpen) {
+    setWasOpen(actualIsOpen);
+    if (actualIsOpen) setSortSelection(selected);
+  }
 
   const sortedOptions = useMemo(() => {
     if (!sortSelected) return entries;
