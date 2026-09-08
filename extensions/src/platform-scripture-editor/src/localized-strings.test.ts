@@ -6,6 +6,7 @@ import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.const';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
+import { EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.const';
 import { RESOURCE_CELL_STRING_KEYS } from './scripture-text-grid/resource-cell.const';
 import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
 import { RESOURCE_PANEL_TYPED_STRING_KEYS } from './resource-panel-strings.utils';
@@ -257,6 +258,22 @@ describe.each([...RESOURCE_CELL_STRING_KEYS])('resource cell label %s', (key) =>
 // The View Options notices, which the grid web view shows outside the panel itself — in the
 // resource picker and in a notification — so they are not covered by any panel's key list.
 describe.each([...VIEW_OPTIONS_NOTICE_STRING_KEYS])('view options notice %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The editor's blank-chapter zero state, whose message, button label, and disabled tooltip are the
+// only strings a reader sees when a chapter has no content at all.
+describe.each([...EMPTY_CHAPTER_VIEW_STRING_KEYS])('empty chapter view label %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();
   });
