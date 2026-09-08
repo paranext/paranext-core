@@ -409,11 +409,11 @@ step, no automation. Just a record.
   needs one. Every channel the app would normally reach for to report a failure travels over the
   socket that just died: `notificationService` is a network object, so toasts are unavailable;
   `sendCommand` needs the same connection to reach main; `useLocalizedStrings`
-  (`src/renderer/hooks/papi-hooks/use-localized-strings-hook.ts:45-54`) fetches over PAPI and, on
+  (`src/renderer/hooks/papi-hooks/use-localized-strings-hook.ts`) fetches over PAPI and, on
   failure or before the first response, returns `defaultState`, whose values are the raw keys
   themselves (`defaultState[key] = key`) — so an unfetched string renders as literal
   `%overlay_connectionLost%`; and `useIsPowerMode`
-  (`src/renderer/hooks/use-is-power-mode.hook.ts:9-12`) reads the interface-mode setting over PAPI
+  (`src/renderer/hooks/use-is-power-mode.hook.ts`) reads the interface-mode setting over PAPI
   and falls back to `false` (Simple) while loading or on failure. A state meant to tell the user the
   backend is unreachable cannot itself depend on the backend to render.
 - **Decision:** Detect and render the connection-lost state entirely inside the renderer process,
@@ -460,7 +460,7 @@ step, no automation. Just a record.
     (`connection-lost-service.test.ts`).
   - **Component:** `ConnectionLostOverlay`
     (`src/renderer/components/overlays/overlay-connection-lost.component.tsx`) is mounted
-    unconditionally in `Main`'s JSX (`app.component.tsx:43`) and returns `undefined` until the store
+    unconditionally in `Main`'s JSX (`app.component.tsx`) and returns `undefined` until the store
     flips. This is load-bearing, not stylistic: mounted from startup, its `useLocalizedStrings` and
     `useIsPowerMode` calls resolve while the connection is alive, and their resolved values persist
     in the component's own React state afterwards because `useData`'s subscription state is not
@@ -496,14 +496,21 @@ step, no automation. Just a record.
 
     **The gate is not total, and that is a documented limit rather than a claim.** A `FocusScope`
     constrains where DOM focus lands; it does not stop handlers bound above or outside the focused
-    element. Main-process `before-input-event` accelerators (F12, Ctrl+Tab, the Paratext 9
-    verse-navigation set) are seen by main before any renderer frame gets them, and the
-    `document`-level toaster hotkeys (Sonner's own, plus `notification-display.tsx`'s Alt+T focus
-    cycling) bubble out of the dialog regardless of the focus scope. All of them still travel over
-    the dead socket. Gating the first category needs main to be told this renderer has latched,
-    which is exactly what this renderer-local design does not do — so it is left open and recorded
-    at the component, in the ADR, and in the keyboard-shortcuts catalog entry rather than papered
-    over. Escape is separately prevented (`onEscapeKeyDown`), making this the one dialog in the app
+    element. Three categories escape it, and all of them still travel over the dead socket:
+    main-process `before-input-event` accelerators (F12, Ctrl+Tab, the Paratext 9 verse-navigation
+    set), which are seen by main before any renderer frame gets them; the `document`-level toaster
+    hotkeys (Sonner's own, plus `notification-display.tsx`'s Alt+T focus cycling), which bubble out
+    of the dialog regardless of the focus scope; and `PlatformMenubar`'s Alt, Alt+P, Alt+L, Alt+N
+    and Alt+H, which are `react-hotkeys-hook` bindings — also `document`-level — that call
+    `.focus()` on a menu trigger behind the scrim and so pull focus out of the scope as well as
+    opening a menu whose items dispatch over the dead socket.
+
+    The first two need main to be told this renderer has latched, which is exactly what this
+    renderer-local design does not do. The third does NOT: it is renderer-local and closable by
+    gating `PlatformMenubar`'s `useHotkeys` call behind a new prop. It is left open with the others
+    anyway, because closing one of three would leave the guarantee just as false while reading as
+    fixed. All three are recorded at the component, here, and in the keyboard-shortcuts catalog
+    entry rather than papered over. Escape is separately prevented (`onEscapeKeyDown`), making this the one dialog in the app
     where Escape closes nothing; that is catalogued as its own entry.
 
   - **Arbitration with the other app-gating modal:** `FirstRunOverlay` stands down entirely once
@@ -558,7 +565,7 @@ step, no automation. Just a record.
     unrelated one (text selection).
   - **Reconnect instead of a one-way state** — deferred, not rejected on the merits: reconnecting
     needs the socket re-established AND every method this renderer registered re-announced to main,
-    neither of which this branch implements. `initConnectionLostStore()` is deliberately kept simple
+    neither of which this branch implements. `connection-lost-store.ts` is deliberately kept simple
     (no ref-counting, no safety leash) because a state that could flip back to `false` on its own
     would be claiming a recovery that had not actually happened.
 - **Consequences:**
@@ -568,11 +575,11 @@ step, no automation. Just a record.
     scrim on top.
   - **Extension-host disconnect is not covered.** Main already learns of an extension-host
     disconnect through `onDidDisconnectClient`
-    (`src/shared/services/network.service.ts:146`/`185`), but relaying that specific case to the
+    (`src/shared/services/network.service.ts`), but relaying that specific case to the
     renderer needs a new main→renderer network event and different wording ("extensions have
     stopped working" is a materially different claim than "you are disconnected," since the
-    renderer's own socket is still alive). Deferred to a follow-up ticket.
-  - **The quit-time false positive is closed in code rather than left to paint timing.**
+    renderer's own socket is still alive). Deferred to the follow-up ticket below.
+  - **The quit-time false positive is narrowed in code, but not closed.**
     `adr-renderer-websocket-suspend-disconnect` records that `INTENTIONAL_CLOSE_CODE` (4000) is
     currently unreachable from every peer, and that every socket dies with 1006 on the way down. The
     gate here, `isCleanCloseEvent`, rejects 1006 the same as any other unclean close — it cannot
@@ -587,13 +594,25 @@ step, no automation. Just a record.
     to close the window. `pagehide` as well as `beforeunload` because a reload from inside this
     state leaves by that path.
 
-    Originally this entry left the question open — recording that the store may latch during an
+    **What that latch does and does not reach.** It fires on a window closing while the app stays
+    up, and on a reload. It does NOT fire on an app quit: main takes the `isAppShuttingDown()`
+    branch and calls `newWindow.destroy()` rather than `close()` (`src/main/main.ts`), and
+    `destroy()` raises neither `beforeunload` nor `pagehide` — main's own comment at that branch
+    says so, which is why it uses `close()` on the other one. So on a quit the store still latches
+    and the overlay is still asked to render, exactly as before, and the banner is still kept off
+    screen only by teardown outrunning paint.
+
+    Originally this entry left that question open — recording that the store may latch during an
     ordinary quit, and that whether the user SEES a farewell error banner depended only on whether
     the renderer painted before its `BrowserWindow` was destroyed, "an empirical question, being
-    checked against the running app." Live checking found no visible banner on quit, but a
-    correct-by-paint-timing invisible is not the same as a correct one: the same code on a slower
-    machine, or with a slower teardown, is a coin flip. Hence the latch. The behaviour is pinned by
-    `connection-lost-store.test.ts` and `connection-lost-service.test.ts` rather than by that
+    checked against the running app." Live checking found no visible banner on quit. That
+    observation stands, and so does the objection to resting on it: a correct-by-paint-timing
+    invisible is not a correct one, since the same code on a slower machine is a coin flip. The
+    latch is therefore a narrowing, not a fix — the quit case needs main to tell the renderer it is
+    going down, the same main→renderer relay the keyboard gaps and the extension-host disconnect
+    want, and is deferred with them (see the follow-up ticket below). What the latch does cover
+    is pinned by
+    `connection-lost-store.test.ts` and `connection-lost-service.test.ts` rather than by the live
     observation.
   - **The startup window where a loss could be missed is closed.** An earlier revision wired the
     subscription from a React effect in `Main`, which lost to `ConnectionLostOverlay`'s own subscribe
@@ -612,6 +631,12 @@ step, no automation. Just a record.
     itself entirely PAPI-driven, so a socket death mid-wizard would otherwise strand a brand-new user
     in a form that can no longer submit, with no visible explanation why. Pinned by
     `z-index.test.ts`.
+  - **One follow-up closes three of these consequences.** The extension-host disconnect, the
+    main-process half of the keyboard gaps, and the quit-time latch all want the same thing: a
+    main-to-renderer channel telling a renderer what main already knows. Until that ticket is
+    filed, all three sites carry the literal marker `TODO(main-renderer-shutdown-relay)` — a slug rather than
+    a `PT-XXXX`, because inventing an id that resolves to nothing is worse than admitting there
+    is not one yet. Grep the marker to find every site; replace it with the real id once it exists.
 - **Source:** PT-4435; builds on the diagnosis in `adr-renderer-websocket-suspend-disconnect`
   (PT-4434). Branch `pt-4435-visible-connection-lost-state`.
 ## adr-decision-log-sorted-insertion: Decision-log entries are inserted in byte order by slug, not appended

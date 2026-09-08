@@ -29,6 +29,7 @@ import {
   getIsConnectionLost,
   subscribeToConnectionLost,
 } from '@renderer/services/connection-lost-store';
+import { CANCEL_ENTER_ZOOM_STYLE } from '@renderer/components/overlays/full-screen-dialog.util';
 import { FirstRunStep } from '@renderer/services/first-run.model';
 import { REGISTRATION_RESOLVE_TIMEOUT_MS } from '@renderer/services/resolve-registration-validity';
 import { FirstRunShell } from './first-run-shell.component';
@@ -51,11 +52,12 @@ const KEYS: LocalizeKey[] = [
 
 // Full-viewport, above the menubar, opaque, square corners. `tw:block` overrides DialogContent's
 // default `tw:grid`; the rest override its centered rounded card so the gate covers the whole app.
-// `tw:data-open:zoom-in-100` cancels the card's `zoom-in-95` open animation, which on a
-// full-viewport layer scales the gate about its centre and leaves a band of un-gated app visible
-// around all four edges while it animates.
+// The card's `zoom-in-95` open animation — which on a full-viewport layer scales the gate about its
+// centre and leaves a band of un-gated app visible around all four edges while it animates — is
+// cancelled by `CANCEL_ENTER_ZOOM_STYLE` on the element rather than by a class. See that constant
+// for why the class form does not reliably win.
 const FULL_SCREEN_CONTENT =
-  'tw:fixed tw:inset-0 tw:top-0 tw:start-0 tw:block tw:h-screen tw:w-screen tw:max-w-none tw:sm:max-w-none tw:translate-x-0 tw:rtl:translate-x-0 tw:translate-y-0 tw:gap-0 tw:overflow-auto tw:rounded-none tw:bg-background tw:p-0 tw:ring-0 tw:data-open:zoom-in-100';
+  'tw:fixed tw:inset-0 tw:top-0 tw:start-0 tw:block tw:h-screen tw:w-screen tw:max-w-none tw:sm:max-w-none tw:translate-x-0 tw:rtl:translate-x-0 tw:translate-y-0 tw:gap-0 tw:overflow-auto tw:rounded-none tw:bg-background tw:p-0 tw:ring-0';
 
 /**
  * How long the gate can sit in `loading` before it reveals a "continue without setup" escape
@@ -149,7 +151,7 @@ export function FirstRunGate({
         data-testid="first-run-dialog"
         showCloseButton={false}
         className={FULL_SCREEN_CONTENT}
-        style={{ zIndex: Z_INDEX_FIRST_RUN }}
+        style={{ ...CANCEL_ENTER_ZOOM_STYLE, zIndex: Z_INDEX_FIRST_RUN }}
         onEscapeKeyDown={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}

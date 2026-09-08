@@ -82,7 +82,7 @@ describe('ConnectionLostOverlayPresentational', () => {
   // Whether the scrim actually swallows clicks is a layout question, and jsdom has neither layout
   // nor the Tailwind stylesheet — a click-through assertion here would pass whether or not the
   // scrim covered anything. So this asserts only the structure that makes covering possible; that
-  // it really blocks is verified against the running app (see the plan's live-verification task).
+  // it really blocks is verified by hand against the running app, not by any file in this repo.
   it('lays a full-window scrim under the banner', () => {
     render(<ConnectionLostOverlayPresentational {...PROPS} />);
     // The dialog content is itself the scrim — see FULL_SCREEN_SCRIM_CONTENT for why the layer that

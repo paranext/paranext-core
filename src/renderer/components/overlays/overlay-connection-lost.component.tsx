@@ -16,6 +16,7 @@ import { createPortal } from 'react-dom';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { getToolbarHeight } from '@renderer/components/toolbar-height.util';
+import { CANCEL_ENTER_ZOOM_STYLE } from '@renderer/components/overlays/full-screen-dialog.util';
 import {
   getIsConnectionLost,
   subscribeToConnectionLost,
@@ -114,12 +115,12 @@ type Props = {
  * translucent rather than a card, with the banner positioned inside it. `FirstRunOverlay` overrides
  * the same card the same way, for the same reason.
  *
- * `tw:data-open:zoom-in-100` cancels the card's open animation. `DialogContent` animates in from
- * `zoom-in-95`, which on a full-viewport layer scales the scrim about its centre and leaves a band
- * of undimmed, still-live-looking app around all four edges for the length of the animation.
+ * `DialogContent` animates in from `zoom-in-95`, which on a full-viewport layer scales the scrim
+ * about its centre and leaves a band of undimmed, still-live-looking app around all four edges for
+ * the length of the animation. {@link CANCEL_ENTER_ZOOM_STYLE} cancels it.
  */
 const FULL_SCREEN_SCRIM_CONTENT =
-  'tw:fixed tw:inset-0 tw:top-0 tw:start-0 tw:block tw:h-screen tw:w-screen tw:max-w-none tw:sm:max-w-none tw:translate-x-0 tw:rtl:translate-x-0 tw:translate-y-0 tw:gap-0 tw:rounded-none tw:bg-background/70 tw:p-0 tw:ring-0 tw:data-open:zoom-in-100';
+  'tw:fixed tw:inset-0 tw:top-0 tw:start-0 tw:block tw:h-screen tw:w-screen tw:max-w-none tw:sm:max-w-none tw:translate-x-0 tw:rtl:translate-x-0 tw:translate-y-0 tw:gap-0 tw:rounded-none tw:bg-background/70 tw:p-0 tw:ring-0';
 
 /**
  * Neutralizes the backdrop `DialogContent` always renders. This state supplies its own scrim as the
@@ -140,8 +141,8 @@ const NEUTRALIZED_BACKDROP = 'tw:bg-transparent tw:supports-backdrop-filter:back
  * prevented, since nothing behind this state works.
  *
  * The keyboard gate is NOT total, and deliberately so. A `FocusScope` constrains where DOM focus
- * can land; it does not stop handlers bound above or outside the focused element. Two categories
- * still fire while this state is shown, and both still travel over the dead socket:
+ * can land; it does not stop handlers bound above or outside the focused element. Three categories
+ * still fire while this state is shown, and all three still travel over the dead socket:
  *
  * - Main-process `before-input-event` accelerators (`src/main/main.ts`) — F12, Ctrl+Tab, and the
  *   Paratext 9 verse-navigation set — are seen by main before any renderer frame gets them.
@@ -149,9 +150,17 @@ const NEUTRALIZED_BACKDROP = 'tw:bg-transparent tw:supports-backdrop-filter:back
  *   deliberately renderer-local design does not tell it.
  * - Sonner's own toaster hotkey and `notification-display.tsx`'s Alt+T focus cycling are
  *   `document`-level, so they bubble out of this dialog regardless of the focus scope.
+ * - `PlatformMenubar`'s Alt, Alt+P, Alt+L, Alt+N and Alt+H (`platform-menubar.component.tsx`) are
+ *   `react-hotkeys-hook` bindings, also `document`-level. Each calls `.focus()` on a menu trigger
+ *   behind the scrim, so besides opening a menu whose items dispatch over the dead socket, it pulls
+ *   focus out of the scope entirely.
  *
- * Gating either category needs main to be told the renderer has latched — a design change rather
- * than a patch, and out of scope here. Left as a known, documented limit.
+ * The first two categories need main to be told the renderer has latched — a design change rather
+ * than a patch, and out of scope here (TODO(main-renderer-shutdown-relay); see
+ * `adr-connection-lost-is-renderer-local` for the marker's meaning). The third is renderer-local
+ * and so is closable without that relay: `PlatformMenubar` would need its `useHotkeys` call gated
+ * by a new prop. It is grouped here rather than fixed because gating it alone would leave the
+ * guarantee just as false while looking fixed. All three are a known, documented limit.
  *
  * The alternatives considered and rejected — a hand-rolled `document` keydown trap (blind to
  * keydowns inside a web view's iframe), and letting content behind the scrim stay selectable — are
@@ -175,7 +184,7 @@ export function ConnectionLostOverlayPresentational({
         showCloseButton={false}
         className={FULL_SCREEN_SCRIM_CONTENT}
         overlayClassName={NEUTRALIZED_BACKDROP}
-        style={{ zIndex: Z_INDEX_CONNECTION_LOST }}
+        style={{ ...CANCEL_ENTER_ZOOM_STYLE, zIndex: Z_INDEX_CONNECTION_LOST }}
         onEscapeKeyDown={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
@@ -205,7 +214,15 @@ export function ConnectionLostOverlayPresentational({
             // slot positions its children absolutely over the text and reserves only 72px for them,
             // which suits a one-word action or an icon; this label is two words and this strip is as
             // wide as the window, so in flow is the only layout that cannot overlap the message.
-            className="tw:rounded-none tw:border-x-0 tw:border-destructive/40 tw:bg-destructive/10 tw:px-3 tw:has-[>svg]:grid-cols-[auto_1fr_auto]"
+            //
+            // The text and icon take `diff-deleted` rather than the variant's own `destructive`.
+            // `--destructive` is background-grade in the Platform dark theme (`index.css` says so
+            // where `--diff-deleted` is defined): at `oklch(0.396 …)` on a slate-950 ground it
+            // reaches roughly 2:1, well under the 4.5:1 AA needs, and Platform light only reaches
+            // about 3.3:1. `--diff-deleted` is the text-grade red the themes provision — red-600 on
+            // light, red-400 on dark — and clears AA in all four. This is the screen a user reaches
+            // when nothing else in the app works, so reading it cannot depend on the theme.
+            className="tw:rounded-none tw:border-x-0 tw:border-destructive/40 tw:bg-destructive/10 tw:px-3 tw:text-diff-deleted tw:has-[>svg]:grid-cols-[auto_1fr_auto] tw:*:data-[slot=alert-description]:text-diff-deleted/90"
           >
             <TriangleAlert aria-hidden="true" />
             {/* `asChild` so the dialog's accessible name and description ARE the banner's own title
@@ -217,10 +234,10 @@ export function ConnectionLostOverlayPresentational({
               {/* `data-slot` restated because `asChild` would otherwise replace it. Radix's `Slot`
                   merges as `{...slotProps, ...childProps}`, so `DialogDescription`'s own
                   `data-slot="dialog-description"` arrives here as a prop and lands after
-                  `AlertDescription`'s internal spread — which would silently drop the destructive
-                  variant's `*:data-[slot=alert-description]:text-destructive/90`, leaving the
-                  message muted grey on a destructive-tinted strip. Naming it on the child makes it
-                  a child prop, which wins. */}
+                  `AlertDescription`'s internal spread — which would silently drop both the
+                  destructive variant's `*:data-[slot=alert-description]:…` rule and the
+                  `text-diff-deleted/90` override above it, leaving the message muted grey on a
+                  tinted strip. Naming it on the child makes it a child prop, which wins. */}
               <AlertDescription data-slot="alert-description">{message}</AlertDescription>
             </DialogDescription>
             <div className="tw:col-start-3 tw:row-span-2 tw:row-start-1 tw:self-center tw:ps-3">

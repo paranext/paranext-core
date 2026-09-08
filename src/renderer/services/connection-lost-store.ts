@@ -16,8 +16,8 @@ let isConnectionLost = false;
 
 /**
  * Whether this renderer is on its way down. Latched separately from the loss itself because the two
- * are different facts: every websocket dies with 1006 on an ordinary quit, so a loss reported after
- * this is set is the app closing rather than the network breaking.
+ * are different facts: every websocket dies with 1006 on a teardown, so a loss reported after this
+ * is set is the page going away rather than the network breaking.
  */
 let isShuttingDown = false;
 
@@ -42,9 +42,14 @@ export function subscribeToConnectionLost(listener: () => void): () => void {
  *
  * `INTENTIONAL_CLOSE_CODE` is unreachable from every peer today (see
  * `adr-renderer-websocket-suspend-disconnect`), so every socket dies with 1006 on the way down and
- * `isCleanCloseEvent` cannot tell a quit from a broken network. Main solves the same problem with
- * `isAppShuttingDown()` from `shutdown-latch.service`; that service is main's, so the renderer
- * latches its own equivalent from the browser's own unload signal.
+ * `isCleanCloseEvent` cannot tell a teardown from a broken network. Main solves the same problem
+ * with `isAppShuttingDown()` from `shutdown-latch.service`; that service is main's, so the renderer
+ * latches its own equivalent from the browser's own unload signals.
+ *
+ * Those signals reach only as far as the browser does. A window closing while the app stays up and
+ * a reload both raise them; an app quit does not, because main destroys the window instead of
+ * closing it and `destroy()` skips them. See {@link initConnectionLostService} for what that leaves
+ * uncovered.
  */
 export function markShuttingDown(): void {
   isShuttingDown = true;

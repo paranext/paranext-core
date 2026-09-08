@@ -33,7 +33,8 @@ describe('the listener end of the connection-lost seam', () => {
     // stores it and calls it during `shutdown()`.
     expect(typeof unsubscribe).toBe('function');
     expect(() => unsubscribe()).not.toThrow();
-    // Nothing on this end ever emits, so the subscriber is never called.
-    expect(callback).not.toHaveBeenCalled();
+    // Deliberately no `expect(callback).not.toHaveBeenCalled()`. Nothing in this test asks the
+    // listener to emit and nothing on this end can, so that assertion would have nothing to be the
+    // negative of — it would pass against a subscribe that silently did nothing at all.
   });
 });
