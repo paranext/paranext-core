@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => {
     networkObjectGet: vi.fn(),
     networkObjectSet: vi.fn(),
     loggerWarn: vi.fn(),
+    findWindowIdOwningWebView: vi.fn(),
     shardAnnouncementListeners,
     onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
       shardAnnouncementListeners.create.push(listener);
@@ -63,6 +64,9 @@ vi.mock('@shared/services/network-object.service', () => ({
 vi.mock('@shared/services/logger.service', () => ({
   logger: { info: vi.fn(), warn: mocks.loggerWarn, error: vi.fn() },
 }));
+vi.mock('@main/services/web-view.service-router', () => ({
+  findWindowIdOwningWebView: mocks.findWindowIdOwningWebView,
+}));
 
 /** Capture the router object registered under the generic name */
 async function getRouter() {
@@ -94,6 +98,10 @@ describe('notification service router', () => {
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
+    mocks.findWindowIdOwningWebView.mockResolvedValue({
+      windowId: undefined,
+      hadUnreachableWindows: false,
+    });
   });
 
   test('sends to a window that registered its shard after the router started', async () => {
@@ -134,6 +142,40 @@ describe('notification service router', () => {
 
     expect(focused.send).toHaveBeenCalled();
     expect(other.send).not.toHaveBeenCalled();
+  });
+
+  test('sends a notification naming a webViewId to the window that owns it, not the focused one', async () => {
+    const focused = windowShard([]);
+    const owner = windowShard([]);
+    withWindows({ 1: focused, 2: owner });
+    mocks.findWindowIdOwningWebView.mockResolvedValue({
+      windowId: '2',
+      hadUnreachableWindows: false,
+    });
+    const router = await getRouter();
+
+    await router.send({ message: 'hi', severity: 'info', webViewId: 'wv-1' });
+
+    expect(mocks.findWindowIdOwningWebView).toHaveBeenCalledWith('wv-1', expect.any(String));
+    expect(owner.send).toHaveBeenCalled();
+    expect(focused.send).not.toHaveBeenCalled();
+  });
+
+  test('falls back to the focused window when a notification names a webViewId nobody owns', async () => {
+    const focused = windowShard([]);
+    const other = windowShard([]);
+    withWindows({ 1: focused, 2: other });
+    mocks.findWindowIdOwningWebView.mockResolvedValue({
+      windowId: undefined,
+      hadUnreachableWindows: false,
+    });
+    const router = await getRouter();
+
+    await router.send({ message: 'hi', severity: 'info', webViewId: 'wv-missing' });
+
+    expect(focused.send).toHaveBeenCalled();
+    expect(other.send).not.toHaveBeenCalled();
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(expect.stringContaining('wv-missing'));
   });
 
   test('dismisses in the window showing the notification, not the focused one', async () => {

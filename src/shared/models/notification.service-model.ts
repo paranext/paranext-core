@@ -1,6 +1,7 @@
 import { CommandHandlers } from 'papi-shared-types';
 import { LocalizeKey } from 'platform-bible-utils';
 import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
+import type { WebViewId } from '@shared/models/web-view.model';
 
 export type Severity = 'info' | 'warning' | 'error';
 
@@ -149,6 +150,19 @@ export interface PlatformNotification {
    * seconds).
    */
   duration?: number;
+  /**
+   * Optional id of a web view this notification is about. When provided, the notification is routed
+   * to the window that owns that web view instead of the focused window — for a notification or
+   * prompt raised about a specific project or editor that may not be the one the user is currently
+   * looking at. Falls back to the focused window if the web view cannot be found open in any
+   * window.
+   *
+   * Omit for a generic notice, which should keep routing to the focused window — where the user is
+   * looking is the right place for something that is not about anything in particular.
+   *
+   * @experimental
+   */
+  webViewId?: WebViewId;
 }
 
 /**
@@ -222,6 +236,7 @@ export const NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS: NetworkObjectDocumentatio
               dismissible: { type: 'boolean' },
               notificationId: { type: ['string', 'number'] },
               duration: { type: 'number' },
+              webViewId: { type: 'string' },
             },
             required: ['message', 'severity'],
           },

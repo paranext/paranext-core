@@ -3,19 +3,27 @@
  * network object name and routes calls to a window's notification service shard (e.g.
  * "NotificationService-f81d4fae-7dec-11d0-a765-00a0c91e6bf6"). A new notification goes to the
  * focused window, so one raised by a background task appears where the user is looking rather than
- * in whichever renderer happened to start first; dismissing one goes to the window that is actually
- * showing it.
+ * in whichever renderer happened to start first — UNLESS it names
+ * {@link PlatformNotification.webViewId}, in which case it goes to the window that owns that web
+ * view: a notification or prompt about a specific project or editor is about something concrete,
+ * and the window showing it may not be the one the user currently has focused. Dismissing one goes
+ * to the window that is actually showing it.
  *
  * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
  * service shard".
  */
 
 import { getReadyWindowIds } from '@main/services/window-state.service';
-import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
+import {
+  createTargetShardResolver,
+  resolveShardForWindow,
+} from '@main/services/target-shard-resolver.util';
+import { findWindowIdOwningWebView } from '@main/services/web-view.service-router';
 import {
   INotificationService,
   NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
   NotificationServiceNetworkObjectName,
+  PlatformNotification,
 } from '@shared/models/notification.service-model';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -43,6 +51,45 @@ const getTargetNotificationShard = createTargetShardResolver(
   NotificationServiceNetworkObjectName,
   notificationShards,
 );
+
+/**
+ * The notification service shard a `send` should run in: the window that owns
+ * {@link PlatformNotification.webViewId} when the notification names one, otherwise the focused
+ * window, exactly as before that field existed.
+ *
+ * Falls back to the focused window rather than throwing when the named web view cannot be resolved
+ * to a window — a notification is user-facing feedback, and showing it in the wrong window is a
+ * better outcome than not showing it at all. Every fallback path is logged, since a caller that
+ * bothered to name a `webViewId` presumably cared where the notification landed.
+ */
+async function getSendTargetShard(
+  notification: PlatformNotification,
+): Promise<INotificationService> {
+  if (notification.webViewId !== undefined) {
+    const { windowId, hadUnreachableWindows } = await findWindowIdOwningWebView(
+      notification.webViewId,
+      'route notification',
+    );
+    if (windowId !== undefined) {
+      try {
+        return await resolveShardForWindow(
+          NotificationServiceNetworkObjectName,
+          notificationShards,
+          windowId,
+        );
+      } catch (e) {
+        logger.warn(
+          `Notification named webViewId ${notification.webViewId}, owned by window ${windowId}, but that window's notification service could not be resolved (${getErrorMessage(e)}); falling back to the focused window.`,
+        );
+      }
+    } else {
+      logger.warn(
+        `Notification named webViewId ${notification.webViewId}, but no window could be found owning it${hadUnreachableWindows ? ' (some windows could not be asked)' : ''}; falling back to the focused window.`,
+      );
+    }
+  }
+  return getTargetNotificationShard();
+}
 
 /**
  * Dismiss a notification in the window(s) that own it — the ones whose renderers are showing it,
@@ -103,7 +150,7 @@ async function dismissInOwningWindows(notificationId: string | number): Promise<
  * a name the router does not answer for.
  */
 const notificationServiceRouter: INotificationService = {
-  send: async (...args) => (await getTargetNotificationShard()).send(...args),
+  send: async (notification) => (await getSendTargetShard(notification)).send(notification),
   dismiss: async (notificationId) => dismissInOwningWindows(notificationId),
 };
 
