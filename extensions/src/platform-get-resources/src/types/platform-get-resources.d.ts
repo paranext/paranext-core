@@ -29,10 +29,33 @@ declare module 'platform-get-resources' {
      */
     isGetDblResourcesAvailable: () => Promise<boolean>;
   };
+
+  /**
+   * Why the DBL resource catalog cannot be shown, when it cannot.
+   *
+   * - `notConfigured` — this build has no DBL credentials, so there is no catalog to fetch and no
+   *   amount of retrying will produce one. Nothing is wrong; offering a retry here would be an
+   *   inert control attached to a false failure.
+   * - `notReady` — the resources data provider has not registered yet. Transient, so a later call can
+   *   succeed.
+   */
+  export type DblResourceCatalogUnavailableReason = 'notConfigured' | 'notReady';
+
+  /**
+   * The DBL resource catalog, or the reason there is none to show.
+   *
+   * A genuine fetch failure REJECTS rather than resolving to `unavailable`. That split is the whole
+   * point of this type: a caller can tell "this build cannot download DBL resources" (show nothing,
+   * offer no retry) from "the fetch broke" (say so, offer a retry) without having to guess at an
+   * ambiguous absent value.
+   */
+  export type DblResourceCatalog =
+    | { status: 'available'; resources: DblResourceData[] }
+    | { status: 'unavailable'; reason: DblResourceCatalogUnavailableReason };
 }
 
 declare module 'papi-shared-types' {
-  import type { IDblResourcesProvider } from 'platform-get-resources';
+  import type { DblResourceCatalog, IDblResourcesProvider } from 'platform-get-resources';
   import type { DblResourceData } from 'platform-bible-utils';
 
   export interface DataProviders {
@@ -78,9 +101,12 @@ declare module 'papi-shared-types' {
      * If no cached value exists, attempts to fetch them. Failed refresh attempts do NOT clear
      * existing cached data.
      *
-     * @returns Cached DBL resources, or `undefined` if none have been successfully fetched.
+     * @returns The cached catalog, or an `unavailable` result when this build cannot produce one.
+     * @throws When the fetch itself fails. Callers that render an error state with a retry should
+     *   key it on the rejection, never on an `unavailable` result — retrying the latter cannot
+     *   change the answer.
      */
-    'platformGetResources.getCachedResources': () => Promise<DblResourceData[] | undefined>;
+    'platformGetResources.getCachedResources': () => Promise<DblResourceCatalog>;
 
     /**
      * Returns locally-installed, read-only resources that are NOT in the DBL catalog (e.g. VULGP83,
