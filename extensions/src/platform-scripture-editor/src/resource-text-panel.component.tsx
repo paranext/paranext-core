@@ -55,6 +55,14 @@ const localize = (strings: ResourcePanelLocalizedStrings, key: ResourcePanelLoca
  */
 export const RESOURCE_TEXT_EDITOR_CONTAINER_TEST_ID = 'resource-text-editor-container';
 
+/**
+ * Identifies the content area's waiting state. `Spinner` is a bare `LoaderCircle` SVG with no role
+ * and no accessible name, so without a handle here a test can only assert that the messages and the
+ * editor are ABSENT — which a content area rendering nothing at all satisfies just as well.
+ * Asserting the spinner is present is what makes "the panel is waiting" a falsifiable claim.
+ */
+export const RESOURCE_TEXT_WAITING_TEST_ID = 'resource-text-waiting';
+
 type ResourceSelectorDropdownProps = {
   filteredResources: PickerResource[];
   selectedRef: PickerResource | undefined;
@@ -431,7 +439,10 @@ export function ResourceTextPanel({
   const renderContent = () => {
     if (contentState === 'loading')
       return (
-        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+        <div
+          className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8"
+          data-testid={RESOURCE_TEXT_WAITING_TEST_ID}
+        >
           <Spinner />
         </div>
       );
@@ -478,7 +489,10 @@ export function ResourceTextPanel({
     // cannot edit.
     if (!usjFromPdp)
       return (
-        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+        <div
+          className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8"
+          data-testid={RESOURCE_TEXT_WAITING_TEST_ID}
+        >
           <Spinner />
         </div>
       );
