@@ -194,8 +194,9 @@ declare module 'papi-shared-types' {
 
     // This command is provided in `onboarding-tour.service-router.ts` (main)
     /**
-     * Show the Simple-mode orientation tour again from its first stop, in the window the user is
-     * working in. Does nothing visible in Power mode, where the tour has nothing to point at.
+     * Show the orientation tour again from its first stop, in the window the user is working in.
+     * Available in both interface modes: in Power mode the tour reduces to the stops whose anchors
+     * exist there, which today is the toolbar's profile button.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */

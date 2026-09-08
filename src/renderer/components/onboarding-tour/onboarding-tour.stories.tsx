@@ -18,7 +18,7 @@ const meta: Meta<typeof OnboardingTour> = {
     docs: {
       description: {
         component:
-          'One-shot Simple-mode orientation tour. Only shows when: Simple mode, first-run complete, tour not yet done.',
+          'One-shot orientation tour. Shows on its own only in Simple mode, once first-run is complete and the tour is not yet done; a Help-menu replay also runs in Power mode, where `Tour` reduces it to the stops whose anchors exist there.',
       },
     },
   },

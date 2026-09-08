@@ -5,8 +5,10 @@ import { ONBOARDING_TOUR_DONE_KEY } from '../../fixtures/helpers';
  * Page-object helpers for the onboarding tour overlay.
  *
  * The tour is a `role="dialog"` overlay rendered by `OnboardingTour` (which delegates to `Tour`).
- * It only appears in Simple mode when `firstRunStatus.kind === 'app'` and the user has not yet
- * completed or skipped it (`platform-bible.onboardingTourComplete` absent from localStorage).
+ * It appears on its own only in Simple mode, when `firstRunStatus.kind === 'app'` and the user has
+ * not yet completed or skipped it (`platform-bible.onboardingTourComplete` absent from
+ * localStorage). A Help-menu replay reopens it regardless of that flag, and in either interface
+ * mode — in Power it reduces to the stops whose anchors exist there.
  *
  * All locator helpers scope queries inside the tour dialog element so they cannot accidentally
  * match other content in the app.

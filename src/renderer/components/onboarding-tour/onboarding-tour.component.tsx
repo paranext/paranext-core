@@ -64,6 +64,13 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
   // other window still showing it. That is reachable because nothing collapses a Power user's
   // extra windows when they switch to Simple. A replay skips the flag entirely: the user asked for
   // the tour from the Help menu, which only ever happens after they have already completed it.
+  //
+  // Only the closing half of that multi-window case is handled. A user who has never completed the
+  // tour, in Power, with several windows open, who switches live to Simple gets the tour in every
+  // window: they now close together, but they also open together. Suppressing all but one needs the
+  // renderer to know which window is the main one at this point, which it does not, and the case
+  // disappears once PT-4286 stops a Simple user having extra windows at all — so it is left alone
+  // rather than plumbed for here.
   const [finishedThisSession, setFinishedThisSession] = useState(false);
   const persistedTourDone = useSyncExternalStore(subscribeToTourDone, readTourDone);
   const tourDone = finishedThisSession || (!isReplay && persistedTourDone);
@@ -188,11 +195,12 @@ function OnboardingTourNotYetDone({ isReplay }: { isReplay: boolean }) {
 }
 
 /**
- * Simple-mode orientation tour. Shows five spotlight stops once per user (see the trigger note
- * above), then never shows again on its own (persisted in localStorage) — Help > Show the tour
- * again is the one way back to it. Renders nothing if:
+ * Orientation tour. Shows five spotlight stops once per user (see the trigger note above), then
+ * never shows again on its own (persisted in localStorage) — Help > Show the tour again is the one
+ * way back to it. Renders nothing if:
  *
- * - The user is in Power mode
+ * - The user is in Power mode and this is not a replay (the unrequested showing is Simple-only; a
+ *   replay runs in Power too, reduced by `Tour` to the stops whose anchors exist there)
  * - The app is not yet unlocked (`firstRunStatus.kind !== 'app'` — still loading or in the wizard)
  * - The tour has already been completed or skipped, and no replay has been requested
  *
