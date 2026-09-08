@@ -158,3 +158,40 @@ export function resolveHasSourcesError({
   if (isReferencedLoading) return false;
   return !!adminReferencedError || isPlatformError(adminReferenced);
 }
+
+/** Inputs for {@link resolveIsGridBodyWaiting}. */
+export type GridBodyWaitInput = {
+  /** Whether the grid currently has a project to show a collection for. */
+  hasProject: boolean;
+  /** Whether the sources resolved to a failure. A failure is an answer, so it ends the wait. */
+  hasSourcesError: boolean;
+  /** Whether {@link useTextCollectionSources} has delivered its sources. */
+  areSourcesResolved: boolean;
+  /** Whether the cached DBL resource list is still in flight. */
+  isLoadingCachedResources: boolean;
+};
+
+/**
+ * Whether the grid body is waiting on something that could fail to arrive, and so should be under
+ * an elapsed-time bound.
+ *
+ * Must cover _every_ wait the loading branch can be in, not just the sources: an unresolved sources
+ * read and an unsettled cached-resource list both render `'loading'`, so bounding only one leaves
+ * the other able to spin forever. A sources failure ends the wait rather than continuing it — it is
+ * an answer — and with no project bound there is nothing being waited on at all.
+ *
+ * Extracted from the web view so this is testable; inline, narrowing it back to the sources alone
+ * would restore the unbounded hang with every test still green.
+ *
+ * @param input See {@link GridBodyWaitInput}.
+ * @returns Whether a bounded wait is in progress.
+ */
+export function resolveIsGridBodyWaiting({
+  hasProject,
+  hasSourcesError,
+  areSourcesResolved,
+  isLoadingCachedResources,
+}: GridBodyWaitInput): boolean {
+  if (!hasProject || hasSourcesError) return false;
+  return !areSourcesResolved || isLoadingCachedResources;
+}

@@ -50,6 +50,7 @@ import { useFocusedResourceProjectId } from './use-focused-resource-project-id.h
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import {
   resolveGridBodyState,
+  resolveIsGridBodyWaiting,
   resolveTextCollectionProjectId,
 } from './scripture-text-grid-project.utils';
 import { LoadingView } from './panel-state-views.component';
@@ -538,12 +539,21 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // This window opens on every Simple-mode project switch, not only at first mount, because the
   // switch re-points this panel by reloading it (see `updateRelatedTextCollectionPanel`), which is
   // why the body needs a real loading state.
-  // Bounds the wait for the sources. Neither of the ways that wait can never end — a subscribe that
-  // rejects, or a settings provider that never resolves — surfaces as an error, so without this the
-  // body would spin indefinitely on both.
+  // Bounds every wait the loading branch can be in, not just the sources: a subscribe that rejects
+  // and a settings provider that never resolves both leave `sources` undefined without reporting an
+  // error, and `getCachedResources` can equally never settle. Any of them would otherwise spin
+  // forever. Keyed on the project so a switch restarts the allowance — the flag alone stays true
+  // across an A→B change whose sources are also unresolved, which would declare B unresolvable
+  // before it had any allowance of its own.
   const hasWaitedTooLong = useHasTimedOut(
-    effectiveProjectId !== undefined && sources === undefined && !hasSourcesError,
+    resolveIsGridBodyWaiting({
+      hasProject: effectiveProjectId !== undefined,
+      hasSourcesError,
+      areSourcesResolved: sources !== undefined,
+      isLoadingCachedResources,
+    }),
     SOURCES_TIMEOUT_MS,
+    effectiveProjectId,
   );
 
   const bodyState = resolveGridBodyState({

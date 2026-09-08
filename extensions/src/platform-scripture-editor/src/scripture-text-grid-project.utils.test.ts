@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolveGridBodyState,
+  resolveIsGridBodyWaiting,
   resolveHasSourcesError,
   resolveTextCollectionProjectId,
   type GridBodyStateInput,
@@ -117,6 +118,14 @@ describe('resolveGridBodyState', () => {
     expect(resolveGridBodyState({ ...settled, areSourcesResolved: false })).toBe('loading');
   });
 
+  it('gives up on a cached-resource list that never settles, not just on sources', () => {
+    // The caller folds this wait into the timeout too, so a getCachedResources that never settles
+    // is bounded rather than spinning forever the way an unresolved sources read used to.
+    expect(
+      resolveGridBodyState({ ...settled, isLoadingCachedResources: true, hasWaitedTooLong: true }),
+    ).toBe('error');
+  });
+
   it('loads while the cached DBL list is still in flight and there is nothing to show yet', () => {
     expect(resolveGridBodyState({ ...settled, isLoadingCachedResources: true })).toBe('loading');
   });
@@ -224,5 +233,42 @@ describe('resolveHasSourcesError', () => {
 
   it('reports no failure once the setting reads cleanly', () => {
     expect(resolveHasSourcesError(loaded)).toBe(false);
+  });
+});
+
+describe('resolveIsGridBodyWaiting', () => {
+  const waiting = {
+    hasProject: true,
+    hasSourcesError: false,
+    areSourcesResolved: false,
+    isLoadingCachedResources: false,
+  };
+
+  it('waits while the sources have not arrived', () => {
+    expect(resolveIsGridBodyWaiting(waiting)).toBe(true);
+  });
+
+  it('waits while the cached resource list is still in flight', () => {
+    // Narrowing this to the sources alone is what left a never-settling getCachedResources able to
+    // spin forever.
+    expect(
+      resolveIsGridBodyWaiting({
+        ...waiting,
+        areSourcesResolved: true,
+        isLoadingCachedResources: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('stops waiting once a failure arrives, since a failure is an answer', () => {
+    expect(resolveIsGridBodyWaiting({ ...waiting, hasSourcesError: true })).toBe(false);
+  });
+
+  it('is not waiting when no project is bound', () => {
+    expect(resolveIsGridBodyWaiting({ ...waiting, hasProject: false })).toBe(false);
+  });
+
+  it('is not waiting once everything has settled', () => {
+    expect(resolveIsGridBodyWaiting({ ...waiting, areSourcesResolved: true })).toBe(false);
   });
 });
