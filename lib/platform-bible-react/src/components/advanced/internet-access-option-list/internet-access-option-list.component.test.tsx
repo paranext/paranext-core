@@ -8,6 +8,7 @@ import type { LanguageStrings } from 'platform-bible-utils';
 import { queryVisibleTooltips } from '@/components/shadcn-ui/tooltip.test-utils';
 import {
   InternetAccessOptionList,
+  isSupportedInternetUse,
   type InternetAccessOptionListProps,
 } from './internet-access-option-list.component';
 
@@ -42,7 +43,9 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_ProxyOnly_2%': 'Configure proxy sentinel',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%': 'Desc Proxy sentinel',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
-  '%paratextRegistration_internetUse_footer%': 'Footer text sentinel',
+  '%paratextRegistration_internetUse_unsupportedSelection_title%': 'Not supported sentinel',
+  '%paratextRegistration_internetUse_unsupportedSelection_description%':
+    '{selectedOption} is not supported sentinel',
 };
 
 function renderList(overrides: Partial<InternetAccessOptionListProps> = {}) {
@@ -77,10 +80,10 @@ describe('InternetAccessOptionList', () => {
   test('descriptions are not rendered as visible paragraphs', () => {
     const { container } = renderList();
     const paragraphs = Array.from(container.querySelectorAll('p')).map((p) => p.textContent);
-    // The footer note is the list's only body copy; every description reaches sighted users
-    // through a tooltip and assistive tech through an sr-only span.
+    // Every description reaches sighted users through a tooltip and assistive tech through an
+    // sr-only span, so the list carries no body copy at all.
     ROWS.forEach(([, description]) => expect(paragraphs).not.toContain(description));
-    expect(paragraphs).toEqual(['Footer text sentinel']);
+    expect(paragraphs).toEqual([]);
   });
 
   test('every row, including the disabled coming-soon ones, describes its radio for screen readers', () => {
@@ -139,12 +142,6 @@ describe('InternetAccessOptionList', () => {
     act(() => screen.getByLabelText('Disable access sentinel').focus());
 
     await waitFor(() => expect(visibleTooltips()).toHaveLength(0));
-  });
-
-  test('showFooter={false} hides the footer but keeps the coming-soon badges', () => {
-    renderList({ showFooter: false });
-    expect(screen.queryByText('Footer text sentinel')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Coming soon')).toHaveLength(3);
   });
 
   // The other half of the guard: a focus the user actually drove must still reveal the description.
@@ -206,5 +203,46 @@ describe('InternetAccessOptionList', () => {
     renderList({ value: 'Enabled' });
     // Options 1 and 2 are active; only options 3-5 have badges
     expect(screen.getAllByText('Coming soon')).toHaveLength(3);
+  });
+
+  // InternetSettings.xml is shared with a co-installed Paratext 9 and can be copied in from one, so
+  // it can name an option this app does not implement yet. Showing the row selected under a banner
+  // is what keeps that from looking like the app quietly picked something else.
+  describe('a stored value the app cannot honor', () => {
+    test.each(['Disabled', 'ProxyOnly'] as const)('%s is announced in a banner', (value) => {
+      renderList({ value });
+      expect(screen.getByRole('alert')).toHaveTextContent('Not supported sentinel');
+    });
+
+    test('the banner names the option that is selected', () => {
+      renderList({ value: 'ProxyOnly' });
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Configure proxy sentinel is not supported sentinel',
+      );
+    });
+
+    test('the row stays selected rather than being silently swapped', () => {
+      renderList({ value: 'Disabled' });
+      const radio = screen.getByLabelText('Disable ALL sentinel');
+      expect(radio).toBeChecked();
+      expect(radio).toBeDisabled();
+    });
+
+    test.each(['Enabled', 'VpnRequired'] as const)('%s shows no banner', (value) => {
+      renderList({ value });
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  });
+
+  // Consumers that gate on a usable selection (the first-run wizard's Next button) read this
+  // instead of re-deriving which options the app implements.
+  describe('isSupportedInternetUse', () => {
+    test.each(['Enabled', 'VpnRequired'] as const)('%s is supported', (value) => {
+      expect(isSupportedInternetUse(value)).toBe(true);
+    });
+
+    test.each(['Disabled', 'ProxyOnly'] as const)('%s is not supported', (value) => {
+      expect(isSupportedInternetUse(value)).toBe(false);
+    });
   });
 });

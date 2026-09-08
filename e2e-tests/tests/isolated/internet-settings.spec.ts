@@ -78,9 +78,8 @@ test.describe('Internet & Connectivity settings', () => {
     // Three "Coming soon" badges appear
     await expect(frame.getByText('Coming soon')).toHaveCount(3);
 
-    // The "Disabled options are planned for future updates" footer was removed (PT-4363): the
-    // per-row "Coming soon" badges above already carry that meaning, and dropping the line keeps
-    // the first-run wizard's Next button in view.
+    // The per-row "Coming soon" badges above are the only marker of the unavailable options; the
+    // list carries no footer note, which also keeps the first-run wizard's Next button in view.
     await expect(frame.getByText(/Disabled options are planned for future updates/)).toHaveCount(0);
   });
 

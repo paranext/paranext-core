@@ -28,6 +28,10 @@ const localizedStrings = {
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%':
     'Routes Paratext internet traffic through a configured proxy server.',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
+  '%paratextRegistration_internetUse_unsupportedSelection_title%':
+    'This internet setting is not supported yet',
+  '%paratextRegistration_internetUse_unsupportedSelection_description%':
+    'Your Paratext internet settings have “{selectedOption}” selected, which this version of Paratext cannot apply yet. Choose one of the available options to continue.',
 };
 
 function Controlled(
@@ -124,24 +128,22 @@ export const DisabledAccess: Story = {
 };
 
 /**
- * A coming-soon value is the current setting (e.g., persisted from an older PT9 migration). The row
- * renders selected-but-disabled; the user cannot interact with it.
+ * A coming-soon value is the current setting — `InternetSettings.xml` is shared with a co-installed
+ * Paratext 9 and can be copied in from one, so it can name an option this app does not implement
+ * yet. The row renders selected-but-disabled so the carried-over setting is visible rather than
+ * silently swapped, and a banner says why nothing acts on it.
  */
 export const ComingSoonSelected: Story = {
   render: (args) => <Controlled {...args} initialValue="Disabled" />,
+};
+
+/** The other unsupported value a settings file can carry: "Configure proxy". */
+export const ComingSoonProxySelected: Story = {
+  render: (args) => <Controlled {...args} initialValue="ProxyOnly" />,
 };
 
 /** All rows non-interactive — simulates the loading or saving state. */
 export const FormDisabled: Story = {
   render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
   args: { disabled: true },
-};
-
-/**
- * Footer note suppressed for space-constrained hosts such as the first-run wizard step. The "Coming
- * soon" badges still mark the unavailable options.
- */
-export const WithoutFooter: Story = {
-  render: (args) => <Controlled {...args} initialValue="VpnRequired" />,
-  args: { showFooter: false },
 };

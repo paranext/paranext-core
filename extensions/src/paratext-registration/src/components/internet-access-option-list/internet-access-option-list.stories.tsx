@@ -26,9 +26,12 @@ type Story = StoryObj<typeof InternetAccessOptionList>;
 function createDecorator(initialValue: InternetUse) {
   return function Decorator(
     Story: (update?: { args: Partial<InternetAccessOptionListProps> }) => ReactElement,
+    context: { args: InternetAccessOptionListProps },
   ) {
     const [value, setValue] = useState<InternetUse>(initialValue);
-    return <Story args={{ value, onChange: setValue }} />;
+    // Args passed to <Story> replace the story's args rather than merging into them, so spread the
+    // resolved ones back in — otherwise `localizedStrings` and `disabled` arrive undefined.
+    return <Story args={{ ...context.args, value, onChange: setValue }} />;
   };
 }
 
@@ -43,8 +46,9 @@ export const DisabledAccess: Story = {
 };
 
 /**
- * A coming-soon value is the current setting (e.g., from a PT9 migration). The row renders
- * selected-but-disabled; the user cannot interact with it.
+ * A coming-soon value is the current setting — `InternetSettings.xml` is shared with a co-installed
+ * Paratext 9 and can be copied in from one, so it can name an option this app does not implement
+ * yet. The row renders selected-but-disabled and a banner says why nothing acts on it.
  */
 export const ComingSoonSelected: Story = {
   decorators: [createDecorator('Disabled')],
@@ -54,13 +58,4 @@ export const ComingSoonSelected: Story = {
 export const FormDisabled: Story = {
   decorators: [createDecorator('VpnRequired')],
   args: { disabled: true },
-};
-
-/**
- * Footer note suppressed for space-constrained hosts such as the first-run wizard step. The "Coming
- * soon" badges still mark the unavailable options.
- */
-export const WithoutFooter: Story = {
-  decorators: [createDecorator('VpnRequired')],
-  args: { showFooter: false },
 };

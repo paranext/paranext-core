@@ -5,6 +5,7 @@ import {
   DEVELOPER_SECTION_STRING_KEYS,
   InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
+  isSupportedInternetUse,
 } from 'platform-bible-react/experimental';
 import { useData, useDataProvider, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useDelayedFlag } from '@renderer/hooks/use-delayed-flag.hook';
@@ -150,7 +151,9 @@ function InternetSettingsLoaded({
   // Sync the local mirror from the provider value. While loading (value is still the default) or
   // while a save is pending/failed, handleChange and the loading render own the state — defer. Once
   // a real value is in, enable Next; if the read is an error, keep Next disabled so the wizard can't
-  // advance past an unloaded step.
+  // advance past an unloaded step. A stored value the app cannot honor (see isSupportedInternetUse)
+  // also holds Next back: the list shows it selected under a banner, and the user has to replace it
+  // with something that will actually take effect before the wizard moves on.
   useEffect(() => {
     if (isLoading || isSaving || saveError) return;
     if (isPlatformError(value)) {
@@ -159,7 +162,7 @@ function InternetSettingsLoaded({
     }
     setSettings(value);
     lastGood.current = value;
-    setCanProceed?.(true);
+    setCanProceed?.(isSupportedInternetUse(value.permittedInternetUse));
   }, [value, isLoading, isSaving, saveError, setCanProceed]);
 
   const handleChange = useCallback(
@@ -180,7 +183,9 @@ function InternetSettingsLoaded({
         if (!isMounted.current) return;
         lastGood.current = next;
         setIsSaving(false);
-        setCanProceed?.(true);
+        // Changing the server while an unsupported internet-use value is still stored must not
+        // unlock Next, so re-derive it from what was actually saved.
+        setCanProceed?.(isSupportedInternetUse(next.permittedInternetUse));
       } catch (err: unknown) {
         if (!isMounted.current) return;
         setSettings(lastGood.current); // revert
@@ -226,15 +231,11 @@ function InternetSettingsLoaded({
           <AlertDescription>{saveError}</AlertDescription>
         </Alert>
       )}
-      {/* The step's heading and description already consume vertical space here, so drop the
-          list's footer note to keep the wizard's Next button above the fold. The per-row
-          "Coming soon" badges still mark the unavailable options. */}
       <InternetAccessOptionList
         localizedStrings={localizedStrings}
         value={settings.permittedInternetUse}
         onChange={(v) => handleChange({ ...settings, permittedInternetUse: v })}
         disabled={isSaving}
-        showFooter={false}
       />
       <DeveloperSection
         localizedStrings={localizedStrings}
