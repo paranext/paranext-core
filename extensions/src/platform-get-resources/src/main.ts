@@ -7,7 +7,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import type { DblResourceCatalog } from 'platform-get-resources';
+import type { DblResourceCatalog, DblResourceUpdateStatus } from 'platform-get-resources';
 import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-utils';
 import { resolveDblCatalog, shouldStopBackgroundFetch } from './dbl-catalog.utils';
@@ -15,6 +15,7 @@ import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
+import { reconcileCachedResources } from './resources-cache.util';
 import tailwindStyles from './tailwind.css?inline';
 
 const GET_RESOURCES_WEB_VIEW_TYPE = 'platformGetResources.getResources';
@@ -132,9 +133,13 @@ async function getLocalProjectMetadata(): Promise<{
 }
 
 /**
- * Syncs installed flags on `cachedResources` against live project metadata from C#. Runs in the
- * background so it never blocks a dialog open. Updates `cachedResources` and writes to storage when
- * flags change.
+ * Syncs the derived `installed`, `projectId` and `updateAvailable` flags on `cachedResources`
+ * against current local state. Runs in the background so it never blocks a dialog open. Updates
+ * `cachedResources` and writes to storage when flags change.
+ *
+ * `installed` and `projectId` come from live project metadata. `updateAvailable` compares the
+ * locally installed revision against the DBL catalog's, and neither number is reachable from
+ * TypeScript, so the backend is asked for it.
  */
 async function syncInstalledFlags(): Promise<void> {
   if (cachedResources === undefined) return;
@@ -145,36 +150,27 @@ async function syncInstalledFlags(): Promise<void> {
     // and it can never mark anything installed, so there is nothing to gain by continuing.
     if (!hasResourceProjects) return;
 
+    // Kept in its own `try` so a backend failure costs only the `updateAvailable` refresh: an
+    // undefined status leaves those flags at their cached values, while `installed` and `projectId`
+    // still reconcile against the local projects.
+    let updateStatus: DblResourceUpdateStatus | undefined;
+    try {
+      const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
+      updateStatus = await provider?.recomputeDblResourcesUpdateStatus();
+    } catch (error: unknown) {
+      logger.warn(`Could not recompute DBL resource update status: ${getErrorMessage(error)}`);
+    }
+
     // Wrap the read-modify-write in fetchMutex so a concurrent fetchAndCacheResources call cannot
-    // overwrite cachedResources between our map() and our assignment.
+    // overwrite cachedResources between our reconcile and our assignment.
     await fetchMutex.runExclusive(async () => {
       if (cachedResources === undefined) return;
 
-      let isChanged = false;
-      const newCachedResources = cachedResources.map((resource) => {
-        const matchingLocalProject = localProjectMetadata.find((localProject) =>
-          // If the `projectId` is defined then tries to use that
-          resource.projectId
-            ? resource.projectId === localProject.id
-            : // Otherwise uses the `dblEntryUid` which contains the first part of the project id.
-              // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
-              resource.dblEntryUid !== '' &&
-              localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
-        );
-
-        const isInstalled = matchingLocalProject !== undefined;
-        if (isInstalled !== resource.installed) {
-          isChanged = true;
-          return {
-            ...resource,
-            installed: isInstalled,
-            updateAvailable: false,
-            projectId: matchingLocalProject?.id ?? '',
-          };
-        }
-
-        return resource;
-      });
+      const { resources: newCachedResources, isChanged } = reconcileCachedResources(
+        cachedResources,
+        localProjectMetadata.map((localProject) => localProject.id),
+        updateStatus,
+      );
 
       if (isChanged) {
         cachedResources = newCachedResources;

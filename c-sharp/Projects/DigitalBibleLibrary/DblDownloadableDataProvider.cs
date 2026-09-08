@@ -75,6 +75,15 @@ internal class DblResourcesDataProvider(
 
     private const int DBL_NETWORK_TIMEOUT = 0; // Don't timeout DBL network requests
 
+    // Bounds the update-status recheck, which is the one wire method here that must answer promptly:
+    // it serves the front end's list refresh, and its TSDoc promises it "gives up rather than
+    // blocking". Without an explicit value it would inherit `network.service.ts`'s 30-second
+    // default, three orders of magnitude past that promise. Sized well above the work itself — the
+    // gate is non-waiting and the recheck is in-memory, though it grows with the catalog and the
+    // local project count — while still failing fast enough that a stuck recheck cannot hold a
+    // refresh for half a minute.
+    private const int UPDATE_STATUS_NETWORK_TIMEOUT = 5000;
+
     public const string DBL_RESOURCES = "DblResources";
 
     // Node.js services match this exact text (platform-bible-utils `isErrorMessageAboutRegistryAuthFailure`
@@ -85,17 +94,20 @@ internal class DblResourcesDataProvider(
     private List<InstallableResource> _resources = [];
 
     // Set once the catalog has loaded at least once so a mutation (install/uninstall) that races the
-    // initial fetch doesn't operate on an empty _resources list. Read and written only while holding
-    // _providerGate.
+    // initial fetch doesn't operate on an empty _resources list. Written only while holding
+    // _providerGate. It may also be read WITHOUT the gate, but only as a one-way hint: it never
+    // returns to false, so a lock-free reader that sees false has either not missed anything yet or
+    // is about to redo the check under the gate, and one that sees true is correct.
     private bool _hasFetchedResources;
 
     // Guards every access to shared state so only one DBL operation touches it at a time:
-    //   • _resources — reassigned by FetchResourcesCore, read by FindResource
+    //   • _resources — reassigned by FetchResourcesCore, read by FindResource and by
+    //     RecomputeDblResourcesUpdateStatus
     //   • the Paratext ScrTextCollection — mutated by install/uninstall, read by the fetch's projection
     //   • the process-global Trace.Listeners 401-detection bracket in FetchResourcesCore
-    // GetDblResources/InstallDblResource/UninstallDblResource do their blocking work inside Task.Run
-    // and take this lock there — never on the JSON-RPC reading thread — so the reading loop stays
-    // responsive while an operation runs. See PT-4222.
+    // GetDblResources/InstallDblResource/UninstallDblResource/RecomputeDblResourcesUpdateStatus do
+    // their blocking work inside Task.Run and take this lock there — never on the JSON-RPC reading
+    // thread — so the reading loop stays responsive while an operation runs. See PT-4222.
     private readonly object _providerGate = new();
 
     #endregion
@@ -107,6 +119,7 @@ internal class DblResourcesDataProvider(
         return
         [
             ("getDblResources", GetDblResources),
+            ("recomputeDblResourcesUpdateStatus", RecomputeDblResourcesUpdateStatus),
             ("installDblResource", InstallDblResource),
             ("uninstallDblResource", UninstallDblResource),
             ("isGetDblResourcesAvailable", IsGetDblResourcesAvailable),
@@ -236,6 +249,134 @@ internal class DblResourcesDataProvider(
                     .ToList();
             }
         });
+
+    /// <summary>
+    /// Recompute, for each resource in the already-loaded catalog, whether the DBL has a newer
+    /// version than the copy installed locally.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately never loads the catalog, unlike <see cref="GetDblResources"/> and the
+    /// install/uninstall methods: this serves the front end's list refresh, and
+    /// <see cref="FetchResourcesCore"/> is an unbounded network download. Skipping it is sound
+    /// because the DBL-side revision is the half we want held fixed — it is the locally installed
+    /// revision that changes after an install, and ParatextData reads that from the installed
+    /// resource on every call rather than caching it.
+    /// </remarks>
+    /// <returns>
+    /// Whether an update is available, keyed by DBL entry uid. Empty when the catalog has not loaded
+    /// yet or when another DBL operation holds the gate; callers then keep the values they have.
+    /// </returns>
+    [NetworkTimeout(UPDATE_STATUS_NETWORK_TIMEOUT)]
+    internal Task<Dictionary<string, bool>> RecomputeDblResourcesUpdateStatus()
+    {
+        // Answer on the calling thread while the catalog has never loaded — the whole of startup,
+        // during which every list refresh would otherwise queue a thread-pool dispatch and contend
+        // the gate held by the in-progress download, all for an answer that is empty by definition.
+        // Reading the flag without the gate is sound because it is a one-way hint; see its
+        // declaration.
+        if (!_hasFetchedResources)
+            return Task.FromResult(new Dictionary<string, bool>());
+
+        return Task.Run(() =>
+        {
+            bool gateTaken = false;
+            try
+            {
+                // Non-waiting on purpose. Everything else that holds this gate — a catalog
+                // download, an install, an uninstall — runs for seconds, far longer than a list
+                // refresh should block, so waiting could only delay the same empty answer. Two
+                // rechecks cannot contend with each other: the only caller runs inside the
+                // front end's single-flight installed-flag sync.
+                Monitor.TryEnter(_providerGate, ref gateTaken);
+                if (!gateTaken || !_hasFetchedResources)
+                    return [];
+
+                return ProjectUpdateStatus(_resources, InstalledDblIds());
+            }
+            finally
+            {
+                if (gateTaken)
+                    Monitor.Exit(_providerGate);
+            }
+        });
+    }
+
+    /// <summary>
+    /// The DBL entry uids of every resource currently installed locally, gathered in a single pass
+    /// over the project collection.
+    /// </summary>
+    /// <remarks>
+    /// This exists to keep <see cref="ProjectUpdateStatus"/> off
+    /// <see cref="InstallableResource.ExistingScrText"/> for entries that are not installed.
+    /// That property is computed with no backing field and enumerates the whole project collection
+    /// on every access, so asking each of the ~1800 catalog entries whether it is installed costs
+    /// ~1800 full scans — and an installed entry pays it twice, once for
+    /// <c>Installed</c> and once inside <c>IsNewerThanCurrentlyInstalled</c>. Gating the loop on
+    /// <c>Installed</c> does not help, because that property is the same lookup.
+    ///
+    /// The predicate matches the main branch of <c>ExistingScrText</c>. It deliberately omits that
+    /// property's two other branches — a null <c>DBLEntryUid</c> matched by name, and the
+    /// <c>SourceLanguageResource</c> fallback — because this provider serves only whitelisted DBL
+    /// catalog entries, which always carry a uid and are always <c>ResourceType.DBL</c>. A resource
+    /// reaching here without a uid would be reported as not installed, which is what
+    /// ParatextData already returns for anything uninstalled.
+    /// </remarks>
+    private static HashSet<string> InstalledDblIds()
+    {
+        HashSet<string> installedDblIds = [];
+        foreach (var scrText in ScrTextCollection.ScrTexts(IncludeProjects.AllAccessible))
+        {
+            if (!scrText.IsResourceProject)
+                continue;
+            var dblId = scrText.Settings.DBLId;
+            if (dblId != null)
+                installedDblIds.Add(dblId.Id);
+        }
+        return installedDblIds;
+    }
+
+    /// <summary>
+    /// Projects a catalog into "is a newer version available", keyed by DBL entry uid.
+    /// </summary>
+    /// <param name="resources">The catalog entries to report on.</param>
+    /// <param name="installedDblIds">
+    /// Uids of the resources installed locally, from <see cref="InstalledDblIds"/>. An entry
+    /// outside this set is reported as having an update available without consulting
+    /// ParatextData — the same answer <c>IsNewerThanCurrentlyInstalled</c> gives for anything
+    /// uninstalled, since it opens with <c>if (!Installed) return true;</c>.
+    /// </param>
+    internal static Dictionary<string, bool> ProjectUpdateStatus(
+        IEnumerable<InstallableResource> resources,
+        ISet<string> installedDblIds
+    )
+    {
+        Dictionary<string, bool> updateStatus = [];
+        foreach (var resource in resources)
+        {
+            var dblEntryUid = resource.DBLEntryUid?.Id;
+            if (dblEntryUid == null)
+                continue;
+            try
+            {
+                // TryAdd, not the indexer, so a duplicate uid resolves to the same
+                // InstallableResource that FindResource's FirstOrDefault picks — the flag shown
+                // then describes the resource the install/uninstall buttons act on.
+                updateStatus.TryAdd(
+                    dblEntryUid,
+                    !installedDblIds.Contains(dblEntryUid)
+                        || resource.IsNewerThanCurrentlyInstalled()
+                );
+            }
+            catch (Exception e)
+            {
+                // Skipping one entry degrades one row: callers already treat a missing key as
+                // "unknown" and keep the value they have. Letting it escape would fault the whole
+                // task and leave every row stale for the session instead.
+                Console.WriteLine($"Could not recompute update status for {dblEntryUid}: {e}");
+            }
+        }
+        return updateStatus;
+    }
 
     private void FindResource(
         string dblEntryUid,
