@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeAll, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -24,6 +24,22 @@ import {
  * editor is on screen" the only observable fact, which a permanently blank editor also satisfies.
  */
 const setUsjSpy = vi.fn();
+
+// jsdom implements no `IntersectionObserver`, and the panel's reveal-scroll effect reaches one
+// through `useViewVisibility`. A no-op stub keeps rendering from throwing; the tests below assert on
+// content states rather than on scroll behaviour, so nothing depends on it reporting visibility.
+// Matches the stub in `platform-scripture`'s `find.component.test.tsx`.
+beforeAll(() => {
+  vi.stubGlobal(
+    'IntersectionObserver',
+    vi.fn(() => ({
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+      disconnect: vi.fn(),
+      takeRecords: vi.fn(() => []),
+    })),
+  );
+});
 
 vi.mock('@eten-tech-foundation/platform-editor', () => ({
   Editorial: React.forwardRef((_props: Record<string, unknown>, ref: React.Ref<unknown>) => {
