@@ -285,6 +285,10 @@ const MANY_LANGUAGES = [
 /**
  * Languages carrying at least one installed resource in {@link MANY_LANGUAGE_RESOURCES}. The
  * language filter is expected to promote these above the rest.
+ *
+ * Only in an unscoped list. The installed resource of a language is whatever type the generator
+ * gives its first row, which for some of these is not a Scripture resource — so this is not the set
+ * of stars a picker scoped to `ScriptureResource` should show.
  */
 export const MANY_LANGUAGE_INSTALLED_LANGUAGES = [
   'Amharic',
@@ -331,7 +335,9 @@ function generateManyLanguageResources(): DblResourceData[] {
     for (let n = 0; n < countForLanguage; n++) {
       resources.push({
         dblEntryUid: `many-${step}-${n}`,
-        displayName: `${language.slice(0, 3).toUpperCase()}${n + 1}`,
+        // `step` keeps this unique: a three-letter prefix collides across Malagasy, Malay,
+        // Malayalam and Maltese, and rows are queried by display name through their `aria-label`.
+        displayName: `${language.slice(0, 3).toUpperCase()}${step}-${n + 1}`,
         fullName: `${language} Resource ${n + 1}`,
         bestLanguageName: language,
         type: isNonScriptureOnly
