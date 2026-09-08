@@ -10,7 +10,7 @@ The rule:
 2. **Every grep hit is a mandatory candidate** — it MUST appear in your result, or you must state why it is a false positive.
 3. **Tag each result by source** (`keyword-grep` vs `judgment`) so the deterministic hits stay distinguishable from the ones you reasoned in.
 4. **Make the pattern broader than the thing you are checking** — see below. Prefer a pattern that over-matches: false positives you dismiss by eye are cheap, whereas a match the pattern cannot express is silent.
-5. **Treat a green sweep as evidence about the pattern, not about the code.** Before trusting one, state which cases the pattern is capable of matching. If you cannot, it is not a safety net yet.
+5. **Treat a green sweep as evidence about the pattern, not about the code.** Before trusting one, name at least one case the pattern would miss. If you cannot name one, you have not yet worked out what the pattern excludes — so it is not a safety net yet, and a clean result says nothing about the code.
 
 ### The pattern must be broader than the thing you are checking
 
@@ -22,15 +22,25 @@ a clean result proves nothing about the code.
 Concretely, when sweeping call sites, match the call shape rather than the argument:
 
 ```bash
-# Too narrow: the character class excludes digits, so `mainPage1`, `mainPage2` and
-# `mainPage3` can never match. A clean result here is not luck — it is structurally
-# guaranteed, and therefore actively misleading.
+# Too narrow: THREE separate assumptions all have to hold for a hit — the character class
+# excludes digits (so `mainPage1`, `mainPage2` and `mainPage3` can never match), the separator
+# is a literal `, ` (so `,180_000` and a line break do not match), and the second argument has
+# to start with a digit (so a named constant does not match). A clean result here is not luck —
+# it is structurally guaranteed, and therefore actively misleading.
 grep -rn "waitForAppReady([a-zA-Z]*, [0-9]" .
 
-# Right: matches any two-argument call, however the arguments are spelled.
+# Broader: matches a two-argument call however the arguments are spelled.
 grep -rnE "waitForAppReady\([^)]*,[^)]*\)" .
 ```
 
 The same trap applies to any pattern built from an expected spelling: a variable-name prefix, an
 import path, a test-name convention. Anchor on the syntax that must be present (the call parentheses,
 the keyword, the extension) and let the noise through.
+
+**"Broader" is not "exhaustive".** No regex over source text is complete, and the fixed pattern above
+is a live example: `[^)]*` stops at the first `)`, so a call whose arguments contain nested
+parentheses is missed, and a `grep` without `-z` never matches a call wrapped across lines. That is
+the point of rule 5 rather than an argument against the sweep — the bar is a pattern that cannot
+exclude the cases you are checking for, and knowing which cases it still misses. When the misses
+matter, widen the net rather than trusting it: drop back to matching the bare identifier and skim the
+hits, or reach for a parser.
