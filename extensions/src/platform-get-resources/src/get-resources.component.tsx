@@ -435,6 +435,9 @@ export function GetResources({
       XmlResource: typeXrText,
     };
 
+    // Counted over the whole catalogue, not the type-scoped list the language counts use: a type's
+    // own count must not depend on which types are selected, or picking one would zero out the
+    // others and there would be no way to see what selecting them would bring back.
     return RESOURCE_TYPES.map((type) => ({
       value: type,
       label: labelByType[type],

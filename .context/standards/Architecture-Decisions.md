@@ -3564,10 +3564,10 @@ step, no automation. Just a record.
 - **Context:** The resource picker's language dropdown clipped ~130 languages flush at a row
   boundary, so a full list looked complete. The scrollbar alone was measured as too weak a signal —
   with a few hundred options the thumb is ~7% of the track, and `command.tsx` already carries a
-  `// CUSTOM` note about having made it visible for exactly this case, with `gutterWidth: 0`
-  reserving no layout width at all. The fade cue that fixes it lives in `MultiSelectComboBox`, which
-  every `Filter` in the app renders — Get Resources, the Checks side panel — so a fix aimed at one
-  dropdown changed the look of every dropdown, with no entry in the design guidelines to point at.
+  `// CUSTOM` note recording that `tw:no-scrollbar` was removed so the scrollbar is visible for
+  exactly this case. The fade cue that fixes it lives in `MultiSelectComboBox`, which every `Filter`
+  renders and which the Checks side panel reaches for directly — so a fix aimed at one dropdown
+  changed the look of every dropdown, with no entry in the design guidelines to point at.
 - **Decision:** A shared option-list component may host a new visual affordance, but it ships behind
   an opt-in prop that defaults to off (`showScrollCue` on `MultiSelectComboBox`/`Filter`,
   `lib/platform-bible-react/src/components/advanced/multi-select-combo-box.component.tsx`). Only the

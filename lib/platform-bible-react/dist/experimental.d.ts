@@ -313,7 +313,12 @@ export interface ResourcePickerDialogProps {
 	 * to infer it from "no results".
 	 */
 	areDownloadsUnavailable?: boolean;
-	/** If provided, only resources of this type (or any of the listed types) are shown */
+	/**
+	 * If provided, only resources of this type (or any of the listed types) are shown. Omitting it
+	 * shows everything, and so does an empty array — that is what a multi-select with nothing chosen
+	 * hands over, and {@link matchesResourceType} treats the two the same. There is no value that
+	 * means "show nothing".
+	 */
 	resourceType?: ResourceType | ResourceType[];
 	/**
 	 * Already-localized sentence shown above the resource list explaining why the list is INCOMPLETE

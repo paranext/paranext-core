@@ -98,6 +98,15 @@ export const Default: Story = {
         canvasElement.ownerDocument.querySelector('[data-slot="command-list-scroll-cue"]'),
       ).toBeNull();
     });
+
+    await step('Leave the dialog as the reference example', async () => {
+      // This is the story consumers copy args from, so it should not be left with a dropdown over
+      // the sections it exists to show.
+      await userEvent.keyboard('{Escape}');
+      await waitFor(() =>
+        expect(canvasElement.ownerDocument.querySelector('[data-slot="command-list"]')).toBeNull(),
+      );
+    });
   },
 };
 
