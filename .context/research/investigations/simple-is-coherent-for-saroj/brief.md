@@ -283,35 +283,37 @@ Insert footnote, Insert cross-reference, Insert comment, Find, Comments and Chec
 Repo key: **core** = `paranext-core`; **engine** = `eten-tech-foundation/scripture-editors`;
 **deps** = `paranext/dependencies`; **studio** = `paratext-10-studio`.
 
-| # | Work item | Repo | Complexity | Depends on | Covers |
-| :-- | :--- | :-- | :-- | :-- | :--- |
-| WI-1 | ~~Adjudicate the three unknowns in the running app~~ — **DONE, see §1a** | — | Simple | — | gated WI-12/13/14, WI-17, WI-21 |
-| WI-2 | Prune Simple's main and Help menus; rename FAQs → Community support | core | Simple | — | TODD-NN-1.1, 1.2, 1.3 |
-| WI-3′ | Menu renderer: group headings **+ end-justified shortcut hints** *(consolidates former WI-5)* | core | Moderate | — | TODD-NN-1.6c, 1.6d |
-| WI-4 | Regroup the Project menu to the v0 structure | core | Moderate | WI-3′, WI-2 | TODD-NN-1.6a, 1.6b, 1.6e, 1.6f |
-| ~~WI-5~~ | **Folded into WI-3′** — same model + renderer + `dist` rebuild (see §4a) | — | — | — | *(was TODD-NN-1.6d)* |
-| WI-6 | Make menus and popovers opaque; remove the stray border/shadow | core | Moderate | — | TODD-NN-1.4, 1.5 |
-| WI-7 | Reconcile #2229 against #2750 and land BCV chapter-hover alignment | core | Simple | — | TODD-NTH-4 ≡ IAN-NTH-4 |
-| WI-8 | Theme contrast pass — `--input`, radio, selection colours | core | Moderate | — | IAN-NTH-4 |
-| WI-9 | Add the Dictionary tab to column three | core | Moderate | — | TODD-NTH-5.2 |
-| WI-10 | Fix Senses card formatting and strip definition-string artefacts *(the shadcn `toggle.tsx` half moves to Lane 5)* | core | Moderate | — | TODD-NTH-5.3 |
-| WI-11 | Correct the `lexical.db` semantic-domain off-by-one | deps | Moderate | — | TODD-NTH-5.1 |
-| WI-12 | ~~Position the marker and editable region in the gutter view~~ → **regression test only** (WI-1: not reproduced) | core | Simple | — | TODD-NN-2.2 |
-| WI-13 | Make the paragraph marker itself a selection target | engine + core | Complex | §6 Q1, WI-14, invariants owner | TODD-NN-2.3 |
-| WI-14 | Declare the core paragraph-marker set host-side and fix palette coverage | core | Moderate | §6 Q1/Q2, PR #2761 check | TODD-NN-2.1 |
-| WI-15 | Add a hover delay to the paragraph-marker tooltip | core | Simple | — | TODD-NN-2.4 |
-| WI-16 | Add settle-loop `scrollToVerse` to the Scripture Text Grid | core | Moderate | — | TODD-NN-3.1 |
-| WI-17 | Add `scrollToRange` so find/check results scroll to the match | core | Moderate | — | TODD-NN-3.2 |
-| WI-18 | Text collection: click-toggle verse/chapter view and tighten row layout | core | Moderate | — | TODD-NTH-1.1, 1.2 |
-| WI-19′ | Comments: density, active-comment contrast, toolbar-ordering bug **+ date/author filters** *(consolidates former WI-20)* | core | Moderate | — | IAN-NN-1.1, 1.2, 1.3, 1.4 |
-| ~~WI-20~~ | **Folded into WI-19′** — same `comment-list/` + `comment-editor/` surface (see §4a) | — | — | — | *(was IAN-NN-1.3)* |
-| WI-21 | Make the caret visible while arrowing through an empty verse | engine | Moderate | — | TODD-NTH-2 |
-| WI-22 | Promote `ProjectSelector` to the stable barrel and open up `RowSection` | core | Moderate | picker PR queue | IAN-NN-3.1 |
-| WI-23 | Migrate the titlebar picker onto `ProjectSelector` | core | Complex | WI-22 | IAN-NN-2.1, 2.3(part), IAN-NN-3.2 |
-| WI-24 | Make shortname-first consistent across tab titles, dialogs and components | core | Moderate | WI-22 | IAN-NN-2.4 ≡ TODD-NTH-3 |
-| WI-25 | Fix the four named picker defects in place | core | Moderate | — | IAN-NN-3.3 |
-| WI-26 | Reach S/R server projects from "All projects…" | core + studio | Complex | WI-23, §6 Q3 | IAN-NN-2.3 |
-| WI-27 | Retire the dead `selectProject` / `selectMultipleProjects` dialogs | core | Simple | — | none — cleanup, cut first |
+| # | Work item | Repo | Complexity | Depends on | Covers | Jira |
+| :-- | :--- | :-- | :-- | :-- | :--- | :--- |
+| WI-1 | ~~Adjudicate the three unknowns in the running app~~ — **DONE, see §1a** | — | Simple | — | gated WI-12/13/14, WI-17, WI-21 | — |
+| WI-2 | Prune Simple's main and Help menus; rename FAQs → Community support | core | Simple | — | TODD-NN-1.1, 1.2, 1.3 | [PT-4533](https://paratextstudio.atlassian.net/browse/PT-4533) |
+| WI-3′ | Menu renderer: group headings **+ end-justified shortcut hints** *(consolidates former WI-5)* | core | Moderate | — | TODD-NN-1.6c, 1.6d | [PT-4532](https://paratextstudio.atlassian.net/browse/PT-4532) |
+| WI-4 | Regroup the Project menu to the v0 structure | core | Moderate | WI-3′, WI-2 | TODD-NN-1.6a, 1.6b, 1.6e, 1.6f | [PT-4534](https://paratextstudio.atlassian.net/browse/PT-4534) |
+| ~~WI-5~~ | **Folded into WI-3′** — same model + renderer + `dist` rebuild (see §4a) | — | — | — | *(was TODD-NN-1.6d)* | — |
+| WI-6 | Make menus and popovers opaque; remove the stray border/shadow | core | Moderate | — | TODD-NN-1.4, 1.5 | [PT-4535](https://paratextstudio.atlassian.net/browse/PT-4535) |
+| WI-7 | Reconcile #2229 against #2750 and land BCV chapter-hover alignment | core | Simple | — | TODD-NTH-4 ≡ IAN-NTH-4 | [PT-4553](https://paratextstudio.atlassian.net/browse/PT-4553) |
+| WI-8 | Theme contrast pass — `--input`, radio, selection colours | core | Moderate | — | IAN-NTH-4 | [PT-4555](https://paratextstudio.atlassian.net/browse/PT-4555) |
+| WI-9 | Add the Dictionary tab to column three | core | Moderate | — | TODD-NTH-5.2 | [PT-4545](https://paratextstudio.atlassian.net/browse/PT-4545) |
+| WI-10 | Fix Senses card formatting and strip definition-string artefacts *(the shadcn `toggle.tsx` half moves to Lane 5)* | core | Moderate | — | TODD-NTH-5.3 | [PT-4546](https://paratextstudio.atlassian.net/browse/PT-4546) |
+| WI-11 | Correct the `lexical.db` semantic-domain off-by-one | deps | Moderate | — | TODD-NTH-5.1 | [PT-4547](https://paratextstudio.atlassian.net/browse/PT-4547) |
+| WI-12 | ~~Position the marker and editable region in the gutter view~~ → **regression test only** (WI-1: not reproduced) | core | Simple | — | TODD-NN-2.2 | [PT-4542](https://paratextstudio.atlassian.net/browse/PT-4542) |
+| WI-13 | Make the paragraph marker itself a selection target | engine + core | Complex | §6 Q1, WI-14, invariants owner | TODD-NN-2.3 | [PT-4540](https://paratextstudio.atlassian.net/browse/PT-4540) |
+| WI-14 | Declare the core paragraph-marker set host-side and fix palette coverage | core | Moderate | §6 Q1/Q2, PR #2761 check | TODD-NN-2.1 | [PT-4539](https://paratextstudio.atlassian.net/browse/PT-4539) |
+| WI-15 | Add a hover delay to the paragraph-marker tooltip | core | Simple | — | TODD-NN-2.4 | [PT-4536](https://paratextstudio.atlassian.net/browse/PT-4536) |
+| WI-16 | Add settle-loop `scrollToVerse` to the Scripture Text Grid | core | Moderate | — | TODD-NN-3.1 | [PT-4543](https://paratextstudio.atlassian.net/browse/PT-4543) |
+| WI-17 | Add `scrollToRange` so find/check results scroll to the match | core | Moderate | — | TODD-NN-3.2 | [PT-4541](https://paratextstudio.atlassian.net/browse/PT-4541) |
+| WI-18 | Text collection: click-toggle verse/chapter view and tighten row layout | core | Moderate | — | TODD-NTH-1.1, 1.2 | [PT-4544](https://paratextstudio.atlassian.net/browse/PT-4544) |
+| WI-19′ | Comments: density, active-comment contrast, toolbar-ordering bug **+ date/author filters** *(consolidates former WI-20)* | core | Moderate | — | IAN-NN-1.1, 1.2, 1.3, 1.4 | [PT-4554](https://paratextstudio.atlassian.net/browse/PT-4554) |
+| ~~WI-20~~ | **Folded into WI-19′** — same `comment-list/` + `comment-editor/` surface (see §4a) | — | — | — | *(was IAN-NN-1.3)* | — |
+| WI-21 | Make the caret visible while arrowing through an empty verse | engine | Moderate | — | TODD-NTH-2 | [PT-4537](https://paratextstudio.atlassian.net/browse/PT-4537) |
+| WI-22 | Promote `ProjectSelector` to the stable barrel and open up `RowSection` | core | Moderate | picker PR queue | IAN-NN-3.1 | [PT-4548](https://paratextstudio.atlassian.net/browse/PT-4548) |
+| WI-23 | Migrate the titlebar picker onto `ProjectSelector` | core | Complex | WI-22 | IAN-NN-2.1, 2.3(part), IAN-NN-3.2 | [PT-4549](https://paratextstudio.atlassian.net/browse/PT-4549) |
+| WI-24 | Make shortname-first consistent across tab titles, dialogs and components | core | Moderate | WI-22 | IAN-NN-2.4 ≡ TODD-NTH-3 | [PT-4550](https://paratextstudio.atlassian.net/browse/PT-4550) |
+| WI-25 | Fix the four named picker defects in place | core | Moderate | — | IAN-NN-3.3 | [PT-4551](https://paratextstudio.atlassian.net/browse/PT-4551) |
+| WI-26 | Reach S/R server projects from "All projects…" | core + studio | Complex | WI-23, §6 Q3 | IAN-NN-2.3 | [PT-4552](https://paratextstudio.atlassian.net/browse/PT-4552) |
+| WI-27 | Retire the dead `selectProject` / `selectMultipleProjects` dialogs | core | Simple | — | none — cleanup, cut first | [PT-4556](https://paratextstudio.atlassian.net/browse/PT-4556) |
+
+**These work items are now filed in Jira** under the Combined parent [PT-4530](https://paratextstudio.atlassian.net/browse/PT-4530) *(Sprint 90 — Simple is coherent for Saroj (Ian + Todd))* — one Sub-task per item, 26 in all, including **WI-28** ([PT-4557](https://paratextstudio.atlassian.net/browse/PT-4557), Team layout) and **WI-29** ([PT-4558](https://paratextstudio.atlassian.net/browse/PT-4558), Report a problem), neither of which is itemized in the table above. The parent carries the non-negotiable → ticket mapping, the lane plan, and twelve open questions (Q1–Q9 for the product owners; Q10–Q12 engineering decisions). **The tickets, not this brief, are the current record** — several claims here were corrected against `origin/main` while the tickets were written, including `platform.selectProject` (a live picker, not product-dead) and the marker-dropdown curation axis (`MarkerCategoryType`, not `MarkerType`).
 
 **WI-1 — Adjudicate the three unknowns in the running app.** Not a research spike; a
 half-day empirical pass that sets three valve triggers on day one. (a) In Simple, does a
@@ -563,39 +565,39 @@ pbr owner and no single pbr issue.
 
 | Requirement | Work item(s) | Notes |
 | :--- | :--- | :--- |
-| IAN-NN-1.1 comments whitespace | WI-19′ | `Card` already accepts `size="sm"` — a zero-blast-radius lever |
-| IAN-NN-1.2 active-comment visibility | WI-19′ | Current ΔL ≈ 1.6% in light, inverted in the `paratext` dark theme |
-| IAN-NN-1.3 basic PT9 filters | WI-19′ | Largely shipped; only date + author need UI |
-| IAN-NN-1.4 styling buttons above toolbar | WI-19′ | |
-| IAN-NN-2.1 blue box dismissal | WI-23 | |
+| IAN-NN-1.1 comments whitespace | WI-19′ ([PT-4554](https://paratextstudio.atlassian.net/browse/PT-4554)) | `Card` already accepts `size="sm"` — a zero-blast-radius lever |
+| IAN-NN-1.2 active-comment visibility | WI-19′ ([PT-4554](https://paratextstudio.atlassian.net/browse/PT-4554)) | Current ΔL ≈ 1.6% in light, inverted in the `paratext` dark theme |
+| IAN-NN-1.3 basic PT9 filters | WI-19′ ([PT-4554](https://paratextstudio.atlassian.net/browse/PT-4554)) | Largely shipped; only date + author need UI |
+| IAN-NN-1.4 styling buttons above toolbar | WI-19′ ([PT-4554](https://paratextstudio.atlassian.net/browse/PT-4554)) | |
+| IAN-NN-2.1 blue box dismissal | WI-23 ([PT-4549](https://paratextstudio.atlassian.net/browse/PT-4549)) | |
 | IAN-NN-2.2 "Recent" works | — | PRD states it already works; verify only |
-| IAN-NN-2.3 "Your projects" / All projects… | WI-23, WI-26 | WI-26 is the Studio-gated half |
-| IAN-NN-2.4 shortname-first | WI-24 | ≡ TODD-NTH-3.1 — **build once** |
-| IAN-NN-3.1 use composable ProjectSelector | WI-22 | Stretch Goal in rev2 |
-| IAN-NN-3.2 unify across Simple tabs | WI-23 | Stretch Goal in rev2 |
-| IAN-NN-3.3 four named picker defects | WI-25 | The part Saroj actually feels; shippable without WI-22/23 |
-| TODD-NN-1.1/1.2/1.3 menu pruning + rename | WI-2 | |
-| TODD-NN-1.4/1.5 menu chrome | WI-6 | Adopt PT-4101 |
-| TODD-NN-1.6a/b/e/f Project menu regroup | WI-4 | |
-| TODD-NN-1.6c section headings | WI-3′ | Needs a model change |
-| TODD-NN-1.6d shortcut hints | WI-3′ | PRD pre-authorises postponing; cut this half if it fights the schema |
-| TODD-NN-2.1 insert core markers | WI-14 | Check #2761 revert first |
-| TODD-NN-2.2 marker positioning | WI-12 | **Not reproduced in WI-1** — regression test only |
-| TODD-NN-2.3 select the marker | WI-13 | Confirmed in WI-1; gated on §6 Q1; crosses Invariant II |
-| TODD-NN-2.4 tooltip delay | WI-15 | `delayDuration` is currently inert |
-| TODD-NN-3.1 all columns respond | WI-16 | Mostly shipped; Text Collection remains |
-| TODD-NN-3.2 scroll to the match | WI-17 | Confirmed in WI-1 — two failure modes, fails at full width too |
-| TODD-NTH-1.1 verse/chapter toggle | WI-18 | included |
-| TODD-NTH-1.2 text-collection whitespace | WI-18 | included |
+| IAN-NN-2.3 "Your projects" / All projects… | WI-23 ([PT-4549](https://paratextstudio.atlassian.net/browse/PT-4549)), WI-26 ([PT-4552](https://paratextstudio.atlassian.net/browse/PT-4552)) | WI-26 is the Studio-gated half |
+| IAN-NN-2.4 shortname-first | WI-24 ([PT-4550](https://paratextstudio.atlassian.net/browse/PT-4550)) | ≡ TODD-NTH-3.1 — **build once** |
+| IAN-NN-3.1 use composable ProjectSelector | WI-22 ([PT-4548](https://paratextstudio.atlassian.net/browse/PT-4548)) | Stretch Goal in rev2 |
+| IAN-NN-3.2 unify across Simple tabs | WI-23 ([PT-4549](https://paratextstudio.atlassian.net/browse/PT-4549)) | Stretch Goal in rev2 |
+| IAN-NN-3.3 four named picker defects | WI-25 ([PT-4551](https://paratextstudio.atlassian.net/browse/PT-4551)) | The part Saroj actually feels; shippable without WI-22/23 |
+| TODD-NN-1.1/1.2/1.3 menu pruning + rename | WI-2 ([PT-4533](https://paratextstudio.atlassian.net/browse/PT-4533)) | |
+| TODD-NN-1.4/1.5 menu chrome | WI-6 ([PT-4535](https://paratextstudio.atlassian.net/browse/PT-4535)) | Adopt PT-4101 |
+| TODD-NN-1.6a/b/e/f Project menu regroup | WI-4 ([PT-4534](https://paratextstudio.atlassian.net/browse/PT-4534)) | |
+| TODD-NN-1.6c section headings | WI-3′ ([PT-4532](https://paratextstudio.atlassian.net/browse/PT-4532)) | Needs a model change |
+| TODD-NN-1.6d shortcut hints | WI-3′ ([PT-4532](https://paratextstudio.atlassian.net/browse/PT-4532)) | PRD pre-authorises postponing; cut this half if it fights the schema |
+| TODD-NN-2.1 insert core markers | WI-14 ([PT-4539](https://paratextstudio.atlassian.net/browse/PT-4539)) | Check #2761 revert first |
+| TODD-NN-2.2 marker positioning | WI-12 ([PT-4542](https://paratextstudio.atlassian.net/browse/PT-4542)) | **Not reproduced in WI-1** — regression test only |
+| TODD-NN-2.3 select the marker | WI-13 ([PT-4540](https://paratextstudio.atlassian.net/browse/PT-4540)) | Confirmed in WI-1; gated on §6 Q1; crosses Invariant II |
+| TODD-NN-2.4 tooltip delay | WI-15 ([PT-4536](https://paratextstudio.atlassian.net/browse/PT-4536)) | `delayDuration` is currently inert |
+| TODD-NN-3.1 all columns respond | WI-16 ([PT-4543](https://paratextstudio.atlassian.net/browse/PT-4543)) | Mostly shipped; Text Collection remains |
+| TODD-NN-3.2 scroll to the match | WI-17 ([PT-4541](https://paratextstudio.atlassian.net/browse/PT-4541)) | Confirmed in WI-1 — two failure modes, fails at full width too |
+| TODD-NTH-1.1 verse/chapter toggle | WI-18 ([PT-4544](https://paratextstudio.atlassian.net/browse/PT-4544)) | included |
+| TODD-NTH-1.2 text-collection whitespace | WI-18 ([PT-4544](https://paratextstudio.atlassian.net/browse/PT-4544)) | included |
 | TODD-NTH-1.3 text order | — | **already done** (PT-4078); only the verse-mode grip is missing |
-| TODD-NTH-2 empty-verse reflow | WI-21 | **Confirmed NOT fixed in WI-1** — real work, not a verify-and-close |
-| TODD-NTH-3 name display | WI-24 | 3.1 ≡ IAN-NN-2.4; 3.2/3.3 cut first |
-| TODD-NTH-4 ≡ IAN-NTH-4 BCV hover | WI-7 | included — cheapest item; just land #2750 |
-| TODD-NTH-5.1 semantic domains | WI-11 | outside all five repos |
-| TODD-NTH-5.2 Dictionary tab | WI-9 | included |
-| TODD-NTH-5.3 Senses cards | WI-10 | included |
+| TODD-NTH-2 empty-verse reflow | WI-21 ([PT-4537](https://paratextstudio.atlassian.net/browse/PT-4537)) | **Confirmed NOT fixed in WI-1** — real work, not a verify-and-close |
+| TODD-NTH-3 name display | WI-24 ([PT-4550](https://paratextstudio.atlassian.net/browse/PT-4550)) | 3.1 ≡ IAN-NN-2.4; 3.2/3.3 cut first |
+| TODD-NTH-4 ≡ IAN-NTH-4 BCV hover | WI-7 ([PT-4553](https://paratextstudio.atlassian.net/browse/PT-4553)) | included — cheapest item; just land #2750 |
+| TODD-NTH-5.1 semantic domains | WI-11 ([PT-4547](https://paratextstudio.atlassian.net/browse/PT-4547)) | outside all five repos |
+| TODD-NTH-5.2 Dictionary tab | WI-9 ([PT-4545](https://paratextstudio.atlassian.net/browse/PT-4545)) | included |
+| TODD-NTH-5.3 Senses cards | WI-10 ([PT-4546](https://paratextstudio.atlassian.net/browse/PT-4546)) | included |
 | IAN-NTH-1/2/3 Team layout | WI-28 *(not itemized — see below)* | **cut first**; feature already shipped, this is rename + icon + grouping + lock-structure UI + relabel "Save" |
-| IAN-NTH-4 themes | WI-8 | cut first, except the `--input` token which is a real WCAG 1.4.11 failure (≈1.3:1) |
+| IAN-NTH-4 themes | WI-8 ([PT-4555](https://paratextstudio.atlassian.net/browse/PT-4555)) | cut first, except the `--input` token which is a real WCAG 1.4.11 failure (≈1.3:1) |
 | IAN-NTH-5 Report a problem | — | machinery done; entry-point refinement only. **Cut first** |
 
 Every non-negotiable maps to at least one work item. Three land mostly-shipped
