@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import { BoxData, PanelData } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
+import { WINDOW_MIN_WIDTH_PX } from '@shared/models/window-constraints.model';
 import { RC_DOCK_DIVIDER_MIN_WIDTH_RESERVE_PX, simpleLayout } from './simple-layout.data';
 import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
 
@@ -134,10 +135,8 @@ describe('simple-layout.data', () => {
     });
 
     it('leaves the three columns plus their dividers narrower than the smallest window the app allows, so narrowing to the minimum cannot force a horizontal scrollbar', () => {
-      // Mirrors `minWidth` on the BrowserWindow in src/main/main.ts. It cannot be imported —
-      // main.ts pulls in Electron — so lowering that number will NOT fail this test. Change both.
-      const WINDOW_MIN_WIDTH_PX = 900;
-
+      // Bound to the same constant `main.ts` applies as the BrowserWindow `minWidth`, so lowering
+      // the window minimum fails this test rather than silently overflowing the dock.
       // The reserve rc-dock actually budgets per divider, which is what decides whether the dock
       // overflows. Deliberately NOT the 2px the Simple-mode stylesheet paints: rc-dock hard-codes 4
       // in its own arithmetic, so using the visual width here makes 3 x 300 look like it fits (898)
