@@ -128,18 +128,47 @@ describe('TabToolbar', () => {
   });
 
   it('keeps its full padding and gaps at every wider step', () => {
+    // Pinned rather than left to the default. jsdom ships no `ResizeObserver`, so an unpinned
+    // toolbar sits at step 0 because it never measured anything — which would make this pass
+    // whatever the tightening threshold were, and go red the moment a stub is installed. Pinning
+    // the step immediately above the threshold is what makes it a test of the boundary.
     render(
-      <TabToolbar
-        onSelectProjectMenuItem={() => {}}
-        onSelectViewInfoMenuItem={() => {}}
-        startAreaChildren={<span data-testid="start-child">Start</span>}
-      />,
+      <ShrinkStepOverride value={SHRINK_STEP.TIGHTER}>
+        <TabToolbar
+          onSelectProjectMenuItem={() => {}}
+          onSelectViewInfoMenuItem={() => {}}
+          startAreaChildren={<span data-testid="start-child">Start</span>}
+        />
+      </ShrinkStepOverride>,
     );
 
     const container = screen.getByTestId('start-child').parentElement?.parentElement;
 
     expect(container?.className).toMatch(/(?:^|\s)tw:px-4(?:\s|$)/);
     expect(container?.className).toMatch(/(?:^|\s)tw:gap-2(?:\s|$)/);
+  });
+
+  it('keeps its flex row when a consumer passes a conflicting display class', () => {
+    // `cn()` resolves Tailwind conflicts last-wins, so the container's layout classes have to be
+    // merged AFTER the consumer's `className`. Without that, the editor web view's own
+    // `scripture-editor-tab-nav` class list — which carried a `tw:block` — silently took
+    // `display: flex` away and stacked the zones vertically inside a fixed-height, clipped row,
+    // with every gap and alignment utility going inert alongside it.
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        className="tw:block"
+        startAreaChildren={<span data-testid="start-child">Start</span>}
+      />,
+    );
+
+    const container = screen.getByTestId('start-child').parentElement?.parentElement;
+
+    expect(container).not.toBeNull();
+    expect(container?.className).toMatch(/(?:^|\s)tw:flex(?:\s|$)/);
+    expect(container?.className).toMatch(/(?:^|\s)tw:flex-row(?:\s|$)/);
+    expect(container?.className).not.toMatch(/(?:^|\s)tw:block(?:\s|$)/);
   });
 
   it('publishes its shrink step down to the items inside it, so a laddered label sees the real value', () => {

@@ -1252,6 +1252,18 @@ step, no automation. Just a record.
   undo/redo at the narrowest step** — rejected for now: it frees 68px, the only option with real
   margin to spare, but it costs two discoverable controls, and it is not needed once the two rungs
   above are in place.
+- **Amended 2026-09-04:** The "every marker length fits" claim below was measured against `toc1`
+  (4 characters), on the assumption that `blockMarkerToBlockNames`
+  (`platform-scripture-editor.utils.ts`) bounds the marker. It does not — `blockMarker` is read
+  verbatim off the USJ para node at the caret, and that list is commented "This list is incomplete".
+  The real ceiling is **7 characters**: `c-sharp/assets/usfm.sty` defines 120 `StyleType Paragraph`
+  markers, the longest being `pubinfo` and `restore` (7), then `periph` (6). Each is ~20–25px wider
+  than `toc1` in the trigger's monospace field, against the ≥16px spare recorded below, so at the
+  column floor those three still overrun the zone and have their trailing border clipped. Reachable
+  only with the caret in peripheral or front-matter material. Left open rather than fixed: the next
+  rung is the "hide undo/redo" alternative rejected below, which needs UX sign-off, and that has not
+  changed. Measure `restore` at the 297px floor before choosing between adding that rung and
+  accepting the residual overrun.
 - **Consequences:** Every marker length now fits at the column floor with ≥16px spare, and the
   `min-content` floor is deliberately applied *only* at `SHRINK_STEP.MINIMUM`: while the style name
   is still rendered it contributes its longest word to `min-content`, and a floor there makes the

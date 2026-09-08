@@ -11,12 +11,18 @@
  * are geometric — the trigger's box against its zone's box — exactly as
  * `title-bar-narrow-width.spec.ts` does for the same class of bug.
  *
+ * This spec shrinks the WINDOW, which bottoms out at `WINDOW_MIN_WIDTH_PX` (900). The narrower half
+ * — a splitter drag to the editor column's own 297px floor inside a full-screen window — is
+ * `paragraph-style-trigger-column-floor.spec.ts`.
+ *
  * ONE test() per spec file (isolated-fixture / second-Electron-instance constraint — see
  * standard-default-power-mode.spec.ts). Run: `npm run test:e2e:isolated scripture-editor`.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
+import { setWindowWidth } from '../../../fixtures/helpers';
 import {
   makeSampleProjectEditable,
+  navigateToolbarBcv,
   openEditableScriptureEditorForProject,
   SAMPLE_WEB_PROJECT_ID,
   waitForHomeTab,
@@ -30,11 +36,19 @@ test.use({
 /** Sub-pixel layout rounding shows up as a 1px excess that is not a real overrun. */
 const ROUNDING_TOLERANCE_PX = 1;
 
-/** Widths chosen to squeeze the editor column past the trigger's full-label width. */
-const NARROW_VIEWPORT_WIDTHS_PX = [1100, 1000, 950];
+/**
+ * Widths chosen to squeeze the editor column past the trigger's full-label width. All are above the
+ * app's 900px `WINDOW_MIN_WIDTH_PX`, so Electron honours each one rather than clamping — a spec
+ * that asked for less would silently measure the same clamped window three times.
+ */
+const NARROW_WINDOW_WIDTHS_PX = [1100, 1000, 950];
+
+/** A block whose marker is more than one character, so a clipped label is measurable. */
+const MULTI_CHARACTER_MARKER = 'q2';
 
 test.describe('paragraph-style trigger at narrow editor widths', () => {
   test('keeps its whole box inside the toolbar zone instead of being clipped', async ({
+    electronApp,
     mainPage,
   }) => {
     // Heavy isolated test (own Electron instance + backend-readiness gates). 3x "slow" budget.
@@ -46,8 +60,22 @@ test.describe('paragraph-style trigger at narrow editor widths', () => {
     const editorFrame = mainPage.frameLocator(`iframe[data-web-view-id="${editorId}"]`);
     await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
 
+    // The trigger renders NOTHING until the caret is inside a block: it returns `undefined` while
+    // `blockMarker` is unset, and `blockMarker` is set only from the editor's `onStateChange`, which
+    // fires on a range selection. Opening the editor does not place a caret and the editor mounts no
+    // AutoFocusPlugin, so without this click every assertion below would wait out its timeout on an
+    // element that is never in the DOM. Genesis 3 is poetry from verse 14 on, so it carries `\q2`
+    // blocks — the same anchor the sibling column-floor spec uses.
+    await navigateToolbarBcv(mainPage, 'Genesis 3:14');
+    const poetryBlock = editorFrame.locator(`[data-marker="${MULTI_CHARACTER_MARKER}"]`).first();
+    await poetryBlock.waitFor({ timeout: 60_000 });
+    await poetryBlock.click();
+
     const trigger = editorFrame.locator('[aria-label="Paragraph style"]');
     await expect(trigger).toBeVisible({ timeout: 60_000 });
+    // Positive control: the geometric checks below are vacuous if the caret never landed in a block
+    // with a label long enough to overflow anything.
+    await expect(trigger).toContainText(MULTI_CHARACTER_MARKER);
 
     // The root cause, asserted directly. The geometric checks below can only bite while the style
     // name is long enough to overflow the column, which depends on where the cursor happens to sit
@@ -62,11 +90,15 @@ test.describe('paragraph-style trigger at narrow editor widths', () => {
 
     // One step per width rather than a loop: the widths are few and named, and a failure names the
     // width it happened at without the reader decoding an index.
-    await NARROW_VIEWPORT_WIDTHS_PX.reduce(
+    await NARROW_WINDOW_WIDTHS_PX.reduce(
       (previous, width) =>
         previous.then(() =>
           test.step(`the trigger stays inside its zone at ${width}px`, async () => {
-            await mainPage.setViewportSize({ width, height: 900 });
+            // A real OS resize, never `setViewportSize()`: on a CDP-attached page that applies an
+            // emulation override which sets `innerWidth` to whatever was asked for, bypassing the
+            // `minWidth` Electron enforces and letting this spec assert against widths a user could
+            // never reach. See `setWindowWidth` and `assertDeclaredWindowSize` in helpers.ts.
+            await setWindowWidth(electronApp, mainPage, width);
             await expect(trigger).toBeVisible();
 
             const overrunPx = await trigger.evaluate((el) => {

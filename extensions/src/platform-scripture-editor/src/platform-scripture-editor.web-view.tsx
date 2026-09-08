@@ -3766,7 +3766,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
         projectMenuData={webViewMenu.topMenu}
-        className={`scripture-editor-tab-nav tw:block tw:z-10${isPowerMode ? '' : ' scripture-editor-tab-nav-simple'}`}
+        className={`scripture-editor-tab-nav tw:z-10${isPowerMode ? '' : ' scripture-editor-tab-nav-simple'}`}
         startAreaChildren={
           <>
             {bcvControls}

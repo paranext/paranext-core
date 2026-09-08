@@ -121,9 +121,16 @@ export const TabToolbarContainer = React.forwardRef<HTMLDivElement, TabToolbarCo
         <div
           ref={attachRoot}
           className={cn(
-            'tw:sticky tw:top-0 tw:box-border tw:flex tw:h-14 tw:flex-row tw:items-center tw:justify-between tw:overflow-clip tw:py-2 tw:text-foreground tw:@container/toolbar',
+            'tw:sticky tw:top-0 tw:box-border tw:h-14 tw:items-center tw:justify-between tw:overflow-clip tw:py-2 tw:text-foreground tw:@container/toolbar',
             isTightened ? 'tw:gap-1 tw:px-2' : 'tw:gap-2 tw:px-4',
             className,
+            // Last, so it survives `cn()`. Everything above is a default a consumer may override,
+            // but the flex row is structure this container owns: the zones below it are flex items
+            // that shrink and grow against each other, and none of that exists under any other
+            // `display`. `cn()` resolves Tailwind conflicts last-wins, so a consumer passing any
+            // display utility in `className` would otherwise take `display: flex` away and stack the
+            // zones vertically inside a fixed-height, `overflow-clip` row.
+            'tw:flex tw:flex-row',
           )}
           id={id}
         >

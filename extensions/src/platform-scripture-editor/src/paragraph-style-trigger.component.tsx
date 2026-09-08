@@ -84,6 +84,18 @@ export function ParagraphStyleTrigger({
   // name is still rendered it contributes its longest word to `min-content`, far more than the zone
   // can spare, so the trigger would refuse to shrink and have its trailing border clipped by the
   // zone's `overflow-clip` instead of ellipsising the name.
+  //
+  // What the floor resolves to is the button's padding plus the WHOLE marker string, because the
+  // primary field is nowrap and so contributes its full width to `min-content` — and `min-width`
+  // beats `max-width`, so this is what decides whether the button's cap can hold at all.
+  // `blockMarker` is read verbatim off the USJ para node at the caret, NOT from the switcher menu:
+  // `blockMarkerToBlockNames` in platform-scripture-editor.utils.ts is explicitly incomplete and
+  // does not bound it. The ceiling is the longest `StyleType Paragraph` marker in
+  // `c-sharp/assets/usfm.sty` — SEVEN characters (`pubinfo`, `restore`; `periph` is six), not the
+  // four of `toc1` the column-floor widths were measured against. Those three are wider than the
+  // spare room that measurement found, so at the 297px Simple-mode column floor the trigger still
+  // overruns its zone by a few pixels. Peripheral and front-matter material only; see
+  // `adr-narrow-toolbar-yields-padding-then-decoration` for what is left open there and why.
   const isFloored = shrinkStep >= SHRINK_STEP.MINIMUM;
   const widthFloor = isFloored ? 'tw:min-w-min' : 'tw:min-w-0';
 

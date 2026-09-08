@@ -66,6 +66,29 @@ describe('ParagraphStyleTrigger', () => {
     expect(wrapperOf(button)?.className).toMatch(/(?:^|\s)tw:min-w-min(?:\s|$)/);
   });
 
+  it('caps itself at its wrapper width at every step, so a long style name ellipsises', () => {
+    // The headline fix, and the one rung of the ladder no other test in this file pins. The wrapper
+    // around the button is a block box, so the button is not a flex item of it and the `shrink-0` in
+    // shadcn's button base cannot be shrunk past: without a ceiling the button simply takes its
+    // content width, up to the label's 30-character limit, and overruns the toolbar zone, whose
+    // `overflow-clip` slices its trailing border and chevron. The cap is what puts the squeeze back
+    // on the label, which has the `min-w-0` and `truncate` to absorb it.
+    //
+    // Every step, because the cap is not step-dependent the way the floor and the chevron are — and
+    // the e2e spec that measures the real geometry runs in the `isolated` Playwright project, which
+    // CI does not run.
+    [undefined, SHRINK_STEP.TIGHTER, SHRINK_STEP.MINIMUM].forEach((shrinkStep) => {
+      const { unmount } = renderTrigger(shrinkStep);
+
+      const button = screen.getByRole('button', {
+        name: '%webView_platformScriptureEditor_paragraphSelection_ariaLabel%',
+      });
+      expect(button.className).toMatch(/(?:^|\s)tw:max-w-full(?:\s|$)/);
+
+      unmount();
+    });
+  });
+
   it('keeps shrinking freely while the style name is still rendered', () => {
     renderTrigger(SHRINK_STEP.TIGHTER);
 

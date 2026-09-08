@@ -243,6 +243,80 @@ export async function applyDeclaredWindowSize(
   }).toPass({ timeout: 15_000 });
 }
 
+/** Sub-pixel layout rounding shows up as a 1px difference that is not a real width mismatch. */
+const WINDOW_WIDTH_SETTLE_TOLERANCE_PX = 1;
+
+/** Budget for the renderer to lay out at a width the OS has already granted. */
+const WINDOW_WIDTH_SETTLE_TIMEOUT_MS = 20_000;
+
+/**
+ * Closes the docked DevTools that a dev-mode launch opens.
+ *
+ * Not cosmetic for any spec that measures. Docked DevTools takes its width out of the renderer's
+ * layout viewport (measured: a constant 555px), so an 800px window lays its content out in 245px
+ * and every control genuinely overflows — the spec then reports "clipped" for a layout that is fine
+ * at the width a user would actually see.
+ */
+export async function closeDevTools(electronApp: ElectronApplication): Promise<void> {
+  await electronApp.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows().forEach((win) => {
+      if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools();
+    });
+  });
+}
+
+/**
+ * Narrows the real OS window and waits until the renderer has actually laid out at the new width.
+ *
+ * Use this, never `page.setViewportSize()`. On a CDP-attached page `setViewportSize` applies an
+ * emulation override rather than resizing the window: it sets `innerWidth` to whatever was asked
+ * for, so it bypasses the `minWidth` Electron enforces in `main.ts` and a spec can silently assert
+ * against a width the app would never let a user reach. See {@link assertDeclaredWindowSize} for the
+ * measurements behind that.
+ *
+ * The counterpart to {@link applyDeclaredWindowSize}, which grows a freshly launched window to the
+ * size a spec declared; this one is for narrowing an already-running window mid-spec.
+ *
+ * Returns nothing useful to assert on by design — the point is the wait. Electron clamps the
+ * request to `minWidth`, so the settled width is read back from the window rather than assumed, and
+ * the poll compares against THAT. Polling for something already true before the resize waits for
+ * nothing, and the spec then samples boxes from two different layout passes and reports phantom
+ * clipping.
+ */
+export async function setWindowWidth(
+  electronApp: ElectronApplication,
+  page: Page,
+  width: number,
+): Promise<void> {
+  await closeDevTools(electronApp);
+
+  const settledWidth = await electronApp.evaluate(({ BrowserWindow }, requestedWidth) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
+    // timeout and then fail with a width mismatch, hiding the actual cause.
+    if (!win) throw new Error('No Electron window to resize');
+    if (win.isMaximized()) win.unmaximize();
+
+    const [outerWidth, height] = win.getSize();
+    // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
+    // reading the size back immediately after it returns the width the window still has, not the one
+    // it is moving to. The target is derived instead — the request clamped by the window's own
+    // `minWidth` (main.ts), converted from outer to content width by the frame delta, since the
+    // renderer's `innerWidth` measures the content box.
+    const frameDelta = outerWidth - win.getContentSize()[0];
+    const target = Math.max(requestedWidth, win.getMinimumSize()[0]) - frameDelta;
+
+    win.setSize(requestedWidth, height);
+    return target;
+  }, width);
+
+  await expect
+    .poll(async () => Math.abs((await page.evaluate(() => window.innerWidth)) - settledWidth), {
+      timeout: WINDOW_WIDTH_SETTLE_TIMEOUT_MS,
+    })
+    .toBeLessThanOrEqual(WINDOW_WIDTH_SETTLE_TOLERANCE_PX);
+}
+
 /**
  * Budget for a wait that gates on a cold app launch — extension host activation, PDP factory
  * registration, the settings data provider's first read.
