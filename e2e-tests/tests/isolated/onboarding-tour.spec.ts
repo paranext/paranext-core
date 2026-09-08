@@ -1,19 +1,22 @@
 /**
  * E2E tests for the onboarding tour.
  *
- * The onboarding tour is a one-shot spotlight overlay that shows once in Simple mode after the
- * first-run wizard has been completed (i.e. `firstRunStatus.kind === 'app'`). It persists
+ * The onboarding tour is a one-shot spotlight overlay that shows on its own once in Simple mode,
+ * after the first-run wizard has been completed (i.e. `firstRunStatus.kind === 'app'`). It persists
  * completion in localStorage (`platform-bible.onboardingTourComplete`) and never shows again.
  *
  * ## Test strategy
  *
  * Each test uses `isolated.fixture` (fresh Electron instance per test) to get a clean localStorage.
- * `preConfigureSettings` seeds:
+ * Settings are seeded through the fixture's own `test.use` options, never through a spec-level
+ * `preConfigureSettings` — hooks run before test-scoped fixture setup, so a spec's own seed loses
+ * to the fixture's for any shared key and leaks on restore (see the `IsolatedFixtures` doc):
  *
- * - `platform.interfaceMode: 'simple'` — required for the tour to render (it only shows in Simple
- *   mode).
- * - `platform.firstRunComplete: true` — so `resolveInternal` resolves to `{ kind: 'app' }` without
- *   going through the wizard and without contacting the Paratext registration backend.
+ * - `interfaceMode` — the mode the block is about. The unrequested showing needs `'simple'`; the
+ *   Power block pins `'power'` to exercise the replay path.
+ * - `seedSettings: { 'platform.firstRunComplete': true }` — so `resolveInternal` resolves to `{ kind:
+ *   'app' }` without going through the wizard and without contacting the Paratext registration
+ *   backend.
  *
  * `waitForAppReady` suppresses the tour by default (it writes the completion flag so no other test
  * races the tour's async open). These tests are the exception — they pass `allowOnboardingTour:
@@ -29,6 +32,14 @@
  * assertions below: the four unconditional stops must ALL be present and in order, and the sync
  * stop is the only permitted variation.
  *
+ * ## Power mode
+ *
+ * The tour never shows on its own in Power mode, but a Help-menu replay does run there. Power
+ * shares exactly one anchor with Simple — the toolbar's profile trigger — so `Tour`'s open-time
+ * filter reduces the replay to that single stop. That reduction is the whole justification for
+ * offering the tour in Power, and it cannot be unit-tested: it depends on `tw:empty:hidden`
+ * zero-sizing `toolbar-sync-area`, which jsdom does not evaluate.
+ *
  * ## Tour retrigger
  *
  * The tour only shows _on its own_ when `platform-bible.onboardingTourComplete` is absent from
@@ -40,7 +51,7 @@
  */
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/isolated.fixture';
-import { preConfigureSettings, waitForAppReady } from '../../fixtures/helpers';
+import { waitForAppReady } from '../../fixtures/helpers';
 import {
   clearTourDone,
   getTourDialog,
@@ -52,12 +63,14 @@ import {
   skipTour,
 } from './onboarding-tour.page';
 
+/** Title of the one stop whose anchor the toolbar renders in both interface modes. */
+const PROFILE_STEP_TITLE = 'Profile';
 /** Titles (from `assets/localization/en.json`) of the stops that always resolve in this build. */
 const REQUIRED_STEP_TITLES = [
   'Your project',
   'Your model text',
   'Your resources and tools',
-  'Profile',
+  PROFILE_STEP_TITLE,
 ];
 /** Title of the stop that is present only when the send/receive extension supplies the sync button. */
 const CONDITIONAL_STEP_TITLE = 'Sync';
@@ -91,23 +104,12 @@ async function collectStepTitles(page: Page): Promise<string[]> {
   return titles;
 }
 
-// Seed settings before each Electron launch so the wizard gate is bypassed and the tour is free
-// to show. Each test gets a fresh isolated Electron instance (isolated.fixture is test-scoped),
-// so the before/after pattern from first-run-wizard.spec.ts applies here too.
-let restoreSettings: (() => void) | undefined;
-
-test.beforeEach(() => {
-  restoreSettings = preConfigureSettings({
-    'platform.interfaceMode': 'simple',
-    'platform.firstRunComplete': true,
-  });
-});
-
-test.afterEach(() => {
-  restoreSettings?.();
-});
+/** Bypasses the first-run wizard so `firstRunStatus.kind === 'app'` and the tour can be reached. */
+const SEED_PAST_FIRST_RUN = { 'platform.firstRunComplete': true };
 
 test.describe('Onboarding tour', () => {
+  test.use({ interfaceMode: 'simple', seedSettings: SEED_PAST_FIRST_RUN });
+
   test('shows on first launch in Simple mode (fresh localStorage)', async ({ mainPage }) => {
     // The isolated fixture gives us a clean user-data dir with no localStorage, so the tour
     // shows without any manual clearing. waitForAppReady confirms the dock and overlay are settled
@@ -252,5 +254,37 @@ test.describe('Onboarding tour', () => {
 
     await expect(dialog).toBeVisible({ timeout: 15_000 });
     expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
+  });
+});
+
+test.describe('Onboarding tour in Power mode', () => {
+  test.use({ interfaceMode: 'power', seedSettings: SEED_PAST_FIRST_RUN });
+
+  test('does not show on its own, and a Help replay reduces to the profile stop', async ({
+    mainPage,
+  }) => {
+    await waitForAppReadyWithTour(mainPage);
+
+    // The unrequested showing is Simple-only: a single stop appearing unprompted on next launch
+    // for every existing Power user would be interruption without orientation.
+    const dialog = getTourDialog(mainPage);
+    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+
+    await mainPage.getByRole('menuitem', { name: /^Help$/i }).click();
+    await mainPage.getByRole('menuitem', { name: /Show the tour/i }).click();
+
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+    // Exactly one stop, not merely "at least the profile stop". The three dock columns are
+    // Simple-only and `toolbar-sync-area` is an empty zero-size wrapper here, so Tour's open-time
+    // filter drops all four — and the two dropped column descriptions are the ones asserting
+    // Simple invariants ("only ever one project here", "can't be closed or moved"), so a
+    // regression that stopped filtering them would print copy that is false in Power.
+    expect(await getTourTotalSteps(mainPage)).toBe(1);
+    expect(await getCurrentStepTitle(mainPage)).toBe(PROFILE_STEP_TITLE);
+
+    // One stop is both first and last, so the primary action is Done rather than Next.
+    await expect(dialog.getByRole('button', { name: /^Done$/i })).toBeVisible({ timeout: 5_000 });
+    await expect(dialog.getByRole('button', { name: /^Next$/i })).not.toBeVisible();
   });
 });
