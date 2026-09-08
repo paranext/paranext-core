@@ -217,14 +217,11 @@ export function SelectBooksPicker({
           consistently instead of tracking the trigger width — carried over from
           the pre-refactor BookSelector (markers-checklist work).
 
-          Height is capped to the space Radix actually has on whichever side it lands.
-          Without the cap, a trigger sitting low in its container makes Radix flip the
-          popover upward, and the full-height content (input + section buttons + a
-          max-h-72 list) overruns the top of the viewport — inside a web view's iframe
-          that clips the search input away entirely, leaving no way to filter.
-          The list below shrinks instead so the input stays put. */}
+          PopoverContent caps its own height to the space Radix has on whichever side it
+          lands, so the max-h-72 list below shrinks and the search input stays put rather
+          than overrunning the top of the web view's iframe. */}
       <PopoverContent
-        className="tw:max-h-(--radix-popover-content-available-height) tw:w-[500px] tw:max-w-[calc(100vw-2rem)] tw:p-0"
+        className="tw:w-[500px] tw:max-w-[calc(100vw-2rem)] tw:p-0"
         align="start"
         collisionPadding={8}
       >

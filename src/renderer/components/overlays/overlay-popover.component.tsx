@@ -203,10 +203,11 @@ export function OverlayPopoverPresentational({
       </PopoverAnchor>
       <PopoverContent
         data-overlay-popover
-        className="tw:overflow-y-auto"
         side={side}
         align="start"
         sideOffset={showArrow ? 8 : 4}
+        // The inline maxHeight beats PopoverContent's available-height class cap, so this overlay
+        // keeps the caller's fixed height rather than sizing to the space Radix has.
         style={{
           zIndex: Z_INDEX_OVERLAY,
           maxWidth,
