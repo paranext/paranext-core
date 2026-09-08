@@ -8,9 +8,17 @@ import { computePosition, extractMarker, TooltipPosition } from './paragraph-mar
 
 type HoveredData = TooltipPosition & { marker: string };
 
-type Props = { children: React.ReactNode };
+type Props = {
+  children: React.ReactNode;
+  /**
+   * When false, the overlay renders its wrapper `<div>` (so downstream layout is unchanged) but
+   * skips the tooltip UI, event handlers, and scroll/keydown listeners. Keeping the wrapper always
+   * mounted prevents the editor subtree from remounting when this prop flips.
+   */
+  enabled?: boolean;
+};
 
-export function ParagraphMarkerTooltipOverlay({ children }: Props) {
+export function ParagraphMarkerTooltipOverlay({ children, enabled = true }: Props) {
   const [hoveredData, setHoveredData] = useState<HoveredData | undefined>(undefined);
 
   // positionAnchorRef: the position:relative element; coordinate origin for getBoundingClientRect math.
@@ -109,8 +117,9 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     const positionAnchor = positionAnchorRef.current;
-    if (!positionAnchor) return;
+    if (!positionAnchor) return undefined;
 
     // The editor's scroll container is an ancestor of positionAnchor — walking DOWN into children
     // never reaches it. Style-only matching (requireOverflow: false): this lookup runs once on
@@ -157,40 +166,42 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
       scrollContainer.removeEventListener('scroll', handleScroll);
       cancelAnimationFrame(rafIdRef.current);
     };
-  }, []); // both refs are stable ref objects; empty deps is correct
+  }, [enabled]); // refs are stable; re-run only when enabled flips to (un)attach listeners
 
   return (
     <div
       ref={positionAnchorRef}
       className="tw:relative"
-      onMouseOver={handleMouseOver}
-      onMouseMove={handleMouseMove}
-      onFocus={handleFocus}
-      onMouseOut={handleMouseOut}
-      onBlur={handleBlur}
-      onMouseLeave={handleMouseLeave}
+      onMouseOver={enabled ? handleMouseOver : undefined}
+      onMouseMove={enabled ? handleMouseMove : undefined}
+      onFocus={enabled ? handleFocus : undefined}
+      onMouseOut={enabled ? handleMouseOut : undefined}
+      onBlur={enabled ? handleBlur : undefined}
+      onMouseLeave={enabled ? handleMouseLeave : undefined}
     >
       {children}
-      <TooltipProvider>
-        {/* onOpenChange no-op satisfies Radix controlled-component contract and silences dev warning */}
-        <Tooltip open={!!hoveredData} onOpenChange={() => {}}>
-          <TooltipTrigger
-            aria-hidden="true"
-            tabIndex={-1}
-            className={cn(
-              'tw:absolute tw:w-px tw:h-px tw:opacity-0 tw:pointer-events-none',
-              'tw:p-0 tw:border-0 tw:bg-transparent tw:cursor-default tw:min-w-0 tw:min-h-0',
-            )}
-            style={{
-              top: hoveredData?.top ?? lastPositionRef.current.top,
-              left: hoveredData?.left ?? lastPositionRef.current.left,
-            }}
-          />
-          <TooltipContent side="top" align="start" showArrow={false}>
-            {tooltipText}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      {enabled && (
+        <TooltipProvider>
+          {/* onOpenChange no-op satisfies Radix controlled-component contract and silences dev warning */}
+          <Tooltip open={!!hoveredData} onOpenChange={() => {}}>
+            <TooltipTrigger
+              aria-hidden="true"
+              tabIndex={-1}
+              className={cn(
+                'tw:absolute tw:w-px tw:h-px tw:opacity-0 tw:pointer-events-none',
+                'tw:p-0 tw:border-0 tw:bg-transparent tw:cursor-default tw:min-w-0 tw:min-h-0',
+              )}
+              style={{
+                top: hoveredData?.top ?? lastPositionRef.current.top,
+                left: hoveredData?.left ?? lastPositionRef.current.left,
+              }}
+            />
+            <TooltipContent side="top" align="start" showArrow={false}>
+              {tooltipText}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
     </div>
   );
 }
