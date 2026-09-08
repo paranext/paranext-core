@@ -211,7 +211,7 @@ Examples:
 
 #### One key-prefix convention per feature namespace
 
-**Within a single feature namespace in `localizedStrings.json`, all new keys MUST share one prefix convention.** Prefer **camelCase feature-prefix with `_` subsegment separators** (e.g. `%webView_bookSelector_more%`, `%markerMenu_searchPlaceholder%`) — this matches the dominant in-repo style. Lowercase `snake_case` throughout is acceptable *only* if the namespace has no pre-existing keys.
+**Within a single feature namespace in `localizedStrings.json`, all new keys MUST share one prefix convention.** Prefer **camelCase feature-prefix with `_` subsegment separators** (e.g. `%webView_book_selector_more%` (an existing snake_case exception; do not copy its style), `%markerMenu_searchPlaceholder%`) — this matches the dominant in-repo style. Lowercase `snake_case` throughout is acceptable *only* if the namespace has no pre-existing keys.
 
 - **Avoid:** mixing camelCase and snake_case variants of the same prefix inside one namespace (e.g. `markersChecklist_*` alongside `markers_checklist_*`).
 
@@ -334,10 +334,10 @@ grep -i "cancel\|ok\|save\|close\|submit\|error\|loading" \
 Common reusable keys (check if they exist first):
 - `%general_cancel%` - "Cancel"
 - `%general_ok%` - "OK"
-- `%general_save%` - "Save"
-- `%general_close%` - "Close"
 - `%general_loading%` - "Loading..."
-- `%general_error%` - "Error"
+- `%general_error_title%` - "Error"
+
+No generic `%general_save%` or `%general_close%` key exists yet — add one under the `general_` prefix if a feature needs it, rather than a feature-scoped duplicate.
 
 **Do NOT create duplicate keys** for generic strings that already exist.
 
