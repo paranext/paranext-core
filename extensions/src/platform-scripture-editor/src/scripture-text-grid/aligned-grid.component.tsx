@@ -24,6 +24,12 @@ export type AlignedGridProps = {
  * blocks, so a row is as tall as its tallest cell with nothing measuring anything — which is also
  * why the columns must hand their scrolling here (`contentOverflow="visible"`): a column that
  * scrolled on its own would both break the chain and drift out of alignment.
+ *
+ * Rows are a visual relationship only, not an announced one: this is a group of labeled column
+ * regions, as the chapter view is. ARIA table semantics would need a row-major DOM, and the rows
+ * here exist solely as grid tracks — one editor spans each whole column, which is what lets a
+ * reader select and copy a passage down it. Screen-reader users correlate columns by the verse
+ * number the editor renders at the start of every block.
  */
 export function AlignedGrid({ children, scrRef, ariaLabel }: AlignedGridProps) {
   // React's ref API requires `null` as the initial value for DOM refs.
