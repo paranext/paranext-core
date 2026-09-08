@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { findVerseBlockForVerse } from './aligned-scroll.utils';
+import { findVerseBlockForVerse, isBlockInPortView } from './aligned-scroll.utils';
 
 /**
  * Builds a grid port holding one column per resource, each described as the verse ranges it
@@ -73,5 +73,62 @@ describe('findVerseBlockForVerse', () => {
     // The caller uses this to tell "the chapter has not arrived" from "the verse is missing", and
     // leaves the pending scroll armed for when it does.
     expect(findVerseBlockForVerse(buildPort([]), 1)).toBeUndefined();
+  });
+});
+
+/**
+ * Builds a port and one block with fixed geometry. Jsdom measures nothing, so both rects are
+ * stubbed; the sticky header is 20 tall and covers the top of the port.
+ *
+ * @param blockTop Viewport-relative top of the block.
+ * @param blockHeight Height of the block.
+ * @returns The port and the block, ready to pass to {@link isBlockInPortView}.
+ */
+function buildPortWithBlock(blockTop: number, blockHeight: number) {
+  const port = document.createElement('div');
+  const header = document.createElement('div');
+  header.setAttribute('data-cell-header', '');
+  const block = document.createElement('div');
+  block.className = 'verse-block';
+  port.append(header, block);
+
+  const rect = (top: number, height: number) => ({ top, height, bottom: top + height }) as DOMRect;
+  port.getBoundingClientRect = () => rect(0, 300);
+  header.getBoundingClientRect = () => rect(0, 20);
+  block.getBoundingClientRect = () => rect(blockTop, blockHeight);
+  return { port, block };
+}
+
+describe('isBlockInPortView', () => {
+  it('counts a block in the middle of the port as showing', () => {
+    const { port, block } = buildPortWithBlock(100, 40);
+
+    expect(isBlockInPortView(port, block)).toBe(true);
+  });
+
+  it('counts a block scrolled past above as not showing', () => {
+    const { port, block } = buildPortWithBlock(-80, 40);
+
+    expect(isBlockInPortView(port, block)).toBe(false);
+  });
+
+  it('counts a block below the port as not showing', () => {
+    const { port, block } = buildPortWithBlock(400, 40);
+
+    expect(isBlockInPortView(port, block)).toBe(false);
+  });
+
+  it('counts a block hidden behind the sticky header as not showing', () => {
+    // Its top is inside the port, but the header covers it, so a reader cannot see it.
+    const { port, block } = buildPortWithBlock(-25, 40);
+
+    expect(isBlockInPortView(port, block)).toBe(false);
+  });
+
+  it('counts a block taller than the port as showing while the reader is inside it', () => {
+    // Scrolling this one back to the top would fight a reader who is part-way through a long verse.
+    const { port, block } = buildPortWithBlock(-200, 900);
+
+    expect(isBlockInPortView(port, block)).toBe(true);
   });
 });

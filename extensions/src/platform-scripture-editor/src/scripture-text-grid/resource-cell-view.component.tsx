@@ -79,12 +79,9 @@ export type ResourceCellViewProps = {
    */
   nameDisplay?: ResourceNameDisplay;
   /**
-   * Who owns scrolling of this cell's content. `'auto'` (default) keeps today's behavior: the cell
-   * scrolls its own content. `'visible'` hands scrolling to an ancestor, which the verse-aligned
-   * grid needs for two independent reasons — a scroll container's children cannot participate in an
-   * ancestor's grid (so the subgrid chain that aligns verse rows would stop here), and cells that
-   * scroll separately drift out of alignment with each other, which is the whole point of that
-   * view.
+   * Who scrolls this cell's content. `'auto'` (default) is the cell itself. `'visible'` hands it to
+   * an ancestor, which the aligned grid needs: a scroll container's children cannot take part in an
+   * ancestor's grid, and cells that scrolled separately would drift out of alignment anyway.
    */
   contentOverflow?: 'auto' | 'visible';
   /** Current zoom factor for this resource (1 = default). */
@@ -314,10 +311,9 @@ export function ResourceCellView({
   return (
     <div
       onContextMenuCapture={zoomMenuLabels ? handleCellContextMenu : undefined}
-      // The `data-cell-*` attributes on this element and the content wrappers below are the hooks
-      // the aligned grid's stylesheet uses to turn this flex chrome into its subgrid chain
-      // (`aligned-grid.styles.ts`). They are layout anchors, not test ids — renaming one changes
-      // that view's layout.
+      // The `data-cell-*` attributes here and below are what the aligned grid's stylesheet hooks
+      // onto to turn this flex chrome into its subgrid chain (`aligned-grid.styles.ts`) — layout
+      // anchors, not test ids.
       data-cell-root
       // `group` powers the hover/focus-visible kebab reveal. Activation (opening the chapter split)
       // is owned by the parent verse `listitem` in ScriptureTextGrid — this cell is presentational.

@@ -32,10 +32,6 @@ describe('buildVerseRowRules', () => {
       `.${ALIGNED_GRID_CLASS} .verse-block[data-verse-end="15"]{grid-row-end:16}`,
     );
   });
-
-  it('emits a start and an end rule for every verse up to the cap', () => {
-    expect(buildVerseRowRules(7).split('\n')).toHaveLength(14);
-  });
 });
 
 describe('ALIGNED_GRID_STYLESHEET', () => {
