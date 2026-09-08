@@ -308,6 +308,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run package
 
+      # Reads `meta/snap.yaml` out of the snap the packaging step above built. The unit-level guard
+      # (.erb/scripts/electron-builder-snap-config.test.ts) checks the same GNOME platform pairing
+      # from the inputs; everything that turns those inputs into the shipped plug list lives in
+      # app-builder-lib's snap.js and is invisible from them. Linux-only because that is the leg
+      # that builds a snap, and it runs before the rename-for-upload step below so the artifact is
+      # still under its built name.
+      - name: check generated snap metadata
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: npm run assert:snap-metadata
+
       - name: Delete previous Windows artifacts created by this workflow
         if: ${{ matrix.os == env.OS_WINDOWS }}
         env:

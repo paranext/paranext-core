@@ -41,6 +41,7 @@
   ],
   "main": "./.erb/dll/main.bundle.dev.js",
   "scripts": {
+    "assert:snap-metadata": "tsx ./.erb/scripts/assert-generated-snap-metadata.ts",
     "prebuild": "tsx ./.erb/scripts/notices-build-id.ts",
     "build": "concurrently --kill-others-on-fail \"npm:build:main\" \"npm:build:extension-host\" \"npm:build:renderer\" \"npm:build:types\" \"npm:build:extensions\" \"npm:build:data-release\"",
     "build:data": "dotnet build c-sharp/ParanextDataProvider.sln",
