@@ -2,6 +2,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
+import type { DblResourceCatalog } from 'platform-get-resources';
 import type { DblResourceData } from 'platform-bible-utils';
 import papi from '@papi/frontend';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
@@ -41,12 +42,12 @@ const LOCAL_RESOURCE: DblResourceData = {
 describe('useDblResourceCatalog', () => {
   // The hook issues both fetches together, so the mock routes by command rather than by call
   // order: a test that drives one of them must not depend on which lands first.
-  let fetchDblCatalog: () => Promise<DblResourceData[] | undefined>;
+  let fetchDblCatalog: () => Promise<DblResourceCatalog>;
   let fetchLocalNonDbl: () => Promise<DblResourceData[]>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    fetchDblCatalog = () => Promise.resolve([]);
+    fetchDblCatalog = () => Promise.resolve({ status: 'available', resources: [] });
     fetchLocalNonDbl = () => Promise.resolve([]);
     mockSendCommand.mockImplementation((command: string) =>
       command === 'platformGetResources.getLocalNonDblResources'
@@ -56,7 +57,7 @@ describe('useDblResourceCatalog', () => {
   });
 
   it('reports the catalog as ready once the fetch delivers', async () => {
-    fetchDblCatalog = () => Promise.resolve([RESOURCE]);
+    fetchDblCatalog = () => Promise.resolve({ status: 'available', resources: [RESOURCE] });
 
     const { result } = renderHook(() => useDblResourceCatalog());
 
@@ -66,7 +67,7 @@ describe('useDblResourceCatalog', () => {
   });
 
   it('appends the locally-installed non-DBL resources to the catalog', async () => {
-    fetchDblCatalog = () => Promise.resolve([RESOURCE]);
+    fetchDblCatalog = () => Promise.resolve({ status: 'available', resources: [RESOURCE] });
     fetchLocalNonDbl = () => Promise.resolve([LOCAL_RESOURCE]);
 
     const { result } = renderHook(() => useDblResourceCatalog());
@@ -78,10 +79,54 @@ describe('useDblResourceCatalog', () => {
   it('still delivers the DBL catalog when the local non-DBL fetch fails', async () => {
     // The local list is supplementary: losing it degrades the panel to DBL-only resources rather
     // than reporting the whole catalog as failed.
-    fetchDblCatalog = () => Promise.resolve([RESOURCE]);
+    fetchDblCatalog = () => Promise.resolve({ status: 'available', resources: [RESOURCE] });
     fetchLocalNonDbl = () => Promise.reject(new Error('no projects'));
 
     const { result } = renderHook(() => useDblResourceCatalog());
+
+    await waitFor(() => expect(result.current.isCatalogReady).toBe(true));
+    expect(result.current.dblResources).toEqual([RESOURCE]);
+    expect(result.current.hasCatalogError).toBe(false);
+  });
+
+  // A build with no DBL credentials has ARRIVED at its answer: there is no catalog and there never
+  // will be one. Treating that as an error strands the panel behind a retry that cannot work, in
+  // the most common real-world case — DBL credentials live in studio, not core.
+  it('reports a delivered, error-free catalog when this build cannot download DBL resources', async () => {
+    fetchDblCatalog = () => Promise.resolve({ status: 'unavailable', reason: 'notConfigured' });
+    fetchLocalNonDbl = () => Promise.resolve([LOCAL_RESOURCE]);
+
+    const { result } = renderHook(() => useDblResourceCatalog());
+
+    await waitFor(() => expect(result.current.isCatalogReady).toBe(true));
+    expect(result.current.hasCatalogError).toBe(false);
+    // The locally-installed rows are the only resources such a user has, so they still show.
+    expect(result.current.dblResources).toEqual([LOCAL_RESOURCE]);
+  });
+
+  // The opposite of `notConfigured`: the DBL provider registers in the BACKGROUND, so the catalog
+  // is still coming and a retry genuinely works. Delivering it as an empty catalog would tell a
+  // panel that a project's configured resources are gone — and would let
+  // `canPublishResourcePanelProjectIds` publish an empty navigable-project-id list over a correct
+  // persisted one.
+  it('reports an error, not a delivered empty catalog, when the provider is not registered yet', async () => {
+    fetchDblCatalog = () => Promise.resolve({ status: 'unavailable', reason: 'notReady' });
+
+    const { result } = renderHook(() => useDblResourceCatalog());
+
+    await waitFor(() => expect(result.current.hasCatalogError).toBe(true));
+    expect(result.current.isCatalogReady).toBe(false);
+    expect(result.current.isLoadingResources).toBe(false);
+  });
+
+  it('recovers from a not-registered-yet catalog when the retry finds the provider', async () => {
+    fetchDblCatalog = () => Promise.resolve({ status: 'unavailable', reason: 'notReady' });
+
+    const { result } = renderHook(() => useDblResourceCatalog());
+    await waitFor(() => expect(result.current.hasCatalogError).toBe(true));
+
+    fetchDblCatalog = () => Promise.resolve({ status: 'available', resources: [RESOURCE] });
+    act(() => result.current.refetchCatalog());
 
     await waitFor(() => expect(result.current.isCatalogReady).toBe(true));
     expect(result.current.dblResources).toEqual([RESOURCE]);
@@ -105,7 +150,7 @@ describe('useDblResourceCatalog', () => {
     const { result } = renderHook(() => useDblResourceCatalog());
     await waitFor(() => expect(result.current.hasCatalogError).toBe(true));
 
-    fetchDblCatalog = () => Promise.resolve([RESOURCE]);
+    fetchDblCatalog = () => Promise.resolve({ status: 'available', resources: [RESOURCE] });
     act(() => result.current.refetchCatalog());
 
     await waitFor(() => expect(result.current.hasCatalogError).toBe(false));
@@ -118,9 +163,9 @@ describe('useDblResourceCatalog', () => {
     // unguarded, a late-resolving stale fetch clears a genuine error, leaving hasCatalogError
     // false + an empty catalog + isCatalogReady true — which `getResourcePanelReadiness` reads as
     // 'empty'. That is exactly the premature empty state this branch exists to remove.
-    let resolveStale: ((value: DblResourceData[]) => void) | undefined;
+    let resolveStale: ((value: DblResourceCatalog) => void) | undefined;
     fetchDblCatalog = () =>
-      new Promise<DblResourceData[]>((resolve) => {
+      new Promise<DblResourceCatalog>((resolve) => {
         resolveStale = resolve;
       });
 
@@ -134,7 +179,7 @@ describe('useDblResourceCatalog', () => {
 
     // The superseded fetch now resolves successfully, out of order.
     await act(async () => {
-      resolveStale?.([RESOURCE]);
+      resolveStale?.({ status: 'available', resources: [RESOURCE] });
       await Promise.resolve();
     });
 

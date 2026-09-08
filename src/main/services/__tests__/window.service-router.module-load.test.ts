@@ -68,7 +68,7 @@ describe('window service router module load', () => {
     // window state service touches
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     addWindow({ id: 1 } as never);
-    markWindowReady(1);
+    markWindowReady('1');
 
     const { testingWindowServiceRouter } = await import('@main/services/window.service-router');
     const { dataProviderService } = await import('@shared/services/data-provider.service');

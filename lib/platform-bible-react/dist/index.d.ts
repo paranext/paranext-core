@@ -2719,6 +2719,45 @@ export type EmptyStateProps = {
  * instead.
  */
 export declare function EmptyState({ message, id, className }: EmptyStateProps): import("react/jsx-runtime").JSX.Element;
+/** Props for {@link RetryableErrorView}. */
+export type RetryableErrorViewProps = {
+	/** Already-localized message saying what went wrong, or why the region has nothing to show. */
+	message: React$1.ReactNode;
+	/** Already-localized label for the retry button. Required alongside `onRetry`; ignored without it. */
+	retryLabel?: React$1.ReactNode;
+	/**
+	 * Re-attempts whatever failed. Omit when nothing the user does here could change the outcome —
+	 * the view then renders its message alone rather than an inert button.
+	 */
+	onRetry?: () => void;
+	/** Overrides the default warning glyph so distinct failures stay distinguishable. */
+	icon?: React$1.ReactNode;
+	/**
+	 * ARIA live-region role. Defaults to `alert` for a failure; pass `status` for a state that
+	 * reports a condition rather than an error, such as a capability this installation does not
+	 * have.
+	 */
+	role?: "alert" | "status";
+	/** Class name applied to the `Empty` container so the caller owns sizing within its surface. */
+	className?: string;
+};
+/**
+ * Icon + message zero state for a region that has nothing to show because something failed or is
+ * unavailable, with an optional retry action.
+ *
+ * One implementation for every surface that reports the same condition. The resource panels, the
+ * resource picker, Get Resources, and the Text Collection grid can all be looking at the very same
+ * failed DBL catalog fetch, and a retry button that changes size or emphasis depending on which of
+ * them the user happened to reach it from reads as a different control doing a different thing.
+ *
+ * Composes the shadcn `Empty` primitive per `adr-empty-is-zero-state-primitive` rather than
+ * hand-rolling a container.
+ *
+ * The icon is the state's visual signature. Without one, a failure and a "nothing is configured"
+ * prompt render as the same centred text plus a button — two identical screens whose buttons do
+ * opposite things (retry vs. reconfigure).
+ */
+export declare function RetryableErrorView({ message, retryLabel, onRetry, icon, role, className, }: RetryableErrorViewProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Search query for the search bar */
@@ -3752,6 +3791,62 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 	value: T,
 	isLoading: boolean
 ];
+/** What {@link useRetryablePromise} reports about the fetch it is driving. */
+export type RetryablePromiseState<T> = {
+	/**
+	 * The most recently resolved value, or `undefined` before one arrives.
+	 *
+	 * A rejection leaves an already-resolved value alone (`usePromise` does not wipe it), so a caller
+	 * whose fetch can fail after having succeeded should decide whether a stale value or an error
+	 * state serves its user better, rather than assuming `hasError` means there is nothing to show.
+	 */
+	data: T | undefined;
+	/** Whether a fetch is in flight. */
+	isLoading: boolean;
+	/**
+	 * Whether the last fetch rejected. Distinct from an absent `data`: a caller reading only `data`
+	 * cannot tell "the fetch failed" from "the answer is genuinely nothing", which is the distinction
+	 * that lets a UI say what happened instead of reporting an empty result.
+	 *
+	 * Recoverable — call {@link RetryablePromiseState.refetch}.
+	 */
+	hasError: boolean;
+	/**
+	 * Whether a fetch has completed since the last supersession — resolved or rejected.
+	 *
+	 * Read this rather than inferring "finished" from `!isLoading`. `isLoading` is `false` both
+	 * before the first fetch starts and for the render between a `refetch` and the effect that
+	 * restarts it, so a caller deriving state from `!isLoading` alone paints a settled-looking state
+	 * during a fetch that has not run yet — most visibly a flash of the error state on the very click
+	 * meant to clear it.
+	 */
+	hasSettled: boolean;
+	/**
+	 * Clears any error and re-runs the fetch. A no-op when there is no fetch to run, so it never
+	 * presents itself as a recovery that cannot happen.
+	 */
+	refetch: () => void;
+};
+/**
+ * Awaits a promise like `usePromise`, and additionally reports whether it rejected and offers a way
+ * to run it again.
+ *
+ * `usePromise` alone leaves a rejection indistinguishable from a value that has not arrived, so a
+ * UI driven by it can only say "nothing here" for a failure — with no way for the user to try
+ * again. This hook adds the two things such a UI needs: a failure flag and a working retry.
+ *
+ * Deliberately takes the fetch as a callback rather than performing one itself, so this library
+ * stays free of any PAPI dependency and both the renderer and extension web views can use it with
+ * their own command-sending mechanism.
+ *
+ * @param promiseFactoryCallback A function that returns the promise to await, or `undefined` for
+ *   nothing to run.
+ *
+ *   WARNING: MUST BE STABLE - const or wrapped in useCallback. A reference that is updated every
+ *   render re-runs the fetch every render, exactly as it does with `usePromise`.
+ * @returns See {@link RetryablePromiseState}.
+ */
+export declare const useRetryablePromise: <T>(promiseFactoryCallback: (() => Promise<T>) | undefined) => RetryablePromiseState<T>;
 /**
  * Adds a CSS stylesheet to the current document in a
  * [`style`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/style) element

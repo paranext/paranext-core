@@ -1,7 +1,10 @@
 import { renderHook, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
-import { EVENT_NAME_ON_DID_UPDATE_WEB_VIEW } from '@shared/services/web-view.service-model';
+import {
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
+  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
+} from '@shared/services/web-view.service-model';
 import {
   useProjectPickerData,
   type ProjectPickerData,
@@ -138,6 +141,20 @@ async function importMocks() {
  * it is ever hit, the follow-up assertions fail loudly rather than the whole test timing out.
  */
 async function settle(result: { current: ProjectPickerData }) {
+  // One turn first, unconditionally: the hook reads the dock layout deferred (see
+  // `useDeferredDockLayoutRead` for why it must not read inside the event handler), and every
+  // assertion about the active editor depends on that read having run. Taken as a timer turn rather
+  // than a bare microtask drain so the same harness also serves the tests that install fake timers
+  // for the metadata retry timer.
+  await act(async () => {
+    // Advanced rather than awaited under fake timers, which several tests below install for the
+    // metadata retry timer — a real `setTimeout` would never fire there.
+    if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(0);
+    else
+      await new Promise((resolve) => {
+        setTimeout(resolve);
+      });
+  });
   for (let i = 0; i < 20 && result.current.isLoading; i += 1) {
     // Each turn must run sequentially so React commits the resulting state before the next check
     // eslint-disable-next-line no-await-in-loop
@@ -442,6 +459,7 @@ describe('useProjectPickerData', () => {
         }) as never,
     );
 
+    // Empty for the one read that happens before any event: the deferred read requested on mount.
     vi.mocked(getAllOpenWebViewDefinitionsSync)
       .mockReturnValueOnce([])
       .mockReturnValue([
@@ -461,6 +479,78 @@ describe('useProjectPickerData', () => {
 
     await settle(result);
     expect(result.current.currentSimpleProject?.fullName).toBe('Updated Project');
+  });
+
+  it('reads the active editor after mount rather than during render', async () => {
+    // Enumerating open web views is not a pure read - it touches the WebViewState keep-alive set -
+    // and on a first render this window's dock layout is typically not registered yet, so a
+    // render-phase read both mutates for a tree that may never commit and answers nothing. The read
+    // is requested on mount and deferred instead.
+    const { getAllOpenWebViewDefinitionsSync, projectLookupService } = await importMocks();
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-xyz' },
+    ] as never);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([{ id: 'proj-xyz', fullName: 'Recovered Project', name: 'Recovered' }]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    // Nothing has enumerated web views yet: rendering the hook did not.
+    expect(getAllOpenWebViewDefinitionsSync).not.toHaveBeenCalled();
+
+    await settle(result);
+
+    // No web view event was ever fired - only the deferred mount read can have produced this.
+    expect(getAllOpenWebViewDefinitionsSync).toHaveBeenCalled();
+    expect(result.current.currentSimpleProject?.fullName).toBe('Recovered Project');
+  });
+
+  it('names the project that is still open after the closing tab’s event, not the one closing', async () => {
+    // rc-dock calls `onLayoutChange` BEFORE it commits the new layout, and the web view service
+    // emits the close event as that callback's first statement, synchronously - so a read taken
+    // inside the handler still sees the tab that is going away. Because that read resolves the same
+    // project id as before, `useState` bails out and NOTHING ever corrects it: the picker would keep
+    // naming the project whose tab the user just closed.
+    const { getNetworkEvent, getAllOpenWebViewDefinitionsSync, projectLookupService } =
+      await importMocks();
+    let closeCallback: (() => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      (eventName: string) =>
+        vi.fn((cb: () => void) => {
+          if (eventName === EVENT_NAME_ON_DID_CLOSE_WEB_VIEW) closeCallback = cb;
+          return vi.fn();
+        }) as never,
+    );
+
+    // Two editors open; closing one leaves the other. The layout only reports the post-close state
+    // AFTER the handler has returned, which is what rc-dock does.
+    let openDefs: unknown[] = [
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-closing' },
+      { id: 'wv-2', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-staying' },
+    ];
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockImplementation(() => openDefs as never);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        { id: 'proj-closing', fullName: 'Closing Project', name: 'Closing' },
+        { id: 'proj-staying', fullName: 'Staying Project', name: 'Staying' },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+    expect(result.current.currentSimpleProject?.id).toBe('proj-closing');
+
+    expect(closeCallback).toBeDefined();
+    act(() => {
+      // Fired while the layout still reports the pre-close tabs, exactly as rc-dock fires it...
+      closeCallback!();
+      // ...and committed only after the handler returned.
+      openDefs = [{ id: 'wv-2', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-staying' }];
+    });
+    await settle(result);
+
+    expect(result.current.currentSimpleProject?.id).toBe('proj-staying');
   });
 
   it('resolves the current project by direct lookup when it is absent from the filtered list snapshot', async () => {
@@ -539,6 +629,151 @@ describe('useProjectPickerData', () => {
     expect(result.current.currentSimpleProjectError).toBeUndefined();
   });
 
+  it('settles with no current project and warns when the dock-layout read throws', async () => {
+    // The read runs in a deferred callback, so a throw that escapes is an unhandled error in a
+    // scheduled task rather than a rejected promise anything is watching. The WHOLE read is inside
+    // the try for that reason — resolving the editor and building the warning message included —
+    // and this pins it.
+    const { getAllOpenWebViewDefinitionsSync } = await importMocks();
+    const { logger } = await import('@shared/services/logger.service');
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockImplementation(() => {
+      throw new Error('dock layout not registered');
+    });
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+
+    expect(result.current.currentSimpleProject).toBeUndefined();
+    expect(result.current.currentSimpleProjectError).toBeUndefined();
+    expect(logger.warn).toHaveBeenCalled();
+    expect(vi.mocked(logger.warn).mock.calls[0][0]).toContain('dock layout not registered');
+  });
+
+  it('stops retrying the current-project lookup after MAX_METADATA_FETCH_RETRIES even while the shared fetch succeeds', async () => {
+    // The single-project lookup needs its OWN budget. Sharing the shared fan-out's counter does not
+    // bound it in the scenario the retry exists for — the fan-out succeeding while only
+    // getMetadataForProject fails — because the fan-out's success handler resets that counter every
+    // generation, and it runs before this hook's own await. The budget would read 0 forever and the
+    // pair would re-fetch every METADATA_FETCH_RETRY_DELAY_MS for the life of the window.
+    vi.useFakeTimers();
+    try {
+      const { getAllOpenWebViewDefinitionsSync, projectLookupService } = await importMocks();
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+        { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-unresolvable' },
+      ] as never);
+      // The shared fan-out always SUCCEEDS, and never contains the active editor's project.
+      vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([] as never);
+      // The direct lookup always fails, so the miss path can never resolve.
+      vi.mocked(projectLookupService.getMetadataForProject).mockRejectedValue(
+        new Error('No project found'),
+      );
+
+      const { result } = renderHook(() => useProjectPickerData());
+      await settle(result);
+      expect(result.current.currentSimpleProjectError).toBe(
+        'Unable to load current project details',
+      );
+      expect(vi.mocked(projectLookupService.getMetadataForProject)).toHaveBeenCalledTimes(1);
+
+      // Drive well past the budget. Each turn is one retry window.
+      for (let i = 0; i < MAX_METADATA_FETCH_RETRIES + 5; i += 1) {
+        // Sequential: advance the timer, then drain the resulting async work before the next window
+        // eslint-disable-next-line no-await-in-loop
+        await act(async () => {
+          await vi.runAllTimersAsync();
+        });
+        // Same reason: the drain must finish before the next retry window opens
+        // eslint-disable-next-line no-await-in-loop
+        await settle(result);
+      }
+
+      // The first attempt plus exactly the allowed retries — not one per 5-second window forever
+      expect(vi.mocked(projectLookupService.getMetadataForProject)).toHaveBeenCalledTimes(
+        1 + MAX_METADATA_FETCH_RETRIES,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('restores the current-project retry budget once a project resolves', async () => {
+    // A project that exhausts the budget must not leave a later one with no retries at all. The
+    // budget is per-failure-run, restored whenever the current project does resolve.
+    vi.useFakeTimers();
+    try {
+      const { getNetworkEvent, getAllOpenWebViewDefinitionsSync, projectLookupService } =
+        await importMocks();
+      let webViewCallback: (() => void) | undefined;
+      vi.mocked(getNetworkEvent).mockImplementation(
+        (eventName: string) =>
+          vi.fn((cb: () => void) => {
+            if (eventName === EVENT_NAME_ON_DID_UPDATE_WEB_VIEW) webViewCallback = cb;
+            return vi.fn();
+          }) as never,
+      );
+
+      let activeProjectId = 'proj-broken-1';
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockImplementation(
+        () =>
+          [{ id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: activeProjectId }] as never,
+      );
+      // The shared fan-out always succeeds and never contains any of these projects, so every
+      // current-project resolution goes through the direct lookup.
+      vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([] as never);
+      vi.mocked(projectLookupService.getMetadataForProject).mockImplementation((async (
+        projectId: string,
+      ) => {
+        if (projectId === 'proj-good')
+          return metadata({ id: 'proj-good', fullName: 'Good Project', name: 'Good' });
+        throw new Error('No project found');
+      }) as never);
+
+      /** Drives enough retry windows to exhaust a full budget, and returns the calls it took. */
+      const exhaustBudget = async (hook: { current: ProjectPickerData }) => {
+        const before = vi.mocked(projectLookupService.getMetadataForProject).mock.calls.length;
+        for (let i = 0; i < MAX_METADATA_FETCH_RETRIES + 3; i += 1) {
+          // Sequential: advance the timer, then drain the resulting async work
+          // eslint-disable-next-line no-await-in-loop
+          await act(async () => {
+            await vi.runAllTimersAsync();
+          });
+          // Same reason: the drain must finish before the next retry window opens
+          // eslint-disable-next-line no-await-in-loop
+          await settle(hook);
+        }
+        return vi.mocked(projectLookupService.getMetadataForProject).mock.calls.length - before;
+      };
+
+      const { result } = renderHook(() => useProjectPickerData());
+      await settle(result);
+      expect(result.current.currentSimpleProjectError).toBe(
+        'Unable to load current project details',
+      );
+
+      // First project spends the whole budget
+      expect(await exhaustBudget(result)).toBe(MAX_METADATA_FETCH_RETRIES);
+
+      // A project that resolves restores it
+      activeProjectId = 'proj-good';
+      act(() => webViewCallback!());
+      await settle(result);
+      expect(result.current.currentSimpleProject?.fullName).toBe('Good Project');
+      expect(result.current.currentSimpleProjectError).toBeUndefined();
+
+      // So the next failing project gets a FULL budget, not the exhausted one. Without the reset
+      // this is 0 retries.
+      activeProjectId = 'proj-broken-2';
+      act(() => webViewCallback!());
+      await settle(result);
+      expect(result.current.currentSimpleProjectError).toBe(
+        'Unable to load current project details',
+      );
+      expect(await exhaustBudget(result)).toBe(MAX_METADATA_FETCH_RETRIES);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not re-fetch metadata on web view events (metadata cache is decoupled from them)', async () => {
     // Restoring N tabs at startup fires a burst of web view events; each must re-derive only the
     // active editor from the cached metadata, not launch a fresh full PDPF fan-out.
@@ -570,6 +805,63 @@ describe('useProjectPickerData', () => {
 
     // The web view event re-ran currentSimpleProject but reused the cached metadata: still one fetch.
     expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
+    expect(result.current.currentSimpleProject?.id).toBe('proj-r1');
+  });
+
+  it('does not re-render its consumer when a web view event leaves the active editor unchanged', async () => {
+    // Not re-fetching metadata (above) is not enough: a refresh counter in state re-renders the
+    // consumer on every web view event even when the project it stands for is unchanged. This hook
+    // feeds PlatformBibleToolbar, and a project switch fires a burst of these events, so the render
+    // count must not scale with the number of events.
+    const { getNetworkEvent, getAllOpenWebViewDefinitionsSync, projectLookupService } =
+      await importMocks();
+    let webViewCallback: (() => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      (eventName: string) =>
+        vi.fn((cb: () => void) => {
+          if (eventName === EVENT_NAME_ON_DID_UPDATE_WEB_VIEW) webViewCallback = cb;
+          return vi.fn();
+        }) as never,
+    );
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-r1' },
+    ] as never);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([{ id: 'proj-r1', fullName: 'Full proj-r1', name: 'Short proj-r1' }]) as never,
+    );
+
+    let renderCount = 0;
+    const { result } = renderHook(() => {
+      renderCount += 1;
+      return useProjectPickerData();
+    });
+    await settle(result);
+    expect(result.current.currentSimpleProject?.id).toBe('proj-r1');
+    const rendersBefore = renderCount;
+
+    // Same open web views throughout, so every event resolves the same active editor project id.
+    expect(webViewCallback).toBeDefined();
+    const fireWebViewEvent = webViewCallback!;
+    const eventCount = 10;
+    for (let i = 0; i < eventCount; i += 1) {
+      // Each event must let its deferred read RUN before the next arrives. Firing the burst
+      // synchronously would coalesce all ten into one read, and the bound below would then hold by
+      // deferral alone rather than saying anything about the `useState` bailout it exists to pin.
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        fireWebViewEvent();
+        await Promise.resolve();
+      });
+    }
+
+    // Every event's read really did run, so the bound below is about the bailout
+    expect(vi.mocked(getAllOpenWebViewDefinitionsSync).mock.calls.length).toBeGreaterThanOrEqual(
+      eventCount,
+    );
+    // Not zero: `useState` has to render once to discover the value is unchanged before it can bail
+    // out. What matters is that the count does not scale with the number of events — a refresh
+    // counter would add one render per event.
+    expect(renderCount - rendersBefore).toBeLessThanOrEqual(1);
     expect(result.current.currentSimpleProject?.id).toBe('proj-r1');
   });
 

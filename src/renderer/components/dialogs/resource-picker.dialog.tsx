@@ -1,5 +1,5 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { usePromise } from 'platform-bible-react';
+import { usePromise, useRetryablePromise } from 'platform-bible-react';
 import {
   ResourcePickerDialog,
   RESOURCE_PICKER_DIALOG_STRING_KEYS,
@@ -15,37 +15,13 @@ import {
   collectFetchedResources,
   RESOURCE_PICKER_NOTICE_STRING_KEYS,
   ResourceFetchResult,
-  toResourceFetchResult,
+  toDblFetchResult,
+  toLocalFetchResult,
 } from '@renderer/components/dialogs/resource-picker.utils';
 import { useCallback, useMemo } from 'react';
 import { sendCommand } from '@shared/services/command.service';
 
 const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS, ...RESOURCE_PICKER_NOTICE_STRING_KEYS];
-
-/** The commands this dialog draws its two independent resource lists from */
-type ResourceFetchCommand =
-  | 'platformGetResources.getCachedResources'
-  | 'platformGetResources.getLocalNonDblResources';
-
-/**
- * Runs one resource fetch, reporting both a rejection and a resolved `undefined` as a failed fetch
- * so the dialog can explain a short list rather than pass an outage off as an empty catalog.
- * Catching also keeps `usePromise` from hanging on `isLoading` forever, since it has no try/catch.
- *
- * @returns `[fetchResult, isLoading]`, where `fetchResult` is `undefined` until the fetch resolves
- */
-function useResourceFetch(command: ResourceFetchCommand) {
-  return usePromise<ResourceFetchResult | undefined>(
-    useCallback(async (): Promise<ResourceFetchResult> => {
-      try {
-        return toResourceFetchResult(await sendCommand(command));
-      } catch {
-        return { didFetchSucceed: false };
-      }
-    }, [command]),
-    undefined,
-  );
-}
 
 /**
  * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
@@ -60,29 +36,68 @@ function ResourcePickerDialogWrapper({
 }: DialogTypes[typeof RESOURCE_PICKER_DIALOG_TYPE]['props']) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
-  const [dblCatalogFetch, isDblLoading] = useResourceFetch(
-    'platformGetResources.getCachedResources',
-  );
-  // Locally-installed non-DBL resources (e.g. VULGP83, TNN, TND, HBK) that are not in the DBL
-  // catalog. Each entry uses dblEntryUid === projectId as a synthetic marker.
-  const [localResourceFetch, isLocalLoading] = useResourceFetch(
-    'platformGetResources.getLocalNonDblResources',
+  // The DBL catalog is the retryable half: it distinguishes its own outcomes and rejects on a real
+  // failure, so a retry here can genuinely change the answer.
+  const {
+    data: catalog,
+    isLoading: isDblLoading,
+    hasError: hasDblFetchError,
+    hasSettled: hasDblSettled,
+    refetch: refetchDblCatalog,
+  } = useRetryablePromise(
+    useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
   );
 
+  // Locally-installed non-DBL resources (e.g. VULGP83, TNN, TND, HBK) that are not in the DBL
+  // catalog. Each entry uses dblEntryUid === projectId as a synthetic marker. Supplementary: losing
+  // it degrades the list rather than emptying it, so it stays on plain `usePromise`.
+  const [localResources, isLocalLoading] = usePromise<ResourceFetchResult | undefined>(
+    useCallback(async (): Promise<ResourceFetchResult> => {
+      try {
+        return toLocalFetchResult(
+          await sendCommand('platformGetResources.getLocalNonDblResources'),
+        );
+      } catch {
+        return { didFetchSucceed: false };
+      }
+    }, []),
+    undefined,
+  );
+
+  // `!hasDblSettled` counts as loading, not just `isLoading`. A retry clears the error
+  // synchronously while `usePromise` only raises its loading flag in an effect, so the render in
+  // between would otherwise report "no results" on the very click meant to disprove it.
+  const isResourcesLoading = isDblLoading || !hasDblSettled || isLocalLoading;
+
+  const dblCatalogFetch = useMemo((): ResourceFetchResult | undefined => {
+    if (hasDblFetchError) return { didFetchSucceed: false };
+    return catalog ? toDblFetchResult(catalog) : undefined;
+  }, [catalog, hasDblFetchError]);
+
   const allResources = useMemo(
-    () => collectFetchedResources(dblCatalogFetch, localResourceFetch),
-    [dblCatalogFetch, localResourceFetch],
+    () => collectFetchedResources(dblCatalogFetch, localResources),
+    [dblCatalogFetch, localResources],
   );
 
   const combinedNotice = useMemo(
-    () => buildResourcePickerNotice(dblCatalogFetch, localResourceFetch, localizedStrings, notice),
-    [dblCatalogFetch, localResourceFetch, localizedStrings, notice],
+    () => buildResourcePickerNotice(dblCatalogFetch, localResources, localizedStrings, notice),
+    [dblCatalogFetch, localResources, localizedStrings, notice],
   );
+
+  // These two describe having NOTHING to show; the notice above describes an incomplete list. A
+  // permanent answer earns its own message and no retry, because no retry could change it.
+  const hasFailedRecoverably =
+    !!dblCatalogFetch && !dblCatalogFetch.didFetchSucceed && !dblCatalogFetch.isPermanent;
+  const areDownloadsUnavailable =
+    !!dblCatalogFetch && !dblCatalogFetch.didFetchSucceed && !!dblCatalogFetch.isPermanent;
 
   return (
     <ResourcePickerDialog
       allResources={allResources}
-      isResourcesLoading={isDblLoading || isLocalLoading}
+      isResourcesLoading={isResourcesLoading}
+      hasResourcesError={hasFailedRecoverably}
+      onRetryResources={refetchDblCatalog}
+      areDownloadsUnavailable={areDownloadsUnavailable}
       resourceType={resourceType}
       selectedResourceIds={selectedResourceIds}
       localizedStrings={localizedStrings}

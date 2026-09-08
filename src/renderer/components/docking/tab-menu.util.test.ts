@@ -28,7 +28,7 @@ const CONTRIBUTED = [floatItem, moveToNewWindowItem, moveToWindowSubmenu];
 
 const context = (overrides: Partial<TabMenuContext> = {}): TabMenuContext => ({
   webViewId: 'tab-1',
-  otherWindows: [{ windowId: 2, label: 'Biblical Terms', isMain: false }],
+  otherWindows: [{ windowId: '2', label: 'Biblical Terms', isMain: false }],
   isOnlyTabInWindowThatWouldClose: false,
   ...overrides,
 });
@@ -53,8 +53,8 @@ describe('buildTabMenuItems', () => {
       CONTRIBUTED,
       context({
         otherWindows: [
-          { windowId: 2, label: 'Biblical Terms', isMain: false },
-          { windowId: 3, label: 'MRK — wgPIDGIN', isMain: true },
+          { windowId: '2', label: 'Biblical Terms', isMain: false },
+          { windowId: '3', label: 'MRK — wgPIDGIN', isMain: true },
         ],
       }),
       'Empty window',
@@ -74,7 +74,7 @@ describe('buildTabMenuItems', () => {
   test('names a window showing nothing titled', () => {
     const result = buildTabMenuItems(
       CONTRIBUTED,
-      context({ otherWindows: [{ windowId: 2, label: '', isMain: false }] }),
+      context({ otherWindows: [{ windowId: '2', label: '', isMain: false }] }),
       'Empty window',
     );
 
@@ -143,24 +143,39 @@ describe('buildTabMenuItems', () => {
 });
 
 describe('getMoveTargetWindowId', () => {
+  const WINDOW_ID = '11111111-1111-4111-8111-111111111111';
+
   test('reads the window id back out of a generated target', () => {
-    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}2`)).toBe(2);
-    // Window ids come from Electron and start at 1, but nothing here depends on that
-    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}0`)).toBe(0);
+    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}${WINDOW_ID}`)).toBe(WINDOW_ID);
+  });
+
+  test('accepts a window id written in upper-case hex', () => {
+    // The shape pattern carries the `i` flag deliberately — see WINDOW_ID_SHAPE_PATTERN_SOURCE —
+    // so a case-sensitive rewrite of this check would refuse ids it must accept, and would do it
+    // silently: the move would simply stop finding its target.
+    const upper = WINDOW_ID.toUpperCase();
+
+    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}${upper}`)).toBe(upper);
   });
 
   test('ignores an item id that is not a generated target', () => {
     expect(getMoveTargetWindowId('platform.floatTab')).toBeUndefined();
   });
 
-  test('refuses a suffix that is not plainly a number', () => {
-    // `Number` is far more permissive than the ids this ever mints: it reads the empty string as 0,
-    // trims whitespace, and accepts hex and exponent forms. Each of these would otherwise name a
-    // real window — the empty one most dangerously, since it would resolve to window 0.
+  test('refuses a suffix that is not shaped like a window id', () => {
+    // Everything under this prefix is generated from a live window's own id, so a suffix of any
+    // other shape did not come from that generation and names no window. The empty one matters
+    // most: without the check it would be handed on as a target that resolves to nothing.
     expect(getMoveTargetWindowId(MOVE_TO_WINDOW_TARGET_ID_PREFIX)).toBeUndefined();
-    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX} 3 `)).toBeUndefined();
-    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}0x2`)).toBeUndefined();
-    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}1e2`)).toBeUndefined();
-    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}-1`)).toBeUndefined();
+    expect(getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}2`)).toBeUndefined();
+    expect(
+      getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX} ${WINDOW_ID} `),
+    ).toBeUndefined();
+    expect(
+      getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}${WINDOW_ID}-extra`),
+    ).toBeUndefined();
+    expect(
+      getMoveTargetWindowId(`${MOVE_TO_WINDOW_TARGET_ID_PREFIX}not-a-window-id`),
+    ).toBeUndefined();
   });
 });

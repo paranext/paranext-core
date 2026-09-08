@@ -1,5 +1,6 @@
 import { SavedTabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import type { LayoutInfo } from '@shared/models/docking-framework.model';
+import { WINDOW_ID_SHAPE_PATTERN_SOURCE } from '@shared/utils/util';
 
 /**
  * An rc-dock box or panel: a box holds further boxes and panels, a panel holds tabs and remembers
@@ -15,18 +16,34 @@ type LayoutBoxes = {
   maxbox?: LayoutBox;
 };
 
-/** Matches the window suffix this module appends, so re-scoping replaces rather than stacks */
-const WINDOW_SUFFIX_PATTERN = /-w\d+$/;
+/**
+ * Matches the window suffix this module appends — `-w` followed by the window's platform id — so
+ * re-scoping replaces rather than stacks. See {@link WINDOW_ID_SHAPE_PATTERN_SOURCE} for why the
+ * durable shape matches by shape rather than requiring an RFC-4122-strict UUID.
+ *
+ * Both the durable shape and a bare run of digits, because a saved layout can carry either: a
+ * window id was the stringified Electron window id until it became durable, and layouts written
+ * under that scheme are still in profiles. Accepting only the durable shape would leave those
+ * unstrippable, so re-scoping would stack a second suffix onto the first and the id would never
+ * return to the one its web view was minted with.
+ *
+ * The digits are safe to accept HERE and are deliberately not accepted where this module's sibling
+ * matches a whole storage key (`local-storage.service.ts`): that one decides what to delete from
+ * storage shared with every web view iframe, so widening it would put an extension's own key in
+ * reach. This pattern only ever reads ids out of layouts this module wrote, after an anchored
+ * `-w`.
+ */
+const WINDOW_SUFFIX_PATTERN = new RegExp(`-w(?:${WINDOW_ID_SHAPE_PATTERN_SOURCE}|\\d+)$`, 'i');
 
 /**
  * Remove the window suffix {@link withWindowScopedWebViewIds} appends, giving back the id the web
  * view was minted with.
  *
  * Web view state is stored under this unscoped id. `localWindowStorage` already keeps each window's
- * storage under its own key prefix, so the suffix would buy nothing there — and since ids are
- * minted unscoped and only pick up a suffix when a layout is loaded, storing state under the scoped
- * id would file a web view's state under one key while it was open and look for it under another
- * after a restart.
+ * storage under its own window id's key prefix, so the suffix would buy nothing there — and since
+ * ids are minted unscoped and only pick up a suffix when a layout is loaded, storing state under
+ * the scoped id would file a web view's state under one key while it was open and look for it under
+ * another after a restart.
  *
  * @param webViewId Web view id, window-scoped or not
  * @returns `webViewId` without a window suffix
@@ -114,8 +131,9 @@ function withWindowScopedWebViewIdsInBox(box: LayoutBox): LayoutBox {
  * - `simpleLayout` and `testLayout` are module constants with ids baked in, so every window loading
  *   one starts from the same ids
  * - A layout saved before multi-window support lives under an unprefixed storage key that
- *   `localWindowStorage` migrates per window WITHOUT deleting (window ids are not stable across
- *   restarts), so two windows can each migrate the same legacy blob and get the same ids
+ *   `localWindowStorage` migrates per window WITHOUT deleting (more than one window can restore
+ *   from a single-window profile), so two windows can each migrate the same legacy blob and get the
+ *   same ids
  *
  * Re-scoping an already-scoped id replaces the suffix instead of stacking another one, which is
  * what makes it safe to run on every load — including a layout this window saved earlier.

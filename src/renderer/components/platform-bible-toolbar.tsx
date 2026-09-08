@@ -416,16 +416,29 @@ export function PlatformBibleToolbar() {
         }
       : undefined;
 
-  // Live-subscribed (not a one-shot fetch): the extension host calls notifyUpdate('*') on this
-  // data provider both when platform.interfaceMode changes (menu-data.service-host.ts) and when
-  // contributions resync (which also covers localized-string loading completing), so this always
-  // reflects the current mode and current localization without needing to reopen the menu —
-  // matching the pattern web-view.component.tsx already uses for WebViewMenu.
-  const [menuDataPossiblyError] = useData(menuDataService.dataProviderName).MainMenu(
-    undefined,
-    MAIN_MENU_DEFAULT,
-  );
+  // Live-subscribed (not a one-shot fetch) in the main window: the extension host calls
+  // notifyUpdate('*') on this data provider both when platform.interfaceMode changes
+  // (menu-data.service-host.ts) and when contributions resync (which also covers localized-string
+  // loading completing), so the main window's menu always reflects the current mode and current
+  // localization without needing to reopen it — matching the pattern web-view.component.tsx already
+  // uses for WebViewMenu. A secondary window never subscribes at all (see below), so it gets no live
+  // updates because it draws no menu to update.
+  // Only the main window draws the menu, so only the main window subscribes: passing `undefined` as
+  // the data provider source skips the subscription entirely rather than paying for a merged,
+  // localized menu in every window and discarding it. Same idiom as web-view.component.tsx's
+  // `webViewType && shouldShowToolbar ? menuDataService.dataProviderName : undefined`.
+  const [menuDataPossiblyError] = useData(
+    globalThis.isMainWindow ? menuDataService.dataProviderName : undefined,
+  ).MainMenu(undefined, MAIN_MENU_DEFAULT);
   const menuData = useMemo(() => {
+    // Secondary windows get identical chrome minus the top-level menu. `Toolbar` renders its
+    // menubar only when `menuData` is truthy, so withholding it here removes the menu.
+    //
+    // It does not remove ONLY the menu: the shared `PlatformMenubar` registers the Alt, Alt+P,
+    // Alt+L, Alt+N and Alt+H shortcuts, and it is mounted only when `menuData` is truthy — so those
+    // five die with it in secondary windows. That is intended (they open menus that are not there)
+    // and the shortcut catalog records it, but it is a real behavioural difference, not a no-op.
+    if (!globalThis.isMainWindow) return undefined;
     if (isPlatformError(menuDataPossiblyError)) {
       logger.warn(
         `Toolbar failed to get main menu data: ${getErrorMessage(menuDataPossiblyError)}`,

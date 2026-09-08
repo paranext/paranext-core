@@ -1,6 +1,87 @@
 import { renderHook, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { useProgressiveList } from './resource-picker-dialog.utils';
+import { getResourcePickerBodyState } from './resource-picker-dialog.component';
+
+const SETTLED_WITH_ROWS = {
+  isResourcesLoading: false,
+  hasResourcesError: false,
+  hasNoResults: false,
+  canClearFiltersHelp: false,
+  areDownloadsUnavailable: false,
+};
+
+describe('getResourcePickerBodyState', () => {
+  it('shows the list when there is something to show', () => {
+    expect(getResourcePickerBodyState(SETTLED_WITH_ROWS)).toBe('list');
+  });
+
+  it('shows the spinner while the catalog has not settled', () => {
+    expect(getResourcePickerBodyState({ ...SETTLED_WITH_ROWS, isResourcesLoading: true })).toBe(
+      'loading',
+    );
+  });
+
+  // A fetch can fail partially — one source of several — and replacing a usable list with an error
+  // card throws away resources the user can act on. The `notice` prop explains an incomplete list;
+  // the error state is for having nothing to show at all.
+  it('keeps the list when a fetch failed but something still loaded', () => {
+    expect(getResourcePickerBodyState({ ...SETTLED_WITH_ROWS, hasResourcesError: true })).toBe(
+      'list',
+    );
+  });
+
+  // An empty list caused by a fetch that never arrived is not an answer about the catalog, so the
+  // failure outranks the emptiness states the user cannot act on.
+  it('reports the failure when nothing loaded and no filter is to blame', () => {
+    expect(
+      getResourcePickerBodyState({
+        isResourcesLoading: false,
+        hasResourcesError: true,
+        hasNoResults: true,
+        canClearFiltersHelp: false,
+        areDownloadsUnavailable: true,
+      }),
+    ).toBe('error');
+  });
+
+  it('blames the user own clearable filters before reporting a fetch failure', () => {
+    expect(
+      getResourcePickerBodyState({
+        isResourcesLoading: false,
+        hasResourcesError: true,
+        hasNoResults: true,
+        canClearFiltersHelp: true,
+        areDownloadsUnavailable: true,
+      }),
+    ).toBe('filteredEmpty');
+  });
+
+  it('blames clearable filters before anything the user cannot act on', () => {
+    expect(
+      getResourcePickerBodyState({
+        ...SETTLED_WITH_ROWS,
+        hasNoResults: true,
+        canClearFiltersHelp: true,
+        areDownloadsUnavailable: true,
+      }),
+    ).toBe('filteredEmpty');
+  });
+
+  it('explains an installation that cannot download once no filter is to blame', () => {
+    expect(
+      getResourcePickerBodyState({
+        ...SETTLED_WITH_ROWS,
+        hasNoResults: true,
+        areDownloadsUnavailable: true,
+      }),
+    ).toBe('downloadsUnavailable');
+  });
+
+  it('falls back to the plain empty state for a genuinely empty catalog', () => {
+    expect(getResourcePickerBodyState({ ...SETTLED_WITH_ROWS, hasNoResults: true })).toBe('empty');
+  });
+});
 
 type IOCallback = (entries: Partial<IntersectionObserverEntry>[]) => void;
 let ioCallback: IOCallback;

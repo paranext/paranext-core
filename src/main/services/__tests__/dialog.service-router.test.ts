@@ -70,7 +70,7 @@ function dialogShard() {
 }
 
 /** Wire windows, each serving its own dialog service shard */
-function withWindows(shardsByWindowId: Record<number, unknown>) {
+function withWindows(shardsByWindowId: Record<string, unknown>) {
   withWindowsServingShards(mocks, DIALOG_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId);
 }
 
@@ -87,7 +87,7 @@ function registrations() {
 describe('dialog service router', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
@@ -127,7 +127,7 @@ describe('dialog service router', () => {
     const { handler } = registrations().get('dialog:selectProject') ?? {};
 
     await handler?.();
-    mocks.getTargetWindowId.mockReturnValue(3);
+    mocks.getTargetWindowId.mockReturnValue('3');
     await handler?.();
 
     expect(shards[2].selectProject).toHaveBeenCalledTimes(1);
@@ -261,7 +261,7 @@ describe('dialog service router', () => {
     // removals are not what is being asserted here
     mocks.sharedStoreRemove.mockClear();
 
-    withoutWindowShard(mocks, 2);
+    withoutWindowShard(mocks, '2');
 
     expect(mocks.sharedStoreRemove.mock.calls.map(([key]) => key)).toEqual([
       'platform.customNetworkTimeoutMs.object:shard-of-window-2.showDialog',
