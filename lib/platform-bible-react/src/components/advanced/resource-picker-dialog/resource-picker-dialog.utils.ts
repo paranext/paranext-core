@@ -20,7 +20,7 @@ export function matchesResourceType(
 }
 
 /**
- * Builds the language filter's options from a resource catalogue.
+ * Builds the language filter's options from the resources currently in play.
  *
  * Languages are returned alphabetically, never in catalogue order — a DBL catalogue arrives in an
  * arbitrary order that has nothing to do with what the user is likely to want. Languages that
@@ -28,27 +28,26 @@ export function matchesResourceType(
  * of the list when its `sortSelected` prop is set. Each entry carries its resource count as
  * `secondaryLabel`.
  *
- * Only languages with at least one resource of `resourceType` are offered, so selecting a language
- * can never produce an empty result list.
+ * Pass the same list the rows are drawn from — already narrowed with {@link matchesResourceType} on
+ * a surface that scopes by type. Every language offered here has a resource behind it in whatever
+ * it is given, so "selecting a language can never produce an empty result list" is a guarantee the
+ * caller earns by deriving its rows and its options from one list, not one this function can make
+ * on its own.
  *
  * Note that a consumer passing `sortSelected` re-sorts these entries itself, so the rendered order
  * is that component's (starred first, then selected, then alphabetical) rather than the plain
  * alphabetical order returned here.
  *
- * @param resources The full catalogue.
- * @param resourceType If provided, restricts both the offered languages and their counts to this
- *   type, or to any of these types.
+ * @param resources The resources in play — the same list the rows are drawn from.
  * @returns Alphabetically ordered entries, ready for `MultiSelectComboBox`.
  */
 export function buildLanguageFilterOptions(
   resources: DblResourceData[],
-  resourceType?: ResourceType | ResourceType[],
 ): MultiSelectComboBoxEntry[] {
   const countByLanguage = new Map<string, number>();
   const installedLanguages = new Set<string>();
 
   resources.forEach((resource) => {
-    if (!matchesResourceType(resource, resourceType)) return;
     const language = resource.bestLanguageName;
     countByLanguage.set(language, (countByLanguage.get(language) ?? 0) + 1);
     if (resource.installed) installedLanguages.add(language);

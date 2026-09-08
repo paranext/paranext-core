@@ -58,10 +58,8 @@ import {
 import { useMemo, useState } from 'react';
 
 /**
- * Object containing all keys used for localization in this component. If you're using this
- * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
- * localized strings and pass them into the localizedStringsWithLoadingState prop of this
- * component.
+ * The resource types this build offers: the type filter's options, in the order they are listed
+ * there, and the set a persisted type selection is narrowed against.
  */
 const RESOURCE_TYPES: ResourceType[] = [
   'ScriptureResource',
@@ -71,6 +69,12 @@ const RESOURCE_TYPES: ResourceType[] = [
   'XmlResource',
 ];
 
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStringsWithLoadingState prop of this
+ * component.
+ */
 export const GET_RESOURCES_STRING_KEYS = Object.freeze([
   '%general_error_title%',
   '%resources_action%',
@@ -379,9 +383,14 @@ export function GetResources({
   const [textFilter, setTextFilter] = useState<string>('');
 
   /**
-   * The persisted type selection narrowed to types that actually exist. Web view state outlives any
-   * one build of this list, so a value retired from {@link RESOURCE_TYPES} is dropped here rather
-   * than silently filtering every row away.
+   * The persisted type selection narrowed to the types this build offers.
+   *
+   * The selection is a plain `string[]` in web view state that outlives any one build of this list,
+   * so it can hold a value {@link RESOURCE_TYPES} does not — one that was retired or renamed, or
+   * that a hand-edited layout put there. Filtering on such a value would silently empty the grid.
+   *
+   * This is also what the type filter is handed as its selection, so an unrecognized value cannot
+   * render as a badge with an X and no label, and the next toggle drops it from state for good.
    */
   const selectedResourceTypes = useMemo(
     () => RESOURCE_TYPES.filter((type) => selectedTypes.includes(type)),
@@ -533,9 +542,11 @@ export function GetResources({
             </div>
             <div className="tw:flex tw:flex-col tw:gap-1">
               <Label className="tw:mb-2 tw:text-muted-foreground">{filterByText}</Label>
+              {/* The type list is five entries long, so it needs neither the scroll cue nor the
+                  sort that floats a just-picked entry to the top. */}
               <Filter
                 entries={typeOptions}
-                selected={selectedTypes}
+                selected={selectedResourceTypes}
                 onChange={onSelectedTypesChange}
                 placeholder={typesText}
                 searchPlaceholder={typesSearchPlaceholder}
@@ -553,6 +564,7 @@ export function GetResources({
                 searchPlaceholder={languagesSearchPlaceholder}
                 commandEmptyMessage={languagesNoResultsText}
                 sortSelected
+                showScrollCue
                 icon={<Globe />}
                 badgesPlaceholder={anyLanguage}
                 isDisabled={isLoadingResources}

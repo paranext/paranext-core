@@ -3571,7 +3571,8 @@ step, no automation. Just a record.
 - **Decision:** A shared option-list component may host a new visual affordance, but it ships behind
   an opt-in prop that defaults to off (`showScrollCue` on `MultiSelectComboBox`/`Filter`,
   `lib/platform-bible-react/src/components/advanced/multi-select-combo-box.component.tsx`). Only the
-  surface whose ticket motivated it turns it on. Flipping the default to on is a separate change
+  surfaces whose ticket motivated it turn it on — here the two language filters PT-4135 names, not
+  the five-entry type filter beside one of them. Flipping the default to on is a separate change
   that needs design sign-off.
 - **Alternatives:** Ship it app-wide by default — rejected: it makes an unreviewed visual change to
   every dropdown, and the cue's gradient is painted in the popover's own background colour

@@ -523,34 +523,49 @@ describe('ResourcePickerDialog', () => {
       return screen.queryAllByRole('option').map((option) => option.textContent ?? '');
     };
 
-    it('holds the option order steady while the list is open', () => {
-      renderDialog({ allResources: MANY_LANGUAGE_RESOURCES, selectedResourceIds: [] });
-      const optionsBefore = toggleLanguageFilter();
+    // Opening the ~130-option list is the fixture size this behaviour is about, and cmdk renders
+    // every option; two or three openings run past vitest's default 5s budget on a developer
+    // machine even though CI clears it.
+    const SLOW_LIST_TIMEOUT_MS = 30000;
 
-      // A language far enough down that re-sorting would visibly move it, and unstarred so that
-      // selecting it is what would float it up.
-      const target = screen.getAllByRole('option')[optionsBefore.length - 1];
-      const targetLabel = target.textContent ?? '';
-      fireEvent.click(target);
+    it(
+      'holds the option order steady while the list is open',
+      () => {
+        renderDialog({ allResources: MANY_LANGUAGE_RESOURCES, selectedResourceIds: [] });
+        const optionsBefore = toggleLanguageFilter();
 
-      const optionsAfter = screen.getAllByRole('option').map((option) => option.textContent ?? '');
-      expect(optionsAfter).toEqual(optionsBefore);
-      expect(optionsAfter[optionsAfter.length - 1]).toBe(targetLabel);
-    });
+        // A language far enough down that re-sorting would visibly move it, and unstarred so that
+        // selecting it is what would float it up.
+        const target = screen.getAllByRole('option')[optionsBefore.length - 1];
+        const targetLabel = target.textContent ?? '';
+        fireEvent.click(target);
 
-    it('re-sorts the selection to the top the next time the list is opened', () => {
-      renderDialog({ allResources: MANY_LANGUAGE_RESOURCES, selectedResourceIds: [] });
-      const optionsBefore = toggleLanguageFilter();
-      const target = screen.getAllByRole('option')[optionsBefore.length - 1];
-      const targetLabel = target.textContent ?? '';
-      fireEvent.click(target);
+        const optionsAfter = screen
+          .getAllByRole('option')
+          .map((option) => option.textContent ?? '');
+        expect(optionsAfter).toEqual(optionsBefore);
+        expect(optionsAfter[optionsAfter.length - 1]).toBe(targetLabel);
+      },
+      SLOW_LIST_TIMEOUT_MS,
+    );
 
-      // Close and reopen: the snapshot refreshes, so the choice is now grouped with the starred
-      // languages instead of sitting at the far end of a 130-row list.
-      fireEvent.click(languageTrigger());
-      const reopened = toggleLanguageFilter();
+    it(
+      're-sorts the selection to the top the next time the list is opened',
+      () => {
+        renderDialog({ allResources: MANY_LANGUAGE_RESOURCES, selectedResourceIds: [] });
+        const optionsBefore = toggleLanguageFilter();
+        const target = screen.getAllByRole('option')[optionsBefore.length - 1];
+        const targetLabel = target.textContent ?? '';
+        fireEvent.click(target);
 
-      expect(reopened.indexOf(targetLabel)).toBeLessThan(optionsBefore.length - 1);
-    });
+        // Close and reopen: the snapshot refreshes, so the choice is now grouped with the starred
+        // languages instead of sitting at the far end of a 130-row list.
+        fireEvent.click(languageTrigger());
+        const reopened = toggleLanguageFilter();
+
+        expect(reopened.indexOf(targetLabel)).toBeLessThan(optionsBefore.length - 1);
+      },
+      SLOW_LIST_TIMEOUT_MS,
+    );
   });
 });

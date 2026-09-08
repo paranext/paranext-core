@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { DblResourceData } from 'platform-bible-utils';
+import { DblResourceData, ResourceType } from 'platform-bible-utils';
 import {
   buildLanguageFilterOptions,
   matchesResourceType,
@@ -212,6 +212,11 @@ describe('matchesResourceType', () => {
 });
 
 describe('buildLanguageFilterOptions', () => {
+  // Both call sites scope their catalogue with `matchesResourceType` and build the options from the
+  // result, which is what keeps the offered languages and the rendered rows in agreement.
+  const scopedTo = (resources: DblResourceData[], type: ResourceType | ResourceType[]) =>
+    resources.filter((r) => matchesResourceType(r, type));
+
   const resource = (
     overrides: Partial<DblResourceData> & Pick<DblResourceData, 'bestLanguageName'>,
   ): DblResourceData => ({
@@ -264,16 +269,16 @@ describe('buildLanguageFilterOptions', () => {
     expect(options.find((o) => o.label === 'Nepali')?.secondaryLabel).toBe('1');
   });
 
-  it('omits languages with no resource of the requested type, so the filter cannot dead-end', () => {
+  it('omits languages the scoped list has no resource for, so the filter cannot dead-end', () => {
     const resources = [
       resource({ bestLanguageName: 'Amharic', type: 'ScriptureResource' }),
       // Coptic exists in the catalogue, but only as a non-Scripture resource.
       resource({ bestLanguageName: 'Coptic', type: 'XmlResource' }),
     ];
 
-    expect(buildLanguageFilterOptions(resources, 'ScriptureResource').map((o) => o.label)).toEqual([
-      'Amharic',
-    ]);
+    expect(
+      buildLanguageFilterOptions(scopedTo(resources, 'ScriptureResource')).map((o) => o.label),
+    ).toEqual(['Amharic']);
     // Without a type filter both languages are offered.
     expect(buildLanguageFilterOptions(resources).map((o) => o.label)).toEqual([
       'Amharic',
@@ -281,26 +286,30 @@ describe('buildLanguageFilterOptions', () => {
     ]);
   });
 
-  it('counts only resources of the requested type', () => {
+  it('counts only the resources in the scoped list', () => {
     const options = buildLanguageFilterOptions(
-      [
-        resource({ bestLanguageName: 'Swahili', type: 'ScriptureResource' }),
-        resource({ bestLanguageName: 'Swahili', dblEntryUid: '2', type: 'XmlResource' }),
-      ],
-      'ScriptureResource',
+      scopedTo(
+        [
+          resource({ bestLanguageName: 'Swahili', type: 'ScriptureResource' }),
+          resource({ bestLanguageName: 'Swahili', dblEntryUid: '2', type: 'XmlResource' }),
+        ],
+        'ScriptureResource',
+      ),
     );
 
     expect(options.find((o) => o.label === 'Swahili')?.secondaryLabel).toBe('1');
   });
 
-  it('offers only languages holding a resource of one of several requested types', () => {
+  it('offers only languages holding a resource of one of several scoped types', () => {
     const options = buildLanguageFilterOptions(
-      [
-        resource({ bestLanguageName: 'Amharic', type: 'ScriptureResource' }),
-        resource({ bestLanguageName: 'Nepali', dblEntryUid: '2', type: 'CommentaryResource' }),
-        resource({ bestLanguageName: 'Swahili', dblEntryUid: '3', type: 'XmlResource' }),
-      ],
-      ['ScriptureResource', 'CommentaryResource'],
+      scopedTo(
+        [
+          resource({ bestLanguageName: 'Amharic', type: 'ScriptureResource' }),
+          resource({ bestLanguageName: 'Nepali', dblEntryUid: '2', type: 'CommentaryResource' }),
+          resource({ bestLanguageName: 'Swahili', dblEntryUid: '3', type: 'XmlResource' }),
+        ],
+        ['ScriptureResource', 'CommentaryResource'],
+      ),
     );
 
     expect(options.map((o) => o.label)).toEqual(['Amharic', 'Nepali']);
@@ -329,9 +338,9 @@ describe('buildLanguageFilterOptions', () => {
   });
 
   it('drops the non-Scripture-only languages when scoped to Scripture resources', () => {
-    const labels = buildLanguageFilterOptions(MANY_LANGUAGE_RESOURCES, 'ScriptureResource').map(
-      (o) => o.label,
-    );
+    const labels = buildLanguageFilterOptions(
+      scopedTo(MANY_LANGUAGE_RESOURCES, 'ScriptureResource'),
+    ).map((o) => o.label);
 
     MANY_LANGUAGE_NON_SCRIPTURE_LANGUAGES.forEach((language) => {
       expect(labels).not.toContain(language);
@@ -339,9 +348,9 @@ describe('buildLanguageFilterOptions', () => {
   });
 
   it('offers exactly the languages that have a Scripture resource, in both directions', () => {
-    const labels = buildLanguageFilterOptions(MANY_LANGUAGE_RESOURCES, 'ScriptureResource').map(
-      (o) => o.label,
-    );
+    const labels = buildLanguageFilterOptions(
+      scopedTo(MANY_LANGUAGE_RESOURCES, 'ScriptureResource'),
+    ).map((o) => o.label);
     const withScripture = new Set(
       MANY_LANGUAGE_RESOURCES.filter((r) => r.type === 'ScriptureResource').map(
         (r) => r.bestLanguageName,
