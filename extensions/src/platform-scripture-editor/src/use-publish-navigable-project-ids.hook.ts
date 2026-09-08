@@ -67,10 +67,17 @@ export function usePublishNavigableProjectIds(
   );
 
   useEffect(() => {
-    // The persisted list belongs to a different project — a re-point reused this web view id. Drop
-    // it before the isReady guard below, which would otherwise keep serving the outgoing project's
-    // resources to global navigation for as long as the new project's sources take to load.
-    const isOwnedByAnotherProject = publishedOwningProjectId !== owningProjectId;
+    // Only a KNOWN mismatch counts as "this list belongs to another project". Two cases look like a
+    // mismatch but are not, and clearing on either would wipe a correct list — the very thing the
+    // isReady gate below exists to prevent:
+    //
+    // - `owningProjectId` is undefined on the first renders of an unbound grid (the shipped default
+    //   layout opens with no projectId), so we do not yet know whose list this is.
+    // - `publishedOwningProjectId` is undefined for any list persisted before this key existed,
+    //   which is every existing user on first ship. Unknown provenance, not foreign provenance —
+    //   adopt it below rather than discarding it.
+    const isOwnerKnown = owningProjectId !== undefined && publishedOwningProjectId !== undefined;
+    const isOwnedByAnotherProject = isOwnerKnown && publishedOwningProjectId !== owningProjectId;
     if (isOwnedByAnotherProject && publishedNavigableProjectIds.length > 0) {
       setPublishedNavigableProjectIds(EMPTY_PROJECT_IDS);
       return;
@@ -82,7 +89,9 @@ export function usePublishNavigableProjectIds(
       publishedNavigableProjectIds,
     );
     if (toPublish) setPublishedNavigableProjectIds(toPublish);
-    if (isOwnedByAnotherProject) setPublishedOwningProjectId(owningProjectId);
+    // Stamp ownership whenever what is recorded no longer matches, which covers both adopting a
+    // pre-existing unowned list and completing a re-point.
+    if (publishedOwningProjectId !== owningProjectId) setPublishedOwningProjectId(owningProjectId);
     // Hidden case: intentionally handled by doing nothing special. This publishing is data-driven,
     // not geometry-driven, so the effect keeps running while the tab is inactive (rc-dock hides
     // panes with display:none but leaves them mounted) and the declared ids stay current. There is

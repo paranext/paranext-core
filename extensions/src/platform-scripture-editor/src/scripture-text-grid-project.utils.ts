@@ -98,8 +98,12 @@ export function resolveGridBodyState({
 }: GridBodyStateInput): GridBodyState {
   if (hasResources) return 'cells';
   if (hasSourcesError) return 'error';
+  // Ahead of every remaining branch, because each of them renders localized prose and
+  // `useLocalizedStrings` seeds each key with the key itself — returning 'empty' here while the
+  // strings are still in flight puts a literal `%key%` on screen. Only the cells branch above is
+  // exempt: its labels resolve per cell and it has content worth showing meanwhile.
+  if (isLoadingLocalizedStrings) return 'loading';
   if (!hasProject) return 'empty';
-  if (!areSourcesResolved || isLoadingCachedResources || isLoadingLocalizedStrings)
-    return 'loading';
+  if (!areSourcesResolved || isLoadingCachedResources) return 'loading';
   return 'empty';
 }

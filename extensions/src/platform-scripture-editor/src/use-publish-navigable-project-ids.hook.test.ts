@@ -21,12 +21,14 @@ const OWNER_KEY = 'navigableProjectIdsOwningProjectId';
  */
 function createUseWebViewState(
   initialValue: unknown = [],
-  initialOwner: string | undefined = OWNER,
+  // An object rather than a bare id so a test can model "no owner recorded" as `{}`. A bare
+  // `undefined` would select the parameter default and silently model an OWNED list instead.
+  { owner }: { owner?: string } = { owner: OWNER },
 ) {
   const setValue = vi.fn();
   const values = new Map<string, unknown>([
     [NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY, initialValue],
-    [OWNER_KEY, initialOwner],
+    [OWNER_KEY, owner],
   ]);
 
   function useWebViewState<T>(
@@ -175,7 +177,9 @@ describe('usePublishNavigableProjectIds across a project switch', () => {
   // A re-point reloads the web view but reuses its id, so the persisted list outlives the project
   // it was built for. The readiness gate alone would keep serving it until the new sources land.
   test('drops a list left behind by another project without waiting for readiness', () => {
-    const { useWebViewState, getValue } = createUseWebViewState(['outgoingResource'], 'projectA');
+    const { useWebViewState, getValue } = createUseWebViewState(['outgoingResource'], {
+      owner: 'projectA',
+    });
 
     renderHook(() => usePublishNavigableProjectIds(useWebViewState, [], false, 'projectB'));
 
@@ -194,6 +198,36 @@ describe('usePublishNavigableProjectIds across a project switch', () => {
 
     expect(getValue()).toEqual(['incomingResource']);
     expect(getOwner()).toBe('projectB');
+  });
+
+  test('keeps a persisted list while the owning project is still unknown', () => {
+    // An unbound grid's first renders: the shipped default layout opens with no projectId, so a
+    // mismatch here means "we do not know yet", not "this belongs to someone else".
+    const { useWebViewState, setValue, getValue } = createUseWebViewState(
+      ['persistedResource'],
+      'projectA',
+    );
+
+    renderHook(() => usePublishNavigableProjectIds(useWebViewState, [], false, undefined));
+
+    expect(setValue).not.toHaveBeenCalled();
+    expect(getValue()).toEqual(['persistedResource']);
+  });
+
+  test('adopts a list persisted before the owner key existed instead of wiping it', () => {
+    // Every existing user on first ship: a correct list with no recorded owner.
+    const { useWebViewState, setValue, getValue, getOwner } = createUseWebViewState(
+      ['persistedResource'],
+      {},
+    );
+
+    renderHook(() =>
+      usePublishNavigableProjectIds(useWebViewState, ['persistedResource'], true, 'projectA'),
+    );
+
+    expect(setValue).not.toHaveBeenCalled();
+    expect(getValue()).toEqual(['persistedResource']);
+    expect(getOwner()).toBe('projectA');
   });
 
   test('still protects a persisted list when the project has not changed', () => {

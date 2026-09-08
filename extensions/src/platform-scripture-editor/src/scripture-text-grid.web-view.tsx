@@ -563,10 +563,17 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   } else if (bodyState === 'loading') {
     // The same LoadingView the three sibling Column 3 panels use, resized for this body — it
     // defaults to `h-screen` for a whole-panel state, which would overflow the flex body beneath
-    // this view's header. Sharing it rather than hand-copying keeps the spinner's accessible name
-    // guaranteed: `label` is required there precisely because a bare Spinner announces nothing.
+    // this view's header.
+    //
+    // Empty label until the string resolves: `useLocalizedStrings` seeds every key with the key
+    // itself, and `isLoadingLocalizedStrings` is one of the conditions routing into this branch, so
+    // passing it through unguarded renders a literal `%key%` as both the visible text and this
+    // region's accessible name. The spinner alone is correct for that window.
     bodyContent = (
-      <LoadingView className="tw:h-full tw:p-4" label={localizedStrings[LOADING_KEY]} />
+      <LoadingView
+        className="tw:h-full tw:p-4"
+        label={isLoadingLocalizedStrings ? '' : localizedStrings[LOADING_KEY]}
+      />
     );
   } else {
     // Covers both 'empty' and 'error'. They are distinguished in `resolveGridBodyState` because the

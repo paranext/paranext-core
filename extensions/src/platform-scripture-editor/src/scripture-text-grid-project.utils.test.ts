@@ -124,6 +124,29 @@ describe('resolveGridBodyState', () => {
     expect(resolveGridBodyState({ ...settled, isLoadingLocalizedStrings: true })).toBe('loading');
   });
 
+  it('waits for the strings rather than showing the empty state with no project bound', () => {
+    // The shipped startup state. `useLocalizedStrings` seeds each key with the key itself, so
+    // returning 'empty' here renders a literal %webView_scriptureTextGrid_emptyState_prompt%.
+    expect(
+      resolveGridBodyState({
+        ...settled,
+        hasProject: false,
+        areSourcesResolved: false,
+        isLoadingLocalizedStrings: true,
+      }),
+    ).toBe('loading');
+  });
+
+  it('waits for the strings rather than showing the empty state for a settled project', () => {
+    expect(resolveGridBodyState({ ...settled, isLoadingLocalizedStrings: true })).toBe('loading');
+  });
+
+  it('still reports a failure ahead of the strings, since that branch has content either way', () => {
+    expect(
+      resolveGridBodyState({ ...settled, hasSourcesError: true, isLoadingLocalizedStrings: true }),
+    ).toBe('error');
+  });
+
   it('shows the empty state once a bound project resolves to no texts', () => {
     expect(resolveGridBodyState(settled)).toBe('empty');
   });

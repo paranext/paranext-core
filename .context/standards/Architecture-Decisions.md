@@ -3108,10 +3108,10 @@ step, no automation. Just a record.
   caller.
 - **Consequences:** The scroll group's source project is now documented at its call site as *not* an
   active-editor signal, which is the trap that produced this bug; any future panel that reaches for
-  it should be re-pointed explicitly instead. Note that `adr-find-follows-editor-to-read-only`
-  records Find as "the only Column 3 panel that command re-points without also being able to open
-  it" — that is no longer the only such panel, though the Text Collection is re-pointed by a direct
-  call rather than a command. Reloading the grid drops its in-memory React state (for example an
+  it should be re-pointed explicitly instead. `adr-find-follows-editor-to-read-only` records Find as "the only
+  Column 3 panel that command re-points without also being able to open it"; that stays true, since
+  the Text Collection is re-pointed by a direct call rather than a command. What changed is the
+  narrower fact that Find is no longer the only panel re-pointed *without being openable*. Reloading the grid drops its in-memory React state (for example an
   open chapter-context split); state held through `useWebViewState` — `viewMode`, per-cell zoom —
   survives, because a reload reuses the same web view id. That loss is accepted, because the
   collection's contents legitimately change on a project switch anyway, and the skip-if-unchanged
@@ -3128,16 +3128,17 @@ step, no automation. Just a record.
   renders the shared `LoadingView` for that window instead of an empty container — matching the three
   sibling panels re-pointed by the same mechanism. If a sixth Column 3 panel appears, the rule to apply is this one: add it to
   `openOrUpdateRelatedPanels` (or, if it needs the new editor's id, beside `updateRelatedFindPanel`)
-  rather than giving it a signal to infer from. Three limits of this decision are recorded
+  rather than giving it a signal to infer from. Five limits of this decision are recorded
   deliberately rather than left to be re-derived:
   - **Read-only resources are NOT followed.** PR #2425 removed the `isEditable` gate from the
     `openOrUpdateRelatedPanels` call site, which would have let a published resource opened in the
     editor column re-point the Text Collection at itself — a project with no collection of its own.
     The gate was reinstated one level down instead: `openOrUpdateRelatedPanels` takes
-    `isProjectEditable` and skips only the Text Collection re-point when it is false, so the other
-    four Column 3 panels still follow a resource as #2425 intended. Note this makes
-    `adr-find-follows-editor-to-read-only`'s Context accurate again in effect, though not in the
-    detail it states: the gate now lives in `openOrUpdateRelatedPanels`, not at its call site.
+    `isProjectEditable` and skips only the Text Collection re-point when it is false, so everything
+    else it drives — Bible Texts, Commentaries and Comments in Column 3, plus Model Text in Column 1
+    — still follows a resource as #2425 intended. `adr-find-follows-editor-to-read-only` is marked
+    above as superseded on this point, which remains the right marking: its premise names the *call
+    site* as the gate, and that is still false. The gate exists again, one level down.
   - **The re-point targets one window.** `getAllOpenWebViewDefinitions()` flattens across every
     window, so `.find()` returns whichever Text Collection comes first, not the one in the window
     that switched. If that panel already shows the target project the skip guard returns early and a
@@ -3152,6 +3153,15 @@ step, no automation. Just a record.
     rather than throwing when the definition has gone or the provider declines) and logs failures at
     **error**, naming the project left on screen. It still does not recover; it just stops failing
     silently.
+  - **The re-point runs on both switch paths, and each costs a probe and a reload.** Every switch
+    now performs a `getAllOpenWebViewDefinitions()` (which the router rejects outright if any window
+    is unreachable) and a `reloadWebView` → `addWebViewToDock` → rc-dock `updateTab`. On the
+    `openOrUpdateRelatedPanels` path it is awaited *ahead of* the editor's replace-tab `openWebView`
+    — deliberately, because re-pointing afterwards would flash the outgoing project's texts — and two
+    E2E suites already retry around the "Replacing tab failed" rejection that window produces. The
+    `finalizeProjectSwitch` path is the Power→Simple switch #2425 optimized, which previously did no
+    web-view enumeration at all. If both run for one switch the case-normalized skip guard makes the
+    second a no-op.
   - **The stale-held-setting path is narrowed, not closed.** Whenever the grid is still unbound it
     continues to change `projectId` in place through its latch effect, which is exactly the usage
     `useBufferedLayoutSetting` warns about: `shouldApply` is already `false` after the first apply,

@@ -1297,7 +1297,8 @@ export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: stri
  *   entry: its only open path is the default-layout supplement, which puts it in Column 3 from
  *   startup. So "not open" means the tab was closed in Power mode or the
  *   `platformScriptureEditor.enableScriptureTextGrid` setting is off, and neither is a state a
- *   project switch should reverse. (In practice the sole caller is Simple-mode-only, so this guard
+ *   project switch should reverse. (Both callers are Simple-mode-only — `openOrUpdateRelatedPanels`
+ *   for an editor-column switch and `finalizeProjectSwitch` for a Power→Simple one — so this guard
  *   is a contract, not a hot path.)
  * - Skips the reload when the panel already shows `projectId`, because rebuilding the iframe drops
  *   the grid's in-memory React state for no gain. State held through `useWebViewState` —
