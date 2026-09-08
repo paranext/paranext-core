@@ -37,6 +37,10 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
   return {
     ...original,
+    // The grid asks whether its tab is visible (to defer the aligned view's reference scroll); the
+    // real hook needs an IntersectionObserver, which jsdom has not got. These tests are about wheel
+    // wiring, so report visible and move on.
+    useViewVisibility: () => true,
     ResizablePanelGroup: ({ children }: { children: React.ReactNode }) => (
       <div data-testid="resizable-panel-group">{children}</div>
     ),
