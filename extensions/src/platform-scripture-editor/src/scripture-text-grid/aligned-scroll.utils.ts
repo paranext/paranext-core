@@ -72,6 +72,9 @@ export function isBlockInPortView(port: HTMLElement, block: HTMLElement): boolea
  * @param block The verse block to bring to the top of the port.
  */
 export function scrollPortToBlock(port: HTMLElement, block: HTMLElement): void {
-  const offsetFromPortTop = block.getBoundingClientRect().top - port.getBoundingClientRect().top;
-  port.scrollTop += offsetFromPortTop - getStickyHeaderHeight(port);
+  // `clientTop` is the port's top border: its bounding rect starts at the border, its scrollable
+  // content does not. `getTopWithinScrollContainer` in `editor-dom.util.ts` subtracts it for the
+  // same reason; this view allows an external border on the grid.
+  const portTop = port.getBoundingClientRect().top + port.clientTop;
+  port.scrollTop += block.getBoundingClientRect().top - portTop - getStickyHeaderHeight(port);
 }
