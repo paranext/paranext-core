@@ -187,10 +187,9 @@ describe('usePublishNavigableProjectIds across a project switch', () => {
   });
 
   test('publishes the incoming project ids and records the new owner once ready', () => {
-    const { useWebViewState, getValue, getOwner } = createUseWebViewState(
-      ['outgoingResource'],
-      'projectA',
-    );
+    const { useWebViewState, getValue, getOwner } = createUseWebViewState(['outgoingResource'], {
+      owner: 'projectA',
+    });
 
     renderHook(() =>
       usePublishNavigableProjectIds(useWebViewState, ['incomingResource'], true, 'projectB'),
@@ -203,10 +202,9 @@ describe('usePublishNavigableProjectIds across a project switch', () => {
   test('keeps a persisted list while the owning project is still unknown', () => {
     // An unbound grid's first renders: the shipped default layout opens with no projectId, so a
     // mismatch here means "we do not know yet", not "this belongs to someone else".
-    const { useWebViewState, setValue, getValue } = createUseWebViewState(
-      ['persistedResource'],
-      'projectA',
-    );
+    const { useWebViewState, setValue, getValue } = createUseWebViewState(['persistedResource'], {
+      owner: 'projectA',
+    });
 
     renderHook(() => usePublishNavigableProjectIds(useWebViewState, [], false, undefined));
 
@@ -231,10 +229,9 @@ describe('usePublishNavigableProjectIds across a project switch', () => {
   });
 
   test('still protects a persisted list when the project has not changed', () => {
-    const { useWebViewState, setValue, getValue } = createUseWebViewState(
-      ['persistedResource'],
-      'projectA',
-    );
+    const { useWebViewState, setValue, getValue } = createUseWebViewState(['persistedResource'], {
+      owner: 'projectA',
+    });
 
     renderHook(() => usePublishNavigableProjectIds(useWebViewState, [], false, 'projectA'));
 

@@ -39,9 +39,10 @@ const NAVIGABLE_PROJECT_IDS_OWNER_WEB_VIEW_STATE_KEY = 'navigableProjectIdsOwnin
  *   be a fresh array each render; only its membership is depended on.
  * @param isReady Whether every source `displayedProjectIds` is derived from has loaded. Nothing is
  *   published while false.
- * @param owningProjectId The project `displayedProjectIds` is derived from. When this differs from
- *   the project the persisted list was built for, the stale list is cleared without waiting for
- *   `isReady`.
+ * @param owningProjectId The project `displayedProjectIds` is derived from. When this and the
+ *   recorded owner are both known and differ, the stale list is cleared without waiting for
+ *   `isReady`. Either being `undefined` means unknown provenance rather than foreign, so the list
+ *   is kept and adopted instead.
  */
 export function usePublishNavigableProjectIds(
   useWebViewState: UseWebViewStateHook,

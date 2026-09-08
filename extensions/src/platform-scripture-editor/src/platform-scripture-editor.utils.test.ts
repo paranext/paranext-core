@@ -2454,8 +2454,8 @@ function createFinalizeMockPapi() {
     .mockResolvedValue([
       { id: GRID_WEBVIEW_ID, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE, projectId: undefined },
     ]);
-  // Resolves an id: `reloadWebView` returning undefined means the re-point did not take, which the
-  // implementation now reports as an error.
+  // Resolves an id: `reloadWebView` returning undefined means the re-point did not take, which is
+  // reported as an error.
   const mockReloadWebView = vi.fn().mockResolvedValue(GRID_WEBVIEW_ID);
   const mockError = vi.fn();
   // Must cast since the mock only includes the papi properties finalizeProjectSwitch uses.
@@ -2510,7 +2510,7 @@ describe('finalizeProjectSwitch', () => {
   });
 
   it('re-points the Text Collection, which the rebuilt Simple layout leaves unbound', async () => {
-    // PT-4238 on the mode-switch path: buildSimpleLayoutForProject stamps projectId onto the static
+    // On the mode-switch path buildSimpleLayoutForProject stamps projectId onto the static
     // layout's tabs, but the Text Collection is merged in afterwards from the supplement with none.
     const { papi, mockReloadWebView } = createFinalizeMockPapi();
 
@@ -3339,8 +3339,8 @@ describe('formatEditorTitle', () => {
 function createRelatedPanelsMockPapi(openDefs: Array<Partial<SavedWebViewDefinition>> = []) {
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
   const mockGetAllOpenWebViewDefinitions = vi.fn().mockResolvedValue(openDefs);
-  // Resolves an id: `reloadWebView` returning undefined means the re-point did not take, which the
-  // implementation now reports as an error.
+  // Resolves an id: `reloadWebView` returning undefined means the re-point did not take, which is
+  // reported as an error.
   const mockReloadWebView = vi.fn().mockResolvedValue(GRID_WEBVIEW_ID);
   const mockOpenWebView = vi.fn().mockResolvedValue(undefined);
   const mockWarn = vi.fn();
@@ -3456,8 +3456,8 @@ describe('updateRelatedTextCollectionPanel', () => {
   });
 
   it('reports an error when the reload resolves no id, which it does instead of throwing', async () => {
-    // `reloadWebView` resolves undefined when the definition has gone or the provider declines. The
-    // re-point is the panel's only project signal now, so a silent no-op here is not acceptable.
+    // `reloadWebView` resolves undefined when the definition has gone or the provider declines.
+    // The re-point is the panel's only project signal, so a silent no-op here is not acceptable.
     const { papi, mockReloadWebView, mockError } = createRelatedPanelsMockPapi([gridDef('proj-a')]);
     mockReloadWebView.mockResolvedValue(undefined);
 
@@ -3558,7 +3558,7 @@ describe('openOrUpdateRelatedPanels', () => {
 
 describe('resolveGridProviderProjectId', () => {
   it('prefers the project a switch supplied over the one the tab already had', () => {
-    // Inverting this is PT-4238: the re-point passes the incoming project in options, and falling
+    // Inverting this strands the panel: the re-point passes the incoming project in options, and falling
     // back to the saved id leaves the panel on the outgoing project.
     expect(resolveGridProviderProjectId({ projectId: 'incoming' }, { projectId: 'outgoing' })).toBe(
       'incoming',

@@ -102,14 +102,13 @@ describe('resolveGridBodyState', () => {
     ).toBe('error');
   });
 
-  it('reports the failure even while other inputs are still in flight', () => {
+  it('reports the failure regardless of what else is still in flight, once the strings are in', () => {
     expect(
       resolveGridBodyState({
         ...settled,
         areSourcesResolved: false,
         hasSourcesError: true,
         isLoadingCachedResources: true,
-        isLoadingLocalizedStrings: true,
       }),
     ).toBe('error');
   });
@@ -143,10 +142,16 @@ describe('resolveGridBodyState', () => {
     expect(resolveGridBodyState({ ...settled, isLoadingLocalizedStrings: true })).toBe('loading');
   });
 
-  it('still reports a failure ahead of the strings, since that branch has content either way', () => {
+  it('waits for the strings before reporting a failure, which also renders prose', () => {
+    // The error branch shares the empty state's localized message, so reporting it early puts a
+    // raw %key% on screen just as the empty branch would.
     expect(
       resolveGridBodyState({ ...settled, hasSourcesError: true, isLoadingLocalizedStrings: true }),
-    ).toBe('error');
+    ).toBe('loading');
+  });
+
+  it('reports a failure once the strings have arrived', () => {
+    expect(resolveGridBodyState({ ...settled, hasSourcesError: true })).toBe('error');
   });
 
   it('gives up on a wait that has outlasted its allowance rather than spinning forever', () => {

@@ -1269,9 +1269,10 @@ export async function openOrUpdateRelatedPanels(
  * this same type, which catches a _rename_ of `projectId` on either side via the object literal's
  * excess-property check. It does NOT catch an omission: `projectId` has to stay optional, so `{
  * bringToFront: false }` still typechecks and the provider's `openWebViewOptions.projectId ??
- * savedWebView.projectId` would quietly fall back to the stale saved id — reintroducing PT-4238
- * with `typecheck` green. Only a test on the provider side would catch that, and none exists.
- * (Mirrors `FindWebViewOptions`, which Find exports once and uses on both sides.)
+ * savedWebView.projectId` would quietly fall back to the stale saved id, leaving the panel on the
+ * outgoing project with `typecheck` green. `resolveGridProviderProjectId` pins that precedence; the
+ * provider's own call to it is still uncovered. (Mirrors `FindWebViewOptions`, which Find exports
+ * once and uses on both sides.)
  */
 export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: string };
 
@@ -1280,9 +1281,9 @@ export type TextCollectionPanelOptions = OpenWebViewOptions & { projectId?: stri
  *
  * The two halves of the re-point meet here. `openWebViewOptions` is the half a project switch fills
  * in — `updateRelatedTextCollectionPanel` passes the incoming project through `reloadWebView` — and
- * it has to win: preferring the saved definition when a switch supplied a project IS PT-4238, the
- * panel left rendering the outgoing project's texts. `savedWebView.projectId` is what keeps a
- * restored tab, or one re-provided for an unrelated reason, on the project it already had.
+ * it has to win: preferring the saved definition when a switch supplied a project leaves the panel
+ * rendering the outgoing project's texts. `savedWebView.projectId` is what keeps a restored tab, or
+ * one re-provided for an unrelated reason, on the project it already had.
  *
  * Extracted from the provider so this precedence is testable: the provider itself lives in
  * `main.ts`, which no test imports, so inline the rule could be inverted and every test would still

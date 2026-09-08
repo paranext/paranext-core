@@ -959,10 +959,7 @@ step, no automation. Just a record.
 - **Status:** Accepted
 - **Context:** Simple mode's Column 3 panels follow the *active translation project*: the editor gates
   `openOrUpdateRelatedPanels` on `projectForWebView.isEditable` precisely so that opening a published
-  resource in the editor column does not switch the related panels over to the resource. **(No longer
-  true as of PR #2425, which deleted that gate; the related panels now do follow a published
-  resource opened in the editor column. Recorded in
-  `adr-column-3-panels-are-told-their-project`. The reasoning below is preserved as written.)** Making Find a
+  resource in the editor column does not switch the related panels over to the resource. Making Find a
   permanent Column 3 tab put it inside that contract for the first time, and it was the one panel
   exempt from it — `openFind` took whatever project the triggering editor held, with no editability
   check, so Ctrl+F on a resource re-pointed the always-visible Find tab at the resource while its
@@ -3072,7 +3069,8 @@ step, no automation. Just a record.
 - **Decision:** Every Column 3 panel is **told** its project by the switch; none infers one. The Text
   Collection is re-pointed by `updateRelatedTextCollectionPanel`, called directly from
   `openOrUpdateRelatedPanels` (same module, so no command indirection is needed — unlike the four
-  panels whose handlers live in `main.ts`). There are **two** switch paths and both must call it:
+  command-driven panels, whose handlers live in `main.ts` for Model Text and the two resource
+  panels, in `legacy-comment-manager` for Comments, and in `platform-scripture` for Find). There are **two** switch paths and both must call it:
   the editor-column switch via `openOrUpdateRelatedPanels`, and the Power→Simple mode switch via
   `finalizeProjectSwitch`. The mode switch needs its own call because `buildSimpleLayoutForProject`
   stamps `projectId` only onto the static layout's tabs, while the Text Collection is merged in
@@ -3130,15 +3128,13 @@ step, no automation. Just a record.
   `openOrUpdateRelatedPanels` (or, if it needs the new editor's id, beside `updateRelatedFindPanel`)
   rather than giving it a signal to infer from. Five limits of this decision are recorded
   deliberately rather than left to be re-derived:
-  - **Read-only resources are NOT followed.** PR #2425 removed the `isEditable` gate from the
-    `openOrUpdateRelatedPanels` call site, which would have let a published resource opened in the
-    editor column re-point the Text Collection at itself — a project with no collection of its own.
-    The gate was reinstated one level down instead: `openOrUpdateRelatedPanels` takes
-    `isProjectEditable` and skips only the Text Collection re-point when it is false, so everything
-    else it drives — Bible Texts, Commentaries and Comments in Column 3, plus Model Text in Column 1
-    — still follows a resource as #2425 intended. `adr-find-follows-editor-to-read-only` is marked
-    above as superseded on this point, which remains the right marking: its premise names the *call
-    site* as the gate, and that is still false. The gate exists again, one level down.
+  - **Read-only resources are not followed.** `openOrUpdateRelatedPanels` takes
+    `isProjectEditable` and skips the Text Collection re-point when it is false, so a published
+    resource opened in the editor column does not re-point the grid at itself — a project with no
+    collection of its own. Everything else the function drives (Bible Texts, Commentaries and
+    Comments in Column 3, plus Model Text in Column 1) follows the editor either way. This upholds
+    `adr-find-follows-editor-to-read-only`'s Context rather than changing it; the gate lives one
+    level in from the call site that entry describes, which is the only detail that has shifted.
   - **The re-point targets one window.** `getAllOpenWebViewDefinitions()` flattens across every
     window, so `.find()` returns whichever Text Collection comes first, not the one in the window
     that switched. If that panel already shows the target project the skip guard returns early and a
@@ -3159,8 +3155,10 @@ step, no automation. Just a record.
     `openOrUpdateRelatedPanels` path it is awaited *ahead of* the editor's replace-tab `openWebView`
     — deliberately, because re-pointing afterwards would flash the outgoing project's texts — and two
     E2E suites already retry around the "Replacing tab failed" rejection that window produces. The
-    `finalizeProjectSwitch` path is the Power→Simple switch #2425 optimized, which previously did no
-    web-view enumeration at all. If both run for one switch the case-normalized skip guard makes the
+    `finalizeProjectSwitch` path is the Power→Simple switch #2425 optimized. It already enumerated
+    web views there — in Simple mode it calls `applyForProject` → `focusSharedLayoutDefaultTab`,
+    which issues an `existingId: '?'` probe — so this adds a second enumeration and a reload to a
+    path that had one probe. If both run for one switch the case-normalized skip guard makes the
     second a no-op.
   - **The stale-held-setting path is narrowed, not closed.** Whenever the grid is still unbound it
     continues to change `projectId` in place through its latch effect, which is exactly the usage

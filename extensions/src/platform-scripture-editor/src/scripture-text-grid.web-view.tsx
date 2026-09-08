@@ -537,7 +537,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // `resolveResourceContentState`. The ordering rules it encodes are documented on that function.
   // This window opens on every Simple-mode project switch, not only at first mount, because the
   // switch re-points this panel by reloading it (see `updateRelatedTextCollectionPanel`), which is
-  // why the body gets a real loading state rather than an empty container.
+  // why the body needs a real loading state.
   // Bounds the wait for the sources. Neither of the ways that wait can never end — a subscribe that
   // rejects, or a settings provider that never resolves — surfaces as an error, so without this the
   // body would spin indefinitely on both.
@@ -562,6 +562,12 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // button that cannot be opened.
   // Held back until it resolves: before then it is a raw `%key%`, and this is the accessible name.
   const loadingLabel = isLoadingLocalizedStrings ? '' : (localizedStrings[LOADING_KEY] ?? '');
+
+  // Guarded for the same reason the body branches are: unresolved, this is the literal key, and it
+  // is the button's accessible name — a screen reader reaching the header during the load window
+  // would read `%webView_scriptureTextGrid_viewOptions_openPanel%`. Undefined leaves the button
+  // unnamed for that window, which is the lesser of the two.
+  const viewOptionsLabel = resolveLocalizedString(localizedStrings, VIEW_OPTIONS_BUTTON_KEY);
 
   let viewOptionsDisabledMessage: string | undefined;
   if (!effectiveProjectId)
@@ -609,10 +615,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       />
     );
   } else {
-    // Covers both 'empty' and 'error'. They are distinguished in `resolveGridBodyState` because the
-    // distinction is real and testable, but they render alike here: a dedicated failure message
-    // would need a new localized string, which is deliberately out of scope for this fix. What
-    // matters either way is that a failure lands on a terminal state rather than an endless spinner.
+    // Covers both 'empty' and 'error'. `resolveGridBodyState` keeps them distinct because the
+    // distinction is real and testable, but they render alike: a dedicated failure message needs a
+    // localized string that does not exist yet. What matters either way is that a failure lands on
+    // a terminal state rather than an endless spinner.
     //
     // Centered in the grid body; the message names the View Options button by interpolating
     // its own localized label so a rename can't desync the copy.
@@ -654,7 +660,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}
+                    aria-label={viewOptionsLabel}
                     // Explicit themed colors so the icon is visible in both light and dark themes; a
                     // plain ghost button inherits the (un-themed) default color and vanishes on dark
                     // tabs.
@@ -664,7 +670,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
-              <TooltipContent>{localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}</TooltipContent>
+              <TooltipContent>{viewOptionsLabel}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <PopoverContent className="tw:max-h-[70vh] tw:overflow-y-auto">

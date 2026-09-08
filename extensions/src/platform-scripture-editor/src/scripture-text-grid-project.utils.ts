@@ -88,11 +88,12 @@ export type GridBodyStateInput = {
  *   become placeholders — so there are cells to show as soon as the sources land, even while the
  *   cached DBL list is still in flight. Each cell renders its own loading/unavailable state, so
  *   showing the text that is ready beats hiding the whole grid behind a spinner.
- * - **Only a bound project can be loading.** With no project there is no
+ * - **No project bound is a steady state, not a wait.** With no project there is no
  *   `platformScripture.textConnectionSettings` provider, so the sources never resolve and a spinner
- *   would never end. No project is a steady state, and so is a sources failure — the same rule
+ *   there would never end. A sources failure is terminal for the same reason — the rule
  *   `resource-panel-readiness.utils.ts` states as "an unreadable setting is its own answer — never
- *   hide it behind a spinner that cannot end."
+ *   hide it behind a spinner that cannot end." Waiting on the localized strings outranks both,
+ *   because every terminal branch renders prose.
  *
  * @param input See {@link GridBodyStateInput}.
  * @returns The body state to render.
@@ -107,12 +108,14 @@ export function resolveGridBodyState({
   hasWaitedTooLong,
 }: GridBodyStateInput): GridBodyState {
   if (hasResources) return 'cells';
-  if (hasSourcesError) return 'error';
-  // Ahead of every remaining branch, because each of them renders localized prose and
-  // `useLocalizedStrings` seeds each key with the key itself — returning 'empty' here while the
-  // strings are still in flight puts a literal `%key%` on screen. Only the cells branch above is
-  // exempt: its labels resolve per cell and it has content worth showing meanwhile.
+  // Ahead of every branch below, because each of them renders localized prose and
+  // `useLocalizedStrings` seeds each key with the key itself, so returning one of them while the
+  // strings are in flight puts a literal `%key%` on screen. `error` is included: it currently
+  // shares the empty state's message, so it is no more exempt than `empty` is. Only the cells
+  // branch above is exempt — its labels resolve per cell and it has content worth showing
+  // meanwhile.
   if (isLoadingLocalizedStrings) return 'loading';
+  if (hasSourcesError) return 'error';
   if (!hasProject) return 'empty';
   // A spinner promises an answer is coming; past this point we can no longer promise that. Checked
   // after the strings, because a terminal state renders prose and would otherwise show a raw
