@@ -345,6 +345,26 @@ export function ResourceTextPanel({
     );
   }
 
+  // Ahead of the readiness branch below, because a pick in flight outranks what the reference list
+  // currently says. On a FIRST pick the list is still empty — the resource is not referenced until
+  // `selectTextConnection` has installed it and the write has propagated back — so readiness is
+  // `empty`, and testing readiness first would leave the reader on "no texts selected", with an
+  // enabled pick button and no progress, for the whole download.
+  //
+  // Distinguish the two causes so the label is accurate: a user pick (isSelecting) reads
+  // "Selecting…", while an auto-install of an already-configured resource (isInstalling) — where
+  // the user picked nothing and it is just downloading — reads "Installing…".
+  if (isSelecting || isInstalling) {
+    return (
+      <LoadingView
+        label={localize(
+          localizedStrings,
+          isSelecting ? '%webView_resourcePanel_selecting%' : '%webView_resourcePanel_installing%',
+        )}
+      />
+    );
+  }
+
   // Front of the state machine: still resolving, unreadable setting, or genuinely nothing
   // configured. Driven by one readiness value so the empty prompt can only appear once emptiness is
   // actually known — the loading branch deliberately outlasts the catalog fetch when something is
@@ -402,21 +422,6 @@ export function ResourceTextPanel({
         )}
         retryLabel={localize(localizedStrings, '%webView_resourcePanel_retry%')}
         onRetry={retryInstall}
-      />
-    );
-  }
-
-  // Installing state: selected DblResource found but not yet installed. Distinguish the two causes
-  // so the label is accurate: a user pick (isSelecting) reads "Selecting…", while an auto-install
-  // of a configured resource (isInstalling) — where the user picked nothing and it's just
-  // downloading — reads "Installing…".
-  if (isSelecting || isInstalling) {
-    return (
-      <LoadingView
-        label={localize(
-          localizedStrings,
-          isSelecting ? '%webView_resourcePanel_selecting%' : '%webView_resourcePanel_installing%',
-        )}
       />
     );
   }
