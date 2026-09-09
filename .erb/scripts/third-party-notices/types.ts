@@ -67,6 +67,11 @@ export type Override = {
   versionIndependent?: boolean;
   /** A question this entry does NOT settle - reported on every run, never blocking. */
   openQuestion?: string;
+  /**
+   * Names a `separatePrograms` entry whose reviewed determination is what admits this package's
+   * copyleft `license`: the package IS that program, redistributed as a separate executable.
+   */
+  separateProgram?: string;
 };
 
 /**
@@ -407,6 +412,8 @@ export type Report = {
   staticAssetNotices?: NamedText[];
   /** Native libraries copied from the build machine - see `CopiedPlatformLibrary`. */
   copiedPlatformLibraries?: Record<string, CopiedPlatformLibrary>;
+  /** Third-party programs redistributed as separate executables - see `separate-programs.ts`. */
+  separatePrograms?: Record<string, SeparateProgram>;
   /** Folder names of the extensions an installer packs - see `packedExtensionNames`. */
   packedExtensions?: string[];
   /**

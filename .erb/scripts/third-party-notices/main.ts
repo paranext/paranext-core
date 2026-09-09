@@ -76,6 +76,10 @@ import { render, joinTexts } from './render';
 import { declaredLicenseField, readPackageNotices, readTextFile } from './package-files';
 import { messageOf, readJsonFile } from './read-json';
 import { assertProductMatchesPackaging, readPackagingConfig } from './product';
+import {
+  assertSeparateProgramsRecorded,
+  assertSeparateProgramTextsAvailable,
+} from './separate-programs';
 import type {
   CopiedPlatformLibrary,
   Detection,
@@ -85,6 +89,7 @@ import type {
   Policy,
   ProductBlock,
   ReportRow,
+  SeparateProgram,
   ShippedPackage,
   SnapStagePackage,
 } from './types';
@@ -718,6 +723,7 @@ type BuiltReport = {
   snapCopyrightTexts: NamedText[];
   staticAssetNotices: NamedText[];
   copiedPlatformLibraries: Record<string, CopiedPlatformLibrary>;
+  separatePrograms: Record<string, SeparateProgram>;
   packedExtensions: string[];
   shipsElectron: boolean;
   product: ProductBlock | undefined;
@@ -816,6 +822,8 @@ export function buildReport(): BuiltReport {
   assertStaticAssetNoticesRecorded(REPO, policy);
   assertCopiedPlatformLibraryIdsAllowed(policy);
   assertCopiedPlatformLibrariesRecorded(policy, copiedPlatformLibraryStems());
+  assertSeparateProgramsRecorded(REPO, policy.separatePrograms || {});
+  assertSeparateProgramTextsAvailable(policy.separatePrograms || {});
 
   const nugetVerdicts = buildNugetVerdicts({ policy, collected, directReferences, alwaysListed });
 
@@ -856,6 +864,9 @@ export function buildReport(): BuiltReport {
     // The fifth: native libraries copied out of the build machine itself, which no manifest
     // declares and no restore resolves - see `CopiedPlatformLibrary`.
     copiedPlatformLibraries: policy.copiedPlatformLibraries || {},
+    // The sixth: third-party programs redistributed as separate executables and invoked as
+    // subprocesses - see `SeparateProgram`.
+    separatePrograms: policy.separatePrograms || {},
     // What the two prose sections are gated on, so neither can survive the thing it describes. The
     // extension set is the directory listing of `extensions/dist`, which is the tree an installer
     // packs; `electron` ships as a prebuilt runtime compiled into no bundle, so the policy's

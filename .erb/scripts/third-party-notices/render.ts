@@ -13,11 +13,13 @@ import { canonicalText } from './corpus';
 import { parseDeclared } from './declared';
 import { normalizeText } from './package-files';
 import type {
+  BundledComponent,
   CopiedPlatformLibrary,
   NamedText,
   ProductBlock,
   Report,
   ReportRow,
+  SeparateProgram,
   SnapStagePackage,
 } from './types';
 
@@ -762,6 +764,94 @@ function pushCopiedPlatformLibrarySection(
   });
 }
 
+/** One bundled component as the delivery bullet names it: `Python 3.9 (PSF-2.0)`. */
+function describeComponent(component: BundledComponent): string {
+  const version = component.version ? ` ${component.version}` : '';
+  const terms = component.spdx?.length ? component.spdx.join(', ') : component.terms || '';
+  return `${component.name}${version} (${terms})`;
+}
+
+/**
+ * Third-party programs redistributed as separate executables - see `separate-programs.ts`.
+ *
+ * Every field is the reviewer's own words, reproduced rather than paraphrased, because the entry is
+ * the determination: the document says what was decided, by whom, and when.
+ */
+function pushSeparateProgramsSection(
+  out: string[],
+  separatePrograms: Record<string, SeparateProgram>,
+): void {
+  const entries = Object.entries(separatePrograms).sort(([first], [second]) =>
+    compareStrings(first, second),
+  );
+  if (!entries.length) return;
+  out.push('## Third-party programs redistributed as separate executables', '');
+  out.push(
+    'The application redistributes these programs as separate executables, each with its own',
+    'runtime, and invokes them as subprocesses. They belong to neither the npm nor the NuGet graph',
+    'above. The canonical text of every identifier named here is reproduced under "Canonical license',
+    'texts for declared identifiers", because not every bundle below carries a copy of its own terms.',
+    '',
+  );
+  entries.forEach(([name, program]) => {
+    out.push(`### ${name}`, '');
+    out.push(
+      `- **Terms:** ${program.spdx.join(', ')}`,
+      `- **Copyright:** ${inlineText(program.copyright)}`,
+      '',
+      'Delivered as:',
+      '',
+    );
+    program.deliveries.forEach((delivery) => {
+      const notices =
+        delivery.carriesNotices === false
+          ? 'The bundle carries no notice files of its own.'
+          : `The bundle carries its own notice files at ${inlineText(delivery.carriesNotices)}.`;
+      const also = delivery.alsoContains?.length
+        ? ` It also contains ${delivery.alsoContains.map(describeComponent).join('; ')}.`
+        : '';
+      out.push(
+        `- **${delivery.platform}**, version ${delivery.version}: ${inlineText(delivery.mechanism)}. ${notices}${also}`,
+      );
+    });
+    out.push('', program.reason, '', `**Corresponding source:** ${program.sourceAvailability}`, '');
+    out.push(`Reviewed by ${inlineText(program.reviewer)} on ${program.date}.`, '');
+  });
+}
+
+/**
+ * Adds the canonical text of every identifier a separate-program entry names, credited to the
+ * program - the counterpart of `addCopiedPlatformLibraryTexts`, with the same refusal.
+ */
+function addSeparateProgramTexts(
+  canonical: CollectedTexts,
+  separatePrograms: Record<string, SeparateProgram>,
+): void {
+  Object.entries(separatePrograms).forEach(([name, program]) => {
+    const ids = new Set<string>(program.spdx);
+    program.deliveries.forEach((delivery) =>
+      (delivery.alsoContains || []).forEach((component) =>
+        (component.spdx || []).forEach((id) => ids.add(id)),
+      ),
+    );
+    ids.forEach((id) => {
+      const text = canonicalText(id);
+      if (!text)
+        throw new Error(
+          `the notices policy lists the separate program "${name}" under ${id}, and the SPDX ` +
+            'corpus holds no text for it - run `npm run build:third-party-notices:corpus` after ' +
+            'adding the identifier to the committed policy.',
+        );
+      if (!canonical.has(id)) canonical.set(id, { text: normalizeText(text), packages: [] });
+      canonical
+        .get(id)
+        ?.packages.push(
+          `\`${name}\` (redistributed as a separate executable) — ${inlineText(program.copyright)}`,
+        );
+    });
+  });
+}
+
 /** The Ubuntu libraries snapcraft stages inside the Linux `.snap`, and their copyright files. */
 function pushSnapSection(
   out: string[],
@@ -1291,6 +1381,7 @@ export function render({
   packedExtensions = [],
   shipsElectron = false,
   copiedPlatformLibraries = {},
+  separatePrograms = {},
   product,
 }: Report): string {
   assertKnownEcosystems(verdicts);
@@ -1305,6 +1396,7 @@ export function render({
     ...dotnetRows,
   ]);
   addCopiedPlatformLibraryTexts(canonical, copiedPlatformLibraries);
+  addSeparateProgramTexts(canonical, separatePrograms);
   const npmDescribed = described.filter((row) => row.ecosystem === 'npm');
   const dotnetDescribed = described.filter((row) => row.ecosystem === 'nuget');
   const npmAccount = accountNpmRows(npmDescribed);
@@ -1317,6 +1409,7 @@ export function render({
   pushStaticAssetSection(out, staticAssetNotices);
   pushSnapSection(out, snapStagePackages, snapStagePackageLicenses, snapCopyrightTexts);
   pushCopiedPlatformLibrarySection(out, copiedPlatformLibraries);
+  pushSeparateProgramsSection(out, separatePrograms);
   pushDotnetSection(out, dotnetDescribed, copiedPlatformLibraries);
   pushNpmSection(out, npmDescribed, npmAccount);
   assertNpmRowsAccountedFor(npmDescribed, npmAccount, canonical);

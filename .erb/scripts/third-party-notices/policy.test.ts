@@ -1769,9 +1769,12 @@ describe('what a curated override may carry across', () => {
     declaredField: undefined,
     detection: { dir: '', files: [] },
   };
-  const withOverride = (entry: object) => ({
+  const withOverride = (
+    entry: object,
+    transform: (policy: Policy) => Policy = (policy) => policy,
+  ) => ({
     ...overridden,
-    policy: { ...POLICY, overrides: { 'nuget:X': entry } },
+    policy: transform({ ...POLICY, overrides: { 'nuget:X': entry } }),
   });
 
   // An override is keyed by NAME and pinned to no license text. `stalePolicyEntries` reports one
@@ -1832,6 +1835,57 @@ describe('what a curated override may carry across', () => {
     expect(v.verdict).toBe('blocked');
     expect(v.reason).toContain('1.0.0');
     expect(v.reason).toContain('re-read the package');
+  });
+
+  describe('an override linked to a separate program', () => {
+    // `overridden.version` above is '2.0.0'; the link is what is under test here, not the version
+    // pin, so this is kept in step with it rather than triggering the version-mismatch block.
+    const linked = {
+      license: 'GPL-2.0-or-later',
+      version: '2.0.0',
+      alwaysList: true,
+      separateProgram: 'Mercurial',
+    };
+    const withPrograms = (policy: Policy): Policy => ({
+      ...policy,
+      separatePrograms: {
+        Mercurial: {
+          spdx: ['GPL-2.0-or-later'],
+          copyright: 'c',
+          reviewer: 'r@e.org',
+          date: '2026-09-04',
+          reason: 'aggregation',
+          sourceAvailability: 's',
+          deliveries: [],
+        },
+      },
+    });
+
+    it('admits a copyleft license when the named program is recorded', () => {
+      const v = classify(withOverride(linked, withPrograms));
+      expect(v.verdict).toBe('overridden');
+      expect(v.spdxId).toBe('GPL-2.0-or-later');
+      expect(v.reason).toContain('separate program "Mercurial"');
+    });
+
+    it('still blocks a copyleft license with no link', () => {
+      // Destructured only to drop it from `unlinked` below.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { separateProgram, ...unlinked } = linked;
+      expect(classify(withOverride(unlinked, withPrograms)).verdict).toBe('blocked');
+    });
+
+    it('refuses a link to a program the table does not record', () => {
+      const v = classify(withOverride(linked));
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('"separatePrograms" records no entry named "Mercurial"');
+    });
+
+    it('refuses a linked override whose license is free text', () => {
+      const v = classify(withOverride({ ...linked, license: 'GPL', nonSpdx: true }, withPrograms));
+      expect(v.verdict).toBe('blocked');
+      expect(v.reason).toContain('SPDX expression');
+    });
   });
 });
 

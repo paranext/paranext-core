@@ -799,3 +799,47 @@ describe('product block', () => {
     expect(paratext).not.toContain('it does not extend to Platform.Bible, nor');
   });
 });
+
+describe('separate programs section', () => {
+  const separatePrograms = {
+    Mercurial: {
+      spdx: ['GPL-2.0-or-later'],
+      copyright: 'Copyright (C) 2005-2025 Olivia Mackall and others',
+      reviewer: 'r@example.org',
+      date: '2026-09-04',
+      reason: 'Invoked as a subprocess.',
+      sourceAvailability: 'Published beside the binaries.',
+      deliveries: [
+        {
+          platform: 'macOS',
+          version: '7.0.2',
+          mechanism: 'hg-universal tarball',
+          evidence: { file: 'electron-builder.json5', contains: 'hg-universal' },
+          carriesNotices: false,
+          alsoContains: [{ name: 'Python', version: '3.9', spdx: ['GPL-2.0-or-later'] }],
+        },
+      ],
+    },
+  };
+
+  it('is absent when no program is recorded', () => {
+    expect(render(report)).not.toContain(
+      '## Third-party programs redistributed as separate executables',
+    );
+  });
+
+  it('describes each program, its deliveries, and reproduces the canonical text', () => {
+    const out = render({ ...report, separatePrograms });
+    expect(out).toContain('## Third-party programs redistributed as separate executables');
+    expect(out).toContain('### Mercurial');
+    expect(out).toContain('- **Terms:** GPL-2.0-or-later');
+    expect(out).toContain('- **Copyright:** Copyright (C) 2005-2025 Olivia Mackall and others');
+    expect(out).toContain('- **macOS**, version 7.0.2: hg-universal tarball');
+    expect(out).toContain('carries no notice files of its own');
+    expect(out).toContain('Python 3.9 (GPL-2.0-or-later)');
+    expect(out).toContain('Invoked as a subprocess.');
+    expect(out).toContain('**Corresponding source:** Published beside the binaries.');
+    expect(out).toContain('Reviewed by r@example.org on 2026-09-04.');
+    expect(out).toMatch(/### GPL-2\.0-or-later — canonical text[^#]*`Mercurial`/);
+  });
+});
