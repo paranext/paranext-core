@@ -12,6 +12,7 @@ import { WorkspaceUpdatingOverlay } from './components/overlays/overlay-workspac
 import { ConnectionLostOverlay } from './components/overlays/overlay-connection-lost.component';
 import { PlatformBibleToolbar } from './components/platform-bible-toolbar';
 import { FirstRunOverlay } from './components/first-run/first-run-overlay.component';
+import { OnboardingTour } from './components/onboarding-tour/onboarding-tour.component';
 import { initWorkspaceUpdatingService } from './services/workspace-updating-service';
 import { resolveFirstRunState } from './services/first-run-store';
 
@@ -40,6 +41,7 @@ function Main() {
       <WorkspaceUpdatingOverlay />
       <ConnectionLostOverlay />
       <FirstRunOverlay />
+      <OnboardingTour />
     </TestContext.Provider>
   );
 }

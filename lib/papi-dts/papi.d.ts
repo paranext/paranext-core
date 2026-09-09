@@ -5469,6 +5469,14 @@ declare module 'papi-shared-types' {
     /** Call close function for Usersnap forms known to the application */
     'platform.closeOpenUsersnapForm': () => Promise<void>;
     /**
+     * Show the orientation tour again from its first stop, in the window the user is working in.
+     * Available in both interface modes: in Power mode the tour reduces to the stops whose anchors
+     * exist there, which today is the toolbar's profile button.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.showOnboardingTour': () => Promise<void>;
+    /**
      * Navigate the active scroll group to the next chapter (rolls into the next book)
      *
      * @experimental This command is unstable and may change or disappear without notice

@@ -266,7 +266,7 @@ test.describe('window close rule', () => {
     // This test never quits, so its fault sweep runs at the end against a still-running app
     const output = captureAppOutput(electronApp);
     const logStep = createStepLogger('window-close-rule');
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const primaryId = getWindowIdOfPage(mainPage);
 
     const page2 = await createSecondWindow(electronApp);
@@ -329,7 +329,7 @@ test.describe('window close rule', () => {
       const { userDataDir } = ctx;
       const output = captureAppOutput(ctx.electronApp);
       const [mainPage] = await waitForAppPages(ctx.electronApp, 1, 90_000);
-      await waitForAppReady(mainPage, 180_000);
+      await waitForAppReady(mainPage, { timeout: 180_000 });
       const primaryId = getWindowIdOfPage(mainPage);
 
       const page2 = await createSecondWindow(ctx.electronApp);
@@ -384,7 +384,7 @@ test.describe('window close rule', () => {
             .map(getWindowIdOfPage)
             .join(', ')}`,
         );
-      await waitForAppReady(restoredMain, 180_000);
+      await waitForAppReady(restoredMain, { timeout: 180_000 });
       await waitForRendererRegistered(getWindowIdOfPage(restoredSecond), 120_000);
       logStep('phase 2: both windows restored');
     } finally {
@@ -405,7 +405,7 @@ test.describe('window close rule', () => {
     // So this asserts both halves: the primary stays and docks Home, and it is STILL the primary —
     // shown by its ✕ asking, which only the primary's does.
     const logStep = createStepLogger('window-close-rule');
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const primaryId = getWindowIdOfPage(mainPage);
 
     const page2 = await createSecondWindow(electronApp);
@@ -468,7 +468,7 @@ test.describe('window close rule', () => {
       const { userDataDir } = ctx;
       const output = captureAppOutput(ctx.electronApp);
       const [mainPage] = await waitForAppPages(ctx.electronApp, 1, 90_000);
-      await waitForAppReady(mainPage, 180_000);
+      await waitForAppReady(mainPage, { timeout: 180_000 });
       const primaryId = getWindowIdOfPage(mainPage);
 
       const page2 = await createSecondWindow(ctx.electronApp);
@@ -508,7 +508,7 @@ test.describe('window close rule', () => {
       });
       const restored = await waitForAppPages(ctx.electronApp, 2, 240_000);
       expect(restored).toHaveLength(2);
-      await waitForAppReady(restored[0], 180_000);
+      await waitForAppReady(restored[0], { timeout: 180_000 });
       logStep('phase 2: both windows restored, primary included');
     } finally {
       if (ctx) await teardownElectronApp(ctx);
@@ -523,7 +523,7 @@ test.describe('window close rule', () => {
     // This test never quits, so its fault sweep runs at the end against a still-running app
     const output = captureAppOutput(electronApp);
     const logStep = createStepLogger('window-close-rule');
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const primaryId = getWindowIdOfPage(mainPage);
 
     const page2 = await createSecondWindow(electronApp);
@@ -570,7 +570,7 @@ test.describe('window close rule', () => {
     // WHILE the question is showing — every other test in this file creates its second window
     // before asking, never during.
     const logStep = createStepLogger('window-close-rule');
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const primaryId = getWindowIdOfPage(mainPage);
 
     const page2 = await createSecondWindow(electronApp);

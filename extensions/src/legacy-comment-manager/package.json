@@ -1,7 +1,7 @@
 {
   "name": "legacy-comment-manager",
   "private": true,
-  "version": "0.6.0-alpha.0",
+  "version": "0.6.0-alpha.1",
   "main": "src/main.js",
   "types": "src/types/legacy-comment-manager.d.ts",
   "author": "Paranext",
@@ -36,7 +36,7 @@
     "react-dom": ">=19.0.0"
   },
   "dependencies": {
-    "@sillsdev/scripture": "^2.0.5",
+    "@sillsdev/scripture": "^2.1.0",
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
