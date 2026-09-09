@@ -558,6 +558,26 @@ globalThis.webViewComponent = function ResourceTextPanel({
     [usjFromPdp, isUsjLoading, scrRef.chapterNum],
   );
 
+  // Which resource the value in hand answers for.
+  //
+  // `useData` preserves its value across a source change, and the `ChapterUSJ` selector does not
+  // change when only the resource does — so after a switch the PREVIOUS resource's chapter is still
+  // here, `isUsjLoading` never rises, and a valid USJ carries no book or project of its own to
+  // compare (which is why the missing-book ERROR path needs no help: it names both).
+  //
+  // A change of value IDENTITY, though, can only come from the current subscription — the value is
+  // deserialized fresh per delivery, so it can never be identity-equal to what it replaces.
+  // Recording the resource in effect at that moment is therefore enough to tell "this answers for
+  // the resource on screen" from "this is what the reader just navigated away from", and it is
+  // available during render rather than an effect later, so no stale frame is painted.
+  const answeredForRef = useRef<{ value: unknown; resourceProjectId: string | undefined }>({
+    value: undefined,
+    resourceProjectId: undefined,
+  });
+  if (answeredForRef.current.value !== usjPossiblyError)
+    answeredForRef.current = { value: usjPossiblyError, resourceProjectId };
+  const isAnswerCurrent = answeredForRef.current.resourceProjectId === resourceProjectId;
+
   // The book-not-available message is withheld unless the failure names the book AND project on
   // screen right now, so a result still describing the reference the user just left cannot be
   // misattributed to this one. See `resolveResourceContentState`. Derived here rather than in the
@@ -569,8 +589,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
         usjPossiblyError,
         currentBookNum: Canon.bookIdToNumber(scrRef.book),
         isUsjSettled: !isUsjLoading,
+        isAnswerCurrent,
       }),
-    [resourceProjectId, usjPossiblyError, scrRef.book, isUsjLoading],
+    [resourceProjectId, usjPossiblyError, scrRef.book, isUsjLoading, isAnswerCurrent],
   );
 
   // A chapter read that fails is otherwise invisible outside the UI, and the state it produces — a
