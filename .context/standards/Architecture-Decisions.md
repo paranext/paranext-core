@@ -446,7 +446,12 @@ step, no automation. Just a record.
   removed and the GitHub release carries no binaries; it creates the version tag, the draft and the
   generated notes, which are the fixed points a downstream build constructs its own release from.
   Installers are still built on every leg — that is how the packaging path is exercised — and the
-  optional S3 upload of the Windows and macOS artifacts stays, for internal sharing. Nothing is
+  optional S3 upload of the Windows and macOS artifacts stays, for internal sharing. That upload is
+  `publish.yml`'s "Upload release assets to S3" step, gated on the `uploadReleaseAssets` input and
+  writing to the bucket named by `vars.AWS_S3_RELEASE_BUCKET_NAME`; it is named here because it is
+  the one remaining channel a built installer leaves this repository by, and the bucket is not
+  public — which is what makes LICENSING.md's "nothing is published to an app store or attached to a
+  public release" true as written. Nothing is
   identified as Platform.Bible to a public audience, so the Platform.Bible/Paratext 10
   identification the notices and the Terms would otherwise need is not needed at all.
 - **Alternatives:** Identify Platform.Bible builds as Paratext 10 builds in both documents —

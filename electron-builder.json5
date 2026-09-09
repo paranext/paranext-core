@@ -71,6 +71,11 @@
   },
   linux: {
     executableName: 'platform-bible',
+    // The snap is still built on every release run and published nowhere - this repository
+    // distributes no built application (LICENSING.md, "The distributed application"), and Paratext
+    // 10 is released from `paranext/paratext-10-studio`. It is kept so that a broken Linux packaging
+    // path surfaces while the release is being cut rather than afterward, and because
+    // `package-main.yml` uploads this same target as a per-push artifact for internal Linux testing.
     target: ['snap'],
     category: 'Development',
     extraResources: [

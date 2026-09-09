@@ -92,7 +92,12 @@ const configWebView: webpack.Configuration = merge(configBase, {
   // TODO(PT-4477): this is the AGGREGATE build only. Each extension also has its own `package`
   // script that builds a redistributable zip from its own `webpack/webpack.config.web-view.ts`, and
   // none of those set this - so that path still ships the dangling pointer. The fix belongs in
-  // `paranext-multi-extension-template`, because those files are shared regions end to end.
+  // `paranext-multi-extension-template` rather than here: each of those files is 29 lines and the
+  // shared region is the WHOLE file, `#region` on line 1 to `#endregion` on line 29, so there is
+  // nowhere in one to put this block that is not a divergence from the template. Their
+  // `webpack.config.main.ts` siblings are the contrast that makes the rule visible - the shared
+  // region there ends at `:47` and the copy patterns start below it, which is why a per-extension
+  // change was possible in that file and is not in this one.
   //
   // `compress.passes` restates a webpack DEFAULT rather than choosing a new setting. Webpack applies
   // its own `new TerserPlugin({ terserOptions: { compress: { passes: 2 } } })` only when

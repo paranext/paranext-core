@@ -128,6 +128,11 @@ declare module 'papi-shared-types' {
      *
      * The document is handed to whatever the operating system opens Markdown with; if nothing does,
      * it is revealed in the file manager instead.
+     *
+     * @throws If the document could not be opened - which includes the case where it was revealed
+     *   in the file manager instead, because that fallback cannot report whether it succeeded
+     *   either. A caller that offers this as a link needs to be able to tell the user the document
+     *   did not open, so the failure is reported rather than only logged.
      */
     'platform.openTermsOfService': () => Promise<void>;
 
