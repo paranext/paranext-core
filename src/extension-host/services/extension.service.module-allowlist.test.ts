@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EXTENSION_INTERFACE_MODULE_SPECIFIERS } from '@extension-host/data/extension-interface-modules.data';
+import { WEB_VIEW_MODULE_SPECIFIERS } from '@renderer/data/web-view-modules.data';
 
 /*
  * Pins the module specifiers an extension may `require` at runtime.
@@ -18,17 +19,13 @@ import { EXTENSION_INTERFACE_MODULE_SPECIFIERS } from '@extension-host/data/exte
  * `EXTENSION_INTERFACE_MODULE_SPECIFIERS` instead, in a module that imports nothing, and this
  * compares that VALUE. Any admission has to add a specifier there, in any syntax, and fail this.
  *
- * The renderer half is still read as source text: `global-this-web-view.model.ts` builds its map
- * imperatively, and its imports are not loadable outside a browser environment.
+ * The renderer half is read the same way, and for the same reason: `global-this-web-view.model.ts`
+ * pulls in React and `platform-bible-react`, which do not load outside a browser environment, so its
+ * map is keyed by `WEB_VIEW_MODULE_SPECIFIERS` in a module that imports nothing and this compares
+ * that value.
  */
 
 const REPO = path.join(__dirname, '..', '..', '..');
-const WEB_VIEW_MODULE_MAP_PATH = path.join(
-  REPO,
-  'src',
-  'renderer',
-  'global-this-web-view.model.ts',
-);
 const LICENSE_EXCEPTION_PATH = path.join(REPO, 'LICENSE-EXCEPTION.md');
 
 /**
@@ -103,17 +100,9 @@ const FIRST_PARTY_SUPPLIED_MODULES = [
   'platform-bible-utils',
 ];
 
-/** The specifiers the renderer answers for a web view, read out of its module map. */
-function readWebViewModuleSpecifiers(source: string): string[] {
-  const specifiers = [...source.matchAll(/moduleMap\.set\('([^']+)'/g)].map(
-    ([, specifier]) => specifier,
-  );
-  if (!specifiers.length)
-    throw new Error(
-      `Could not find any 'moduleMap.set(...)' entries in ${WEB_VIEW_MODULE_MAP_PATH}. This guard ` +
-        `reads source text, so check whether the map was merely reshaped. ${WIDENING_THE_GRANT}`,
-    );
-  return specifiers.sort();
+/** The specifiers the renderer answers for a web view, as its module map is keyed. */
+function readWebViewModuleSpecifiers(): string[] {
+  return [...WEB_VIEW_MODULE_SPECIFIERS].sort();
 }
 
 /**
@@ -149,7 +138,7 @@ describe('the Extension Interface the license exception grants', () => {
     // see, because it compares the shim against a copy of itself.
     const supplied = new Set([
       ...readPermittedModuleSpecifiers(),
-      ...readWebViewModuleSpecifiers(readFileSync(WEB_VIEW_MODULE_MAP_PATH, 'utf8')),
+      ...readWebViewModuleSpecifiers(),
     ]);
 
     expect(FIRST_PARTY_SUPPLIED_MODULES.filter((module) => !supplied.has(module))).toEqual([]);
@@ -159,10 +148,7 @@ describe('the Extension Interface the license exception grants', () => {
     // The other direction: a first-party module added to either host has to reach the grant, or the
     // published carve-out is silently narrower than the interface extensions actually link against.
     const supplied = [
-      ...new Set([
-        ...readPermittedModuleSpecifiers(),
-        ...readWebViewModuleSpecifiers(readFileSync(WEB_VIEW_MODULE_MAP_PATH, 'utf8')),
-      ]),
+      ...new Set([...readPermittedModuleSpecifiers(), ...readWebViewModuleSpecifiers()]),
     ];
     const ungranted = supplied.filter((module) => !FIRST_PARTY_SUPPLIED_MODULES.includes(module));
 
