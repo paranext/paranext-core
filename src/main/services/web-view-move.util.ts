@@ -32,7 +32,7 @@ import {
   type OwnerMatcher,
   type WebViewMoveInFlight,
 } from '@main/services/web-view-ownership.util';
-import { getTargetWebViewShard, webViewShards } from '@main/services/web-view-shard-index';
+import { getTargetWebViewWindowShard, webViewShards } from '@main/services/web-view-shard-index';
 import {
   createFreshWindow,
   findOwner,
@@ -421,7 +421,13 @@ async function moveCapturedWebView(
       );
     }
 
-    return await recoverAfterFailedMove(webViewId, owner, captured, targetDescription);
+    return await recoverAfterFailedMove(
+      webViewId,
+      owner,
+      captured,
+      targetDescription,
+      moveInFlight,
+    );
   } finally {
     deleteMoveInFlight(moveInFlight);
   }
@@ -470,12 +476,21 @@ async function readoptAfterFailedMove(
  * prose. These three outcomes are as far apart as "nothing changed" and "the web view is open
  * nowhere at all", and a caller reporting a failed move to the user has to tell them apart without
  * reading a sentence written for the log.
+ *
+ * Keeps `moveInFlight.destinationWindowId` current as the ladder moves on: this is the same record
+ * `getOpenWebViewDefinitionsForWindow` (`web-view.service-router.ts`) folds a mid-move view into
+ * for the one window it names, so a rung that re-targets without updating it would leave that
+ * fold-in still pointing at the target that just failed.
+ *
+ * @param moveInFlight This move's own record in the in-flight register, updated in place — the
+ *   register holds this exact object, not a copy
  */
 async function recoverAfterFailedMove(
   webViewId: WebViewId,
   owner: WebViewOwner,
   captured: SavedWebViewDefinition,
   targetDescription: string,
+  moveInFlight: WebViewMoveInFlight,
 ): Promise<never> {
   logger.debug(
     `Reopening webview ${webViewId} after its failed move to ${targetDescription}. Captured definition: ${JSON.stringify(captured)}`,
@@ -484,6 +499,10 @@ async function recoverAfterFailedMove(
   let reopenedIn: { description: string; disposition: WebViewMoveFailureDisposition } | undefined;
   if (!isWindowClosing(owner.windowId)) {
     const sourceDescription = `window ${owner.windowId}, where it came from`;
+    // The move is now trying to land the view back where it came from, not at the target that just
+    // failed — set before the readopt below is awaited, so a closing-window read that lands in the
+    // gap attributes the view to the window recovery is actually heading toward.
+    moveInFlight.destinationWindowId = owner.windowId;
     if (await readoptAfterFailedMove(owner.shard, webViewId, captured, sourceDescription)) {
       // Read again, because capturing out of this window is what emptied it: its close can be
       // decided while the readopt is in flight, and a web view in a window that is closing is not
@@ -499,7 +518,11 @@ async function recoverAfterFailedMove(
   }
   if (reopenedIn === undefined) {
     try {
-      const focusedShard = await getTargetWebViewShard();
+      const { windowId: focusedWindowId, shard: focusedShard } =
+        await getTargetWebViewWindowShard();
+      // Same reasoning as the source-window rung above: recorded before the readopt is awaited, not
+      // after, so the record never lags behind where this rung is actually trying to land the view.
+      moveInFlight.destinationWindowId = focusedWindowId;
       if (await readoptAfterFailedMove(focusedShard, webViewId, captured, 'the focused window')) {
         reopenedIn = {
           description: 'the focused window',

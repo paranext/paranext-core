@@ -46,11 +46,18 @@ export type WebViewMoveInFlight = {
   /** Project the captured view was showing, if any */
   projectId?: string;
   /**
-   * Window this move is putting the captured view into. Known before the move ever reaches the
-   * register below: a named target's id is the caller's own argument, and a new-window target's id
-   * is `createFreshWindow`'s window, stood up before the capture that empties the source. Either
-   * way this is set from the moment a `WebViewMoveInFlight` exists at all — there is no window in
-   * which one sits in the register with this still undefined.
+   * Window this move is currently trying to put the captured view into. Known before the move ever
+   * reaches the register below: a named target's id is the caller's own argument, and a new-window
+   * target's id is `createFreshWindow`'s window, stood up before the capture that empties the
+   * source. Either way this is set from the moment a `WebViewMoveInFlight` exists at all — there is
+   * no window in which one sits in the register with this still undefined.
+   *
+   * Not set once. A failed move's recovery (`recoverAfterFailedMove` in `web-view-move.util.ts`)
+   * re-adopts the captured view into a window other than the one that just failed — the source
+   * window first, then the focused window if that also fails — and updates this field on the same
+   * record, in place, before each of those readopts is attempted. So the value always names
+   * whichever window the move is heading toward right now, not the window it originally set out
+   * for.
    *
    * What lets `getOpenWebViewDefinitionsForWindow` in `web-view.service-router.ts` attribute an
    * in-flight move to the one closing window it is headed toward, the same way `webViewType` and

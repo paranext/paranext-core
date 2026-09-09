@@ -10,7 +10,10 @@ import { networkObjectService } from '@shared/services/network-object.service';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
 import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
-import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
+import {
+  createTargetShardResolver,
+  createTargetWindowShardResolver,
+} from '@main/services/target-shard-resolver.util';
 import { NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE } from '@shared/services/web-view.service-model';
 
 /**
@@ -24,6 +27,20 @@ export const webViewShards = createServiceShardIndex<WebViewServiceShard>({
 
 /** Get the WebView service shard for the currently focused window, throwing if none is available. */
 export const getTargetWebViewShard = createTargetShardResolver(
+  NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+  webViewShards,
+);
+
+/**
+ * Get the WebView service shard for the currently focused window, along with that window's id —
+ * throwing, with the reason, when no window can answer.
+ *
+ * For the one caller that has to come back to the window it heard from: a failed move's recovery
+ * (`recoverAfterFailedMove` in `web-view-move.util.ts`), which records the focused window as the
+ * in-flight move's new `destinationWindowId` before readopting into it. `getTargetWebViewShard`
+ * above drops the id, which is fine for a call that only forwards to whichever window answers.
+ */
+export const getTargetWebViewWindowShard = createTargetWindowShardResolver(
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   webViewShards,
 );
