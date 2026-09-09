@@ -406,11 +406,7 @@ namespace TestParanextDataProvider.Projects
             "myExtension/..",
             TestName = "ListExtensionDataQualifiers_TraversingExtensionName_Throws"
         )]
-        [TestCase(
-            "myExtension ",
-            TestName = "ListExtensionDataQualifiers_TrailingSpaceExtensionName_Throws"
-        )]
-        public void ListExtensionDataQualifiers_ExtensionNameNotASingleDirectory_Throws(
+        public void ListExtensionDataQualifiers_ExtensionNameEscapesItsDirectory_Throws(
             string? extensionName
         )
         {
@@ -427,6 +423,40 @@ namespace TestParanextDataProvider.Projects
                         new ProjectDataScope { ExtensionName = extensionName }
                     )
             );
+        }
+
+        [Test]
+        public void ExtensionData_NestedExtensionName_WritesListsAndReadsBack()
+        {
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+
+            // A name with a separator nests inside the extensions directory rather than escaping
+            // it, and the read and write paths have always accepted one. The listing must agree
+            // with them - and its escape check must never migrate into the shared path composition,
+            // where it would reject this name for reads and writes too and strand whatever was
+            // written under it
+            SetExtensionData(provider, "acme/tools", "settings.json", "nested");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    provider.ListExtensionDataQualifiers(
+                        new ProjectDataScope { ExtensionName = "acme/tools" }
+                    ),
+                    Is.EqualTo(new[] { "settings.json" })
+                );
+                Assert.That(
+                    provider.GetExtensionData(
+                        new ProjectDataScope
+                        {
+                            ExtensionName = "acme/tools",
+                            DataQualifier = "settings.json",
+                        }
+                    ),
+                    Is.EqualTo("nested")
+                );
+            });
         }
 
         private void SetExtensionData(

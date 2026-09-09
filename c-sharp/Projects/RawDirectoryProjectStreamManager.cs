@@ -1,3 +1,5 @@
+using System.IO.Enumeration;
+
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
@@ -48,32 +50,50 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
         if (!Directory.Exists(rootDir))
             return [];
 
-        var files = Directory.GetFiles(
+        // The listing must agree with GetDataStream, which opens a file by name with no attribute
+        // filter at all. So the rule is exactly: every regular file under rootDir is a stream,
+        // whatever its attributes; nothing else is; and the walk never leaves rootDir. Those are two
+        // separate decisions - what to INCLUDE and where to RECURSE - and Directory.GetFiles exposes
+        // only one knob (AttributesToSkip) that conflates them, which is why this is a
+        // FileSystemEnumerable with a predicate for each. Every simpler form below breaks the
+        // contract, and the named test goes red:
+        // - Directory.GetFiles with AttributesToSkip = ReparsePoint (the one-flag way to stop link
+        //   recursion) also skips FILES carrying ReparsePoint - which cloud-sync placeholders do
+        //   (OneDrive Files On-Demand, Dropbox online-only) while GetDataStream reads them fine.
+        //   Caught by GetExistingDataStreamNames_FileThatIsASymbolicLink_IsListed.
+        // - AttributesToSkip at its default (Hidden | System): .NET reports every dot-prefixed name
+        //   as Hidden on Unix, so `.foo.json` and everything under `.cache/` vanish on macOS and
+        //   Linux but not on Windows. Caught by GetExistingDataStreamNames_HiddenStreams_AreStillListed.
+        // - Following directory links (no ShouldRecursePredicate, or a MaxRecursionDepth in its
+        //   place) reports files from outside the project as this extension's own, under names with
+        //   no `..` for GetFileNameFromStreamName's guard to catch; a link to an ancestor recurses
+        //   until the path length overflows, and a depth cap only bounds that damage.
+        //   Caught by GetExistingDataStreamNames_DirectoryThatIsASymbolicLink_IsNotDescendedInto.
+        var streams = new FileSystemEnumerable<string>(
             rootDir,
-            "*",
+            (ref FileSystemEntry entry) => entry.ToFullPath(),
             new EnumerationOptions
             {
                 MatchType = MatchType.Simple,
                 RecurseSubdirectories = true,
                 ReturnSpecialDirectories = false,
-                // Two departures from EnumerationOptions' defaults, both required by this method's
-                // "every stream that exists" contract:
-                // - Hidden/System are NOT skipped (the default skips both). .NET reports every
-                //   dot-prefixed name as Hidden on Unix, so the default drops a `.foo.json` stream
-                //   - and every stream under a `.cache/` directory - on macOS and Linux but not on
-                //   Windows, while GetDataStream reads them on every platform.
-                // - ReparsePoint IS skipped, so recursion stops at a symlink or junction instead of
-                //   walking through it. Following one would report files from outside the project as
-                //   though they belonged to it, under names carrying no `..` for the guard in
-                //   GetFileNameFromStreamName to catch, and a link to an ancestor would recurse
-                //   until the path length overflowed.
-                AttributesToSkip = FileAttributes.ReparsePoint,
+                // Skip nothing by attribute; inclusion and recursion are decided by the predicates
+                AttributesToSkip = 0,
             }
-        );
+        )
+        {
+            // Files are streams and directories are not. Without this predicate the enumeration
+            // yields directories too - it is not Directory.GetFiles.
+            ShouldIncludePredicate = (ref FileSystemEntry entry) => !entry.IsDirectory,
+            // Consulted only for directories: never descend into a symlink or junction. A FILE that
+            // is a link is still included above, because GetDataStream reads through it.
+            ShouldRecursePredicate = (ref FileSystemEntry entry) =>
+                (entry.Attributes & FileAttributes.ReparsePoint) == 0,
+        };
 
         return
         [
-            .. files
+            .. streams
                 .Select(file =>
                     Path.GetRelativePath(rootDir, file).Replace(Path.DirectorySeparatorChar, '/')
                 )

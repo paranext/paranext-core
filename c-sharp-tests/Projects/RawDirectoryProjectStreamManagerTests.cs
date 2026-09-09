@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Paranext.DataProvider.Projects;
 using SIL.TestUtilities;
+using static TestParanextDataProvider.FileSystemLinks;
 
 namespace TestParanextDataProvider.Projects
 {
@@ -138,6 +139,55 @@ namespace TestParanextDataProvider.Projects
                     new[] { ".dotdir/inside.json", ".dotted.json", "attributed.json", "plain.json" }
                 )
             );
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_FileThatIsASymbolicLink_IsListed()
+        {
+            // A cloud-sync placeholder (OneDrive Files On-Demand, Dropbox online-only) is a file
+            // carrying the ReparsePoint attribute that File.Open reads fine. A file symlink has the
+            // same shape and is the closest a test can construct, so this pins that the listing
+            // does not skip reparse-point files - the tempting one-flag way to stop link recursion
+            WriteStream($"{ExtensionPath}/real.json", "real");
+            var extensionDirectory = Path.Join(
+                _projectFolder.Path,
+                ExtensionPath.Replace('/', Path.DirectorySeparatorChar)
+            );
+            CreateLinkOrIgnore(
+                Path.Join(extensionDirectory, "link.json"),
+                Path.Join(extensionDirectory, "real.json"),
+                isDirectory: false
+            );
+
+            var streamNames = _streamManager.GetExistingDataStreamNames(ExtensionPath);
+
+            Assert.That(streamNames, Is.EqualTo(new[] { "link.json", "real.json" }));
+        }
+
+        [Test]
+        public void GetExistingDataStreamNames_DirectoryThatIsASymbolicLink_IsNotDescendedInto()
+        {
+            // Following a directory link would report files from outside the project as this
+            // extension's own, under names carrying no `..` for the path guard to catch, and a link
+            // to an ancestor would recurse until the path length overflowed
+            WriteStream($"{ExtensionPath}/mine.json", "mine");
+            using var outside = new TemporaryFolder(
+                $"{TestContext.CurrentContext.Test.ID}-outside"
+            );
+            File.WriteAllText(Path.Join(outside.Path, "outside.json"), "not ours");
+            CreateLinkOrIgnore(
+                Path.Join(
+                    _projectFolder.Path,
+                    ExtensionPath.Replace('/', Path.DirectorySeparatorChar),
+                    "escape"
+                ),
+                outside.Path,
+                isDirectory: true
+            );
+
+            var streamNames = _streamManager.GetExistingDataStreamNames(ExtensionPath);
+
+            Assert.That(streamNames, Is.EqualTo(new[] { "mine.json" }));
         }
 
         [Test]

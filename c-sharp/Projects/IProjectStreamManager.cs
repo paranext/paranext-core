@@ -14,8 +14,10 @@ internal interface IProjectStreamManager
     /// <summary>
     /// Get the names of the data streams under <paramref name="underPath"/>, relative to it, using
     /// '/' as the separator. Recursive, so a stream nested in subdirectories is returned with those
-    /// subdirectories in its name. Creates nothing: if the path does not exist, returns an empty
-    /// array.
+    /// subdirectories in its name - but a symbolic link or junction to a directory is not followed,
+    /// while a link that is a file is listed like any other file, since
+    /// <see cref="GetDataStream"/> reads through it. Creates nothing: if the path does not exist,
+    /// returns an empty array.
     /// </summary>
     /// <param name="underPath">
     /// Path to enumerate under, relative to the project, using '/' or the platform's separator. Null
