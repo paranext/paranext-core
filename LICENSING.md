@@ -196,9 +196,25 @@ That is a licensing decision too.
 developers and contributors can run and test what the source produces, but nothing is published to
 an app store or attached to a public release. The application released to users is **Paratext 10**,
 built from this source in the `paranext/paratext-10-studio` repository, and it is that release the
-Terms of Service govern. Everything below describes the terms the released application carries; a
-locally built `Platform.Bible` binary is the same code under the same terms, not a separate product
-with its own.
+Terms of Service govern.
+
+The invariant is _no binaries attached to public releases_, not _no binaries leave this repository_,
+and the difference is worth stating because a reader who reaches the UBS lexical database later in
+this section will find these build artifacts and wonder whether they were considered. Three paths
+still move installers off the build machine, all of them for development and testing rather than for
+users: `publish.yml` uploads the Windows and macOS installers to an access-controlled S3 bucket when
+`uploadReleaseAssets` is set, `package-main.yml` uploads per-platform artifacts on pushes to the
+long-lived branches, and `test.yml`'s `check packaging` uploads one per platform on every push and
+pull request, retained for 14 days. Every one of those installers carries the lexical database, so
+every one of them relies on the same Paratext permission described later in this section - UBS's
+permission runs to **Paratext** specifically - rather than on anything this repository grants. That
+is deliberate and in scope; the narrower invariant - that no build of this source is offered to a
+public audience as a product - is what the paragraph above states. Releases carry no attachments:
+the fourteen that predate this position had theirs removed on 2026-09-09, leaving their tags and
+notes intact.
+
+Everything below describes the terms the released application carries; a locally built
+`Platform.Bible` binary is the same code under the same terms, not a separate product with its own.
 
 The built application is **not** distributed under the AGPL. It is licensed to the user under the
 [Paratext Terms of Service](./TERMS-OF-SERVICE.md), whose section 3.B.1 says so directly: "The final

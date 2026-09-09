@@ -460,13 +460,18 @@ step, no automation. Just a record.
   permission — rejected as unnecessary once nothing is distributed. Exclude the database from
   public artifacts — rejected: it is not optional in this build, and the identification problem
   would remain for the Terms of Service.
-- **Consequences:** `publish.yml` no longer needs `SNAPCRAFT_STORE_CREDENTIALS` (the repository
-  secret wants revoking separately), and the Linux `release/staged` staging is gone since the S3
+- **Consequences:** `publish.yml` no longer sets `SNAPCRAFT_STORE_CREDENTIALS`, so the repository
+  secret it read from - `LINUX_SNAP_STORE_CREDENTIALS`, the two names are not the same and only the
+  second is deletable - is unused and wants revoking separately, and the Linux `release/staged` staging is gone since the S3
   step excludes Linux. `README.md`'s Users section points at Paratext 10 rather than at GitHub
   releases and the snap store. Nothing consumes the release assets programmatically: every
-  `autoUpdater` use in `main.ts` is commented out, so there is no update feed to break. What is
-  already published — the `latest/stable` snap and fourteen GitHub releases going back to 2023 —
-  stays published until someone unpublishes it; this decision is about the future.
+  `autoUpdater` use in `main.ts` is commented out, so there is no update feed to break. What was
+  already published has since been retired rather than left to contradict this: the snap is gone
+  from the store, and on 2026-09-09 all 113 assets across the fourteen GitHub releases going back to
+  2023 were deleted, keeping every tag, note and prerelease flag. The invariant this states is *no
+  binaries attached to public releases* rather than *no binaries leave this repository* — CI build
+  artifacts and the S3 upload are in scope of the Paratext permission, which `LICENSING.md`'s "The
+  distributed application" section now says outright rather than leaving each reader to re-derive.
   `paratext-10-studio` becomes the sole distributor, which makes the notices document it packs
   (this repository's, describing this repository's shipping set rather than the patched clone's)
   the only copy a user receives. **Revisit** if this repository ever needs to publish a build to a
