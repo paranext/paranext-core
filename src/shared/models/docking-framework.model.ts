@@ -429,9 +429,12 @@ export type PapiDockLayout = {
    *   tabs. Defaults to `false`
    * @param activateWithoutDocumentFocus If true, a tab brought to the front is made active without
    *   being given document focus. For content arriving in a window the user has not activated:
-   *   focusing the tab focuses its iframe, which asks the browser to bring that window forward.
-   *   Left unspecified, this defaults to whether this window is still awaiting its first
-   *   activation. **Experimental** — this parameter is the new part of this method
+   *   focusing the tab focuses its iframe, and a `focus()` call inside a window that does not hold
+   *   OS focus sets that document's active element without raising the window — so without this,
+   *   whichever tab's content focuses last would claim the caret the moment the window is finally
+   *   raised, rather than the tab the raise is actually showing. Left unspecified, this defaults to
+   *   whether this window is still awaiting its first activation. **Experimental** — this parameter
+   *   is the new part of this method
    * @returns True if successfully found the WebView to update; false otherwise
    * @experimental
    */
@@ -488,10 +491,12 @@ export type PapiDockLayout = {
    *
    * @param tabId ID of the tab to set active and focused
    * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
-   *   taking document focus. Every mounted panel and every loaded web view asks to be focused, so a
-   *   window still waiting for its first activation would otherwise be pulled forward by its own
-   *   content arriving. Left unspecified, this defaults to whether this window is still awaiting
-   *   its first activation.
+   *   taking document focus. Every mounted panel and every loaded web view asks to be focused, and
+   *   a `focus()` call inside a window that does not hold OS focus only sets that document's active
+   *   element — it does not raise the window — so without this, whichever tab's content focuses
+   *   last would claim the caret the moment a window still awaiting its first activation is finally
+   *   raised. Left unspecified, this defaults to whether this window is still awaiting its first
+   *   activation.
    * @returns `true` if successfully found tab to update, `false` otherwise
    * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
    *   member is long-established.

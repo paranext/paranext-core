@@ -188,10 +188,11 @@ class FocusedWindowDataProviderEngine
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
     const { windowService, targetWindowId } = await this.#getTargetWindowServiceAndId();
     const focusSpecifier = selectorOrSpecifier ?? specifierIfSelectorProvided;
-    // A window created without activation must not be pulled forward by its own content: every
-    // mounted panel and every loaded web view asks to be focused, and routing can land here while
-    // that window is the only one ready to take work. Self-clearing on its first `focus` event, so
-    // a window the user has been in never takes this branch.
+    // A window created without activation must not have its caret claimed by its own content:
+    // every mounted panel and every loaded web view asks to be focused, and routing can land here
+    // while that window is the only one ready to take work — whichever call lands last would
+    // otherwise own the caret the moment the window is raised. Self-clearing on its first `focus`
+    // event, so a window the user has been in never takes this branch.
     const activateWithoutDocumentFocus = shouldContentAvoidDocumentFocus(targetWindowId);
     // Deselecting goes over as the one-argument form. Arguments cross the process boundary as JSON,
     // where an `undefined` in a non-trailing position becomes `null`, and the window service reads

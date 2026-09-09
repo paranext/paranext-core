@@ -83,7 +83,8 @@ export type WindowServiceShard = IWindowService & {
    * @param activateWithoutDocumentFocus Make the tab active without taking document focus. Passed
    *   by the main process when this window was created without activation and the user has not
    *   activated it since — every mounted panel and every loaded web view asks to be focused, and
-   *   honouring that would pull a background window forward as its own content finishes loading
+   *   honouring that would let whichever one focuses last claim the caret the moment the window is
+   *   raised, regardless of which tab the raise is actually showing
    * @experimental
    */
   setFocus(

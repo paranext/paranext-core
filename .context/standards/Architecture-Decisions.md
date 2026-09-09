@@ -826,10 +826,12 @@ step, no automation. Just a record.
   moment a window IS raised: several tabs' content can each call `focus()` while a window sits
   backgrounded, and without withholding, whichever call lands last claims the latent active element
   and wins the caret the instant the window is raised, regardless of which tab the raise is actually
-  showing. Comments in `main.ts`, `web-view.service-router.ts`,
-  `platform-dock-layout-storage.util.ts`, `platform.data.ts`, `docking-framework.model.ts`, and
-  `web-view.service-shard.model.ts` were corrected to state the latent-focus fact and this narrower
-  rationale in place of the two disproved claims. Left open: on a path where the window is never
+  showing. Every comment and TSDoc entry across the withholding code (`activateWithoutDocumentFocus`
+  and its call sites, in both main and renderer, and the generated `papi.d.ts` entries that come from
+  it) that described what a `focus()` call does was corrected to state the latent-focus fact and this
+  narrower rationale in place of the two disproved claims; comments describing a genuine OS-level
+  raise (`shouldBringToFront`, `focusWindow`, `raiseMoveTarget`) needed no change; a `focus()` call is
+  not in tension with any of them. Left open: on a path where the window is never
   raised at all, the latent active element may have no observable consequence, so whether
   withholding earns its place there too is unresolved — raised with the reviewer separately, not
   answered by this entry.
