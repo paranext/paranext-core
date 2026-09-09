@@ -8,6 +8,7 @@ import {
   ProjectSelector,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProject,
+  type ProjectSelectorSection,
 } from '@/components/advanced/project-selector/project-selector.component';
 
 // jsdom doesn't ship ResizeObserver or `Element.prototype.scrollTo`. cmdk (the
@@ -399,5 +400,105 @@ describe('locked grouping (regression: manage-books after groupByVersification r
     expect(screen.getByText('English')).toBeInTheDocument();
     expect(screen.getByText('Vulgate')).toBeInTheDocument();
     expect(screen.queryByLabelText('Filter')).not.toBeInTheDocument();
+  });
+});
+
+describe('customSections', () => {
+  const projects: ProjectSelectorProject[] = [
+    { id: 'a', shortName: 'A', fullName: 'Project A' },
+    { id: 'b', shortName: 'B', fullName: 'Project B' },
+    { id: 'c', shortName: 'C', fullName: 'Project C' },
+  ];
+
+  const sections: ProjectSelectorSection[] = [
+    { id: 'recent', label: 'Recent', match: (p) => p.id === 'c' },
+    { id: 'yours', label: 'Your projects', match: () => true },
+  ];
+
+  const openCustom = async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={[]}
+        selection={{ projectId: 'a' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        availableGroupings={['custom']}
+        defaultGrouping="custom"
+        hideFilterMenu
+        customSections={sections}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    return user;
+  };
+
+  it('renders caller-supplied headings in the supplied order', async () => {
+    await openCustom();
+    const headings = screen.getAllByText(/^(Recent|Your projects)$/).map((n) => n.textContent);
+    expect(headings).toEqual(['Recent', 'Your projects']);
+  });
+
+  it('places each project under the first section that matches it', async () => {
+    await openCustom();
+    const recent = screen.getByText('Recent').closest('[cmdk-group=""]');
+    expect(recent).not.toBeNull();
+    expect(recent).toHaveTextContent('C');
+    expect(recent).not.toHaveTextContent('A');
+  });
+
+  it('still filters within sections when the user searches', async () => {
+    const user = await openCustom();
+    // "Project C" (not just "C") disambiguates from "Project A"/"Project B", whose full names
+    // both contain the letter C as part of the word "Project".
+    await user.type(screen.getByPlaceholderText(/search/i), 'Project C');
+    expect(screen.getByText('Recent')).toBeInTheDocument();
+    expect(screen.queryByText('Your projects')).not.toBeInTheDocument();
+  });
+
+  it('ignores customSections when the active grouping is not custom', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={[]}
+        selection={{ projectId: 'a' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        availableGroupings={['custom', 'language']}
+        defaultGrouping="language"
+        customSections={sections}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(screen.queryByText('Recent')).not.toBeInTheDocument();
+  });
+
+  it('switches to custom sections through the filter menu', async () => {
+    const user = setupUser();
+    render(
+      <ProjectSelector
+        mode="project"
+        projects={projects}
+        openTabs={[]}
+        selection={{ projectId: 'a' }}
+        onChangeSelection={() => {}}
+        ariaLabel="Project"
+        availableGroupings={['custom', 'language']}
+        defaultGrouping="language"
+        customSections={sections}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    expect(screen.queryByText('Recent')).not.toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Filter'));
+    await user.click(await screen.findByText('Custom'));
+
+    expect(await screen.findByText('Recent')).toBeInTheDocument();
+    expect(screen.getByText('Your projects')).toBeInTheDocument();
   });
 });

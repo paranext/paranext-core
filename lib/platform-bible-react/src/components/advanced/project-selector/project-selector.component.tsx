@@ -56,6 +56,7 @@ import { useTruncationTooltip } from '@/hooks/use-truncation-tooltip.hook';
 import {
   computeRows,
   partitionAndSort,
+  partitionByCustomSections,
   partitionByLanguage,
   partitionByLastUsed,
   partitionByType,
@@ -68,6 +69,7 @@ import {
   type ProjectSelection,
   type ProjectSelectorMode,
   type ProjectSelectorProject,
+  type ProjectSelectorSection,
   type RowSection,
 } from './project-selector.rows';
 
@@ -80,6 +82,7 @@ export type {
   ProjectSelection,
   ProjectSelectorMode,
   ProjectSelectorProject,
+  ProjectSelectorSection,
 } from './project-selector.rows';
 
 // The selector's own popover already sits at `Z_INDEX_ABOVE_DOCK`; overlays that portal from
@@ -152,6 +155,8 @@ export type ProjectSelectorLocalizedStrings = {
   selectAll?: string;
   /** Multi-select: "Clear all" button. Defaults to `"Clear all"`. */
   clearAll?: string;
+  /** Filter menu: "Custom" item under the Group by section. Defaults to `"Custom"`. */
+  filterGroupByCustom?: string;
 };
 
 const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
@@ -177,6 +182,7 @@ const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
   openButtonLabel: 'Open',
   selectAll: 'Select all',
   clearAll: 'Clear all',
+  filterGroupByCustom: 'Custom',
 };
 
 function resolveStrings(
@@ -212,13 +218,16 @@ function scrollGroupLetterFromMap(id: ScrollGroupId): string {
  * - `versification` — uses `versificationId` / `versificationName`; pair with
  *   `priorityVersificationId` to pin the caller's active bucket to the top.
  * - `type` — uses `type` / `typeName`.
+ * - `custom` — uses the `customSections` prop; sections are caller-defined rather than derived from a
+ *   project field.
  */
 export type ProjectSelectorGroupingOption =
   | 'openTabs'
   | 'lastUsed'
   | 'language'
   | 'versification'
-  | 'type';
+  | 'type'
+  | 'custom';
 
 /**
  * Default `availableGroupings` when the caller does not pass the prop. Order matters — this list
@@ -293,10 +302,21 @@ type CommonProps = {
    * For a picker whose rows are ALL open tabs (so "Group by open tabs" only toggles a section
    * heading over an otherwise identical list) and which is single-select (so "Show selected only"
    * never renders), the menu reduces to a control with no meaningful effect. Set this to drop the
-   * affordance rather than present an inert one. Grouping still applies per
-   * `defaultGroupByOpenTabs`; only the user-facing toggle goes away.
+   * affordance rather than present an inert one. Grouping still applies per `defaultGrouping`; only
+   * the user-facing toggle goes away.
    */
   hideFilterMenu?: boolean;
+  /**
+   * Sections to bucket the list into, used when the active grouping is `'custom'`. Evaluated in
+   * order — a project lands in the first section whose `match` accepts it, and anything unmatched
+   * collects into a trailing unlabeled section. Empty sections are not rendered.
+   *
+   * `'custom'` is not offered by default: add it to `availableGroupings` to expose it. To pin the
+   * list to these sections and nothing else, pass `availableGroupings={['custom']}` with
+   * `defaultGrouping="custom"` and `hideFilterMenu`, since a one-item grouping menu is an inert
+   * control.
+   */
+  customSections?: readonly ProjectSelectorSection[];
 };
 
 export type ProjectSelectorProps =
@@ -582,7 +602,8 @@ function isGroupingChoice(value: string): value is GroupingChoice {
     value === 'lastUsed' ||
     value === 'language' ||
     value === 'versification' ||
-    value === 'type'
+    value === 'type' ||
+    value === 'custom'
   );
 }
 
@@ -610,6 +631,8 @@ function groupingLabel(
       return strings.filterGroupByVersification;
     case 'type':
       return strings.filterGroupByType;
+    case 'custom':
+      return strings.filterGroupByCustom;
     default:
       return option;
   }
@@ -801,6 +824,13 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     return result;
   }, [rows, query, props.mode, showSelectedOnly]);
 
+  // Keyed by normalizeProjectId because open-tab ids can arrive lowercased while canonical
+  // project ids are uppercase; partitionByCustomSections looks rows up by the same key.
+  const projectsById = useMemo(
+    () => new Map(props.projects.map((project) => [normalizeProjectId(project.id), project])),
+    [props.projects],
+  );
+
   // Section partitioning dispatches on the active grouping. Versification is just another option
   // here — `priorityVersificationId` still lets the caller pin their active project's bucket to
   // the top, but only when the active grouping happens to be 'versification'.
@@ -824,6 +854,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
         );
       case 'type':
         return partitionByType(filteredRows, strings.typeUnknownSectionHeading);
+      case 'custom':
+        return partitionByCustomSections(filteredRows, props.customSections ?? [], projectsById);
       case 'none':
       default:
         return partitionAndSort(filteredRows, false);
@@ -831,6 +863,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   }, [
     filteredRows,
     activeGrouping,
+    props.customSections,
+    projectsById,
     props.priorityVersificationId,
     strings.versificationUnknownSectionHeading,
     strings.languageUnknownSectionHeading,
@@ -1132,10 +1166,10 @@ export function ProjectSelector(props: ProjectSelectorProps) {
             <CommandList>
               <CommandEmpty>{props.commandEmptyMessage ?? 'No projects found'}</CommandEmpty>
               {sections.map((section, index) => (
-                // Versification grouping yields multiple sections of the
-                // same `kind` ('versification'), so the section key must
-                // include the heading label to stay stable across re-orders.
-                <Fragment key={`${section.kind}:${section.label ?? ''}`}>
+                // Grouping schemes emit several sections of the same `kind`, so the key needs more
+                // than that: custom sections carry an explicit `id`, and the rest are distinguished
+                // by their heading label.
+                <Fragment key={section.id ?? `${section.kind}:${section.label ?? ''}`}>
                   <CommandGroup heading={sectionHeading(section, strings)}>
                     {section.rows.map((row) => (
                       <ProjectRowView
@@ -1173,6 +1207,7 @@ function sectionHeading(
     case 'language':
     case 'type':
     case 'lastUsed':
+    case 'custom':
       return section.label;
     case 'flat':
     default:

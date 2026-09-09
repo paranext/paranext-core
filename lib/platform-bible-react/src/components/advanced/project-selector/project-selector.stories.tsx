@@ -11,6 +11,7 @@ import {
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
+  type ProjectSelectorSection,
 } from '@/components/advanced/project-selector/project-selector.component';
 
 const sampleProjects: ProjectSelectorProject[] = [
@@ -367,6 +368,72 @@ export const SimpleFlatMultiSelect: Story = {
       description: {
         story:
           'Multi-select without scroll groups: `mode="project-multi"` with `openTabs={[]}`. Every row corresponds to a single `{ projectId }` pair (no `scrollGroupId`), so no chips, no "Open" buttons, and no bound-but-closed synthetic rows appear. The trigger label reads "N: short1, short2, ..." driven by the default `getSelectedText`.',
+      },
+    },
+  },
+};
+
+// #endregion
+
+// #region custom sections
+
+const customSectionsSample: ProjectSelectorSection[] = [
+  { id: 'recent', label: 'Recent', match: (p) => ['esvus16', 'esv16uk'].includes(p.id) },
+  { id: 'yours', label: 'Your projects', match: () => true },
+];
+
+export const CustomSectionsSimple: Story = {
+  name: 'Custom sections (Simple — pinned, no filter menu)',
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+    return (
+      <ProjectSelector
+        mode="project"
+        projects={sampleProjects}
+        openTabs={[]}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+        ariaLabel="Project"
+        availableGroupings={['custom']}
+        defaultGrouping="custom"
+        hideFilterMenu
+        customSections={customSectionsSample}
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A picker pinned to caller-defined sections with no user-facing way to change grouping: `availableGroupings={[\'custom\']}`, `defaultGrouping="custom"`, and `hideFilterMenu` together, since a one-item grouping menu is an inert control.',
+      },
+    },
+  },
+};
+
+export const CustomSectionsPower: Story = {
+  name: 'Custom sections (Power — offered alongside other groupings)',
+  render: () => {
+    const [pairs, setPairs] = useState<ProjectSelectorProjectPair[]>([{ projectId: 'esvus16' }]);
+    return (
+      <ProjectSelector
+        mode="project-multi"
+        projects={sampleProjects}
+        openTabs={sampleOpenTabs}
+        selection={{ pairs }}
+        onChangeSelection={({ pairs: next }) => setPairs(next)}
+        ariaLabel="Projects"
+        availableGroupings={['custom', 'openTabs', 'language', 'type']}
+        defaultGrouping="custom"
+        customSections={customSectionsSample}
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`customSections` offered alongside the built-in groupings. Open the funnel icon and switch grouping in the menu to confirm the custom sections give way to the other options and come back when "Custom" is reselected.',
       },
     },
   },
