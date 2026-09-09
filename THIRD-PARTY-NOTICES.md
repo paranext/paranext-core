@@ -2735,7 +2735,7 @@ identifiers": `fsevents@2.3.3`.
 | `@radix-ui/react-use-size` | 1.1.1 | MIT |
 | `@radix-ui/react-visually-hidden` | 1.2.3 | MIT |
 | `@remix-run/router` | 1.23.3 | MIT |
-| `@sillsdev/scripture` | 2.0.5 | MIT |
+| `@sillsdev/scripture` | 2.1.0 | MIT |
 | `@tabler/icons-react` | 3.41.1 | MIT |
 | `@tailwindcss/typography` | 0.5.16 | MIT |
 | `@tanstack/react-table` | 8.21.3 | MIT |
@@ -3108,7 +3108,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### 7. @sillsdev/scripture@2.0.5
+### 7. @sillsdev/scripture@2.1.0
 
 ```text
 Copyright (c) SIL International.

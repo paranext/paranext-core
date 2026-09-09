@@ -1,7 +1,7 @@
 {
   "licenseeVersion": "10.1.0",
   "corpusVersion": "6.12.0",
-  "documentSha256": "db6f698669386bf7c9fadb70b2d208df34760092e2eba6e301c970a9f6a7e20b",
+  "documentSha256": "b811f4d3efe13e08e515a92e451f8afdf97bdb1ff055e96ddf36b43af549d472",
   "packages": [
     {
       "ecosystem": "npm",
@@ -747,7 +747,7 @@
     {
       "ecosystem": "npm",
       "name": "@sillsdev/scripture",
-      "version": "2.0.5",
+      "version": "2.1.0",
       "spdxId": "MIT",
       "confidence": 100,
       "matchedFile": "LICENSE",
