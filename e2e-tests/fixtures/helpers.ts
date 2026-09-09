@@ -736,6 +736,66 @@ export async function launchElectronApp(
 }
 
 /**
+ * Seams {@link removeUserDataDirWithRetry} calls through, so a test can fake the clock and the
+ * filesystem instead of actually waiting or deleting anything.
+ */
+export interface RemoveUserDataDirDeps {
+  rmSync: (dirPath: string, options: { recursive: boolean; force: boolean }) => void;
+  sleep: (ms: number) => Promise<void>;
+  now: () => number;
+}
+
+const defaultRemoveUserDataDirDeps: RemoveUserDataDirDeps = {
+  rmSync: (dirPath, options) => fs.rmSync(dirPath, options),
+  sleep: (ms) =>
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    }),
+  now: () => Date.now(),
+};
+
+/**
+ * Remove a user-data directory, polling briefly instead of trusting the first attempt.
+ *
+ * A file lock here outlives {@link killProcessTree} by a fraction of a second, not by seconds: on
+ * Windows, Chromium's utility process releases its cache journal (e.g.
+ * `Cache\No_Vary_Search\journal.baj`) moments after the tree is killed, not the instant it is. A
+ * single fixed multi-second wait pays that worst case on every teardown, including the near-total
+ * majority that would have succeeded within a couple hundred milliseconds; polling every 250ms
+ * instead removes the directory as soon as the lock actually clears, and only warns if it is still
+ * held once the (generous) budget below runs out.
+ */
+export async function removeUserDataDirWithRetry(
+  userDataDir: string,
+  deps: RemoveUserDataDirDeps = defaultRemoveUserDataDirDeps,
+): Promise<void> {
+  const budgetMs = 5_000;
+  const intervalMs = 250;
+  const start = deps.now();
+  let attempts = 0;
+  let lastError: unknown;
+  for (;;) {
+    attempts += 1;
+    try {
+      deps.rmSync(userDataDir, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+    const elapsed = deps.now() - start;
+    if (elapsed >= budgetMs) {
+      console.warn(
+        `[teardown] Could not remove ${userDataDir} after ${attempts} attempts over ${elapsed}ms: ${lastError}`,
+      );
+      return;
+    }
+    // Sequential polling: each attempt must complete before the next starts.
+    // eslint-disable-next-line no-await-in-loop
+    await deps.sleep(intervalMs);
+  }
+}
+
+/**
  * Tear down an Electron instance: kill the process group, wait for close, and clean up the isolated
  * user-data directory.
  */
@@ -819,21 +879,9 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
 
   console.log('[teardown] Cleaning up user data dir...');
 
-  // Clean up the isolated user-data directory. On some platforms file locks
-  // may linger briefly after the process group is killed, so retry once.
-  try {
-    fs.rmSync(userDataDir, { recursive: true, force: true });
-  } catch {
-    console.warn('[teardown] First rmSync attempt failed — retrying in 3s...');
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 3_000);
-    });
-    try {
-      fs.rmSync(userDataDir, { recursive: true, force: true });
-    } catch (e) {
-      console.warn(`[teardown] Could not remove ${userDataDir}: ${e}`);
-    }
-  }
+  // Clean up the isolated user-data directory. See removeUserDataDirWithRetry for why this polls
+  // briefly rather than trusting the first attempt or paying a fixed multi-second wait.
+  await removeUserDataDirWithRetry(userDataDir);
 
   // After the app has closed, so its own shutdown writes cannot land on top of what is restored.
   // Not reached when preserveUserDataDir returned above (an intermediate teardown of a relaunch
