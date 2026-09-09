@@ -704,8 +704,8 @@ export function partitionByCustomSections(
   const duplicateId = findDuplicateSectionId(sections);
   if (duplicateId !== undefined) {
     console.warn(
-      `ProjectSelector: duplicate custom section id "${duplicateId}" — the first section with ` +
-        `this id wins and later ones sharing it are ignored for matching purposes.`,
+      `ProjectSelector: duplicate custom section id "${duplicateId}" — matching is unaffected because ` +
+        `each section buckets by its own \`match\`, but sections sharing an id collide as React keys, which can cause stale or misapplied rendering.`,
     );
   }
 
