@@ -4,12 +4,21 @@ import * as path from 'path';
 import correct from 'spdx-correct';
 import { afterAll, describe, expect, it } from 'vitest';
 import { parseDeclared } from './declared';
-import { classify, loadPolicy, CONFIDENCE_THRESHOLD } from './policy';
-import type { Detection, Exception } from './types';
+import {
+  classify,
+  loadPolicy,
+  mergePolicies,
+  overlayFromEnv,
+  CONFIDENCE_THRESHOLD,
+} from './policy';
+import type { Detection, Exception, Policy } from './types';
 
 // Typed empty array rather than `[] as object[]`: `no-type-assertion/no-type-assertion` is an
 // error in this repo and does not exempt test files.
 const NO_EXCEPTIONS: Exception[] = [];
+
+/** Path to the committed policy, beside this test file. */
+const POLICY_PATH = path.join(__dirname, 'notices-policy.json');
 
 const POLICY = {
   allowed: ['MIT', 'Apache-2.0', 'BSD-3-Clause', 'MPL-2.0'],
@@ -1270,7 +1279,6 @@ describe('notices-policy.json', () => {
   // its copyleft ids are ones licensee can actually emit. Nothing else looks at the file that way,
   // and an unreachable copyleft entry (a deprecated spelling licensee never emits) is invisible to
   // every behavioral test in this file.
-  const POLICY_PATH = path.join(__dirname, 'notices-policy.json');
   const policy = loadPolicy(POLICY_PATH);
 
   it('parses and has the expected top-level shape', () => {
@@ -2010,5 +2018,82 @@ describe('loadPolicy', () => {
       },
     });
     expect(Object.keys(loadPolicy(file).licenseTexts ?? {})).toEqual(['nuget:Some.Package']);
+  });
+});
+
+describe('policy overlay', () => {
+  const basePolicy: Policy = {
+    allowed: ['MIT'],
+    copyleft: ['GPL-2.0-only'],
+    elections: { 'npm:jszip': { elected: 'MIT', of: 'MIT OR GPL-3.0-or-later', reason: 'x' } },
+    exceptions: [],
+    overrides: { 'nuget:Spart': { license: 'Zlib', version: '1.0.0' } },
+    platformOnlyPackages: ['fsevents'],
+  };
+
+  it('reads the overlay path by value and treats blank as none', () => {
+    expect(overlayFromEnv({ NOTICES_POLICY_OVERLAY: '  ' })).toBeUndefined();
+    expect(overlayFromEnv({})).toBeUndefined();
+    expect(overlayFromEnv({ NOTICES_POLICY_OVERLAY: '/tmp/o.json' })).toBe('/tmp/o.json');
+  });
+
+  it('unions the lists and merges the tables', () => {
+    const merged = mergePolicies(
+      basePolicy,
+      {
+        allowed: ['PSF-2.0', 'MIT'],
+        overrides: { 'nuget:hgWindows-6.3.1': { license: 'GPL-2.0-or-later', version: '1.0.0.3' } },
+        product: { name: 'P', repository: 'o/r' },
+      },
+      { base: 'base.json', overlay: 'overlay.json' },
+    );
+    expect(merged.allowed).toEqual(['MIT', 'PSF-2.0']);
+    expect(merged.copyleft).toEqual(['GPL-2.0-only']);
+    expect(Object.keys(merged.overrides || {})).toEqual(['nuget:Spart', 'nuget:hgWindows-6.3.1']);
+    expect(merged.platformOnlyPackages).toEqual(['fsevents']);
+    expect(merged.product).toEqual({ name: 'P', repository: 'o/r' });
+  });
+
+  it('refuses an overlay key the base already records', () => {
+    expect(() =>
+      mergePolicies(
+        basePolicy,
+        { overrides: { 'nuget:Spart': { license: 'MIT', versionIndependent: true } } },
+        { base: 'base.json', overlay: 'overlay.json' },
+      ),
+    ).toThrow(/overlay\.json redefines overrides nuget:Spart, which base\.json already records/);
+  });
+
+  it('concatenates exceptions and still refuses two for one package', () => {
+    const exception = {
+      package: 'npm:x',
+      spdx: 'MIT',
+      reviewer: 'a@b.c',
+      date: '2026-01-01',
+      reason: 'r',
+      textSha256: 'abc',
+      version: '1.0.0',
+    };
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notices-overlay-'));
+    const baseFile = path.join(dir, 'base.json');
+    const overlayFile = path.join(dir, 'overlay.json');
+    fs.writeFileSync(baseFile, JSON.stringify({ ...basePolicy, exceptions: [exception] }));
+    fs.writeFileSync(overlayFile, JSON.stringify({ exceptions: [exception] }));
+    expect(() => loadPolicy(baseFile, overlayFile)).toThrow(/more than one "exceptions" entry/);
+    fs.writeFileSync(
+      overlayFile,
+      JSON.stringify({ exceptions: [{ ...exception, package: 'npm:y' }] }),
+    );
+    expect(loadPolicy(baseFile, overlayFile).exceptions.map((e) => e.package)).toEqual([
+      'npm:x',
+      'npm:y',
+    ]);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('refuses an overlay path that names no readable file', () => {
+    expect(() => loadPolicy(POLICY_PATH, '/nonexistent/overlay.json')).toThrow(
+      /the notices policy overlay/,
+    );
   });
 });

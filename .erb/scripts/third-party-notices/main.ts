@@ -865,7 +865,8 @@ export function buildReport(): BuiltReport {
  * `CI=false` and `CI=0` - the two spellings somebody uses to say the opposite - both select the CI
  * branch, after which the check hard-fails on a condition it has explicitly decided not to fail on
  * locally. `acceptShrinkFromEnv` (`shipping-set.ts`) reads its variable the same way for the same
- * reason; these two are the pipeline's only environment reads.
+ * reason; `overlayFromEnv` (`policy.ts`) is the third and last: these three are the pipeline's only
+ * environment reads.
  */
 export function inCi(env: typeof process.env = process.env): boolean {
   const raw = (env.CI || '').trim().toLowerCase();

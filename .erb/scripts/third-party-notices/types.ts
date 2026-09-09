@@ -172,6 +172,19 @@ export type CopiedPlatformLibrary = {
   reason: string;
 };
 
+/** The product a downstream repository builds from this source, declared only in its overlay. */
+export type ProductBlock = {
+  /** Must equal `productName` in `electron-builder.json5`, which the downstream build rewrites. */
+  name: string;
+  /** The repository the product is built from, e.g. `paranext/paratext-10-studio`. */
+  repository: string;
+  /**
+   * Whether UBS's permission to distribute the lexical database covers this product. UBS's
+   * permission names Paratext, so this is true only for a Paratext product.
+   */
+  isParatext?: boolean;
+};
+
 /** A checked-in copy of a staged library's Ubuntu `copyright` file. */
 export type VendoredCopyright = {
   /** Filename under `vendored-texts/snap/`. */
@@ -213,6 +226,55 @@ export type Policy = {
   copiedPlatformLibrariesNote?: string;
   /** Keyed by the library's name as the document calls it. */
   copiedPlatformLibraries?: Record<string, CopiedPlatformLibrary>;
+  separateProgramsNote?: string;
+  /** Keyed by program name - see `separate-programs.ts`. Element type is filled in by that module. */
+  separatePrograms?: Record<string, SeparateProgram>;
+  externalExtensionsNote?: string;
+  /** Keyed by extension name - see `external-extensions.ts`. */
+  externalExtensions?: Record<string, ExternalExtension>;
+  productNote?: string;
+  /** Overlay only: the downstream product this run describes. */
+  product?: ProductBlock;
+};
+
+/** A third-party program redistributed as a separate executable - see `separate-programs.ts`. */
+export type SeparateProgram = {
+  spdx: string[];
+  copyright: string;
+  reviewer: string;
+  date: string;
+  reason: string;
+  sourceAvailability: string;
+  deliveries: ProgramDelivery[];
+};
+
+/** How one platform's installer carries a separate program. */
+export type ProgramDelivery = {
+  platform: string;
+  version: string;
+  mechanism: string;
+  /** A file in the tree and a substring it must contain, or the entry is refused. */
+  evidence: { file: string; contains: string };
+  /** Where the bundle carries its own notice files, or `false` when it carries none. */
+  carriesNotices: string | false;
+  alsoContains?: BundledComponent[];
+};
+
+/** A runtime or library bundled inside a separate program's delivery. */
+export type BundledComponent = {
+  name: string;
+  version?: string;
+  spdx?: string[];
+  /** Free-text terms where no SPDX identifier applies; requires `nonSpdx: true`. */
+  terms?: string;
+  nonSpdx?: boolean;
+};
+
+/** An extension packed from outside this repository - see `external-extensions.ts`. */
+export type ExternalExtension = {
+  /** Whether its bundled dependencies have rows in this document. Only `false` is accepted today. */
+  itemized: boolean;
+  reason: string;
 };
 
 /** One npm package the build establishes as shipping, and how it was reached. */

@@ -96,8 +96,136 @@ function normalizeDetectedId(id: string): string {
  * before it is added. Each sits immediately before the table it describes. The fuller
  * situation-to-instrument guide is `.erb/scripts/third-party-notices/README.md`.
  */
-export function loadPolicy(file: string): Policy {
-  const policy = readJsonFile<Policy>(file, 'the notices policy');
+/** The environment variable naming a second policy file to merge over the committed one. */
+export const OVERLAY_ENV = 'NOTICES_POLICY_OVERLAY';
+
+/**
+ * The overlay path the environment names, or `undefined` when it names none.
+ *
+ * Read by VALUE like `inCi` and `acceptShrinkFromEnv`: a blank value is "no overlay", never a file
+ * called "". A downstream repository that builds a product from this source sets this to its own
+ * policy file, so its determinations live beside its build rather than in a patch to this file.
+ */
+export function overlayFromEnv(env: typeof process.env = process.env): string | undefined {
+  const raw = (env[OVERLAY_ENV] || '').trim();
+  return raw || undefined;
+}
+
+/** The two lists' union, in base order then overlay order, each name once. */
+function unionLists(base: string[] | undefined, overlay: string[] | undefined): string[] {
+  return [...new Set([...(base || []), ...(overlay || [])])];
+}
+
+/**
+ * One keyed table merged, refusing a key both files record.
+ *
+ * An overlay ADDS determinations. Letting it replace one would let a downstream file silently
+ * change what this repository's reviewers established about a package both ship.
+ */
+function mergeTable<T>(
+  table: string,
+  base: Record<string, T> | undefined,
+  overlay: Record<string, T> | undefined,
+  names: { base: string; overlay: string },
+): Record<string, T> {
+  const collisions = Object.keys(overlay || {})
+    .filter((key) => base && key in base)
+    .sort(compareStrings);
+  if (collisions.length)
+    throw new Error(
+      `${names.overlay} redefines ${table} ${collisions.join(', ')}, which ${names.base} already ` +
+        'records. An overlay adds determinations; it never replaces one. Remove the entry from ' +
+        'the overlay, or change the committed policy.',
+    );
+  return { ...(base || {}), ...(overlay || {}) };
+}
+
+/**
+ * The committed policy with a downstream overlay merged over it.
+ *
+ * Lists union, keyed tables merge with collisions refused, `exceptions` concatenate (and
+ * `assertOneExceptionPerPackage` then runs over the result in `loadPolicy`), the `*Note` fields
+ * stay the committed ones, and `product` comes from the overlay alone.
+ */
+export function mergePolicies(
+  base: Policy,
+  overlay: Partial<Policy>,
+  names: { base: string; overlay: string },
+): Policy {
+  return {
+    ...base,
+    allowed: unionLists(base.allowed, overlay.allowed),
+    copyleft: unionLists(base.copyleft, overlay.copyleft),
+    platformOnlyPackages: unionLists(base.platformOnlyPackages, overlay.platformOnlyPackages),
+    exceptions: [...(base.exceptions || []), ...(overlay.exceptions || [])],
+    elections: mergeTable('elections', base.elections, overlay.elections, names),
+    overrides: mergeTable('overrides', base.overrides, overlay.overrides, names),
+    copyrightNotices: mergeTable(
+      'copyrightNotices',
+      base.copyrightNotices,
+      overlay.copyrightNotices,
+      names,
+    ),
+    licenseTexts: mergeTable('licenseTexts', base.licenseTexts, overlay.licenseTexts, names),
+    unbundledDependencies: mergeTable(
+      'unbundledDependencies',
+      base.unbundledDependencies,
+      overlay.unbundledDependencies,
+      names,
+    ),
+    snapStagePackages: mergeTable(
+      'snapStagePackages',
+      base.snapStagePackages,
+      overlay.snapStagePackages,
+      names,
+    ),
+    staticAssetNotices: mergeTable(
+      'staticAssetNotices',
+      base.staticAssetNotices,
+      overlay.staticAssetNotices,
+      names,
+    ),
+    copiedPlatformLibraries: mergeTable(
+      'copiedPlatformLibraries',
+      base.copiedPlatformLibraries,
+      overlay.copiedPlatformLibraries,
+      names,
+    ),
+    separatePrograms: mergeTable(
+      'separatePrograms',
+      base.separatePrograms,
+      overlay.separatePrograms,
+      names,
+    ),
+    externalExtensions: mergeTable(
+      'externalExtensions',
+      base.externalExtensions,
+      overlay.externalExtensions,
+      names,
+    ),
+    product: overlay.product,
+  };
+}
+
+/**
+ * Reads the policy, merges the overlay the environment names (if any), and refuses the shapes no
+ * consumer can act on.
+ *
+ * `overlayFile` defaults from the environment AT CALL TIME, so every caller - the generator, both
+ * verify modes, the corpus index builder - sees the same merged policy without passing anything.
+ */
+export function loadPolicy(
+  file: string,
+  overlayFile: string | undefined = overlayFromEnv(),
+): Policy {
+  const base = readJsonFile<Policy>(file, 'the notices policy');
+  const policy = overlayFile
+    ? mergePolicies(
+        base,
+        readJsonFile<Partial<Policy>>(overlayFile, 'the notices policy overlay'),
+        { base: file, overlay: overlayFile },
+      )
+    : base;
   assertOneExceptionPerPackage(policy);
   assertLicenseTextsAreNuget(policy);
   return policy;
