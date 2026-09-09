@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import path from 'path';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 
@@ -73,14 +74,16 @@ describe('dotnetDataProvider.start', () => {
 
     const [command, args, options] = mocks.spawn.mock.calls[0];
     expect(command).toBe('dotnet');
+    // Built with `path.join`, as the service builds it: the separator is platform-specific, so a
+    // forward-slash literal cannot match on Windows.
     expect(args).toEqual([
       'run',
       '--project',
-      `${RESOURCES_PATH}/c-sharp/ParanextDataProvider.csproj`,
+      path.join(RESOURCES_PATH, 'c-sharp', 'ParanextDataProvider.csproj'),
       '--no-build',
     ]);
     // Matches the cwd `dotnet watch --project` would have used, so the two dev modes agree
-    expect(options).toEqual({ cwd: `${RESOURCES_PATH}/c-sharp` });
+    expect(options).toEqual({ cwd: path.join(RESOURCES_PATH, 'c-sharp') });
     // A stale C# build is invisible from the outside, so the mode has to announce itself
     expect(mocks.loggerInfo).toHaveBeenCalledWith(
       expect.stringContaining('PT_DOTNET_NO_WATCH is set'),
