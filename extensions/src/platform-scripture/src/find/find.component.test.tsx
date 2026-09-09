@@ -882,3 +882,51 @@ describe('Find — whitespace and diacritic tolerance toggles', () => {
     },
   );
 });
+
+// These exist because the filter controls are plain form controls (radio groups, checkboxes), not
+// menu items. Housing them in a Radix menu makes them unreachable by keyboard: menu content calls
+// preventDefault on Tab, and its arrow handling only walks items registered in its roving-focus
+// collection — which plain form controls never join. A regression back to a menu container would
+// leave the panel mouse-only, and nothing else in this suite would notice.
+describe('Find — filters panel keyboard accessibility', () => {
+  /** Opens the filters panel, which is where all the filter controls live */
+  async function openFilters(user: ReturnType<typeof setupUser>) {
+    await user.click(screen.getByRole('button', { name: 'Toggle filters' }));
+  }
+
+  it('puts focus on the first filter control as soon as the panel opens', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+
+    expect(screen.getByRole('radio', { name: 'Any text' })).toHaveFocus();
+  });
+
+  // Each radio group is a single tab stop (roving tabindex), so Tab crosses between groups rather
+  // than visiting every radio — which is why the second stop is the next group, not the next radio.
+  it('moves focus to the next group of controls when the user presses Tab', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.tab();
+
+    expect(screen.getByRole('radio', { name: 'Anywhere' })).toHaveFocus();
+  });
+
+  // Asserts focus movement rather than selection. Radix selects a radio on arrow-navigation from a
+  // `focus` handler gated on a flag set by a non-capturing `document` keydown listener, which React
+  // sets only after its own delegated handler has already moved focus — so the selection half of
+  // that behavior cannot be reproduced under jsdom. Navigation is the part this component controls,
+  // and the part that was broken.
+  it('moves focus between radio options when the user presses the down arrow', async () => {
+    const user = setupUser();
+    render(<Find {...buildLifecycleProps({})} />);
+
+    await openFilters(user);
+    await user.keyboard('{ArrowDown}');
+
+    expect(screen.getByRole('radio', { name: 'Verse text only' })).toHaveFocus();
+  });
+});
