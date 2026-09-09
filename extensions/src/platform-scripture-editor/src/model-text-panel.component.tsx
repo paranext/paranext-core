@@ -209,17 +209,11 @@ export function ModelTextPanel({
   // without it the panel spins forever with the picker unreachable. Skipped while a manual pick is
   // in flight (it installs the resource itself).
   const dblEntryUidToInstall = match && !match.installed ? match.dblEntryUid : undefined;
-  const { isInstalling, installFailed, retryInstall, markInstallFailed } =
-    useDblResourceAutoInstall(dblEntryUidToInstall, installResource, isSelecting);
-
-  // Re-read the catalog before re-attempting. The install ran against a catalog snapshot, and when
-  // that snapshot is what was wrong — a resource cached as not-installed that is in fact on disk —
-  // re-running the same install against it can only reproduce the same failure. Refetching first is
-  // what lets a stale flag self-correct and gives "Try again" a chance at a different outcome.
-  const handleRetryInstall = useCallback(() => {
-    onRetryCatalog();
-    retryInstall();
-  }, [onRetryCatalog, retryInstall]);
+  const { isInstalling, installFailed, retryInstall, clearInstallFailure, markInstallFailed } =
+    useDblResourceAutoInstall(dblEntryUidToInstall, installResource, {
+      skipAutoInstall: isSelecting,
+      refreshResourceList: onRetryCatalog,
+    });
 
   // Only used to add a "check your connection" hint to the install-failed message when the machine
   // is definitely offline (the common cause of a failed download on first run).
@@ -450,7 +444,7 @@ export function ModelTextPanel({
       setIsSelecting(true);
       // A user-initiated pick is a fresh attempt: clear any prior auto-install failure so the
       // install-failed state doesn't stick.
-      retryInstall();
+      clearInstallFailure();
       try {
         await selectTextConnection(resource, getUserModelTexts, setUserModelTexts, async () => {
           try {
@@ -467,7 +461,7 @@ export function ModelTextPanel({
         setIsSelecting(false);
       }
     },
-    [getUserModelTexts, setUserModelTexts, installResource, retryInstall, markInstallFailed],
+    [getUserModelTexts, setUserModelTexts, installResource, clearInstallFailure, markInstallFailed],
   );
 
   const handlePickModelText = useCallback(async () => {
@@ -564,7 +558,7 @@ export function ModelTextPanel({
             : '%webView_modelTextPanel_installFailedOffline%',
         )}
         retryLabel={localize(localizedStrings, '%webView_modelTextPanel_retry%')}
-        onRetry={handleRetryInstall}
+        onRetry={retryInstall}
       />
     );
   }

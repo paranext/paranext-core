@@ -56,16 +56,13 @@ declare module 'platform-get-resources' {
   /** Options for the `platformGetResources.getCachedResources` command. */
   export type GetCachedResourcesOptions = {
     /**
-     * Wait for the catalog's `installed` flags to be reconciled against the local project list
-     * before returning, instead of returning the current snapshot and reconciling in the
-     * background.
+     * Wait for the catalog's `installed` flags to be reconciled against the local project list,
+     * instead of returning the current snapshot and reconciling in the background.
      *
-     * Opt in when the next decision turns on those flags — a panel deciding whether to install the
-     * resource it is about to render reads a snapshot taken before the reconciliation as "not
-     * installed" and downloads a resource that is already on disk. Leave it off for a listing (the
-     * Get Resources dialog, the resource picker), where blocking the open on a project-metadata
-     * read that can take many seconds while the C# project factory initializes costs more than
-     * showing the previous snapshot and picking up the corrected flags on the next open.
+     * Opt in when the next decision turns on those flags: a panel reading a pre-reconciliation
+     * snapshot sees "not installed" and downloads a resource already on disk. Leave it off for a
+     * listing, which would rather show a slightly stale catalog than wait. The wait is bounded and
+     * gives up quietly, so it never turns a slow reconciliation into a failed command.
      */
     waitForInstalledFlagsSync?: boolean;
   };
@@ -122,9 +119,8 @@ declare module 'papi-shared-types' {
      * If no cached value exists, attempts to fetch them. Failed refresh attempts do NOT clear
      * existing cached data.
      *
-     * The catalog's `installed` flags are reconciled against the local project list on every call;
-     * by default that runs in the background and the current snapshot is returned. Pass
-     * `waitForInstalledFlagsSync` to wait for it — see {@link GetCachedResourcesOptions}.
+     * The catalog's `installed` flags are reconciled against the local project list on every call,
+     * in the background unless `options` asks otherwise.
      *
      * @param options Options for this call; see {@link GetCachedResourcesOptions}.
      * @returns The cached catalog, or an `unavailable` result when this build cannot produce one.

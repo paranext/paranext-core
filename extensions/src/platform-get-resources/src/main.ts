@@ -9,7 +9,13 @@ import {
 } from '@papi/core';
 import type { DblResourceCatalog, GetCachedResourcesOptions } from 'platform-get-resources';
 import type { DblResourceData } from 'platform-bible-utils';
-import { getErrorMessage, isString, Mutex, retryUntil } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isString,
+  Mutex,
+  retryUntil,
+  waitForDuration,
+} from 'platform-bible-utils';
 import { resolveDblCatalog, shouldStopBackgroundFetch } from './dbl-catalog.utils';
 import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
 import { hasResourceProject, reconcileInstalledFlags } from './installed-flags.utils';
@@ -95,6 +101,13 @@ let hasWaitedForLocalResourceProjects = false;
 
 const RESOURCE_PROJECT_WAIT_ATTEMPTS = 5;
 const RESOURCE_PROJECT_WAIT_DELAY_MS = 500;
+
+/**
+ * How long `getCachedResources` will wait for the installed-flag sync when a caller opts in. Well
+ * under the 30-second network request timeout, because a caller that blocks past that gets a
+ * rejection — and a panel paints a catalog-load failure over a catalog it could have shown.
+ */
+const INSTALLED_FLAGS_SYNC_WAIT_MS = 5000;
 
 /**
  * Reads local project metadata, waiting for the C# Paratext PDPF to register its resource projects.
@@ -206,19 +219,21 @@ async function getCachedResources(
   const catalog = await getCatalogFromCacheOrFetch();
   if (catalog.status !== 'available') return catalog;
 
-  // The sync is what corrects a stale `installed` flag — a row cached before the C# project factory
-  // registered its projects reads not-installed even though the resource is on disk. It is normally
-  // left running in the background so a dialog open is never blocked by getMetadataForAllProjects
-  // retries (which can exceed the 30-second JSON-RPC timeout while the C# PDPF is initializing);
-  // that open shows the previous snapshot and the next one picks up the corrected flags.
+  // The sync corrects a stale `installed` flag: a row cached before the C# project factory
+  // registered its projects reads not-installed even though the resource is on disk. Callers that
+  // only list resources let it run in the background and show this snapshot; callers that act on
+  // the flags wait for it (see `GetCachedResourcesOptions`).
   const syncPromise = ensureInstalledFlagsSynced();
   if (!options?.waitForInstalledFlagsSync) return catalog;
 
-  // A caller that acts on the flags — a panel deciding whether to install the resource it is about
-  // to render — cannot use a snapshot that predates the sync, so it opts into waiting and gets the
-  // rows the sync produced. `cachedResources` is reassigned (not mutated) by the sync, so the
-  // catalog captured above is the pre-sync array and has to be re-read here.
-  await syncPromise;
+  // Bounded, and giving up is not an error: the sync's project-metadata read can block for tens of
+  // seconds while the C# factory starts up, and waiting that long would fail this whole command on
+  // the network timeout — painting a load failure over a usable, slightly stale catalog. Timing out
+  // returns the snapshot instead, which the next read corrects. `ensureInstalledFlagsSynced` never
+  // rejects, which `waitForDuration` requires to time out promptly.
+  await waitForDuration(() => syncPromise, INSTALLED_FLAGS_SYNC_WAIT_MS);
+  // Re-read: the sync reassigns `cachedResources` rather than mutating it, so the catalog captured
+  // above is the pre-sync array.
   return { status: 'available', resources: cachedResources ?? catalog.resources };
 }
 

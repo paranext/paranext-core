@@ -229,6 +229,7 @@ function resetPanelHooks() {
     isInstalling: false,
     installFailed: false,
     retryInstall: vi.fn(),
+    clearInstallFailure: vi.fn(),
     markInstallFailed: vi.fn(),
   });
   mockUseDblResourceCatalog.mockReturnValue({
@@ -264,17 +265,16 @@ describe('ResourceTextPanel — More info disclosure', () => {
 });
 
 describe('ResourceTextPanel — failed install recovery', () => {
-  it('re-reads the catalog when the user retries a failed install', () => {
-    // The install ran against a catalog snapshot, so when that snapshot is what was wrong — a
-    // resource cached as not-installed that is in fact on disk — re-running the same install
-    // against it can only reproduce the same error. Refetching first is what lets Try again reach
-    // a different outcome instead of replaying the failure forever.
+  it('hands the catalog refetch to the auto-install hook, so its retry can re-read', () => {
+    // The retry is composed inside the hook (refresh + re-attempt); this panel's job is only to
+    // supply the refresh. Without it the retry replays the same install against the same snapshot.
     const retryInstall = vi.fn();
     const refetchCatalog = vi.fn();
     mockUseDblResourceAutoInstall.mockReturnValue({
       isInstalling: false,
       installFailed: true,
       retryInstall,
+      clearInstallFailure: vi.fn(),
       markInstallFailed: vi.fn(),
     });
     mockUseDblResourceCatalog.mockReturnValue({
@@ -309,7 +309,9 @@ describe('ResourceTextPanel — failed install recovery', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
-    expect(refetchCatalog).toHaveBeenCalled();
-    expect(retryInstall).toHaveBeenCalled();
+    expect(retryInstall).toHaveBeenCalledTimes(1);
+    // ...and it was handed this panel's catalog refetch as the list-refresher that retry uses.
+    const [, , optionsPassedToHook] = mockUseDblResourceAutoInstall.mock.lastCall ?? [];
+    expect(optionsPassedToHook).toMatchObject({ refreshResourceList: refetchCatalog });
   });
 });

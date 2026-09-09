@@ -293,11 +293,9 @@ describe('ModelTextPanel', () => {
     await waitFor(() => expect(installResource).toHaveBeenCalledTimes(2));
   });
 
-  it('re-reads the catalog when the user retries a failed install', async () => {
-    // The install ran against a catalog snapshot, so when that snapshot is what was wrong — a
-    // resource cached as not-installed that is in fact on disk — re-running the same install
-    // against it can only reproduce the same error. Refetching first is what lets Try again reach
-    // a different outcome instead of replaying the failure forever.
+  it('re-reads the catalog as well as re-installing when the user retries', async () => {
+    // The install failed against a catalog snapshot, so replaying it against that same snapshot
+    // could only fail again. Re-reading is the half of the retry that can change the answer.
     const installResource = vi.fn(async () => {
       throw new Error('install failed');
     });
@@ -311,13 +309,14 @@ describe('ModelTextPanel', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
 
-    expect(onRetryCatalog).toHaveBeenCalled();
+    expect(onRetryCatalog).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(installResource).toHaveBeenCalledTimes(2));
   });
 
   it('offers a retry rather than reinstalling when a successful install leaves the flag stale', async () => {
-    // Installing a resource that is already on disk succeeds as a no-op, so a stale catalog hands
-    // the same uid back after the refetch that success triggers. Re-firing the install there loops
-    // forever; the panel surfaces the recovery affordance instead, whose retry re-reads the catalog.
+    // Installing a resource already on disk succeeds as a no-op, so a stale catalog hands the same
+    // uid back after the refetch that success triggers. Re-firing there would loop; the panel
+    // surfaces the recovery affordance instead.
     const installResource = vi.fn(async () => {});
     const props = makeProps({
       modelTextsState: readyState(configuredModelText('uid-web')),

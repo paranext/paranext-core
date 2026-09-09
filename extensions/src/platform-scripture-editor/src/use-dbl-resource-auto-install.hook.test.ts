@@ -33,7 +33,9 @@ describe('useDblResourceAutoInstall', () => {
 
   it('skips the auto-install when skipAutoInstall is true', () => {
     const installResource = okInstall();
-    renderHook(() => useDblResourceAutoInstall('uid-a', installResource, true));
+    renderHook(() =>
+      useDblResourceAutoInstall('uid-a', installResource, { skipAutoInstall: true }),
+    );
 
     expect(installResource).not.toHaveBeenCalled();
   });
@@ -59,20 +61,45 @@ describe('useDblResourceAutoInstall', () => {
     expect(installResource).toHaveBeenCalledTimes(1);
   });
 
-  it('retryInstall re-attempts the same uid', async () => {
+  it('retryInstall re-attempts the same uid and refreshes the list it failed against', async () => {
     const installResource = failInstall();
-    const { result } = renderHook(() => useDblResourceAutoInstall('uid-a', installResource));
+    const refreshResourceList = vi.fn();
+    const { result } = renderHook(() =>
+      useDblResourceAutoInstall('uid-a', installResource, { refreshResourceList }),
+    );
 
     await waitFor(() => expect(result.current.installFailed).toBe(true));
     act(() => result.current.retryInstall());
+
+    // Re-reading the list is the half that can change the answer: the install failed against a
+    // snapshot, so replaying it against that same snapshot could only fail again.
+    expect(refreshResourceList).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(installResource).toHaveBeenCalledTimes(2));
+  });
+
+  it('clearInstallFailure drops the failed state without refreshing the list', async () => {
+    // The manual-pick path calls this: it is starting its own install and re-resolves the list
+    // itself, so a refresh here would be a second, racing fetch.
+    const installResource = failInstall();
+    const refreshResourceList = vi.fn();
+    const { result } = renderHook(() =>
+      useDblResourceAutoInstall('uid-a', installResource, { refreshResourceList }),
+    );
+
+    await waitFor(() => expect(result.current.installFailed).toBe(true));
+    act(() => result.current.clearInstallFailure());
+
+    expect(refreshResourceList).not.toHaveBeenCalled();
+    await waitFor(() => expect(result.current.installFailed).toBe(false));
   });
 
   it('markInstallFailed surfaces installFailed for a uid without an auto-install attempt', () => {
     // Mirrors a manual pick: the caller installs the resource itself (skipAutoInstall) and reports
     // the failure via markInstallFailed.
     const installResource = okInstall();
-    const { result } = renderHook(() => useDblResourceAutoInstall('uid-a', installResource, true));
+    const { result } = renderHook(() =>
+      useDblResourceAutoInstall('uid-a', installResource, { skipAutoInstall: true }),
+    );
 
     expect(result.current.installFailed).toBe(false);
     act(() => result.current.markInstallFailed('uid-a'));
@@ -88,7 +115,8 @@ describe('useDblResourceAutoInstall', () => {
     // the pick finishes (skipAutoInstall = false) the failed-uid guard must suppress the auto-install.
     const installResource = okInstall();
     const { result, rerender } = renderHook(
-      ({ skip }: { skip: boolean }) => useDblResourceAutoInstall('uid-a', installResource, skip),
+      ({ skip }: { skip: boolean }) =>
+        useDblResourceAutoInstall('uid-a', installResource, { skipAutoInstall: skip }),
       { initialProps: { skip: true } },
     );
 
@@ -101,9 +129,9 @@ describe('useDblResourceAutoInstall', () => {
   });
 
   it('reports failure instead of re-installing a uid whose install already succeeded', async () => {
-    // Installing a resource that is already on disk succeeds as a no-op, so the catalog behind the
-    // panel can hand the same uid straight back. Re-firing the install there is an endless loop —
-    // every success asks the caller to re-read that catalog, which returns the same uid again.
+    // Installing a resource already on disk succeeds as a no-op, so the caller's list can hand the
+    // same uid straight back. Re-firing there would loop: every success asks for a re-read, which
+    // returns the same uid again.
     const installResource = okInstall();
     // Typed up front (rather than asserted at the call) so the uid can later be cleared to
     // `undefined`, which is how the catalog refetch between attempts presents itself.
@@ -125,8 +153,8 @@ describe('useDblResourceAutoInstall', () => {
   });
 
   it('retryInstall re-attempts a uid whose install already succeeded', async () => {
-    // The retry is user-initiated and the caller re-reads its catalog alongside it, so it is a
-    // genuinely fresh attempt rather than a replay of the state that produced the error.
+    // A user-initiated retry is a genuinely fresh attempt, not a replay of the state that produced
+    // the error view.
     const installResource = okInstall();
     // Typed up front (rather than asserted at the call) so the uid can later be cleared to
     // `undefined`, which is how the catalog refetch between attempts presents itself.
@@ -147,9 +175,9 @@ describe('useDblResourceAutoInstall', () => {
   });
 
   it('runs the real install after the no-op one that precedes the data provider', async () => {
-    // `useInstallDblResource` returns a callback that resolves without installing until the DBL
-    // provider resolves, and a new callback identity once it does. That first resolve must not
-    // count as an attempt, or the resource is never installed at all.
+    // Until the DBL provider resolves, `useInstallDblResource` returns a callback that resolves
+    // without installing, then a new identity once it does. That first resolve must not count as
+    // an attempt, or the resource is never installed at all.
     const noOpInstall = vi.fn(async () => {});
     const realInstall = vi.fn(async () => {});
     const { result, rerender } = renderHook(

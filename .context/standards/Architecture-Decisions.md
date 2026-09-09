@@ -415,9 +415,9 @@ step, no automation. Just a record.
   finished registering projects.
 - **Decision:** Three rules, together. (1) **Install is idempotent** — an already-installed,
   up-to-date resource is a no-op success, not an error. (2) **`installed` is a hint, never
-  authority** — a consumer that acts on it must be able to recover when it is wrong, which for both
-  resource panels means re-reading the catalog before retrying a failed install rather than
-  replaying the same call. (3) **A resolved install is never re-fired for the same uid** — since
+  authority** — a consumer that acts on it must be able to recover when it is wrong, so a retry
+  re-reads the catalog alongside re-attempting the install rather than replaying the same call
+  against the same snapshot (`useDblResourceAutoInstall`'s `retryInstall`). (3) **A resolved install is never re-fired for the same uid** — since
   every success asks the caller to re-read its catalog, an idempotent install plus a catalog that
   does not converge is an infinite loop; `useDblResourceAutoInstall` surfaces the retry state
   instead. The reconciliation still refuses to downgrade rows from a project list containing no
@@ -430,8 +430,9 @@ step, no automation. Just a record.
   downgrade is what reflects an uninstall in the Get Resources dialog before the next authoritative
   catalog fetch. *Block every `getCachedResources` on the reconciliation* — rejected: it can wait
   many seconds while the C# factory initializes, and a listing surface would rather show the
-  previous snapshot; the wait is opt-in per call (`waitForInstalledFlagsSync`) and taken by the
-  panels, which act on the flags, not by the dialogs, which only list.
+  previous snapshot; the wait is opt-in per call (`waitForInstalledFlagsSync`), taken by the panels
+  that act on the flags and not by the dialogs that only list, and bounded so a slow reconciliation
+  degrades to the previous snapshot instead of failing the command on the network timeout.
 - **Consequences:** A panel whose catalog is stale now installs (as a no-op), re-reads, and renders,
   with no remount. Callers can no longer distinguish "I installed it" from "it was already there" —
   neither one needs to. **Revisit** if a caller ever needs that distinction (return the outcome

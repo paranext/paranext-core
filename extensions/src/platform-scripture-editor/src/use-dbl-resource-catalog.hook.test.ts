@@ -66,10 +66,10 @@ describe('useDblResourceCatalog', () => {
     expect(result.current.hasCatalogError).toBe(false);
   });
 
-  it('waits for the installed-flag sync before reading the DBL rows', async () => {
-    // A panel acts on `installed`: a row cached before the C# project factory registered its
-    // projects reads not-installed, and the panel then downloads a resource that is already on
-    // disk. Reading the rows only after the reconciliation is what keeps that from happening.
+  it('asks for DBL rows whose installed flags are reconciled first', async () => {
+    // A panel acts on `installed`, and a row cached before the C# project factory registered reads
+    // not-installed — so the panel downloads a resource already on disk. Opting into the
+    // reconciliation is what keeps that from happening.
     renderHook(() => useDblResourceCatalog());
 
     await waitFor(() =>

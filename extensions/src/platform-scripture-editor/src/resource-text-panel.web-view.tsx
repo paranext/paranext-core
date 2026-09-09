@@ -375,17 +375,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // (shared with the model-text panel); without it the panel spins forever. Skipped while a manual
   // pick is in flight (it installs the resource itself).
   const dblEntryUidToInstall = dblMatch && !dblMatch.installed ? dblMatch.dblEntryUid : undefined;
-  const { isInstalling, installFailed, retryInstall, markInstallFailed } =
-    useDblResourceAutoInstall(dblEntryUidToInstall, installResource, isSelecting);
-
-  // Re-read the catalog before re-attempting. The install ran against a catalog snapshot, and when
-  // that snapshot is what was wrong — a resource cached as not-installed that is in fact on disk —
-  // re-running the same install against it can only reproduce the same failure. Refetching first is
-  // what lets a stale flag self-correct and gives "Try again" a chance at a different outcome.
-  const handleRetryInstall = useCallback(() => {
-    refetchCatalog();
-    retryInstall();
-  }, [refetchCatalog, retryInstall]);
+  const { isInstalling, installFailed, retryInstall, clearInstallFailure, markInstallFailed } =
+    useDblResourceAutoInstall(dblEntryUidToInstall, installResource, {
+      skipAutoInstall: isSelecting,
+      refreshResourceList: refetchCatalog,
+    });
 
   // Only used to add a "check your connection" hint to the install-failed message when offline.
   const isOnline = useIsOnline();
@@ -566,7 +560,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
     async (resource: DblResourceData) => {
       setIsSelecting(true);
       // A user-initiated pick is a fresh attempt: clear any prior auto-install failure.
-      retryInstall();
+      clearInstallFailure();
       try {
         await selectTextConnection(
           resource,
@@ -589,7 +583,13 @@ globalThis.webViewComponent = function ResourceTextPanel({
         setIsSelecting(false);
       }
     },
-    [getUserResourceTexts, setUserResourceTexts, installResource, retryInstall, markInstallFailed],
+    [
+      getUserResourceTexts,
+      setUserResourceTexts,
+      installResource,
+      clearInstallFailure,
+      markInstallFailed,
+    ],
   );
 
   const showResourcePicker = useDialogCallback(
@@ -838,7 +838,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
           ]
         }
         retryLabel={localizedStrings['%webView_resourcePanel_retry%']}
-        onRetry={handleRetryInstall}
+        onRetry={retryInstall}
       />
     );
   }
