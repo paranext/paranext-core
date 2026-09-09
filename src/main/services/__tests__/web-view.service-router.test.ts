@@ -1540,9 +1540,11 @@ describe('web view service router', () => {
 
     test('withholds document focus from the shard when about to raise across windows, so the raise below has a tab left waiting to catch up on', async () => {
       // `focusWindow` below runs an OS-level raise of a window that is, at the moment the shard's
-      // own `openWebView` call runs above it, still backgrounded — a `focus()` call inside a window
-      // that does not hold OS focus is silently dropped rather than deferred. Without withholding
-      // here, the raise lands with nothing focused inside it.
+      // own `openWebView` call runs above it, still backgrounded. A `focus()` call made then would
+      // set that document's active element without raising the window — latently, not lost — and
+      // stay open to being overwritten by whatever else in that window calls `focus()` before the
+      // raise actually happens. Withholding here leaves that decision to the shard's own catch-up at
+      // raise time, so this open is the one that ends up owning the caret.
       const owner = windowShard(['existing-view']);
       owner.openWebView.mockResolvedValue('existing-view');
       withWindows({ 1: windowShard([]), 2: owner });

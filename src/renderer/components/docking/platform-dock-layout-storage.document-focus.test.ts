@@ -19,9 +19,11 @@ vi.mock('@renderer/services/theme.service', () => ({
 
 /**
  * Docking a web view ends by focusing its iframe. A `focus()` inside a window that does not hold OS
- * focus asks the browser to activate that window, so a window opened deliberately in the background
- * would pull itself to the front the moment content arrived. These cover the two answers the dock
- * can give, since a flag that is never read looks identical to one that is always read.
+ * focus sets that document's active element without activating the window, latently, until the
+ * window is next activated — so a window opened deliberately in the background would still end up
+ * with something claiming the caret the moment it is raised, decided by whichever `focus()` call
+ * ran last rather than by the dock. These cover the two answers the dock can give, since a flag
+ * that is never read looks identical to one that is always read.
  */
 describe('taking document focus when a web view is docked', () => {
   const TAB_ID = 'test-web-view';

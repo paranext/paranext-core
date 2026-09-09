@@ -43,11 +43,14 @@ export const IS_MAIN_WINDOW_QUERY_PARAMETER = 'isMainWindow';
  * activated. Written once, at creation, and never removed — whether the user has been in the window
  * since is the renderer's own to track.
  *
- * A window told to stay in the background is undone by its own content: every mounted panel and
- * every loaded web view asks this window's service to focus it, and focusing a tab focuses its web
- * view's iframe, which asks the browser to activate the window. Those calls resolve this window's
- * own service shard by name and never reach the main process, so this is how the fact gets to them.
- * The renderer stops honouring it the first time the window is activated.
+ * A window told to stay in the background still has its own content calling `focus()` as it lands:
+ * every mounted panel and every loaded web view asks this window's service to focus it, and
+ * focusing a tab focuses its web view's iframe. A `focus()` inside a window that does not hold OS
+ * focus sets that document's active element without activating the window, latently, until the
+ * window is next activated — so left unchecked, whichever call lands last would decide who owns the
+ * caret once the window is finally raised. Those calls resolve this window's own service shard by
+ * name and never reach the main process, so this is how the fact gets to them. The renderer stops
+ * honouring it the first time the window is activated.
  *
  * @experimental
  */
