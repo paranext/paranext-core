@@ -11,6 +11,7 @@ import { useResourceZoomInput } from './use-resource-zoom-input.hook';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 import { resolveDisplayVerseNum } from './verse-display.utils';
 import { moveId } from '../scripture-text-grid-order.utils';
+import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
 
 export type ChapterContextResource = GridResource;
 
@@ -29,7 +30,7 @@ type ScriptureTextGridProps = {
    * intentionally differ — every caller here passes `viewMode` explicitly, so the defaults only
    * document each component's own primary use.
    */
-  viewMode?: 'chapter' | 'verse' | 'aligned';
+  viewMode?: ResourceCollectionViewMode;
   /** When set, the chapter-context split is open for this resource. */
   chapterContext?: ChapterContextResource;
   /** Opens or switches the chapter-context panel to the given resource. */
@@ -49,8 +50,10 @@ type ScriptureTextGridProps = {
   zoomMenuLabels?: ZoomMenuLabels;
   /**
    * Fired after a drag-and-drop or keyboard move with the new visible id sequence; omit to disable
-   * reorder. Every view supports it: columns move sideways in the chapter row and the aligned grid,
-   * listitems move up and down in the verse view.
+   * reorder. Columns move sideways in the chapter row and the aligned grid, and verse listitems
+   * move up and down. Drag works in all three; the KEYBOARD path reaches only the two column views,
+   * because the grip that carries it is rendered by `ResourceCellView`'s header-band layout and the
+   * verse view uses the inline-name layout instead.
    */
   onReorder?: (newShownIdSequence: string[]) => void;
   /** Builds the reorder grip's accessible name for a resource (e.g. "Reorder Genesis"). */
