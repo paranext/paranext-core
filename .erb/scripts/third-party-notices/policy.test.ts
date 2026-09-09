@@ -1779,6 +1779,36 @@ describe('what a curated override may carry across', () => {
     expect(v.reason).toContain('2.0.0');
   });
 
+  // The template `report.ts` prints fills every field with a bracketed placeholder, and each is a
+  // non-empty string - so a half-filled paste satisfies any check that only asks whether the field
+  // is set. `license` is the one that matters: `nonSpdx: true` is exactly what stops the value being
+  // parsed, so nothing downstream reads it again and the template's own wording travels into the
+  // document and the lock as the terms a shipped package is under.
+  it('refuses an override whose license is still the template placeholder', () => {
+    const v = classify(
+      withOverride({
+        license: '<SPDX identifier, or a short free-text determination>',
+        nonSpdx: true,
+        versionIndependent: true,
+        note: 'the vendor confirmed these terms by email',
+      }),
+    );
+    expect(v.verdict).toBe('blocked');
+    expect(v.reason).toContain('placeholder license');
+  });
+
+  it('refuses an override whose note is still the template placeholder', () => {
+    const v = classify(
+      withOverride({
+        license: 'MIT',
+        versionIndependent: true,
+        note: '<why this is what applies - one sentence>',
+      }),
+    );
+    expect(v.verdict).toBe('blocked');
+    expect(v.reason).toContain('placeholder note');
+  });
+
   it('applies a versionIndependent override to any version', () => {
     expect(classify(withOverride({ license: 'MIT', versionIndependent: true })).verdict).toBe(
       'overridden',

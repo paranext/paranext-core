@@ -438,15 +438,19 @@ export function importedPackages(repo: string): ImportedPackage[] {
   const found = new Map<string, ImportedPackage>();
   roots.forEach((root) => {
     findPrebuiltSources(root)
-      // Test SUPPORT files, on top of the `.test.`/`.spec.`/`.stories.` files `findPrebuiltSources`
-      // already drops. A helper named `*.test-utils.ts` or sitting in `__mocks__` is imported only
+      // Test SUPPORT files, on top of the ones `findPrebuiltSources` already drops. A helper named
+      // `*.test-utils.ts` or `*.test-harness.tsx`, or one sitting in `__mocks__`, is imported only
       // by tests and bundled by nothing, so the packages it reaches (`vitest`, here) ship nowhere.
-      // Filtered here rather than in `findPrebuiltSources`, which also feeds the shipping set:
-      // narrowing that would REMOVE rows from the notices document, which is the direction this
-      // pipeline refuses to take on a guess.
+      // The whole convention is named here even where `findPrebuiltSources` already covers part of
+      // it: this filter and that one answer the SAME question about the same corpus, and where they
+      // disagree the omission guard corroborates a row the shipping set should not be carrying
+      // rather than catching it.
+      // `.test-utils.` is filtered here rather than in `findPrebuiltSources`, which also feeds the
+      // shipping set: narrowing that would REMOVE rows from the notices document, which is the
+      // direction this pipeline refuses to take on a guess.
       .filter(
         (file) =>
-          !/\.test-utils?\./.test(path.basename(file)) &&
+          !/\.test-(?:utils?|harness)\./.test(path.basename(file)) &&
           !file.split(path.sep).includes('__mocks__'),
       )
       .forEach((file) => {
@@ -1030,25 +1034,25 @@ function isInstalledPath(resource: string): boolean {
 }
 
 /**
- * Walks up from a module path to the package directory that owns it.
+ * The package directory that owns a module path.
  *
- * Walks to the NEAREST enclosing package.json rather than parsing the path outright, so a package
- * that drops a resolution-scoped `package.json` partway down its own tree does not become a false
- * boundary (see `isPackageRoot` - `@babel/runtime/helpers/esm/package.json` is the real case).
+ * The directory the PATH names (`packageBoundaryOf`) is the answer, and it is checked for a real
+ * manifest rather than assumed to have one: `isPackageRoot` is what tells a package root from the
+ * resolution-scoped marker some packages drop partway down their own tree (see it -
+ * `@babel/runtime/helpers/esm/package.json` is the real case).
  *
- * The walk STOPS at the package directory the path names (`packageBoundaryOf`), and that stop is
- * the difference between failing closed and failing open. Without it, a module under a package
- * directory that does not exist - a nested copy a `yalc` link took off disk, a pruned tree, a
- * lockfile-vs-tree mismatch in CI - keeps walking and is silently attributed to the ENCLOSING
- * package, which reports a real directory, resolves, and exits 0 with that package's modules
- * miscredited and the missing one absent from the document entirely. The shape to picture: sixteen
- * modules under
+ * Nothing outside that directory may answer in its place, and that is the difference between
+ * failing closed and failing open. A module under a package directory that does not exist - a
+ * nested copy a `yalc` link took off disk, a pruned tree, a lockfile-vs-tree mismatch in CI - must
+ * never be attributed to the ENCLOSING package, which reports a real directory, resolves, and exits
+ * 0 with that package's modules miscredited and the missing one absent from the document entirely.
+ * The shape to picture: sixteen modules under
  * `node_modules/@eten-tech-foundation/scripture-utilities/node_modules/@xmldom/xmldom/` when that
  * directory is gone, all credited to `scripture-utilities`.
  *
- * Reaching the boundary with no readable `package.json` therefore returns `undefined`, which
+ * A boundary with no readable `package.json` therefore returns `undefined`, which
  * `collectShippedPackages` treats as UNRESOLVED and throws on - the same answer it already gave for
- * a missing TOP-LEVEL package, where the walk simply ran out of path.
+ * a missing TOP-LEVEL package, whose path holds no container segment at all.
  *
  * @returns Undefined for first-party source outside node_modules, and for a module whose own
  *   package directory has no readable package.json.
@@ -1063,29 +1067,20 @@ export function packageDirOf(resource: string, repo: string): string | undefined
   // one. It is the tested helper the rest of this module already resolves lockfile keys with.
   if (!boundary || !containedPath(repo, boundary)) return undefined;
 
-  // The BOUNDARY first, not the nearest manifest walking up. A `name` field does not distinguish a
-  // package root from a resolution marker the way `isPackageRoot` assumes: this tree installs
-  // `terser/dist/package.json` as `{"name":"dist","version":"1.0.0"}`,
-  // `detect-port/dist/package.json` as `{"name":"detect-port","version":"2.1.0"}` and
-  // `web-streams-polyfill/es2018/package.json` as `{"name":"web-streams-polyfill-es2018"}` with no
-  // version at all. A module bundled from such a subdirectory produced a row named `dist@1.0.0`,
-  // pointed licensee at a directory holding no LICENSE, and left the real package with no row.
+  // The BOUNDARY, and only the boundary. A `name` field does not distinguish a package root from a
+  // resolution marker the way `isPackageRoot` assumes: this tree installs `terser/dist/package.json`
+  // as `{"name":"dist","version":"1.0.0"}`, `detect-port/dist/package.json` as
+  // `{"name":"detect-port","version":"2.1.0"}` and `web-streams-polyfill/es2018/package.json` as
+  // `{"name":"web-streams-polyfill-es2018"}` with no version at all. A module bundled from such a
+  // subdirectory produced a row named `dist@1.0.0`, pointed licensee at a directory holding no
+  // LICENSE, and left the real package with no row.
   //
   // The path already names the owner unambiguously, so where that directory carries a manifest it
-  // is the answer and no walk can improve on it. The walk below is kept for the case the boundary
-  // itself cannot answer - a package directory taken off disk by a `yalc` link, a pruned tree - and
-  // still stops AT the boundary, so a missing package is never attributed to the one enclosing it.
-  if (isPackageRoot(path.join(boundary, 'package.json'))) return boundary;
-
-  let dir = path.dirname(resource);
-  while (dir === boundary || dir.startsWith(boundary + path.sep)) {
-    if (isPackageRoot(path.join(dir, 'package.json'))) return dir;
-    if (dir === boundary) break;
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return undefined;
+  // is the answer; and where it does not, nothing inside the boundary is a better one - a search up
+  // from the module can only reach one of those resolution markers, which is the case above. So a
+  // boundary that cannot answer for itself is UNRESOLVED, which fails the run rather than crediting
+  // somebody else.
+  return isPackageRoot(path.join(boundary, 'package.json')) ? boundary : undefined;
 }
 
 // --- Stylesheet leaf scan -------------------------------------------------------------------
@@ -1380,21 +1375,23 @@ function resolvePackageLeaf(name: string, fromDir: string, repo: string): string
 function collectStylesheetLeaves(repo: string): { leaves: Leaf[]; unresolvedNames: string[] } {
   const leaves: Leaf[] = [];
   const unresolvedNames = new Set<string>();
-  const libReal = realPathOf(path.join(repo, 'lib'));
+  const repoReal = realPathOf(repo);
 
   /** Records one bare specifier's package as a leaf, or as unresolved. */
   const record = (specifier: string, fromDir: string) => {
     const name = packageOfSpecifier(specifier);
     if (!name) return;
     const dir = resolvePackageLeaf(name, fromDir, repo);
-    // The same two guards `collectPrebuiltLibLeaves` applies, and for the same reasons: npm
-    // installs a workspace package as a SYMLINK, so `@import 'platform-bible-react/dist/...'`
-    // resolves to a path that looks like any other dependency until the link is followed, and
-    // emitting it would report this repository's own AGPL code as a third-party notice. A
-    // dev-linked package is described from `package-lock.json` rather than its on-disk
-    // directory, so adding it here would key a second lock entry to the very directory that
-    // policy exists to avoid.
-    if (dir && !containedPath(libReal, realPathOf(dir)) && !isDevLinked(dir))
+    // The same two guards `collectPrebuiltLibLeaves` and `importedPackages` apply, and for the same
+    // reasons: npm installs a workspace package as a SYMLINK, so `@import
+    // 'platform-bible-react/dist/...'` resolves to a path that looks like any other dependency
+    // until the link is followed, and emitting it would report this repository's own AGPL code as a
+    // third-party notice. `isFirstPartyWorkspace` covers every workspace container rather than
+    // `lib/` alone - `node_modules/platform-scripture` is a symlink to `extensions/src/...`, so one
+    // sibling-extension `@import` is all it takes. A dev-linked package is described from
+    // `package-lock.json` rather than its on-disk directory, so adding it here would key a second
+    // lock entry to the very directory that policy exists to avoid.
+    if (dir && !isFirstPartyWorkspace(dir, repoReal) && !isDevLinked(dir))
       leaves.push({ dir, bundle: 'stylesheet' });
     else if (!dir) unresolvedNames.add(name);
   };
@@ -1447,6 +1444,18 @@ function resolveConfigTarget(target: string, fromDir: string): string | undefine
 const PREBUILT_SOURCE_FILE = /\.(?:m|c)?[jt]sx?$/;
 
 /**
+ * Names the file conventions that mark a source file as belonging to the tests rather than to the
+ * published bundle.
+ *
+ * `test-harness` sits beside `test`, `spec` and `stories` because it names the same kind of file
+ * under a name chosen to fall OUTSIDE the `*.{test,spec}.*` glob -
+ * `footnote-editor.test-harness.tsx` says exactly that in its own docstring, and is imported only
+ * by `*.test.tsx`. Nothing it pulls in reaches a `dist/`, so a pattern that misses it reports
+ * `@testing-library/react` in a legal document as software this repository redistributes.
+ */
+const TEST_SUPPORT_FILE = /\.(?:test|spec|stories|test-harness)\./;
+
+/**
  * Every such file under `dir`, recursing but never descending into a `node_modules` - or into a
  * `stories` directory, whose contents are not part of the published bundle.
  */
@@ -1455,7 +1464,7 @@ function findPrebuiltSources(dir: string, found: string[] = []): string[] {
     if (entry.name === 'node_modules' || entry.name === 'stories') return;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) findPrebuiltSources(full, found);
-    else if (PREBUILT_SOURCE_FILE.test(entry.name) && !/\.(?:test|spec|stories)\./.test(entry.name))
+    else if (PREBUILT_SOURCE_FILE.test(entry.name) && !TEST_SUPPORT_FILE.test(entry.name))
       found.push(full);
   });
   return found;
@@ -1569,7 +1578,7 @@ function collectPrebuiltLibLeaves(
 ): { leaves: Leaf[]; unresolvedNames: string[] } {
   const leaves: Leaf[] = [];
   const unresolvedNames = new Set<string>();
-  const libReal = realPathOf(path.join(repo, 'lib'));
+  const repoReal = realPathOf(repo);
   const shipped = childSourceRoots(path.join(repo, 'lib')).filter((root) =>
     shippedLibNames.has(path.basename(path.dirname(root))),
   );
@@ -1584,18 +1593,23 @@ function collectPrebuiltLibLeaves(
         // through `realPathOf`, because npm installs a workspace package as a SYMLINK:
         // `node_modules/platform-bible-utils` points at `lib/platform-bible-utils`, so the resolved
         // path looks like any other installed dependency until the link is followed.
+        // `isFirstPartyWorkspace` asks whether the real directory is inside the repository and
+        // outside any `node_modules`, which answers for every workspace container at once rather
+        // than for `lib/` alone: `node_modules/platform-scripture` is a symlink into
+        // `extensions/src/`, and this repository stamps its extensions `AGPL-3.0-or-later`, so a
+        // `lib/`-only test would hard-block the generator on its own code the first time a shipped
+        // package imported a sibling extension.
         // A dev-linked package is deliberately described from `package-lock.json` and never from
         // its on-disk directory, and it already reaches the set through the module graph. Adding it
         // here would key it by a SECOND directory - webpack reports the resolved `.yalc/...` real
         // path while this resolves the `node_modules` symlink - putting two entries in the lock for
         // one package, the second described from the very directory that policy exists to avoid.
-        // Both sides of the test have to be REAL paths. `realPathOf` follows the workspace
-        // symlink, so the `lib/` root it is measured against has to be followed too: where the
-        // repository itself is reached through a symlink - macOS `/var` -> `/private/var`, a
-        // symlinked worktree - a repo-spelled root contains no real path at all, and every
-        // first-party package reads as third-party. `inRepoSpelling` carries the same caution for
-        // the module-graph side.
-        if (dir && !containedPath(libReal, realPathOf(dir)) && !isDevLinked(dir))
+        // Both sides of the test have to be REAL paths, which is why the repository root is
+        // followed too: where the repository itself is reached through a symlink - macOS `/var` ->
+        // `/private/var`, a symlinked worktree - a repo-spelled root contains no real path at all,
+        // and every first-party package reads as third-party. `inRepoSpelling` carries the same
+        // caution for the module-graph side.
+        if (dir && !isFirstPartyWorkspace(dir, repoReal) && !isDevLinked(dir))
           leaves.push({ dir, bundle: 'prebuilt-lib' });
         else if (!dir) unresolvedNames.add(name);
       });

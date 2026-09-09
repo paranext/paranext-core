@@ -131,14 +131,12 @@ SPDX’s `<copyright holders>` placeholder is not a substitute for it. Only wher
 bundles no license file is the canonical text of its declared identifier reproduced under
 "Canonical license texts for declared identifiers" instead, paired with the nuspec’s copyright.
 
-The build also copies the platform ICU C libraries next to the executable (`libicu*` from the
-build machine on Linux and macOS; the `Microsoft.ICU.ICU4C.Runtime` package on Windows). ICU is
-distributed under the Unicode license, which requires its copyright and permission notice to
-travel with copies. That package is referenced under an MSBuild condition on the *host* OS, so
-no restore performed on Linux resolves it whatever runtime identifier is requested; it is listed
-here from a recorded determination in `notices-policy.json` rather than from the closure. The
-Linux and macOS copies belong to no package graph at all and are covered under "Native libraries
-copied from the build machine" above.
+The build also copies the platform ICU C library next to the executable. On Windows that is the
+`Microsoft.ICU.ICU4C.Runtime` package. ICU is distributed under the Unicode license, which
+requires its copyright and permission notice to travel with copies. That package is referenced
+under an MSBuild condition on the *host* OS, so no restore performed on Linux resolves it
+whatever runtime identifier is requested; it is listed here from a recorded determination in
+`notices-policy.json` rather than from the closure.
 
 | Package | Version | License | Notes |
 | --- | --- | --- | --- |
@@ -258,7 +256,7 @@ THE SOFTWARE IS PROVIDED "AS IS" AND ISC DISCLAIMS ALL WARRANTIES WITH REGARD TO
 
 - `delta@4.0.0` (npm) — no copyright notice — an npm manifest has no field for one, and its license files state none
 - `eta@7.0.0` (npm) — not present in the local package folder, so no copyright notice could be read
-- `Gamma@3.0.0` (NuGet) — neither its nuspec nor its license files state a copyright notice
+- `Gamma@3.0.0` (NuGet) — its nuspec states no copyright notice, and it bundles no license file to carry one
 
 ```text
 MIT License

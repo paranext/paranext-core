@@ -59,6 +59,7 @@ import {
 } from './shipping-set';
 import {
   collectNugetPackages,
+  copiedPlatformLibraryStems,
   missingDirectReferences,
   readDirectPackageReferences,
   DOTNET_PROJECT,
@@ -723,6 +724,32 @@ type BuiltReport = {
 };
 
 /**
+ * Refuses a native library the .NET build copies out of the build machine and nothing discloses.
+ *
+ * The inverse of the staleness report `stalePolicyEntries` produces for this table, and the half
+ * that matters: a STALE entry describes a library that stopped shipping, which is a document making
+ * a claim too many, while a MISSING one is a library that ships with nothing saying so. Every other
+ * inventory in this pipeline refuses that direction outright, and this table was the one that could
+ * not - there was no set of live copy rules to compare against until `copiedPlatformLibraryStems`
+ * read them out of the project file.
+ *
+ * Matched by stem prefix, the same way the staleness half matches, because an entry names the
+ * platforms it covers (`libicu (Linux and macOS)`) while a copy rule names only the file.
+ */
+export function assertCopiedPlatformLibrariesRecorded(policy: Policy, stems: string[]): void {
+  const recorded = Object.keys(policy.copiedPlatformLibraries || {});
+  const undisclosed = stems.filter((stem) => !recorded.some((key) => key.startsWith(stem)));
+  if (undisclosed.length)
+    throw new Error(
+      `${path.relative(REPO, DOTNET_PROJECT)} copies ${undisclosed.join(', ')} out of the ` +
+        'build machine, and ' +
+        'notices-policy.json has no "copiedPlatformLibraries" entry for it. The library reaches ' +
+        'every installer while belonging to neither package graph, so nothing else in this ' +
+        'pipeline can see it - record what it is and the terms it carries, or remove the copy rule.',
+    );
+}
+
+/**
  * Refuses a copied-platform-library entry naming an identifier the corpus cannot reach.
  *
  * The document reproduces the CANONICAL text of each identifier on the library's behalf, and
@@ -781,6 +808,7 @@ export function buildReport(): BuiltReport {
   // file nobody recorded is a claim the document would omit, not a row it would get wrong.
   assertStaticAssetNoticesRecorded(REPO, policy);
   assertCopiedPlatformLibraryIdsAllowed(policy);
+  assertCopiedPlatformLibrariesRecorded(policy, copiedPlatformLibraryStems());
 
   const nugetVerdicts = buildNugetVerdicts({ policy, collected, directReferences, alwaysListed });
 
@@ -800,7 +828,7 @@ export function buildReport(): BuiltReport {
     // Computed here, where the policy and the full verdict set are both in hand, and printed by
     // `main` as a note - see `stalePolicyEntries`. Never a failure: a dead entry means a dependency
     // left, which is not a licensing problem.
-    stalePolicyEntries: stalePolicyEntries(policy, verdicts),
+    stalePolicyEntries: stalePolicyEntries(policy, verdicts, copiedPlatformLibraryStems()),
     // Overrides that record a question nobody has answered - see `openPolicyQuestions`. A verdict
     // has no state between "cleared" and "blocked", so without this a package the project has
     // explicitly NOT cleared goes green with the only record of that in prose.
@@ -822,9 +850,9 @@ export function buildReport(): BuiltReport {
     // declares and no restore resolves - see `CopiedPlatformLibrary`.
     copiedPlatformLibraries: policy.copiedPlatformLibraries || {},
     // What the two prose sections are gated on, so neither can survive the thing it describes. The
-    // extension set is the directory listing `extensions/dist` is built from; `electron` ships as a
-    // prebuilt runtime compiled into no bundle, so the policy's `unbundledDependencies` entry is
-    // the record that it ships at all.
+    // extension set is the directory listing of `extensions/dist`, which is the tree an installer
+    // packs; `electron` ships as a prebuilt runtime compiled into no bundle, so the policy's
+    // `unbundledDependencies` entry is the record that it ships at all.
     packedExtensions: packedExtensionNames(REPO),
     shipsElectron: Boolean((policy.unbundledDependencies || {}).electron),
   };
@@ -1019,7 +1047,7 @@ function printRunNotes(report: {
 }) {
   if (report.stalePolicyEntries.length)
     console.log(
-      `  note: ${report.stalePolicyEntries.length} policy entr(ies) matched no package in this ` +
+      `  note: ${report.stalePolicyEntries.length} policy entr(ies) matched nothing in this ` +
         `run, so nothing was decided by them:\n${report.stalePolicyEntries
           .map((entry) => `    ${entry}`)
           .join('\n')}`,

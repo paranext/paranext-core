@@ -54,9 +54,11 @@ function admissibleSpdx(
  * filled in with the real detected value rather than a placeholder - the developer's job is to
  * supply a reason and a reviewer, not to compute a hash.
  *
- * Where the identified text is itself inadmissible, NO exception can clear the block - an exception
- * records which license an unidentifiable text actually is, and this text is not unidentifiable -
- * so the template is withheld and the routes that can resolve it are printed instead.
+ * Where a license file identified as something inadmissible at or above the confidence threshold,
+ * NO exception can clear the block - an exception records which license an unidentifiable text
+ * actually is, and this text is not unidentifiable - so the template is withheld and the routes
+ * that can resolve it are printed instead. A match BELOW the threshold is the opposite case and
+ * gets the template: that is the unidentifiable text the instrument was written for.
  *
  * `allowed` is OPTIONAL, and absent is not the same as empty: an allow-list bound cannot be applied
  * by a caller that supplied no allow list, or every identifier would read as inadmissible on the
@@ -72,9 +74,14 @@ function exceptionRemedy(
 ): string[] {
   const declared = parseDeclared(v.declared);
 
-  // `detected` is `best.spdxId`, and `best` is only ever a file at or above the confidence
-  // threshold - so an inadmissible `detected` IS the positive identification an exception cannot
-  // override. Nothing weaker reaches this test.
+  // `usableDisallowedId`, not `detected`, because that is the fact the GATE decides on: a reviewed
+  // exception is refused only where a license file AT OR ABOVE the confidence threshold identified
+  // as something the policy does not admit (see `withException`). `detected` is a different fact -
+  // it also carries the id of a BELOW-threshold objecting file, which is precisely the
+  // unidentifiable text an exception exists to resolve and which the gate does let one clear. So
+  // reading `detected` here is wrong in both directions at once: it withholds the template from a
+  // package an exception would have cleared, and prints a hash-filled one for a package bound by a
+  // second usable file whose id `detected` never names.
   //
   // Bounded by `isDisallowedId`, the same predicate the gate itself applies, so the two cannot
   // disagree about what an exception may clear. A looser test here prints the paste-ready template
@@ -83,27 +90,35 @@ function exceptionRemedy(
   const copyleftIds = copyleft || new Set<string>();
   const inadmissible = (id: string) =>
     allowed ? isDisallowedId(id, allowed, copyleftIds) : copyleftIds.has(id);
-  if (v.detected && inadmissible(v.detected))
+  const identified = v.usableDisallowedId;
+  if (identified && inadmissible(identified))
     return [
-      `  ${v.detected} was identified from this package's own ${v.matchedFile || 'license text'}`,
-      `  and ${describeDisallowed(v.detected, copyleftIds)},`,
+      // `usableDisallowedFile`, not `matchedFile`: the verdict is pinned to the file it RESTS on,
+      // which for a package blocked by a bundled extra is its own declared license rather than the
+      // one objecting.
+      `  ${identified} was identified from this package's own ${
+        v.usableDisallowedFile || 'license text'
+      }`,
+      `  and ${describeDisallowed(identified, copyleftIds)},`,
       '  so a reviewed exception cannot clear this block: an exception records which license an',
       '  unidentifiable text actually is, and this text is not unidentifiable. What can resolve it:',
       '',
-      ...(copyleftIds.has(v.detected)
+      ...(copyleftIds.has(identified)
         ? [
             '  - if the package genuinely offers a choice of licenses, its declaration has to say so',
-            `    ("${v.detected} OR <permissive>"), and an "elections" entry in ${POLICY_FILE}`,
+            `    ("${identified} OR <permissive>"), and an "elections" entry in ${POLICY_FILE}`,
             '    records which branch this project takes, and why;',
           ]
         : [
-            `  - if ${v.detected} is terms this project accepts, add it to the "allowed" list in`,
+            `  - if ${identified} is terms this project accepts, add it to the "allowed" list in`,
             `    ${POLICY_FILE} - one reviewable line, rather than a per-package entry that admits`,
             '    it invisibly;',
           ]),
       '  - otherwise the dependency itself has to change.',
       '',
     ];
+
+  const suggestedSpdx = admissibleSpdx(declared, v.declared, copyleftIds, allowed ?? new Set());
 
   return [
     '  If this package is genuinely fine, record a reviewed exception by adding this entry to the',
@@ -114,7 +129,25 @@ function exceptionRemedy(
       // Provenance, not part of the key - `applyException` matches on `package` alone. It records
       // which version the reader had in front of them, so the determination stays re-checkable.
       version,
-      spdx: v.detected || admissibleSpdx(declared, v.declared, copyleftIds, allowed ?? new Set()),
+      // `detected` leads, because it is what a file actually says and an exception is a
+      // determination about that text - EXCEPT under a conjunction, where it names one operand and
+      // every operand applies at once. A `(MIT AND Zlib)` package with an MIT-identified file would
+      // otherwise be handed `"spdx": "MIT"`, which `applyException` accepts; `render` then computes
+      // `compound` from the single id, and the Zlib text is reproduced nowhere - the outcome the
+      // hand-written `npm:pako` entry exists to prevent. `admissibleSpdx` keeps a conjunction whole
+      // for exactly that reason, so nothing may short-circuit past it while one is declared.
+      //
+      // `detected` also has to be ADMISSIBLE to lead. Reaching this template at all now includes the
+      // below-threshold case - the objecting file's id is what `detected` carries there, and it is
+      // by definition one the policy does not admit, so offering it would fill in the one field
+      // `applyException` checks with the one value it always refuses. The reader would paste a
+      // hash-filled entry and be told no. `suggestedSpdx` is `admissibleSpdx`, which answers with
+      // an operand the policy accepts or with a placeholder, and a placeholder is the honest answer
+      // for a text nobody has identified yet.
+      spdx:
+        (declared.ok && declared.hasConjunction) || !v.detected || inadmissible(v.detected)
+          ? suggestedSpdx
+          : v.detected,
       reason: '<why this is correct - one sentence>',
       reviewer: '<your email>',
       // A PLACEHOLDER, not today's date. `applyException` requires a reviewer and a date because
@@ -244,7 +277,9 @@ function policyRemedy(v: Verdict, entryKey: string, copyleft: Set<string> = new 
         // Both are required by the gate, and a template omitting them is the "advice the gate
         // rejects" failure this function exists to prevent: a value that is not an SPDX expression
         // is refused without `nonSpdx`, and an entry recording neither `version` nor
-        // `versionIndependent` is refused outright. A reader pasting the template hits both.
+        // `versionIndependent` is refused outright. Each is a PLACEHOLDER rather than a `true`, and
+        // `applyOverride` requires an actual boolean - so a paste left half-filled is refused by
+        // name, rather than clearing both gates on the truthiness of a placeholder string.
         nonSpdx: '<true if "license" above is free text rather than an SPDX expression>',
         version: '<the version this determination was read from, or drop this field>',
         versionIndependent: '<true instead of "version" if it holds at any version>',
@@ -306,6 +341,10 @@ export function describeBlock(
  * package that left the closure entirely fires never and so says nothing at all. `npm:harmony-
  * reflect` is the live case: an election for a package that is not in the shipping set.
  *
+ * `copiedPlatformLibraries` is keyed by library rather than by package, so it is matched against
+ * the copy rules in the .NET project file instead of against the verdict set - see the entry
+ * below.
+ *
  * `copyrightNotices` is excluded, and so is an `alwaysList` override: those exist precisely BECAUSE
  * no restore on this machine produces the package (see `alwaysListedPackages` in `main.ts`), so
  * "unused" is their normal state and reporting them would be noise that trains the reader to skip
@@ -323,8 +362,10 @@ export function stalePolicyEntries(
     copyrightNotices?: Record<string, string>;
     licenseTexts?: Record<string, object>;
     unbundledDependencies?: Record<string, object>;
+    copiedPlatformLibraries?: Record<string, object>;
   },
   verdicts: { ecosystem: string; name: string; version: string }[],
+  copiedLibraryStems: string[],
 ): string[] {
   const names = new Set(verdicts.map((v) => `${v.ecosystem}:${v.name}`));
   return [
@@ -366,6 +407,19 @@ export function stalePolicyEntries(
         (key) =>
           `unbundled dependency "${key}" - it is in the shipping set now, so the entry no longer ` +
           'describes it',
+      ),
+    // The one table whose subject is neither a package nor a file this repository holds, so neither
+    // set of names above can speak for it: a native library the .NET build copies out of the machine
+    // that produced the installer. `copiedLibraryStems` is read from the csproj's own absolute
+    // `<Content Include>` rules, which is the only place the copying is stated - and without this,
+    // deleting the `libicu*` copy steps leaves the document asserting an ICU redistribution that has
+    // stopped happening, indefinitely and with every gate green.
+    ...Object.keys(policy.copiedPlatformLibraries || {})
+      .filter((key) => !copiedLibraryStems.some((stem) => key.startsWith(stem)))
+      .map(
+        (key) =>
+          `copied platform library "${key}" - nothing in the .NET project copies it out of the ` +
+          'build machine any more',
       ),
   ].sort();
 }

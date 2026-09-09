@@ -2,7 +2,12 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { compareByNameThenVersion, compareVersions, isNumericVersion } from './compare';
+import {
+  compareByNameThenVersion,
+  compareStrings,
+  compareVersions,
+  isNumericVersion,
+} from './compare';
 import { readNugetLicenseFiles, readPackageNotices } from './package-files';
 import { readJsonFile } from './read-json';
 import type { DotnetAssets, MergedNugetPackage, NugetLicenseEntry } from './types';
@@ -699,6 +704,36 @@ export function readDirectPackageReferences(
       },
     ];
   });
+}
+
+/**
+ * The native-library name stems the project copies out of the BUILD MACHINE, from its own `<Content
+ * Include>` rules.
+ *
+ * An ABSOLUTE include path is what identifies one: a rule naming
+ * `/usr/lib/x86_64-linux-gnu/libicu*.so.??` or `/opt/local/lib/libicu*.??.dylib` reaches outside
+ * the repository entirely, which is exactly what `copiedPlatformLibraries` describes and what
+ * neither package graph can see. The repo-relative rules (`assets\**`, `base-directory-assets\*.*`,
+ * `icon.ico`) are the static trees, and `static-assets.ts` is the gate for those.
+ *
+ * A STEM rather than a filename, because the rules are globs over whatever the machine happens to
+ * have installed - the version is precisely the thing the document cannot state. `libicu*.so.??`
+ * yields `libicu`, which is what a `copiedPlatformLibraries` key is named for.
+ *
+ * @returns Each distinct stem once, so a library copied under four platform rules is one entry.
+ */
+export function copiedPlatformLibraryStems(projectFile = DOTNET_PROJECT): string[] {
+  const csproj = withoutXmlComments(fs.readFileSync(projectFile, 'utf8'));
+  const elements = [
+    ...csproj.matchAll(/<Content\b[^>]*?\/>|<Content\b[\s\S]*?<\/Content\s*>/g),
+  ].map((match) => match[0]);
+  const stems = elements.flatMap((element) => {
+    const include = attributeOf(element, 'Include');
+    if (!include || !include.startsWith('/')) return [];
+    const stem = (include.split('/').pop() || '').split(/[*?]/)[0];
+    return stem ? [stem] : [];
+  });
+  return [...new Set(stems)].sort(compareStrings);
 }
 
 /**

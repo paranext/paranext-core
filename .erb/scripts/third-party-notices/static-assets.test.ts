@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   assertStaticAssetNoticesRecorded,
   findStaticAssetNotices,
+  packedExtensionNames,
   staticAssetNoticeTexts,
 } from './static-assets';
 import { loadPolicy } from './policy';
@@ -117,6 +118,29 @@ describe('findStaticAssetNotices', () => {
     write('extensions/src/a/assets/displayData.json', 'x');
 
     expect(findStaticAssetNotices(repo)).toEqual([]);
+  });
+});
+
+describe('packedExtensionNames', () => {
+  it('names the extensions the BUILT tree carries, not the ones in source', () => {
+    // The two diverge exactly where it matters: an extension added but not yet built is in `src`
+    // and not in any installer, and a section of the document gated on it must not appear.
+    write(path.join('extensions', 'src', 'not-built-yet', 'manifest.json'), '{}');
+    write(path.join('extensions', 'dist', 'platform-scripture', 'manifest.json'), '{}');
+    write(path.join('extensions', 'dist', 'quick-verse', 'manifest.json'), '{}');
+
+    expect(packedExtensionNames(repo)).toEqual(['platform-scripture', 'quick-verse']);
+  });
+
+  it('refuses a missing built tree rather than reporting that no extension ships', () => {
+    // The failure this exists to prevent is silent and self-consistent: an empty answer drops every
+    // gated section from the document AND from the lock written beside it in the same run, so the
+    // two agree and the byte-compare has nothing to catch. Naming the build is the whole remedy.
+    write(path.join('extensions', 'src', 'platform-scripture', 'manifest.json'), '{}');
+
+    expect(() => packedExtensionNames(repo)).toThrow(
+      /does not exist.*build the extensions first/is,
+    );
   });
 });
 

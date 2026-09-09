@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { compareStrings } from './compare';
 import { sha256Bytes } from './lock';
+import { isLicenseTextFileName, isNoticeFileName } from './package-files';
 import type { NamedText, Policy } from './types';
 
 /**
@@ -26,6 +27,14 @@ import type { NamedText, Policy } from './types';
  * content, and licensee has nothing to read. So the rule is that every notice-shaped file under
  * them must be recorded in `notices-policy.json`, exactly as `snapStagePackages` requires every
  * staged Ubuntu library to be classified there. An unrecorded one refuses the build.
+ *
+ * TODO(PT-4560): the inventory sees only notice-SHAPED FILENAMES, so a third-party file whose terms
+ * are stated in no file beside it is invisible to this gate, and it ships anyway. Not hypothetical:
+ * `c-sharp/base-directory-assets/IP-Country.zip` shipped that way until a human noticed it and
+ * wrote the `ATTRIBUTION.md` that now covers it. Closing the gap needs a recorded inventory of what
+ * the packed trees CONTAIN rather than of the notices they happen to carry, and such an assertion
+ * is build-dependent - so where it lives is a design question rather than a wider pattern here.
+ * https://paratextstudio.atlassian.net/browse/PT-4560
  */
 
 /**
@@ -52,15 +61,34 @@ const NOTICE_FILE_PREFIX = /^(attribution|licen[cs]e|notice|copying|credits?|sou
 const NOTICE_WORD =
   /(licen[cs]e|notices?|copying|copyright|attributions?|credits?|authors?|patents?)/i;
 
-/** Extensions a standalone statement of terms uses. Anything else with these words in it is code. */
-const NOTICE_DOCUMENT = /\.(txt|md|markdown|rst|html?|text)$/i;
+/**
+ * Extensions a standalone statement of terms uses. Anything else with these words in it is code.
+ *
+ * `rtf` is on the list even though `package-files.ts` denies it: that module's list decides what
+ * may be REPRODUCED inside the document, where RTF markup would be noise, while this one decides
+ * what has to be RECORDED. `NOTICE.rtf` is an ordinary spelling for a notice authored on Windows,
+ * and a notice this gate cannot see is a notice nobody has to account for.
+ */
+const NOTICE_DOCUMENT = /\.(txt|md|markdown|rst|html?|text|rtf)$/i;
 
 /** Whether a file's name says it states terms for the files beside it. */
 function statesTerms(name: string): boolean {
   // A dotfile is configuration, never a notice - and `.gitattributes` matches `attributes`.
   if (name.startsWith('.')) return false;
-  // The file-type test bounds BOTH branches. `license` is a word boundary in `license.png`, so the
-  // prefix branch alone flagged an icon as a statement of terms - which then reached
+  // `package-files.ts` asks the same question of a package directory, and answers it with a DENYLIST
+  // of the extensions a statement of terms never has plus a stem match. Reused rather than restated,
+  // because the two patterns below cannot reach the commonest license filenames there are: an
+  // extension ALLOWLIST rejects `COPYING.LESSER` - the standard LGPL filename - along with
+  // `LICENSE.GPL` and `LICENSE.MIT`, and this is the gate that exists because third-party content
+  // shipped undisclosed. Failing open on the ordinary case is the way it stops being a gate.
+  if (isLicenseTextFileName(name) || isNoticeFileName(name)) return true;
+  // The rest of the vocabulary, which a package root has no need of and a copied asset tree does: an
+  // asset states its terms in `ATTRIBUTION.md`, `SOURCE.md`, `CREDITS`, `AUTHORS` or `COPYRIGHT` as
+  // readily as in a `LICENSE`, and `extensions/src/quick-verse/assets/ATTRIBUTION.md` is the live
+  // case this module was written for.
+  //
+  // The file-type test bounds BOTH branches below. `license` is a word boundary in `license.png`, so
+  // the prefix branch alone flagged an icon as a statement of terms - which then reached
   // `staticAssetNoticeTexts` and was read as UTF-8 into a fenced block of replacement characters.
   if (!NOTICE_DOCUMENT.test(name) && path.extname(name)) return false;
   return NOTICE_FILE_PREFIX.test(name) || NOTICE_WORD.test(name);
@@ -114,6 +142,15 @@ const DOTNET_STATIC_TREES = [
  *
  * `extensions/src/evil` is copied WHOLESALE rather than tree by tree (see `webpack.util.ts`), so
  * the whole extension directory is read for it - anything under it ships.
+ *
+ * Read from `extensions/src` and deliberately NOT from `extensions/dist`, which is where an
+ * installer actually takes these files from. Two reasons, both about what this gate is for. It is a
+ * COMMITTED-content gate: every file it finds is hash-pinned in `notices-policy.json` by its
+ * repo-relative source path and reproduced verbatim from there (`staticAssetNoticeTexts`), so a
+ * `dist` path would pin build output that no reviewer reads and no clone holds. And `dist` is empty
+ * until something builds it, so a gate reading it would pass by finding nothing - silence on the
+ * exact question it exists to refuse a build over. `packedExtensionNames` reads `dist` because it
+ * asks the opposite question: not "what is committed" but "did this build carry it".
  */
 function packedStaticTrees(repo: string): string[] {
   const trees: string[] = [];
@@ -139,15 +176,33 @@ function packedStaticTrees(repo: string): string[] {
 /**
  * The extensions whose trees an installer packs, by folder name.
  *
- * Every folder under `extensions/src` is built and copied into `extensions/dist`, which
- * `electron-builder.json5` packs as `extraResources` - so this is the set of extensions the
- * artifact contains. Read from the same directory listing `packedStaticTrees` walks, so a section
- * of the notices document that describes what one extension redistributes can be gated on the
- * extension actually being there rather than asserted unconditionally.
+ * `electron-builder.json5` packs `./extensions/dist/` as `extraResources`, so the BUILT directory
+ * is the set of extensions the artifact contains, and it is what this reads - `extensions/src`
+ * answers "is this folder in git", which is a different question and one an installer does not ask.
+ * The two only diverge where a build is incomplete or an extension has been added but not yet
+ * built, and that divergence is the whole point: a section of the notices document describing what
+ * one extension redistributes is gated on the extension having actually been carried into this
+ * build.
+ *
+ * The only caller is on the full-report path, which already requires a completed build.
+ *
+ * A MISSING `extensions/dist` throws rather than reading as "this build packs no extensions". The
+ * two are indistinguishable from the directory listing and their consequences are opposite: an
+ * empty answer silently drops every gated prose section from the document AND from the lock written
+ * beside it in the same run, so the byte-compare that catches a stale artifact cannot catch a short
+ * one - the two agree with each other. `extensions/src` could never be absent in a clone, so
+ * reading `dist` is what introduces the state, and refusing it is what keeps this a gate.
  */
 export function packedExtensionNames(repo: string): string[] {
-  const extensionsRoot = path.join(repo, 'extensions', 'src');
-  if (!fs.existsSync(extensionsRoot)) return [];
+  const extensionsRoot = path.join(repo, 'extensions', 'dist');
+  if (!fs.existsSync(extensionsRoot))
+    throw new Error(
+      `${path.relative(repo, extensionsRoot)} does not exist, so this run cannot establish which ` +
+        'extensions the installers carry. Sections of the document are gated on that set, and an ' +
+        'empty answer would drop them silently. Build the extensions first:\n' +
+        '    npm run build\n' +
+        '    npm run build:extensions:production',
+    );
   return fs
     .readdirSync(extensionsRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())

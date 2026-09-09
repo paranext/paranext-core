@@ -2,8 +2,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { describe, expect, it, vi } from 'vitest';
 import { REQUIRED_BUNDLES } from './shipping-set';
-import { assertCopiedPlatformLibraryIdsAllowed, assertSnapStagePackagesClassified } from './main';
-import { RIDS, readDirectPackageReferences } from './nuget-set';
+import {
+  assertCopiedPlatformLibrariesRecorded,
+  assertCopiedPlatformLibraryIdsAllowed,
+  assertSnapStagePackagesClassified,
+} from './main';
+import { RIDS, copiedPlatformLibraryStems, readDirectPackageReferences } from './nuget-set';
 import { STATIC_TREES, WHOLESALE_COPIED_EXTENSIONS } from './static-assets';
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
@@ -337,6 +341,21 @@ describe('every copied platform library names terms the corpus can reproduce', (
     expect(() => assertCopiedPlatformLibraryIdsAllowed(policy)).not.toThrow();
   });
 
+  it('accepts the shipped policy against the copy rules the project actually states', () => {
+    expect(() =>
+      assertCopiedPlatformLibrariesRecorded(policy, copiedPlatformLibraryStems()),
+    ).not.toThrow();
+  });
+
+  // The direction the staleness report cannot cover, and the one with a consequence: a stale entry
+  // over-describes, a missing one means a native library reaches every installer with nothing in
+  // the document saying so and no other gate able to see it.
+  it('refuses a copy rule that no policy entry discloses', () => {
+    expect(() => assertCopiedPlatformLibrariesRecorded(policy, ['libicu', 'libfoo'])).toThrow(
+      /libfoo/,
+    );
+  });
+
   it('refuses an identifier that is not on the allow list', () => {
     expect(() =>
       assertCopiedPlatformLibraryIdsAllowed({
@@ -354,19 +373,74 @@ describe('every copied platform library names terms the corpus can reproduce', (
   });
 });
 
-describe('the two Microsoft compatibility shims are referenced for no assets', () => {
+describe('the two Microsoft compatibility shims contribute nothing to the derived closure', () => {
   // LICENSING.md records the determination: neither package's assembly reaches the publish output,
-  // so neither may contribute one - a reference that DID would put a package carrying the pre-MIT
-  // "Excluded License" clause into the derived closure and therefore into THIRD-PARTY-NOTICES.md,
-  // raising a question nobody has answered. The `System.Net.Http` reference exists precisely to say
-  // "no assets": `SIL.Core` pulls it in transitively, and without the exclusion the restore assets
-  // file resolves its netstandard1.6 assembly even though publish discards it.
+  // so neither may contribute one - a package that DID would carry the pre-MIT "Excluded License"
+  // clause into the derived closure and therefore into THIRD-PARTY-NOTICES.md, raising a question
+  // nobody has answered. The `System.Net.Http` reference exists precisely to say "no assets":
+  // `SIL.Core` pulls it in transitively, and without the exclusion the restore assets file resolves
+  // its netstandard1.6 assembly even though publish discards it.
   const SHIMS = ['System.Net.Http', 'System.Net.WebSockets'];
 
-  it.each(SHIMS)('references %s for no runtime assets, if at all', (id) => {
-    const matching = readDirectPackageReferences().filter(
-      (reference) => reference.id.toLowerCase() === id.toLowerCase(),
-    );
-    matching.forEach((reference) => expect(reference.shipsRuntimeAssets).toBe(false));
+  // The CLOSURE, not the declaration. The invariant is that neither assembly ships, and a shim the
+  // csproj does not name at all satisfies that as fully as one referenced with `ExcludeAssets`. A
+  // check that only iterated the declared references therefore asserts NOTHING about a shim nobody
+  // declares - it passes by finding no reference to look at. `THIRD-PARTY-NOTICES.lock.json` is the
+  // committed record of what a real restore produced, which is exactly the set at issue.
+  const lock = JSON.parse(
+    fs.readFileSync(path.join(REPO, 'THIRD-PARTY-NOTICES.lock.json'), 'utf8'),
+  );
+  const closure = new Set<string>(
+    lock.packages
+      .filter((row: { ecosystem: string }) => row.ecosystem === 'nuget')
+      .map((row: { name: string }) => row.name.toLowerCase()),
+  );
+
+  it('reads a non-empty NuGet closure from the committed lock', () => {
+    // Otherwise the cases below assert nothing, which is the failure they exist to correct.
+    expect(closure.size).toBeGreaterThan(0);
+  });
+
+  it.each(SHIMS)('keeps %s out of the notices document entirely', (id) => {
+    expect(closure.has(id.toLowerCase())).toBe(false);
+  });
+
+  it.each(SHIMS)('excludes the assets of %s wherever the project does declare it', (id) => {
+    // The mechanism that keeps the closure clean where the reference exists at all, checked so that
+    // deleting `ExcludeAssets="all"` fails here rather than only on the next regeneration.
+    readDirectPackageReferences()
+      .filter((reference) => reference.id.toLowerCase() === id.toLowerCase())
+      .forEach((reference) => expect(reference.shipsRuntimeAssets).toBe(false));
+  });
+});
+
+describe('the Terms of Service document is spelled the same in all three places', () => {
+  // Three independent spellings of one filename, with nothing tying them together: `main.ts` opens
+  // it, `electron-builder.json5` packs it into `resources/`, and `release/app/package.json` declares
+  // the application licensed under it. `resolveLicenseDisplay` maps that declaration to a display
+  // string by prefix and discards the filename, so a rename passes every other test in the tree
+  // while leaving the About dialog opening a file that is not there.
+  const NAME_FROM_MANIFEST = /"license"\s*:\s*"SEE LICENSE IN ([^"]+)"/;
+
+  const manifest = fs.readFileSync(path.join(REPO, 'release', 'app', 'package.json'), 'utf8');
+  const declared = NAME_FROM_MANIFEST.exec(manifest)?.[1];
+
+  it('declares the application licensed under a named document', () => {
+    // Otherwise every case below compares against `undefined` and passes on absence.
+    expect(declared).toBeDefined();
+  });
+
+  it('ships that exact document in the repository', () => {
+    expect(fs.existsSync(path.join(REPO, declared ?? ''))).toBe(true);
+  });
+
+  it('packs it into the installer as extraResources', () => {
+    const builder = fs.readFileSync(path.join(REPO, 'electron-builder.json5'), 'utf8');
+    expect(builder).toContain(`'./${declared}'`);
+  });
+
+  it('opens that name from the main process', () => {
+    const main = fs.readFileSync(path.join(REPO, 'src', 'main', 'main.ts'), 'utf8');
+    expect(main).toContain(`TERMS_OF_SERVICE_FILE_NAME = '${declared}'`);
   });
 });

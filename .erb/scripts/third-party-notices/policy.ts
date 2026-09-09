@@ -182,6 +182,8 @@ type CommonFields = {
   detected: string | undefined;
   matchedFile: string | undefined;
   textSha256: string | undefined;
+  usableDisallowedId: string | undefined;
+  usableDisallowedFile: string | undefined;
 };
 
 /**
@@ -214,8 +216,11 @@ function blocked(reason: string, extra: Partial<Verdict> = {}): BlockedFields {
   return { verdict: 'blocked', spdxId: undefined, reason, ...extra };
 }
 
-/** The `reason` placeholder `report.ts` prints in its paste-ready exception template. */
-const PLACEHOLDER_REASON = /^<.*>$/;
+/**
+ * A value still spelled as one of the `<…>` placeholders `report.ts` prints in its paste-ready
+ * templates, rather than replaced with the thing the placeholder asks for.
+ */
+const PLACEHOLDER_TEMPLATE_VALUE = /^<.*>$/;
 
 /**
  * Applies a reviewed exception. Exceptions are an override applied AFTER a block, never a path
@@ -289,13 +294,19 @@ function applyException(
         'without a name, a date and a stated reason it is not reviewable, and nothing else records ' +
         'who accepted it or why.',
     );
-  // The template `report.ts` prints carries this literal placeholder for the reader to replace.
-  // Pasted and half-filled, it clears every other check and stands as the recorded determination.
-  if (PLACEHOLDER_REASON.test(entry.reason))
+  // The template `report.ts` prints carries these literal placeholders for the reader to replace.
+  // Pasted and half-filled, each clears every other check and stands as the recorded determination:
+  // `<your email>` is a non-empty string, so the "unsigned" test above sees a reviewer, and the
+  // entry then reads as a determination somebody made under a name that is not a name.
+  const placeholder = [
+    ['reason', entry.reason],
+    ['reviewer', entry.reviewer],
+  ].find(([, value]) => PLACEHOLDER_TEMPLATE_VALUE.test(String(value ?? '')));
+  if (placeholder)
     return blocked(
-      `the reviewed exception for ${key}@${version} still carries the placeholder reason from the ` +
-        'template ("' +
-        `${entry.reason}"). Replace it with the determination you actually made.`,
+      `the reviewed exception for ${key}@${version} still carries the placeholder ` +
+        `${placeholder[0]} from the template ("${placeholder[1]}"). Replace it with the ` +
+        'determination you actually made, and with who made it.',
     );
   if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.date))
     return blocked(
@@ -844,6 +855,31 @@ function withException(
 }
 
 /**
+ * Refuses an override whose reviewable boolean is not actually a boolean.
+ *
+ * `versionIndependent` and `nonSpdx` each stand for a decision a human made, and each is read below
+ * as a plain truthiness test. The template `report.ts` prints supplies both as PLACEHOLDER STRINGS
+ * for the reader to replace - `"<true instead of \"version\" if it holds at any version>"` and
+ * `"<true if \"license\" above is free text rather than an SPDX expression>"` - and a non-empty
+ * string is truthy, so a paste left half-filled answers "yes" to the very question the placeholder
+ * is asking. `loadPolicy` does no type validation and `types.ts` only DECLARES both as `boolean?`,
+ * so this is the one place the declared type is enforced against what the file actually holds.
+ */
+function nonBooleanOverrideFlag(
+  key: string,
+  field: 'versionIndependent' | 'nonSpdx',
+  value: unknown,
+): BlockedFields | undefined {
+  if (value === undefined || typeof value === 'boolean') return undefined;
+  return blocked(
+    `the "overrides" entry for "${key}" records ${JSON.stringify(value)} for "${field}", which is ` +
+      'not a boolean. The field records a decision a reviewer made, and any non-empty value at all ' +
+      'would otherwise read as "yes" - the placeholder the template prints included. Record true, ' +
+      'or drop the field.',
+  );
+}
+
+/**
  * Applies a curated override to a result the reviewed-exception path left blocked, or blocks again
  * naming what the entry itself fails to establish.
  */
@@ -898,7 +934,32 @@ function applyOverride(ctx: ClassifyContext, override: Override): Verdict {
   // on each release bump is friction with nothing to find. Neither is the default, so the entry
   // has to say which it is - the same shape as `nonSpdx`, one reviewable boolean in the policy
   // file rather than an absence nobody can see from the diff.
-  if (!override.version && !override.versionIndependent)
+  const malformedFlag =
+    nonBooleanOverrideFlag(key, 'versionIndependent', override.versionIndependent) ??
+    nonBooleanOverrideFlag(key, 'nonSpdx', override.nonSpdx);
+  if (malformedFlag) return { ...common, ...malformedFlag };
+  // Every placeholder `report.ts` prints is a non-empty string like any other, so an entry pasted
+  // and left half-filled clears each check that only asks whether the field is set.
+  //
+  // `license` matters most and is the least obvious, because the fields around it are the ones a
+  // reader thinks to fill: an entry supplying `note`, `nonSpdx: true` and `versionIndependent: true`
+  // satisfies every other gate here while `license` still reads
+  // `<SPDX identifier, or a short free-text determination>` - and `nonSpdx` is precisely what stops
+  // that value being parsed, so nothing downstream looks at it again. The template's own wording
+  // then travels into the document and the lock as the terms a shipped package is under.
+  const placeholderField = (['license', 'note'] as const).find((field) =>
+    PLACEHOLDER_TEMPLATE_VALUE.test(String(override[field] ?? '')),
+  );
+  if (placeholderField)
+    return {
+      ...common,
+      ...blocked(
+        `the "overrides" entry for "${key}" still carries the placeholder ${placeholderField} from ` +
+          `the template ("${override[placeholderField]}"). Replace it with the determination you ` +
+          'actually made.',
+      ),
+    };
+  if (!override.version && override.versionIndependent !== true)
     return {
       ...common,
       ...blocked(
@@ -924,7 +985,7 @@ function applyOverride(ctx: ClassifyContext, override: Override): Verdict {
   // value is deliberately not an SPDX expression. That is the same shape as `alwaysList` - one
   // reviewable boolean on the entry - and it makes a copyleft determination smuggled in as prose
   // a line a reviewer sees rather than a short-circuit nobody can see from the diff.
-  if (!recorded.ok && !override.nonSpdx)
+  if (!recorded.ok && override.nonSpdx !== true)
     return {
       ...common,
       ...blocked(
@@ -1104,47 +1165,23 @@ function resolveWithText(ctx: ClassifyContext, best: DetectedFile): Verdict {
   });
 }
 
-/** The two instruments that may reconsider a blocked verdict, and what bounds each. */
+/** The two instruments that may reconsider a blocked verdict. */
 type Instruments = {
   /** A reviewed exception recorded for this exact `name@version`, where there is one. */
   exception: BlockedFields | undefined;
-  /** A usable file whose positive identification neither instrument may override. */
-  usableDisallowed: DetectedFile | undefined;
   /** The curated override, where the package itself establishes nothing to contradict it. */
   overridable: Override | undefined;
 };
 
-/**
- * Reads the two instruments that may reconsider a blocked verdict, and the positively identified
- * file that bounds what either of them may clear.
- */
+/** Reads the two instruments that may reconsider a blocked verdict. */
 function readInstruments(
   ctx: ClassifyContext,
   signals: DetectedSignals,
   sha256: string | undefined,
 ): Instruments {
   const { key, version, policy, allowed, copyleft, declared } = ctx;
-  const { files, usable } = signals;
+  const { files } = signals;
   const exception = applyException(policy, key, version, sha256, allowed, copyleft);
-  // An INADMISSIBLE id that resolved AT OR ABOVE the confidence threshold - a positive
-  // identification, not an ambiguous one. An exception may not override it: `applyException` bounds
-  // what an exception may record, but nothing bounded what it could record it AGAINST, so an entry
-  // saying `MIT` cleared a package whose LICENSE identified as AGPL-3.0 at 100% and `joinTexts`
-  // then reproduced the AGPL text under a row labelled MIT. The instrument's own message says it
-  // "records which license an unidentifiable text actually is"; a 100% match is the case where the
-  // text IS identifiable and the two signals disagree.
-  //
-  // Bounded by `isDisallowedId`, not by the copyleft list alone - the same predicate `applyException`
-  // applies to what an exception may RECORD, and the same one the unusable-file scan above applies.
-  // Testing copyleft alone leaves this the one admission path in the file still shaped as a
-  // denylist: a text identifying as `CC-BY-NC-4.0` or `BUSL-1.1` at 100% is then cleared by an
-  // exception recording `MIT`, and its text reproduced under a row labelled MIT.
-  //
-  // Scoped to `usable` on purpose. A BELOW-threshold match is exactly the unidentifiable text an
-  // exception exists to resolve - `npm:jszip`'s LICENSE.markdown concatenates the full MIT and
-  // GPLv3 texts - and it is already blocked separately by the unusable-file scan above, which a
-  // reviewed exception is meant to be able to clear.
-  const usableDisallowed = usable.find((file) => isDisallowedId(file.spdxId, allowed, copyleft));
   // A curated override records what a human established about a package whose own metadata
   // establishes nothing - the SIL packages whose nuspecs declare no license at all, and the
   // Windows-only ICU runtime that no restore on this machine resolves. It is applied ONLY where the
@@ -1177,7 +1214,7 @@ function readInstruments(
   // `override` itself rather than a boolean, so the stage it clears reads the entry it applies.
   const overridable = !declared.ok && !identifiedText ? override : undefined;
 
-  return { exception, usableDisallowed, overridable };
+  return { exception, overridable };
 }
 
 /**
@@ -1234,6 +1271,28 @@ export function classify({
   const pinned = objectingFile || best || anyText;
   const sha256 = pinned?.sha256;
 
+  // An INADMISSIBLE id that resolved AT OR ABOVE the confidence threshold - a positive
+  // identification, not an ambiguous one. Neither instrument may override it: `applyException`
+  // bounds what an exception may record, but nothing bounded what it could record it AGAINST, so an
+  // entry saying `MIT` cleared a package whose LICENSE identified as AGPL-3.0 at 100% and
+  // `joinTexts` then reproduced the AGPL text under a row labelled MIT. The instrument's own message
+  // says it "records which license an unidentifiable text actually is"; a 100% match is the case
+  // where the text IS identifiable and the two signals disagree.
+  //
+  // Bounded by `isDisallowedId`, not by the copyleft list alone - the same predicate
+  // `applyException` applies to what an exception may RECORD, and the same one the unusable-file
+  // scan applies. Testing copyleft alone leaves this the one admission path in the file still shaped
+  // as a denylist: a text identifying as `CC-BY-NC-4.0` or `BUSL-1.1` at 100% is then cleared by an
+  // exception recording `MIT`, and its text reproduced under a row labelled MIT.
+  //
+  // Scoped to `usable` on purpose. A BELOW-threshold match is exactly the unidentifiable text an
+  // exception exists to resolve - `npm:jszip`'s LICENSE.markdown concatenates the full MIT and
+  // GPLv3 texts - and it is already blocked separately by the unusable-file scan, which a reviewed
+  // exception is meant to be able to clear.
+  const usableDisallowed = signals.usable.find((file) =>
+    isDisallowedId(file.spdxId, allowed, copyleft),
+  );
+
   // `matchedFile` and `textSha256` describe ONE file, so they are both taken from `pinned`.
   // Recording `best`'s filename beside the objecting file's hash would leave a block message naming
   // a permissive license and an exception pinned to a restrictive text - and taking the hash from
@@ -1250,6 +1309,11 @@ export function classify({
     detected: objectingFile ? objectingFile.spdxId : best?.spdxId,
     matchedFile: pinned?.filename,
     textSha256: sha256,
+    // Carried on every verdict, not only the blocked ones, because `common` is what every return
+    // path spreads - and because the remedy printed for a block has to be able to tell a positive
+    // identification from the below-threshold match `detected` may equally be holding.
+    usableDisallowedId: usableDisallowed?.spdxId,
+    usableDisallowedFile: usableDisallowed?.filename,
   };
 
   const ctx: ClassifyContext = {
@@ -1264,7 +1328,7 @@ export function classify({
     usableById,
   };
 
-  const { exception, usableDisallowed, overridable } = readInstruments(ctx, signals, sha256);
+  const { exception, overridable } = readInstruments(ctx, signals, sha256);
 
   // The upstream tool could not establish the license. Never a permissive result. Requires an
   // actual array: `{}.length` is `undefined`, which duck-types as "no errors" and would silently

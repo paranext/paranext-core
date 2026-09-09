@@ -152,12 +152,12 @@ describe('packageDirOf', () => {
     expect(packageDirOf(file, repo)).toBe(dir);
   });
 
-  it('walks past a directory-scoped package.json with no name to the real package root', () => {
+  it('ignores a directory-scoped package.json with no name and answers the real package root', () => {
     // Some packages (e.g. @babel/runtime/helpers/esm/package.json, real on-disk file: just
     // `{"type":"module"}`) drop a minimal package.json partway down their own tree purely to flip
-    // Node's module-resolution algorithm for that subtree - it is not a package boundary. Treating it
-    // as the nearest enclosing package.json attributes the file to a manifest with no name/version at
-    // all, so this must keep walking up to the package that actually has a `name`.
+    // Node's module-resolution algorithm for that subtree - it is not a package boundary. Reading
+    // the manifest NEAREST the file would attribute it to one with no name and no version at all,
+    // which is why the answer comes from the directory the path itself names.
     const dir = writePackage('node_modules/pkg-a', 'pkg-a', '1.0.0');
     const esmDir = path.join(dir, 'helpers', 'esm');
     fs.mkdirSync(esmDir, { recursive: true });
@@ -1324,9 +1324,10 @@ describe('packageDirOf stops at the package boundary', () => {
     expect(packageDirOf(path.join(inner, 'lib', 'index.js'), repo)).toBe(inner);
   });
 
-  it('still walks past a resolution-scoped package.json inside the same package', () => {
+  it('still ignores a resolution-scoped package.json inside the same package', () => {
     // `@babel/runtime/helpers/esm/package.json` is `{"type":"module"}` and no boundary at all. The
-    // walk has to cross it and stop at the package root, which is still inside the boundary.
+    // answer is the package directory the path names, so a marker anywhere beneath it changes
+    // nothing.
     const pkg = writePackage('node_modules/@babel/runtime', '@babel/runtime', '7.0.0');
     const marker = path.join(pkg, 'helpers', 'esm');
     fs.mkdirSync(marker, { recursive: true });

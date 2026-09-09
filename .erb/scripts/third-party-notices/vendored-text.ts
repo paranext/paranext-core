@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { sha256 } from './lock';
+import { codeOf } from './read-json';
 import type { NamedText, Policy, SnapStagePackage } from './types';
 
 const DIR = path.join(__dirname, 'vendored-texts');
@@ -51,7 +52,13 @@ function pinnedText({
   let text;
   try {
     text = fs.readFileSync(path.join(dir, file), 'utf8');
-  } catch {
+  } catch (error: unknown) {
+    // ENOENT is the only failure this message describes. EACCES, EISDIR and ELOOP describe a file
+    // that may well be sitting exactly where the policy says it is, holding the legal text this
+    // document reproduces on another party's behalf - so reporting one of them as absence sends the
+    // reader to restore a file that is already there, and hides the real fault. `readTextFile` in
+    // `package-files.ts` draws the same line for the same reason.
+    if (codeOf(error) !== 'ENOENT') throw error;
     throw new Error(
       `${pinnedAs}, but that file is not in ${path.relative(process.cwd(), dir)}. ` +
         `${onlyCopyOf}, so the document cannot be written without it.`,

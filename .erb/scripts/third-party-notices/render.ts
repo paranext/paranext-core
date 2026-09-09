@@ -95,17 +95,41 @@ export function cell(value: string | undefined): string {
 }
 
 /**
- * What is said in place of a copyright notice when there is none to quote.
+ * What is said in place of a copyright notice when there is none to quote, keyed `<ecosystem>` for
+ * a package that ships a license file and `<ecosystem>-no-text` for one that ships none.
  *
- * Three different facts, and collapsing them would be the lie: "nothing was found in a file that
- * was read" is not "there is no field to find it in", and neither is "the package was never on this
- * machine to read". A notices file must never imply knowledge it does not have.
+ * THREE different facts, and collapsing any pair of them would be the lie: "nothing was found in
+ * the files that were read" is not "there were no files to read it from", and neither of those is
+ * "the package was never on this machine to read". A notices file must never imply knowledge it
+ * does not have, and "its license files state none" said of a package that ships no license file
+ * reports what non-existent files say.
  */
 const MISSING_COPYRIGHT_NOTICE: Record<string, string> = {
   uninspected: 'not present in the local package folder, so no copyright notice could be read',
   NuGet: 'neither its nuspec nor its license files state a copyright notice',
+  'NuGet-no-text':
+    'its nuspec states no copyright notice, and it bundles no license file to carry one',
   npm: 'no copyright notice — an npm manifest has no field for one, and its license files state none',
+  'npm-no-text':
+    'no copyright notice — an npm manifest has no field for one, and it bundles no license file ' +
+    'to carry one',
 };
+
+/**
+ * Escapes a value interpolated into Markdown PROSE, as `cell` does for a table cell.
+ *
+ * A copyright notice is the part of this document with legal weight, and it is written into a
+ * bullet rather than a fenced block, so the renderer reads it: `<julian@juliangruber.com>` becomes
+ * an autolink, and an `<Acme>`-shaped holder name is swallowed whole as a raw HTML tag - which
+ * drops the attribution the line exists to make. The emphasis and code characters go with them,
+ * because a holder name carrying `*` or a backtick otherwise re-punctuates the text around it.
+ *
+ * Backslashes FIRST, for the reason `cell` states: escaping anything else introduces backslashes of
+ * its own, and the other order would double those and leave the original character live.
+ */
+function inlineText(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/[<>`*_[\]]/g, (character) => `\\${character}`);
+}
 
 /**
  * The credit line for one package listed beneath a canonical SPDX license text.
@@ -120,18 +144,26 @@ export function canonicalTextCredit({
   version,
   ecosystem,
   copyright,
+  hasText,
   inspected = true,
 }: {
   name: string;
   version: string;
   ecosystem: string;
   copyright?: string;
+  /** Whether the package ships a license file of its own, which decides what "none" may be said of. */
+  hasText: boolean;
   inspected?: boolean;
 }): string {
-  const notice =
-    (copyright || '').replace(/\s+/g, ' ').trim() ||
-    MISSING_COPYRIGHT_NOTICE[inspected ? ecosystem : 'uninspected'];
-  return `\`${name}@${version}\` (${ecosystem}) — ${notice}`;
+  const notice = (copyright || '').replace(/\s+/g, ' ').trim();
+  // `hasText` is REQUIRED rather than defaulted: the two wordings make different claims about the
+  // package's FILES, and a default picks one of them on behalf of a caller that never said which
+  // case it was in - so a package bundling no license file is credited with what its license files
+  // state. The notice itself is escaped because this line is Markdown prose; see `inlineText`.
+  const missingKey = `${ecosystem}${hasText ? '' : '-no-text'}`;
+  return `\`${name}@${version}\` (${ecosystem}) — ${
+    notice ? inlineText(notice) : MISSING_COPYRIGHT_NOTICE[inspected ? missingKey : 'uninspected']
+  }`;
 }
 
 /**
@@ -353,7 +385,7 @@ function packageNames(subset: { name: string; version: string }[]): string {
  * ids: a list reproduces the licenses someone thought of, and leaves every other
  * declared-but-untexted package's attribution obligation discharged nowhere.
  */
-function useCanonicalText(canonical: CollectedTexts, row: ReportRow): boolean {
+function useCanonicalText(canonical: CollectedTexts, row: ReportRow, hasText: boolean): boolean {
   const label = ECOSYSTEM_LABEL[row.ecosystem];
   // Every identifier the row resolved to, not the field as one string - see `spdxIdsOf`. A
   // conjunction means every operand's terms apply at once, so reproducing one operand's text and
@@ -369,13 +401,19 @@ function useCanonicalText(canonical: CollectedTexts, row: ReportRow): boolean {
     version: row.version,
     ecosystem: label,
     copyright: row.copyright,
+    hasText,
     inspected: row.inspected !== false,
   });
   corpusTexts.forEach(({ id, text }) => {
     // `useCanonicalText` returns false above unless EVERY operand has a text, so `text` is a
     // string by the time this runs - the all-or-nothing rule is what makes that true.
     if (!text) return;
-    if (!canonical.has(id)) canonical.set(id, { text, packages: [] });
+    // Normalized on the way in, like every other text this document reproduces. `canonicalText`
+    // returns the corpus entry raw - hash-checked, not normalized - and `normalizeText`'s own
+    // docstring says the read and the write normalisations must not drift, because the artifact is
+    // byte-compared against freshly generated output. A corpus text with CRLF endings would
+    // otherwise be permanently unreproducible, failing a long way from its cause.
+    if (!canonical.has(id)) canonical.set(id, { text: normalizeText(text), packages: [] });
     canonical.get(id)?.packages.push(credit);
   });
   return true;
@@ -429,7 +467,7 @@ function describeReport(rows: ReportRow[]): DescribedReport {
       compound,
       // Otherwise only reached when the package itself shipped nothing, so a canonical text never
       // displaces a package's own copy of its license.
-      hasCanonicalText: (!hasText || compound) && useCanonicalText(canonical, row),
+      hasCanonicalText: (!hasText || compound) && useCanonicalText(canonical, row, hasText),
     };
   });
 
@@ -736,7 +774,17 @@ function pushSnapSection(
 }
 
 /** The NuGet closure: its prose, its table, and the account of the rows with no text. */
-function pushDotnetSection(out: string[], dotnetDescribed: DescribedRow[]): void {
+function pushDotnetSection(
+  out: string[],
+  dotnetDescribed: DescribedRow[],
+  copiedPlatformLibraries: Record<string, CopiedPlatformLibrary>,
+): void {
+  // The ICU prose below is split on this, because the two halves rest on different facts. The
+  // Windows half is a row this document already carries; the Linux and macOS half is the
+  // `copiedPlatformLibraries` table, and `pushCopiedPlatformLibrarySection` suppresses the very
+  // heading that sentence cross-references when the table is empty. Stated unconditionally, it
+  // asserts a redistribution that has stopped and points at a section that is not there.
+  const copiesPlatformLibraries = Object.keys(copiedPlatformLibraries).length > 0;
   // Split because the sentence describes a PROVENANCE, and the two halves have different ones.
   // Counting them together stated that every row came out of a restore with its nuspec read by
   // `nuget-license`, while `Microsoft.ICU.ICU4C.Runtime` - referenced under an MSBuild condition on
@@ -781,15 +829,21 @@ function pushDotnetSection(out: string[], dotnetDescribed: DescribedRow[]): void
     'bundles no license file is the canonical text of its declared identifier reproduced under',
     '"Canonical license texts for declared identifiers" instead, paired with the nuspec’s copyright.',
     '',
-    'The build also copies the platform ICU C libraries next to the executable (`libicu*` from the',
-    'build machine on Linux and macOS; the `Microsoft.ICU.ICU4C.Runtime` package on Windows). ICU is',
-    'distributed under the Unicode license, which requires its copyright and permission notice to',
-    'travel with copies. That package is referenced under an MSBuild condition on the *host* OS, so',
-    'no restore performed on Linux resolves it whatever runtime identifier is requested; it is listed',
-    'here from a recorded determination in `notices-policy.json` rather than from the closure. The',
-    'Linux and macOS copies belong to no package graph at all and are covered under "Native libraries',
-    'copied from the build machine" above.',
+    'The build also copies the platform ICU C library next to the executable. On Windows that is the',
+    '`Microsoft.ICU.ICU4C.Runtime` package. ICU is distributed under the Unicode license, which',
+    'requires its copyright and permission notice to travel with copies. That package is referenced',
+    'under an MSBuild condition on the *host* OS, so no restore performed on Linux resolves it',
+    'whatever runtime identifier is requested; it is listed here from a recorded determination in',
+    '`notices-policy.json` rather than from the closure.',
     '',
+    ...(copiesPlatformLibraries
+      ? [
+          'On Linux and macOS the libraries are copied from the build machine itself (`libicu*`), and',
+          'belong to no package graph at all; those copies are covered under "Native libraries copied',
+          'from the build machine" above.',
+          '',
+        ]
+      : []),
   );
   out.push('| Package | Version | License | Notes |', '| --- | --- | --- | --- |');
   dotnetDescribed.forEach((row) =>
@@ -1056,8 +1110,13 @@ function pushLicenseTextsSection(
  *
  * The libraries have no row - nothing declares or resolves them - so `useCanonicalText` never sees
  * them, and without this the section above would state an obligation and reproduce nothing, which
- * is the state the notices policy's own note calls the worst of the three. `main.ts` refuses an
- * identifier that is not on `allowed`, so the corpus holds a text for every one that reaches here.
+ * is the state the notices policy's own note calls the worst of the three.
+ *
+ * `assertCopiedPlatformLibraryIdsAllowed` refuses an identifier that is not on `allowed`, which is
+ * the list the corpus index is BUILT from rather than the index itself - so it is not a guarantee
+ * that the corpus holds a text, and a missing one throws here instead of being skipped. Skipping it
+ * would leave the section promising a text it never prints, about a redistribution nothing else in
+ * this pipeline can see.
  */
 function addCopiedPlatformLibraryTexts(
   canonical: CollectedTexts,
@@ -1066,8 +1125,18 @@ function addCopiedPlatformLibraryTexts(
   Object.entries(copiedPlatformLibraries).forEach(([name, entry]) => {
     entry.spdx.forEach((id) => {
       const text = canonicalText(id);
-      if (!text) return;
-      if (!canonical.has(id)) canonical.set(id, { text, packages: [] });
+      if (!text)
+        throw new Error(
+          `the notices policy lists the copied platform library "${name}" under ${id}, and the ` +
+            'SPDX corpus holds no text for it. The "Native libraries copied from the build ' +
+            'machine" section states that each identifier\u2019s canonical text is reproduced ' +
+            'below, so the document cannot be written without one - add the identifier to ' +
+            '"allowed" and re-run `npm run build:third-party-notices:corpus`, or record terms the ' +
+            'corpus holds.',
+        );
+      // Normalized on the way in, for the reason `useCanonicalText` states: the corpus text is
+      // hash-checked rather than normalized, and the two normalisations must not drift.
+      if (!canonical.has(id)) canonical.set(id, { text: normalizeText(text), packages: [] });
       canonical
         .get(id)
         ?.packages.push(
@@ -1207,7 +1276,7 @@ export function render({
   pushStaticAssetSection(out, staticAssetNotices);
   pushSnapSection(out, snapStagePackages, snapStagePackageLicenses, snapCopyrightTexts);
   pushCopiedPlatformLibrarySection(out, copiedPlatformLibraries);
-  pushDotnetSection(out, dotnetDescribed);
+  pushDotnetSection(out, dotnetDescribed, copiedPlatformLibraries);
   pushNpmSection(out, npmDescribed, npmAccount);
   assertNpmRowsAccountedFor(npmDescribed, npmAccount, canonical);
   pushNpmTable(out, npmDescribed);

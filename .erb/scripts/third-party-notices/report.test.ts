@@ -12,6 +12,8 @@ const block = {
   detected: 'Apache-2.0',
   matchedFile: 'LICENSE',
   textSha256: 'deadbeef',
+  usableDisallowedId: undefined,
+  usableDisallowedFile: undefined,
 };
 
 describe('describeBlock', () => {
@@ -69,6 +71,8 @@ describe('describeBlock', () => {
     detected: undefined,
     matchedFile: undefined,
     textSha256: undefined,
+    usableDisallowedId: undefined,
+    usableDisallowedFile: undefined,
   };
 
   it('never offers an exception for a package with no license text', () => {
@@ -141,11 +145,16 @@ describe('stalePolicyEntries', () => {
     { ecosystem: 'npm', name: 'jszip', version: '3.10.1' },
     { ecosystem: 'nuget', name: 'CsvHelper', version: '33.1.0' },
   ];
+  // What the .NET project's own absolute `<Content Include>` rules say it still copies out of the
+  // build machine - the only place that copying is stated, and so the only thing a
+  // `copiedPlatformLibraries` entry can go stale against.
+  const COPIED_LIBRARY_STEMS = ['libicu'];
 
   it('reports an election for a package that is not in the shipping set', () => {
     const entries = stalePolicyEntries(
       { elections: { 'npm:jszip': {}, 'npm:harmony-reflect': {} } },
       verdicts,
+      COPIED_LIBRARY_STEMS,
     );
     expect(entries).toEqual([
       'election "npm:harmony-reflect" - no such package in the shipping set',
@@ -161,6 +170,7 @@ describe('stalePolicyEntries', () => {
         exceptions: [{ package: 'npm:jszip', version: '3.9.0' }, { package: 'npm:departed' }],
       },
       verdicts,
+      COPIED_LIBRARY_STEMS,
     );
     // `npm:jszip` still ships, at a different version, and is NOT reported: that is the whole point
     // of keying by name. Only the departed one is.
@@ -175,6 +185,7 @@ describe('stalePolicyEntries', () => {
     const entries = stalePolicyEntries(
       { unbundledDependencies: { jszip: {}, 'electron-updater': {} } },
       verdicts,
+      COPIED_LIBRARY_STEMS,
     );
     expect(entries).toEqual([
       'unbundled dependency "jszip" - it is in the shipping set now, so the entry no longer ' +
@@ -183,7 +194,11 @@ describe('stalePolicyEntries', () => {
   });
 
   it('matches on ecosystem too, so an npm entry is not satisfied by a NuGet package', () => {
-    const entries = stalePolicyEntries({ elections: { 'npm:CsvHelper': {} } }, verdicts);
+    const entries = stalePolicyEntries(
+      { elections: { 'npm:CsvHelper': {} } },
+      verdicts,
+      COPIED_LIBRARY_STEMS,
+    );
     expect(entries).toEqual(['election "npm:CsvHelper" - no such package in the shipping set']);
   });
 
@@ -199,6 +214,7 @@ describe('stalePolicyEntries', () => {
         },
       },
       verdicts,
+      COPIED_LIBRARY_STEMS,
     );
     expect(entries).toEqual([
       'copyright notice "npm:harmony-reflect" - no such package in the shipping set',
@@ -211,14 +227,36 @@ describe('stalePolicyEntries', () => {
         elections: { 'npm:jszip': {}, 'nuget:CsvHelper': {} },
         exceptions: [{ package: 'npm:jszip', version: '3.10.1' }],
         copyrightNotices: { 'nuget:CsvHelper': 'Copyright © 2009-2024 Josh Close' },
+        copiedPlatformLibraries: { 'libicu (Linux and macOS)': {} },
       },
       verdicts,
+      COPIED_LIBRARY_STEMS,
     );
     expect(entries).toEqual([]);
   });
 
+  // The one table whose subject is a native library rather than a package, so no verdict can speak
+  // for it. Delete the csproj's `libicu*` copy steps and the document would otherwise go on
+  // asserting an ICU redistribution that has stopped, indefinitely and with every gate green.
+  it('reports a copied platform library the .NET project no longer copies', () => {
+    const entries = stalePolicyEntries(
+      {
+        copiedPlatformLibraries: {
+          'libicu (Linux and macOS)': {},
+          'libdeparted (Linux)': {},
+        },
+      },
+      verdicts,
+      COPIED_LIBRARY_STEMS,
+    );
+    expect(entries).toEqual([
+      'copied platform library "libdeparted (Linux)" - nothing in the .NET project copies it out ' +
+        'of the build machine any more',
+    ]);
+  });
+
   it('reports nothing for a policy with no elections or exceptions at all', () => {
-    expect(stalePolicyEntries({}, verdicts)).toEqual([]);
+    expect(stalePolicyEntries({}, verdicts, COPIED_LIBRARY_STEMS)).toEqual([]);
   });
 });
 
@@ -244,6 +282,10 @@ describe('a remedy the gate would reject is not offered', () => {
     detected: 'GPL-3.0-or-later',
     matchedFile: 'COPYING',
     textSha256: 'cafe',
+    // The COPYING that identified it, at or above the confidence threshold - the positive
+    // identification an exception may not override, and the fact `exceptionRemedy` decides on.
+    usableDisallowedId: 'GPL-3.0-or-later',
+    usableDisallowedFile: 'COPYING',
   };
 
   it('does not offer an exception for a positively identified copyleft text', () => {
@@ -266,6 +308,63 @@ describe('a remedy the gate would reject is not offered', () => {
     expect(describeBlock(copyleftText)).toContain('"exceptions" array');
   });
 
+  // The direction the gate is PERMISSIVE in, and the one an id-only test gets backwards.
+  // `withException` refuses an exception only for a match at or above the confidence threshold; a
+  // below-threshold copyleft match is the unidentifiable text the instrument exists for, and
+  // `policy.test.ts` asserts an exception clears exactly that. Withholding the template there sends
+  // the reader to an `elections` entry `classify` never reaches for a text-derived verdict.
+  it('offers the exception for a copyleft match BELOW the confidence threshold', () => {
+    const message = describeBlock(
+      { ...copyleftText, usableDisallowedId: undefined, usableDisallowedFile: undefined },
+      POLICY,
+    );
+    expect(message).toContain('"exceptions" array');
+    expect(message).not.toContain('cannot clear this block');
+  });
+
+  // The template offered in that case still has to be one the gate can accept. `detected` there is
+  // the BELOW-threshold objecting file's id, which is inadmissible by definition - filling `spdx`
+  // with it hands the reader a hash-filled entry `applyException` refuses on the one field it
+  // checks, which is a worse outcome than the withheld template this case was opened up to avoid.
+  it('does not suggest the inadmissible id it was blocked on', () => {
+    const message = describeBlock(
+      {
+        ...copyleftText,
+        detected: 'GPL-3.0-or-later',
+        usableDisallowedId: undefined,
+        usableDisallowedFile: undefined,
+      },
+      POLICY,
+    );
+    expect(message).toContain('"exceptions" array');
+    expect(message).not.toContain('"spdx": "GPL-3.0-or-later"');
+    expect(message).toContain('<SPDX identifier this package is actually under>');
+  });
+
+  // The other direction. A package resolving on its own declared MIT while bundling an inadmissible
+  // extra is blocked by the extra, and `withException` refuses an exception for it - but `detected`
+  // names the MIT file, so a remedy reading `detected` hands over a hash-filled template the gate is
+  // guaranteed to reject.
+  it('withholds the exception when a bundled extra carries the identification', () => {
+    const message = describeBlock(
+      {
+        ...copyleftText,
+        reason: 'bundles LICENSE.gpl (GPL-3.0-or-later), which is copyleft',
+        declared: 'MIT',
+        detected: 'MIT',
+        matchedFile: 'LICENSE',
+        usableDisallowedId: 'GPL-3.0-or-later',
+        usableDisallowedFile: 'LICENSE.gpl',
+      },
+      POLICY,
+    );
+    expect(message).not.toContain('"exceptions" array');
+    // Named from the objecting file rather than from `matchedFile`, which is the package's own
+    // license here and states nothing inadmissible.
+    expect(message).toContain('LICENSE.gpl');
+    expect(message).toContain('cannot clear this block');
+  });
+
   // A conjunction leaves `detected` undefined, so this printed a placeholder asking the reader for
   // something already on the line above. What such an exception must record is the compound
   // expression - the shape all three conjunction entries in the closure carry.
@@ -283,6 +382,8 @@ describe('a remedy the gate would reject is not offered', () => {
         detected: undefined,
         matchedFile: undefined,
         textSha256: 'f00d',
+        usableDisallowedId: undefined,
+        usableDisallowedFile: undefined,
       },
       POLICY,
     );
@@ -313,6 +414,8 @@ describe('a remedy the gate would reject is not offered', () => {
         detected: undefined,
         matchedFile: undefined,
         textSha256: undefined,
+        usableDisallowedId: undefined,
+        usableDisallowedFile: undefined,
       },
       POLICY,
     );
@@ -340,6 +443,8 @@ describe('a remedy the gate would reject is not offered', () => {
         detected: undefined,
         matchedFile: undefined,
         textSha256: 'beef',
+        usableDisallowedId: undefined,
+        usableDisallowedFile: undefined,
       },
       POLICY,
     );
@@ -362,6 +467,8 @@ describe('a remedy the gate would reject is not offered', () => {
     detected: undefined,
     matchedFile: 'LICENSE.markdown',
     textSha256: 'beef',
+    usableDisallowedId: undefined,
+    usableDisallowedFile: undefined,
   };
 
   it('records the admissible branch of a disjunction, not the whole expression', () => {

@@ -34,6 +34,18 @@ export type Verdict = {
   detected: string | undefined;
   matchedFile: string | undefined;
   textSha256: string | undefined;
+  /**
+   * The inadmissible SPDX id a license file resolved to AT OR ABOVE the confidence threshold, where
+   * the package ships one - the positive identification a reviewed exception may not override.
+   *
+   * Recorded on the verdict rather than re-derived, so that the remedy `report.ts` prints and the
+   * gate that would accept it rest on the SAME fact. Not interchangeable with an inadmissible
+   * `detected`: that also carries the id of a BELOW-threshold objecting file, which is exactly the
+   * unidentifiable text an exception exists to resolve and which the gate does let one clear.
+   */
+  usableDisallowedId: string | undefined;
+  /** The license file `usableDisallowedId` was read from, which is not always `matchedFile`. */
+  usableDisallowedFile: string | undefined;
 };
 
 /** A curated determination about a package whose own metadata establishes nothing. */

@@ -1,7 +1,7 @@
 {
   "licenseeVersion": "10.1.0",
   "corpusVersion": "6.12.0",
-  "documentSha256": "3684115e8cf0b9e3c305fb47d0f71e0aeb1509f63c0ec5cfb880435da7cca0d3",
+  "documentSha256": "db6f698669386bf7c9fadb70b2d208df34760092e2eba6e301c970a9f6a7e20b",
   "packages": [
     {
       "ecosystem": "npm",
@@ -788,15 +788,6 @@
       "confidence": 100,
       "matchedFile": "LICENSE",
       "textSha256": "9db3f8ddd7031ab264b99bec49c221155d0c8649b53dd4aa007f2041d36cdf5f"
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@testing-library/react",
-      "version": "16.2.0",
-      "spdxId": "MIT",
-      "confidence": 100,
-      "matchedFile": "LICENSE",
-      "textSha256": "9680978280d509520d2a7b51e93ffbf7d9ec2b9de4411a6989daba5b659048e0"
     },
     {
       "ecosystem": "npm",

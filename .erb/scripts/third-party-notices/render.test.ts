@@ -546,6 +546,7 @@ describe('canonicalTextCredit', () => {
         version: '33.1.0',
         ecosystem: 'NuGet',
         copyright: 'Copyright © 2009-2024 Josh Close',
+        hasText: true,
       }),
     ).toBe('`CsvHelper@33.1.0` (NuGet) — Copyright © 2009-2024 Josh Close');
   });
@@ -557,6 +558,7 @@ describe('canonicalTextCredit', () => {
         version: '1.0.0',
         ecosystem: 'NuGet',
         copyright: '  Copyright (c)\n  Example   Corp  ',
+        hasText: true,
       }),
     ).toBe('`x@1.0.0` (NuGet) — Copyright (c) Example Corp');
   });
@@ -567,14 +569,21 @@ describe('canonicalTextCredit', () => {
   // text, so "the nuspec is empty" alone is not the whole reason there is nothing to quote.
   it('names both places a NuGet notice could have come from', () => {
     expect(
-      canonicalTextCredit({ name: 'ParatextChecks', version: '9.5.0', ecosystem: 'NuGet' }),
+      canonicalTextCredit({
+        name: 'ParatextChecks',
+        version: '9.5.0',
+        ecosystem: 'NuGet',
+        hasText: true,
+      }),
     ).toBe(
       '`ParatextChecks@9.5.0` (NuGet) — neither its nuspec nor its license files state a copyright notice',
     );
   });
 
   it('names both places an npm notice could have come from', () => {
-    expect(canonicalTextCredit({ name: 'dlv', version: '1.1.3', ecosystem: 'npm' })).toBe(
+    expect(
+      canonicalTextCredit({ name: 'dlv', version: '1.1.3', ecosystem: 'npm', hasText: true }),
+    ).toBe(
       '`dlv@1.1.3` (npm) — no copyright notice — an npm manifest has no field for one, and its license files state none',
     );
   });
@@ -587,12 +596,51 @@ describe('canonicalTextCredit', () => {
         name: 'Microsoft.ICU.ICU4C.Runtime',
         version: '72.1.0.3',
         ecosystem: 'NuGet',
+        hasText: false,
         inspected: false,
       }),
     ).toBe(
       '`Microsoft.ICU.ICU4C.Runtime@72.1.0.3` (NuGet) — not present in the local package folder, ' +
         'so no copyright notice could be read',
     );
+  });
+
+  // "Its license files state none" is a claim about files, and a package that bundles none has none
+  // to make it about - `rc-new-window` is the live case, listed in the same document among the
+  // packages that ship no license file of their own.
+  it('does not report what a package’s non-existent license files state', () => {
+    expect(
+      canonicalTextCredit({
+        name: 'rc-new-window',
+        version: '0.1.13',
+        ecosystem: 'npm',
+        hasText: false,
+      }),
+    ).toBe(
+      '`rc-new-window@0.1.13` (npm) — no copyright notice — an npm manifest has no field for one, ' +
+        'and it bundles no license file to carry one',
+    );
+    expect(
+      canonicalTextCredit({ name: 'Zeta', version: '6.0.0', ecosystem: 'NuGet', hasText: false }),
+    ).toBe(
+      '`Zeta@6.0.0` (NuGet) — its nuspec states no copyright notice, and it bundles no license ' +
+        'file to carry one',
+    );
+  });
+
+  // The credit line is Markdown prose, and this is the part of it with legal weight. An
+  // angle-bracketed holder name is a raw HTML tag to a Markdown renderer, which swallows it whole
+  // and drops the attribution the line exists to make.
+  it('escapes a notice so a bracketed holder name is not read as markup', () => {
+    expect(
+      canonicalTextCredit({
+        name: 'x',
+        version: '1.0.0',
+        ecosystem: 'npm',
+        copyright: 'Copyright (c) 2015 Julian Gruber <julian@juliangruber.com>',
+        hasText: true,
+      }),
+    ).toBe('`x@1.0.0` (npm) — Copyright (c) 2015 Julian Gruber \\<julian@juliangruber.com\\>');
   });
 
   it('prefers a recorded notice over the not-inspected fallback', () => {
@@ -602,6 +650,7 @@ describe('canonicalTextCredit', () => {
         version: '1.0.0',
         ecosystem: 'NuGet',
         copyright: '© Example',
+        hasText: false,
         inspected: false,
       }),
     ).toBe('`x@1.0.0` (NuGet) — © Example');
