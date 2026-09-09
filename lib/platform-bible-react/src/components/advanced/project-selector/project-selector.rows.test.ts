@@ -672,6 +672,28 @@ describe('partitionByCustomSections', () => {
     expect(sections[0].rows.map((r) => r.shortName)).toEqual(['C', 'A', 'B']);
   });
 
+  it('falls back to compareRows when a caller compare treats two rows as equal', () => {
+    // The project is open in scroll group B and separately selected (but not open) in scroll
+    // group A, so `computeRows` produces the B row before the synthetic A row — descending, not
+    // canonical order. A caller `compare` that does not consider scroll group returns 0 for that
+    // pair, so the canonical tie-break must decide their relative order.
+    const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
+    const rows = computeRows({
+      mode: 'project-multi',
+      projects: list,
+      openTabs: [{ projectId: 'a', scrollGroupId: B }],
+      selection: { pairs: [{ projectId: 'a', scrollGroupId: A }] },
+    });
+    expect(rows.map((r) => r.scrollGroupId)).toEqual([B, A]);
+    const sections = partitionByCustomSections(
+      rows,
+      [{ id: 'all', label: 'All', match: () => true, compare: () => 0 }],
+      byId(list),
+    );
+    expect(sections).toHaveLength(1);
+    expect(sections[0].rows.map((r) => r.scrollGroupId)).toEqual([A, B]);
+  });
+
   it('gives two unlabeled sections distinct ids so React keys stay stable', () => {
     const list: ProjectSelectorProject[] = [
       { id: 'a', shortName: 'A', fullName: 'Apple' },
@@ -687,6 +709,56 @@ describe('partitionByCustomSections', () => {
     expect(sections[0].label).toBeUndefined();
     expect(sections[1].label).toBeUndefined();
     expect(sections[0].id).not.toBe(sections[1].id);
+  });
+
+  it('warns once when two supplied sections share an id', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
+      partitionByCustomSections(
+        rowsFor(list),
+        [
+          { id: 'dup', label: 'One', match: () => false },
+          { id: 'dup', label: 'Two', match: () => true },
+        ],
+        byId(list),
+      );
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0][0]).toContain('dup');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('warns when a caller section id collides with the reserved unmatched-bucket id', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
+      partitionByCustomSections(
+        rowsFor(list),
+        [{ id: '__unmatched__', label: 'Mine', match: () => true }],
+        byId(list),
+      );
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0][0]).toContain('__unmatched__');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('does not warn when supplied section ids are unique', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const list: ProjectSelectorProject[] = [{ id: 'a', shortName: 'A', fullName: 'Apple' }];
+      partitionByCustomSections(
+        rowsFor(list),
+        [{ id: 'unique', label: 'One', match: () => true }],
+        byId(list),
+      );
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it('keeps rows whose project is missing from the map in the unmatched section', () => {

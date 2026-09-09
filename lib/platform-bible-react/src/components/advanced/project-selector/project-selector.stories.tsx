@@ -748,7 +748,7 @@ export const ProjectAndResourceIndicators: Story = {
     docs: {
       description: {
         story:
-          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories) and renders a book icon for resources, a document icon for everything else. The selector renders whatever node the caller returns and treats it as decorative — the icons here are `aria-hidden` because the row text already names the project.",
+          "`renderProjectIndicator` lets the caller distinguish row types from data rather than copy. This fixture reads the caller's own `type` values (mixing PT9 ProjectType keys and DBL ResourceType keys, same fixture as the grouping stories) and renders a book icon specifically for the `ScriptureResource` type, a document icon for everything else. The selector renders whatever node the caller returns and treats it as decorative — the icons here are `aria-hidden` because the row text already names the project.",
       },
     },
   },

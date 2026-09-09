@@ -664,6 +664,21 @@ export function partitionByLastUsed(
 const UNMATCHED_SECTION_ID = '__unmatched__';
 
 /**
+ * Returns the first `section.id` that collides with an earlier one, or with the reserved id used
+ * for the trailing unmatched bucket, or `undefined` if none does.
+ */
+function findDuplicateSectionId(sections: readonly ProjectSelectorSection[]): string | undefined {
+  const seenIds = new Set<string>();
+  return sections
+    .map((section) => section.id)
+    .find((id) => {
+      if (id === UNMATCHED_SECTION_ID || seenIds.has(id)) return true;
+      seenIds.add(id);
+      return false;
+    });
+}
+
+/**
  * Bucket rows into caller-supplied sections, in the order supplied. A project lands in the first
  * section whose `match` accepts it; rows whose project matched nothing (or is absent from
  * `projectsById`) collect into a single trailing unlabeled section. Sections that end up empty are
@@ -684,6 +699,14 @@ export function partitionByCustomSections(
 ): RowSection[] {
   if (sections.length === 0) {
     return [{ kind: 'flat', rows: [...rows].sort(compareRows) }];
+  }
+
+  const duplicateId = findDuplicateSectionId(sections);
+  if (duplicateId !== undefined) {
+    console.warn(
+      `ProjectSelector: duplicate custom section id "${duplicateId}" — the first section with ` +
+        `this id wins and later ones sharing it are ignored for matching purposes.`,
+    );
   }
 
   // Resolve each project once, then reuse the verdict for all of its rows.

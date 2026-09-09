@@ -112,6 +112,8 @@ export type ProjectSelectorLocalizedStrings = {
   filterGroupByVersification?: string;
   /** Filter menu: "Type" item under the Group by section. Defaults to `"Type"`. */
   filterGroupByType?: string;
+  /** Filter menu: "Custom" item under the Group by section. Defaults to `"Custom"`. */
+  filterGroupByCustom?: string;
   /** Filter menu: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
   filterShowSelectedOnly?: string;
   /** Section heading for the Open tabs section. Defaults to `"Opened project & resource tabs"`. */
@@ -155,8 +157,6 @@ export type ProjectSelectorLocalizedStrings = {
   selectAll?: string;
   /** Multi-select: "Clear all" button. Defaults to `"Clear all"`. */
   clearAll?: string;
-  /** Filter menu: "Custom" item under the Group by section. Defaults to `"Custom"`. */
-  filterGroupByCustom?: string;
 };
 
 const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
@@ -170,6 +170,7 @@ const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
   filterGroupByLastUsed: 'Last used',
   filterGroupByVersification: 'Versification',
   filterGroupByType: 'Type',
+  filterGroupByCustom: 'Custom',
   filterShowSelectedOnly: 'Show selected only',
   openTabsSectionHeading: 'Opened project & resource tabs',
   otherProjectsSectionHeading: 'Your projects & resources',
@@ -182,7 +183,6 @@ const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
   openButtonLabel: 'Open',
   selectAll: 'Select all',
   clearAll: 'Clear all',
-  filterGroupByCustom: 'Custom',
 };
 
 function resolveStrings(
@@ -315,6 +315,9 @@ type CommonProps = {
    * list to these sections and nothing else, pass `availableGroupings={['custom']}` with
    * `defaultGrouping="custom"` and `hideFilterMenu`, since a one-item grouping menu is an inert
    * control.
+   *
+   * If `'custom'` is the active grouping and this is absent or empty, the list renders flat
+   * (unsectioned) rather than showing an empty view.
    */
   customSections?: readonly ProjectSelectorSection[];
   /**

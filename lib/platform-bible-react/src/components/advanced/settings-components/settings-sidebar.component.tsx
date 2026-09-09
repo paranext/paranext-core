@@ -162,6 +162,7 @@ export function SettingsSidebar({
                 mode="project"
                 projects={projectSelectorProjects}
                 openTabs={[]}
+                availableGroupings={['openTabs']}
                 selection={{ projectId: selectedSidebarItem?.projectId ?? '' }}
                 onChangeSelection={({ projectId: nextId }) => {
                   if (!nextId) return;

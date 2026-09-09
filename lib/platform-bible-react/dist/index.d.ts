@@ -3726,8 +3726,8 @@ export type ProjectSelectorProject = {
 	 *
 	 * - **Paratext project types** — the PT9 `ProjectType` enum, surfaced by the C# ParatextData
 	 *   library via `ScrText.Settings.TranslationInfo.Type.InternalValue` and forwarded on the wire
-	 *   as `ProjectListResult.projectType` (see `c-sharp/ManageBooks/ProjectSummary.cs`). Values
-	 *   include `"Standard"`, `"BackTranslation"`, `"Auxiliary"`, `"Daughter"`, `"StudyBible"`,
+	 *   as `ProjectSummary.ProjectType` (see `c-sharp/ManageBooks/ProjectSummary.cs`). Values include
+	 *   `"Standard"`, `"BackTranslation"`, `"Auxiliary"`, `"Daughter"`, `"StudyBible"`,
 	 *   `"StudyBibleAdditions"`, `"ConsultantNotes"`, `"Transliteration"`,
 	 *   `"TransliterationWithEncoder"`.
 	 * - **DBL resource types** — the `ResourceType` union in `platform-bible-utils`
@@ -3796,13 +3796,20 @@ export type ProjectSelectorProjectPair = {
 	projectId: string;
 	scrollGroupId?: ScrollGroupId;
 };
-type ProjectSelection = {
+/** Selection shape for single `project` mode. */
+export type ProjectSelection = {
 	projectId?: string;
 };
-type ProjectMultiSelection = {
+/**
+ * Selection shape for `project-multi` mode. Each entry is a `(projectId, scrollGroupId)` pair; the
+ * same project open in two scroll groups is two distinct pairs. `scrollGroupId` is undefined when a
+ * project that is not currently open anywhere is selected.
+ */
+export type ProjectMultiSelection = {
 	pairs: readonly ProjectSelectorProjectPair[];
 };
-type ProjectScrollGroupSelection = {
+/** Selection shape for `projectScrollGroup` mode. */
+export type ProjectScrollGroupSelection = {
 	projectId?: string;
 	scrollGroupId?: ScrollGroupId;
 };
@@ -3827,6 +3834,8 @@ export type ProjectSelectorLocalizedStrings = {
 	filterGroupByVersification?: string;
 	/** Filter menu: "Type" item under the Group by section. Defaults to `"Type"`. */
 	filterGroupByType?: string;
+	/** Filter menu: "Custom" item under the Group by section. Defaults to `"Custom"`. */
+	filterGroupByCustom?: string;
 	/** Filter menu: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
 	filterShowSelectedOnly?: string;
 	/** Section heading for the Open tabs section. Defaults to `"Opened project & resource tabs"`. */
@@ -3870,8 +3879,6 @@ export type ProjectSelectorLocalizedStrings = {
 	selectAll?: string;
 	/** Multi-select: "Clear all" button. Defaults to `"Clear all"`. */
 	clearAll?: string;
-	/** Filter menu: "Custom" item under the Group by section. Defaults to `"Custom"`. */
-	filterGroupByCustom?: string;
 };
 /**
  * The set of grouping options the filter menu can offer. Each corresponds to a partition function
@@ -3961,6 +3968,9 @@ type CommonProps = {
 	 * list to these sections and nothing else, pass `availableGroupings={['custom']}` with
 	 * `defaultGrouping="custom"` and `hideFilterMenu`, since a one-item grouping menu is an inert
 	 * control.
+	 *
+	 * If `'custom'` is the active grouping and this is absent or empty, the list renders flat
+	 * (unsectioned) rather than showing an empty view.
 	 */
 	customSections?: readonly ProjectSelectorSection[];
 	/**

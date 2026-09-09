@@ -322,6 +322,9 @@ export {
   type ProjectSelectorLocalizedStrings,
   type ProjectSelectorSection,
   type ProjectSelectorGroupingOption,
+  type ProjectSelection,
+  type ProjectMultiSelection,
+  type ProjectScrollGroupSelection,
 } from './components/advanced/project-selector/project-selector.component';
 
 // Hooks

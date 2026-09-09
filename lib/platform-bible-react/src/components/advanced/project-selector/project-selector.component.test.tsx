@@ -322,7 +322,7 @@ describe('ProjectSelector — scroll-to-selected on open', () => {
   });
 });
 
-describe('hideFilterMenu (regression: must survive the #2673 rebase)', () => {
+describe('hideFilterMenu', () => {
   const projects: ProjectSelectorProject[] = [
     { id: 'a', shortName: 'A', fullName: 'Project A' },
     { id: 'b', shortName: 'B', fullName: 'Project B' },
@@ -364,7 +364,7 @@ describe('hideFilterMenu (regression: must survive the #2673 rebase)', () => {
   });
 });
 
-describe('locked grouping (regression: manage-books after groupByVersification removal)', () => {
+describe('locked grouping', () => {
   it('groups by versification with no user-facing way to change it', async () => {
     const user = setupUser();
     const versified: ProjectSelectorProject[] = [
