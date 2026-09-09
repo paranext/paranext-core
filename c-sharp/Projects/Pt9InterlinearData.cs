@@ -146,7 +146,9 @@ public sealed record Pt9Lexicon(
 /// the model text the interlinearization reads from, and the export half: whether and where
 /// approved verses export. The model name is absent for a setup with no model text; the model id
 /// serves whenever PT9 stored one, since a model-less setup mints an id as its settings key.
-/// String fields that are empty in the project are absent here.
+/// Emptiness is not handled uniformly: an empty <c>FontName</c>, <c>ModelScrTextName</c>, or
+/// <c>ExportScrTextName</c> is absent here, while an empty <c>LanguageId</c> or
+/// <c>LanguageName</c> serves as an empty string.
 /// </summary>
 public sealed record Pt9InterlinearSetup(
     [property: JsonPropertyName("type")] string Type,
