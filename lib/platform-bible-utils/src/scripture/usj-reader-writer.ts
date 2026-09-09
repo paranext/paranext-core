@@ -1831,13 +1831,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         if (!searchRegex.global || searchRegex.lastIndex >= searchText.length) break;
         searchRegex.lastIndex += 1;
         match = searchRegex.exec(searchText);
-        // Re-evaluating this match against the rejection checks below would be redundant: a
-        // zero-length match can never build a valid start/end pair, so skip straight to the next one.
-        // eslint-disable-next-line no-continue
-        continue;
-      }
-
-      if (
+      } else if (
         isBoundaryFilterOn &&
         UsjReaderWriter.hasWhitespaceGapAwayFromBoundary(
           match,
@@ -1851,57 +1845,54 @@ export class UsjReaderWriter implements IUsjReaderWriter {
         if (!searchRegex.global) break;
         searchRegex.lastIndex = match.index + 1;
         match = searchRegex.exec(searchText);
-        // A rejected match must never fall through to the retVal-building code below it.
-        // eslint-disable-next-line no-continue
-        continue;
+      } else {
+        // Convert NFD match positions back to original-string positions if normalization was applied
+        const originalStart = nfdToOriginalMap ? nfdToOriginalMap[match.index] : match.index;
+        const originalEnd = nfdToOriginalMap
+          ? nfdToOriginalMap[match.index + match[0].length]
+          : match.index + match[0].length;
+
+        if (originalStart < 0 || originalStart >= fullText.length)
+          throw new Error(`Match index out of bounds: ${originalStart}`);
+
+        const startingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(originalStart);
+        if (!startingNodeEntry)
+          throw new Error(`Internal error: no starting node found for index ${originalStart}`);
+        const start: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
+          node: startingNodeEntry.value.node,
+          documentLocation: {
+            jsonPath: startingNodeEntry.value.documentLocation.jsonPath,
+            offset: originalStart - startingNodeEntry.key,
+          },
+        };
+
+        // Have to find the node containing the last character in the match so we don't go past the
+        // ending text node and to the next text node that may be multiple markers past the end text
+        // node. Then do NOT subtract one from the index in the offset since the ending location is
+        // exclusive, meaning the last character in the match is the character before the ending
+        // location.
+        const endingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(originalEnd - 1);
+        if (!endingNodeEntry)
+          throw new Error(`Internal error: no ending node found for index ${originalStart}`);
+        const end: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
+          node: endingNodeEntry.value.node,
+          documentLocation: {
+            jsonPath: endingNodeEntry.value.documentLocation.jsonPath,
+            offset: originalEnd - endingNodeEntry.key,
+          },
+        };
+
+        // When text was NFD-normalized for search, return the original (non-NFD) text slice so the
+        // caller sees the same characters that appear in the source document.
+        const matchText = nfdToOriginalMap
+          ? fullText.substring(originalStart, originalEnd)
+          : match[0];
+        retVal.push({ text: matchText, start, end });
+
+        // If the regex is not global, then running `exec` again will return the same match
+        if (!searchRegex.global) break;
+        match = searchRegex.exec(searchText);
       }
-
-      // Convert NFD match positions back to original-string positions if normalization was applied
-      const originalStart = nfdToOriginalMap ? nfdToOriginalMap[match.index] : match.index;
-      const originalEnd = nfdToOriginalMap
-        ? nfdToOriginalMap[match.index + match[0].length]
-        : match.index + match[0].length;
-
-      if (originalStart < 0 || originalStart >= fullText.length)
-        throw new Error(`Match index out of bounds: ${originalStart}`);
-
-      const startingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(originalStart);
-      if (!startingNodeEntry)
-        throw new Error(`Internal error: no starting node found for index ${originalStart}`);
-      const start: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
-        node: startingNodeEntry.value.node,
-        documentLocation: {
-          jsonPath: startingNodeEntry.value.documentLocation.jsonPath,
-          offset: originalStart - startingNodeEntry.key,
-        },
-      };
-
-      // Have to find the node containing the last character in the match so we don't go past the
-      // ending text node and to the next text node that may be multiple markers past the end text
-      // node. Then do NOT subtract one from the index in the offset since the ending location is
-      // exclusive, meaning the last character in the match is the character before the ending
-      // location.
-      const endingNodeEntry = fullTextIndexMap.findClosestLessThanOrEqual(originalEnd - 1);
-      if (!endingNodeEntry)
-        throw new Error(`Internal error: no ending node found for index ${originalStart}`);
-      const end: UsjNodeAndDocumentLocation<UsjTextContentLocation> = {
-        node: endingNodeEntry.value.node,
-        documentLocation: {
-          jsonPath: endingNodeEntry.value.documentLocation.jsonPath,
-          offset: originalEnd - endingNodeEntry.key,
-        },
-      };
-
-      // When text was NFD-normalized for search, return the original (non-NFD) text slice so the
-      // caller sees the same characters that appear in the source document.
-      const matchText = nfdToOriginalMap
-        ? fullText.substring(originalStart, originalEnd)
-        : match[0];
-      retVal.push({ text: matchText, start, end });
-
-      // If the regex is not global, then running `exec` again will return the same match
-      if (!searchRegex.global) break;
-      match = searchRegex.exec(searchText);
     }
 
     return retVal;

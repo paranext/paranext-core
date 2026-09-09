@@ -1265,6 +1265,18 @@ describe('Find USJ details for text searches', () => {
     expect(usjDoc.search(canMatchEmpty, { flexibleWhitespaceAtBlockBoundaries: true })).toEqual([]);
   });
 
+  test('search returns a later non-zero-length match after skipping an earlier zero-length one 3.0', () => {
+    const usjDoc = new UsjReaderWriter(matthew1And2Usj);
+
+    // The first alternative only matches at the very start of the text and always matches zero
+    // characters there; the exec loop must step past it without losing the "father" occurrences
+    // that follow, which take the ordinary non-zero-length, boundary-filter-passing path.
+    const zeroThenNonZero = /^(?<ws0>)|(father)/dg;
+    const matches = usjDoc.search(zeroThenNonZero, { flexibleWhitespaceAtBlockBoundaries: true });
+    expect(matches.length).toBe(40);
+    expect(matches[0].text).toBe('father');
+  });
+
   test('search with the boundary option off is unchanged and does not require the d flag 3.0', () => {
     const usjDoc = new UsjReaderWriter(matthew1And2Usj);
 
