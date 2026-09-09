@@ -203,8 +203,9 @@ describe('content arriving through a door that names no caller', () => {
   test('a reload in a window the user has not activated does not take document focus', async () => {
     // A reload names no window and carries no say over focus: an extension asks for it, and it
     // re-docks wherever the view already lives. If that is a window main opened in the background,
-    // taking document focus there focuses the iframe, which asks the browser for the foreground —
-    // the same defect as a fresh open, through a door no caller passes a flag to.
+    // taking document focus there focuses the iframe, and that focus stays latent until the window
+    // itself is raised — an uncontrolled focus here risks the same caret-ownership defect as a
+    // fresh open, through a door no caller passes a flag to.
     globalThis.wasWindowCreatedWithoutActivation = true;
     const { shard, addWebViewToDock } = await shardOverDockRecordingAdds();
     await primeProvider();

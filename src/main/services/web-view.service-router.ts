@@ -995,10 +995,14 @@ async function moveWebView(
       target.windowId,
     );
     targetShard = shard;
-    // TODO(PT-4573): This adopt carries no document-focus instruction, so the dock decides from
-    // whether the destination is awaiting its first activation — which cannot see an ordinary
-    // window that is simply not the one holding OS focus. Moving a view into such a window takes
-    // the caret out of wherever the user is typing.
+    // TODO(PT-4573): This adopt carries no document-focus instruction, so the dock decides purely
+    // from whether the destination is awaiting its first activation — which is false for an
+    // ordinary window that is simply not the one holding OS focus, so the adopt takes document
+    // focus there. `raiseMoveTarget` below is what is meant to make that harmless, by raising the
+    // destination right after; when it is skipped (the application does not hold focus) or refused
+    // by the OS, the window stays backgrounded and the adopt's focus stays latent — it claims the
+    // caret only once something later raises that window, at a moment the user never associated
+    // with this move.
     adoptIntoDestination = (definition) => shard.adoptWebView(definition);
   }
 

@@ -174,7 +174,8 @@ describe('window service router', () => {
   test('tells a window still awaiting its first activation not to take document focus', async () => {
     // Every mounted panel and every loaded web view asks the window service to focus it, and
     // routing lands here whenever the background window is the one ready to take work. Honouring
-    // that focus would pull forward the window the platform deliberately opened behind.
+    // that focus would let it claim the caret the moment the platform-opened window is eventually
+    // raised, regardless of which tab the raise is actually showing.
     const only = windowShard('a');
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
     noteWindowWithheldFromActivation('1');
