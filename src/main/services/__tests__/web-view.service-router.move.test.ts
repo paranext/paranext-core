@@ -1057,6 +1057,63 @@ describe('a web view that is between windows on a move', () => {
     releaseAdopt('view-2');
     await moving;
   });
+
+  test("a move recovering into the source window folds the view into that window's own enumeration", async () => {
+    // The target's adopt failed, so recovery is readopting the view back into the source window it
+    // came from — not the target named in the original call. While that readopt is still pending,
+    // the source window is exactly as "between windows" as a live move's target is, so its own
+    // close-time enumeration must fold the view in the same way.
+    const owner = sourceWindowShard('view-3', { projectId: 'project-3' });
+    const target = windowShard([]);
+    target.adoptWebView.mockRejectedValue(new Error('provider exploded'));
+    let releaseSourceReadopt: (webViewId: WebViewId) => void = () => {};
+    owner.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseSourceReadopt = resolve;
+        }),
+    );
+    withWindows({ 2: owner, 3: target });
+
+    const moving = moveWebView('view-3', { kind: 'window', windowId: '3' });
+    await settle();
+
+    const definitions = await getOpenWebViewDefinitionsForWindow('2');
+
+    expect(definitions).toContainEqual(
+      expect.objectContaining({ id: 'view-3', projectId: 'project-3' }),
+    );
+
+    releaseSourceReadopt('view-3');
+    await failedMove(moving);
+  });
+
+  test('a move recovering into the source window stops folding into the target that just failed', async () => {
+    // The discrimination test for the sibling above: a record left pointing at the failed target
+    // would still make that target's own enumeration report the view, even though the move gave up
+    // on it and is now trying the source window instead.
+    const owner = sourceWindowShard('view-4', { projectId: 'project-4' });
+    const target = windowShard([]);
+    target.adoptWebView.mockRejectedValue(new Error('provider exploded'));
+    let releaseSourceReadopt: (webViewId: WebViewId) => void = () => {};
+    owner.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseSourceReadopt = resolve;
+        }),
+    );
+    withWindows({ 2: owner, 3: target });
+
+    const moving = moveWebView('view-4', { kind: 'window', windowId: '3' });
+    await settle();
+
+    const definitions = await getOpenWebViewDefinitionsForWindow('3');
+
+    expect(definitions.some((definition) => definition.id === 'view-4')).toBe(false);
+
+    releaseSourceReadopt('view-4');
+    await failedMove(moving);
+  });
 });
 
 describe('the move commands', () => {
