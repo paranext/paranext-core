@@ -107,24 +107,45 @@ step, no automation. Just a record.
   that cost nothing.
 - **Consequences:** This view is coupled to three class names it does not own, and a rename upstream
   breaks alignment *silently* — the grid still renders, just unaligned. Three things watch for that:
-  a unit test pins the selectors, a Storybook story reproduces the markup so Chromatic sees the
-  layout, and an e2e test measures real block geometry across columns in the running app. Scrolling
-  to a reference is explicit, because Lexical skips the DOM-selection write — and the
-  scroll-into-view inside it — for a read-only editor. A verse numbered above 200 would fall outside
-  the explicit grid and stop sharing rows; revisit if a versification ever exceeds that.
+  a unit test pins the selectors, a contract test reads the installed editor bundle and fails when a
+  name or export the layout depends on is gone, a Storybook story reproduces the markup so Chromatic
+  sees the layout, and an e2e test measures real block geometry across columns in the running app.
+  Scrolling to a reference is explicit, because Lexical skips the DOM-selection write — and the
+  scroll-into-view inside it — for a read-only editor. Placement is opt-in: verse blocks are hidden
+  by default and shown by the row rule that places them, so a block the rules cannot place — one
+  upstream emitted with no parsable range, or a verse numbered above 200 — is dropped rather than
+  auto-placed into the first free row of the shared grid, which would silently misalign that column
+  from there down. Such a verse is therefore not readable in this view (it still is in Verse and
+  Chapter view); revisit the row count if a versification ever exceeds 200. Per-resource zoom lands
+  on the verse blocks here rather than on the column's content wrapper as it does in the other
+  views: that wrapper is a subgrid box, and `zoom` scales the used value of the lengths inside it,
+  which would include the shared row tracks it inherits.
 
   Two decisions follow from the row model rather than from taste, so they are recorded here:
 
-  - **Section headings are hidden.** They sit between verse blocks, so they have no row of their own,
-    and they are translation-specific — showing them per column would put a heading beside verse 5 in
-    one text and verse 6 in another. Placing them instead on the row of the verse they precede is not
-    expressible in CSS (no selector reaches a following sibling's attributes) and would need JS. The
-    model still carries them, so a later pass can span one across a full-width row keyed to a
+  - **Everything between verse blocks is hidden**, not section headings alone: the rule suppresses
+    every non-verse-block child of the editor root, so chapter descriptions and intro material
+    inside the chapter go with them. All of it sits between verse blocks, so it has no row of its
+    own, and it is translation-specific — showing it per column would put a heading beside verse 5
+    in one text and verse 6 in another. Placing it instead on the row of the verse it precedes is
+    not expressible in CSS (no selector reaches a following sibling's attributes) and would need JS.
+    The model still carries it, so a later pass can span one across a full-width row keyed to a
     reference resource; until then the reference screenshot's clean look is what ships.
   - **Rows are visual, not announced.** The grid is a group of labeled column regions. ARIA table
     semantics would need a row-major DOM, which the one-editor-per-column requirement rules out;
     verse numbers rendered at the start of each block are what let a screen-reader user correlate
     columns. Flagged for AT validation with the rest of this surface.
+
+  The editor this depends on is **not** the one the manifests pin. `BLOCK_VERSE_VIEW_MODE` and the
+  `verse-block` DOM exist only in the editor built from `scripture-editors`' `platform-yalc` branch,
+  which `dev-packages.json` names and `postinstall` -> `link-dev-packages` yalc-links over
+  `node_modules`; that branch is how Platform.Bible consumes the editor at all, rather than from npm
+  releases (the branch's own README says so). The `~0.8.15` pins in both manifests are the registry
+  floor npm resolves before the link replaces it — raising them to a version that is not published
+  would break `npm install`. Any path that skips the link (`npm ci --ignore-scripts`,
+  `npm run editor:unlink`) gets an editor without the mode, and this view then renders empty
+  columns; `upstream-editor-contract.test.ts` fails by name in that case rather than leaving it to
+  be diagnosed from the layout.
 - **Source:** PT-4184, building on PT-4304's subgrid-chain proof and extending it to the editor's own
   wrappers.
 

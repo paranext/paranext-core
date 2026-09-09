@@ -4,16 +4,35 @@
  * In TypeScript rather than `.scss` because the row rules are generated, one pair per verse number,
  * and generating them here makes the mapping unit-testable.
  */
+import type { CSSProperties } from 'react';
 
 /** Class marking the grid root, which owns the row axis and is the single scroll port. */
 export const ALIGNED_GRID_CLASS = 'scripture-text-grid-aligned';
 
 /**
+ * Custom property carrying a column's zoom factor down to its verse blocks.
+ *
+ * Zoom cannot sit on the column's content wrapper here the way it does in the other views: that
+ * wrapper is a `grid-template-rows: subgrid` box, and `zoom` scales the used value of the lengths
+ * inside it — including the row tracks it inherits from the shared grid, so a zoomed column would
+ * measure its rows against a different scale than its neighbours. Zooming the verse blocks instead
+ * leaves the tracks alone and keeps the row model intact: a row is still as tall as its tallest
+ * cell, that cell is simply zoomed.
+ */
+export const ALIGNED_ZOOM_PROPERTY = '--aligned-zoom';
+
+/**
+ * A `style` value that can carry {@link ALIGNED_ZOOM_PROPERTY}. React's `CSSProperties` has no index
+ * signature, so a custom property has to be declared to be set without a type assertion.
+ */
+export type AlignedZoomStyle = CSSProperties & { [K in typeof ALIGNED_ZOOM_PROPERTY]?: number };
+
+/**
  * How many verse rows the grid root declares. Unoccupied rows collapse to zero height, so declaring
  * more than a chapter uses costs nothing and saves measuring the chapter first. 200 clears the
- * longest chapter Platform.Bible ships (Psalm 119, 176 verses). A verse numbered beyond this falls
- * into a per-column implicit row, which is not shared — so keep this above any real verse number
- * rather than tuning it down.
+ * longest chapter Platform.Bible ships (Psalm 119, 176 verses). A verse numbered beyond this gets
+ * no row rule and so is not shown at all (see `CHAIN_RULES`) — keep this above any real verse
+ * number rather than tuning it down.
  */
 export const MAX_ALIGNED_VERSE_ROWS = 200;
 
@@ -27,6 +46,12 @@ export const MAX_ALIGNED_VERSE_ROWS = 200;
  * Start and end come from separate rules keyed on the block's own `data-verse-start`/`-end`, which
  * is what lets a bridge (`14-15`) span its two rows without a rule per pair.
  *
+ * The start rule also un-hides the block. Verse blocks are hidden by default so placement is
+ * opt-in: a block these rules cannot place — carrying no `data-verse-start`, or a start outside
+ * 1..`maxVerseRows` — would otherwise be auto-placed into the first free row of the SHARED explicit
+ * grid and silently misalign the column from there down. These rules out-specify that default
+ * (`.class .class[attr]` beats `.class .class`), so every block they do place is shown.
+ *
  * @param maxVerseRows Highest verse number to emit rules for.
  * @returns The generated CSS text.
  */
@@ -34,7 +59,7 @@ export function buildVerseRowRules(maxVerseRows: number): string {
   const rules: string[] = [];
   for (let verseNum = 1; verseNum <= maxVerseRows; verseNum++) {
     rules.push(
-      `.${ALIGNED_GRID_CLASS} .verse-block[data-verse-start="${verseNum}"]{grid-row-start:${verseNum}}`,
+      `.${ALIGNED_GRID_CLASS} .verse-block[data-verse-start="${verseNum}"]{grid-row-start:${verseNum};display:block}`,
       `.${ALIGNED_GRID_CLASS} .verse-block[data-verse-end="${verseNum}"]{grid-row-end:${verseNum + 1}}`,
     );
   }
@@ -94,37 +119,54 @@ const CHAIN_RULES = `
 .${ALIGNED_GRID_CLASS} .editor-input{
   display:contents;
 }
-/* Padding discarded by the two flattened wrappers above, re-applied where a box still exists. */
 .${ALIGNED_GRID_CLASS} .verse-block{
+  /* Hidden until a generated row rule places it. An unplaced grid item is auto-placed into the
+     first free row of the SHARED explicit grid, which silently misaligns the column from there
+     down, so a block this view cannot place is dropped instead — the verse stays readable in Verse
+     and Chapter view. Two kinds land here: a marker upstream could not parse into a range (an
+     imported reversed bridge like 3-1, for which it emits neither attribute), and a verse numbered
+     outside 1..${MAX_ALIGNED_VERSE_ROWS}. Restoring display:block restores the default: upstream
+     renders the block as a bare div and gives it no display of its own. */
+  display:none;
+  /* Padding discarded by the two flattened wrappers above, re-applied where a box still exists. */
   padding:0.25rem 0.5rem;
   min-width:0;
   /* Handing scrolling to the grid root removed this column's only clipping boundary, so a long
      unbreakable run (a transliteration, a URL, unspaced scripts) would otherwise cross into the
      next column. */
   overflow-wrap:anywhere;
-}
-/* Upstream removes both range attributes when a marker cannot be parsed into one — an imported
-   reversed bridge like 3-1. Such a block matches no row rule, and an unplaced grid item is
-   auto-placed into the first free row of the SHARED explicit grid, which silently misaligns the
-   column from there down. Dropping it keeps the rest of the column aligned; the verse is still
-   readable in Verse and Chapter view. */
-.${ALIGNED_GRID_CLASS} .verse-block:not([data-verse-start]){
-  display:none;
+  /* Per-resource zoom, applied here rather than to the subgrid box above. See
+     ALIGNED_ZOOM_PROPERTY. */
+  zoom:var(${ALIGNED_ZOOM_PROPERTY},1);
 }
 /* A cell with no editor to show — downloading, unavailable, or no verses to align — puts its
-   message across the column rather than in the first verse's row. The minimum height is for the
-   case where every column is in that state, leaving no row heights to borrow. */
+   message across the column rather than in the first verse's row. Stretched over a whole chapter's
+   height a centred message would sit at that column's midpoint, so it would start off screen and
+   one slow resource among several would read as a blank column; pin it to the top instead. The
+   minimum height is for the case where every column is in that state, leaving no row heights to
+   borrow. */
 .${ALIGNED_GRID_CLASS} [data-cell-placeholder]{
   grid-row:1/-1;
   min-height:6rem;
+  justify-content:flex-start;
+  padding-top:0.75rem;
+  zoom:var(${ALIGNED_ZOOM_PROPERTY},1);
 }
-/* Section headings and other between-verse content are suppressed in v1: they are
-   translation-specific, so they disagree across columns, and they have no row of their own. The
-   model still carries them (upstream keeps them as ordinary paragraphs), so showing them later is a
-   change to this rule alone. Gated on the editor having produced verse blocks at all: without that
-   gate, an editor that never produced them would have every paragraph hidden and the column would
-   render empty rather than merely unaligned. */
-.${ALIGNED_GRID_CLASS} .editor-input:has(.verse-block) > *:not(.verse-block){
+/* Only verse blocks get rows, so everything the editor puts between them is suppressed in v1 —
+   section headings, but equally chapter descriptions and any intro material inside the chapter.
+   That content is translation-specific, so it disagrees across columns, and it has no row of its
+   own. The model still carries it (upstream keeps it as ordinary paragraphs), so showing it later
+   is a change to this rule alone.
+
+   Unconditional, deliberately. An earlier form gated this on a :has(.verse-block) test so that a
+   column whose editor produced no verse blocks — an editor without the block-verse view mode —
+   would show its paragraphs instead of nothing. Measured in Chromium, that is the worse failure:
+   those paragraphs are grid items of the SHARED subgrid with an auto grid-row, so they auto-place
+   into rows 1, 2, 3… and their heights (one inline paragraph holds many verses) stretch those rows
+   for every other column too. One misconfigured resource collapsed the whole grid rather than just
+   its own column. An empty column is recoverable and points at the real cause, which
+   upstream-editor-contract.test.ts names. */
+.${ALIGNED_GRID_CLASS} .editor-input > *:not(.verse-block){
   display:none;
 }
 /* The editor's empty-state prompt invites editing, which this read-only view never allows; the
