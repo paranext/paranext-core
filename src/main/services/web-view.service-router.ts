@@ -869,10 +869,16 @@ async function findWebViewAdoptedAfterTimeout(
  * view went — same narrow rule as cross-window opens: only between this app's windows, never taking
  * focus from another application. A window created for the move is not raised at all: it is
  * revealed without activation on purpose, so the move does not pull the user out of the window they
- * are working in.
+ * are working in. An existing window the platform deliberately kept out of the foreground is
+ * likewise left alone: a move landing content there is not the user asking to go there either.
  */
 function raiseMoveTarget(target: MoveWebViewTarget): void {
-  if (target.kind === 'window' && isApplicationFocused()) focusWindow(target.windowId);
+  if (
+    target.kind === 'window' &&
+    isApplicationFocused() &&
+    !shouldContentAvoidDocumentFocus(target.windowId)
+  )
+    focusWindow(target.windowId);
 }
 
 /**
