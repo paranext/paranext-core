@@ -394,6 +394,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         Stream? dataStream = GetExtensionStream(scope, createIfNotExists: false);
         if (dataStream == null)
             return "";
+
         using (dataStream)
         {
             return new StreamReader(dataStream, Encoding.UTF8).ReadToEnd();
@@ -434,13 +435,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <see cref="GetExtensionData"/>.
     /// </remarks>
     /// <exception cref="InvalidDataException">
-    /// The scope has no extension name, or one that does not name a single directory. See
-    /// <see cref="GetExtensionDataRoot"/>.
+    /// The scope has no extension name, or one that would root the listing at the shared extensions
+    /// directory or above it. See <see cref="EnsureExtensionNameStaysInItsOwnDirectory"/>.
     /// </exception>
     public override string[] ListExtensionDataQualifiers(ProjectDataScope scope)
     {
-        // Scoped to this extension's own data - which GetExtensionDataRoot's own check on the
-        // extension name is what enforces - so a project's thousands of other files are never
+        if (string.IsNullOrWhiteSpace(scope.ExtensionName))
+            throw new InvalidDataException("Must provide an extension name");
+        EnsureExtensionNameStaysInItsOwnDirectory(scope.ExtensionName);
+
+        // Scoped to this extension's own data so a project's thousands of other files are never
         // walked, and so no other extension's layout is exposed
         return CreateExtensionStreamManager()
             .GetExistingDataStreamNames(GetExtensionDataRoot(scope));
@@ -461,30 +465,44 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <see cref="ListExtensionDataQualifiers"/> returns readable by
     /// <see cref="GetExtensionData"/> — change the layout here and both sides move together.
     ///
-    /// The extension name has to name one directory and nothing else, so it is checked here rather
-    /// than at each caller. An extension name is caller-supplied and lands directly in a path, and
-    /// the only downstream guard rejects the substring ".." — so "." or "./" would root the walk at
-    /// the shared extensions directory and hand back every extension's data, and a Windows-trimmed
-    /// trailing space or dot would do the same.
+    /// It deliberately validates nothing. The callers' checks differ — see
+    /// <see cref="EnsureExtensionNameStaysInItsOwnDirectory"/> for why the listing's check must not
+    /// be shared here — so composition and validation stay separate on purpose.
     /// </summary>
-    /// <exception cref="InvalidDataException">
-    /// The scope has no extension name, or one that does not name a single directory.
-    /// </exception>
-    private static string GetExtensionDataRoot(ProjectDataScope scope)
-    {
-        var extensionName = scope.ExtensionName;
-        if (string.IsNullOrWhiteSpace(extensionName))
-            throw new InvalidDataException("Must provide an extension name");
-        if (
-            extensionName.AsSpan().IndexOfAny('/', '\\') >= 0
-            || extensionName != extensionName.Trim()
-            || extensionName.EndsWith('.')
-        )
-            throw new InvalidDataException(
-                $"Extension name '{extensionName}' must name a single directory"
-            );
+    private static string GetExtensionDataRoot(ProjectDataScope scope) =>
+        $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{scope.ExtensionName}";
 
-        return $"{LocalParatextProjects.EXTENSION_DATA_SUBDIRECTORY}/{extensionName}";
+    /// <summary>
+    /// Reject an extension name that would root the listing at the shared extensions directory or
+    /// above it — "." or "./" alone, or any ".." segment — because enumerating there hands back every
+    /// extension's data instead of the one asked about. Nothing else is rejected: a nested name such
+    /// as "acme/tools" stays within its own subtree and is valid on every path, and Windows' trimming
+    /// of a trailing space or dot has always aliased such a name to the trimmed one and still
+    /// round-trips.
+    ///
+    /// This check belongs to the listing alone and must not move into
+    /// <see cref="GetExtensionDataRoot"/>, tempting as sharing it looks. An extension name is
+    /// caller-supplied and lands directly in a path, but for <see cref="GetExtensionData"/> and
+    /// <see cref="SetExtensionData"/> a bad name reaches nothing a caller could not reach by naming
+    /// the other extension outright — so a shared check would close no access there, while rejecting
+    /// names those methods have always accepted and stranding whatever was written under them.
+    /// ExtensionData_NestedExtensionName_WritesListsAndReadsBack pins that; the
+    /// ListExtensionDataQualifiers_*_Throws cases pin the rejections.
+    /// </summary>
+    /// <exception cref="InvalidDataException">The name escapes its own directory.</exception>
+    private static void EnsureExtensionNameStaysInItsOwnDirectory(string extensionName)
+    {
+        // Split on both separators, as GetFileNameFromStreamName normalizes both. Trimming is for the
+        // check only — a whitespace-only segment names no directory — and does not alter the path.
+        var segments = extensionName.Split(
+            ['/', '\\'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+        );
+        // All(...) is true for no segments at all, so a bare separator is rejected too
+        if (segments.All(segment => segment == ".") || segments.Contains(".."))
+            throw new InvalidDataException(
+                $"Extension name '{extensionName}' must stay within its own extension-data directory"
+            );
     }
 
     private IProjectStreamManager CreateExtensionStreamManager() =>
