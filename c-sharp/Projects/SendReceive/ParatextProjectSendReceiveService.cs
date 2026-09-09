@@ -215,17 +215,32 @@ internal class ParatextProjectSendReceiveService(
     }
 
     /// <summary>
-    /// Syncs projects from the provided IDs: filters for editable projects and S/Rs them,
-    /// then reads each editable project's connected resources and projects (one level deep —
-    /// connections of connections are not included) and S/Rs connected translation projects
-    /// or DBL-updates connected resources. Non-editable and unknown IDs are skipped.
-    /// Deduplication is handled internally.
+    /// Syncs the given projects (S/Rs them), then reads connected resources and projects (one level
+    /// deep — connections of connections are not included) for the project(s) this call settles on,
+    /// and S/Rs connected translation projects or DBL-updates connected resources for those as
+    /// needed. Unknown IDs are skipped. Deduplication is handled internally.
     /// Exception is thrown if this function is not implemented in the current application
     /// or if an error was encountered syncing.
     /// </summary>
     /// <param name="projectIds">
-    /// IDs of the projects to sync. If <see langword="null"/>, all shared projects that are already
-    /// present locally (i.e., not new) are synced. An empty array is a no-op.
+    /// IDs of the projects to sync.
+    /// <list type="bullet">
+    /// <item>If explicit IDs are given, each one is synced regardless of whether it is already
+    /// present locally — a <c>new</c> (not yet downloaded) project among them is downloaded, not
+    /// skipped, though an implementation may still exclude a given id for reasons outside the
+    /// caller's control (e.g., an unsupported project version, or the project being otherwise
+    /// ineligible).</item>
+    /// <item>If <see langword="null"/> and at least one shared project the account knows about is
+    /// already present locally (not new), every locally-present shared project is synced; new
+    /// projects are left alone.</item>
+    /// <item>If <see langword="null"/> and no shared project the account knows about is present
+    /// locally yet (whether a genuine first sync, or every previously-local project has since gone
+    /// missing from disk), an implementation is expected to try to make at least one project
+    /// available for the current user to work in, if the account has one — but may stop short of
+    /// downloading every shared project in the account, trading completeness for performance.
+    /// Callers MUST NOT assume every shared project is present locally once this resolves.</item>
+    /// <item>An empty array is a no-op.</item>
+    /// </list>
     /// </param>
     protected void SyncProjects(String[]? projectIds)
     {
