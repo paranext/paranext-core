@@ -151,6 +151,9 @@ jobs:
           USE_HARD_LINKS: false
         run: |
           npx electron-builder build --publish never --linux
+          # Before the artifact upload below: this workflow's snap is the one shared internally, so
+          # a bad one should fail here rather than be published as a build someone can install.
+          npm run assert:snap-metadata
 
       - name: Rename Windows exe to include GitHub Action Run ID
         if: ${{ matrix.os == env.OS_WINDOWS }}

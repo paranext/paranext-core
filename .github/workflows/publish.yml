@@ -232,6 +232,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx electron-builder --publish never --linux
+          # In the same block rather than a following step: a broken snap should fail the release
+          # build here, before anything downstream treats it as a good one.
+          npm run assert:snap-metadata
 
       # Creates the tag, the draft and the generated notes, and attaches NO binaries. The release is
       # a fixed point in Git history for the Paratext 10 Studio build to construct its own releases
