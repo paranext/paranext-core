@@ -1228,11 +1228,13 @@ export function addWebViewToDock(
  * @param tabId ID of tab in the tab group to reveal
  * @param activateWithoutDocumentFocus If `true`, the tab group is revealed and the tab is made
  *   active, but document focus is left where it is. Focusing a tab focuses its web view's iframe,
- *   and a `focus()` inside a window that does not hold OS focus asks the browser to activate that
- *   window — which would pull a window opened deliberately in the background to the front as soon
- *   as content arrived in it. Left unspecified, this defaults to whether this window is still
- *   awaiting its first activation, so a door into the dock that does not know this parameter exists
- *   still gets the right answer instead of unconditionally taking focus.
+ *   and a `focus()` inside a window that does not hold OS focus sets that document's active element
+ *   without activating the window — latently, until the window is next activated. Left alone,
+ *   whichever tab's content calls `focus()` last would claim that latent focus and decide who owns
+ *   the caret once a window opened deliberately in the background is finally raised. Left
+ *   unspecified, this defaults to whether this window is still awaiting its first activation, so a
+ *   door into the dock that does not know this parameter exists still gets the right answer instead
+ *   of unconditionally taking focus.
  */
 function revealTabGroupAndSetDocumentFocusToTab(
   dockLayout: DockLayout,

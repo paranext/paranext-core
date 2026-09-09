@@ -520,10 +520,12 @@ async function openWebViewInOwningWindow(
   // on is the renderer's, between the note and the gesture.
   const isOwnerAwaitingFirstActivation = shouldContentAvoidDocumentFocus(owner.windowId);
   // Read the same condition the raise below decides on, before the open runs: a raise about to
-  // happen needs the shard to activate the tab without moving document focus. Without this, the
-  // shard's own `focus()` call runs while the owning window is still backgrounded — a `focus()`
-  // inside a window that does not hold OS focus is silently dropped rather than deferred — and
-  // `focusWindow` below then raises the window with no document focus left to land the tab.
+  // happen needs the shard to activate the tab without moving document focus yet. A `focus()` call
+  // made now, while the owning window is still backgrounded, sets that document's active element
+  // without raising the window — the focus lands, but only latently, and stays open to being
+  // overwritten by whatever else in that window calls `focus()` before `focusWindow` below actually
+  // raises it. Withholding here leaves that decision to the shard's own catch-up at raise time, so
+  // the tab that ends up owning the caret is the one this open asked for.
   const willLikelyRaiseAcrossWindows =
     owner.windowId !== getTargetWindowId() &&
     isApplicationFocused() &&

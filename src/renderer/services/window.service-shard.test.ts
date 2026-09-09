@@ -575,11 +575,14 @@ describe('getNavigationContext', () => {
 });
 
 /**
- * A window created without activation is undone by its own content unless the content knows: every
+ * A window created without activation still has its own content calling `focus()` on arrival: every
  * mounted panel and every loaded web view asks this window's service to focus it, and focusing a
- * tab focuses its web view's iframe, which asks the browser to activate the window. Those calls
- * resolve this window's own shard by name and never reach the main process, so the shard has to
- * answer for itself.
+ * tab focuses its web view's iframe. A `focus()` inside a window that does not hold OS focus sets
+ * that document's active element without activating the window, latently, until the window is next
+ * activated — so left unchecked, whichever call lands last would decide who owns the caret once the
+ * window is finally raised, rather than the tab the user is actually shown. Those calls resolve
+ * this window's own shard by name and never reach the main process, so the shard has to answer for
+ * itself.
  */
 describe('a window still waiting for its first activation', () => {
   beforeEach(() => {

@@ -902,9 +902,12 @@ async function main() {
 
     if (creationOptions?.pendingContent) markWindowPendingContent(windowId);
 
-    // Withholding activation only survives until content arrives unless the content knows: docking a
-    // web view focuses its iframe, and a `focus()` inside a window that does not hold OS focus asks
-    // the browser to activate that window. Recorded here so the open that follows can say so.
+    // Content that docks into this window before it has ever been raised still calls focus() on its
+    // iframe, and a `focus()` inside a window that does not hold OS focus sets that document's
+    // active element without activating the window — latently, until the window is next activated.
+    // Left unchecked, whichever tab's content lands last would claim that latent focus and decide
+    // who owns the caret once the window is finally raised. Recorded here so the open that follows
+    // can withhold document focus and leave that decision open until raise time.
     if (activation.revealWhenReady === 'inactive') noteWindowWithheldFromActivation(windowId);
     // Where focus goes back to if this window takes it on its own: the window that actually HELD
     // focus, not the routing target. They diverge — routing walks past a window that is not ready,

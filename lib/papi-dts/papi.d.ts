@@ -4306,9 +4306,11 @@ declare module 'shared/models/docking-framework.model' {
      *   tabs. Defaults to `true`
      * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
      *   taking document focus. Focusing a tab focuses its web view's iframe, and a `focus()` inside a
-     *   window that does not hold OS focus asks the browser to activate that window — so a window
-     *   opened deliberately in the background must dock its content without it. Left unspecified,
-     *   this defaults to whether this window is still awaiting its first activation.
+     *   window that does not hold OS focus sets that document's active element without activating the
+     *   window — latently, until the window is next activated — so a window opened deliberately in
+     *   the background docks its content without taking that latent focus, leaving who owns the caret
+     *   to be decided when the window is actually raised. Left unspecified, this defaults to whether
+     *   this window is still awaiting its first activation.
      * @returns If WebView added, final layout used to display the new webView. If existing webView
      *   updated, `undefined`
      * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
@@ -9606,11 +9608,14 @@ declare module 'shared/data/platform.data' {
    * activated. Written once, at creation, and never removed — whether the user has been in the window
    * since is the renderer's own to track.
    *
-   * A window told to stay in the background is undone by its own content: every mounted panel and
-   * every loaded web view asks this window's service to focus it, and focusing a tab focuses its web
-   * view's iframe, which asks the browser to activate the window. Those calls resolve this window's
-   * own service shard by name and never reach the main process, so this is how the fact gets to them.
-   * The renderer stops honouring it the first time the window is activated.
+   * A window told to stay in the background still has its own content calling `focus()` as it lands:
+   * every mounted panel and every loaded web view asks this window's service to focus it, and
+   * focusing a tab focuses its web view's iframe. A `focus()` inside a window that does not hold OS
+   * focus sets that document's active element without activating the window, latently, until the
+   * window is next activated — so left unchecked, whichever call lands last would decide who owns the
+   * caret once the window is finally raised. Those calls resolve this window's own service shard by
+   * name and never reach the main process, so this is how the fact gets to them. The renderer stops
+   * honouring it the first time the window is activated.
    *
    * @experimental
    */
