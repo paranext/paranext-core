@@ -1,11 +1,30 @@
 /** Finding, and scrolling to, a verse row in the aligned grid. */
 
+import { MAX_ALIGNED_VERSE_ROWS } from './aligned-grid.styles';
+
+/**
+ * Whether the grid's generated row rules place a block carrying this `data-verse-start`.
+ *
+ * A block outside 1..`MAX_ALIGNED_VERSE_ROWS` — a `\v 0` front-matter marker, or a verse numbered
+ * past the last row — matches no rule and so stays hidden. Scrolling to one would read an all-zero
+ * rect off an element with no layout box, which lands the reader at the top of the chapter instead
+ * of at the verse they asked for, and then keeps them pinned there.
+ *
+ * @param block A rendered verse block.
+ * @returns True when the block is one the layout placed on a shared row.
+ */
+function isPlacedBlock(block: HTMLElement): boolean {
+  const start = Number(block.dataset.verseStart);
+  return Number.isInteger(start) && start >= 1 && start <= MAX_ALIGNED_VERSE_ROWS;
+}
+
 /**
  * The verse block to scroll to for a reference, searched within one scroll port.
  *
- * Prefers a block starting exactly at the verse. Otherwise takes the nearest block starting before
- * it, which is what lands a reference inside a bridge (`14-15` starts at 14, so verse 15 finds it)
- * or in a versification gap on the row above. Returns `undefined` only when no verse block has
+ * Only blocks the layout actually placed are candidates ({@link isPlacedBlock}). Prefers a block
+ * starting exactly at the verse. Otherwise takes the nearest block starting before it, which is
+ * what lands a reference inside a bridge (`14-15` starts at 14, so verse 15 finds it) or in a
+ * versification gap on the row above. Returns `undefined` only when no placed verse block has
  * rendered yet, which callers use to tell "the chapter has not arrived" from "the verse is
  * missing".
  *
@@ -17,18 +36,28 @@ export function findVerseBlockForVerse(
   port: ParentNode,
   verseNum: number,
 ): HTMLElement | undefined {
-  const blocks = [...port.querySelectorAll<HTMLElement>('.verse-block[data-verse-start]')];
+  // The common case — the reference names a verse some column starts — is answerable without
+  // collecting every block, and this runs on each frame in which the grid's editors mutate.
+  if (Number.isInteger(verseNum) && verseNum >= 1 && verseNum <= MAX_ALIGNED_VERSE_ROWS) {
+    const match = port.querySelector<HTMLElement>(`.verse-block[data-verse-start="${verseNum}"]`);
+    if (match) return match;
+  }
+
+  const blocks = [...port.querySelectorAll<HTMLElement>('.verse-block[data-verse-start]')].filter(
+    isPlacedBlock,
+  );
   const [firstBlock] = blocks;
   if (!firstBlock) return undefined;
 
-  const exact = blocks.find((block) => Number(block.dataset.verseStart) === verseNum);
-  if (exact) return exact;
+  // A non-finite verse can only come from a malformed reference; nothing is "nearest" to it, so the
+  // top of the passage is the only defensible answer (and matches a verse-0 reference).
+  if (!Number.isFinite(verseNum)) return firstBlock;
 
   let best: HTMLElement | undefined;
   let bestStart = Number.NEGATIVE_INFINITY;
   blocks.forEach((block) => {
     const start = Number(block.dataset.verseStart);
-    if (Number.isNaN(start) || start > verseNum || start <= bestStart) return;
+    if (start > verseNum || start <= bestStart) return;
     best = block;
     bestStart = start;
   });
@@ -37,13 +66,22 @@ export function findVerseBlockForVerse(
 }
 
 /**
- * The height of the sticky resource-name header, which covers the top of the port.
+ * The viewport-relative Y of the port's first pixel a reader can actually see: past its top border,
+ * and past the sticky resource-name header that covers the top of the scrollable area.
  *
- * @param port The grid root.
- * @returns The header's height, or 0 before one has rendered.
+ * `clientTop` is the port's top border: its bounding rect starts at the border, its scrollable
+ * content does not. `getTopWithinScrollContainer` in `editor-dom.util.ts` subtracts it for the same
+ * reason; this view allows an external border on the grid. Both functions below take their origin
+ * from here so they cannot disagree about it — reading a block as visible against one origin and
+ * scrolling it to another is off by the border width.
+ *
+ * @param port The scroll port (the grid root).
+ * @returns The viewport Y of the first visible content pixel.
  */
-function getStickyHeaderHeight(port: HTMLElement): number {
-  return port.querySelector<HTMLElement>('[data-cell-header]')?.getBoundingClientRect().height ?? 0;
+function getFirstVisibleY(port: HTMLElement): number {
+  const headerHeight =
+    port.querySelector<HTMLElement>('[data-cell-header]')?.getBoundingClientRect().height ?? 0;
+  return port.getBoundingClientRect().top + port.clientTop + headerHeight;
 }
 
 /**
@@ -55,10 +93,10 @@ function getStickyHeaderHeight(port: HTMLElement): number {
  * @returns True when the reader can see some of the block.
  */
 export function isBlockInPortView(port: HTMLElement, block: HTMLElement): boolean {
-  const portRect = port.getBoundingClientRect();
   const blockRect = block.getBoundingClientRect();
-  const firstVisibleY = portRect.top + getStickyHeaderHeight(port);
-  return blockRect.bottom > firstVisibleY && blockRect.top < portRect.bottom;
+  return (
+    blockRect.bottom > getFirstVisibleY(port) && blockRect.top < port.getBoundingClientRect().bottom
+  );
 }
 
 /**
@@ -72,9 +110,5 @@ export function isBlockInPortView(port: HTMLElement, block: HTMLElement): boolea
  * @param block The verse block to bring to the top of the port.
  */
 export function scrollPortToBlock(port: HTMLElement, block: HTMLElement): void {
-  // `clientTop` is the port's top border: its bounding rect starts at the border, its scrollable
-  // content does not. `getTopWithinScrollContainer` in `editor-dom.util.ts` subtracts it for the
-  // same reason; this view allows an external border on the grid.
-  const portTop = port.getBoundingClientRect().top + port.clientTop;
-  port.scrollTop += block.getBoundingClientRect().top - portTop - getStickyHeaderHeight(port);
+  port.scrollTop += block.getBoundingClientRect().top - getFirstVisibleY(port);
 }

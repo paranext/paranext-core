@@ -77,23 +77,81 @@ function isVerseOpener(node: MarkerContent): node is MarkerObject {
 }
 
 /**
+ * Highest verse number the aligned grid emits a row rule for. Duplicated from
+ * `MAX_ALIGNED_VERSE_ROWS` rather than imported so this module stays free of the grid's stylesheet
+ * (and so of React); `aligned-grid.styles.test.ts` fails if the two drift apart.
+ */
+export const MAX_PLACEABLE_VERSE_FOR_EMPTY_STATE = 200;
+
+/** Whether a verse marker resolves to a range the aligned grid has a row rule for. */
+function isPlaceableVerseMarker(marker: string): boolean {
+  const { start, end } = parseVerseRange(marker);
+  if (Number.isNaN(start) || Number.isNaN(end)) return false;
+  // Upstream drops both range attributes for a reversed or unparsable range, and the generated row
+  // rules only cover 1..MAX_PLACEABLE_VERSE_FOR_EMPTY_STATE — a block outside that is hidden, not placed.
+  return start >= 1 && start <= end && end <= MAX_PLACEABLE_VERSE_FOR_EMPTY_STATE;
+}
+
+/** Whether any verse opener anywhere under `content` resolves to a placeable range. */
+function hasPlaceableVerseOpener(content: MarkerContent[] | undefined): boolean {
+  if (!Array.isArray(content)) return false;
+  return content.some((node) => {
+    if (!isMarkerObject(node)) return false;
+    if (isVerseOpener(node) && isPlaceableVerseMarker(String(node.number))) return true;
+    return hasPlaceableVerseOpener(Array.isArray(node.content) ? node.content : undefined);
+  });
+}
+
+/**
  * Whether the chapter has a verse the aligned grid could place on a row.
  *
- * That view shows verse blocks and hides everything between them, so a chapter with no verse marker
- * in any paragraph renders an empty column unless the caller says otherwise. Only paragraphs count:
- * the editor makes no verse block for a verse inside a table or sidebar, so those would not show
- * either.
+ * This asks the layout's question, not the model's: that view shows only verse blocks it can place
+ * on a shared row and hides everything else, so a chapter whose every verse marker is unplaceable
+ * renders a blank column just as surely as one with no verse markers at all. It therefore checks
+ * that a marker resolves to a range the generated row rules cover, and searches the whole paragraph
+ * subtree, because the editor groups verses from nested content too — a marker one level down would
+ * render fine and be wrongly gated out by a direct-children-only check.
+ *
+ * Only paragraphs count: the editor makes no verse block for a verse inside a table or sidebar, so
+ * those would not show either.
  *
  * @param usj The chapter to inspect.
- * @returns True when at least one paragraph opens a verse.
+ * @returns True when at least one paragraph opens a verse the grid can place.
  */
 export function hasAlignableVerse(usj: Usj): boolean {
   return usj.content.some(
     (node) =>
       isMarkerObject(node) &&
       node.type === 'para' &&
-      (Array.isArray(node.content) ? node.content : []).some(isVerseOpener),
+      hasPlaceableVerseOpener(Array.isArray(node.content) ? node.content : undefined),
   );
+}
+
+/**
+ * Whether the chapter has any renderable text at all, verse-shaped or not.
+ *
+ * Tells "this chapter has content the other views can show" from "this chapter is empty", which is
+ * what decides whether pointing the reader at another view is useful advice or a dead end. A book
+ * created before any text is entered arrives as a successful, empty chapter rather than as an
+ * error.
+ *
+ * @param usj The chapter to inspect.
+ * @returns True when some marker in the chapter carries non-whitespace text.
+ */
+export function hasAnyRenderableText(usj: Usj): boolean {
+  // Recurses through every marker type, unlike `hasRenderableText`, which only descends into `char`
+  // because it inspects an already-sliced single verse.
+  const walk = (content: MarkerContent[] | undefined): boolean => {
+    if (!Array.isArray(content)) return false;
+    return content.some((node) => {
+      if (typeof node === 'string') return node.trim().length > 0;
+      if (!isMarkerObject(node)) return false;
+      // `book` and `chapter` are chrome, not text the reader came for.
+      if (node.type === 'book' || node.type === 'chapter') return false;
+      return walk(Array.isArray(node.content) ? node.content : undefined);
+    });
+  };
+  return walk(usj.content);
 }
 
 /**
