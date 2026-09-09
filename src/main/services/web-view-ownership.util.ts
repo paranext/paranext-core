@@ -46,11 +46,24 @@ export type WebViewMoveInFlight = {
   /** Project the captured view was showing, if any */
   projectId?: string;
   /**
-   * The definition the capture returned, kept whole rather than split into the fields above:
-   * `getAllOpenWebViewDefinitionsWithReachability` in `web-view.service-router.ts` folds this into
-   * its merged read so a web view mid-move is not invisible to a caller that selects by
+   * Window this move is putting the captured view into. Known before the move ever reaches the
+   * register below: a named target's id is the caller's own argument, and a new-window target's id
+   * is `createFreshWindow`'s window, stood up before the capture that empties the source. Either
+   * way this is set from the moment a `WebViewMoveInFlight` exists at all — there is no window in
+   * which one sits in the register with this still undefined.
+   *
+   * What lets `getOpenWebViewDefinitionsForWindow` in `web-view.service-router.ts` attribute an
+   * in-flight move to the one closing window it is headed toward, the same way `webViewType` and
+   * `projectId` let a search attribute one to what it is looking for.
+   */
+  destinationWindowId: string;
+  /**
+   * The definition the capture returned, kept whole rather than split into the fields above: both
+   * `getAllOpenWebViewDefinitionsWithReachability` (the whole-app read) and
+   * `getOpenWebViewDefinitionsForWindow` (one window's read), in `web-view.service-router.ts`, fold
+   * this into their result so a web view mid-move is not invisible to a caller that selects by
    * `state?.isReadOnly` alongside `projectId` — a selection `webViewType`/`projectId` alone cannot
-   * answer. Its `id` is also what a search and the fold-in match on: the id a web view is minted
+   * answer. Its `id` is also what a search and both fold-ins match on: the id a web view is minted
    * with never changes across a move (see `mint-web-view-ids.util.ts`), so this is the same id the
    * caller asked the move for and the same id the destination window reports once the adopt lands.
    */
