@@ -10,6 +10,9 @@
     "CC0-1.0",
     "Zlib",
     "Python-2.0",
+    "PSF-2.0",
+    "OpenSSL",
+    "blessing",
     "Unicode-3.0",
     "Unicode-DFS-2016",
     "BlueOak-1.0.0",
@@ -308,6 +311,11 @@
       "reason": "ICU is published under the Unicode license, which requires its copyright and permission notice to travel with copies. Both identifiers are listed because the version comes from the build machine and ICU moved from the Unicode License Agreement for Data Files and Software (Unicode-DFS-2016) to the Unicode License v3 (Unicode-3.0) at ICU 74 - a build on Ubuntu 22.04 copies ICU 70 and a build on current Homebrew copies ICU 74 or later, and this document cannot know which produced a given installer. The Windows copy is the Microsoft.ICU.ICU4C.Runtime package instead, which has a row of its own in the NuGet table."
     }
   },
+  "separateProgramsNote": "A third-party program redistributed as a SEPARATE EXECUTABLE that the application invokes as a subprocess - its own runtime, its own process, no linking. Keyed by program name. The entry is the reviewed determination that shipping it beside this application is aggregation rather than derivation, with reviewer, date, reason and a statement of where its corresponding source is; each delivery names the platform, the version, the mechanism that puts it in the installer, and EVIDENCE (a file and a substring) the generator refuses the entry without, so a determination cannot outlive the program it describes. The canonical text of every identifier the entry names is reproduced in the document, because a bundle may carry no license text of its own. An overrides entry may link to a program by name, which is what admits a copyleft NuGet package that IS the program. This repository ships none; a downstream product records its own in its overlay (NOTICES_POLICY_OVERLAY).",
+  "separatePrograms": {},
+  "externalExtensionsNote": "An extension packed from OUTSIDE this repository: a downstream build copies zips from its own extension repositories into a folder it maps to ./extensions in electron-builder.json5. Each zip bundles every dependency outside the extension host's externals list and carries no module manifest, so nothing here can itemize it. Every packed zip must have an entry, keyed by extension name, recording itemized: false and why - the document names it as a stated omission. itemized: true is refused until the generator can read a manifest set rooted in another repository. This repository packs none.",
+  "externalExtensions": {},
+  "productNote": "Overlay only. A downstream repository that builds a product from this source declares { name, repository, isParatext } in its overlay; name must equal productName in electron-builder.json5, which that build rewrites before packaging. With a product declared, the document names it instead of Platform.Bible and drops the 'reference, not the notices for any shipped product' paragraph. isParatext selects the UBS lexical-database wording, whose permission names Paratext. Never set in this file.",
   "snapStagePackagesNote": "The Ubuntu packages snapcraft stages inside the Linux .snap are redistributed inside that artifact but appear in neither the npm nor the NuGet graph, so nothing else in this pipeline can see them. This table is what the notices document's \"Linux snap\" section is written FROM: every name in electron-builder.json5's snap.stagePackages must appear here or the build refuses, so a library added to the installer cannot be described by prose that predates it. `terms` is deliberately as coarse as the source it was read from (\"the LGPL\", not a version) - recording a version nobody established would be inventing precision. A library whose terms nobody has settled is recorded as not-established rather than guessed, the same treatment LICENSING.md gives System.Net.Http; the way out of that state is to read its terms and record what they say.",
   "snapStagePackages": {
     "libappindicator3-1": {

@@ -102,13 +102,7 @@ describe('assertSeparateProgramsRecorded', () => {
 
 describe('assertSeparateProgramTextsAvailable', () => {
   it('accepts identifiers the corpus holds', () => {
-    // The corpus does not hold PSF-2.0 until Task 5 adds it, so this uses a program whose
-    // identifiers are all GPL-2.0-or-later - Task 5 flips it back to exercise `alsoContains` too.
-    const allGpl: SeparateProgram = {
-      ...mercurial,
-      deliveries: [{ ...mercurial.deliveries[0], alsoContains: [] }],
-    };
-    expect(() => assertSeparateProgramTextsAvailable({ Mercurial: allGpl })).not.toThrow();
+    expect(() => assertSeparateProgramTextsAvailable({ Mercurial: mercurial })).not.toThrow();
   });
 
   it('refuses an identifier the corpus does not hold', () => {

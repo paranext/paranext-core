@@ -90,6 +90,8 @@ message names both signals it read plus the exact JSON to paste. Every instrumen
 | A library was added to `snap.stagePackages`                                         | `snapStagePackages`       | `copyleft`, `permissive`, or `not-established`. Guessing a specific license is worse than the gap.   |
 | A declared `dependencies` entry reaches no bundle                                   | `unbundledDependencies`   | Why nothing this repository ships contains it.                                                       |
 | A package ships only in another platform's installer                                | `platformOnlyPackages`    | Nothing beyond the name; CI's other legs fail if it is wrong.                                        |
+| A third-party program is redistributed as a separate executable                     | `separatePrograms`        | Reviewer, date, why it is aggregation, where the source is, and per-platform evidence in the tree.   |
+| An extension zip is packed from outside this repository                             | `externalExtensions`      | `itemized: false` and why; the document names the omission.                                          |
 
 An **allowed license this project has simply never met** is not a per-package problem: add the
 identifier to `allowed`, which is one reviewable line, rather than admitting it invisibly through a
@@ -159,6 +161,18 @@ and why every escape instrument is pinned.
 - Only one `exceptions` entry per package. Re-review edits the entry in place; appending a second
   leaves the stale one in force, and `loadPolicy` refuses the file.
 
+## Downstream products
+
+A repository that builds a product from this source (Paratext 10 Studio, from
+`paranext/paratext-10-studio`) runs this generator inside its patched clone with
+`NOTICES_POLICY_OVERLAY` naming its own policy file. The overlay merges over the committed policy
+(`mergePolicies` in `policy.ts`): lists union, keyed tables merge with a collision refused, so an
+overlay adds determinations and never replaces one. It also carries the `product` block, which
+names the product in the document's prose and is checked against `electron-builder.json5`'s
+`productName`, and the two tables this repository ships empty: `separatePrograms` and
+`externalExtensions`. The downstream repository commits the pair the run writes and verifies it
+with the same `--verify-shipping-set` and `--verify` checks this repository runs.
+
 ## Module map
 
 | File                       | Answers                                                                          |
@@ -175,6 +189,9 @@ and why every escape instrument is pinned.
 | `lock.ts`                  | The sidecar, and every drift comparison against it                               |
 | `corpus.ts`                | Canonical SPDX texts, checksum-verified against a pinned `spdx-license-list`     |
 | `build-corpus-index.ts`    | Writes that checksum index, for the identifiers the policy can reach and no more |
+| `product.ts`               | Reads `electron-builder.json5`; checks an overlay's `product` block against it   |
+| `separate-programs.ts`     | Third-party programs redistributed as separate executables, and their evidence   |
+| `external-extensions.ts`   | Extension zips packed from outside this repository, recorded as an omission      |
 
 ## Changing the generator
 
