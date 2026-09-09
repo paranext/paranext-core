@@ -6426,6 +6426,9 @@ declare module 'shared/models/notification.service-model' {
      * Omit for a generic notice, which should keep routing to the focused window — where the user is
      * looking is the right place for something that is not about anything in particular.
      *
+     * The narrowest key available: a notification about a project with no web view currently open has
+     * no `webViewId` to name, and routes to the focused window like a generic notice would.
+     *
      * @experimental
      */
     webViewId?: WebViewId;
