@@ -39,63 +39,6 @@ function normalizeDetectedId(id: string): string {
   return corrected || 'NOASSERTION';
 }
 
-/**
- * Loads the policy document from disk: the single source of every repository-specific licensing
- * decision.
- *
- * `copyrightNotices` and `overrides` are the two hand-maintained tables in this file. Their
- * rationale is recorded here because it is the part a future reader cannot reconstruct:
- *
- * - **`copyrightNotices`** (keyed `npm:<name>`) carries the copyright line for an npm package whose
- *   own license file cannot be read on the generating machine. An npm manifest has no copyright
- *   field, so a package shipping no readable license file leaves the canonical SPDX text with
- *   nothing to pair against - and MIT, BSD and ISC all require the copyright notice to travel with
- *   copies, which SPDX's `<copyright holders>` placeholder does not satisfy. Every entry is a
- *   notice read from the package's own LICENSE, never a holder inferred from `author`.
- *
- *   Where a package publishes NO license file in its tarball - the `@radix-ui/*` family, which
- *   publishes dozens of packages from one monorepo, is the bulk of it - the notice is read from the
- *   license file in the repository that package's own `package.json` names, which is the same
- *   document by a different route. Two packages carry their license text inside `README.md` and the
- *   notice comes from there. `npm:rc-new-window` has no entry on purpose: its Apache-2.0 LICENSE
- *   leaves the boilerplate appendix unfilled (`Copyright [yyyy] [name of copyright owner]`) and it
- *   ships no NOTICE, so the project asserts no copyright notice and inventing one would be worse
- *   than the document saying none was found.
- *
- *   Verify an entry against the package when its major version changes - and for a notice read from a
- *   repository rather than a tarball, that the repository still publishes that package.
- *
- *   `copyrightNoticesNote` states the same provenance rule for a reader of the policy file alone, and
- *   records what was searched for `rc-new-window` so nobody repeats it.
- * - **`overrides`** (keyed `<ecosystem>:<name>`) is the curated answer for a package whose own
- *   metadata establishes nothing. `alwaysList` marks one that must appear in the document even
- *   though no restore on this machine resolves it: `Microsoft.ICU.ICU4C.Runtime` is referenced
- *   under `Condition="$([MSBuild]::IsOsPlatform('Windows'))"`, which MSBuild evaluates against the
- *   HOST OS rather than the target runtime identifier, so `dotnet restore -r win-x64` on Linux
- *   still does not pull it in and the four-RID union does not surface it. Without `alwaysList` a
- *   genuinely shipped Windows dependency would be silently absent.
- *
- *   An override's `note` is REPRODUCED in the document, in the Notes column, where it displaces the
- *   nuspec's own copyright notice (see `nugetVerdict`) - so a package that has no license text to
- *   pair a copyright with must not carry one, or its copyright appears nowhere at all. `reason` is
- *   the field for rationale that belongs to the reviewer rather than to the artifact: it is read by
- *   nothing here and exists to make the determination reviewable in this file, which is where a
- *   `<licenseUrl>` override has to be justified. The three legacy-`<licenseUrl>` NuGet packages use
- *   it for exactly that.
- *
- *   `nonSpdx` records that an entry's `license` is deliberately free text - "Proprietary - SIL…",
- *   "MICROSOFT .NET LIBRARY" - rather than an SPDX expression. It is REQUIRED on such an entry,
- *   because an unparseable value cannot be tested against `allowed` or `copyleft` at all. The flag
- *   does not make the value checkable; it makes the fact that nothing checked it visible in the
- *   policy file and in review, rather than a silently skipped test. An entry whose value IS an SPDX
- *   expression must not carry it - that one is checked, and the two ICU packages
- *   (`Unicode-DFS-2016`) and `Spart` (`Zlib`) are the live examples.
- *
- * The `*Note` fields carry no data the pipeline reads. JSON has no comments, so they are how a
- * reader of the policy file alone learns what each table is for and what an entry has to establish
- * before it is added. Each sits immediately before the table it describes. The fuller
- * situation-to-instrument guide is `.erb/scripts/third-party-notices/README.md`.
- */
 /** The environment variable naming a second policy file to merge over the committed one. */
 export const OVERLAY_ENV = 'NOTICES_POLICY_OVERLAY';
 
@@ -213,6 +156,62 @@ export function mergePolicies(
  *
  * `overlayFile` defaults from the environment AT CALL TIME, so every caller - the generator, both
  * verify modes, the corpus index builder - sees the same merged policy without passing anything.
+ *
+ * Loads the policy document from disk: the single source of every repository-specific licensing
+ * decision.
+ *
+ * `copyrightNotices` and `overrides` are the two hand-maintained tables in this file. Their
+ * rationale is recorded here because it is the part a future reader cannot reconstruct:
+ *
+ * - **`copyrightNotices`** (keyed `npm:<name>`) carries the copyright line for an npm package whose
+ *   own license file cannot be read on the generating machine. An npm manifest has no copyright
+ *   field, so a package shipping no readable license file leaves the canonical SPDX text with
+ *   nothing to pair against - and MIT, BSD and ISC all require the copyright notice to travel with
+ *   copies, which SPDX's `<copyright holders>` placeholder does not satisfy. Every entry is a
+ *   notice read from the package's own LICENSE, never a holder inferred from `author`.
+ *
+ *   Where a package publishes NO license file in its tarball - the `@radix-ui/*` family, which
+ *   publishes dozens of packages from one monorepo, is the bulk of it - the notice is read from the
+ *   license file in the repository that package's own `package.json` names, which is the same
+ *   document by a different route. Two packages carry their license text inside `README.md` and the
+ *   notice comes from there. `npm:rc-new-window` has no entry on purpose: its Apache-2.0 LICENSE
+ *   leaves the boilerplate appendix unfilled (`Copyright [yyyy] [name of copyright owner]`) and it
+ *   ships no NOTICE, so the project asserts no copyright notice and inventing one would be worse
+ *   than the document saying none was found.
+ *
+ *   Verify an entry against the package when its major version changes - and for a notice read from a
+ *   repository rather than a tarball, that the repository still publishes that package.
+ *
+ *   `copyrightNoticesNote` states the same provenance rule for a reader of the policy file alone, and
+ *   records what was searched for `rc-new-window` so nobody repeats it.
+ * - **`overrides`** (keyed `<ecosystem>:<name>`) is the curated answer for a package whose own
+ *   metadata establishes nothing. `alwaysList` marks one that must appear in the document even
+ *   though no restore on this machine resolves it: `Microsoft.ICU.ICU4C.Runtime` is referenced
+ *   under `Condition="$([MSBuild]::IsOsPlatform('Windows'))"`, which MSBuild evaluates against the
+ *   HOST OS rather than the target runtime identifier, so `dotnet restore -r win-x64` on Linux
+ *   still does not pull it in and the four-RID union does not surface it. Without `alwaysList` a
+ *   genuinely shipped Windows dependency would be silently absent.
+ *
+ *   An override's `note` is REPRODUCED in the document, in the Notes column, where it displaces the
+ *   nuspec's own copyright notice (see `nugetVerdict`) - so a package that has no license text to
+ *   pair a copyright with must not carry one, or its copyright appears nowhere at all. `reason` is
+ *   the field for rationale that belongs to the reviewer rather than to the artifact: it is read by
+ *   nothing here and exists to make the determination reviewable in this file, which is where a
+ *   `<licenseUrl>` override has to be justified. The three legacy-`<licenseUrl>` NuGet packages use
+ *   it for exactly that.
+ *
+ *   `nonSpdx` records that an entry's `license` is deliberately free text - "Proprietary - SIL…",
+ *   "MICROSOFT .NET LIBRARY" - rather than an SPDX expression. It is REQUIRED on such an entry,
+ *   because an unparseable value cannot be tested against `allowed` or `copyleft` at all. The flag
+ *   does not make the value checkable; it makes the fact that nothing checked it visible in the
+ *   policy file and in review, rather than a silently skipped test. An entry whose value IS an SPDX
+ *   expression must not carry it - that one is checked, and the two ICU packages
+ *   (`Unicode-DFS-2016`) and `Spart` (`Zlib`) are the live examples.
+ *
+ * The `*Note` fields carry no data the pipeline reads. JSON has no comments, so they are how a
+ * reader of the policy file alone learns what each table is for and what an entry has to establish
+ * before it is added. Each sits immediately before the table it describes. The fuller
+ * situation-to-instrument guide is `.erb/scripts/third-party-notices/README.md`.
  */
 export function loadPolicy(
   file: string,
