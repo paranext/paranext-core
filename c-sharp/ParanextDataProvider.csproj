@@ -15,7 +15,11 @@
     <Product>Paratext Data Provider for Platform.Bible</Product>
     <Title>Paratext Data Provider for Platform.Bible</Title>
     <VersionPrefix>0.1.0</VersionPrefix>
-    <VersionSuffix>$([System.DateTime]::UtcNow.ToString(`yyyyMMddHHmmss`))</VersionSuffix>
+    <!-- Release only: this re-evaluates on every build, so applying it in Debug rewrites
+         ParanextDataProvider.AssemblyInfo.cs each time and CoreCompile can never skip, which
+         makes every `dotnet watch` start pay a full recompile. `dotnet publish` defaults to
+         Release, so the shipped artifact keeps the timestamped suffix. -->
+    <VersionSuffix Condition="'$(Configuration)' == 'Release'">$([System.DateTime]::UtcNow.ToString(`yyyyMMddHHmmss`))</VersionSuffix>
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <PackageIcon>icon.png</PackageIcon>
     <PackageProjectUrl>https://github.com/paranext</PackageProjectUrl>

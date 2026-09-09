@@ -2,7 +2,7 @@
   "watch": ["src/client/**", "src/extension-host/**", "src/node/**", "src/shared/**"],
   "ext": "ts,js,json",
   "execMap": {
-    "ts": "cross-env ELECTRON_RUN_AS_NODE=true electron -r ts-node/register/transpile-only",
+    "ts": "cross-env ELECTRON_RUN_AS_NODE=true electron --import tsx",
     "js": "cross-env ELECTRON_RUN_AS_NODE=true electron"
   },
   "delay": 500
