@@ -341,9 +341,11 @@ export type PapiDockLayout = {
    *   tabs. Defaults to `true`
    * @param activateWithoutDocumentFocus If true, the tab is made active in its tab group without
    *   taking document focus. Focusing a tab focuses its web view's iframe, and a `focus()` inside a
-   *   window that does not hold OS focus asks the browser to activate that window — so a window
-   *   opened deliberately in the background must dock its content without it. Left unspecified,
-   *   this defaults to whether this window is still awaiting its first activation.
+   *   window that does not hold OS focus sets that document's active element without activating the
+   *   window — latently, until the window is next activated — so a window opened deliberately in
+   *   the background docks its content without taking that latent focus, leaving who owns the caret
+   *   to be decided when the window is actually raised. Left unspecified, this defaults to whether
+   *   this window is still awaiting its first activation.
    * @returns If WebView added, final layout used to display the new webView. If existing webView
    *   updated, `undefined`
    * @experimental The optional `activateWithoutDocumentFocus` parameter is new; the rest of this
