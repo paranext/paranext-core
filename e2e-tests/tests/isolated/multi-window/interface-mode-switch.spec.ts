@@ -173,7 +173,7 @@ test.describe('switching interface mode', () => {
   }) => {
     const output = captureAppOutput(electronApp);
     const logStep = createStepLogger('interface-mode-switch');
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const primaryId = getWindowIdOfPage(mainPage);
 
     const page2 = await createSecondWindow(electronApp);
@@ -209,7 +209,7 @@ test.describe('switching interface mode', () => {
   }) => {
     const output = captureAppOutput(electronApp);
     const logStep = createStepLogger('interface-mode-switch');
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const primaryId = getWindowIdOfPage(mainPage);
 
     // A window created mid-session deliberately starts empty, so the second window is made by
@@ -301,7 +301,7 @@ test.describe('switching interface mode', () => {
     // No fault sweep here, deliberately: `expectNoFaultsWhileRunning` opens with a positive
     // control that a renderer started during the capture, and the whole point of this test is that
     // nothing starts. The count and identity below are the assertions.
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const primaryId = getWindowIdOfPage(mainPage);
     expect(getAppPages(electronApp)).toHaveLength(1);
 
@@ -319,7 +319,7 @@ test.describe('switching interface mode', () => {
   });
 
   test('creating a window is refused in simple mode', async ({ electronApp, mainPage }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await setInterfaceMode('simple');
     // Waited on the mode itself, not the window count: the count is already 1, so a poll on it
     // returns on its first read and the request below could reach the application before it has
