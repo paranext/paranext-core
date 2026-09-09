@@ -99,8 +99,8 @@ describe('LanguageStep', () => {
   });
 
   // Guards that the step stays titled at all — it renders the shared WizardStepHeading, but this
-  // asserts the heading's role and text, not its Tailwind weight (that would mirror implementation;
-  // the weight convergence tracked by PT-4402 is a visual check, not a unit-test one).
+  // asserts the heading's role and text, not its Tailwind weight: a weight assertion would mirror
+  // implementation, and the shared treatment is a visual check rather than a unit-test one.
   test('titles the step with a level-2 heading', () => {
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
     expect(

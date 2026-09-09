@@ -26,12 +26,12 @@ type Story = StoryObj<typeof InternetAccessOptionList>;
 function createDecorator(initialValue: InternetUse) {
   return function Decorator(
     Story: (update?: { args: Partial<InternetAccessOptionListProps> }) => ReactElement,
-    context: { args: InternetAccessOptionListProps },
+    { args }: { args: InternetAccessOptionListProps },
   ) {
     const [value, setValue] = useState<InternetUse>(initialValue);
     // Args passed to <Story> replace the story's args rather than merging into them, so spread the
     // resolved ones back in — otherwise `localizedStrings` and `disabled` arrive undefined.
-    return <Story args={{ ...context.args, value, onChange: setValue }} />;
+    return <Story args={{ ...args, value, onChange: setValue }} />;
   };
 }
 
@@ -46,8 +46,8 @@ export const DisabledAccess: Story = {
 };
 
 /**
- * A coming-soon value is the current setting — `InternetSettings.xml` is shared with a co-installed
- * Paratext 9 and can be copied in from one, so it can name an option this app does not implement
+ * A coming-soon value is the current setting — `InternetSettings.xml` is seeded once from a
+ * co-installed Paratext 9 on first launch, so it can name an option this app does not implement
  * yet. The row renders selected-but-disabled and a banner says why nothing acts on it.
  */
 export const ComingSoonSelected: Story = {

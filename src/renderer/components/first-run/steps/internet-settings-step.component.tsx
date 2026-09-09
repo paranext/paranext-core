@@ -23,15 +23,18 @@ import { WizardStepHeading } from '../wizard-step-heading.component';
 
 const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDataProvider';
 
-// `internetSettings_*` keys come from the paratext-registration extension, `firstRun_*` from core
-// (assets/localization). Both merge in the combiner, so the extension keys need no en.json entry.
+// `firstRun_*` keys come from core (assets/localization), `internetSettings_*` and
+// `paratextRegistration_*` from the paratext-registration extension. Both merge in the combiner, so
+// the extension keys need no en.json entry.
 const STRING_KEYS: LocalizeKey[] = [
   '%internetSettings_button_retry%',
-  // Same headline the standalone Internet & Connectivity web view shows, so the two surfaces match.
-  '%internetSettings_webView_title_2%',
-  // The dialog's subtitle clipped to its first sentence: the wizard has a footer to keep in view, so
-  // it drops the app-scope/Paratext-9 caveats the roomier dialog spells out.
-  '%internetSettings_subtitle_short%',
+  // The core wizard keys, not the extension's panel strings: these are translated in every language
+  // core ships (fr, zh-hans, zh-hant as well as en/es), and their English already reads "Internet &
+  // connectivity" — the same headline the standalone panel shows, so the two surfaces match.
+  '%firstRun_step_internetSettings_heading%',
+  // The panel's subtitle clipped to its first sentence: the wizard has a footer to keep in view, so
+  // it drops the app-scope/Paratext-9 caveats the roomier panel spells out.
+  '%firstRun_step_internetSettings_body%',
   '%firstRun_step_internetSettings_connecting%',
   '%firstRun_step_internetSettings_loadError%',
   ...INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
@@ -81,10 +84,10 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
           same pairing the standalone dialog uses. */}
       <div>
         <WizardStepHeading>
-          {localizedStrings['%internetSettings_webView_title_2%']}
+          {localizedStrings['%firstRun_step_internetSettings_heading%']}
         </WizardStepHeading>
         <p className="tw:text-sm tw:text-muted-foreground">
-          {localizedStrings['%internetSettings_subtitle_short%']}
+          {localizedStrings['%firstRun_step_internetSettings_body%']}
         </p>
       </div>
       {provider === undefined ? (

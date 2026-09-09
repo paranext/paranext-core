@@ -31,7 +31,7 @@ const localizedStrings = {
   '%paratextRegistration_internetUse_unsupportedSelection_title%':
     'This internet setting is not supported yet',
   '%paratextRegistration_internetUse_unsupportedSelection_description%':
-    'Your Paratext internet settings have “{selectedOption}” selected, which this version of Paratext cannot apply yet. Choose one of the available options to continue.',
+    'Your Paratext internet settings have “{selectedOption}” selected. This version of Paratext does not support that option yet, so choose one of the available options to continue.',
 };
 
 function Controlled(
@@ -128,8 +128,8 @@ export const DisabledAccess: Story = {
 };
 
 /**
- * A coming-soon value is the current setting — `InternetSettings.xml` is shared with a co-installed
- * Paratext 9 and can be copied in from one, so it can name an option this app does not implement
+ * A coming-soon value is the current setting — `InternetSettings.xml` is seeded once from a
+ * co-installed Paratext 9 on first launch, so it can name an option this app does not implement
  * yet. The row renders selected-but-disabled so the carried-over setting is visible rather than
  * silently swapped, and a banner says why nothing acts on it.
  */

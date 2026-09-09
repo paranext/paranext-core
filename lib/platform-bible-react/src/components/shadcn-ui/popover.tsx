@@ -5,7 +5,7 @@ import { Popover as PopoverPrimitive } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
 // CUSTOM: Shared portal-container factory (also used by tooltip.tsx) so this workaround is defined once
-import { createPortalContainerContext } from '@/components/portal-container.context';
+import { createPortalContainerContext } from '@/context/portal-container.context';
 // CUSTOM: Import direction helper for RTL support
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 // CUSTOM: Import shared z-index constant to ensure popovers stack above the dock
@@ -31,6 +31,8 @@ function PopoverTrigger({ ...props }: React.ComponentProps<typeof PopoverPrimiti
 const { PortalContainerProvider, usePortalContainer: usePopoverPortalContainer } =
   createPortalContainerContext();
 
+// CUSTOM: expand JSDoc — state the provider's contract and give a usage example. The shared factory
+// carries the general rationale, so this keeps only what a popover caller needs.
 /**
  * Keeps descendant {@link PopoverContent} inside `container` instead of `document.body`. Use it
  * whenever a popover's trigger sits inside an ancestor that owns a focus trap or a
@@ -76,7 +78,10 @@ function PopoverContent({
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   // CUSTOM: Read document direction to support RTL layouts
   const dir: Direction = readDirection();
-  // CUSTOM: Read portal container override (see PopoverPortalContainerProvider above) so nested popovers stay inside modal dialogs.
+  // CUSTOM: Read portal container override (see PopoverPortalContainerProvider above) so nested
+  // popovers stay inside modal dialogs. The hook already resolves "no provider in scope" to
+  // undefined, which is what Radix's Portal wants for its document.body default, so nothing here
+  // has to coalesce it.
   const portalContainer = usePopoverPortalContainer();
   return (
     // CUSTOM: When a PopoverPortalContainerProvider is in scope, portal into its container

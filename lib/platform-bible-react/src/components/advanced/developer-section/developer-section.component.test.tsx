@@ -23,10 +23,10 @@ beforeAll(() => {
 
 const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_developer_section_label%': 'Developer only',
-  '%paratextRegistration_label_serverType_option_Production%': 'Production server',
-  '%paratextRegistration_label_serverType_option_QualityAssurance%': 'Quality Assurance server',
-  '%paratextRegistration_label_serverType_option_Development%': 'Development server',
-  '%paratextRegistration_label_serverType_option_Test%': 'Test server',
+  '%paratextRegistration_label_serverType_option_Production_2%': 'Production server',
+  '%paratextRegistration_label_serverType_option_QualityAssurance_2%': 'Quality assurance server',
+  '%paratextRegistration_label_serverType_option_Development_2%': 'Development server',
+  '%paratextRegistration_label_serverType_option_Test_2%': 'Test server',
 };
 
 function renderSection(overrides: Partial<DeveloperSectionProps> = {}) {
