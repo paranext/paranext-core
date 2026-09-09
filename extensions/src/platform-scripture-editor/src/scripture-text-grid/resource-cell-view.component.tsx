@@ -5,7 +5,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Button,
-  EmptyState,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -15,14 +14,8 @@ import {
 } from 'platform-bible-react';
 import { EllipsisVertical, GripVertical } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
-import {
-  CSSProperties,
-  ReactNode,
-  useCallback,
-  useState,
-  type KeyboardEvent,
-  type MouseEvent,
-} from 'react';
+import { ReactNode, useCallback, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { ALIGNED_ZOOM_PROPERTY, type AlignedZoomStyle } from './aligned-grid.styles';
 import { ResourceCellState } from './resource-cell.utils';
 import {
   BOOK_NOT_AVAILABLE_KEY,
@@ -44,6 +37,7 @@ export {
   BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
   NO_VERSES_TO_SHOW_KEY,
+  CHAPTER_EMPTY_KEY,
   ZOOM_IN_KEY,
   ZOOM_OUT_KEY,
   RESET_ZOOM_KEY,
@@ -58,6 +52,25 @@ export type ResourceNameDisplay = 'inline' | 'header';
 
 /** Localized copy for the zoom actions (the kebab dropdown and the right-click context menu). */
 export type ZoomMenuLabels = { zoomIn: string; zoomOut: string; reset: string; options: string };
+
+/** Where a cell's zoom factor lands; see {@link ResourceCellViewProps.zoomTarget}. */
+export type ZoomTarget = 'box' | 'blocks';
+
+/**
+ * The content wrapper's zoom style.
+ *
+ * @param zoomFactor Current factor, or `undefined` when this cell has no zoom controller.
+ * @param zoomTarget Where the factor should land.
+ * @returns The style to apply, or `undefined` at the default factor (nothing to scale).
+ */
+function buildContentStyle(
+  zoomFactor: number | undefined,
+  zoomTarget: ZoomTarget,
+): AlignedZoomStyle | undefined {
+  if (zoomFactor === undefined || zoomFactor === 1) return undefined;
+  if (zoomTarget === 'blocks') return { [ALIGNED_ZOOM_PROPERTY]: zoomFactor };
+  return { zoom: zoomFactor };
+}
 
 export type ResourceCellViewProps = {
   /** Which visual state to render; only `ready` shows the editor. */
@@ -91,6 +104,13 @@ export type ResourceCellViewProps = {
   contentOverflow?: 'auto' | 'visible';
   /** Current zoom factor for this resource (1 = default). */
   zoomFactor?: number;
+  /**
+   * Where the zoom factor lands. `'box'` (default) scales the content wrapper with the `zoom`
+   * property. `'blocks'` publishes the factor as a custom property and leaves the wrapper unscaled,
+   * which is what the aligned grid needs: the wrapper is a subgrid box there, and zooming it would
+   * scale the shared row tracks it inherits along with the text (`ALIGNED_ZOOM_PROPERTY`).
+   */
+  zoomTarget?: ZoomTarget;
   /** False when the factor is at MAX_ZOOM_FACTOR. */
   canZoomIn?: boolean;
   /** False when the factor is at MIN_ZOOM_FACTOR. */
@@ -222,6 +242,7 @@ export function ResourceCellView({
   nameDisplay = 'header',
   contentOverflow = 'auto',
   zoomFactor,
+  zoomTarget = 'box',
   canZoomIn = true,
   canZoomOut = true,
   canReset = true,
@@ -239,11 +260,17 @@ export function ResourceCellView({
   let readyContent: ReactNode = editor;
   if (emptyMessage) {
     readyContent = (
+      // Not `EmptyState`, which renders its message in a `role="status"` live region. That is right
+      // for a view-level zero state (the web view's own empty state uses it, once), but this one is
+      // per cell: with several resources in the list, a reference change would queue one
+      // announcement per cell that lacks the verse and starve the grid's reorder announcer. The cell
+      // is already named by its enclosing region or listitem, and the sibling placeholder states
+      // below are plain text for the same reason.
       <div
         data-cell-placeholder
         className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center"
       >
-        <EmptyState message={emptyMessage} className="tw:text-center" />
+        <span className="tw:text-center tw:text-sm tw:text-muted-foreground">{emptyMessage}</span>
       </div>
     );
   }
@@ -322,8 +349,7 @@ export function ResourceCellView({
     ? formatReplacementString(zoomMenuLabels.options, { resourceName: label })
     : undefined;
 
-  const contentStyle: CSSProperties | undefined =
-    zoomFactor !== undefined && zoomFactor !== 1 ? { zoom: zoomFactor } : undefined;
+  const contentStyle = buildContentStyle(zoomFactor, zoomTarget);
   const contentOverflowClass =
     contentOverflow === 'visible' ? 'tw:overflow-visible' : 'tw:overflow-auto';
 
@@ -358,6 +384,7 @@ export function ResourceCellView({
         <>
           <div
             data-cell-header
+            data-testid={headerDrag ? 'scripture-text-grid-column-drag-source' : undefined}
             draggable={headerDrag ? true : undefined}
             onDragStart={headerDrag?.onDragStart}
             onDragEnd={headerDrag?.onDragEnd}

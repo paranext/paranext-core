@@ -107,12 +107,14 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, twoResources());
     const stg = await openScriptureTextGrid(mainPage);
 
-    // Wait for the grid row (two cells) to be present.
-    await expect(stg.frame.locator('[role="gridcell"]').first()).toBeVisible({ timeout: 15_000 });
-    await expect(stg.frame.locator('[role="gridcell"]')).toHaveCount(2, { timeout: 15_000 });
+    // Wait for the grid row (two cells) to be present. The cell is the verse listitem — the inner
+    // `gridcell` role this used to select was removed in PT-4157, so it matched nothing and this
+    // wait could only time out.
+    await expect(stg.frame.locator('[role="listitem"]').first()).toBeVisible({ timeout: 15_000 });
+    await expect(stg.frame.locator('[role="listitem"]')).toHaveCount(2, { timeout: 15_000 });
 
-    const firstCell = stg.frame.locator('[role="gridcell"]').first();
-    const secondCell = stg.frame.locator('[role="gridcell"]').nth(1);
+    const firstCell = stg.frame.locator('[role="listitem"]').first();
+    const secondCell = stg.frame.locator('[role="listitem"]').nth(1);
 
     // Hover the first cell so the kebab button becomes visible (it uses opacity-0 / group-hover).
     await firstCell.hover();

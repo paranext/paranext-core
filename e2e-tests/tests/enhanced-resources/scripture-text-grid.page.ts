@@ -172,8 +172,16 @@ export type ScriptureTextGrid = {
   verseViewOption: Locator;
   /** The "Chapter" radio in the View Options VIEW toggle. */
   chapterViewOption: Locator;
-  /** The draggable cell wrappers (`data-testid="scripture-text-grid-cell-draggable"`). */
+  /** The draggable verse listitems (`data-testid="scripture-text-grid-cell-draggable"`). */
   cellDraggable: Locator;
+  /**
+   * The column wrappers of the chapter and Grid views
+   * (`data-testid="scripture-text-grid-column-drop-target"`). A column is the drop target for a
+   * reorder; the drag source is its header band.
+   */
+  columnDropTarget: Locator;
+  /** The header bands that start a column reorder drag. */
+  columnDragSource: Locator;
   /** The "Grid" radio in the View Options VIEW toggle (the verse-aligned grid). */
   gridViewOption: Locator;
   /** Open View Options, switch to Chapter view, dismiss the popover. */
@@ -201,6 +209,8 @@ export async function openScriptureTextGrid(page: Page): Promise<ScriptureTextGr
     chapterViewOption: chapterViewOption(frame),
     gridViewOption: gridViewOption(frame),
     cellDraggable: frame.getByTestId('scripture-text-grid-cell-draggable'),
+    columnDropTarget: frame.getByTestId('scripture-text-grid-column-drop-target'),
+    columnDragSource: frame.getByTestId('scripture-text-grid-column-drag-source'),
     switchToChapterView: async () => switchToChapterView(frame),
     switchToGridView: async () => switchToGridView(frame),
   };
@@ -272,6 +282,33 @@ export async function openAlignedGridWithResources(
   resourceIds: string[],
   namePrefix: string,
 ): Promise<ScriptureTextGrid> {
+  const stg = await flagResourcesAndOpenGrid(page, projectId, resourceIds, namePrefix);
+  await stg.switchToGridView();
+  await expect(stg.frame.getByTestId('scripture-text-grid-aligned')).toBeVisible({
+    timeout: 15_000,
+  });
+  return stg;
+}
+
+/**
+ * Flags `resourceIds` into the project's text collection and opens the grid, leaving it in its
+ * default Verse view.
+ *
+ * The measuring specs need the view switch to be a statement of their own, so it can be bracketed
+ * by {@link armColumnRenderMeasure} and {@link readColumnRenderMs}.
+ *
+ * @param page The main window.
+ * @param projectId Admin-writable text-connection project to flag the resources into.
+ * @param resourceIds Downloaded resource project ids (from `E2E_TEST_RESOURCE_IDS`).
+ * @param namePrefix Display-name prefix, so a failure names the spec that flagged the resource.
+ * @returns The opened grid, in Verse view.
+ */
+export async function flagResourcesAndOpenGrid(
+  page: Page,
+  projectId: string,
+  resourceIds: string[],
+  namePrefix: string,
+): Promise<ScriptureTextGrid> {
   await flagResourcesAndOpenScriptureTextGrid(
     page,
     projectId,
@@ -282,11 +319,80 @@ export async function openAlignedGridWithResources(
       isInTextCollection: true,
     })),
   );
+  return openScriptureTextGrid(page);
+}
 
-  const stg = await openScriptureTextGrid(page);
-  await stg.switchToGridView();
-  await expect(stg.frame.getByTestId('scripture-text-grid-aligned')).toBeVisible({
-    timeout: 15_000,
-  });
-  return stg;
+/** How long a column-render measurement waits before giving up on the columns arriving. */
+const COLUMN_RENDER_GIVE_UP_MS = 15_000;
+
+/** Where {@link armColumnRenderMeasure} parks the in-flight measurement for the reader to await. */
+const COLUMN_RENDER_MEASURE_KEY = '__alignedColumnRenderMs';
+
+/** Outcome of one armed measurement. */
+type ColumnRenderMeasure = { elapsedMs: number; gaveUp: boolean };
+
+/**
+ * Starts the clock and a column-count observer inside the grid iframe.
+ *
+ * Call this BEFORE the statement that renders the columns, and read the result with
+ * {@link readColumnRenderMs} after it. Measuring from a single `evaluate` placed after the view
+ * switch does not work: `switchToGridView`/`switchToChapterView` end with an awaited keypress, so
+ * by the time such an `evaluate` runs the columns are usually already there and it reports ~0 ms
+ * however slow the real render was — a budget assertion that cannot fail.
+ *
+ * @param frame The grid iframe.
+ * @param minColumns How many labeled column regions to wait for.
+ */
+export async function armColumnRenderMeasure(
+  frame: FrameLocator,
+  minColumns: number,
+): Promise<void> {
+  await frame.locator('body').evaluate(
+    // The element `evaluate` binds is unused; only the document-wide count matters here.
+    (_body, { columns, giveUpMs, key }) => {
+      const start = performance.now();
+      const hasAllColumns = () => document.querySelectorAll('[role="region"]').length >= columns;
+      const measuring = new Promise<{ elapsedMs: number; gaveUp: boolean }>((resolve) => {
+        let observer: MutationObserver | undefined;
+        let timer: number | undefined;
+        // Every exit path disconnects AND clears the timer: an observer left attached keeps firing
+        // for the rest of the test, and a live timer would keep the give-up path armed after a
+        // measurement has already been taken.
+        const finish = (gaveUp: boolean) => {
+          observer?.disconnect();
+          if (timer !== undefined) clearTimeout(timer);
+          resolve({ elapsedMs: performance.now() - start, gaveUp });
+        };
+        observer = new MutationObserver(() => {
+          if (hasAllColumns()) finish(false);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        timer = window.setTimeout(() => finish(true), giveUpMs);
+        if (hasAllColumns()) finish(false);
+      });
+      Object.assign(window, { [key]: measuring });
+    },
+    { columns: minColumns, giveUpMs: COLUMN_RENDER_GIVE_UP_MS, key: COLUMN_RENDER_MEASURE_KEY },
+  );
+}
+
+/**
+ * Milliseconds the columns took to render, for a measurement {@link armColumnRenderMeasure} started.
+ *
+ * Throws rather than returning the give-up interval as though it were a measurement: a 15000 that
+ * reads as a slow render is indistinguishable from columns that never arrived at all.
+ *
+ * @param frame The grid iframe.
+ * @returns Elapsed milliseconds.
+ */
+export async function readColumnRenderMs(frame: FrameLocator): Promise<number> {
+  const result: ColumnRenderMeasure | undefined = await frame
+    .locator('body')
+    .evaluate((_body, key) => Reflect.get(window, key), COLUMN_RENDER_MEASURE_KEY);
+  if (!result) throw new Error('No column-render measurement was armed on this frame.');
+  if (result.gaveUp)
+    throw new Error(
+      `Columns never rendered within ${COLUMN_RENDER_GIVE_UP_MS}ms; nothing was measured.`,
+    );
+  return result.elapsedMs;
 }

@@ -42,6 +42,12 @@ export function useAlignedReferenceScroll(
   // puts a reference above the first block at the top of the passage.
   const targetReference = `${scrRef.book} ${scrRef.chapterNum}:${scrRef.verseNum} ${scrRef.versificationStr}`;
 
+  // Set once the reader has moved the port for the current reference. From then on nothing here
+  // will move it again, so the observer below stops doing any work at all rather than re-deciding
+  // that on every batch. Only ever set from inside `requestScroll`, which runs only while the view
+  // is visible — a hidden pane's scrollTop is not the reader's doing and must not stand this down.
+  const hasStoodDownRef = useRef(false);
+
   const isViewVisible = useViewVisibility();
   // An inactive dock tab has no layout: geometry reads return zero and the scroll would silently do
   // nothing. Deferring collapses every request made while hidden into one catch-up on activation
@@ -51,8 +57,22 @@ export function useAlignedReferenceScroll(
     if (!port) return;
 
     const applied = appliedScrollTopRef.current;
-    if (applied !== undefined && Math.abs(port.scrollTop - applied) > SCROLL_MATCH_TOLERANCE_PX)
-      return;
+    if (applied !== undefined) {
+      // The browser clamps scrollTop to the bottom of the content whenever the content SHRINKS — a
+      // resource unchecked in View Options, or a column zoomed out — and that is not the reader
+      // moving the port. Comparing against the position we wrote, clamped into the range that is
+      // valid now, tells the two apart; `overflow-anchor: none` does not help here, because a clamp
+      // is not scroll anchoring.
+      const maxScrollTop = port.scrollHeight - port.clientHeight;
+      // Only clamp where the port reports something to scroll. A port that reports none — nothing
+      // overflows, or the environment lays nothing out — would otherwise clamp every position to 0
+      // and read the reference scroll's own write as the reader's.
+      const expected = maxScrollTop > 0 ? Math.min(applied, maxScrollTop) : applied;
+      if (Math.abs(port.scrollTop - expected) > SCROLL_MATCH_TOLERANCE_PX) {
+        hasStoodDownRef.current = true;
+        return;
+      }
+    }
 
     // No verse block has rendered yet; a later mutation will bring one.
     const block = findVerseBlockForVerse(port, scrRef.verseNum);
@@ -64,18 +84,31 @@ export function useAlignedReferenceScroll(
 
   useEffect(() => {
     appliedScrollTopRef.current = undefined;
+    hasStoodDownRef.current = false;
     requestScroll();
   }, [targetReference, requestScroll]);
 
   // The reference usually changes before the chapter it points into has rendered, and each column
-  // arrives separately. Watching the port re-checks on every batch of DOM changes until the target
-  // is in view and stays there.
+  // arrives separately, so re-check as the DOM changes. Several editors mutating at once produce
+  // far more batches than there are frames, and every check reads layout — a query across every
+  // block plus three rect reads — so batches are coalesced into at most one check per frame, and
+  // stop entirely once this has stood down.
   useEffect(() => {
     const port = portRef.current;
     if (!port) return undefined;
-    const observer = new MutationObserver(() => requestScroll());
+    let pendingFrame: number | undefined;
+    const observer = new MutationObserver(() => {
+      if (hasStoodDownRef.current || pendingFrame !== undefined) return;
+      pendingFrame = requestAnimationFrame(() => {
+        pendingFrame = undefined;
+        requestScroll();
+      });
+    });
     observer.observe(port, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (pendingFrame !== undefined) cancelAnimationFrame(pendingFrame);
+    };
   }, [portRef, requestScroll]);
 }
 

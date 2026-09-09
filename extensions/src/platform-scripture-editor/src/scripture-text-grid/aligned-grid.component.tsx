@@ -53,6 +53,15 @@ export function AlignedGrid({ children, scrRef, ariaLabel }: AlignedGridProps) {
       ref={portRef}
       role="group"
       aria-label={ariaLabel}
+      // This root is the view's only scroll port, and nothing that scrolls it can be focused: the
+      // editors are read-only, the columns are plain regions, and the only tab stops inside — each
+      // column's reorder grip and zoom kebab — sit in the sticky header, which never moves. Without
+      // a tab stop here, content below the fold is reachable by pointer only. The rule reads a
+      // tabIndex on a non-interactive role as a mistake; a focusable scroll container is the
+      // exception (WCAG 2.1.1), and the chapter view gets this for free from its per-column
+      // scrollers.
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      tabIndex={0}
       data-testid="scripture-text-grid-aligned"
       // Tracks are set here rather than in the stylesheet, which does not know the column count.
       // `minmax` floors each column, which is what makes the grid scroll sideways at high resource
@@ -60,7 +69,9 @@ export function AlignedGrid({ children, scrRef, ariaLabel }: AlignedGridProps) {
       style={{
         gridTemplateColumns: `repeat(${columnCount}, minmax(${MIN_COLUMN_WIDTH}, 1fr))`,
       }}
-      className={`${ALIGNED_GRID_CLASS} tw:min-h-0 tw:flex-1`}
+      // The tab stop above is the only focusable thing here with no control of its own to show
+      // focus on, so it needs a visible ring like the verse listitem has.
+      className={`${ALIGNED_GRID_CLASS} tw:min-h-0 tw:flex-1 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-inset tw:focus-visible:ring-ring`}
     >
       {children}
     </div>

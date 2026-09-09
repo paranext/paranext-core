@@ -365,6 +365,28 @@ describe('ResourceCellView zoom UI', () => {
     expect(content instanceof HTMLElement && content.style.zoom).toBe('1.4');
   });
 
+  it('publishes the factor as a custom property instead when zoomTarget is "blocks"', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse-blocks</span>}
+        zoomFactor={1.4}
+        zoomTarget="blocks"
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+    // In the aligned grid this wrapper is a `grid-template-rows: subgrid` box, so `zoom` on it
+    // would scale the shared row tracks it inherits along with the text and let one column measure
+    // its rows differently from its neighbours. The factor rides down to the verse blocks instead.
+    const content = screen.getByText('verse-blocks').parentElement?.parentElement;
+    expect(content).not.toBeNull();
+    expect(content instanceof HTMLElement && content.style.zoom).toBeFalsy();
+    expect(content?.style.getPropertyValue('--aligned-zoom')).toBe('1.4');
+  });
+
   it('has no zoom style on the content wrapper when zoomFactor is 1', () => {
     renderCells(
       <ResourceCellView
@@ -770,6 +792,42 @@ describe('ResourceCellView reorder grip', () => {
     // The grip still renders (no aria-label supplied); the label text is still shown in the header.
     expect(screen.getByText('Genesis')).toBeInTheDocument();
     expect(screen.getByRole('button')).toBeInTheDocument();
+  });
+});
+
+// The header band is the reorder drag source for both the chapter row and the Grid view. Asserted
+// on this component rather than only through `ScriptureTextGrid`, whose tests mock `ResourceCell`
+// and hand-roll a draggable header — so deleting `draggable` here would leave those green.
+describe('ResourceCellView header drag source', () => {
+  const headerDragProps = {
+    state: 'ready' as const,
+    label: 'Genesis',
+    textDirection: 'ltr',
+    localizedStrings,
+    editor: <span>In the beginning</span>,
+  };
+
+  it('makes the header band draggable and reports drag start and end', () => {
+    const onDragStart = vi.fn();
+    const onDragEnd = vi.fn();
+    renderCells(<ResourceCellView {...headerDragProps} headerDrag={{ onDragStart, onDragEnd }} />);
+
+    const header = screen.getByTestId('scripture-text-grid-column-drag-source');
+    expect(header).toHaveAttribute('draggable', 'true');
+
+    fireEvent.dragStart(header);
+    expect(onDragStart).toHaveBeenCalledTimes(1);
+    fireEvent.dragEnd(header);
+    expect(onDragEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the cell undraggable when no reorder is wired', () => {
+    // A `draggable` ancestor makes its whole subtree draggable, which turns a click-drag across the
+    // text into a reorder instead of a selection — the capability one editor per column exists for.
+    renderCells(<ResourceCellView {...headerDragProps} />);
+
+    expect(screen.queryByTestId('scripture-text-grid-column-drag-source')).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[draggable="true"]')).toHaveLength(0);
   });
 });
 

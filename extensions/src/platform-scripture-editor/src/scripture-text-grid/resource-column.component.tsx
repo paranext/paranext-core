@@ -3,6 +3,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ResourceCell, GridResource } from './resource-cell.component';
 import type { ZoomMenuLabels } from './resource-cell-view.component';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
+import type { ResourceCollectionViewMode } from '../resource-collection-options/resource-collection-options.types';
 
 /**
  * Drag-and-keyboard reorder wiring for one column; omit to render a column that cannot move.
@@ -30,7 +31,7 @@ export type ResourceColumnProps = {
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
   /** How the cell renders its text: a whole chapter, or block verses the aligned grid can place. */
-  cellViewMode: 'chapter' | 'aligned';
+  cellViewMode: Exclude<ResourceCollectionViewMode, 'verse'>;
   /**
    * Sizing for this column, owned by the layout: a flex child in the chapter row, a grid track in
    * the aligned grid. The aligned grid's column must NOT be a flex box, or it stops passing the
@@ -65,7 +66,9 @@ export function ResourceColumn({
       aria-label={resource.label}
       data-project-id={resource.projectId}
       data-resource-id={resource.resourceId}
-      data-testid="scripture-text-grid-cell-draggable"
+      // Only when the column IS one: the drop handlers and the ring below are gated on `reorder`
+      // too, so the name never claims more than the element does.
+      data-testid={reorder ? 'scripture-text-grid-column-drop-target' : undefined}
       // No onDragLeave — it fires on child elements; the parent clears on drop/dragEnd instead.
       onDragOver={reorder?.onDragOver}
       onDrop={reorder?.onDrop}
